@@ -308,12 +308,14 @@ BOOST_AUTO_TEST_CASE(FeatureFlagsSlotVerifiedAtANonTemplateAddress)
     }());
 }
 
-// A slot-less account at a non-template address is the documented residual: the node
-// cannot identify it as the SystemConfig role (address literals skip layouts, and the
-// slot key is absent), so the build proceeds. The refusal lives in the generator
-// (build-allocs.py's name-keyed guard — pinned by tools/opstack-genesis/
-// test_build_allocs.py), and the template layout's own omission case stays refused
-// (MissingFlagsSlotRefusesToBuild).
+// A slot-less account at a non-template address still builds — the documented residual, and it
+// now has a measured precondition: the presence mandate is keyed on the template layout because
+// the harness's committed C2 config leaves `system_config` empty, so the generator writes no
+// slot for the C2 layout and mandating it there refuses real nodes (making the C2 e2e red).
+// The VALUE check below is not affected: an account carrying the slot is verified on any layout
+// (MismatchingFlagsSlotAtTheC2LayoutRefusesToBuild), and the generator's name-keyed guard
+// (build-allocs.py, pinned by tools/opstack-genesis/test_build_allocs.py) stays the enforcement
+// for a slot-less layout until that generator change lands and the mandate can follow it.
 BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtANonTemplateAddressIsSkipped)
 {
     task::syncWait([this]() -> task::Task<void> {

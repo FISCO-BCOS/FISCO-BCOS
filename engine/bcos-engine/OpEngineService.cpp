@@ -98,9 +98,18 @@ std::vector<std::string> supportedOpCapabilities()
     // a pre-Isthmus CL on methods that deterministically fail, with no sync path
     // to recover. FCU V1/V2 stay listed (heartbeat FCUs are accepted); FCU V4 is
     // unimplemented (Endpoint -38005) and absent upstream.
+    //
+    // getPayloadBodiesBy{Hash,Range}V1 and getClientVersionV1 are the SAME EngineEndpoint
+    // handlers the Eth lane serves (one implementation, registered once in EndpointsMapping
+    // for both lanes) and answer from the committed ledger / build info, so the table
+    // lists them: geth and op-geth advertise them from one auto-derived caps list, and
+    // the CLs / harnesses that probe exchangeCapabilities before calling them must not
+    // read this node as lacking methods it serves.
     static const std::vector<std::string> caps{"engine_exchangeCapabilities",
         "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
-        "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5", "engine_newPayloadV4"};
+        "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5", "engine_newPayloadV4",
+        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
+        "engine_getClientVersionV1"};
     return caps;
 }
 

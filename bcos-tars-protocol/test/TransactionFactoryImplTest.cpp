@@ -402,14 +402,16 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
 // the other variable-length fields (accessList, signature, extraTransactionBytes) are counted.
 // Without this, a 0x04 SetCode tx makes BlockResponse["size"] under-report. 0x04 requires the
 // Prague revision (OP Isthmus+), so it is config-gated; blobVersionedHashes is defensive only
-// (0x03 is refused at admission). Structural assertion: size() >= the summed payload lengths
-// (the fixed scalars add more, they must not be subtracted).
+// (0x03 is refused at admission). Exact deltas per field group: a >= bound accepts any
+// over-count (the mis-accounting class this change fixes), and every field the change added is
+// exercised — including maxFeePerBlobGas, the sibling variable-length field of the 0x03 shape.
 BOOST_AUTO_TEST_CASE(sizeCountsAuthorizationListAndBlobVersionedHashes)
 {
     auto tx = std::make_shared<TransactionImpl>();
     auto& inner = tx->mutableInner();
     inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     inner.web3TypedTxKind = static_cast<tars::Char>(4);  // EIP-7702 SetCode
+    std::size_t const base = tx->size();
 
     bcostars::AuthorizationEntry auth;
     auth.chainID = 1;
@@ -425,13 +427,17 @@ BOOST_AUTO_TEST_CASE(sizeCountsAuthorizationListAndBlobVersionedHashes)
     auth2.address = std::string(40, 'e');
     inner.data.authorizationList.push_back(auth2);
 
-    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x11));
-    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x22));
-
     std::size_t const authBytes =
         2 * (auth.address.size() + auth.signer.size() + auth.r.size() + auth.s.size());
-    std::size_t const blobBytes = 64;
-    BOOST_CHECK_GE(tx->size(), authBytes + blobBytes);
+    BOOST_CHECK_EQUAL(tx->size() - base, authBytes);
+
+    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x11));
+    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x22));
+    inner.data.maxFeePerBlobGas = "0x" + std::string(64, 'f');
+
+    std::size_t const blobBytes = 2 * 32;
+    BOOST_CHECK_EQUAL(
+        tx->size() - base - authBytes, blobBytes + inner.data.maxFeePerBlobGas.size());
 }
 
 // Deposit hash: the canonical txHash of a 0x7e tx is keccak256 of the full envelope (type byte

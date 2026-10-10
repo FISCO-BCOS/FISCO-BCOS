@@ -50,15 +50,17 @@ BOOST_AUTO_TEST_CASE(poolAdmissionColumnIsExact)
     constexpr auto legacy = Check::TypeGate | Check::ToFieldFormat | Check::Signature |
                             Check::MaxGasLimit | Check::FeeCapVsBaseFee | Check::ChainId |
                             Check::SenderIsEOA | Check::NonceNotMax | Check::Web3NonceWindow |
-                            Check::InitCodeSize | Check::Balance | Check::IntrinsicGas |
-                            Check::Web3PoolNonce;
+                            Check::InitCodeSize | Check::Balance | Check::L1Cost |
+                            Check::IntrinsicGas | Check::Web3PoolNonce;
     BOOST_CHECK(checkSet(TxKind::Web3Legacy, AdmissionContext::PoolAdmission) == legacy);
     BOOST_CHECK(checkSet(TxKind::Web3AccessList, AdmissionContext::PoolAdmission) ==
                 (legacy | Check::TypeByRevision));
     BOOST_CHECK(checkSet(TxKind::Web3DynamicFee, AdmissionContext::PoolAdmission) ==
                 (legacy | Check::TypeByRevision | Check::TipNotAboveCap));
+    // No L1Cost on the blob row: no chain both admits a blob and has a rollup cost.
     BOOST_CHECK(checkSet(TxKind::Web3Blob, AdmissionContext::PoolAdmission) ==
-                (legacy | Check::TypeByRevision | Check::TipNotAboveCap | Check::BlobHasTo));
+                ((legacy & ~Check::L1Cost) | Check::TypeByRevision | Check::TipNotAboveCap |
+                    Check::BlobHasTo));
     BOOST_CHECK(checkSet(TxKind::Web3SetCode, AdmissionContext::PoolAdmission) ==
                 (legacy | Check::TypeByRevision | Check::TipNotAboveCap | Check::SetCodeHasTo |
                     Check::AuthListNonEmpty));
@@ -73,7 +75,7 @@ BOOST_AUTO_TEST_CASE(derivedColumnsHoldForEveryKind)
         const auto pool = checkSet(kind, AdmissionContext::PoolAdmission);
 
         BOOST_CHECK(checkSet(kind, AdmissionContext::EESTReplay) ==
-                    (pool & ~(Check::Balance | Check::Web3NonceWindow)));
+                    (pool & ~(Check::Balance | Check::L1Cost | Check::Web3NonceWindow)));
 
         // Proposal verification is a subset -- it may never check something pool admission does
         // not, or a proposal could fail for a reason a directly-submitted transaction survives.
@@ -207,6 +209,11 @@ BOOST_AUTO_TEST_CASE(stagesPartitionTheEvaluationOrder)
     // Every check that needs the ACCOUNT lives in the state stage: that is what lets verify()
     // read it once, before the stage, and only when the set contains one of them.
     BOOST_CHECK((c_accountStateDependent & ~c_stateStage) == Check::None);
+    // The rollup-cost rule compares against the balance and the base fee, so it is in both
+    // dependency sets: verify() reads the account and derives the fee floor for it.
+    BOOST_CHECK(contains(c_accountStateDependent, Check::L1Cost));
+    BOOST_CHECK(contains(c_baseFeeDependent, Check::L1Cost));
+    BOOST_CHECK((c_rollupCostDependent & ~c_stateStage) == Check::None);
     // Sender-dependent is the wider set: it also covers the pool rule keyed on (sender, nonce),
     // which needs the recovered address but no account read. Both live after the gate, since the
     // sender does not exist until the signature check has run.
@@ -238,7 +245,7 @@ BOOST_AUTO_TEST_CASE(typeGateIsEvaluatedFirstAndSignatureBeforeAccountState)
     };
     const auto signature = indexOf(Check::Signature);
     for (auto dependent : {Check::SenderIsEOA, Check::NonceNotMax, Check::Web3NonceWindow,
-             Check::Balance, Check::Web3PoolNonce})
+             Check::Balance, Check::L1Cost, Check::Web3PoolNonce})
     {
         BOOST_CHECK_MESSAGE(
             signature < indexOf(dependent), "sender-dependent check ordered before Signature");
@@ -264,6 +271,10 @@ BOOST_AUTO_TEST_CASE(typeGateIsEvaluatedFirstAndSignatureBeforeAccountState)
             << (outOfOrder == evmoneSequence.end() ?
                        0U :
                        static_cast<uint32_t>(*std::next(outOfOrder))));
+    // The rollup-cost rule sits right after Balance: it is Balance with one more addend, so a
+    // sender short of even the L1-independent cost reports the plain rule first.
+    BOOST_CHECK(indexOf(Check::Balance) + 1 == indexOf(Check::L1Cost));
+    BOOST_CHECK(indexOf(Check::L1Cost) < indexOf(Check::IntrinsicGas));
     // The two BCOS nonce checks run last, pool set before ledger, as the pool-side validator
     // ran them.
     BOOST_CHECK(indexOf(Check::BcosPoolNonce) + 1 == indexOf(Check::BcosLedgerNonce));
@@ -305,8 +316,9 @@ BOOST_AUTO_TEST_CASE(proposalVerificationKeepsProtocolInvariants)
     // SenderIsEOA and NonceNotMax are execution-enforced account reads; Web3NonceWindow and the
     // two pending-nonce rules consult node-local state on which two honest nodes can disagree --
     // and on this path a disagreement is a view change, not a dropped transaction.
-    constexpr auto nodeLocal = Check::Balance | Check::SenderIsEOA | Check::NonceNotMax |
-                               Check::Web3NonceWindow | Check::BcosPoolNonce | Check::Web3PoolNonce;
+    constexpr auto nodeLocal = Check::Balance | Check::L1Cost | Check::SenderIsEOA |
+                               Check::NonceNotMax | Check::Web3NonceWindow | Check::BcosPoolNonce |
+                               Check::Web3PoolNonce;
     for (auto kind : kKinds)
     {
         const auto pool = checkSet(kind, AdmissionContext::PoolAdmission);
@@ -355,7 +367,7 @@ BOOST_AUTO_TEST_CASE(eestReplayDropsOnlyBalanceAndNonceWindow)
 {
     const auto pool = checkSet(TxKind::Web3DynamicFee, AdmissionContext::PoolAdmission);
     const auto eest = checkSet(TxKind::Web3DynamicFee, AdmissionContext::EESTReplay);
-    BOOST_CHECK((pool & ~eest) == (Check::Balance | Check::Web3NonceWindow));
+    BOOST_CHECK((pool & ~eest) == (Check::Balance | Check::L1Cost | Check::Web3NonceWindow));
     // Everything else survives -- fixtures still have to be well-formed, correctly signed, and
     // on the right chain.
     BOOST_CHECK(contains(eest, Check::Signature));

@@ -1465,10 +1465,10 @@ static task::Task<void> setGenesisFeatures(::ranges::input_range auto const& fea
 // key's slot is keccak256(utf8(key) || be32(baseSlot)), baseSlot 101 pinned by
 // storage-layout/SystemConfig.json. At genesis the Entry.enableNumber is 0, so
 // the slot value is just the packed flags number (Entry.value, uint192).
-static constexpr std::string_view c_l2SystemConfigAddress =
-    "43000000000000000000000000000000000000c0";
 static constexpr std::string_view c_l2FeatureFlagsKey = "feature_flags";
 static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
+static constexpr std::string_view c_l2SystemConfigTemplateAddress =
+    "43000000000000000000000000000000000000c0";
 
 // Verify the L2 SystemConfig feature_flags alloc slot against this node's
 // feature set. Called from TWO places: buildGenesisBlock runs it with the
@@ -1482,13 +1482,12 @@ static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
 static void verifyL2FeatureFlagsSlot(
     ::ranges::input_range auto const& allocs, Features const& features)
 {
-    // Key on the SLOT, not the account address: the SystemConfig predeploy's address
-    // is a chain-config property (the template layout uses 0x43...C0, the committed C2
-    // layout 0x4200...1000), so an address literal would silently skip every other
-    // layout — the genesis state root then does not commit the feature set at all. The
-    // feature_flags mapping key derives from the SystemConfig storage layout (base
-    // slot 101, pinned by storage-layout/SystemConfig.json), so the account carrying it
-    // is the SystemConfig account by construction.
+    // The lookup is keyed on the SLOT, not on the account address: the feature_flags mapping
+    // key derives from the SystemConfig storage layout (base slot 101, pinned by
+    // storage-layout/SystemConfig.json), so whichever account carries it IS the SystemConfig
+    // account — that is what makes the value check work on any layout, not just the template's
+    // 0x43...C0. The PRESENCE mandate is a separate duty and remains keyed on the template
+    // address (see the note below for why it is not extended yet).
     //
     // slot = keccak256(utf8("feature_flags") || be32(101))
     bcos::bytes slotInput;
@@ -1509,6 +1508,18 @@ static void verifyL2FeatureFlagsSlot(
         flagsNumber >>= 8;
     }
 
+        // Two duties, without guessing which account plays the SystemConfig role:
+        //  * any account carrying the slot has its VALUE compared (the slot-key lookup below), so
+        //    the check covers every layout the allocs actually use, not just the template's;
+        //  * an account at the TEMPLATE address (0x43...C0) must carry the slot — the layout the
+        //    generator writes for (build-allocs.py's requirement is keyed on that address).
+        // The presence mandate is deliberately NOT extended to other layouts yet: their allocs
+        // do not carry the slot today (the harness's chain-config leaves `system_config` empty for
+        // the committed C2 layout, so build-allocs.py writes no slot there), and mandating it
+        // refuses such a node at genesis — measured: the C2 e2e goes red. Extend the mandate in
+        // the same change that makes the generator write the slot for that layout.
+        // This runs before ANY genesis write, so a refusal leaves the datadir untouched and a
+        // config fix is a plain retry.
     for (auto const& importAccount : allocs)
     {
         const ledger::Alloc::State* featureFlagsSlot = nullptr;
@@ -1523,25 +1534,18 @@ static void verifyL2FeatureFlagsSlot(
                 break;
             }
         }
-        // The template layout's SystemConfig account (0x43...C0) is mandatory-carrying:
-        // an alloc that has it but dropped the slot never committed the feature set.
-        // (NodeConfig lowercases alloc addresses; direct GenesisConfig callers may pass
-        // uppercase — normalize before comparing so case never skips the check.)
         std::string addressHexLower(ledger::stripHexPrefix(importAccount.address));
         std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
             [](unsigned char c) { return std::tolower(c); });
-        if (addressHexLower == c_l2SystemConfigAddress)
+        if (addressHexLower == c_l2SystemConfigTemplateAddress && featureFlagsSlot == nullptr)
         {
-            if (featureFlagsSlot == nullptr)
-            {
-                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
-                                          "L2 genesis allocs must carry the SystemConfig "
-                                          "feature_flags Entry slot (keccak256(\"feature_flags\" "
-                                          "|| be32(101)) = 0x" +
-                                          slotKeyHex +
-                                          ") so the genesis state root commits it; regenerate "
-                                          "the allocs with build-allocs.py"));
-            }
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                      "L2 genesis allocs must carry the SystemConfig "
+                                      "feature_flags Entry slot (keccak256(\"feature_flags\" "
+                                      "|| be32(101)) = 0x" +
+                                      slotKeyHex +
+                                      ") so the genesis state root commits it; regenerate "
+                                      "the allocs with build-allocs.py"));
         }
         if (featureFlagsSlot == nullptr)
         {
@@ -1562,11 +1566,8 @@ static void verifyL2FeatureFlagsSlot(
                     "); the alloc artifact and the node's [features] config disagree"));
         }
     }
-    // No slot anywhere and no template account: the chain has no SystemConfig account
-    // to commit — nothing to verify. (A hand-made alloc whose SystemConfig sits at a
-    // non-template address WITHOUT the slot is the documented residual: the
-    // generator's name-keyed guard in build-allocs.py refuses to produce it, and the
-    // slot-key check above verifies it whenever the slot IS present, on any layout.)
+    // No slot anywhere and no template-layout SystemConfig account: nothing to verify here —
+    // the precondition note above records why other layouts are not mandated yet.
 }
 
 // Genesis import writes go to the node's local state storage, whose operations
@@ -2319,29 +2320,30 @@ bool Ledger::buildGenesisBlock(
         // the RPC estimate gas-cap gate (M1) among them — keys fork activation on the
         // chain's own schedule in every deployment. The SYS_OP_CHAIN_METADATA triple is the
         // integrity-bound copy the Initializer's boot probe validates (absent = legal;
-        // partial/corrupt/mis-bound = startup refusal). Both declaration channels land
-        // here with the NORMALIZED canonical (buildOpForkScheduleMetadata re-parses and
-        // normalizes, so "0:Isthmus" persists as "0:isthmus"): the canonical section
-        // and the [op_fork_timestamps] shorthand folded by the same rule
-        // (foldOpForkShorthand) the executor applies.
+        // partial/corrupt/mis-bound = startup refusal). Both declaration channels resolve
+        // through the ONE resolver the boot probe also compares against
+        // ([op_fork_schedule] canonicalized verbatim, else the [op_fork_timestamps]
+        // shorthand folded by the rule the executor applies), so the writer and the probe
+        // cannot disagree about what this node declares — and the NORMALIZED canonical is
+        // what gets bound ("0:Isthmus" persists as "0:isthmus").
         std::optional<std::string> resolvedOpSchedule;
-        if (genesis.m_opstackForkSchedule.has_value())
+        // A dual declaration must agree before this branch resolves it: the loader refuses a
+        // divergent pair (NodeConfig), and a direct GenesisConfig caller (tooling, tests, a
+        // future genesis wizard) must not be able to persist the canonical side while the
+        // executor runs the differing shorthand — the exact state the loader then refuses to
+        // read. Same rule set as the loader, one helper.
+        if (auto const problem = opForkScheduleDualDeclarationProblem(
+                genesis.m_opstackForkSchedule, genesis.m_opForkSchedule))
         {
-            const auto metadata =
-                buildOpForkScheduleMetadata(*genesis.m_opstackForkSchedule, header->hash());
-            co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
-            resolvedOpSchedule = metadata.schedule;
+            throwInvalidOpForkSchedule(*problem);
         }
-        else if (genesis.m_opForkSchedule.has_value())
+        if (auto const resolved = resolvedLocalOpForkScheduleCanonical(
+                genesis.m_opForkSchedule, genesis.m_opstackForkSchedule);
+            resolved.has_value())
         {
-            // Same integrity triple for the shorthand channel: fold first, then bind the
-            // NORMALIZED canonical (both channels persist identical triples; a chain
-            // declared via [op_fork_timestamps] must not lack the integrity-bound copy).
-            const auto metadata =
-                buildOpForkScheduleMetadata(canonicalOpForkSchedule(foldOpForkShorthand(
-                                               genesis.m_opForkSchedule->m_jovianTime,
-                                               genesis.m_opForkSchedule->m_karstTime)),
-                    header->hash());
+            // Same integrity triple for either channel (both persist identical triples; a
+            // chain declared via [op_fork_timestamps] must not lack the integrity-bound copy).
+            const auto metadata = buildOpForkScheduleMetadata(*resolved, header->hash());
             co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
             resolvedOpSchedule = metadata.schedule;
         }

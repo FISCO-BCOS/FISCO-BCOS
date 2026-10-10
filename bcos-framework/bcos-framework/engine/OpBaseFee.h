@@ -26,6 +26,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -39,11 +40,20 @@ namespace bcos::engine
 }
 
 /// Pre-Canyon (Bedrock) EIP-1559 denominator (superchain [optimism] config; the elasticity
-/// is the same 6 before and after Canyon).
-inline constexpr std::uint32_t c_eip1559DenominatorBedrock = 50;
+/// is the same 6 before and after Canyon). One home for the values: derived from the legacy
+/// preset the genesis pin and the engine substitute through `effectiveOpEip1559`, so an edit
+/// to one cannot split this path (FeeHistory, encodeOptimismExtraData) off the pricing path.
+inline constexpr std::uint32_t c_eip1559DenominatorBedrock =
+    static_cast<std::uint32_t>(c_legacyOpEip1559Params.denominator);
 /// Canyon EIP-1559 parameters (op-geth params/config.go).
-inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
-inline constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
+inline constexpr std::uint32_t c_eip1559DenominatorCanyon =
+    static_cast<std::uint32_t>(c_legacyOpEip1559Params.denominatorCanyon);
+inline constexpr std::uint32_t c_eip1559ElasticityCanyon =
+    static_cast<std::uint32_t>(c_legacyOpEip1559Params.elasticity);
+static_assert(
+    c_legacyOpEip1559Params.denominator <= std::numeric_limits<std::uint32_t>::max() &&
+    c_legacyOpEip1559Params.denominatorCanyon <= std::numeric_limits<std::uint32_t>::max() &&
+    c_legacyOpEip1559Params.elasticity <= std::numeric_limits<std::uint32_t>::max());
 
 /// Holocene extraData is 9 bytes (0x00 || denom || elasticity);
 /// Jovian extraData is 17 bytes (0x01 || same || minBaseFee).

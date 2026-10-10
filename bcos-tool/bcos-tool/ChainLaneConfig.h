@@ -28,7 +28,7 @@ namespace bcos::tool
 {
 
 /// The executor lane a chain runs. Derived from ONE authoritative signal — executor.version,
-/// which is already genesis-frozen, already maps to a scheduler slot (LedgerConfig.h:288-296)
+/// which is already genesis-frozen, already maps to a scheduler slot (LedgerConfig.h:333-350)
 /// and already carries a static_assert — instead of the four signals that used to answer this
 /// question independently (executor.version, feature_l2_ethereum_compat, [ethereum] mode=el,
 /// the OP schedule section).
@@ -46,10 +46,15 @@ enum class KeyPresence : std::uint8_t
     Optional,
 };
 
-/// One config.genesis key's contract on one lane. `pinned` is the mechanical guard for the rule
-/// that matters most: a key two nodes can disagree about and that changes execution MUST reach
-/// generateGenesisData, or node admission cannot catch the disagreement (the P0 defect was
-/// exactly a chain-level parameter that was in neither the config nor the pin).
+/// One config.genesis key's contract on one lane. `pinned` marks the keys two nodes can
+/// disagree about and that change execution, so their value must be recoverable from the
+/// genesis artifact: generateGenesisData emits a pinned section's GENESIS-ACTIVE entries
+/// (time 0) — deliberately only those, so a default-configured chain's pin text stays
+/// byte-identical — while a value declared for a later activation is caught by the boot
+/// probe's recorded-vs-declared comparison (Initializer's OP schedule probe). The field has
+/// no production reader of its own: NodeConfigLaneMatrixTest::pinnedRulesActuallyReachTheGenesisPin
+/// walks the table, asserts each pinned rule's emission, and fails a pinned rule that has no
+/// expectation entry.
 struct LaneKeyRule
 {
     std::string_view section;

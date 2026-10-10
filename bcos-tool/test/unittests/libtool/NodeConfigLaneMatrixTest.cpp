@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -6,10 +6,18 @@
  *  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
-
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  * @file NodeConfigLaneMatrixTest.cpp
- * @brief Lane-key rule matrix for the NodeConfig OP/EL lanes: required/rejected section binding per lane and the dual-channel agreement check. */
+ * @brief Lane-key rule matrix for the NodeConfig OP/EL lanes:
+ *        required/rejected section binding per lane and the dual-channel
+ *        agreement check.
+ */
 
 // The lane x key matrix: which config-genesis key belongs to which executor lane, whether it is
 // required/forbidden/optional there, and whether it must reach the genesis pin. Before this,
@@ -23,6 +31,8 @@
 #include <bcos-tool/ChainLaneConfig.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
+#include <functional>
+#include <map>
 #include <string>
 #include <string_view>
 
@@ -226,16 +236,27 @@ BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
 
 // The pinned field is the mechanical guard: a pinned rule's section must reach the
 // genesis pin, or two nodes can disagree on a consensus-changing key without admission
-// catching it. Walk the table and prove the emission, per rule — a new rule added with
-// pinned=true but no emission fails HERE, not silently in production.
+// catching it. Walk the table and prove the emission, per rule, driven by this section ->
+// pin-token table: a new rule added with pinned=true has no entry here and fails the
+// BOOST_REQUIRE inside the loop, instead of passing vacuously as it would with a
+// hardcoded per-section if-chain.
 BOOST_AUTO_TEST_CASE(pinnedRulesActuallyReachTheGenesisPin)
 {
+    // std::less<> so a std::string_view rule.section can be looked up without a copy.
+    std::map<std::string, std::string, std::less<>> const expectedPinToken{
+        {"op_fork_timestamps", "[opForkTimestamps]"}, {"op_eip1559", "eip1559:"}};
     for (auto const& rule : laneKeyRules())
     {
         if (!rule.pinned)
         {
             continue;
         }
+        auto const expected = expectedPinToken.find(rule.section);
+        BOOST_REQUIRE_MESSAGE(expected != expectedPinToken.end(),
+            "pinned rule " << rule.section
+                           << " has no genesis-pin expectation: add its emitted token to "
+                              "expectedPinToken (the rule's emission must be pinned, or the "
+                              "table claims a guard nothing enforces)");
         // An OP-lane config carrying the section (jovian active at genesis so the
         // schedule pin is emitted; the shorthand and the canonical agree by fold).
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
@@ -258,16 +279,9 @@ BOOST_AUTO_TEST_CASE(pinnedRulesActuallyReachTheGenesisPin)
             ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
         auto const pin = generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
-        if (rule.section == "op_fork_timestamps")
-        {
-            BOOST_CHECK_MESSAGE(pin.find("[opForkTimestamps]") != std::string::npos,
-                "pinned rule op_fork_timestamps not emitted in the genesis pin");
-        }
-        if (rule.section == "op_eip1559")
-        {
-            BOOST_CHECK_MESSAGE(pin.find("eip1559:") != std::string::npos,
-                "pinned rule op_eip1559 not emitted in the genesis pin");
-        }
+        BOOST_CHECK_MESSAGE(pin.find(expected->second) != std::string::npos,
+            "pinned rule " << rule.section << " not emitted in the genesis pin (expected token "
+                           << expected->second << ")");
     }
 }
 

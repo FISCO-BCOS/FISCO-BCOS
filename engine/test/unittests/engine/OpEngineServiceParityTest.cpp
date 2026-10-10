@@ -730,6 +730,16 @@ BOOST_AUTO_TEST_CASE(op_capabilities_include_op_methods)
     BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_newPayloadV4") != caps.end());
     BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_getPayloadV5") != caps.end());
     BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_forkchoiceUpdatedV3") != caps.end());
+    // The service's exchangeCapabilities IS the shared OP table (no second list), aux
+    // methods included.
+    auto const expected = bcos::engine::engine_common::op::supportedOpCapabilities();
+    BOOST_CHECK_EQUAL_COLLECTIONS(caps.begin(), caps.end(), expected.begin(), expected.end());
+    for (auto const* aux : {"engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
+             "engine_getClientVersionV1"})
+    {
+        BOOST_CHECK_MESSAGE(std::find(caps.begin(), caps.end(), aux) != caps.end(),
+            "OP caps must advertise " << aux);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(op_v3_new_payload_throws_unsupported_fork)
@@ -1253,15 +1263,15 @@ BOOST_AUTO_TEST_CASE(op_da_block_budget_admits_at_cap_then_drops_and_keeps_force
     auto sealed = makeDecodableWeb3Tx(1, key.get(), incompressible);
     auto const sealedRaw = bcostars::protocol::reassembleWeb3RawTransaction(
         sealed.tx->extraTransactionBytes(), sealed.tx->signatureData());
-    auto const sealedEst =
-        bcos::executor_v1::opstack::estimatedDaSize(evmc::bytes_view(sealedRaw.data(), sealedRaw.size()));
+    auto const sealedEst = bcos::executor_v1::opstack::estimatedDaSize(
+        evmc::bytes_view(sealedRaw.data(), sealedRaw.size()));
 
     // Forced envelope carried through payloadAttributes.transactions (the same shape the
     // txFits test uses); its estimate is what preloads the budget.
     auto forced = makeDecodableWeb3Tx(0);
     auto const forcedRaw = bcos::fromHex(forced.rawHex);
-    auto const forcedEst =
-        bcos::executor_v1::opstack::estimatedDaSize(evmc::bytes_view(forcedRaw.data(), forcedRaw.size()));
+    auto const forcedEst = bcos::executor_v1::opstack::estimatedDaSize(
+        evmc::bytes_view(forcedRaw.data(), forcedRaw.size()));
 
     auto buildWithBudget = [&](std::uint64_t maxBlockSize) {
         auto daCaps = std::make_shared<bcos::engine::DACaps>();

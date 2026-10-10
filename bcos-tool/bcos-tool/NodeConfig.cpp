@@ -33,6 +33,7 @@
 #include "bcos-utilities/Common.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
+#include <bcos-framework/ledger/OpForkScheduleMetadata.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -131,25 +132,15 @@ void requireDecimalField(
 uint64_t parseForkTimestamp(
     std::string const& section, std::string const& key, std::string const& value)
 {
-    std::string_view digits = value;
-    int base = 10;
-    if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0)
-    {
-        base = 16;
-        digits.remove_prefix(2);
-    }
-    uint64_t out = 0;
-    auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), out, base);
-    if (ec != std::errc{} || ptr != digits.data() + digits.size())
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[" + section + "]." + key + " invalid timestamp: " + value));
-    }
-    // UINT64_MAX IS the not-scheduled sentinel (ledger::c_opForkTimeUnset): accepting it
-    // as a declared activation time would make resolveOpFork read the fork as never
-    // active — declare a real time or omit the key (the codec's parseTimestamp refuses
-    // the sentinel for the canonical channel; the shorthand parser must not be looser).
-    if (out == ledger::c_opForkTimeUnset)
+    // One acceptance window with the other loaders and the canonical-channel codec
+    // (ledger::parseConfigUint64): decimal or 0x-hex, the whole string consumed, and the
+    // not-scheduled sentinel refused.
+    auto const parsed = ledger::parseConfigUint64(value,
+        ledger::ConfigUint64Options{.allowHex = true,
+            .maxValue = std::numeric_limits<uint64_t>::max(),
+            .refuseSentinel = true,
+            .sentinel = ledger::c_opForkTimeUnset});
+    if (parsed.error == ledger::ConfigUint64Error::sentinel)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[" + section + "]." + key +
@@ -157,7 +148,12 @@ uint64_t parseForkTimestamp(
                                   "(18446744073709551615): declare a real activation time or omit "
                                   "the key"));
     }
-    return out;
+    if (!parsed.value.has_value())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + key + " invalid timestamp: " + value));
+    }
+    return *parsed.value;
 }
 
 /// Required key: absent is a config error.
@@ -710,45 +706,13 @@ void NodeConfig::validateL2Invariants()
     // executor, the devp2p validator and the genesis pin run the [op_fork_timestamps]
     // shorthand. A divergence on those two rungs would make one node price and admit
     // against a different activation than it executes; lower rungs of the canonical row
-    // are carried verbatim but read by nobody today. Compare the two channels through
-    // the SAME fold rule (ledger::foldOpForkShorthand): fold both sides' (jovian, karst)
-    // pairs into records and compare the resolved activations, so the implied-jovian
-    // jump and the equal-time merge come from the one rule set, not from a local
-    // re-implementation.
-    if (genesis.m_opstackForkSchedule.has_value() && genesis.m_opForkSchedule.has_value())
+    // are carried verbatim but read by nobody today. The comparison lives in
+    // OpForkScheduleMetadata.h so the genesis writer resolves the same conflict by the
+    // same rule instead of silently preferring one channel.
+    if (auto const problem = ledger::opForkScheduleDualDeclarationProblem(
+            genesis.m_opstackForkSchedule, genesis.m_opForkSchedule))
     {
-        auto const& shorthand = *genesis.m_opForkSchedule;
-        auto const canonicalRecords = ledger::parseOpForkSchedule(*genesis.m_opstackForkSchedule);
-        auto activationOf = [](std::vector<ledger::OpForkActivationRecord> const& records,
-                                std::string_view fork) {
-            for (auto const& record : records)
-            {
-                if (record.forkName == fork)
-                {
-                    return record.timestamp;
-                }
-            }
-            return ledger::c_opForkTimeUnset;
-        };
-        auto const canonicalFolded = ledger::foldOpForkShorthand(
-            activationOf(canonicalRecords, "jovian"), activationOf(canonicalRecords, "karst"));
-        auto const shorthandFolded =
-            ledger::foldOpForkShorthand(shorthand.m_jovianTime, shorthand.m_karstTime);
-        auto const canonicalJovian = activationOf(canonicalFolded, "jovian");
-        auto const canonicalKarst = activationOf(canonicalFolded, "karst");
-        auto const shorthandJovian = activationOf(shorthandFolded, "jovian");
-        auto const shorthandKarst = activationOf(shorthandFolded, "karst");
-        if (canonicalJovian != shorthandJovian || canonicalKarst != shorthandKarst)
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "[op_fork_schedule] activates jovian/karst at (" +
-                    std::to_string(canonicalJovian) + "/" + std::to_string(canonicalKarst) +
-                    ") but [op_fork_timestamps] declares (" + std::to_string(shorthandJovian) +
-                    "/" + std::to_string(shorthandKarst) +
-                    "): the canonical channel feeds the stored row while the executor runs "
-                    "the shorthand — declare one channel, or make them agree"));
-        }
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(*problem));
     }
     // The opstack-el declaration ([ethereum] mode=opstack-el) is bound to the OP lane and
     // the Ethereum-lane genesis shape: the sync client downloads OP blocks over devp2p and
@@ -1927,25 +1891,37 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
     {
         return;
     }
+    // Two of the three keys are required, so a misspelled OPTIONAL one
+    // (denominator_canyonn=100) would be read as absent and silently become the 250 default —
+    // the "priced every pre-Canyon block differently from its own op-geth" failure this
+    // section exists to fix, reproduced with no diagnostic and then frozen into the genesis
+    // pin. Same policy as [op_fork_timestamps] (a misspelled jovain_time is rejected): reject
+    // anything but the three names.
+    for (auto const& entry : *section)
+    {
+        auto const& key = entry.first;
+        if (key != "elasticity" && key != "denominator" && key != "denominator_canyon")
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "[op_eip1559] has an unrecognised key \"" + key +
+                    "\" (supported: elasticity, denominator, denominator_canyon)"));
+        }
+    }
     auto parseStrictUint64 = [&](std::string const& key, std::string const& text) -> uint64_t {
         // Decimal and 0x-hex both, matching the sibling [op_fork_timestamps] section: a chain
-        // operator writing one section hex-formatted must not be surprised by the other.
-        // NOT parseForkTimestamp — that helper's message says "invalid timestamp", which would
-        // misname an EIP-1559 parameter.
-        std::string_view digits = text;
-        int base = 10;
-        if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0)
-        {
-            base = 16;
-            digits.remove_prefix(2);
-        }
-        uint64_t out = 0;
-        auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), out, base);
-        if (ec != std::errc{} || ptr != digits.data() + digits.size())
+        // operator writing one section hex-formatted must not be surprised by the other. One
+        // acceptance window with the other loaders (ledger::parseConfigUint64); the message
+        // differs because "invalid timestamp" would misname an EIP-1559 parameter.
+        auto const parsed = ledger::parseConfigUint64(text,
+            ledger::ConfigUint64Options{.allowHex = true,
+                .maxValue = std::numeric_limits<uint64_t>::max()});
+        if (!parsed.value.has_value())
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "[op_eip1559]." + key + " is not a valid uint64: " + text));
         }
+        auto const out = *parsed.value;
         if (out > std::numeric_limits<uint32_t>::max())
         {
             // The Holocene extraData encodes denominator and elasticity as uint32

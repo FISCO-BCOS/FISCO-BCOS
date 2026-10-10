@@ -174,6 +174,15 @@ inline bcos::u256 intxToBcosU256(intx::uint256 const& val)
         bcos::bytesConstRef{reinterpret_cast<bcos::byte const*>(be.bytes), sizeof(be.bytes)});
 }
 
+/// intxToBcosU256 at 512 bits: what the admission rollup cost is carried at (a 256-bit L1 fee
+/// plus a 256-bit operator fee, never saturated -- see TxValidator.h RollupCostFn).
+inline bcos::u512 intxToBcosU512(intx::uint512 const& val)
+{
+    std::array<bcos::byte, 64> be{};
+    intx::be::unsafe::store(be.data(), val);
+    return bcos::fromBigEndian<bcos::u512>(bcos::bytesConstRef{be.data(), be.size()});
+}
+
 /// The inverse of intxToBcosU256.
 inline intx::uint256 bcosU256ToIntx(bcos::u256 const& val)
 {

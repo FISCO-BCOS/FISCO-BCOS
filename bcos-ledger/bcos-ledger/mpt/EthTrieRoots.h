@@ -68,8 +68,9 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 /// `Receipts.EncodeIndex` (core/types/receipt.go):
 ///   legacy  (txType 0x00) -> rlp([status, cumulativeGasUsed, logsBloom, logs])
 ///   typed                 -> <txType> || rlp([...])
-///   deposit (txType 0x7e) -> 0x7e || rlp([..., depositNonce, depositReceiptVersion])
-///   deposit -> 0x7e || rlp([status, cumGas, bloom, logs, depositNonce?, depositReceiptVersion?])
+///   deposit (txType 0x7e, receipt form)
+///                         -> 0x7e || rlp([status, cumGas, bloom, logs,
+///                                          depositNonce?, depositReceiptVersion?])
 /// where the deposit tail is present ONLY when the receipt carries depositReceiptVersion
 /// (Canyon+). A post-Regolith pre-Canyon deposit receipt carries depositNonce but EncodeIndex
 /// deliberately omits it from the trie leaf (op-geth's documented backwards-compatibility
@@ -78,9 +79,6 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 /// This is the value half of calculateReceiptsRoot; the caller keys the leaves by rlp(index).
 ///
 /// @param txType EIP-2718 type byte of the transaction that produced @p receipt (0 = legacy).
-/// The deposit leaf shape follows presence-of-depositReceiptVersion alone (op-geth
-///        Receipts.EncodeIndex): Canyon+ receipts carry nonce+version; the pre-Canyon
-///        (Regolith) receipt hash inadvertently omitted the nonce upstream too.
 /// @throws EthReceiptEncodeError when the receipt is malformed: bloom not 256 bytes, an
 ///         unparseable cumulativeGasUsed, or a deposit receipt with a receipt version but
 ///         no deposit nonce.

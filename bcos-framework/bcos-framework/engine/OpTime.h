@@ -23,8 +23,12 @@
 namespace bcos::engine
 {
 /// FISCO block headers store timestamps in internal milliseconds; OP fork schedule activations
-/// are Unix seconds. Convert exactly once at Engine/scheduler boundaries.
-inline uint64_t unixSecondsFromInternalMillis(uint64_t ms)
+/// are Unix seconds. This is the ONE conversion: the executor's opForkTimestampSec
+/// (opstack-executor/OpForkSpec.h) is a documented alias delegating here, so the OP lane's fork
+/// judgements and the RPC's EIP-7825 gate cannot round differently. Engine-framework level (no
+/// evmc/magic_enum dependency), which is what lets bcos-rpc use it without pulling the executor
+/// headers in.
+[[nodiscard]] inline constexpr uint64_t unixSecondsFromInternalMillis(uint64_t ms) noexcept
 {
     return ms / 1000;
 }

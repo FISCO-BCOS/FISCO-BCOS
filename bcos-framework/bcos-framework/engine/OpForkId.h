@@ -93,14 +93,34 @@ static_assert(
     "c_opForkLadder must list every OpFork rung in declaration order");
 static_assert(
     [] {
-        std::size_t mapped = 0;
+        // A BIJECTION, not a count: every OpForkId value must be carried by exactly one row.
+        // The count form let a duplicated id plus an id no row carried through (both keep the
+        // number of id-carrying rows equal), and opForkIdFor then answered the duplicated
+        // row's id — the wrong Engine-API profile — for the rung whose id was dropped.
+        std::array<bool, magic_enum::enum_count<OpForkId>()> seen{};
         for (auto const& row : c_opForkLadder)
         {
-            mapped += row.engineForkId.has_value() ? 1 : 0;
+            if (!row.engineForkId.has_value())
+            {
+                continue;
+            }
+            auto const index = static_cast<std::size_t>(*row.engineForkId);
+            if (index >= seen.size() || seen[index])
+            {
+                return false;
+            }
+            seen[index] = true;
         }
-        return mapped == magic_enum::enum_count<OpForkId>();
+        for (bool const mapped : seen)
+        {
+            if (!mapped)
+            {
+                return false;
+            }
+        }
+        return true;
     }(),
-    "c_opForkLadder must carry an Engine-API fork id for every OpForkId rung");
+    "c_opForkLadder must map every OpForkId rung exactly once (bijection, not a count)");
 
 [[nodiscard]] inline std::optional<OpForkId> opForkIdFor(bcos::ledger::OpFork fork)
 {
@@ -203,10 +223,11 @@ struct EngineForkContext
     return OpExtraDataLayout::Empty;
 }
 
-// The base-fee clock reads this table instead of the fork order (OpBaseFee.h's
-// calcOpBaseFee* helpers):
-// "layout != Empty" means Holocene or later, "layout == Jovian17" means Jovian or
-// later. These pin each boundary so a layout change cannot silently re-price blocks.
+// Fork -> extraData layout, the layout-side reference for the base-fee clock's boundary
+// flags: "layout != Empty" means Holocene or later, "layout == Jovian17" means Jovian or
+// later. The base-fee helpers (OpBaseFee.h) still derive those flags from the fork schedule —
+// wiring that seam to this table is a follow-up, so no production reader exists yet. These
+// pin each boundary so a layout change cannot silently re-price blocks.
 static_assert(extraDataLayoutFor(OpForkId::Regolith) == OpExtraDataLayout::Empty &&
               extraDataLayoutFor(OpForkId::Canyon) == OpExtraDataLayout::Empty &&
               extraDataLayoutFor(OpForkId::Ecotone) == OpExtraDataLayout::Empty &&

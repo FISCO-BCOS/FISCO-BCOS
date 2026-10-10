@@ -1631,6 +1631,10 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         blockHeader->setNumber(10086);
         blockHeader->setVersion(200);
         blockHeader->setTimestamp(110);
+        // An OP-shaped head (NON_ETH with withdrawalsRoot + baseFee, isOpEthereumBlock): the
+        // snapshot must carry its base fee for OP admission's fee floor.
+        blockHeader->setWithdrawalsRoot(crypto::HashType{});
+        blockHeader->setBaseFee(u256(7));
         auto hashImpl = std::make_shared<Keccak256>();
         blockHeader->calculateHash(*hashImpl);
         auto randomHash = blockHeader->hash();
@@ -1654,6 +1658,9 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         BOOST_CHECK_EQUAL(ledgerConfig->blockNumber(), 10086);
         BOOST_CHECK_EQUAL(ledgerConfig->hash(), randomHash);
         BOOST_CHECK_EQUAL(ledgerConfig->consensusType(), RPBFT_CONSENSUS_TYPE);
+        BOOST_REQUIRE(ledgerConfig->baseFeePerGas().has_value());
+        BOOST_CHECK_EQUAL(*ledgerConfig->baseFeePerGas(), u256(7));
+        BOOST_CHECK_EQUAL(ledgerConfig->timestamp(), 110);
 
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochSealerNum()), 12345);
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochBlockNum()), 1000);
@@ -1934,6 +1941,35 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
 // under different revisions (a silent state-root fork at upgrades). The boot-time
 // probe (Initializer's "Effective EVMC revision" block) reaches this parser before
 // any block, so the operator sees the named entry instead of a per-block loop.
+// A negative block height cannot be spelled in the row format (the encoder only emits
+// heights above zero), so a row carrying one is foreign or hand-written — the exact input
+// this parser is the defence against. Accepting it let "-5:cancun" govern blocks 0..4 and
+// then silently move that transition onto the block-0 base on the round trip.
+BOOST_AUTO_TEST_CASE(evmcRevisionNegativeBlockHeightsRefused)
+{
+    LedgerConfig parsed;
+    BOOST_CHECK_EXCEPTION(ledger::applyEVMCRevisionConfig(parsed, "-5:cancun,10:osaka"),
+        ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+            return boost::diagnostic_information(e).find("negative block number") !=
+                   std::string::npos;
+        });
+    // ... and the encoder refuses to mint one instead of dropping it silently.
+    BOOST_CHECK_EXCEPTION(
+        ledger::encodeEVMCRevisionConfig(EVMC_PRAGUE, {{-5, EVMC_CANCUN}, {10, EVMC_OSAKA}}),
+        ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+            return boost::diagnostic_information(e).find("negative block number") !=
+                   std::string::npos;
+        });
+    // The valid sibling still round-trips (the happy path is untouched).
+    auto const encoded = ledger::encodeEVMCRevisionConfig(EVMC_PRAGUE, {{10, EVMC_OSAKA}});
+    LedgerConfig reparsed;
+    ledger::applyEVMCRevisionConfig(reparsed, encoded);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*reparsed.evmcRevisionForBlock(0)), static_cast<int>(EVMC_PRAGUE));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*reparsed.evmcRevisionForBlock(10)), static_cast<int>(EVMC_OSAKA));
+}
+
 BOOST_AUTO_TEST_CASE(evmcRevisionUnknownNamesFailClosed)
 {
     LedgerConfig parsed;
@@ -1970,6 +2006,75 @@ BOOST_AUTO_TEST_CASE(evmcRevisionUnknownNamesFailClosed)
     // Valid mixed transitions still parse (the happy path is untouched).
     ledger::applyEVMCRevisionConfig(parsed, "0:cancun,100:osaka");
     BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100), EVMC_OSAKA);
+}
+
+// The evmc row codec's accepted domain round-trips: every shape an honest loader can
+// produce re-encodes to a string whose parse reproduces the same revision schedule.
+// Base selection order: forks.find(0) > explicitRev > forks.begin().
+BOOST_AUTO_TEST_CASE(evmcRowAcceptedDomainRoundTrip_F3)
+{
+    struct Case
+    {
+        std::optional<evmc_revision> explicitRev;
+        std::map<bcos::protocol::BlockNumber, evmc_revision> forks;
+        std::string_view expected;
+        evmc_revision revAt0;
+        evmc_revision revAt10;
+    };
+    for (auto const& c : std::array<Case, 5>{{
+             {EVMC_PRAGUE, {}, "0:prague", EVMC_PRAGUE, EVMC_PRAGUE},
+             {std::nullopt, {{0, EVMC_CANCUN}, {10, EVMC_OSAKA}}, "0:cancun,10:osaka", EVMC_CANCUN,
+                 EVMC_OSAKA},
+             {EVMC_PRAGUE, {{10, EVMC_OSAKA}}, "0:prague,10:osaka", EVMC_PRAGUE, EVMC_OSAKA},
+             {EVMC_PRAGUE, {{0, EVMC_CANCUN}, {10, EVMC_OSAKA}}, "0:cancun,10:osaka", EVMC_CANCUN,
+                 EVMC_OSAKA},
+             {std::nullopt, {{100000, EVMC_CANCUN}}, "0:cancun,100000:cancun", EVMC_CANCUN,
+                 EVMC_CANCUN},
+         }})
+    {
+        auto const encoded = ledger::encodeEVMCRevisionConfig(c.explicitRev, c.forks);
+        BOOST_CHECK_EQUAL(encoded, std::string(c.expected));
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, encoded);
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(0), c.revAt0);
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(10).has_value());
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(10), c.revAt10);
+    }
+}
+
+// The block-0 entry is emitted once as the base and is not repeated as a transition;
+// ascending positive entries keep their order through the round trip.
+BOOST_AUTO_TEST_CASE(evmcRowZeroBaseAndOrderConsistency_F3)
+{
+    auto const singled = ledger::encodeEVMCRevisionConfig(std::nullopt,
+        std::map<bcos::protocol::BlockNumber, evmc_revision>{{0, EVMC_CANCUN}, {100, EVMC_OSAKA}});
+    BOOST_CHECK_EQUAL(singled, "0:cancun,100:osaka");
+    LedgerConfig parsed;
+    ledger::applyEVMCRevisionConfig(parsed, singled);
+    BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(0), EVMC_CANCUN);
+    BOOST_REQUIRE(parsed.evmcRevisionForBlock(99).has_value());
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(99), EVMC_CANCUN);
+    BOOST_REQUIRE(parsed.evmcRevisionForBlock(100).has_value());
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100), EVMC_OSAKA);
+
+    // Table: three ascending shapes re-parse pointwise.
+    struct Chain
+    {
+        std::string_view text;
+        bcos::protocol::BlockNumber probe;
+        evmc_revision expected;
+    };
+    for (auto const& c :
+        std::array<Chain, 3>{{{"0:cancun", 500, EVMC_CANCUN}, {"0:cancun,10:osaka", 10, EVMC_OSAKA},
+            {"0:cancun,10:osaka,20:prague", 20, EVMC_PRAGUE}}})
+    {
+        LedgerConfig round;
+        ledger::applyEVMCRevisionConfig(round, c.text);
+        BOOST_REQUIRE(round.evmcRevisionForBlock(c.probe).has_value());
+        BOOST_CHECK_EQUAL(*round.evmcRevisionForBlock(c.probe), c.expected);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(web3ChainIdConfigFailStop)
