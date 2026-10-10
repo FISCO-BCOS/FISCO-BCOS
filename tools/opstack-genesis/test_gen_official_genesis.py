@@ -252,27 +252,29 @@ def test_to_ini_allocs_preserves_code_and_storage():
 # c_opForkNames are the same consensus input written twice, in two languages; the C++
 # side only static_asserts its own count against the OpFork enum, so nothing in CI
 # compares the two lists. This test is that comparison.
-_CXX_OP_FORK_CODEC = (Path(__file__).resolve().parents[2] /
-                      "bcos-framework/bcos-framework/ledger/OpForkScheduleCodec.h")
+_CXX_OP_FORK_ID = (Path(__file__).resolve().parents[2] /
+                   "bcos-framework" / "bcos-framework" / "engine" / "OpForkId.h")
 
 
-def test_el_forks_pinned_to_cpp_loader_order_and_membership():
-    """EL_FORKS must equal bcos::ledger::detail::c_opForkNames in order and membership.
+def test_el_forks_pinned_to_cpp_ladder_table():
+    """EL_FORKS must equal the nameable rungs of bcos::engine::c_opForkLadder, in order.
 
-    Both sides are pinned alone elsewhere; only this case proves the seam, so a
-    reorder or an added/removed name in either list must fail here. The C++ home is
-    bcos-framework/bcos-framework/ledger/OpForkScheduleCodec.h (c_opForkNames).
+    The C++ names are DERIVED from that one ladder table (c_opForkNames builds
+    itself from the rows carrying an Engine-API fork id), so the Python side is
+    pinned to the ladder itself: a rung added, renamed or reordered on either side
+    fails here, and the nameable/deliverable membership follows the ladder's
+    engineForkId column.
     """
-    text = _CXX_OP_FORK_CODEC.read_text()
-    match = re.search(
-        r"c_opForkNames\s*=\s*std::to_array<std::string_view>\(\{(.*?)\}\)",
-        text, re.S)
-    assert match, f"c_opForkNames array not found in {_CXX_OP_FORK_CODEC}"
-    cpp_names = re.findall(r'"([^"]+)"', match.group(1))
-    assert cpp_names == gen.EL_FORKS, (
-        "EL_FORKS drifted from c_opForkNames\n"
-        f"  C++ ({_CXX_OP_FORK_CODEC}): {cpp_names}\n"
-        f"  Python (EL_FORKS):          {gen.EL_FORKS}")
+    text = _CXX_OP_FORK_ID.read_text()
+    rows = re.findall(
+        r'\{\s*bcos::ledger::OpFork::\w+,\s*"([a-z_]+)",\s*(std::nullopt|OpForkId::\w+)\s*\}',
+        text)
+    assert rows, f"c_opForkLadder rows not found in {_CXX_OP_FORK_ID}"
+    nameable = [name for name, engine_id in rows if engine_id != "std::nullopt"]
+    assert nameable == gen.EL_FORKS, (
+        "EL_FORKS drifted from c_opForkLadder's nameable rungs\n"
+        f"  C++ ({_CXX_OP_FORK_ID}): {nameable}\n"
+        f"  Python (EL_FORKS):       {gen.EL_FORKS}")
 
 
 _CXX_NODECONFIG = (Path(__file__).resolve().parents[2] /
