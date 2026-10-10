@@ -36,10 +36,10 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
-#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/error.hpp>
 
+#include "bcos-utilities/IOServicePool.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <future>

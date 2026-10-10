@@ -20,7 +20,6 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
@@ -47,6 +46,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "bcos-protocol/TransactionStatus.h"
 
 using namespace bcos;
 using namespace bcos::storage2;

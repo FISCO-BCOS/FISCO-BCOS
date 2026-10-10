@@ -10,6 +10,7 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for.h>
+#include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
@@ -18,7 +19,6 @@
 #include <exception>
 #include <string>
 #include <thread>
-#include <boost/atomic.hpp>
 
 std::atomic_long g_blockNumber = 0;
 constexpr static long blockLimit = 900;

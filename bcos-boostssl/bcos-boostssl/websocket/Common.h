@@ -19,7 +19,7 @@
  */
 #pragma once
 
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Error.h>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/websocket.hpp>

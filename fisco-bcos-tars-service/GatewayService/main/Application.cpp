@@ -1,4 +1,5 @@
 #include "../../Common/TarsUtils.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "../GatewayInitializer.h"
 #include "../GatewayServiceServer.h"
 #include "bcos-tool/NodeConfig.h"

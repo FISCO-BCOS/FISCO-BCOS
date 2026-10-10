@@ -43,13 +43,14 @@
 #include "bcos-sealer/SealerFactory.h"
 #include "bcos-sealer/VRFBasedSealer.h"
 #include "bcos-txpool/TxPoolFactory.h"
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <wedpr-crypto/WedprUtilities.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-utilities/IOServicePool.h>
 
 using namespace bcos::storage;
 

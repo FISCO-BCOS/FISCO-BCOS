@@ -22,7 +22,7 @@
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "bcos-utilities/ZstdCompress.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <utility>

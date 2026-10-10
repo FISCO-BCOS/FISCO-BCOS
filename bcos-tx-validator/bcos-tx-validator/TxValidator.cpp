@@ -29,8 +29,8 @@
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-tx-validator/Normalize.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>

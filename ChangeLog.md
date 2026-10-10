@@ -1,6 +1,11 @@
 
 ### v3.18.0
 
+**bcos-utilities 日志破坏性变更**：
+
+* 日志管线替换为整行异步 fast path，不再支持自定义 `log.format` 配置项（配置该项会在日志中输出 WARNING 并被忽略）；`log.flush` 默认值由 `true` 改为 `false`（改为队列排空时刷盘且至多 100ms 兜底，逐行刷盘可显式配置 `flush=true` 恢复）
+* 删除 stat 日志通道及以下导出符号：`FileLoggerHandler`、`StatFileLogger`、`StatFileLoggerHandler`、`c_statLogLevel`、`setStatLogLevel`，下游如有链接引用需移除
+
 **bcos-boostssl/bcos-cpp-sdk 破坏性变更**：删除 MessageFace 及工厂、WsMessage 改 move-only、回调改按值传 WsMessage、WsSession/WsService 去虚、发送路径签名改 const WsMessage&（迁移详见 PR #5464）
 
 **后续跟进**：`WsStreamDelegate::setVerifyCallback` fail-closed（raw 流上请求证书校验时抛错）将在独立 PR 落地

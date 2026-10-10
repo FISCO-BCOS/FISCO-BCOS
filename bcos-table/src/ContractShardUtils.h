@@ -20,7 +20,7 @@
 
 #pragma once
 #include <bcos-table/src/StorageWrapper.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos::storage
 {

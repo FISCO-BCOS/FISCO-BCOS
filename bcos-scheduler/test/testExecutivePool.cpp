@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 
 using namespace bcos::scheduler;

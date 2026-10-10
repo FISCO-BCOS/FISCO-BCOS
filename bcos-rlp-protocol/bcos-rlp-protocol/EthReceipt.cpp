@@ -18,11 +18,12 @@
  * @date 2026/8/18
  */
 #include "EthReceipt.h"
-#include <bcos-protocol/TransactionStatus.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+
+#include <bcos-protocol/TransactionStatus.h>
+#include <bcos-utilities/DataConvertUtility.h>
 
 using namespace bcos;
 using namespace bcos::codec::rlp;

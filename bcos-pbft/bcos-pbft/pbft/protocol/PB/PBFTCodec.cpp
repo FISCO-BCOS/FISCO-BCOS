@@ -22,8 +22,9 @@
 #include "PBFTMessage.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
 #include "bcos-pbft/pbft/utilities/PacketTypeDigest.h"
-#include <bcos-protocol/Common.h>
 
+
+#include <bcos-protocol/Common.h>
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::crypto;

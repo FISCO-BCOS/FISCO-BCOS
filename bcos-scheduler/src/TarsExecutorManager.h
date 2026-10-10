@@ -23,7 +23,7 @@
 #include "bcos-tars-protocol/client/ExecutorServiceClient.h"
 #include "bcos-tars-protocol/tars/ExecutorService.h"
 #include "bcos-tool/NodeConfig.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "bcos-utilities/Timer.h"
 
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"

@@ -25,8 +25,8 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <sys/types.h>
-#include <boost/test/unit_test.hpp>
 #include <boost/test/tools/old/interface.hpp>
+#include <boost/test/unit_test.hpp>
 #include <set>
 #include <stdexcept>
 #include <string>

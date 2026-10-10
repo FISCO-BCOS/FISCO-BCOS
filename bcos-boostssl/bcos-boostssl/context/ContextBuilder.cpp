@@ -22,6 +22,7 @@
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/context/ContextConfig.h>
 #include <bcos-utilities/Exceptions.h>
+#include <boost/exception/all.hpp>
 #include <boost/filesystem/fstream.hpp>
 
 using namespace bcos;

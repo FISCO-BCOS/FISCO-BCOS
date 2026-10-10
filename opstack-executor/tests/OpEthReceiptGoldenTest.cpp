@@ -17,9 +17,9 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>  // encodeReceiptLeaf
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
-#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
+#include <bcos-utilities/Common.h>
 #include <cstdint>
 #include <map>
 #include <string>

@@ -2,36 +2,34 @@
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *
- * @brief FIB-184: an exception thrown on an asynchronous log sink's feeding thread must not
- *        propagate to std::terminate/abort. BoostLogInitializer installs
- *        make_exception_suppressor() on every async sink; this verifies that mechanism: a sink
- *        backend that always throws does not crash the process when the suppressor is installed.
+ * @brief FIB-184: an exception thrown by a log backend on the asynchronous
+ *        feeding thread must not reach std::terminate/abort. Production
+ *        logging goes through LineAsyncSink, which guards both consumeLine and
+ *        flush with catch(...); this test throws from both and verifies the
+ *        feeding thread survives, keeps draining, and the sink still stops
+ *        cleanly.
  * @file FIB184_LogSinkExceptionTest.cpp
  */
 
-#include <boost/log/sinks/async_frontend.hpp>
-#include <boost/log/sinks/basic_sink_backend.hpp>
-#include <boost/log/sinks/frontend_requirements.hpp>
-#include <boost/log/sources/record_ostream.hpp>
-#include <boost/log/sources/severity_logger.hpp>
-#include <boost/log/utility/exception_handler.hpp>
+#include "bcos-utilities/LineAsyncSink.h"
 #include <boost/smart_ptr/make_shared_object.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <stdexcept>
+#include <string>
 
 namespace bcos::test
 {
 namespace
 {
-// A sink backend that throws on every consumed record, simulating a formatting/IO failure on the
-// async sink's dedicated feeding thread (the FIB-184 crash trigger).
-class ThrowingBackend
-  : public boost::log::sinks::basic_sink_backend<boost::log::sinks::synchronized_feeding>
+// A backend that throws on every consumeLine and every flush, simulating a
+// persistent IO failure on the async sink's dedicated feeding thread (the
+// FIB-184 crash trigger).
+struct AlwaysThrowingBackend
 {
-public:
     std::atomic<int>* m_consumed = nullptr;
-    void consume(boost::log::record_view const& /*record*/)
+
+    void consumeLine(bcos::LogLevel /*level*/, std::string const& /*line*/)
     {
         if (m_consumed != nullptr)
         {
@@ -39,34 +37,27 @@ public:
         }
         throw std::runtime_error("FIB-184 simulated log backend failure");
     }
+    void flush() { throw std::runtime_error("FIB-184 simulated log flush failure"); }
 };
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(FIB184LogSinkExceptionTest)
 
-BOOST_AUTO_TEST_CASE(asyncSinkSuppressesBackendException)
+BOOST_AUTO_TEST_CASE(lineSinkSuppressesBackendException)
 {
-    using sink_t = boost::log::sinks::asynchronous_sink<ThrowingBackend>;
     std::atomic<int> consumed{0};
-    auto backend = boost::make_shared<ThrowingBackend>();
+    auto backend = boost::make_shared<AlwaysThrowingBackend>();
     backend->m_consumed = &consumed;
-    auto sink = boost::make_shared<sink_t>(backend);
-    // The fix under test: without this handler the throw on the feeding thread is uncaught and
-    // reaches std::terminate -> abort (it would crash this test binary, not just fail the case).
-    sink->set_exception_handler(boost::log::make_exception_suppressor());
+    bcos::log::LineAsyncSink<AlwaysThrowingBackend> sink(backend);
 
-    auto core = boost::log::core::get();
-    core->add_sink(sink);
-
-    boost::log::sources::severity_logger<int> logger;
-    BOOST_LOG_SEV(logger, 0) << "FIB-184 trigger record";
-
-    sink->stop();  // join the feeding thread: consume() runs here, throws, and is suppressed
-    sink->flush();
-    core->remove_sink(sink);
+    sink.writeLine(bcos::LogLevel::INFO, "p|", "FIB-184 trigger line");
+    // flush() and stop() run the throwing backend on the feeding thread and
+    // join it; reaching std::terminate would crash the whole test binary.
+    sink.flush();
+    sink.stop();
 
     BOOST_CHECK_GE(consumed.load(), 1);  // the throwing backend actually ran
-    BOOST_CHECK(true);                   // reached only because the throw did not abort the process
+    BOOST_CHECK(true);                   // reached only because nothing escaped the thread
 }
 
 BOOST_AUTO_TEST_SUITE_END()

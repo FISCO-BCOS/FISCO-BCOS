@@ -28,7 +28,7 @@
 #include <wedpr-crypto/WedprCrypto.h>
 #include <array>
 #include <memory>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 using namespace bcos;
 using namespace bcos::crypto;

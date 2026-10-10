@@ -18,8 +18,8 @@
 ///   - the ledger config pins the EVM revision to Shanghai, matching the
 ///     evm_version the contract was compiled for.
 
-#include "../EthereumExecutor.h"
 #include "../EVMSupport.h"
+#include "../EthereumExecutor.h"
 #include "../tests/TestMemoryStorage.h"
 #include "benchmark/BenchmarkERC20.h"
 
@@ -34,6 +34,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <benchmark/benchmark.h>
+#include <boost/log/core.hpp>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 

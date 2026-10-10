@@ -26,8 +26,8 @@
 #include <bcos-cpp-sdk/event/EventSubRequest.h>
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
 #include <bcos-cpp-sdk/event/EventSubStatus.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/reader.h>
 #include <boost/thread/thread.hpp>
 #include <memory>

@@ -1,8 +1,8 @@
 #include "MemPoolImpl.h"
-#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-crypto/kzg/Kzg4844.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <charconv>
 

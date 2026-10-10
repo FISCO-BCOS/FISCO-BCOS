@@ -9,6 +9,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <boost/log/core/core.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 

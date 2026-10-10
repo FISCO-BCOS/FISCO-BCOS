@@ -1,5 +1,5 @@
 #pragma once
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define LIGHTNODE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LIGHTNODE")
 #define TRANSACTIONPOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTIONPOOL")

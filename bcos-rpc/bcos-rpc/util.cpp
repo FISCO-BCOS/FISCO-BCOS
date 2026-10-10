@@ -18,9 +18,9 @@
  * @date 2024/4/24
  */
 
+#include "bcos-rpc/util.h"
 #include "bcos-rpc/Common.h"
 #include "bcos-rpc/jsonrpc/Common.h"
-#include "bcos-rpc/util.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <boost/regex.hpp>
 #include <limits>

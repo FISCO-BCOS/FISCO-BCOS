@@ -22,11 +22,11 @@
 #include <bcos-ledger/mpt/NodeEncoder.h>
 #include <bcos-ledger/mpt/TrieMerge.h>
 #include <bcos-ledger/mpt/TrieNode.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 
 namespace bcos::ledger::mpt::test
 {

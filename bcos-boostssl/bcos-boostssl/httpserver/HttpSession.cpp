@@ -1,5 +1,5 @@
 #include "HttpSession.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 bcos::boostssl::http::HttpSession::HttpSession(uint32_t _httpBodySizeLimit, CorsConfig _corsConfig)
   : m_httpBodySizeLimit(_httpBodySizeLimit), m_corsConfig(std::move(_corsConfig))

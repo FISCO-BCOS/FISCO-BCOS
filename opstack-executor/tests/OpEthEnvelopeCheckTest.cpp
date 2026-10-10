@@ -16,10 +16,10 @@
 
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <cstdint>
 #include <cstring>
 #include <optional>

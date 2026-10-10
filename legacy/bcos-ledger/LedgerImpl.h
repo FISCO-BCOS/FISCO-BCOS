@@ -15,7 +15,7 @@
 #include <bcos-ledger/Ledger.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/VersionConverter.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
