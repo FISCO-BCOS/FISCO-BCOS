@@ -1683,14 +1683,18 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
                 ctx.checkField(lp + ".address", jAt(el, "address").asString(),
                     hexRaw(
                         reinterpret_cast<const unsigned char*>(addrView.data()), addrView.size()));
+                // topics() 按值返回 gsl::span：把它取进具名局部量再取元素，否则
+                // gcc 的 -Wdangling-reference（CI 是 -Werror）会以「引用绑定到临时量」
+                // 拒绝这一行。
+                auto const topics = log.topics();
                 ctx.checkField(lp + ".topicsLen",
                     std::to_string(static_cast<size_t>(jAt(el, "topics").size())),
-                    std::to_string(log.topics().size()));
-                const size_t topicCount = std::min(static_cast<size_t>(log.topics().size()),
+                    std::to_string(topics.size()));
+                const size_t topicCount = std::min(static_cast<size_t>(topics.size()),
                     static_cast<size_t>(jAt(el, "topics").size()));
                 for (size_t t = 0; t < topicCount; ++t)
                 {
-                    const auto& topic = log.topics()[t];  // bcos::h256 (FixedBytes<32>)
+                    auto const& topic = topics[t];  // bcos::h256 (FixedBytes<32>)
                     ctx.checkField(lp + ".topics[" + std::to_string(t) + "]",
                         jAt(el, "topics")[static_cast<Json::ArrayIndex>(t)].asString(),
                         hexRaw(topic.data(), topic.size()));
