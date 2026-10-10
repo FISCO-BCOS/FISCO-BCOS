@@ -308,13 +308,13 @@ BOOST_AUTO_TEST_CASE(FeatureFlagsSlotVerifiedAtANonTemplateAddress)
     }());
 }
 
-// A slot-less account at a non-template address is the documented residual: the node
-// cannot identify it as the SystemConfig role (address literals skip layouts, and the
-// slot key is absent), so the build proceeds. The refusal lives in the generator
-// (build-allocs.py's name-keyed guard — pinned by tools/opstack-genesis/
-// test_build_allocs.py), and the template layout's own omission case stays refused
-// (MissingFlagsSlotRefusesToBuild).
-BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtANonTemplateAddressIsSkipped)
+// A slot-less account at the COMMITTED C2 layout refuses: the mandate covers both known
+// SystemConfig layouts (template 0x43...C0 and C2 0x4200...1000), so dropping the slot on
+// either one fails instead of leaving the genesis state root not committing the feature set.
+// What remains uncovered is an UNKNOWN layout: without the slot the node cannot tell that
+// account is the SystemConfig role, so the generator's name-keyed guard (build-allocs.py,
+// pinned by tools/opstack-genesis/test_build_allocs.py) stays the enforcement there.
+BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtTheCommittedC2LayoutRefusesToBuild)
 {
     task::syncWait([this]() -> task::Task<void> {
         auto storage = makeStorage();
@@ -323,7 +323,9 @@ BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtANonTemplateAddressIsSkipped)
         auto config = makeL2Config();
         config.m_allocs[0].address = "4200000000000000000000000000000000001000";
         config.m_allocs[0].storage.clear();  // drop the feature_flags slot
-        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, config, param));
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
+            bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "must carry the SystemConfig"); });
     }());
 }
 

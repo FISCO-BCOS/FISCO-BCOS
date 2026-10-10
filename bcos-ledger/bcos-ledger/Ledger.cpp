@@ -1465,8 +1465,6 @@ static task::Task<void> setGenesisFeatures(::ranges::input_range auto const& fea
 // key's slot is keccak256(utf8(key) || be32(baseSlot)), baseSlot 101 pinned by
 // storage-layout/SystemConfig.json. At genesis the Entry.enableNumber is 0, so
 // the slot value is just the packed flags number (Entry.value, uint192).
-static constexpr std::string_view c_l2SystemConfigAddress =
-    "43000000000000000000000000000000000000c0";
 static constexpr std::string_view c_l2FeatureFlagsKey = "feature_flags";
 static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
 
@@ -1479,6 +1477,21 @@ static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
 // importGenesisState re-run verifies with the persisted feature set (a change
 // after the fact is caught before the chain runs with it), and the feature
 // enum/default change can never strand an initialized chain here.
+// The SystemConfig predeploy's address is a chain-config property: the template layout uses
+// 0x43...C0, the committed C2 layout 0x4200...1000. An account at one of these MUST carry the
+// feature_flags slot (see verifyL2FeatureFlagsSlot); the list is deliberately explicit — an
+// unknown layout cannot be identified without the slot itself.
+static constexpr std::array<std::string_view, 2> c_l2SystemConfigLayouts{
+    "43000000000000000000000000000000000000c0", "4200000000000000000000000000000000001000"};
+
+static bool isKnownSystemConfigLayout(std::string_view address)
+{
+    std::string normalized(ledger::stripHexPrefix(address));
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+    return std::ranges::find(c_l2SystemConfigLayouts, normalized) != c_l2SystemConfigLayouts.end();
+}
+
 static void verifyL2FeatureFlagsSlot(
     ::ranges::input_range auto const& allocs, Features const& features)
 {
@@ -1509,6 +1522,16 @@ static void verifyL2FeatureFlagsSlot(
         flagsNumber >>= 8;
     }
 
+    // Two duties, both layout-aware without guessing which account plays the SystemConfig role:
+    //  * any account carrying the slot has its VALUE compared (the slot-key lookup below), so
+    //    the check works on every layout the allocs actually use;
+    //  * an account at a KNOWN SystemConfig layout must carry the slot — the template's
+    //    0x43...C0 and the committed C2 layout 0x4200...1000. A layout outside this list cannot
+    //    be identified without the slot (that is exactly what the slot-key lookup avoids
+    //    guessing), so the generator's name-keyed guard (build-allocs.py) stays the enforcement
+    //    for a new one: add it here when a new layout lands.
+    // This runs before ANY genesis write, so a refusal leaves the datadir untouched and a
+    // config fix is a plain retry.
     for (auto const& importAccount : allocs)
     {
         const ledger::Alloc::State* featureFlagsSlot = nullptr;
@@ -1523,25 +1546,15 @@ static void verifyL2FeatureFlagsSlot(
                 break;
             }
         }
-        // The template layout's SystemConfig account (0x43...C0) is mandatory-carrying:
-        // an alloc that has it but dropped the slot never committed the feature set.
-        // (NodeConfig lowercases alloc addresses; direct GenesisConfig callers may pass
-        // uppercase — normalize before comparing so case never skips the check.)
-        std::string addressHexLower(ledger::stripHexPrefix(importAccount.address));
-        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
-            [](unsigned char c) { return std::tolower(c); });
-        if (addressHexLower == c_l2SystemConfigAddress)
+        if (isKnownSystemConfigLayout(importAccount.address) && featureFlagsSlot == nullptr)
         {
-            if (featureFlagsSlot == nullptr)
-            {
-                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
-                                          "L2 genesis allocs must carry the SystemConfig "
-                                          "feature_flags Entry slot (keccak256(\"feature_flags\" "
-                                          "|| be32(101)) = 0x" +
-                                          slotKeyHex +
-                                          ") so the genesis state root commits it; regenerate "
-                                          "the allocs with build-allocs.py"));
-            }
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                      "L2 genesis allocs must carry the SystemConfig "
+                                      "feature_flags Entry slot (keccak256(\"feature_flags\" "
+                                      "|| be32(101)) = 0x" +
+                                      slotKeyHex +
+                                      ") so the genesis state root commits it; regenerate "
+                                      "the allocs with build-allocs.py"));
         }
         if (featureFlagsSlot == nullptr)
         {
@@ -1562,11 +1575,15 @@ static void verifyL2FeatureFlagsSlot(
                     "); the alloc artifact and the node's [features] config disagree"));
         }
     }
-    // No slot anywhere and no template account: the chain has no SystemConfig account
-    // to commit — nothing to verify. (A hand-made alloc whose SystemConfig sits at a
-    // non-template address WITHOUT the slot is the documented residual: the
-    // generator's name-keyed guard in build-allocs.py refuses to produce it, and the
-    // slot-key check above verifies it whenever the slot IS present, on any layout.)
+    // No alloc carried the slot at all: the genesis state root would not commit this node's
+    // feature set, so two nodes with different [features] would agree on the root — the exact
+    // hazard this mandate exists for, and just as reachable through a hand-made alloc set on
+    // a non-template layout (0x4200...1000) as through the template one. Refuse on every
+    // layout; the generator (build-allocs.py) already refuses to produce such allocs, so a
+    // datadir hitting this has left the generated path.
+    // No slot anywhere and no known SystemConfig layout present: the alloc set carries no
+    // SystemConfig account to commit the feature set into, which is the shape the generator
+    // refuses to produce (build-allocs.py, name-keyed) — nothing to verify here.
 }
 
 // Genesis import writes go to the node's local state storage, whose operations
