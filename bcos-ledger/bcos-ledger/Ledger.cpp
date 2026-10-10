@@ -24,6 +24,7 @@
 #include "Ledger.h"
 #include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
+#include "bcos-framework/ledger/ChainMetadata.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
@@ -1475,55 +1476,41 @@ static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
 // genesis-exists early return) — before ANY genesis write, so a mismatching
 // config cannot leave B0 committed under a state root no alloc rows back (the
 // datadir stays untouched and a config fix is a plain retry); on restart the
-// pinned stateRoot comparison is the guard instead, so a binary-side Features
+// importGenesisState re-run verifies with the persisted feature set (a change
+// after the fact is caught before the chain runs with it), and the feature
 // enum/default change can never strand an initialized chain here.
-// importGenesisState re-runs it with the persisted feature set before the
-// first ACCOUNT-row write (genesis import is not transactional, and
-// asyncCreateTable is not idempotent). Hex itself is accepted by
-// computeGenesisStateTrie; this compares VALUES.
 static void verifyL2FeatureFlagsSlot(
     ::ranges::input_range auto const& allocs, Features const& features)
 {
+    // Key on the SLOT, not the account address: the SystemConfig predeploy's address
+    // is a chain-config property (the template layout uses 0x43...C0, the committed C2
+    // layout 0x4200...1000), so an address literal would silently skip every other
+    // layout — the genesis state root then does not commit the feature set at all. The
+    // feature_flags mapping key derives from the SystemConfig storage layout (base
+    // slot 101, pinned by storage-layout/SystemConfig.json), so the account carrying it
+    // is the SystemConfig account by construction.
+    //
+    // slot = keccak256(utf8("feature_flags") || be32(101))
+    bcos::bytes slotInput;
+    slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
+    slotInput.insert(slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
+    bcos::bytes baseSlotBytes(32, 0);
+    baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
+    slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
+    auto const slotKeyHex = crypto::keccak256Hash(bcos::ref(slotInput)).hex();
+
+    // expected value = packed flags number as 32-byte big-endian (enableNumber = 0)
+    std::array<uint8_t, 32> expectedValue{};
+    auto flagsNumber = features.toFlagsNumber();
+    for (size_t i = 0; i < expectedValue.size(); ++i)
+    {
+        expectedValue[expectedValue.size() - 1 - i] =
+            (flagsNumber & 0xFF).convert_to<uint8_t>();
+        flagsNumber >>= 8;
+    }
+
     for (auto const& importAccount : allocs)
     {
-        // Normalize before comparing: NodeConfig lowercases alloc addresses,
-        // but direct GenesisConfig callers may pass uppercase — an unmatched
-        // case must not silently skip the verification below.
-        std::string addressHexLower(ledger::stripHexPrefix(importAccount.address));
-        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
-            [](unsigned char c) { return std::tolower(c); });
-        if (addressHexLower != c_l2SystemConfigAddress)
-        {
-            continue;
-        }
-        // The feature_flags Entry slot must arrive IN the alloc (written
-        // by build-allocs.py) so the genesis state root — computed over
-        // the allocs alone — commits it, and the same alloc JSON feeds
-        // the op-reth oracle. This path only VERIFIES the slot against
-        // the feature set the node actually runs with; injecting it here
-        // (the previous behavior) left the root not covering it.
-        //
-        // slot = keccak256(utf8("feature_flags") || be32(101))
-        bcos::bytes slotInput;
-        slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
-        slotInput.insert(slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
-        bcos::bytes baseSlotBytes(32, 0);
-        baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
-        slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
-        auto slotHash = crypto::keccak256Hash(bcos::ref(slotInput));
-        auto slotKeyHex = slotHash.hex();  // lowercase, 64 chars
-
-        // expected value = packed flags number as 32-byte big-endian
-        // (enableNumber = 0)
-        std::array<uint8_t, 32> expectedValue{};
-        auto flagsNumber = features.toFlagsNumber();
-        for (size_t i = 0; i < expectedValue.size(); ++i)
-        {
-            expectedValue[expectedValue.size() - 1 - i] =
-                (flagsNumber & 0xFF).convert_to<uint8_t>();
-            flagsNumber >>= 8;
-        }
-
         const ledger::Alloc::State* featureFlagsSlot = nullptr;
         for (auto const& state : importAccount.storage)
         {
@@ -1536,15 +1523,29 @@ static void verifyL2FeatureFlagsSlot(
                 break;
             }
         }
+        // The template layout's SystemConfig account (0x43...C0) is mandatory-carrying:
+        // an alloc that has it but dropped the slot never committed the feature set.
+        // (NodeConfig lowercases alloc addresses; direct GenesisConfig callers may pass
+        // uppercase — normalize before comparing so case never skips the check.)
+        std::string addressHexLower(ledger::stripHexPrefix(importAccount.address));
+        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
+            [](unsigned char c) { return std::tolower(c); });
+        if (addressHexLower == c_l2SystemConfigAddress)
+        {
+            if (featureFlagsSlot == nullptr)
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                          "L2 genesis allocs must carry the SystemConfig "
+                                          "feature_flags Entry slot (keccak256(\"feature_flags\" "
+                                          "|| be32(101)) = 0x" +
+                                          slotKeyHex +
+                                          ") so the genesis state root commits it; regenerate "
+                                          "the allocs with build-allocs.py"));
+            }
+        }
         if (featureFlagsSlot == nullptr)
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
-                                      "L2 genesis allocs must carry the SystemConfig "
-                                      "feature_flags Entry slot (keccak256(\"feature_flags\" "
-                                      "|| be32(101)) = 0x" +
-                                      slotKeyHex +
-                                      ") so the genesis state root commits it; regenerate "
-                                      "the allocs with build-allocs.py"));
+            continue;
         }
         auto valueHex = ledger::stripHexPrefix(featureFlagsSlot->second);
         std::array<uint8_t, 32> actualValue{};
@@ -1557,9 +1558,15 @@ static void verifyL2FeatureFlagsSlot(
                     "SystemConfig feature_flags slot in the genesis allocs does not match "
                     "this node's genesis feature set (Features::toFlagsNumber()): alloc=0x" +
                     toHex(actualValue) + " expected=0x" + toHex(expectedValue) +
-                    "; the alloc artifact and the node's [features] config disagree"));
+                    " (account 0x" + std::string(importAccount.address) +
+                    "); the alloc artifact and the node's [features] config disagree"));
         }
     }
+    // No slot anywhere and no template account: the chain has no SystemConfig account
+    // to commit — nothing to verify. (A hand-made alloc whose SystemConfig sits at a
+    // non-template address WITHOUT the slot is the documented residual: the
+    // generator's name-keyed guard in build-allocs.py refuses to produce it, and the
+    // slot-key check above verifies it whenever the slot IS present, on any layout.)
 }
 
 // Genesis import writes go to the node's local state storage, whose operations
@@ -2047,6 +2054,7 @@ bool Ledger::buildGenesisBlock(
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
+        SYS_CHAIN_METADATA, SYS_VALUE,
     });
     constexpr static auto moreTables = std::to_array<std::string_view>(
             {SYS_CODE_BINARY, SYS_VALUE, SYS_CONTRACT_ABI, SYS_VALUE});
@@ -2275,6 +2283,76 @@ bool Ledger::buildGenesisBlock(
                 SystemConfigEntry{std::to_string(*genesis.m_excessBlobGas), 0}));
             co_await storage2::writeOne(*m_stateStorage,
                 executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS), excessBlobGasEntry);
+        }
+
+        if (genesis.m_opEip1559.has_value())
+        {
+            // The declared EIP-1559 triple rides the on-chain SYS_CONFIG so every
+            // snapshot read (getLedgerConfig -> RPC fee prediction) prices with the
+            // chain's own parameters, not a binary-side preset. Write-only at genesis:
+            // the triple is genesis-frozen, same policy as the fork-schedule metadata.
+            // Refuse a zero-carrying triple at the SOURCE: the snapshot reader
+            // (parseOpEip1559Params) throws on zeros, so a zero here would otherwise
+            // write a row every later boot fails to read.
+            auto const params = bcos::engine::effectiveOpEip1559(genesis.m_opEip1559);
+            // The row invariant is shared with the SYS_CONFIG reader
+            // (opEip1559ParamsRowProblem): zeros AND anything wider than the u32
+            // Holocene extraData encoding would write a genesis-frozen row every
+            // later boot fails to read.
+            if (auto const problem = opEip1559ParamsRowProblem(params))
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                          "genesis [op_eip1559] triple carries a " + *problem +
+                                          " — the SYS_CONFIG reader rejects it, so this chain "
+                                          "would never boot"));
+            }
+            Entry eip1559Entry;
+            eip1559Entry.set(bcos::storage::serialize::encode(SystemConfigEntry{
+                std::to_string(params.elasticity) + "," + std::to_string(params.denominator) + "," +
+                    std::to_string(params.denominatorCanyon),
+                0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS),
+                std::move(eip1559Entry));
+        }
+        // The resolved schedule also rides SYS_CONFIG so every getLedgerConfig snapshot —
+        // the RPC estimate gas-cap gate (M1) among them — keys fork activation on the
+        // chain's own schedule in every deployment. The SYS_CHAIN_METADATA triple is the
+        // integrity-bound copy the Initializer's boot probe validates (absent = legal;
+        // partial/corrupt/mis-bound = startup refusal). Both declaration channels land
+        // here with the NORMALIZED canonical (buildOpForkScheduleMetadata re-parses and
+        // normalizes, so "0:Isthmus" persists as "0:isthmus"): the canonical section
+        // and the [op_fork_timestamps] shorthand folded by the same rule
+        // (foldOpForkShorthand) the executor applies.
+        std::optional<std::string> resolvedOpSchedule;
+        if (genesis.m_opstackForkSchedule.has_value())
+        {
+            const auto metadata =
+                buildOpForkScheduleMetadata(*genesis.m_opstackForkSchedule, header->hash());
+            co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
+            resolvedOpSchedule = metadata.schedule;
+        }
+        else if (genesis.m_opForkSchedule.has_value())
+        {
+            // Same integrity triple for the shorthand channel: fold first, then bind the
+            // NORMALIZED canonical (both channels persist identical triples; a chain
+            // declared via [op_fork_timestamps] must not lack the integrity-bound copy).
+            const auto metadata =
+                buildOpForkScheduleMetadata(canonicalOpForkSchedule(foldOpForkShorthand(
+                                               genesis.m_opForkSchedule->m_jovianTime,
+                                               genesis.m_opForkSchedule->m_karstTime)),
+                    header->hash());
+            co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
+            resolvedOpSchedule = metadata.schedule;
+        }
+        if (resolvedOpSchedule.has_value())
+        {
+            Entry opForkScheduleEntry;
+            opForkScheduleEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry{*resolvedOpSchedule, 0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, INTERNAL_SYSTEM_KEY_OP_FORK_SCHEDULE),
+                std::move(opForkScheduleEntry));
         }
 
         // write consensus node list
