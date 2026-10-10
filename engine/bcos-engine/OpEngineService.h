@@ -28,6 +28,7 @@
 #include <bcos-framework/engine/EngineService.h>
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/OpBaseFee.h>
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/engine/Types.h>
 
 #include <bcos-framework/ledger/Ledger.h>
@@ -51,6 +52,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <mutex>
+#include <atomic>
 #include <optional>
 #include <set>
 #include <string>
@@ -131,7 +133,8 @@ public:
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
+        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false,
+        std::optional<OpEip1559Params> eip1559 = std::nullopt)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),
@@ -139,7 +142,8 @@ public:
         m_blockTxCountLimit(blockTxCountLimit),
         m_delegate(std::move(delegate)),
         m_daCaps(std::move(daCaps)),
-        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
+        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes),
+        m_eip1559(eip1559)
     {
         if (!m_blockFactory)
         {
@@ -217,6 +221,32 @@ public:
     }
 
 private:
+    /// Fork-aware OP base-fee pricing (op-geth CalcBaseFee, eip1559.go:64-110): a Holocene+
+    /// parent prices from its own extraData; a pre-Holocene parent prices from the chain's
+    /// declared 1559 constants — op-geth DecodeOptimismExtraData's config-constants branch,
+    /// with the denominator keyed on the CHILD block's Canyon activation (op-geth
+    /// BaseFeeChangeDenominator(header.Time), params/config.go:1349-1359). Calling the
+    /// Holocene+-only calcOpBaseFee on a pre-Holocene parent throws on its empty extraData,
+    /// turning a valid pre-Holocene import/build into an internal error (hit by the
+    /// Regolith-window e2e suites replaying from genesis).
+    bcos::u256 calcOpBaseFeeForParent(const bcos::protocol::BlockHeader& parentHeader,
+        int64_t parentTimestampMs, int64_t childTimestampMs) const
+    {
+        if (m_scheduler.isHoloceneActive(parentTimestampMs))
+        {
+            return calcOpBaseFee(
+                parentHeader, m_scheduler.isJovianActive(parentTimestampMs));
+        }
+        // The 2-arg calcOpBaseFee's corrupt-header guard, kept on the pre-Holocene arm too.
+        if (!parentHeader.baseFee().has_value())
+        {
+            throwOpBaseFeeError("OP parent header is missing baseFee");
+        }
+        return calcOpBaseFeePreHolocene(parentHeader.gasLimit(), parentHeader.gasUsed(),
+            *parentHeader.baseFee(), m_scheduler.isCanyonActive(childTimestampMs),
+            effectiveOpEip1559(m_eip1559));
+    }
+
     static PayloadStatus makeStatus(PayloadValidationStatus status,
         std::optional<h256> latestValidHash = std::nullopt,
         std::optional<std::string> validationError = std::nullopt)
@@ -232,6 +262,13 @@ private:
         {
             return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                 std::string("OP block execution rejected the payload: ") + error.errorMessage());
+        }
+        if (boost::get_error_info<bcos::engine::OpSiblingReorgUnsupported>(error) != nullptr)
+        {
+            // One-level tip reorg is a deferred scheduler capability (ReorgUndo
+            // follow-up); the Engine-API answer is SYNCING so the CL retries after
+            // re-parenting — never a -32603 internal fault.
+            return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
         BOOST_THROW_EXCEPTION(
             OpExecutionInternalError{} << bcos::errinfo_comment{
@@ -302,6 +339,12 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
     bool m_allowSynthesizedL1Attributes;
+    /// The chain's EIP-1559 triple as DECLARED (config.genesis [op_eip1559]); nullopt when the
+    /// node declares none. Only the zero-attribute-params substitution consumes it (op-geth
+    /// miner/worker.go:377-381): an op-node that sends (0,0) gets this chain's declared pair,
+    /// or the OP-mainnet preset when nothing is declared. Holocene+ pricing reads the pair
+    /// from the parent's extraData and never consults this member.
+    std::optional<OpEip1559Params> m_eip1559;
     /// Guards m_lastExecutedHeader: newPayload requests can run concurrently on RPC
     /// threads (no serial executor), so the shared_ptr write/read must be synchronized.
     ///

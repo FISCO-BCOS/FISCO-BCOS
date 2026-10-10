@@ -234,10 +234,10 @@ inline protocol::Transaction::Ptr wrapOpP2pEnvelope(
             "OpBlockVerifier: empty transaction envelope", txHash));
     }
     auto const typeByte = static_cast<uint8_t>(raw[0]);
-    constexpr uint8_t kRlpListBase = 0xc0;     // legacy RLP list prefix
-    constexpr uint8_t kDepositTypeByte = 0x7e; // kDepositTxType (OpTransition.h)
-    if (typeByte < kRlpListBase && typeByte != 0x01 && typeByte != 0x02 && typeByte != 0x04 &&
-        typeByte != kDepositTypeByte)
+    constexpr uint8_t c_rlpListBase = 0xc0;     // legacy RLP list prefix
+    constexpr uint8_t c_depositTypeByte = 0x7e; // kDepositTxType (OpTransition.h)
+    if (typeByte < c_rlpListBase && typeByte != 0x01 && typeByte != 0x02 && typeByte != 0x04 &&
+        typeByte != c_depositTypeByte)
     {
         // 0x03 (EIP-4844 blob) and 0x7d land here: not admissible on any OP fork.
         BOOST_THROW_EXCEPTION(bcos::evm::OpConsensusError(
@@ -509,8 +509,43 @@ public:
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<OpRecentBlockHashes<ViewType>> hashes;
+            // Fork-activation gate input: the parent header's timestamp, read only when
+            // the gate can fire (Jovian+). The parent is the committed head this view
+            // forked from (step 1's height guard), so the row exists; getBlockData throws
+            // NotFoundBlockHeader for a number with no committed header — mirror
+            // OpScheduler's translation to the fail-closed storage fault (this
+            // function's documented taxonomy lists OpStorageError, not the framework
+            // exception, and the sync loop classifies OpStorageError as transient).
+            // The p2p child timestamp is already seconds; the stored parent header
+            // carries internal milliseconds.
+            bool noUserTxActivationBlock = false;
+            if (spec.has_da_footprint)
+            {
+                bcos::protocol::BlockHeader::Ptr parentHeader;
+                try
+                {
+                    auto parentBlock = co_await ledger::getBlockData(view,
+                        static_cast<bcos::protocol::BlockNumber>(number) - 1, ledger::HEADER,
+                        *m_blockFactory);
+                    parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
+                }
+                catch (bcos::ledger::NotFoundBlockHeader const&)
+                {
+                    parentHeader = nullptr;
+                }
+                if (!parentHeader)
+                {
+                    throw bcos::evm::engine::OpStorageError(fmt::format(
+                        "OpBlockVerifier: parent block header is missing from storage "
+                        "(block {})",
+                        number - 1));
+                }
+                noUserTxActivationBlock = ledger::isOpNoUserTxActivationBlock(m_forkSchedule,
+                    opForkTimestampSec(parentHeader->timestamp()),
+                    static_cast<uint64_t>(ethHeader.timestamp));
+            }
             co_await preBlockOpEthSteps(view, *header, spec, rawTxBytes, deposits, executor.vm(),
-                sharedError, hashes, hashErr, daFootprintGasScalar);
+                sharedError, hashes, hashErr, daFootprintGasScalar, noUserTxActivationBlock);
 
             OpEthBlockContext ctx{.fee = {},
                 .blockGasLeft =
