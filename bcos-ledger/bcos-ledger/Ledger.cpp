@@ -2325,6 +2325,16 @@ bool Ledger::buildGenesisBlock(
         // and the [op_fork_timestamps] shorthand folded by the same rule
         // (foldOpForkShorthand) the executor applies.
         std::optional<std::string> resolvedOpSchedule;
+        // A dual declaration must agree before this branch resolves it: the loader refuses a
+        // divergent pair (NodeConfig), and a direct GenesisConfig caller (tooling, tests, a
+        // future genesis wizard) must not be able to persist the canonical side while the
+        // executor runs the differing shorthand — the exact state the loader then refuses to
+        // read. Same rule set as the loader, one helper.
+        if (auto const problem = opForkScheduleDualDeclarationProblem(
+                genesis.m_opstackForkSchedule, genesis.m_opForkSchedule))
+        {
+            throwInvalidOpForkSchedule(*problem);
+        }
         if (genesis.m_opstackForkSchedule.has_value())
         {
             const auto metadata =

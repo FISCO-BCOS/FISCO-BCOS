@@ -184,6 +184,24 @@ BOOST_AUTO_TEST_CASE(malformedCanyonDenominatorRejected)
     }
 }
 
+BOOST_AUTO_TEST_CASE(unknownKeyRejectedLikeTheSiblingScheduleSection)
+{
+    // The optional denominator_canyon makes a typo'd key silently read as absent and become
+    // the 250 default — the pre-Canyon mispricing this section exists to fix, with no
+    // diagnostic, frozen into the genesis pin. The sibling [op_fork_timestamps] rejects its
+    // own typos, so the triple must too.
+    for (const auto* stray : {"denominator_canyonn=100\n", "denominator_canyon=100\nstray=1\n"})
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
+                std::string(c_schedule) + "[op_eip1559]\nelasticity=2\ndenominator=8\n" + stray)),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "[op_eip1559] has an unrecognised key");
+            });
+    }
+}
+
 BOOST_AUTO_TEST_CASE(canyonDenominatorHexParsesStrictly)
 {
     // "0xfa" is exactly the value get_optional<uint64_t> silently truncated to 0 (rejected as
