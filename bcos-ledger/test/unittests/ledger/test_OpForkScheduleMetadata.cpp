@@ -273,6 +273,15 @@ BOOST_AUTO_TEST_CASE(resolvedLocalScheduleComesFromWhicheverChannelIsDeclared)
     BOOST_CHECK_EQUAL(*fromBoth, *fromShorthand);
     // Neither channel: nothing to compare.
     BOOST_CHECK(!resolvedLocalOpForkScheduleCanonical(std::nullopt, std::nullopt).has_value());
+    // The all-unset shorthand is the legacy all-Isthmus chain: it resolves to exactly the
+    // canonical text such a chain recorded, so the boot comparison below cannot refuse it.
+    BOOST_REQUIRE(resolvedLocalOpForkScheduleCanonical(OpForkSchedule{}, std::nullopt).has_value());
+    BOOST_CHECK_EQUAL(
+        *resolvedLocalOpForkScheduleCanonical(OpForkSchedule{}, std::nullopt), "0:isthmus");
+    BOOST_CHECK(!opForkScheduleBootProbeProblem(
+                     std::string{"0:isthmus"}, std::string{"0:isthmus"},
+                     resolvedLocalOpForkScheduleCanonical(OpForkSchedule{}, std::nullopt))
+                     .has_value());
 }
 
 BOOST_AUTO_TEST_CASE(bootProbeComparesTheShorthandOnlyNodeAgainstTheRecordedRow)
