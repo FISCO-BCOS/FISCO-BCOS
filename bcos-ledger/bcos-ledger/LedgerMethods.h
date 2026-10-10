@@ -37,6 +37,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-rlp-protocol/BlockHeaderHash.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
@@ -497,13 +498,18 @@ task::Task<void> tag_invoke(
 /// call sites only differ in how they fetch their inputs (node list, system configs /
 /// features at their respective block basis, header hash / timestamp); this helper performs
 /// the pure mapping so the consensus-relevant assembly cannot drift between the paths.
-/// Callers resolve an absent committed header to a disengaged hash/timestamp, leaving the
-/// previous values untouched — matching the historical behavior of both call sites.
+/// Callers resolve an absent committed header to a disengaged hash/timestamp/baseFee, leaving
+/// the previous values untouched — matching the historical behavior of both call sites.
 inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
     bcos::consensus::ConsensusNodeList const& nodeList, ledger::SystemConfigs const& sysConfig,
     ledger::Features const& features, protocol::BlockNumber blockNumber,
-    std::optional<int64_t> const& timestamp, std::optional<crypto::HashType> const& blockHash)
+    std::optional<int64_t> const& timestamp, std::optional<crypto::HashType> const& blockHash,
+    std::optional<u256> const& headBaseFee)
 {
+    if (headBaseFee)
+    {
+        ledgerConfig.setBaseFeePerGas(headBaseFee);
+    }
     ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto const& node) {
         return node.type == consensus::Type::consensus_sealer;
     }) | ::ranges::to<std::vector>());
@@ -656,6 +662,7 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
 
     std::optional<int64_t> timestamp;
     std::optional<crypto::HashType> blockHash;
+    std::optional<u256> headBaseFee;
     auto blockNumberStr = std::to_string(blockNumber);
     if (auto entry = co_await storage2::readOne(
             storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
@@ -665,13 +672,14 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
             bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
         timestamp = headerPtr->timestamp();
         blockHash = headerPtr->hash();
+        headBaseFee = protocol::blockBaseFee(*headerPtr);
     }
 
     Features features;
     co_await readFromStorage(features, storage, blockNumber);
 
-    applyLedgerConfig(
-        ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp, blockHash);
+    applyLedgerConfig(ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp,
+        blockHash, headBaseFee);
 }
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);

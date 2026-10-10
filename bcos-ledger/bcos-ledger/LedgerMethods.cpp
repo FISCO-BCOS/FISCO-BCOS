@@ -480,16 +480,18 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     // Timestamp from the block header; hash from the SYS_NUMBER_2_HASH row (works for OP
     // headers whose in-memory BlockHeader::hash() would throw).
     std::optional<int64_t> timestamp;
+    std::optional<u256> headBaseFee;
     auto block = co_await getBlockData(ledger, blockNumber, HEADER);
     if (block && block->blockHeader())
     {
         timestamp = block->blockHeader()->timestamp();
+        headBaseFee = protocol::blockBaseFee(*block->blockHeader());
     }
     auto blockHash = co_await getBlockHash(ledger, blockNumber);
     auto features = co_await getFeatures(ledger);
 
     applyLedgerConfig(ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp,
-        std::optional<crypto::HashType>{blockHash});
+        std::optional<crypto::HashType>{blockHash}, headBaseFee);
     co_return;
 }
 

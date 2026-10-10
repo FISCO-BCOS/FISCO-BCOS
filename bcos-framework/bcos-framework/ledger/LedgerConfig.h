@@ -163,6 +163,12 @@ public:
     int64_t difficulty() const { return m_difficulty; }
     void setDifficulty(int64_t d) { m_difficulty = d; }
 
+    /// The committed head block's EIP-1559 base fee (protocol::blockBaseFee over its header):
+    /// 0 on a native FISCO chain, the real value on the Ethereum and OP lanes; nullopt = no
+    /// head header was read. Distinct from gasPrice(), the tx_gas_price SYSTEM config row.
+    std::optional<u256> const& baseFeePerGas() const { return m_baseFeePerGas; }
+    void setBaseFeePerGas(std::optional<u256> baseFee) { m_baseFeePerGas = std::move(baseFee); }
+
     // EIP-4399 prev_randao (block mixHash). Used by the PREVRANDAO/DIFFICULTY
     // opcode for Paris+ revisions. Kept in the ledger config because the BCOS
     // block header has no dedicated mixHash/random field.
@@ -291,6 +297,7 @@ private:
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {DEFAULT_GAS_LIMIT, 0};
     std::tuple<std::string, protocol::BlockNumber> m_gasPrice = {"0x0", 0};
     int64_t m_difficulty = 0;
+    std::optional<u256> m_baseFeePerGas;
     evmc::bytes32 m_prevRandao{};
     std::optional<uint64_t> m_excessBlobGas;
     /// The OP lane's declared EIP-1559 triple, read from the op_eip1559_params

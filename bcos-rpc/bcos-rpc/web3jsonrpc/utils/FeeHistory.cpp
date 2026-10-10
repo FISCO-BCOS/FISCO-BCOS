@@ -133,7 +133,7 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
         auto const block = co_await ledger::getBlockData(ledger, number,
             ledger::HEADER | (wantRewards ? (ledger::TRANSACTIONS | ledger::RECEIPTS) : 0));
         last = block->blockHeader();
-        auto const baseFee = blockBaseFee(*last);
+        auto const baseFee = protocol::blockBaseFee(*last);
         baseFees.append(toQuantity(baseFee));
         ratios.append(gasUsedRatio(*last));
         blobFees.append(last->excessBlobGas() ? "0x1" : "0x0");

@@ -48,6 +48,7 @@
 #include "libinitializer/Common.h"
 #include "libinitializer/GlobalStateStorageInitializer.h"
 #include "libinitializer/TxGossipService.h"
+#include <bcos-utilities/ClientIdentity.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
@@ -832,7 +833,7 @@ private:
                         // ALWAYS the chain genesis (the handshake rejects a peer on a
                         // different chain), headHash reflects the local resume anchor.
                         auto clientConfig = peer;
-                        clientConfig.clientId = "FISCO-BCOS-EL/v0.1.0";
+                        clientConfig.clientId = bcos::clientIdentity();
                         clientConfig.networkId = chainId;
                         clientConfig.genesisHash = bcos::protocol::ethHeaderHash(genesisHeader);
                         clientConfig.headHash = bcos::protocol::ethHeaderHash(anchor);
@@ -1375,7 +1376,7 @@ private:
             [this](bcos::devp2p::rlpx::PeerConfig const& bootnode) {
                 auto resume = resumePoint();
                 auto config = bootnode;
-                config.clientId = "FISCO-BCOS-EL/v0.1.0";
+                config.clientId = bcos::clientIdentity();
                 config.networkId = m_nodeConfig->ethereumChainId();
                 config.genesisHash = bcos::protocol::ethHeaderHash(resume.genesisHeader);
                 config.headHash = bcos::protocol::ethHeaderHash(resume.anchor);

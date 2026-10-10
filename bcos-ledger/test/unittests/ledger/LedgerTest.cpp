@@ -1631,6 +1631,10 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         blockHeader->setNumber(10086);
         blockHeader->setVersion(200);
         blockHeader->setTimestamp(110);
+        // An OP-shaped head (NON_ETH with withdrawalsRoot + baseFee, isOpEthereumBlock): the
+        // snapshot must carry its base fee for OP admission's fee floor.
+        blockHeader->setWithdrawalsRoot(crypto::HashType{});
+        blockHeader->setBaseFee(u256(7));
         auto hashImpl = std::make_shared<Keccak256>();
         blockHeader->calculateHash(*hashImpl);
         auto randomHash = blockHeader->hash();
@@ -1654,6 +1658,9 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         BOOST_CHECK_EQUAL(ledgerConfig->blockNumber(), 10086);
         BOOST_CHECK_EQUAL(ledgerConfig->hash(), randomHash);
         BOOST_CHECK_EQUAL(ledgerConfig->consensusType(), RPBFT_CONSENSUS_TYPE);
+        BOOST_REQUIRE(ledgerConfig->baseFeePerGas().has_value());
+        BOOST_CHECK_EQUAL(*ledgerConfig->baseFeePerGas(), u256(7));
+        BOOST_CHECK_EQUAL(ledgerConfig->timestamp(), 110);
 
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochSealerNum()), 12345);
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochBlockNum()), 1000);
