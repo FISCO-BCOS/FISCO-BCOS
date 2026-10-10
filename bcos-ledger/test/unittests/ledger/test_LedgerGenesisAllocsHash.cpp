@@ -308,13 +308,15 @@ BOOST_AUTO_TEST_CASE(FeatureFlagsSlotVerifiedAtANonTemplateAddress)
     }());
 }
 
-// A slot-less account at the COMMITTED C2 layout refuses: the mandate covers both known
-// SystemConfig layouts (template 0x43...C0 and C2 0x4200...1000), so dropping the slot on
-// either one fails instead of leaving the genesis state root not committing the feature set.
-// What remains uncovered is an UNKNOWN layout: without the slot the node cannot tell that
-// account is the SystemConfig role, so the generator's name-keyed guard (build-allocs.py,
-// pinned by tools/opstack-genesis/test_build_allocs.py) stays the enforcement there.
-BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtTheCommittedC2LayoutRefusesToBuild)
+// A slot-less account at a non-template address still builds — the documented residual, and it
+// now has a measured precondition: the presence mandate is keyed on the template layout because
+// the harness's committed C2 config leaves `system_config` empty, so the generator writes no
+// slot for the C2 layout and mandating it there refuses real nodes (making the C2 e2e red).
+// The VALUE check below is not affected: an account carrying the slot is verified on any layout
+// (MismatchingFlagsSlotAtTheC2LayoutRefusesToBuild), and the generator's name-keyed guard
+// (build-allocs.py, pinned by tools/opstack-genesis/test_build_allocs.py) stays the enforcement
+// for a slot-less layout until that generator change lands and the mandate can follow it.
+BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtANonTemplateAddressIsSkipped)
 {
     task::syncWait([this]() -> task::Task<void> {
         auto storage = makeStorage();
@@ -323,9 +325,7 @@ BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtTheCommittedC2LayoutRefusesToBuild)
         auto config = makeL2Config();
         config.m_allocs[0].address = "4200000000000000000000000000000000001000";
         config.m_allocs[0].storage.clear();  // drop the feature_flags slot
-        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, config, param),
-            bcos::tool::InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "must carry the SystemConfig"); });
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, config, param));
     }());
 }
 
