@@ -646,6 +646,24 @@ BOOST_AUTO_TEST_CASE(canonicalTextCannotDeclareTheUnsetSentinel)
 // arithmetic poison (gasTarget = gasLimit/0 in fee prediction) and the config loader
 // already refuses zeros at load; the ROW parser must share the invariant so a corrupt or
 // foreign-written row fails as a named config error at boot instead.
+// The Holocene extraData encodes each field as u32 — a wider row is poison the
+// WRITER must refuse through the same rule set the reader enforces.
+BOOST_AUTO_TEST_CASE(opEip1559ParamsRowRejectsAboveUint32)
+{
+    for (auto const* row : {"4294967296,50,250", "6,4294967296,250", "6,50,4294967296"})
+    {
+        BOOST_CHECK_EXCEPTION((void)bcos::ledger::parseOpEip1559Params(row),
+            bcos::ledger::InvalidEVMCRevisionConfig,
+            [](auto const& e) { return messageContains(e, "exceeds uint32"); });
+    }
+    BOOST_CHECK(bcos::ledger::opEip1559ParamsRowProblem(bcos::engine::OpEip1559Params{
+        .elasticity = 6, .denominator = 50, .denominatorCanyon = 1ull << 32})
+                    .has_value());
+    BOOST_CHECK(!bcos::ledger::opEip1559ParamsRowProblem(bcos::engine::OpEip1559Params{
+        .elasticity = 6, .denominator = 50, .denominatorCanyon = 250})
+                    .has_value());
+}
+
 BOOST_AUTO_TEST_CASE(opEip1559RowRejectsZeroTriple)
 {
     for (auto const* row : {"0,0,0", "6,0,250", "0,50,250"})

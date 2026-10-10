@@ -2295,13 +2295,15 @@ bool Ledger::buildGenesisBlock(
             // (parseOpEip1559Params) throws on zeros, so a zero here would otherwise
             // write a row every later boot fails to read.
             auto const params = bcos::engine::effectiveOpEip1559(genesis.m_opEip1559);
-            if (params.elasticity == 0 || params.denominator == 0 ||
-                params.denominatorCanyon == 0)
+            // The row invariant is shared with the SYS_CONFIG reader
+            // (opEip1559ParamsRowProblem): zeros AND anything wider than the u32
+            // Holocene extraData encoding would write a genesis-frozen row every
+            // later boot fails to read.
+            if (auto const problem = opEip1559ParamsRowProblem(params))
             {
                 BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
-                                          "genesis [op_eip1559] triple carries a zero "
-                                          "elasticity/denominator/denominatorCanyon — the "
-                                          "SYS_CONFIG reader rejects zeros, so this chain "
+                                          "genesis [op_eip1559] triple carries a " + *problem +
+                                          " — the SYS_CONFIG reader rejects it, so this chain "
                                           "would never boot"));
             }
             Entry eip1559Entry;

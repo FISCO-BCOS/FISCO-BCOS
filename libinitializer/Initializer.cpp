@@ -915,7 +915,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 {
                     auto const declaredCanonical =
                         ledger::canonicalOpForkSchedule(ledger::parseOpForkSchedule(*declared));
-                    if (*rows.schedule != declaredCanonical)
+                    // One rule set: storedOpForkScheduleDivergesFromGenesis is the
+                    // stored-vs-declared comparison (parsed identity, not raw ASCII).
+                    if (ledger::storedOpForkScheduleDivergesFromGenesis(*rows.schedule, declared))
                     {
                         BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig()
                                               << bcos::errinfo_comment(

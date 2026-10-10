@@ -522,6 +522,28 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
 
 /// Parse the op_eip1559_params SYS_CONFIG row ("elasticity,denominator,denominatorCanyon").
 /// Same fail-closed policy as applyEVMCRevisionConfig: a malformed persisted value must
+/// The row invariant both the SYS_CONFIG reader and the genesis writer enforce:
+/// zeros are arithmetic poison (gasTarget = gasLimit/elasticity, delta/denominator)
+/// and the Holocene extraData encodes each field as u32, so anything wider can
+/// never be emitted into a header. Returns the violation text, or nullopt when the
+/// triple is row-encodable. One rule set — a writer that skips it mints a
+/// genesis-frozen row the reader refuses on every later boot.
+[[nodiscard]] inline std::optional<std::string> opEip1559ParamsRowProblem(
+    const bcos::engine::OpEip1559Params& params)
+{
+    if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
+    {
+        return std::string("zero elasticity/denominator/denominatorCanyon");
+    }
+    if (params.elasticity > std::numeric_limits<std::uint32_t>::max() ||
+        params.denominator > std::numeric_limits<std::uint32_t>::max() ||
+        params.denominatorCanyon > std::numeric_limits<std::uint32_t>::max())
+    {
+        return std::string("elasticity/denominator/denominatorCanyon exceeding uint32");
+    }
+    return std::nullopt;
+}
+
 /// halt loudly rather than silently degrading the fee prediction to a preset.
 inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value)
 {
@@ -557,15 +579,14 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
     auto params = bcos::engine::OpEip1559Params{.elasticity = parseField(value.substr(0, comma1)),
         .denominator = parseField(value.substr(comma1 + 1, comma2 - comma1 - 1)),
         .denominatorCanyon = parseField(value.substr(comma2 + 1))};
-    // A zero elasticity/denominator is arithmetic poison (gasTarget = gasLimit/elasticity,
-    // delta/denominator) and the config loader already refuses zeros at load; the row
-    // parser shares the invariant so a corrupt or foreign-written row fails as a named
-    // config error at boot instead of a divide-by-zero inside fee prediction.
-    if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
+    // The row invariant is shared with the genesis writer (opEip1559ParamsRowProblem),
+    // so a corrupt or foreign-written row fails as a named config error at boot instead
+    // of a divide-by-zero inside fee prediction — and the writer cannot mint a row this
+    // parser would refuse.
+    if (auto const problem = opEip1559ParamsRowProblem(params))
     {
         BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
-                                  "op_eip1559_params value carries a zero "
-                                  "elasticity/denominator/denominatorCanyon: " +
+                                  "op_eip1559_params value carries a " + *problem + ": " +
                                   std::string(value)));
     }
     return params;
