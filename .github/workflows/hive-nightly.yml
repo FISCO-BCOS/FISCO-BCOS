@@ -149,6 +149,12 @@ jobs:
         if: matrix.limit != ''
         run: cp .ci-fixtures/fixtures_stable.tar.gz .ci-hive/simulators/ethereum/eels/consume-rlp/fixtures.tar.gz
 
+      # This hive revision exits 1 when ANY test fails (hive.go's fatal() on a
+      # non-zero failCount); smoke/genesis carries two known failures and eels
+      # shards may regress upstream, so tolerate the exit code here — the
+      # assert step below parses the run JSON and is the real gate. A hard
+      # failure (image build, docker daemon) leaves no run JSON and still
+      # fails the assert.
       - name: Run hive shard
         run: |
           cd .ci-hive
@@ -156,15 +162,14 @@ jobs:
             ./hive --sim "${{ matrix.sim }}" --client bcos \
               --sim.buildarg fixtures=/fixtures \
               --sim.limit "${{ matrix.limit }}" \
-              --client.checktimelimit 25m
+              --client.checktimelimit 25m || true
           else
-            ./hive --sim "${{ matrix.sim }}" --client bcos
+            ./hive --sim "${{ matrix.sim }}" --client bcos || true
           fi
 
-      # hive exits 0 even when tests fail; gate on the run JSON. smoke/genesis
-      # carries exactly two known failures (pre-London geneses, see
-      # tools/hive/README.md "Known limitations"); every eels shard must be
-      # fully green.
+      # Gate on the run JSON: smoke/genesis carries exactly two known failures
+      # (pre-London geneses, see tools/hive/README.md "Known limitations");
+      # every eels shard must be fully green.
       - name: Assert shard results
         run: |
           if [ "${{ matrix.shard }}" = "smoke" ]; then

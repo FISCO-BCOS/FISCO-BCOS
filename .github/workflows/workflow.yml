@@ -733,12 +733,18 @@ jobs:
           chmod +x fisco-bcos-air/fisco-bcos tools/eth-sync-check/eth-sync-check
           BUILD_DIR=. bash tools/hive/build-local.sh .ci-hive
 
+      # This hive revision exits 1 when ANY test fails (hive.go's fatal() on a
+      # non-zero failCount), and smoke/genesis carries exactly two known
+      # failures (pre-London geneses, see tools/hive/README.md "Known
+      # limitations"), so tolerate the exit code here — the assert step below
+      # parses the run JSON and is the real gate. A hard failure (image build,
+      # docker daemon) leaves no run JSON behind and still fails the assert.
       - name: Run hive smoke suites
-        run: cd .ci-hive && ./hive --sim "smoke/(genesis|network)" --client bcos
+        run: cd .ci-hive && ./hive --sim "smoke/(genesis|network)" --client bcos || true
 
-      # hive exits 0 even when tests fail; gate on the run JSON. smoke/genesis
-      # carries exactly two known failures (pre-London geneses, see
-      # tools/hive/README.md "Known limitations"); anything else fails the job.
+      # Gate on the run JSON: every test must pass except the allow-listed
+      # known failures, which must fail EXACTLY (a fixed known failure turning
+      # green also fails the check, so the allow-list cannot rot).
       - name: Assert smoke results
         run: |
           python3 tools/hive/check-hive-results.py --logs .ci-hive/workspace/logs \
