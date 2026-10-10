@@ -85,12 +85,12 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         "genesis config file path, eg. genesis.ini")("prune,p", "prune the node data")("snapshot,s",
         boost::program_options::value<bool>(),
         "generate snapshot with or without txs and receipts, if true generate snapshot with txs "
-        "and receipts")(
-        "output,o", boost::program_options::value<std::string>(), "snapshot output directory")(
-        "import,i", boost::program_options::value<std::string>(), "import snapshot from directory")(
-        "el,e", "run in EL self-sync mode (mirror of [ethereum].mode=el or mode=opstack-el; "
-                "conflicts with the config file are rejected)")(
-        "bootnodes,b", boost::program_options::value<std::string>(),
+        "and receipts")("output,o", boost::program_options::value<std::string>(),
+        "snapshot output directory")("import,i", boost::program_options::value<std::string>(),
+        "import snapshot from directory")("el,e",
+        "run in EL self-sync mode (mirror of [ethereum].mode=el or mode=opstack-el; "
+        "conflicts with the config file are rejected)")("bootnodes,b",
+        boost::program_options::value<std::string>(),
         "path to the EL-mode bootnodes file (mirror of [ethereum].bootnodes_file; a value that "
         "differs from the config file is rejected)");
 
@@ -109,7 +109,7 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     {
         std::cout << "invalid parameters" << std::endl;
         std::cout << main_options << std::endl;
-        exit(0);
+        exit(1);
     }
     /// help information
     if (vm.count("help") || vm.count("h"))
@@ -143,13 +143,13 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     }
     if (!boost::filesystem::exists(configPath))
     {
-        std::cout << "config \'" << configPath << "\' not found!";
-        exit(0);
+        std::cout << "config \'" << configPath << "\' not found!" << std::endl;
+        exit(1);
     }
     if (!boost::filesystem::exists(genesisFilePath))
     {
-        std::cout << "genesis config \'" << genesisFilePath << "\' not found!";
-        exit(0);
+        std::cout << "genesis config \'" << genesisFilePath << "\' not found!" << std::endl;
+        exit(1);
     }
     float txSpeed = 10;
     if (_autoSendTx)

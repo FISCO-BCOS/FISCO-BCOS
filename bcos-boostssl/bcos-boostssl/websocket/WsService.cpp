@@ -29,6 +29,7 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <iterator>
 #include <memory>
 #include <random>
 #include <string>
@@ -308,13 +309,20 @@ void WsService::syncConnectToEndpoints(EndPointsPtr _peers)
         auto fut = (*vPromise)[i]->get_future();
 
         auto status = fut.wait_for(std::chrono::milliseconds(m_waitConnectFinishTimeout));
+        if (status != std::future_status::ready)
+        {
+            // do not block on get(): the connector keeps the promise until beast's own handshake
+            // timeout fires, which would stretch this wait far past m_waitConnectFinishTimeout
+            auto const& peer = *std::next(_peers->begin(), static_cast<std::ptrdiff_t>(i));
+            errorMsg += genConnectError("connection timeout",
+                peer.address() + ":" + std::to_string(peer.port()), i == vPromise->size() - 1);
+            continue;
+        }
         auto [errCode, errMsg, endpoint] = fut.get();
         switch (status)
         {
         case std::future_status::deferred:
-            break;
         case std::future_status::timeout:
-            errorMsg += genConnectError("connection timeout", endpoint, i == vPromise->size() - 1);
             break;
         case std::future_status::ready:
 
