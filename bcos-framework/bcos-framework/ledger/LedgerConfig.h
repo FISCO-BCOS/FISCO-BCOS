@@ -24,11 +24,16 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
 #include "LedgerTypeDef.h"
+#include "OpForkSchedule.h"
+#include "OpForkScheduleCodec.h"
 #include "SystemConfigs.h"
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <limits>
 #include <evmc/evmc.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -56,6 +61,16 @@ constexpr static uint64_t DEFAULT_GAS_LIMIT = 3000000000;
 constexpr static std::uint64_t DEFAULT_EPOCH_SEALER_NUM = 4;
 constexpr static std::uint64_t DEFAULT_EPOCH_BLOCK_NUM = 1000;
 constexpr static std::uint64_t DEFAULT_INTERNAL_NOTIFY_FLAG = 0;
+
+// OP-lane fork schedule, parsed from the [op_fork_timestamps] section of
+// config.genesis (executor_version >= OPSTACK_EXECUTOR_VERSION). The
+// ledger::OpForkSchedule value type lives in OpForkSchedule.h (upstream #5632)
+// together with resolveOpFork, the fork-activation parser shared by the
+// executor and the devp2p header validator; LedgerConfig snapshots the
+// resolved schedule from there. On the engine path the pre-Isthmus rungs stay
+// unset (UINT64_MAX): the engine's -38005 gate admits only Isthmus+ payloads,
+// and an unset isthmus_time makes Isthmus the zero-start baseline — the shape
+// every engine-driven chain has.
 
 class LedgerConfig
 {
@@ -158,6 +173,22 @@ public:
     // dedicated fields, so EEST runner stores them here.
     std::optional<uint64_t> excessBlobGas() const { return m_excessBlobGas; }
     void setExcessBlobGas(std::optional<uint64_t> v) { m_excessBlobGas = v; }
+
+    std::optional<bcos::engine::OpEip1559Params> const& opEip1559Params() const
+    {
+        return m_opEip1559Params;
+    }
+    void setOpEip1559Params(std::optional<bcos::engine::OpEip1559Params> v)
+    {
+        m_opEip1559Params = std::move(v);
+    }
+
+    /// OP lane: the chain's resolved fork schedule (jovian/karst activation seconds),
+    /// persisted on-chain as the op_fork_schedule SYS_CONFIG row at genesis and assembled
+    /// into every LedgerConfig snapshot. The RPC estimate gas-cap gate keys EIP-7825 (a
+    /// Karst/Osaka+ rule) on it.
+    std::optional<OpForkSchedule> const& opForkSchedule() const { return m_opForkSchedule; }
+    void setOpForkSchedule(std::optional<OpForkSchedule> v) { m_opForkSchedule = std::move(v); }
     std::optional<uint64_t> blobGasUsed() const { return m_blobGasUsed; }
     void setBlobGasUsed(std::optional<uint64_t> v) { m_blobGasUsed = v; }
 
@@ -262,6 +293,15 @@ private:
     int64_t m_difficulty = 0;
     evmc::bytes32 m_prevRandao{};
     std::optional<uint64_t> m_excessBlobGas;
+    /// The OP lane's declared EIP-1559 triple, read from the op_eip1559_params
+    /// SYS_CONFIG row (written at genesis when [op_eip1559] is declared). Consumed by
+    /// the RPC fee prediction so pre-Holocene blocks are priced with the chain's own
+    /// parameters instead of the legacy preset.
+    std::optional<bcos::engine::OpEip1559Params> m_opEip1559Params;
+    /// The OP lane's resolved fork schedule, from the op_fork_schedule SYS_CONFIG row
+    /// (written at genesis from either declaration channel). nullopt off the OP lane and
+    /// on OP chains initialized before the row existed.
+    std::optional<OpForkSchedule> m_opForkSchedule;
     std::optional<uint64_t> m_blobGasUsed;
     std::optional<protocol::BlobScheduleConfig> m_blobSchedule;
     std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {DEFAULT_EPOCH_SEALER_NUM, 0};
@@ -290,12 +330,32 @@ private:
 /// EEST-runner convenience.
 inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 
+/// The executor-slot ladder: which scheduler an executor_version value selects. The
+/// values are the MultiVersionScheduler slot indices and the on-chain decimal string.
+/// Add an enumerator ONLY in the release that actually wires that slot: the governance
+/// write bound (MAX_GOVERNANCE_EXECUTOR_VERSION) is derived from this list, so a
+/// "reserved for later" entry would let a transaction write a value whose non-zero
+/// activation block makes every restart throw in validateOpModeGenesisOnly
+/// (genesis-bound in OP mode) while the runtime setVersion fail-opens — the chain
+/// would keep producing but could never restart.
+enum class ExecutorLane : int
+{
+    LegacyDispatcher = 0,  ///< v1 SchedulerManager dispatch path
+    Baseline = 1,          ///< v1 baseline scheduler
+    Ethereum = 2,          ///< pure-Ethereum EthereumExecutor (ethereum-executor)
+    Opstack = 3,           ///< OP-Stack OpSchedulerSeam (op composition root)
+};
+
+static_assert(static_cast<int>(ExecutorLane::Ethereum) == 2);
+static_assert(static_cast<int>(ExecutorLane::Opstack) == 3);
+
 /// Executor version selecting the pure-Ethereum EthereumExecutor (ethereum-executor).
 /// Canonical value kept here so lower layers (bcos-ledger, bcos-tool) can gate on it
 /// without depending on libinitializer; libinitializer/MultiVersionScheduler.h keeps a
-/// scheduler_v1-scoped alias for the same value. Version 3 names the OP lane below; a value
-/// above the newest DECLARED slot saturates down to the newest slot the node actually wired,
-/// which is this one only when the OP slot is unwired.
+/// scheduler_v1-scoped alias for the same value. Below it the v1 schedulers run; exactly
+/// OPSTACK selects the OP lane. A value above the newest DECLARED slot saturates down to
+/// the newest slot the node actually wired, which is this one only when the OP slot is
+/// unwired.
 ///
 /// PRE-RELEASE SEMANTICS: executor_version = 2 was introduced mid-branch (2026-08) and is
 /// NOT part of any upstream release — upstream releases have no v2. The version gates
@@ -306,11 +366,35 @@ inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 /// be re-hung on a proper feature flag / activation block height (Features::Flag) instead
 /// of a bare version compare — tracked in
 /// https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
-inline constexpr int ETHEREUM_EXECUTOR_VERSION = 2;
+inline constexpr int ETHEREUM_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::Ethereum);
 
 /// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).
-/// executor_version >= this enters OP mode (spec 2026-08-07-op-composition-root-design.md D1).
-inline constexpr int OPSTACK_EXECUTOR_VERSION = 3;
+/// Exactly this value enters OP mode (spec 2026-08-07-op-composition-root-design.md D1);
+/// it is genesis-only (validateOpModeGenesisOnly). A higher value is not a defined lane:
+/// boot does NOT refuse it — setVersion saturates it onto the newest wired slot so the
+/// chain keeps producing — so from this release on it is refused as a governance write
+/// instead (the write's non-zero activation block is what would make the next start throw).
+inline constexpr int OPSTACK_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::Opstack);
+
+/// The ONE OP-lane predicate every runtime gate must share. The comparison is >=, not ==:
+/// MultiVersionScheduler::setVersion saturates any value above the newest wired slot down
+/// to it, so a chain carrying a higher executor_version RUNS the OP executor — and every
+/// lane decision (RPC fee semantics, boot gates, OP-only validation, the genesis-only
+/// freeze) must agree with that, or the RPC layer and the executor price the same block
+/// under different rules. (From 3.18.0 on SystemConfigPrecompiled refuses a governance
+/// write above OPSTACK, so in practice only config.genesis can set such a value.)
+inline constexpr bool isOpLaneVersion(int executorVersion)
+{
+    return executorVersion >= OPSTACK_EXECUTOR_VERSION;
+}
+
+/// The highest executor_version a TRANSACTION may set: the newest defined lane, derived
+/// from the ladder above and never hand-copied — wiring a new lane moves the bound with
+/// it. An accepted write above this value would land activation N+1 while every node's
+/// next start fails closed (the runtime setVersion fail-opens, so the chain would keep
+/// producing but could never restart).
+inline constexpr int MAX_GOVERNANCE_EXECUTOR_VERSION =
+    static_cast<int>(magic_enum::enum_values<ExecutorLane>().back());
 
 /// Convert a canonical EVM fork name (case-insensitive, e.g. "cancun"/"osaka") to an
 /// EVMC revision. Returns nullopt for unknown names so callers can fall back to a default.
@@ -436,6 +520,101 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
     return oss.str();
 }
 
+/// Parse the op_eip1559_params SYS_CONFIG row ("elasticity,denominator,denominatorCanyon").
+/// Same fail-closed policy as applyEVMCRevisionConfig: a malformed persisted value must
+/// The row invariant both the SYS_CONFIG reader and the genesis writer enforce:
+/// zeros are arithmetic poison (gasTarget = gasLimit/elasticity, delta/denominator)
+/// and the Holocene extraData encodes each field as u32, so anything wider can
+/// never be emitted into a header. Returns the violation text, or nullopt when the
+/// triple is row-encodable. One rule set — a writer that skips it mints a
+/// genesis-frozen row the reader refuses on every later boot.
+[[nodiscard]] inline std::optional<std::string> opEip1559ParamsRowProblem(
+    const bcos::engine::OpEip1559Params& params)
+{
+    if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
+    {
+        return std::string("zero elasticity/denominator/denominatorCanyon");
+    }
+    if (params.elasticity > std::numeric_limits<std::uint32_t>::max() ||
+        params.denominator > std::numeric_limits<std::uint32_t>::max() ||
+        params.denominatorCanyon > std::numeric_limits<std::uint32_t>::max())
+    {
+        return std::string("elasticity/denominator/denominatorCanyon exceeding uint32");
+    }
+    return std::nullopt;
+}
+
+/// halt loudly rather than silently degrading the fee prediction to a preset.
+inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value)
+{
+    auto parseField = [&value](std::string_view field) -> std::uint64_t {
+        std::uint64_t out = 0;
+        auto [ptr, ec] = std::from_chars(field.data(), field.data() + field.size(), out);
+        if (ec != std::errc{} || ptr != field.data() + field.size())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidEVMCRevisionConfig()
+                << errinfo_comment("cannot parse op_eip1559_params value: " + std::string(value)));
+        }
+        // Holocene extraData encodes each field as u32; the [op_eip1559] loader refuses
+        // wider values at load and the row parser shares the invariant — a foreign row
+        // must fail the same way instead of silently carrying a value no header can emit.
+        if (out > std::numeric_limits<std::uint32_t>::max())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidEVMCRevisionConfig()
+                << errinfo_comment(
+                       "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
+        }
+        return out;
+    };
+    auto comma1 = value.find(',');
+    auto comma2 =
+        comma1 == std::string_view::npos ? std::string_view::npos : value.find(',', comma1 + 1);
+    if (comma1 == std::string_view::npos || comma2 == std::string_view::npos)
+    {
+        BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                  "cannot parse op_eip1559_params value: " + std::string(value)));
+    }
+    auto params = bcos::engine::OpEip1559Params{.elasticity = parseField(value.substr(0, comma1)),
+        .denominator = parseField(value.substr(comma1 + 1, comma2 - comma1 - 1)),
+        .denominatorCanyon = parseField(value.substr(comma2 + 1))};
+    // The row invariant is shared with the genesis writer (opEip1559ParamsRowProblem),
+    // so a corrupt or foreign-written row fails as a named config error at boot instead
+    // of a divide-by-zero inside fee prediction — and the writer cannot mint a row this
+    // parser would refuse.
+    if (auto const problem = opEip1559ParamsRowProblem(params))
+    {
+        BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                  "op_eip1559_params value carries a " + *problem + ": " +
+                                  std::string(value)));
+    }
+    return params;
+}
+
+/// Inverse of the genesis op_fork_schedule row write (Ledger::buildGenesisBlock): the row
+/// carries the RESOLVED canonical ladder; the snapshot consumers key on the jovian/karst
+/// activation seconds, so extract exactly those (an absent fork keeps the not-scheduled
+/// sentinel, matching the [op_fork_timestamps] shorthand shape). Fail-closed on a
+/// malformed row — parseOpForkSchedule throws — same policy as evmc_revision and
+/// op_eip1559_params.
+[[nodiscard]] inline OpForkSchedule opForkScheduleFromCanonical(std::string_view canonical)
+{
+    OpForkSchedule schedule;
+    for (const auto& record : parseOpForkSchedule(canonical))
+    {
+        if (record.forkName == "jovian")
+        {
+            schedule.m_jovianTime = record.timestamp;
+        }
+        else if (record.forkName == "karst")
+        {
+            schedule.m_karstTime = record.timestamp;
+        }
+    }
+    return schedule;
+}
+
 /// Parse a SYS_CONFIG value string produced by encodeEVMCRevisionConfig and populate
 /// @p ledgerConfig's EVMC revision settings (explicit revision + fork transitions).
 inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view value)
@@ -455,10 +634,21 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         auto colon = entry.find(':');
         if (colon == std::string_view::npos)
         {
-            // Bare fork name -> explicit single revision for all blocks.
+            // Bare fork name -> explicit single revision for all blocks. An unknown
+            // name means this binary is OLDER than the chain config: skipping it would
+            // let mixed binaries execute the same blocks under different revisions (a
+            // silent state-root fork at upgrades). The boot-time probe reaches this
+            // before any block, so the operator sees the named entry.
             if (auto rev = evmcRevisionFromName(entry); rev)
             {
                 single = *rev;
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidEVMCRevisionConfig()
+                    << errinfo_comment("unknown EVM revision name '" + std::string(entry) +
+                                       "' in evmc_revision config value: " + std::string(value)));
             }
             continue;
         }
@@ -467,9 +657,11 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         auto name = entry.substr(colon + 1);
         bcos::protocol::BlockNumber block = 0;
         auto [ptr, ec] = std::from_chars(blockStr.data(), blockStr.data() + blockStr.size(), block);
-        if (ec != std::errc())
+        if (ec != std::errc() || ptr != blockStr.data() + blockStr.size())
         {
-            continue;
+            BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                      "malformed block number '" + std::string(blockStr) +
+                                      "' in evmc_revision config value: " + std::string(value)));
         }
         if (auto rev = evmcRevisionFromName(name); rev)
         {
@@ -478,6 +670,15 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
             {
                 base = *rev;
             }
+        }
+        else
+        {
+            // Same mixed-binary hazard as the bare-name branch, at the transition
+            // height: older binaries would keep executing the previous revision past
+            // this block while newer ones switch.
+            BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                      "unknown EVM revision name '" + std::string(name) +
+                                      "' in evmc_revision config value: " + std::string(value)));
         }
     }
 
