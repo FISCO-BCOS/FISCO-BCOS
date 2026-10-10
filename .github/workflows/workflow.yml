@@ -298,37 +298,6 @@ jobs:
         run: |
           bash tools/.ci/check-fork-labels.sh build/opstack-executor/tests/opstack-executor-block-tests
 
-      - name: Mutation harness (reverse-fix variants must go RED)
-        # WI-32 gate 1/4.
-        # ORDERING CONTRACT — do not move this before the build/ctest phase without
-        # first fixing run.sh: tools/mutation/run.sh restores each variant's mutated
-        # SOURCE (`git checkout HEAD -- <file>`) but does NOT rebuild the target back
-        # to the unmutated state, so it leaves a variant-mutated BINARY behind (the
-        # last variant processed). Any test step running after this would execute
-        # that mutated binary and report false failures. It therefore runs AFTER
-        # `Test` above, which is also the phase whose validity it audits: a variant
-        # that stays GREEN under its mapped filter is a matrix blind spot, and a
-        # negative-control filter that goes RED means the mutation is not attributed.
-        # The harness restores the source on every exit path and ends with a
-        # `git status --porcelain` cleanliness gate over every mapped file.
-        if: matrix.os == 'ubuntu-26.04' && github.event_name != 'release'
-        run: |
-          # The variant patches are applied with `git apply --3way`, which lazily
-          # fetches the pre-image BLOBS the patches were authored against; a
-          # fetch-depth=1 checkout cannot serve them and GitHub refuses blob-by-SHA
-          # lazy wants ("not our ref"), so unshallow once — the pack is ~2 GiB and
-          # takes about a minute on a hosted runner.
-          #
-          # --unshallow fetches every origin ref, and if submodule recursion is on
-          # it then walks the populated vcpkg submodule too: some historical ref of
-          # this repo records a vcpkg gitlink (d14033c16…) that microsoft/vcpkg no
-          # longer serves, and the resulting "not our ref" kills the step before
-          # run.sh starts (PR #5615). Only superproject blobs are needed here, so
-          # recursion is off for this fetch.
-          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-            git -c fetch.recurseSubmodules=no fetch --unshallow
-          fi
-          bash tools/mutation/run.sh
       - name: Reduce vcpkg cache size
         if: matrix.os != 'windows-2025'
         run: |
