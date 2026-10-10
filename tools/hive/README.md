@@ -121,7 +121,11 @@ The entrypoint:
   (`[fork_timestamps]`) models London and later only, so fixtures whose chain
   starts before London — including the current `ethereum/rpc-compat` fixture
   chain (londonBlock=27, TTD>0, merge at block 36) — cannot be imported yet.
-  `--genesis2ini` rejects `terminalTotalDifficulty > 0` loudly for now.
+  `--genesis2ini` rejects `terminalTotalDifficulty > 0` loudly for now, and
+  likewise refuses a genesis with no `baseFeePerGas` whose `config.londonBlock`
+  is absent or non-zero (error starts with `no baseFeePerGas and
+  config.londonBlock is absent or non-zero`): the emitted fork ladder activates
+  London at genesis, so such an artifact would be self-contradictory.
 - ~~**Empty alloc**~~ (fixed): `NodeConfig::validateL2Invariants` now exempts the
   L1 EL lane (`[ethereum] mode=el`) from the non-empty-alloc invariant — an
   empty-alloc genesis publishes the canonical empty-trie root as its stateRoot
@@ -137,8 +141,9 @@ The entrypoint:
   Paris/London headers — no withdrawalsRoot — fell into the NON_ETH mock
   branch: `eth_getBlockByNumber` lost `miner` and mocked `mixHash`/
   `withdrawalsRoot`, failing hive's FixtureHeader validation on all 22
-  fork_Paris cases. The version is now derived from the fork-gated field
-  presence (mirroring `EthBlockHeader::rlpDecode`) and stamped at commit.
+  fork_Paris cases. The version is now derived from the chain's fork schedule
+  at the block's timestamp — the same rule the EL build lane's
+  `finalizeEthBlockHeader` applies — and stamped at commit.
 - ~~**Fork-field presence was one-sided**~~ (fixed):
   `validateForkFieldPresence` (EthPoSHeaderValidation.h) only rejected headers
   MISSING a field their active fork requires, not headers carrying a field

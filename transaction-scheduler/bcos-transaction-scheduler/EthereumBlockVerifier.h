@@ -105,10 +105,10 @@ inline constexpr uint64_t kSecondsToMilliseconds = 1000;
 inline constexpr size_t kHashBytes = 32;
 inline constexpr size_t kChainIdBytes = 8;
 
-/// The EVMC revision active for a block with the given timestamp. A zero fork
-/// timestamp means "active from genesis" (consistent with HeaderValidator's
-/// isForkActive semantics); an unset field (the UINT64_MAX default) means the fork
-/// never activates.
+/// The EVMC revision active for a block with the given timestamp. Activation is
+/// bcos::protocol::isForkActive (bcos-rlp-protocol/EthPoSHeaderValidation.h): a
+/// zero fork timestamp means "active from genesis"; an unset field (the
+/// UINT64_MAX default) means the fork never activates.
 ///
 /// Paris (the Merge) is special: geth activates it at paris_time OR as soon as
 /// the chain's Terminal Total Difficulty has been reached — a PoW-configured
@@ -123,27 +123,25 @@ inline constexpr size_t kChainIdBytes = 8;
 inline evmc_revision evmcRevisionForTimestamp(
     EvmcForkTimestamps const& schedule, int64_t timestamp, u256 const& difficulty)
 {
-    const uint64_t timestampValue = static_cast<uint64_t>(timestamp);
-    auto active = [timestampValue](
-                      uint64_t forkTime) { return forkTime == 0 || timestampValue >= forkTime; };
-    if (active(schedule.osakaTime))
+    using bcos::protocol::isForkActive;
+    if (isForkActive(schedule.osakaTime, timestamp))
     {
         return EVMC_OSAKA;
     }
-    if (active(schedule.pragueTime))
+    if (isForkActive(schedule.pragueTime, timestamp))
     {
         return EVMC_PRAGUE;
     }
-    if (active(schedule.cancunTime))
+    if (isForkActive(schedule.cancunTime, timestamp))
     {
         return EVMC_CANCUN;
     }
-    if (active(schedule.shanghaiTime))
+    if (isForkActive(schedule.shanghaiTime, timestamp))
     {
         return EVMC_SHANGHAI;
     }
     // Paris: paris_time reached, or TTD passed (difficulty == 0 on a PoW chain).
-    if (active(schedule.parisTime) || difficulty == 0)
+    if (isForkActive(schedule.parisTime, timestamp) || difficulty == 0)
     {
         return EVMC_PARIS;
     }
@@ -224,23 +222,22 @@ inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
     // (finalizeEthBlockHeader stamps a schedule-derived forkVersion) — so the two lanes
     // agree by construction, not by coincidence. The agreement is safe for the RLP
     // round-trip because validateHeaderPoS's symmetric require/forbidForkField pair
-    // guarantees field presence == schedule on every committed external header.
+    // guarantees field presence == schedule on every committed external header — and
+    // the activation predicate here IS the validator's own (bcos::protocol::isForkActive),
+    // so the two cannot drift apart.
     // EthBlockVersion tops out at PRAGUE (Osaka/BPO add no header fields;
     // tryEthBlockVersionFor likewise maps EVMC_OSAKA to PRAGUE). This lane is London+
     // only, so the floor is LONDON.
-    auto forkActive = [&](uint64_t forkTime) {
-        return forkTime == 0 || static_cast<uint64_t>(ethHeader.timestamp) >= forkTime;
-    };
     auto ethVersion = bcos::protocol::EthBlockVersion::LONDON;
-    if (forkActive(forkSchedule.pragueTime))
+    if (bcos::protocol::isForkActive(forkSchedule.pragueTime, ethHeader.timestamp))
     {
         ethVersion = bcos::protocol::EthBlockVersion::PRAGUE;
     }
-    else if (forkActive(forkSchedule.cancunTime))
+    else if (bcos::protocol::isForkActive(forkSchedule.cancunTime, ethHeader.timestamp))
     {
         ethVersion = bcos::protocol::EthBlockVersion::CANCUN;
     }
-    else if (forkActive(forkSchedule.shanghaiTime))
+    else if (bcos::protocol::isForkActive(forkSchedule.shanghaiTime, ethHeader.timestamp))
     {
         ethVersion = bcos::protocol::EthBlockVersion::SHANGHAI;
     }

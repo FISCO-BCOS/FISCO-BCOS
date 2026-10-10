@@ -174,6 +174,7 @@ Exact strings:
 | `[alloc.*] section requires executor.version >= 2 (the Ethereum lane) in config.genesis` | allocs present, `executor.version < 2` | `NodeConfig::validateL2Invariants` |
 | `executor.version >= 2 (the Ethereum lane) requires an [eth_genesis_header] section in config.genesis (all 22 fields from the merged genesis artifact); ...` | Ethereum lane on, no `[eth_genesis_header]` section | `NodeConfig::validateL2Invariants` |
 | `[eth_genesis_header] section requires executor.version >= 2 (the Ethereum lane) in config.genesis` | `[eth_genesis_header]` present on a consortium (`executor.version < 2`) genesis | `NodeConfig::validateL2Invariants` |
+| `[ethereum] mode=el requires executor.version=2 (the L1 EL lane) in config.genesis; the OP lane (executor.version >= 3) takes mode=opstack-el` | `mode=el` declared on a non-L1 lane (the OP lane must use `mode=opstack-el`) | `NodeConfig::validateL2Invariants` |
 | `executor.is_wasm=true is not supported: WASM support was removed in FISCO-BCOS 3.18; use the EVM executor (set is_wasm=false)` | `is_wasm = true` (any lane; WASM removed in 3.18) | `NodeConfig::loadExecutorConfig` |
 | `[alloc.N].address duplicate: <addr>` | two alloc entries share an address | `NodeConfig.cpp:239` |
 | `[alloc.N].nonce must fit in uint64: <v>` | alloc `nonce` exceeds `uint64` (RLP-encoded as a uint64 in the state root) | `NodeConfig.cpp:260` |
