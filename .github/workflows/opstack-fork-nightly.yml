@@ -56,28 +56,20 @@ jobs:
           CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold \
             -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
             -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
-          cmake --build . --target test-bcos-engine \
+          cmake --build . --target test-bcos-engine opstack-executor-block-tests \
             -j 4
-      - name: C++ fork suites (one invocation per suite; Boost rejects comma lists)
+      - name: Fork-label gate (all nine fork-* labels present)
         run: |
           set -euo pipefail
-          check_suite() {  # <binary> <suite>
-            local out_file
-            out_file=$(mktemp)
-            "$1" --run_test="$2" --log_level=test_suite >"$out_file" 2>&1 || true
-            cat "$out_file"
-            grep -qE 'Running [1-9][0-9]* test cases?' "$out_file" \
-              || { echo "SUITE DID NOT RUN: $2 on $1"; rm -f "$out_file"; exit 1; }
-            grep -q '\*\*\* No errors detected' "$out_file" \
-              || { echo "SUITE FAILED: $2 on $1"; rm -f "$out_file"; exit 1; }
-            rm -f "$out_file"
-          }
-          # PORT BACKLOG: these four suites (OpEnginePayloadShapeBaselineSuite,
-          # OpForkBoundarySweepSuite, OpHeaderFieldSetBaselineSuite,
-          # OpGoldenCorpusProvenance) exist in no compiled binary at this head —
-          # their sources are the unwired opstack-executor/tests assets. Re-add
-          # the check_suite calls when those suites are ported onto live targets.
-          echo "fork-suites: 4 suites deferred to port backlog (see mapping.retired.json era)"
+          # The fork-labelled suites compile into opstack-executor-block-tests
+          # (the post-cutover port landed): OpGoldenCorpusProvenanceTest pins all
+          # nine rungs, OpKarstActivationTest/OpL1EdgeGateTest the Jovian/Karst
+          # pair. check-fork-labels.sh fails when any label disappears from the
+          # binary — the old step here deferred four suite names of which three
+          # (OpEnginePayloadShapeBaselineSuite, OpForkBoundarySweepSuite,
+          # OpHeaderFieldSetBaselineSuite) exist in no source file and the fourth
+          # is compiled; the deferral text was stale and the step ran nothing.
+          bash tools/.ci/check-fork-labels.sh build/opstack-executor/tests/opstack-executor-block-tests
       - name: Set up Python 3.11 (pytest runner for the sweep)
         uses: actions/setup-python@v5
         with:
@@ -93,8 +85,8 @@ jobs:
           OP_GETH_ZIP: ${{ runner.temp }}/op-geth/superchain/superchain-configs.zip
           OP_REQUIRE_REGISTRY_ZIP: "1"
         run: python -m pytest tools/opstack-genesis/test_gen_official_genesis.py -q
-      - name: opstack-genesis python suites (the three the registry sweep does not cover)
-        run: python -m pytest tools/opstack-genesis/test_gen_rollup_config.py tools/opstack-genesis/test_gen_eth_header_fixture.py tools/opstack-genesis/test_mpt_state_root.py -q
+      - name: opstack-genesis python suites (the four the registry sweep does not cover)
+        run: python -m pytest tools/opstack-genesis/test_gen_rollup_config.py tools/opstack-genesis/test_gen_eth_header_fixture.py tools/opstack-genesis/test_mpt_state_root.py tools/opstack-genesis/test_build_allocs.py -q
       - name: route failure to an issue, do not block PRs
         if: failure()
         run: |

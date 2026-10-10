@@ -112,10 +112,17 @@ checkout_pins() {
     # tracking the default branch must fail loudly, not vanish.
     sed 's/#.*//' "$1" | awk '
         function flush() {
-            if (repo && path != "") { print path, (ref == "" ? "NO-REF" : ref) }
+            # Never vanish a corpus checkout: a block with no path prints NO-PATH,
+            # a block with no ref prints NO-REF — both then fail the axis checks
+            # loudly instead of silently tracking a default branch (or nothing).
+            if (repo) {
+                print (path == "" ? "NO-PATH" : path), (ref == "" ? "NO-REF" : ref)
+            }
             repo = 0; ref = ""; path = ""
         }
-        /^[[:space:]]*-[[:space:]]*(name|uses|run):/ { flush() }
+        # Any step key starts a new block: a step whose first key is - id: or - if:
+        # must not merge its checkout with the previous step's.
+        /^[[:space:]]*-[[:space:]]*[A-Za-z_]+:/ { flush() }
         /repository:[[:space:]]*FISCO-BCOS\/op-stack-e2e-tests/ { repo = 1 }
         match($0, /ref:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
             ref = substr($0, RSTART, RLENGTH); sub(/^ref:[[:space:]]*/, "", ref)

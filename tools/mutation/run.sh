@@ -140,6 +140,13 @@ restore_patch() {
     [ -n "$f" ] && restore "$f"
   done < <(patch_files "$1")
 }
+rebuild_target() {
+  # The variant build leaves a MUTANT binary behind; rebuild the target from the
+  # restored source so no later step (or local follow-up run) executes the mutation.
+  if ! ninja -C "$build_dir" "$1" >/dev/null 2>&1; then
+    echo "restore-rebuild failed for $1 — the tree is clean but the binary is stale" >&2
+  fi
+}
 
 # The per-variant restore() resets mutated files to HEAD; pre-existing local edits in
 # any file the selected variants touch would be silently destroyed by that reset (and
@@ -163,14 +170,17 @@ for id in "${ids[@]}"; do
   target=$(field "$id" target); bin=$(field "$id" binary); filter=$(field "$id" filter)
   # Each variant names the file it mutates; fall back to the legacy default.
   vmutated=$(field "$id" mutated); [ -n "$vmutated" ] || vmutated="$mutated"
-  git -C "$root" apply --3way "$patch" || { echo "[$id] APPLY FAILED"; rc_all=1; continue; }
+  # On a --3way conflict the apply leaves markers in worktree AND index — restore
+  # before continuing so the next variant starts from a clean tree.
+  git -C "$root" apply --3way "$patch" \
+    || { echo "[$id] APPLY FAILED"; rc_all=1; restore_patch "$patch"; continue; }
   # Restore on ANY exit so the tree never stays patched, and keep the corpus cleanup
   # armed across the variant window. INT/TERM additionally ABORT: a handler without
   # exit would resume the run on the already-restored clean tree and report a false
   # STILL GREEN verdict for the variant (the corpus cleanup would also leave later
   # corpus-gated mapped tests silently skipping).
-  trap 'restore_patch "$patch"; cleanup_corpus' EXIT
-  trap 'restore_patch "$patch"; cleanup_corpus; trap - EXIT; exit 130' INT TERM
+  trap 'restore_patch "$patch"; rebuild_target "$target"; cleanup_corpus' EXIT
+  trap 'restore_patch "$patch"; rebuild_target "$target"; cleanup_corpus; trap - EXIT; exit 130' INT TERM
   # Corpus re-assert per variant (defense in depth): an interrupting event must not
   # turn a corpus-gated mapped test into a counted-as-pass skip.
   if [ ! -e "$corpus_link" ]; then

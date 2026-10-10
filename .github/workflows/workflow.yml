@@ -288,16 +288,15 @@ jobs:
           pip3 install --break-system-packages --quiet requests 2>/dev/null || true
           # Run engine API integration test (curl smoke + Python mock CL)
           bash tools/engine_integration_test.sh build 8551
-      - name: Fork-label coverage guard (DEFERRED — port backlog)
-        # WI-32 gate 4/4, temporarily not enforced: every fork-labelled suite
-        # (OpGoldenCorpusProvenanceTest et al.) is part of the post-cutover port
-        # backlog — no compiled TU carries boost "fork-*" labels at this head, so
-        # the inventory would fail on every leg with no signal. Re-enable by
-        # restoring this step (and its binary args) when the labelled suites are
-        # wired back into opstack-executor/tests CMake targets.
+      - name: Fork-label coverage guard
+        # WI-32 gate 4/4. The fork-labelled suites (OpGoldenCorpusProvenanceTest,
+        # OpKarstActivationTest, OpL1EdgeGateTest et al.) compile into
+        # opstack-executor-block-tests (the post-cutover port landed), and
+        # check-fork-labels.sh asserts the binary still lists all nine fork-* labels:
+        # one binary losing a label means a fork's whole lane silently unguarded.
         if: matrix.os == 'ubuntu-26.04'
         run: |
-          echo "::notice::fork-label guard deferred: no compiled binary carries fork-* labels until the port-backlog suites land (see tools/mutation/variants/mapping.retired.json siblings in opstack-executor/tests)."
+          bash tools/.ci/check-fork-labels.sh build/opstack-executor/tests/opstack-executor-block-tests
 
       - name: Mutation harness (reverse-fix variants must go RED)
         # WI-32 gate 1/4.
