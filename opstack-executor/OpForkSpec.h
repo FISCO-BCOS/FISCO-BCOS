@@ -18,7 +18,11 @@
 
 #pragma once
 
+#include <bcos-framework/engine/OpTime.h>
 #include <bcos-framework/ledger/OpForkSchedule.h>
+#include <magic_enum/magic_enum.hpp>
+
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <evmc/evmc.hpp>
@@ -273,35 +277,46 @@ inline constexpr OpForkSpec OP_KARST_SPEC = [] {
     return c;
 }();
 
-/// The spec for one resolved fork (total over the ladder).
+/// The spec for one resolved fork (total over the ladder): one row per rung, in
+/// OpFork declaration order — the array index IS static_cast<size_t>(fork).
+inline constexpr std::array<OpForkSpec, 11> c_opForkSpecs{{
+    OP_BEDROCK_SPEC,
+    OP_REGOLITH_SPEC,
+    OP_CANYON_SPEC,
+    OP_DELTA_SPEC,
+    OP_ECOTONE_SPEC,
+    OP_FJORD_SPEC,
+    OP_GRANITE_SPEC,
+    OP_HOLOCENE_SPEC,
+    OP_ISTHMUS_SPEC,
+    OP_JOVIAN_SPEC,
+    OP_KARST_SPEC,
+}};
+static_assert(
+    [] {
+        auto const rungs = magic_enum::enum_values<OpFork>();
+        if (rungs.size() != c_opForkSpecs.size())
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < rungs.size(); ++i)
+        {
+            // Both invariants the row order carries: the enum values are contiguous in
+            // declaration order AND row i dispatches rung i (the identity check its sibling
+            // c_opForkLadder pin uses — contiguity alone leaves a swapped table row silently
+            // mis-mapping opForkSpec's EVM revision and precompile set).
+            if (static_cast<std::size_t>(rungs[i]) != i || c_opForkSpecs[i].fork != rungs[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }(),
+    "c_opForkSpecs must have exactly one row per OpFork rung in declaration order");
+
 [[nodiscard]] inline constexpr OpForkSpec opForkSpec(OpFork fork) noexcept
 {
-    switch (fork)
-    {
-    case OpFork::Bedrock:
-        return OP_BEDROCK_SPEC;
-    case OpFork::Regolith:
-        return OP_REGOLITH_SPEC;
-    case OpFork::Canyon:
-        return OP_CANYON_SPEC;
-    case OpFork::Delta:
-        return OP_DELTA_SPEC;
-    case OpFork::Ecotone:
-        return OP_ECOTONE_SPEC;
-    case OpFork::Fjord:
-        return OP_FJORD_SPEC;
-    case OpFork::Granite:
-        return OP_GRANITE_SPEC;
-    case OpFork::Holocene:
-        return OP_HOLOCENE_SPEC;
-    case OpFork::Isthmus:
-        return OP_ISTHMUS_SPEC;
-    case OpFork::Jovian:
-        return OP_JOVIAN_SPEC;
-    case OpFork::Karst:
-        return OP_KARST_SPEC;
-    }
-    return OP_BEDROCK_SPEC;  // unreachable: the ladder enum is closed
+    return c_opForkSpecs[static_cast<std::size_t>(fork)];
 }
 
 /// Maps the fork that bcos::ledger::resolveOpFork (the single OP fork-activation
@@ -318,11 +333,14 @@ inline constexpr OpForkSpec OP_KARST_SPEC = [] {
 /// Internal timestamps are MILLISECONDS everywhere in this node
 /// (BlockHeader::timestamp, PayloadAttributes::timestamp,
 /// ExecutionPayload::timestamp); the OP fork schedule ([op_fork_timestamps],
-/// op-node's rollup.json jovian_time/karst_time) is SECONDS. Every fork
-/// judgement on the new OP lane converts here and nowhere else (the
-/// bcos-evm-free successor of the retired OpCommon.h's detail::forkTimestampSec).
+/// op-node's rollup.json jovian_time/karst_time) is SECONDS. Every fork judgement on the new OP
+/// lane converts through this alias, which delegates to the framework's single implementation
+/// (bcos-framework/engine/OpTime.h) — the same conversion the RPC's EIP-7825 gate uses, so the
+/// two cannot round differently (the alias is kept because the OP lane's call sites name the
+/// domain conversion; the bcos-evm-free successor of the retired OpCommon.h's
+/// detail::forkTimestampSec).
 [[nodiscard]] inline constexpr uint64_t opForkTimestampSec(int64_t internalTimestampMs) noexcept
 {
-    return static_cast<uint64_t>(internalTimestampMs) / 1000;
+    return bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(internalTimestampMs));
 }
 }  // namespace bcos::executor_v1::opstack

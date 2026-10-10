@@ -17,7 +17,7 @@ module bcostars {
     };
 
     // OP Stack (Isthmus/Jovian) receipt metadata, serialized by the OP execution layer.
-    // All 13 fields are hex strings (0 values stored as "0x0") so explicit zero presence
+    // All 14 fields are hex strings (0 values stored as "0x0") so explicit zero presence
     // survives tars serialization (tars optional scalar has no presence semantics).
     struct OpStackReceiptMeta {
         0 optional string l1_gas_price;          // uint256 hex
@@ -33,6 +33,7 @@ module bcostars {
         10 optional string deposit_receipt_version;
         11 optional string l1_gas_used;
         12 optional string operator_fee;          // uint256 hex (FISCO extension)
+        13 optional string l1_fee_scalar;         // uint256 hex (Bedrock era: raw slot-6 scalar; absent from Ecotone on)
     };
 
     struct TransactionReceipt {

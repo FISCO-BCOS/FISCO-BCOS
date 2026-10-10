@@ -102,5 +102,6 @@ public:
 
     virtual void stop(){};
     virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig){};
+
 };
 }  // namespace bcos::scheduler
