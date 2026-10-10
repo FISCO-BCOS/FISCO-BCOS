@@ -121,7 +121,9 @@ checkout_pins() {
             repo = 0; ref = ""; path = ""
         }
         # Any step key starts a new block: a step whose first key is - id: or - if:
-        # must not merge its checkout with the previous step's.
+        # must not merge its checkout with the step before it. (No apostrophes in
+        # this program: it lives inside a single-quoted shell string, so one would
+        # end the quote here and hand the rest of the awk body to bash.)
         /^[[:space:]]*-[[:space:]]*[A-Za-z_]+:/ { flush() }
         /repository:[[:space:]]*FISCO-BCOS\/op-stack-e2e-tests/ { repo = 1 }
         match($0, /ref:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
