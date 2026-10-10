@@ -18,6 +18,7 @@
  */
 #include "L2GenesisTestStorage.h"
 #include "bcos-framework/ledger/OpForkScheduleMetadata.h"
+#include "bcos-framework/ledger/ConfigUint64.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -362,6 +363,48 @@ BOOST_AUTO_TEST_CASE(eip1559BootProbeComparesTheRecordedTripleWithTheNodeTriple)
     // Both sides declare the same triple: start; neither declares: start.
     BOOST_CHECK(!opEip1559BootProbeProblem(std::string{"2,8,250"}, declared).has_value());
     BOOST_CHECK(!opEip1559BootProbeProblem(std::nullopt, std::nullopt).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(configUint64WindowIsSharedByTheLoadersAndTheCodec)
+{
+    // One acceptance window behind [op_fork_timestamps], [op_eip1559] and the canonical
+    // [op_fork_schedule] codec: the three copies had already diverged (one gained the sentinel
+    // refusal, another a uint32 bound, the third accepted hex).
+    using bcos::ledger::ConfigUint64Error;
+    using bcos::ledger::ConfigUint64Options;
+    BOOST_CHECK_EQUAL(*parseConfigUint64("1000").value, 1000U);
+    // Hex is opt-in: the canonical channel never spelled it, the two loaders do.
+    BOOST_CHECK(!parseConfigUint64("0x10").value.has_value());
+    BOOST_CHECK_EQUAL(*parseConfigUint64("0x10", ConfigUint64Options{.allowHex = true}).value, 16U);
+    BOOST_CHECK_EQUAL(*parseConfigUint64("0Xf", ConfigUint64Options{.allowHex = true}).value, 15U);
+    // The whole string must be consumed, signs are refused (std::stoull would wrap '-').
+    BOOST_CHECK(parseConfigUint64("1000abc").error == ConfigUint64Error::invalid);
+    BOOST_CHECK(parseConfigUint64("-1").error == ConfigUint64Error::invalid);
+    BOOST_CHECK(parseConfigUint64("+1").error == ConfigUint64Error::invalid);
+    BOOST_CHECK(parseConfigUint64("").error == ConfigUint64Error::empty);
+    // Bounds and the not-scheduled sentinel are policy, checked by the same loop.
+    BOOST_CHECK(
+        parseConfigUint64("4294967296",
+            ConfigUint64Options{.maxValue = std::numeric_limits<std::uint32_t>::max()})
+            .error == ConfigUint64Error::outOfRange);
+    BOOST_CHECK(
+        parseConfigUint64("99999999999999999999999").error == ConfigUint64Error::outOfRange);
+    BOOST_CHECK(parseConfigUint64("18446744073709551615",
+                    ConfigUint64Options{.refuseSentinel = true})
+                    .error == ConfigUint64Error::sentinel);
+    // The codec maps the shared reasons back to its three distinct messages.
+    BOOST_CHECK_EXCEPTION(parseOpForkSchedule("0:isthmus,18446744073709551615:karst"),
+        InvalidOpForkSchedule,
+        [](InvalidOpForkSchedule const& e) {
+            return messageContains(e, "not-scheduled sentinel");
+        });
+    BOOST_CHECK_EXCEPTION(parseOpForkSchedule("0:isthmus,99999999999999999999999:karst"),
+        InvalidOpForkSchedule,
+        [](InvalidOpForkSchedule const& e) { return messageContains(e, "timestamp overflow"); });
+    BOOST_CHECK_EXCEPTION(parseOpForkSchedule("0:isthmus,x:karst"), InvalidOpForkSchedule,
+        [](InvalidOpForkSchedule const& e) { return messageContains(e, "invalid timestamp"); });
+    BOOST_CHECK_EXCEPTION(parseOpForkSchedule("0:isthmus,:karst"), InvalidOpForkSchedule,
+        [](InvalidOpForkSchedule const& e) { return messageContains(e, "empty timestamp"); });
 }
 
 BOOST_AUTO_TEST_CASE(partialTripleIsNotAbsent)

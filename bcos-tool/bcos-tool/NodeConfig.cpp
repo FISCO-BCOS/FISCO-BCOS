@@ -132,25 +132,15 @@ void requireDecimalField(
 uint64_t parseForkTimestamp(
     std::string const& section, std::string const& key, std::string const& value)
 {
-    std::string_view digits = value;
-    int base = 10;
-    if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0)
-    {
-        base = 16;
-        digits.remove_prefix(2);
-    }
-    uint64_t out = 0;
-    auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), out, base);
-    if (ec != std::errc{} || ptr != digits.data() + digits.size())
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[" + section + "]." + key + " invalid timestamp: " + value));
-    }
-    // UINT64_MAX IS the not-scheduled sentinel (ledger::c_opForkTimeUnset): accepting it
-    // as a declared activation time would make resolveOpFork read the fork as never
-    // active — declare a real time or omit the key (the codec's parseTimestamp refuses
-    // the sentinel for the canonical channel; the shorthand parser must not be looser).
-    if (out == ledger::c_opForkTimeUnset)
+    // One acceptance window with the other loaders and the canonical-channel codec
+    // (ledger::parseConfigUint64): decimal or 0x-hex, the whole string consumed, and the
+    // not-scheduled sentinel refused.
+    auto const parsed = ledger::parseConfigUint64(value,
+        ledger::ConfigUint64Options{.allowHex = true,
+            .maxValue = std::numeric_limits<uint64_t>::max(),
+            .refuseSentinel = true,
+            .sentinel = ledger::c_opForkTimeUnset});
+    if (parsed.error == ledger::ConfigUint64Error::sentinel)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[" + section + "]." + key +
@@ -158,7 +148,12 @@ uint64_t parseForkTimestamp(
                                   "(18446744073709551615): declare a real activation time or omit "
                                   "the key"));
     }
-    return out;
+    if (!parsed.value.has_value())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + key + " invalid timestamp: " + value));
+    }
+    return *parsed.value;
 }
 
 /// Required key: absent is a config error.
@@ -1915,23 +1910,18 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
     }
     auto parseStrictUint64 = [&](std::string const& key, std::string const& text) -> uint64_t {
         // Decimal and 0x-hex both, matching the sibling [op_fork_timestamps] section: a chain
-        // operator writing one section hex-formatted must not be surprised by the other.
-        // NOT parseForkTimestamp — that helper's message says "invalid timestamp", which would
-        // misname an EIP-1559 parameter.
-        std::string_view digits = text;
-        int base = 10;
-        if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0)
-        {
-            base = 16;
-            digits.remove_prefix(2);
-        }
-        uint64_t out = 0;
-        auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), out, base);
-        if (ec != std::errc{} || ptr != digits.data() + digits.size())
+        // operator writing one section hex-formatted must not be surprised by the other. One
+        // acceptance window with the other loaders (ledger::parseConfigUint64); the message
+        // differs because "invalid timestamp" would misname an EIP-1559 parameter.
+        auto const parsed = ledger::parseConfigUint64(text,
+            ledger::ConfigUint64Options{.allowHex = true,
+                .maxValue = std::numeric_limits<uint64_t>::max()});
+        if (!parsed.value.has_value())
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "[op_eip1559]." + key + " is not a valid uint64: " + text));
         }
+        auto const out = *parsed.value;
         if (out > std::numeric_limits<uint32_t>::max())
         {
             // The Holocene extraData encodes denominator and elasticity as uint32

@@ -21,6 +21,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/engine/OpForkId.h>
+#include <bcos-framework/ledger/ConfigUint64.h>
 #include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
@@ -177,29 +178,36 @@ inline std::string trimAscii(std::string_view input)
 
 inline uint64_t parseTimestamp(std::string_view token)
 {
-    if (token.empty())
-        throwInvalidOpForkSchedule("empty timestamp");
-    uint64_t value = 0;
-    for (const char ch : token)
+    // One acceptance window with the config loaders (ConfigUint64.h): the whole string must be
+    // decimal digits — the canonical channel never spelled hex — and the not-scheduled
+    // sentinel is refused. The sentinel is spelled as UINT64_MAX here (not c_opForkTimeUnset,
+    // which is declared below this point) and is the same value.
+    auto const parsed =
+        parseConfigUint64(token, ConfigUint64Options{.allowHex = false,
+                                     .maxValue = std::numeric_limits<uint64_t>::max(),
+                                     .refuseSentinel = true,
+                                     .sentinel = std::numeric_limits<uint64_t>::max()});
+    switch (parsed.error)
     {
-        if (ch < '0' || ch > '9')
-            throwInvalidOpForkSchedule("invalid timestamp");
-        const auto digit = static_cast<uint64_t>(ch - '0');
-        // Pre-multiply guard: `next < value` misses wraps that land above value.
-        if (value > (std::numeric_limits<uint64_t>::max() - digit) / 10)
-            throwInvalidOpForkSchedule("timestamp overflow");
-        value = value * 10 + digit;
-    }
-    // The all-9s value IS the not-scheduled sentinel downstream (c_opForkTimeUnset): a
-    // literal 18446744073709551615 in canonical text would parse and round-trip, then
-    // read as "not scheduled" at the snapshot boundary — one representation silently
-    // carrying two meanings. Reject it so the canonical channel cannot smuggle the
-    // sentinel in as a declared activation time.
-    if (value == std::numeric_limits<uint64_t>::max())
+    case ConfigUint64Error::empty:
+        throwInvalidOpForkSchedule("empty timestamp");
+    case ConfigUint64Error::none:
+        return *parsed.value;
+    case ConfigUint64Error::sentinel:
+        // The all-9s value IS the not-scheduled sentinel downstream (c_opForkTimeUnset): a
+        // literal 18446744073709551615 in canonical text would parse and round-trip, then
+        // read as "not scheduled" at the snapshot boundary — one representation silently
+        // carrying two meanings. Reject it so the canonical channel cannot smuggle the
+        // sentinel in as a declared activation time.
         throwInvalidOpForkSchedule(
             "timestamp 18446744073709551615 is the not-scheduled sentinel and cannot be "
             "declared as an activation time");
-    return value;
+    case ConfigUint64Error::outOfRange:
+        throwInvalidOpForkSchedule("timestamp overflow");
+    case ConfigUint64Error::invalid:
+        break;
+    }
+    throwInvalidOpForkSchedule("invalid timestamp");
 }
 
 inline std::string normalizeForkName(std::string_view token)
