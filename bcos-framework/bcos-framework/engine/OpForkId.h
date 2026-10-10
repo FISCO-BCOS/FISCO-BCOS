@@ -20,9 +20,12 @@
 
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/OpForkSchedule.h>
+#include <magic_enum/magic_enum.hpp>
 
+#include <array>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <variant>
 
 namespace bcos::engine
@@ -43,38 +46,70 @@ enum class OpForkId : uint8_t
     Karst,
 };
 
-/// The ONE fork -> OpForkId ladder mapping, beside the profile tables it feeds.
-/// Fully enumerated switch (no default): a rung added or renamed on the ledger
-/// enum becomes a build break HERE instead of letting a consumer-local table
-/// drift. Bedrock predates the Engine API and Delta/future rungs carry no
-/// profile yet — they answer nullopt (an unmapped fork is a mapping bug, never
-/// the Isthmus profile).
+/// The ONE OP fork ladder, as data: one row per OpFork rung, in declaration order,
+/// carrying the rung's op-node name and its Engine-API fork id (nullopt for rungs
+/// without an Engine API surface: Bedrock predates it, Delta has no EL effect).
+/// Every consumer that would otherwise re-list the rungs — the canonical-text name
+/// table, the fork->OpForkId mapping — derives from these rows.
+struct OpForkLadderRow
+{
+    bcos::ledger::OpFork fork;
+    std::string_view name;
+    std::optional<OpForkId> engineForkId;
+};
+
+inline constexpr std::array<OpForkLadderRow, 11> c_opForkLadder{{
+    {bcos::ledger::OpFork::Bedrock, "bedrock", std::nullopt},
+    {bcos::ledger::OpFork::Regolith, "regolith", OpForkId::Regolith},
+    {bcos::ledger::OpFork::Canyon, "canyon", OpForkId::Canyon},
+    {bcos::ledger::OpFork::Delta, "delta", std::nullopt},
+    {bcos::ledger::OpFork::Ecotone, "ecotone", OpForkId::Ecotone},
+    {bcos::ledger::OpFork::Fjord, "fjord", OpForkId::Fjord},
+    {bcos::ledger::OpFork::Granite, "granite", OpForkId::Granite},
+    {bcos::ledger::OpFork::Holocene, "holocene", OpForkId::Holocene},
+    {bcos::ledger::OpFork::Isthmus, "isthmus", OpForkId::Isthmus},
+    {bcos::ledger::OpFork::Jovian, "jovian", OpForkId::Jovian},
+    {bcos::ledger::OpFork::Karst, "karst", OpForkId::Karst},
+}};
+
+// Total over the ladder enum, in declaration order, with an Engine-API id for
+// exactly the OpForkId rungs.
+static_assert(
+    [] {
+        auto const rungs = magic_enum::enum_values<bcos::ledger::OpFork>();
+        if (rungs.size() != c_opForkLadder.size())
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < rungs.size(); ++i)
+        {
+            if (rungs[i] != c_opForkLadder[i].fork)
+            {
+                return false;
+            }
+        }
+        return true;
+    }(),
+    "c_opForkLadder must list every OpFork rung in declaration order");
+static_assert(
+    [] {
+        std::size_t mapped = 0;
+        for (auto const& row : c_opForkLadder)
+        {
+            mapped += row.engineForkId.has_value() ? 1 : 0;
+        }
+        return mapped == magic_enum::enum_count<OpForkId>();
+    }(),
+    "c_opForkLadder must carry an Engine-API fork id for every OpForkId rung");
+
 [[nodiscard]] inline std::optional<OpForkId> opForkIdFor(bcos::ledger::OpFork fork)
 {
-    using bcos::ledger::OpFork;
-    switch (fork)
+    for (auto const& row : c_opForkLadder)
     {
-    case OpFork::Bedrock:
-    case OpFork::Delta:
-        return std::nullopt;
-    case OpFork::Regolith:
-        return OpForkId::Regolith;
-    case OpFork::Canyon:
-        return OpForkId::Canyon;
-    case OpFork::Ecotone:
-        return OpForkId::Ecotone;
-    case OpFork::Fjord:
-        return OpForkId::Fjord;
-    case OpFork::Granite:
-        return OpForkId::Granite;
-    case OpFork::Holocene:
-        return OpForkId::Holocene;
-    case OpFork::Isthmus:
-        return OpForkId::Isthmus;
-    case OpFork::Jovian:
-        return OpForkId::Jovian;
-    case OpFork::Karst:
-        return OpForkId::Karst;
+        if (row.fork == fork)
+        {
+            return row.engineForkId;
+        }
     }
     return std::nullopt;
 }

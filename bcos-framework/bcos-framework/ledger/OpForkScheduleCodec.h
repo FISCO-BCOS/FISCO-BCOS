@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/ledger/OpForkSchedule.h>
 #include <magic_enum/magic_enum.hpp>
 
@@ -66,21 +67,21 @@ inline constexpr std::string_view c_legacyJovianCanonical = "0:jovian";
 
 namespace detail
 {
-// Protocol order is the array index; bcos-evm's OpFork enum must match it 1:1.
-// op-geth params/config_op.go, whose OP EL fork fields have no Delta entry: delta
-// does not affect the execution layer, so it is not nameable here. The count is
-// deduced from the list, so the two cannot drift apart.
-inline constexpr auto c_opForkNames = std::to_array<std::string_view>({
-    "regolith",
-    "canyon",
-    "ecotone",
-    "fjord",
-    "granite",
-    "holocene",
-    "isthmus",
-    "jovian",
-    "karst",
-});
+// The nameable rungs — every ladder row carrying an Engine-API fork id
+// (OpForkId.h c_opForkLadder) — in protocol order. Derived, not re-listed: a rung
+// cannot be nameable here while missing from the ladder, or the reverse.
+inline constexpr auto c_opForkNames = [] {
+    std::array<std::string_view, magic_enum::enum_count<bcos::engine::OpForkId>()> names{};
+    std::size_t n = 0;
+    for (auto const& row : bcos::engine::c_opForkLadder)
+    {
+        if (row.engineForkId.has_value())
+        {
+            names[n++] = row.name;
+        }
+    }
+    return names;
+}();
 
 // Pin the spelling AND the order to the ledger enum (declaration order): the table
 // is the ladder minus its L1-only rungs (Bedrock, Delta are never decodable OP names).
