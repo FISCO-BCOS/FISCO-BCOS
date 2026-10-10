@@ -110,8 +110,8 @@ void TxsValidator::asyncResetTxsFlag(
             return;
         }
     }
-    PBFT_LOG(INFO) << LOG_DESC("asyncResetTxsFlag") << LOG_KV("index", blockHeader->number())
-                   << LOG_KV("hash", blockHeader->hash().abridged()) << LOG_KV("flag", _flag);
+    PBFT_LOG(DEBUG) << LOG_DESC("asyncResetTxsFlag") << LOG_KV("index", blockHeader->number())
+                    << LOG_KV("hash", blockHeader->hash().abridged()) << LOG_KV("flag", _flag);
     asyncResetTxsFlag(proposal, txsHash, _flag, _emptyTxBatchHash);
 }
 
@@ -172,10 +172,10 @@ void TxsValidator::asyncResetTxsFlag(
             {
                 validator->eraseResettingProposal(proposalHash);
             }
-            PBFT_LOG(INFO) << LOG_DESC("asyncMarkTxs success") << LOG_KV("index", proposalNumber)
-                           << LOG_KV("hash", proposalHash.abridged()) << LOG_KV("flag", _flag)
-                           << LOG_KV("markT", utcSteadyTime() - startT)
-                           << LOG_KV("emptyTxBatchHash", _emptyTxBatchHash);
+            PBFT_LOG(DEBUG) << LOG_DESC("asyncMarkTxs success") << LOG_KV("index", proposalNumber)
+                            << LOG_KV("hash", proposalHash.abridged()) << LOG_KV("flag", _flag)
+                            << LOG_KV("markT", utcSteadyTime() - startT)
+                            << LOG_KV("emptyTxBatchHash", _emptyTxBatchHash);
         });
 }
 

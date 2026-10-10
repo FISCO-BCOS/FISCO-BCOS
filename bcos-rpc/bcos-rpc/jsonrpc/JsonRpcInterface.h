@@ -25,9 +25,9 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-utilities/Error.h>
-#include <boost/beast/http/status.hpp>
 #include <json/json.h>
 #include <util/tc_json.h>
+#include <boost/beast/http/status.hpp>
 #include <functional>
 
 namespace bcos::rpc
@@ -136,11 +136,20 @@ public:
         std::string_view _groupID, const Json::Value& params, RespFunc _respFunc) = 0;
 
     void onRPCRequest(std::string_view _requestBody, Sender _sender);
+    /// the local-socket entry: the public table plus the ipc-only methods (admin_*)
+    void onIpcRequest(std::string_view _requestBody, Sender _sender);
+    /// a method reachable through onIpcRequest only; onRPCRequest answers -32601 for it
+    void registerIpcOnlyMethod(std::string _name, std::function<void(Json::Value&, RespFunc)> _fn)
+    {
+        m_ipcOnlyMethods[std::move(_name)] = std::move(_fn);
+    }
 
 protected:
     void initMethod();
+    void dispatch(std::string_view _requestBody, Sender _sender, bool _allowIpcOnly);
 
     MethodMap m_methodToFunc;
+    MethodMap m_ipcOnlyMethods;
 
 
     std::string_view toView(const Json::Value& value)

@@ -62,13 +62,13 @@ Session::Session(
     m_idleCheckTimer(
         std::make_shared<Timer>(m_socket->ioService(), m_idleTimeInterval, "idleChecker"))
 {
-    SESSION_LOG(INFO) << "[Session::Session] this=" << this
-                      << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
+    SESSION_LOG(DEBUG) << "[Session::Session] this=" << this
+                       << LOG_KV("recvBufferSize", m_maxRecvBufferSize);
 }
 
 Session::~Session() noexcept
 {
-    SESSION_LOG(INFO) << "[Session::~Session] this=" << this;
+    SESSION_LOG(DEBUG) << "[Session::~Session] this=" << this;
     try
     {
         m_idleCheckTimer->stop();
@@ -234,9 +234,9 @@ void Session::write()
                 // the loop's own catches make this unreachable in practice; if the frame
                 // allocation itself threw, release the flag and settle the queue
                 self->m_writingInFlight.store(false);
-                SESSION_LOG(ERROR) << LOG_DESC("write loop launch failed")
-                                   << LOG_KV("what",
-                                          boost::current_exception_diagnostic_information());
+                SESSION_LOG(ERROR)
+                    << LOG_DESC("write loop launch failed")
+                    << LOG_KV("what", boost::current_exception_diagnostic_information());
                 self->drop(TCPError);
             }
         });
@@ -480,14 +480,13 @@ void Session::drop(DisconnectReason _reason)
         {
             callback->timeoutHandler->cancel();
         }
-        postCallback(std::move(callback->callback),
-            "response callback exception during drop",
-            NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
-            std::nullopt);
+        postCallback(std::move(callback->callback), "response callback exception during drop",
+            NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"), std::nullopt);
     }
 
     int errorCode = P2PExceptionType::Disconnect;
-    std::string errorMsg = "Disconnect";
+    // the message carries the PeerDisconnected reason tag; Service::onDisconnect prints it
+    std::string errorMsg(disconnectReasonTag(_reason));
     if (_reason == DuplicatePeer)
     {
         errorCode = P2PExceptionType::DuplicateSession;
@@ -500,8 +499,9 @@ void Session::drop(DisconnectReason _reason)
         return;
     }
 
-    SESSION_LOG(INFO) << "drop, call and erase all callback in this session!"
-                      << LOG_KV("this", this) << LOG_KV("endpoint", socket->nodeIPEndpoint());
+    SESSION_LOG(DEBUG) << "drop, call and erase all callback in this session!"
+                       << LOG_KV("this", this) << LOG_KV("reason", reasonOf(_reason))
+                       << LOG_KV("endpoint", socket->nodeIPEndpoint());
 
     if (m_messageHandler)
     {
@@ -519,8 +519,7 @@ void Session::drop(DisconnectReason _reason)
             {
                 return;
             }
-            session->m_messageHandler(
-                NetworkException(errorCode, errorMsg), session, Message{});
+            session->m_messageHandler(NetworkException(errorCode, errorMsg), session, Message{});
         };
         // Once haveNetwork() is false the Host is on its way out, so run the notification inline
         // rather than handing it to an executor whose remaining lifetime we do not control here.
@@ -602,9 +601,9 @@ void Session::closeSocket(DisconnectReason _reason)
         }
         else
         {
-            SESSION_LOG(INFO) << "[drop] closing remote " << socket->remoteEndpoint()
-                              << LOG_KV("reason", reasonOf(_reason))
-                              << LOG_KV("endpoint", socket->nodeIPEndpoint());
+            SESSION_LOG(DEBUG) << "[drop] closing remote " << socket->remoteEndpoint()
+                               << LOG_KV("reason", reasonOf(_reason))
+                               << LOG_KV("endpoint", socket->nodeIPEndpoint());
         }
 
         /// if get Host object failed, close the socket directly
@@ -880,8 +879,8 @@ task::Task<std::optional<Message>> fastSendMessageWithResponse(
             {
                 claimed->timeoutHandler->cancel();
             }
-            task::GetResultAwaitable<NetworkException, std::optional<Message>>::complete(result,
-                NetworkException(ec.value(), ec.message()), std::nullopt);
+            task::GetResultAwaitable<NetworkException, std::optional<Message>>::complete(
+                result, NetworkException(ec.value(), ec.message()), std::nullopt);
         }
     }
 

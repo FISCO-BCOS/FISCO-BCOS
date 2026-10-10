@@ -20,6 +20,8 @@
  */
 
 #include "bcos-rpc/amop/AirAMOPClient.h"
+#include "bcos-rpc/ipc/IpcServer.h"
+#include "bcos-rpc/jsonrpc/AdminMethods.h"
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -400,8 +402,8 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
     if (_enableEngineRpc)
     {
         const bool elEngineRpc = _nodeConfig->enableEngineRpc();
-        wsConfig->setListenIP(elEngineRpc ? _nodeConfig->engineRpcListenIP() :
-                                            _nodeConfig->opEngineRpcListenIP());
+        wsConfig->setListenIP(
+            elEngineRpc ? _nodeConfig->engineRpcListenIP() : _nodeConfig->opEngineRpcListenIP());
         wsConfig->setListenPort(elEngineRpc ? _nodeConfig->engineRpcListenPort() :
                                               _nodeConfig->opEngineRpcListenPort());
         wsConfig->setMaxMsgSize(elEngineRpc ? _nodeConfig->engineHttpBodySizeLimit() :
@@ -486,8 +488,8 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 }
 
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
-    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
-    bool _enableEngineRpc, bool _enableMinerApi)
+    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager, bool _enableEngineRpc,
+    bool _enableMinerApi)
 {
     // Each RPC surface (web3 / engine) gets its own FilterSystem so that
     // filter stores are isolated across ports (filters created on one port
@@ -609,9 +611,9 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
         // [op_engine_rpc] enable_miner_api, the web3 port under [web3_rpc] enable_miner_api —
         // the batcher handshake can no longer leak onto the public listener. The EL-mode
         // [engine_rpc] listener has no miner namespace.
-        auto engineJsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), engineWsService,
-            groupManager, true,
-            m_nodeConfig->enableOpEngineRpc() && m_nodeConfig->enableOpEngineMinerApi());
+        auto engineJsonRpc =
+            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), engineWsService, groupManager, true,
+                m_nodeConfig->enableOpEngineRpc() && m_nodeConfig->enableOpEngineMinerApi());
 
         rpc->setOpEngineJsonRpcImpl(std::move(engineJsonRpc));
         rpc->setOpEngineService(std::move(engineWsService));
@@ -668,6 +670,23 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
                     }
                 }
             });
+    }
+    if (m_nodeConfig->rpcIpcEnable() && m_ioServicePool)
+    {
+        // the attach channel: the public method table plus admin_* on a unix socket under the
+        // data directory, serialized on one io thread of the pool
+        auto jsonRpc = rpc->jsonRpcImpl();
+        registerAdminMethods(*jsonRpc);
+        std::weak_ptr<JsonRpcImpl_2_0> weakJsonRpc = jsonRpc;
+        auto ipcServer = std::make_shared<IpcServer>(*m_ioServicePool->getIOService(),
+            m_nodeConfig->storagePath() + "/fisco-bcos.ipc",
+            [weakJsonRpc](std::string_view _body, auto&& _sender) {
+                if (auto jsonRpc = weakJsonRpc.lock())
+                {
+                    jsonRpc->onIpcRequest(_body, std::forward<decltype(_sender)>(_sender));
+                }
+            });
+        rpc->setIpcServer(std::move(ipcServer));
     }
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();
