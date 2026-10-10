@@ -33,6 +33,7 @@
 #include <magic_enum/magic_enum.hpp>
 #include <boost/test/unit_test.hpp>
 #include <array>
+#include <magic_enum/magic_enum.hpp>
 #include <memory>
 #include <set>
 #include <string>
@@ -250,6 +251,108 @@ BOOST_AUTO_TEST_CASE(storedScheduleDivergesFromGenesis)
     BOOST_CHECK(!storedOpForkScheduleDivergesFromGenesis("00:isthmus", std::string{"0:isthmus"}));
     BOOST_CHECK(!storedOpForkScheduleDivergesFromGenesis("0:Isthmus", std::string{"0:isthmus"}));
     BOOST_CHECK(storedOpForkScheduleDivergesFromGenesis("0:isthmus", std::string{"0:jovian"}));
+}
+
+BOOST_AUTO_TEST_CASE(resolvedLocalScheduleComesFromWhicheverChannelIsDeclared)
+{
+    // The canonical channel ([op_fork_schedule], Optional) — canonicalized.
+    auto const fromCanonical =
+        resolvedLocalOpForkScheduleCanonical(std::nullopt, std::string{"0:Isthmus,1000:Karst"});
+    BOOST_REQUIRE(fromCanonical.has_value());
+    BOOST_CHECK_EQUAL(*fromCanonical, "0:isthmus,1000:karst");
+    // The shorthand channel ([op_fork_timestamps], Required) — folded by the one rule.
+    OpForkSchedule shorthand;
+    shorthand.m_jovianTime = 0;
+    auto const fromShorthand = resolvedLocalOpForkScheduleCanonical(shorthand, std::nullopt);
+    BOOST_REQUIRE(fromShorthand.has_value());
+    BOOST_CHECK_EQUAL(*fromShorthand, "0:jovian");
+    // Both declared (the loader has already refused divergence): the canonical wins and
+    // resolves to the same records as the shorthand.
+    auto const fromBoth = resolvedLocalOpForkScheduleCanonical(shorthand, std::string{"0:jovian"});
+    BOOST_REQUIRE(fromBoth.has_value());
+    BOOST_CHECK_EQUAL(*fromBoth, *fromShorthand);
+    // Neither channel: nothing to compare.
+    BOOST_CHECK(!resolvedLocalOpForkScheduleCanonical(std::nullopt, std::nullopt).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(bootProbeComparesTheShorthandOnlyNodeAgainstTheRecordedRow)
+{
+    // Shorthand-only OP chains are legal and populate only the required channel; the probe
+    // must still compare them, or an edited [op_fork_timestamps] boots against a recorded
+    // schedule the node does not run.
+    OpForkSchedule shorthand;
+    shorthand.m_jovianTime = 0;
+    auto const local = resolvedLocalOpForkScheduleCanonical(shorthand, std::nullopt);
+    auto const problem =
+        opForkScheduleBootProbeProblem(std::string{"0:isthmus,1000:jovian"}, std::nullopt, local);
+    BOOST_REQUIRE(problem.has_value());
+    BOOST_CHECK(problem->find("does not match the chain's recorded schedule") != std::string::npos);
+    // Matching shorthand-only node: may start.
+    BOOST_CHECK(
+        !opForkScheduleBootProbeProblem(std::string{"0:jovian"}, std::nullopt, local).has_value());
+    // The canonical-only node stays compared (the pre-fix behaviour), normalized.
+    BOOST_CHECK(opForkScheduleBootProbeProblem(
+        std::string{"0:jovian"}, std::nullopt, std::string{"0:isthmus"})
+                    .has_value());
+    BOOST_CHECK(!opForkScheduleBootProbeProblem(
+        std::string{"0:Isthmus"}, std::nullopt, std::string{"0:isthmus"})
+                     .has_value());
+}
+
+BOOST_AUTO_TEST_CASE(bootProbeTiesTheRecordedRowToTheIntegrityTriple)
+{
+    // The row is what every snapshot reader consumes, the triple is what the probe validates:
+    // a well-formed pair that disagrees must refuse.
+    BOOST_CHECK(opForkScheduleBootProbeProblem(
+        std::string{"0:jovian"}, std::string{"0:isthmus"}, std::nullopt)
+                    .has_value());
+    BOOST_CHECK(!opForkScheduleBootProbeProblem(
+        std::string{"0:Isthmus"}, std::string{"0:isthmus"}, std::nullopt)
+                     .has_value());
+    // Pre-triple chain (row only) and triple-only chain: the local comparison still runs.
+    BOOST_CHECK(opForkScheduleBootProbeProblem(
+        std::string{"0:jovian"}, std::nullopt, std::string{"0:isthmus"})
+                    .has_value());
+    BOOST_CHECK(opForkScheduleBootProbeProblem(
+        std::nullopt, std::string{"0:jovian"}, std::string{"0:isthmus"})
+                    .has_value());
+    // Nothing recorded: nothing to compare against (a chain that never declared a schedule).
+    BOOST_CHECK(
+        !opForkScheduleBootProbeProblem(std::nullopt, std::nullopt, std::string{"0:isthmus"})
+             .has_value());
+}
+
+BOOST_AUTO_TEST_CASE(dualDeclarationProblemNamesBothPairs)
+{
+    OpForkSchedule shorthand;
+    shorthand.m_jovianTime = 0;
+    // One channel only: nothing to compare (the loader's shape check, not a divergence).
+    BOOST_CHECK(
+        !opForkScheduleDualDeclarationProblem(std::string{"0:jovian"}, std::nullopt).has_value());
+    BOOST_CHECK(!opForkScheduleDualDeclarationProblem(std::nullopt, shorthand).has_value());
+    // Agreeing pair: resolves to the same records.
+    BOOST_CHECK(
+        !opForkScheduleDualDeclarationProblem(std::string{"0:jovian"}, shorthand).has_value());
+    // Diverging pair: both sides named.
+    auto const problem =
+        opForkScheduleDualDeclarationProblem(std::string{"0:isthmus,1000:jovian"}, shorthand);
+    BOOST_REQUIRE(problem.has_value());
+    BOOST_CHECK(problem->find("activates jovian/karst at") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(eip1559BootProbeComparesTheRecordedTripleWithTheNodeTriple)
+{
+    // The chain recorded the preset: a node without [op_eip1559] prices identically — start.
+    BOOST_CHECK(!opEip1559BootProbeProblem(std::string{"6,50,250"}, std::nullopt).has_value());
+    // The chain recorded a chain-specific triple and this node dropped the section: refuse.
+    BOOST_CHECK(opEip1559BootProbeProblem(std::string{"2,8,250"}, std::nullopt).has_value());
+    // The node declares a triple the chain never recorded: refuse the other way too.
+    bcos::engine::OpEip1559Params const declared{
+        .elasticity = 2, .denominator = 8, .denominatorCanyon = 250};
+    BOOST_CHECK(opEip1559BootProbeProblem(std::nullopt, declared).has_value());
+    // Both sides declare the same triple: start; neither declares: start.
+    BOOST_CHECK(!opEip1559BootProbeProblem(std::string{"2,8,250"}, declared).has_value());
+    BOOST_CHECK(!opEip1559BootProbeProblem(std::nullopt, std::nullopt).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(partialTripleIsNotAbsent)
@@ -599,9 +702,8 @@ BOOST_AUTO_TEST_CASE(genesisWritesScheduleToSysConfig)
         {
             auto storage = makeL2GenesisTestStorage();
             auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
-            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-                *ledger, shorthandGenesis(bcos::ledger::c_opForkTimeUnset, 2000),
-                emptyLedgerConfig()));
+            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger,
+                shorthandGenesis(bcos::ledger::c_opForkTimeUnset, 2000), emptyLedgerConfig()));
             const auto row = co_await readOpForkScheduleSysConfigRow(*storage);
             BOOST_REQUIRE(row.has_value());
             BOOST_CHECK_EQUAL(*row, "0:isthmus,2000:karst");
@@ -637,8 +739,7 @@ BOOST_AUTO_TEST_CASE(canonicalTextCannotDeclareTheUnsetSentinel)
         bcos::ledger::InvalidOpForkSchedule,
         [](auto const& e) { return messageContains(e, "sentinel"); });
     // max-1 still parses: only the exact sentinel value is reserved.
-    auto const records =
-        bcos::ledger::parseOpForkSchedule("0:isthmus,18446744073709551614:karst");
+    auto const records = bcos::ledger::parseOpForkSchedule("0:isthmus,18446744073709551614:karst");
     BOOST_CHECK_EQUAL(records.back().timestamp, 18446744073709551614ULL);
 }
 
@@ -656,12 +757,13 @@ BOOST_AUTO_TEST_CASE(opEip1559ParamsRowRejectsAboveUint32)
             bcos::ledger::InvalidEVMCRevisionConfig,
             [](auto const& e) { return messageContains(e, "exceeds uint32"); });
     }
-    BOOST_CHECK(bcos::ledger::opEip1559ParamsRowProblem(bcos::engine::OpEip1559Params{
-        .elasticity = 6, .denominator = 50, .denominatorCanyon = 1ull << 32})
+    BOOST_CHECK(bcos::ledger::opEip1559ParamsRowProblem(
+        bcos::engine::OpEip1559Params{
+            .elasticity = 6, .denominator = 50, .denominatorCanyon = 1ull << 32})
                     .has_value());
-    BOOST_CHECK(!bcos::ledger::opEip1559ParamsRowProblem(bcos::engine::OpEip1559Params{
-        .elasticity = 6, .denominator = 50, .denominatorCanyon = 250})
-                    .has_value());
+    BOOST_CHECK(!bcos::ledger::opEip1559ParamsRowProblem(
+        bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 50, .denominatorCanyon = 250})
+                     .has_value());
 }
 
 BOOST_AUTO_TEST_CASE(opEip1559RowRejectsZeroTriple)
@@ -690,8 +792,7 @@ BOOST_AUTO_TEST_CASE(opEip1559RowRejectsOverWideField)
             [](auto const& e) { return messageContains(e, "uint32"); });
     }
     // uint32 max still parses.
-    auto const maxOk =
-        bcos::ledger::parseOpEip1559Params("4294967295,4294967295,4294967295");
+    auto const maxOk = bcos::ledger::parseOpEip1559Params("4294967295,4294967295,4294967295");
     BOOST_CHECK_EQUAL(maxOk.elasticity, 4294967295U);
 }
 

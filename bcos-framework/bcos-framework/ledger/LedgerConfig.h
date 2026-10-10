@@ -520,8 +520,6 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
     return oss.str();
 }
 
-/// Parse the op_eip1559_params SYS_CONFIG row ("elasticity,denominator,denominatorCanyon").
-/// Same fail-closed policy as applyEVMCRevisionConfig: a malformed persisted value must
 /// The row invariant both the SYS_CONFIG reader and the genesis writer enforce:
 /// zeros are arithmetic poison (gasTarget = gasLimit/elasticity, delta/denominator)
 /// and the Holocene extraData encodes each field as u32, so anything wider can
@@ -544,6 +542,8 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
     return std::nullopt;
 }
 
+/// Parse the op_eip1559_params SYS_CONFIG row ("elasticity,denominator,denominatorCanyon").
+/// Same fail-closed policy as applyEVMCRevisionConfig: a malformed persisted value must
 /// halt loudly rather than silently degrading the fee prediction to a preset.
 inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value)
 {
@@ -590,6 +590,36 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
                                   std::string(value)));
     }
     return params;
+}
+
+/// The OP-lane boot probe's eip1559 check, symmetric with the schedule one: the chain's
+/// recorded triple (the genesis-frozen SYS_CONFIG row, absent on chains that never declared
+/// [op_eip1559]) must equal the triple THIS node will price with — effectiveOpEip1559 of the
+/// local section, i.e. the preset when it declares nothing. A dropped or edited local section
+/// otherwise makes this node's header validation and zero-param substitution use constants the
+/// chain did not record, which the corpus devnet already demonstrated once (op-geth's own
+/// denominator vs the preset). Returns the violation text, or nullopt when the node may start;
+/// a malformed row throws from parseOpEip1559Params, which is the probe's parse check.
+[[nodiscard]] inline std::optional<std::string> opEip1559BootProbeProblem(
+    std::optional<std::string> const& recordedRow,
+    std::optional<bcos::engine::OpEip1559Params> const& localDeclared)
+{
+    auto const localEffective = bcos::engine::effectiveOpEip1559(localDeclared);
+    auto const recordedEffective = recordedRow.has_value() ?
+                                       parseOpEip1559Params(*recordedRow) :
+                                       bcos::engine::effectiveOpEip1559(std::nullopt);
+    if (localEffective == recordedEffective)
+    {
+        return std::nullopt;
+    }
+    auto const toText = [](bcos::engine::OpEip1559Params const& params) {
+        return std::to_string(params.elasticity) + "," + std::to_string(params.denominator) + "," +
+               std::to_string(params.denominatorCanyon);
+    };
+    return "the node's effective [op_eip1559] (" + toText(localEffective) +
+           ") does not match the chain's recorded triple (" + toText(recordedEffective) +
+           ") — the chain prices with the recorded one; declare a matching [op_eip1559] or "
+           "remove it";
 }
 
 /// Inverse of the genesis op_fork_schedule row write (Ledger::buildGenesisBlock): the row

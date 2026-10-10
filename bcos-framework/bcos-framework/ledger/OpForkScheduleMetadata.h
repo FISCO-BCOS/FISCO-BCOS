@@ -167,6 +167,114 @@ struct OpForkScheduleMetadataRows
            canonicalOpForkSchedule(parseOpForkSchedule(*genesisCanonical));
 }
 
+/// The schedule THIS node will actually run, resolved from whichever declaration channel it
+/// carries: the canonical [op_fork_schedule] (canonicalized), else the [op_fork_timestamps]
+/// shorthand folded through the one fold rule — byte-for-byte the resolution the genesis
+/// writer persists (Ledger::buildGenesisBlock). nullopt when neither channel is declared.
+/// Both channels are legal ([op_fork_schedule] is Optional, [op_fork_timestamps] Required),
+/// so a caller that only looked at the canonical one would skip every shorthand-only chain.
+[[nodiscard]] inline std::optional<std::string> resolvedLocalOpForkScheduleCanonical(
+    std::optional<OpForkSchedule> const& shorthand,
+    std::optional<std::string> const& canonicalDeclared)
+{
+    if (canonicalDeclared.has_value())
+    {
+        return canonicalOpForkSchedule(parseOpForkSchedule(*canonicalDeclared));
+    }
+    if (shorthand.has_value())
+    {
+        return canonicalOpForkSchedule(
+            foldOpForkShorthand(shorthand->m_jovianTime, shorthand->m_karstTime));
+    }
+    return std::nullopt;
+}
+
+/// The dual-declaration check as one rule set: when BOTH channels are declared they must fold
+/// to the same (jovian, karst) activations — the loader refuses such a config before genesis
+/// and the genesis writer must not resolve the same conflict silently (a direct
+/// GenesisConfig caller would otherwise persist one channel while the executor runs the
+/// other). Returns the violation text naming both pairs, or nullopt when only one channel is
+/// declared or the two already agree.
+[[nodiscard]] inline std::optional<std::string> opForkScheduleDualDeclarationProblem(
+    std::optional<std::string> const& canonicalDeclared,
+    std::optional<OpForkSchedule> const& shorthand)
+{
+    if (!canonicalDeclared.has_value() || !shorthand.has_value())
+    {
+        return std::nullopt;
+    }
+    auto const canonicalRecords = parseOpForkSchedule(*canonicalDeclared);
+    auto const activationOf = [](std::vector<OpForkActivationRecord> const& records,
+                                  std::string_view fork) {
+        for (auto const& record : records)
+        {
+            if (record.forkName == fork)
+            {
+                return record.timestamp;
+            }
+        }
+        return c_opForkTimeUnset;
+    };
+    auto const canonicalFolded = foldOpForkShorthand(
+        activationOf(canonicalRecords, "jovian"), activationOf(canonicalRecords, "karst"));
+    auto const shorthandFolded =
+        foldOpForkShorthand(shorthand->m_jovianTime, shorthand->m_karstTime);
+    auto const canonicalJovian = activationOf(canonicalFolded, "jovian");
+    auto const canonicalKarst = activationOf(canonicalFolded, "karst");
+    auto const shorthandJovian = activationOf(shorthandFolded, "jovian");
+    auto const shorthandKarst = activationOf(shorthandFolded, "karst");
+    if (canonicalJovian == shorthandJovian && canonicalKarst == shorthandKarst)
+    {
+        return std::nullopt;
+    }
+    return "[op_fork_schedule] activates jovian/karst at (" + std::to_string(canonicalJovian) +
+           "/" + std::to_string(canonicalKarst) + ") but [op_fork_timestamps] declares (" +
+           std::to_string(shorthandJovian) + "/" + std::to_string(shorthandKarst) +
+           "): the canonical channel feeds the stored row while the executor runs the shorthand — "
+           "declare one channel, or make them agree";
+}
+
+/// The OP-lane boot probe's schedule comparison, as one rule set: the recorded SYS_CONFIG row
+/// (what every snapshot reader consumes) and the integrity triple must agree, and the schedule
+/// THIS node resolves must equal the recorded one — otherwise the node executes a ladder the
+/// chain never recorded, and the divergence surfaces only at the next fork activation. Raw row
+/// text in (the parsers throw on malformed text, which is the probe's existing fail-closed
+/// parse check), violation text out; nullopt means the node may start. Either recorded side may
+/// be absent: a pre-triple chain has a row without a triple, and both-absent is a chain that
+/// recorded nothing to compare against.
+[[nodiscard]] inline std::optional<std::string> opForkScheduleBootProbeProblem(
+    std::optional<std::string> const& recordedRow, std::optional<std::string> const& tripleSchedule,
+    std::optional<std::string> const& localCanonical)
+{
+    std::optional<std::string> rowCanonical;
+    if (recordedRow.has_value())
+    {
+        rowCanonical = canonicalOpForkSchedule(parseOpForkSchedule(*recordedRow));
+    }
+    std::optional<std::string> storedCanonical;
+    if (tripleSchedule.has_value())
+    {
+        storedCanonical = canonicalOpForkSchedule(parseOpForkSchedule(*tripleSchedule));
+    }
+    if (rowCanonical.has_value() && storedCanonical.has_value() &&
+        *rowCanonical != *storedCanonical)
+    {
+        return "the chain's recorded op_fork_schedule row (" + *rowCanonical +
+               ") does not match its SYS_OP_CHAIN_METADATA integrity copy (" + *storedCanonical +
+               "): the row is what this node reads and the triple is what it validated — one of "
+               "them was written by a different genesis";
+    }
+    auto const& recordedCanonical = rowCanonical.has_value() ? rowCanonical : storedCanonical;
+    if (recordedCanonical.has_value() && localCanonical.has_value() &&
+        *recordedCanonical != *localCanonical)
+    {
+        return "the node's declared schedule (" + *localCanonical +
+               ") does not match the chain's recorded schedule (" + *recordedCanonical +
+               ") — the chain runs the recorded schedule; fix the config or use a matching datadir";
+    }
+    return std::nullopt;
+}
+
 namespace detail
 {
 inline executor_v1::StateKeyView opForkScheduleMetadataKey(std::string_view key)

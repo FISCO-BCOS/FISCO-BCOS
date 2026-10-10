@@ -870,26 +870,43 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // and without a boot-side parse a corrupt row would only surface as the per-block
     // "Execute block failed!" loop plus -32603 on every RPC reader. Parse both rows
     // here on the OP lane so the failure is an explicit startup refusal, mirroring the
-    // evmc_revision probe above. Absent rows stay legal (pre-existing OP chains).
+    // evmc_revision probe above. Absent rows stay legal (pre-existing OP chains). The
+    // same probe refuses a node whose OWN declared material diverges from the chain's
+    // recorded copy — see the two comparisons below.
     if (ledger::isOpLaneVersion(m_executorVersion))
     {
+        std::optional<std::string> recordedEip1559Row;
         if (auto row = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_eip1559_params))))
         {
-            // Returns the parsed triple or throws InvalidEVMCRevisionConfig — the exact
-            // parse applyLedgerConfig performs on every snapshot read.
+            // Throws InvalidEVMCRevisionConfig on a malformed row — the exact parse
+            // applyLedgerConfig performs on every snapshot read.
             (void)ledger::parseOpEip1559Params(std::get<0>(*row));
+            recordedEip1559Row = std::get<0>(*row);
         }
+        // The recorded triple is genesis-frozen; the triple THIS node prices with
+        // (effectiveOpEip1559 of the local [op_eip1559], the preset when it declares
+        // nothing) must equal it, or header validation and the zero-param substitution
+        // run on constants the chain never recorded.
+        if (auto const problem =
+                ledger::opEip1559BootProbeProblem(recordedEip1559Row, m_nodeConfig->opEip1559()))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
+        }
+
+        std::optional<std::string> recordedScheduleRow;
         if (auto row = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_fork_schedule))))
         {
             // opForkScheduleFromCanonical throws ledger::InvalidOpForkSchedule on a
             // malformed canonical row — the exact parse applyLedgerConfig performs.
             (void)ledger::opForkScheduleFromCanonical(std::get<0>(*row));
+            recordedScheduleRow = std::get<0>(*row);
         }
         // SYS_OP_CHAIN_METADATA integrity triple: absent is legal (pre-triple chain);
         // PRESENT-but-partial/corrupt/mis-bound is an explicit startup refusal — the
         // triple exists precisely so a tampered schedule cannot survive unnoticed.
+        std::optional<std::string> recordedTripleSchedule;
         if (auto stateStorage = m_ledger->getStateStorage())
         {
             auto rows = task::syncWait(ledger::readOpForkScheduleMetadataRows(*stateStorage));
@@ -905,34 +922,27 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                                               "validate its genesis binding against"));
                 }
                 // Throws ledger::InvalidOpForkSchedule on partial triple, hash mismatch
-                // or genesis-binding mismatch.
-                (void)ledger::validateOpForkScheduleMetadataRows(rows, genesisHeader->m_hash);
-                // ... and against THIS node's declared schedule: the triple validates
-                // the row against itself and the genesis artifact, but not against the
-                // local config that will drive this node's pricing — a node booted with
-                // a different [op_fork_schedule] than the chain's recorded one must
-                // refuse, or the divergence surfaces only at the next fork activation.
-                auto const& declared = m_nodeConfig->genesisConfig().m_opstackForkSchedule;
-                if (declared.has_value() && rows.schedule.has_value())
-                {
-                    auto const declaredCanonical =
-                        ledger::canonicalOpForkSchedule(ledger::parseOpForkSchedule(*declared));
-                    // One rule set: storedOpForkScheduleDivergesFromGenesis is the
-                    // stored-vs-declared comparison (parsed identity, not raw ASCII).
-                    if (ledger::storedOpForkScheduleDivergesFromGenesis(*rows.schedule, declared))
-                    {
-                        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig()
-                                              << bcos::errinfo_comment(
-                                                  "the node's declared [op_fork_schedule] (" +
-                                                  declaredCanonical +
-                                                  ") does not match the chain's recorded "
-                                                  "schedule (" +
-                                                  *rows.schedule +
-                                                  ") — the chain runs the recorded schedule; "
-                                                  "fix the config or use a matching datadir"));
-                    }
-                }
+                // or genesis-binding mismatch; returns the validated, normalized triple.
+                recordedTripleSchedule = ledger::validateOpForkScheduleMetadataRows(
+                                             rows, genesisHeader->m_hash)
+                                             .schedule;
             }
+        }
+        // The schedule this node will actually run comes from WHICHEVER declaration channel
+        // it carries — the canonical [op_fork_schedule] (Optional) or the folded
+        // [op_fork_timestamps] shorthand (Required) — so a shorthand-only chain, which is
+        // legal and populates only the required channel, is compared too. The recorded side
+        // is the row every snapshot reader consumes, else the pre-triple chain's triple, else
+        // nothing to compare against; a node booted with a different schedule than the
+        // chain's recorded one must refuse, or the divergence surfaces only at the next fork
+        // activation.
+        auto const localSchedule = ledger::resolvedLocalOpForkScheduleCanonical(
+            m_nodeConfig->genesisConfig().m_opForkSchedule,
+            m_nodeConfig->genesisConfig().m_opstackForkSchedule);
+        if (auto const problem = ledger::opForkScheduleBootProbeProblem(
+                recordedScheduleRow, recordedTripleSchedule, localSchedule))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
         }
     }
 
