@@ -1934,6 +1934,35 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
 // under different revisions (a silent state-root fork at upgrades). The boot-time
 // probe (Initializer's "Effective EVMC revision" block) reaches this parser before
 // any block, so the operator sees the named entry instead of a per-block loop.
+// A negative block height cannot be spelled in the row format (the encoder only emits
+// heights above zero), so a row carrying one is foreign or hand-written — the exact input
+// this parser is the defence against. Accepting it let "-5:cancun" govern blocks 0..4 and
+// then silently move that transition onto the block-0 base on the round trip.
+BOOST_AUTO_TEST_CASE(evmcRevisionNegativeBlockHeightsRefused)
+{
+    LedgerConfig parsed;
+    BOOST_CHECK_EXCEPTION(ledger::applyEVMCRevisionConfig(parsed, "-5:cancun,10:osaka"),
+        ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+            return boost::diagnostic_information(e).find("negative block number") !=
+                   std::string::npos;
+        });
+    // ... and the encoder refuses to mint one instead of dropping it silently.
+    BOOST_CHECK_EXCEPTION(
+        ledger::encodeEVMCRevisionConfig(EVMC_PRAGUE, {{-5, EVMC_CANCUN}, {10, EVMC_OSAKA}}),
+        ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+            return boost::diagnostic_information(e).find("negative block number") !=
+                   std::string::npos;
+        });
+    // The valid sibling still round-trips (the happy path is untouched).
+    auto const encoded = ledger::encodeEVMCRevisionConfig(EVMC_PRAGUE, {{10, EVMC_OSAKA}});
+    LedgerConfig reparsed;
+    ledger::applyEVMCRevisionConfig(reparsed, encoded);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*reparsed.evmcRevisionForBlock(0)), static_cast<int>(EVMC_PRAGUE));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*reparsed.evmcRevisionForBlock(10)), static_cast<int>(EVMC_OSAKA));
+}
+
 BOOST_AUTO_TEST_CASE(evmcRevisionUnknownNamesFailClosed)
 {
     LedgerConfig parsed;

@@ -511,7 +511,16 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
     oss << "0:" << evmcRevisionName(base);
     for (auto const& [block, rev] : forks)
     {
-        if (block <= 0)
+        if (block < 0)
+        {
+            // Cannot be spelled: the format has no negative heights, so emitting one would
+            // make the row decode to a different schedule than the map describes (the parser
+            // refuses such a row outright).
+            BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                      "negative block number " + std::to_string(block) +
+                                      " cannot be encoded into an evmc_revision config value"));
+        }
+        if (block == 0)
         {
             continue;  // block-0 entry is already emitted as the base
         }
@@ -628,6 +637,12 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
 /// sentinel, matching the [op_fork_timestamps] shorthand shape). Fail-closed on a
 /// malformed row — parseOpForkSchedule throws — same policy as evmc_revision and
 /// op_eip1559_params.
+///
+/// DELIBERATE NARROWING, load-bearing: every OTHER rung of a multi-rung row is dropped to
+/// the sentinel, so resolveOpFork over the result answers the isthmus baseline for a
+/// timestamp inside a declared middle rung. A consumer needing another rung must parse the
+/// row text itself (parseOpForkSchedule); do not widen the extract without auditing every
+/// consumer that reads the sentinel as "not scheduled".
 [[nodiscard]] inline OpForkSchedule opForkScheduleFromCanonical(std::string_view canonical)
 {
     OpForkSchedule schedule;
@@ -691,6 +706,16 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         {
             BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
                                       "malformed block number '" + std::string(blockStr) +
+                                      "' in evmc_revision config value: " + std::string(value)));
+        }
+        // BlockNumber is SIGNED and from_chars accepts a leading '-' for it: a foreign or
+        // hand-written row spelling "-5:cancun" used to be accepted, and because the encoder can
+        // only spell heights above zero the round trip silently moved that transition onto the
+        // block-0 base — the same blocks then executed under a different revision.
+        if (block < 0)
+        {
+            BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                      "negative block number '" + std::string(blockStr) +
                                       "' in evmc_revision config value: " + std::string(value)));
         }
         if (auto rev = evmcRevisionFromName(name); rev)
