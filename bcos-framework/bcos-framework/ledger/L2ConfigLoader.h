@@ -36,10 +36,14 @@
  *        Solidity is the single authoritative source for the L2 chain config.
  *        A missing key (entry never written) or a malformed slot value aborts
  *        the current block via throw; the loader never falls back to a cached
- *        config. A key whose packed enableNumber is still in the future is
- *        skipped (the block keeps its prior value), matching
- *        LedgerTypeDef::readFromStorage's `blockNumber >= enableNumber`
- *        schedule semantics so every node activates a change on the same block.
+ *        config. Each key holds ONE packed entry, so a scheduled value replaces
+ *        the active one with nothing to fall back to: SystemConfig.setValueByKey
+ *        only accepts enableNumber <= block.number + 1, the loader is evaluated
+ *        at committed + 1, and an entry whose enableNumber is still later than
+ *        that is rejected (throw) rather than skipped -- skipping would leave the
+ *        caller's SYS_CONFIG fallback in LedgerConfig until the height arrives,
+ *        and the previous SystemConfig value is unrecoverable after a restart.
+ *        The three genesis-frozen keys must carry enableNumber 0.
  */
 #pragma once
 #include <bcos-crypto/hash/Keccak256.h>
@@ -51,14 +55,18 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <fmt/format.h>
 #include <boost/throw_exception.hpp>
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace bcos::ledger
@@ -66,8 +74,6 @@ namespace bcos::ledger
 // Predeploy address of SystemConfig.sol: 0x43000000000000000000000000000000000000C0.
 // The 0x43... prefix keeps FISCO's self-written predeploys out of the OP-Stack
 // reserved predeploy namespace (0x4200...0000-0x4200...07FF).
-// The table name follows USER_APPS convention so it lives next to user contract
-// tables in the state storage.
 inline constexpr std::string_view L2_SYSTEM_CONFIG_ADDRESS_HEX =
     "43000000000000000000000000000000000000c0";
 
@@ -141,8 +147,9 @@ struct DecodedEntry
 // actual config width (uint64 / uint32 / uint256) by reading the trailing N
 // bytes and asserting the leading bytes are zero — matching the contract's
 // typed accessors (value is declared uint192 on-chain so the upper bytes of
-// any uint64 / uint32 config are required to be zero). enableNumber gates
-// whether the value is applied this block (see loadIntoLedgerConfig).
+// any uint64 / uint32 config are required to be zero). enableNumber must not be
+// later than the block being evaluated, and must be 0 on the genesis-frozen keys
+// (see loadIntoLedgerConfig).
 inline DecodedEntry decodeEntryValue(std::string_view slotBytes)
 {
     if (slotBytes.size() != L2_SLOT_BYTES)
@@ -221,11 +228,25 @@ inline evmc_uint256be valueToUint256BE(std::array<uint8_t, 24> const& value)
 /// `executor_v1::StateKey`, returning `std::optional<bcos::storage::Entry>`
 /// (the default FISCO-BCOS state-storage shape). The caller owns the storage;
 /// L2ConfigLoaderImpl holds a non-owning pointer.
+///
+/// @p tableName is the state table the SystemConfig predeploy's slots live in, in THIS
+/// node's physical layout: "/apps/<hex>" on a Hex-layout node, "/s/<20 raw bytes>" on a
+/// Binary-layout one. Callers take it from l2SystemConfigTableName()
+/// (bcos-framework/ledger/L2SystemConfigTable.h) -- account::ethLaneAccountTableName over
+/// L2_SYSTEM_CONFIG_ADDRESS_HEX, the rule genesis imports the alloc through. That helper is
+/// a separate header because it needs the account-table header, which MSVC 14.51 rejects
+/// inside the bcos-framework unity TU this header is compiled into (see L2ConfigLoader.cpp);
+/// the name therefore arrives from the caller instead of being computed here.
 template <typename Storage>
 class L2ConfigLoaderImpl : public ledger::IL2ConfigLoader
 {
 public:
-    explicit L2ConfigLoaderImpl(Storage& storage) : m_storage(&storage) { assert(m_storage); }
+    L2ConfigLoaderImpl(Storage& storage, std::string tableName)
+      : m_storage(&storage), m_tableName(std::move(tableName))
+    {
+        assert(m_storage);
+        assert(!m_tableName.empty());
+    }
 
     /// Refresh @p out by reading 4 slots from the SystemConfig predeploy.
     /// Precondition: @p out must already carry any non-L2 fields (consensus
@@ -236,8 +257,7 @@ public:
         using executor_v1::StateKey;
         namespace detail = l2_loader_detail;
 
-        auto const tableName = fmt::format(
-            "{}{}", bcos::ledger::SYS_DIRECTORY::USER_APPS, L2_SYSTEM_CONFIG_ADDRESS_HEX);
+        auto const& tableName = m_tableName;
 
         // Compute the 4 slot addresses once. Slot hashes are content-addressed
         // and reusable across blocks, but precomputing them per call keeps the
@@ -278,26 +298,41 @@ public:
             auto const slotBytes = entries[i]->get();
             auto const decoded = detail::decodeEntryValue(slotBytes);
 
-            // chain_id is genesis-frozen (D4): genesis writes it with
-            // enableNumber 0 and the contract rejects runtime writes. A
-            // non-zero enableNumber can only mean someone smuggled a scheduled
-            // chain_id change past the contract whitelist (e.g. via a raw
-            // storage write) — refuse to run rather than re-key the chain.
-            if (key == "chain_id" && decoded.enableNumber != 0)
+            // Genesis-frozen keys (D4): genesis writes chain_id, gas_limit and
+            // compatibility_version with enableNumber 0 and SystemConfig._isWritableKey
+            // rejects runtime writes to them, so a non-zero enableNumber can only mean
+            // the slot was written past the contract (raw storage write, hand-edited
+            // alloc). Refuse to run rather than re-key or re-price the chain -- and
+            // rather than let checkL2GenesisFrozenKeys at boot compare the caller's
+            // fallback value, which a later height would then silently overlay.
+            if (key != "block_tx_count_limit" && decoded.enableNumber != 0)
             {
-                BOOST_THROW_EXCEPTION(
-                    std::runtime_error("L2ConfigLoader: chain_id is genesis-frozen; a scheduled "
-                                       "chain_id change (enableNumber != 0) is invalid"));
+                BOOST_THROW_EXCEPTION(std::runtime_error(
+                    fmt::format("L2ConfigLoader: '{}' is genesis-frozen; a scheduled change "
+                                "(enableNumber {} != 0) is invalid",
+                        key, decoded.enableNumber)));
             }
 
-            // Schedule gate: a config whose enableNumber is still in the future
-            // must not be applied yet — the block keeps its prior value. This
-            // mirrors LedgerTypeDef::readFromStorage's `blockNumber >=
-            // enableNumber` check so every node activates a scheduled change on
-            // the same block (a divergence here would fork the chain).
-            if (blockNumber < static_cast<protocol::BlockNumber>(decoded.enableNumber))
+            // Schedule gate. The slot holds ONE entry per key, so a scheduled value
+            // replaces the active one with nothing to fall back to. SystemConfig.setValueByKey
+            // only accepts enableNumber <= block.number + 1 and this loader is evaluated at
+            // committed + 1 (OpLedgerConfigRepublish.h), so every entry the contract can
+            // produce is active here; a later enableNumber is a raw storage write or an alloc
+            // edit. Refuse it instead of skipping it: "skip" would leave the SYS_CONFIG
+            // fallback in @p out until the height arrives, and after a restart the previous
+            // SystemConfig value is unrecoverable, so two nodes could seal with different
+            // limits. Every node evaluates the same slot at the same height, so the refusal
+            // itself is deterministic.
+            // std::cmp_less: a static_cast of an enableNumber >= 2^63 to the signed
+            // BlockNumber would go negative and slip past the comparison.
+            if (std::cmp_less(blockNumber, decoded.enableNumber))
             {
-                continue;
+                BOOST_THROW_EXCEPTION(std::runtime_error(
+                    fmt::format("L2ConfigLoader: '{}' is scheduled for block {} but the loader "
+                                "is evaluating block {}; a SystemConfig entry must be active at "
+                                "the next block (setValueByKey enforces enableNumber <= "
+                                "block.number + 1)",
+                        key, decoded.enableNumber, blockNumber)));
             }
             auto const& value = decoded.value;
 
@@ -322,15 +357,26 @@ public:
             }
             else if (key == "gas_limit")
             {
-                // The gas-limit tuple's second element is the block the value
-                // takes effect on; use the slot's enableNumber, not the caller's
-                // current block, so downstream sees the contract's schedule.
+                // The gas-limit tuple's second element is the block the value takes
+                // effect on; gas_limit is genesis-frozen, so the slot's enableNumber
+                // (checked to be 0 above) is what downstream sees, not the caller's block.
                 out.setGasLimit({detail::valueToUint64(value, key),
                     static_cast<protocol::BlockNumber>(decoded.enableNumber)});
             }
             else if (key == "block_tx_count_limit")
             {
-                out.setBlockTxCountLimit(detail::valueToUint64(value, key));
+                // The sealer takes this as an int64 count; 0 would seal empty blocks
+                // forever and anything above INT64_MAX would wrap. Refuse both here
+                // rather than let a fallback quietly substitute a default.
+                auto const limit = detail::valueToUint64(value, key);
+                if (limit == 0 ||
+                    limit > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+                {
+                    BOOST_THROW_EXCEPTION(std::runtime_error(fmt::format(
+                        "L2ConfigLoader: block_tx_count_limit must be in [1, INT64_MAX], got {}",
+                        limit)));
+                }
+                out.setBlockTxCountLimit(limit);
             }
             else if (key == "compatibility_version")
             {
@@ -349,5 +395,60 @@ public:
 
 private:
     Storage* m_storage;
+    std::string m_tableName;
 };
+
+/// The node-side values the three genesis-frozen SystemConfig keys must agree with. All three
+/// come from config.genesis: [web3] chain_id, [tx] gas_limit, [version] compatibility_version.
+struct L2GenesisFrozenNodeConfig
+{
+    u256 web3ChainId;
+    uint64_t txGasLimit;
+    uint32_t compatibilityVersion;
+};
+
+/// Compare the genesis-frozen keys the loader just read (chain_id, gas_limit,
+/// compatibility_version) with the node's own config.genesis. Returns the first mismatch as a
+/// message naming both places, or nullopt when all three agree. block_tx_count_limit is
+/// runtime-writable on the contract and is deliberately not compared: the chain's value wins
+/// over the node's consensus.block_tx_count_limit.
+///
+/// Pure so the comparison is unit-testable without a node; the initializer turns a returned
+/// message into a startup refusal (bcos::tool::InvalidConfig).
+inline std::optional<std::string> checkL2GenesisFrozenKeys(
+    LedgerConfig const& loaded, L2GenesisFrozenNodeConfig const& node)
+{
+    auto const mismatch = [](std::string_view key, std::string const& loadedValue,
+                              std::string_view configKey, std::string const& configValue) {
+        return fmt::format(
+            "SystemConfig {} (genesis alloc 0x{} slot {}) {} but config.genesis {} = {}", key,
+            L2_SYSTEM_CONFIG_ADDRESS_HEX, key, loadedValue, configKey, configValue);
+    };
+    if (!loaded.chainId().has_value())
+    {
+        // Defensive: unreachable after a successful load (a missing slot throws and chain_id
+        // is never schedule-gated), kept so a caller that skipped the load still gets a
+        // refusal rather than a false match.
+        return mismatch("chain_id", "is not loaded", "[web3] chain_id", node.web3ChainId.str());
+    }
+    auto const loadedChainId = fromBigEndian<u256>(loaded.chainId()->bytes);
+    if (loadedChainId != node.web3ChainId)
+    {
+        return mismatch(
+            "chain_id", "= " + loadedChainId.str(), "[web3] chain_id", node.web3ChainId.str());
+    }
+    auto const loadedGasLimit = std::get<0>(loaded.gasLimit());
+    if (loadedGasLimit != node.txGasLimit)
+    {
+        return mismatch("gas_limit", fmt::format("= {}", loadedGasLimit), "[tx] gas_limit",
+            fmt::format("{}", node.txGasLimit));
+    }
+    if (loaded.compatibilityVersion() != node.compatibilityVersion)
+    {
+        return mismatch("compatibility_version",
+            fmt::format("= {:#x}", loaded.compatibilityVersion()),
+            "[version] compatibility_version", fmt::format("{:#x}", node.compatibilityVersion));
+    }
+    return std::nullopt;
+}
 }  // namespace bcos::ledger

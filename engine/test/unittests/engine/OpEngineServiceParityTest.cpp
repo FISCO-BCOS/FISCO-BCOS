@@ -463,7 +463,15 @@ static_assert(bcos::engine::EngineServiceConcept<OpEngine>);
 // refuses every EIP-155 envelope after block 1 with -32602 (engine/bcos-engine/
 // OpLedgerConfigRepublish.h). The lane's holder is republished from the ledger by the notifier
 // the initializer installs instead, pinned at runtime by
-// OpLedgerConfigRepublishTest/commit_republish_keeps_the_holder_complete.
+// OpLedgerConfigRepublishTest/commit_republish_keeps_the_holder_complete. The one thing the
+// engine may take from that holder is a read-only seal-limit callable (the trailing
+// SealTxCountLimitSource parameter): it cannot publish through a std::function<int64_t()>.
+static_assert(
+    std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
+        bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
+        std::shared_ptr<bcos::engine::DACaps>, bool, OpEngine::SealTxCountLimitSource>,
+    "positive control: the OP engine takes a read-only seal-limit source as its trailing "
+    "parameter");
 static_assert(
     std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
         bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
@@ -683,11 +691,13 @@ struct OpServicePair
     explicit OpServicePair(bool allowSynthesizedL1Attributes = false,
         bcos::scheduler::SchedulerInterface::Ptr delegateIn = nullptr,
         std::shared_ptr<bcos::engine::DACaps> daCapsIn = nullptr,
-        bcos::ledger::OpForkSchedule forkSchedule = {})
+        bcos::ledger::OpForkSchedule forkSchedule = {},
+        OpEngine::SealTxCountLimitSource sealTxCountLimitSource = nullptr)
       : scheduler(forkSchedule, {}),
         delegate(std::move(delegateIn)),
         service(memPool, storage, scheduler, blockFactory, bcos::engine::c_defaultBlockTxCountLimit,
-            delegate, std::move(daCapsIn), allowSynthesizedL1Attributes)
+            delegate, std::move(daCapsIn), allowSynthesizedL1Attributes,
+            std::move(sealTxCountLimitSource))
     {}
 };
 
@@ -2297,6 +2307,79 @@ BOOST_AUTO_TEST_CASE(op_golden_vector_rebuild_matches_op_geth_block_hash)
     auto const rebuilt = bcos::protocol::EthBlockHeader::computeHash(*header);
     auto const golden = bcos::h256(sample.golden["blockHash"].asString());
     BOOST_CHECK_EQUAL(rebuilt.hex(), golden.hex());
+}
+
+namespace
+{
+/// Records how many transactions the built block carried when it reached executeBlock.
+struct TxCountingScheduler : RecordingScheduler
+{
+    std::vector<std::size_t> executedTxCounts;
+    void executeBlock(bcos::protocol::Block::Ptr block, bool sysBlock,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> callback)
+        override
+    {
+        executedTxCounts.push_back(block ? block->transactionsSize() : 0);
+        RecordingScheduler::executeBlock(std::move(block), sysBlock, std::move(callback));
+    }
+};
+
+/// Builds one payload with five mempool transactions plus one forced transaction and returns
+/// the number of transactions the delegate saw in the block.
+std::size_t buildWithSealLimitSource(OpEngine::SealTxCountLimitSource source)
+{
+    auto delegate = std::make_shared<TxCountingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(
+        /*allowSynthesizedL1Attributes=*/true, delegate, nullptr, {}, std::move(source));
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    for (uint64_t nonce = 1; nonce <= 5; ++nonce)
+    {
+        pair.memPool.pool.push_back(makeDecodableWeb3Tx(nonce).tx);
+    }
+    auto const forced = makeDecodableWeb3Tx(9);
+
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    attrs.transactions = std::vector<std::string>{forced.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    // Every execution of the built block (the build path may execute it more than once with
+    // nothing evicted) must carry the same sealed set.
+    BOOST_REQUIRE(!delegate->executedTxCounts.empty());
+    for (auto const count : delegate->executedTxCounts)
+    {
+        BOOST_CHECK_EQUAL(count, delegate->executedTxCounts.front());
+    }
+    return delegate->executedTxCounts.front();
+}
+}  // namespace
+
+/// Ticket 15: the mempool cap comes from the admission holder's snapshot (SystemConfig
+/// block_tx_count_limit, republished after every commit), not from the constructor constant.
+/// Snapshot limit 3 with five pool transactions seals three; the forced transaction from the
+/// payload attributes is a mandatory inclusion, rides on top and is not counted.
+BOOST_AUTO_TEST_CASE(op_build_seals_at_most_live_block_tx_count_limit_mempool_txs)
+{
+    BOOST_CHECK_EQUAL(buildWithSealLimitSource([] { return int64_t{3}; }), 3U + 1U);
+}
+
+/// A snapshot that carries 0 (holder not yet published, or a lane without the SystemConfig
+/// overlay) falls back to the constructor's limit rather than sealing nothing.
+BOOST_AUTO_TEST_CASE(op_build_zero_live_limit_falls_back_to_constructor_limit)
+{
+    BOOST_CHECK_EQUAL(buildWithSealLimitSource([] { return int64_t{0}; }), 5U + 1U);
+    BOOST_CHECK_EQUAL(buildWithSealLimitSource(nullptr), 5U + 1U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
