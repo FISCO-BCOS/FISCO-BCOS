@@ -581,6 +581,21 @@ void NodeConfig::validateL2Invariants()
                                   "[ethereum] mode=el requires a [fork_timestamps] section in "
                                   "config.genesis (the EL-mode fork schedule)"));
     }
+    // The lane binding, symmetric to the opstack-el >= 3 check below: mode=el is
+    // the L1 EL lane (L1 fork schedule, L1 PoS header rules), so it requires the
+    // L1 executor version. On the OP lane (executor.version >= 3) the self-sync
+    // declaration is mode=opstack-el — accepting mode=el there would also waive
+    // the non-empty-alloc invariant above for a chain whose SystemConfig
+    // predeploy's feature_flags slot travels in the allocs.
+    if (genesis.m_ethereumELMode &&
+        (genesis.m_executorVersion < ledger::ETHEREUM_EXECUTOR_VERSION ||
+            genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION))
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[ethereum] mode=el requires executor.version=2 (the L1 EL "
+                                  "lane) in config.genesis; the OP lane (executor.version >= 3) "
+                                  "takes mode=opstack-el"));
+    }
     // EL-sync mode's EIP-155 signature validation and geth's EIP-2124 fork-id handshake
     // (parts 7-9) key on the CHAIN id: a silent fallback to mainnet (1) would accept
     // transactions signed for another chain or announce a stale fork-id checksum. Require

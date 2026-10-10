@@ -823,6 +823,21 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             // pre-London" (the same constant the validator uses).
             baseFee = h.baseFee = protocol::kInitialBaseFee;
         }
+        else
+        {
+            // geth leaves baseFee nil here, but the emitted ladder hardcodes
+            // london_time=0 below — the artifact would contradict itself: block 1
+            // is rejected whether it carries a base fee ("parent is pre-London")
+            // or not ("missing baseFeePerGas"). Refuse up front, same shape as
+            // the terminalTotalDifficulty > 0 rejection, instead of emitting an
+            // unusable config.genesis (real pre-London support is the tracked
+            // follow-up).
+            throw std::runtime_error(
+                "no baseFeePerGas and config.londonBlock is absent or non-zero: "
+                "pre-London genesis schedules are not supported (the emitted fork "
+                "ladder activates London at genesis, so the header must carry a "
+                "base fee)");
+        }
         // consume-generated genesis files name it "withdrawalsRoot" (the fixture
         // header field); accept the geth-config-style "withdrawalsHash" too.
         auto const* withdrawalsKey = root.isMember("withdrawalsRoot") ? "withdrawalsRoot" :

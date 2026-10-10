@@ -201,6 +201,16 @@ private:
                 {
                     files.push_back(it->path());
                 }
+                else if (entryEc)
+                {
+                    // A dropped entry leaves a gap in the block sequence and every
+                    // later block then fails the parent-hash link — name the file
+                    // so the investigation starts here, not at the blocks.
+                    INITIALIZER_LOG(WARNING)
+                        << LOG_DESC("import-blocks: skipping unreadable directory entry")
+                        << LOG_KV("path", it->path().string())
+                        << LOG_KV("error", entryEc.message());
+                }
             }
             // All files share the same directory, so ordering the full paths is
             // ordering the filenames.

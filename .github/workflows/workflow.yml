@@ -758,11 +758,14 @@ jobs:
       # the served hashes byte-exactly.
       - name: Host-level import replay (EEST fixture)
         run: |
+          # bash -e aborts a failing command substitution at the assignment, so
+          # print the captured output on the failure path too — test-local.sh's
+          # diagnostics (node.out tail, served hashes) are the whole point.
           out=$(BINARY="${GITHUB_WORKSPACE}/fisco-bcos-air/fisco-bcos" \
                 TOOL="${GITHUB_WORKSPACE}/tools/eth-sync-check/eth-sync-check" \
                 bash tools/hive/test-local.sh \
                   tools/hive/tests/withdrawals_large_amount.genesis.json \
-                  tools/hive/tests/withdrawals_large_amount.chain.rlp 2>&1)
+                  tools/hive/tests/withdrawals_large_amount.chain.rlp 2>&1) || { echo "$out"; exit 1; }
           echo "$out"
           echo "$out" | grep -qF "genesis block hash: 0xa759d4d7ff38ec00e88b69069e86d1de9b7be0824b92a6c79b37fca1e6efabab" || exit 1
           echo "$out" | grep -qF "0x1 0x6e8fb4aeae9c0247e35aedec84d933550541c1495e0cd65b83e794dab7f4a3d5" || exit 1
