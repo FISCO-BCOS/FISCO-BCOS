@@ -611,8 +611,6 @@ BOOST_AUTO_TEST_CASE(officialHistoryScheduleRoundTrips)
     const auto resolved = resolveOpForkScheduleCanonical(
         std::nullopt, std::string{c_officialHistorySchedule}, false, HashType{});
     BOOST_CHECK_EQUAL(resolved, c_officialHistorySchedule);
-    BOOST_CHECK_EQUAL(keccakOpForkScheduleHash(resolved).hex(),
-        keccakOpForkScheduleHash(c_officialHistorySchedule).hex());
 }
 
 // A full nine-fork schedule must survive a ledger reopen. StateStorage writes only
@@ -621,6 +619,24 @@ BOOST_AUTO_TEST_CASE(officialHistoryScheduleRoundTrips)
 // stand-in for persisting to the DB). The front storage and its ledger are scoped
 // so they go out of scope before the reopened read — a fresh L2GenesisTestStorage
 // over the same backing is a process restart for the read path.
+// The chain-record extract is DELIBERATELY narrowed to the (jovian, karst) pair
+// (opForkScheduleFromCanonical): a ten-rung row comes back with every other rung at the
+// sentinel, so resolveOpFork over the extract answers the isthmus baseline for a timestamp
+// inside a declared middle rung. Pinned here so a future widening is a deliberate change
+// (it would move existing consumers that read the sentinel as "not scheduled").
+BOOST_AUTO_TEST_CASE(chainRecordExtractKeepsOnlyTheJovianKarstPair)
+{
+    auto const extracted = opForkScheduleFromCanonical(
+        "0:regolith,1:canyon,2:ecotone,3:fjord,4:granite,5:holocene,6:isthmus,7:jovian,8:karst");
+    BOOST_CHECK_EQUAL(extracted.m_jovianTime, 7U);
+    BOOST_CHECK_EQUAL(extracted.m_karstTime, 8U);
+    BOOST_CHECK_EQUAL(extracted.m_regolithTime, std::numeric_limits<uint64_t>::max());
+    BOOST_CHECK_EQUAL(extracted.m_canyonTime, std::numeric_limits<uint64_t>::max());
+    BOOST_CHECK_EQUAL(extracted.m_isthmusTime, std::numeric_limits<uint64_t>::max());
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(resolveOpFork(extracted, 5)), static_cast<int>(OpFork::Isthmus));
+}
+
 BOOST_AUTO_TEST_CASE(nineForkScheduleSurvivesAReopen)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -816,6 +832,9 @@ BOOST_AUTO_TEST_CASE(opEip1559ParamsRowRejectsAboveUint32)
     BOOST_CHECK(!bcos::ledger::opEip1559ParamsRowProblem(
         bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 50, .denominatorCanyon = 250})
                      .has_value());
+    // uint32 max still parses (the boundary the rejections above bracket).
+    auto const maxOk = bcos::ledger::parseOpEip1559Params("4294967295,4294967295,4294967295");
+    BOOST_CHECK_EQUAL(maxOk.elasticity, 4294967295U);
 }
 
 BOOST_AUTO_TEST_CASE(opEip1559RowRejectsZeroTriple)
@@ -831,22 +850,7 @@ BOOST_AUTO_TEST_CASE(opEip1559RowRejectsZeroTriple)
     BOOST_CHECK_EQUAL(legacy.denominatorCanyon, 250U);
 }
 
-// The Holocene extraData encodes each field as u32; the config loader refuses wider
-// values at load (NodeConfig [op_eip1559]) and the ROW parser must share the invariant —
-// a foreign-written row with a wider field fails as a named config error at boot instead
-// of silently carrying a value no header can emit.
-BOOST_AUTO_TEST_CASE(opEip1559RowRejectsOverWideField)
-{
-    for (auto const* row : {"4294967296,50,250", "6,4294967296,250", "6,50,4294967296"})
-    {
-        BOOST_CHECK_EXCEPTION((void)bcos::ledger::parseOpEip1559Params(row),
-            bcos::ledger::InvalidEVMCRevisionConfig,
-            [](auto const& e) { return messageContains(e, "uint32"); });
-    }
-    // uint32 max still parses.
-    auto const maxOk = bcos::ledger::parseOpEip1559Params("4294967295,4294967295,4294967295");
-    BOOST_CHECK_EQUAL(maxOk.elasticity, 4294967295U);
-}
+
 
 // The writer shares the reader's zero invariant: a genesis carrying a zero in the
 // declared triple must be refused at build, not persisted as a row every later boot
@@ -863,6 +867,23 @@ BOOST_AUTO_TEST_CASE(genesisRejectsZeroEip1559Triple)
             co_await ledger::buildGenesisBlock(*ledger, genesis, emptyLedgerConfig()),
             bcos::tool::InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "carries a zero"); });
+    }());
+}
+
+// The over-wide half of the same rule, driven through the WRITE-side call site: a writer
+// that stopped consulting opEip1559ParamsRowProblem would otherwise be caught only by the
+// predicate's own unit check above (test-only coverage of a guard the genesis path calls).
+BOOST_AUTO_TEST_CASE(genesisRejectsOverWideEip1559Triple)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto genesis = shorthandGenesis(1000, 2000);
+        genesis.m_opEip1559 = bcos::engine::OpEip1559Params{
+            .elasticity = 6, .denominator = 50, .denominatorCanyon = 1ull << 32};
+        BOOST_CHECK_EXCEPTION(
+            co_await ledger::buildGenesisBlock(*ledger, genesis, emptyLedgerConfig()),
+            bcos::tool::InvalidConfig, [](auto const& e) { return errinfoContains(e, "uint32"); });
     }());
 }
 
