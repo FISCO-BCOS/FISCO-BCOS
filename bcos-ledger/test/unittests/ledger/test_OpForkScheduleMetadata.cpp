@@ -887,6 +887,29 @@ BOOST_AUTO_TEST_CASE(genesisRejectsOverWideEip1559Triple)
     }());
 }
 
+// The accepted-domain boundary of the same rule: all three declared fields at UINT32_MAX
+// still build and read back unchanged (the rejections above bracket this bound).
+BOOST_AUTO_TEST_CASE(genesisAcceptsUint32MaxTriple_F7)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto genesis = shorthandGenesis(1000, 2000);
+        genesis.m_opEip1559 =
+            bcos::engine::OpEip1559Params{.elasticity = std::numeric_limits<std::uint32_t>::max(),
+                .denominator = std::numeric_limits<std::uint32_t>::max(),
+                .denominatorCanyon = std::numeric_limits<std::uint32_t>::max()};
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, genesis, emptyLedgerConfig()));
+        auto const row = co_await ledger::getSystemConfig(
+            *ledger, std::string(magic_enum::enum_name(ledger::SystemConfig::op_eip1559_params)));
+        BOOST_REQUIRE_MESSAGE(row.has_value(), "the declared triple must persist as a row");
+        auto const parsed = ledger::parseOpEip1559Params(std::get<0>(*row));
+        BOOST_CHECK_EQUAL(parsed.elasticity, std::numeric_limits<std::uint32_t>::max());
+        BOOST_CHECK_EQUAL(parsed.denominator, std::numeric_limits<std::uint32_t>::max());
+        BOOST_CHECK_EQUAL(parsed.denominatorCanyon, std::numeric_limits<std::uint32_t>::max());
+    }());
+}
+
 // genesis declaration → SYS_CONFIG row → snapshot parse: the declared triple
 // round-trips through the chain (the row FeeHistory and the engine both read).
 BOOST_AUTO_TEST_CASE(genesisEip1559RoundTripsThroughTheChain)
