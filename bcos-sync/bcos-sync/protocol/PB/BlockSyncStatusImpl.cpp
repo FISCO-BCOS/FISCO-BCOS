@@ -20,6 +20,7 @@
  */
 #include "BlockSyncStatusImpl.h"
 #include "bcos-sync/utilities/Common.h"
+
 #include <bcos-protocol/Common.h>
 #include <bcos-utilities/Common.h>
 

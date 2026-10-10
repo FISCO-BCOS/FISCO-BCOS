@@ -19,7 +19,7 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Common.h>
 #include <memory>
 

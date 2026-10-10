@@ -15,10 +15,10 @@
 #include <opstack-executor/OpForkSpec.h>
 #include <opstack-executor/OpRollupCost.h>
 
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <evmc/bytes.hpp>
 
+#include <bcos-utilities/DataConvertUtility.h>
 #include <cstdint>
 #include <vector>
 

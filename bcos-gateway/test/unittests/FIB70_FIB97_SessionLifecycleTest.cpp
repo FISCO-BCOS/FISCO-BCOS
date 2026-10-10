@@ -24,16 +24,16 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
-#include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <list>
+#include <optional>
 #include <queue>
 #include <thread>
-#include <atomic>
-#include <optional>
 #include <tuple>
-#include <list>
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace gateway;

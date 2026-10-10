@@ -31,7 +31,7 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos::protocol
 {

@@ -8,8 +8,9 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include "bcos-protocol/TransactionStatus.h"
 #include <boost/test/unit_test.hpp>
+
+#include "bcos-protocol/TransactionStatus.h"
 
 using namespace bcos::protocol;
 

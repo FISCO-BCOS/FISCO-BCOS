@@ -36,6 +36,7 @@
  *              of the number-keyed rows, and a fork block at the same height lands its own.
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-codec/rlp/RLPEncode.h"
 #include "bcos-crypto/hash/Keccak256.h"
@@ -60,7 +61,6 @@
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
-#include "EthereumBlockHashLookup.h"
 #include <bcos-devp2p/sync/HeaderValidator.h>
 #include <boost/test/unit_test.hpp>
 #include <limits>

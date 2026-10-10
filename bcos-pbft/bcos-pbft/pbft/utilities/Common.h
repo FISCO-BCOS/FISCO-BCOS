@@ -23,7 +23,7 @@
 #include <stdint.h>
 #include <string>
 #include <string_view>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define PBFT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
 #define PBFT_STORAGE_LOG(LEVEL) \

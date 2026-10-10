@@ -22,8 +22,9 @@
 #include "PBFTNewViewMsg.h"
 #include "PBFTMessage.h"
 #include "PBFTViewChangeMsg.h"
-#include <bcos-protocol/Common.h>
 
+
+#include <bcos-protocol/Common.h>
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;

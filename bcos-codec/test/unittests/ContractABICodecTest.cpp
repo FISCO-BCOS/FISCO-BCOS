@@ -20,11 +20,11 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 
+#include "bcos-utilities/Common.h"
 #include <boost/test/unit_test.hpp>
 using namespace std;
 using namespace bcos;

@@ -18,9 +18,9 @@
 #include "support/GoldenExpect.h"
 #include "support/GoldenSample.h"  // w6test loaders (pulls support/SeedPreState.h)
 
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
+#include <bcos-utilities/DataConvertUtility.h>
 #include <cstdint>
 #include <vector>
 

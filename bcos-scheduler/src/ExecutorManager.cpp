@@ -1,5 +1,5 @@
 #include "ExecutorManager.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/throw_exception.hpp>

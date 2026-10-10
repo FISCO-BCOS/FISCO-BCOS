@@ -25,6 +25,7 @@
 #include <jwt-cpp/traits/kazuho-picojson/defaults.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <algorithm>

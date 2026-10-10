@@ -31,21 +31,20 @@
  *        Usage: eth-sync-check --genesis-ini <config.genesis> [--expect <root>]
  * @date 2026/8/18
  */
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-devp2p/sync/Block.h>
 #include <bcos-devp2p/sync/HeaderValidator.h>
 #include <bcos-devp2p/sync/OpHeaderValidator.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
-#include <bcos-task/Wait.h>
-#include <bcos-tool/NodeConfig.h>
 #include <bcos-ledger/GenesisStateRoot.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
-#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/EthGenesisHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <curl/curl.h>

@@ -21,6 +21,7 @@
  * @date 2026/8/18
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-codec/rlp/Common.h"
 #include "bcos-codec/rlp/RLPEncode.h"
@@ -33,15 +34,14 @@
 #include "bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
-#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
-#include "EthereumBlockHashLookup.h"
 #include <bcos-devp2p/rlpx/Crypto.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>

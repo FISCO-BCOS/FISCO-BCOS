@@ -52,7 +52,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmone/evmone.h>

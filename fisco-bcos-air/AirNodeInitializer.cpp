@@ -33,6 +33,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/atomic.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 
 using namespace bcos::node;
 using namespace bcos::initializer;

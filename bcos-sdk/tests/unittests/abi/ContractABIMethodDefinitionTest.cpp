@@ -25,8 +25,8 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/unit_test.hpp>
 #include <boost/test/tools/old/interface.hpp>
+#include <boost/test/unit_test.hpp>
 #include <memory>
 #include <stdexcept>
 #include <utility>

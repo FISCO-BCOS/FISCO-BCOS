@@ -21,9 +21,9 @@
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-cpp-sdk/rpc/Common.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/value.h>
 #include <fstream>
 

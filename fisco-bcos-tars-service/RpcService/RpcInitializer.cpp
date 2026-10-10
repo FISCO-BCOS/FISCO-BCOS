@@ -21,7 +21,7 @@
 #include "RpcInitializer.h"
 #include "../Common/TarsUtils.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-rpc/RpcFactory.h>

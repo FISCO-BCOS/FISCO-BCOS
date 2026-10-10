@@ -4,8 +4,8 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/Web3AccessList.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/LogStream.h"
 
 namespace bcos::executor
 {

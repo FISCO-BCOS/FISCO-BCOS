@@ -18,9 +18,9 @@
  * @date 2021.03.06
  */
 #include "bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.h"
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::crypto;

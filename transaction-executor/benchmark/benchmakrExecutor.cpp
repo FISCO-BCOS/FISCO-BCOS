@@ -1,4 +1,5 @@
 #include "../bcos-transaction-executor/TransactionExecutorImpl.h"
+#include <boost/log/core/core.hpp>
 #include "../tests/TestBytecode.h"
 #include "../tests/TestMemoryStorage.h"
 #include "BenchmarkERC20.h"

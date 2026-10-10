@@ -25,7 +25,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
@@ -927,9 +927,9 @@ BOOST_AUTO_TEST_CASE(binaryWritesLeaveHexRowsUntouched)
         co_await binaryAccount.setCode(code, "the-abi", codeHash);
 
         // Both registrations and both row sets now exist side by side...
-        BOOST_CHECK(co_await storage2::existsOne(
+        BOOST_CHECK(co_await bcos::storage2::existsOne(
             storage, StateKeyView{bcos::ledger::SYS_TABLES, hexTable}));
-        BOOST_CHECK(co_await storage2::existsOne(
+        BOOST_CHECK(co_await bcos::storage2::existsOne(
             storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
         BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"3"});
         BOOST_CHECK_EQUAL(co_await hexAccount.balance(), bcos::u256(999));
@@ -1002,7 +1002,7 @@ BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
         BOOST_REQUIRE_EQUAL(result.status_code, 0);
 
         // The auth table must exist at the hex path...
-        BOOST_CHECK(co_await storage2::existsOne(
+        BOOST_CHECK(co_await bcos::storage2::existsOne(
             storage, StateKeyView{bcos::ledger::SYS_TABLES, hexAuthTable}));
         // ...and NOT at the binary path that the recipient account's path() would have
         // produced before the fix.
@@ -1010,7 +1010,7 @@ BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
             account::hexToBinaryAccountTableName("/apps/4200000000000000000000000000000000004321") +
             "_accessAuth";
         BOOST_REQUIRE(binAuthTable.size() > std::string_view{"_accessAuth"}.size());
-        BOOST_CHECK(!co_await storage2::existsOne(
+        BOOST_CHECK(!co_await bcos::storage2::existsOne(
             storage, StateKeyView{bcos::ledger::SYS_TABLES, binAuthTable}));
         co_return;
     }());
@@ -1102,7 +1102,7 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         BOOST_REQUIRE_EQUAL(createCode, 0);  // CODE_SUCCESS
 
         // The link row carries the address internalCreate registered the stub under.
-        auto linkEntry = co_await storage2::readOne(
+        auto linkEntry = co_await bcos::storage2::readOne(
             storage, StateKeyView{"/tables/t_v1_binary", bcos::executor::FS_LINK_ADDRESS});
         BOOST_REQUIRE(linkEntry.has_value());
         std::string const linkAddress(linkEntry->get());
@@ -1131,9 +1131,9 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         auto const binTable =
             account::accountTableName(linkAddress, account::AddressTableMode::Binary);
         BOOST_REQUIRE(account::isBinaryAccountTableName(binTable));
-        BOOST_CHECK(co_await storage2::existsOne(
+        BOOST_CHECK(co_await bcos::storage2::existsOne(
             storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
-        BOOST_CHECK(!co_await storage2::existsOne(
+        BOOST_CHECK(!co_await bcos::storage2::existsOne(
             storage, StateKeyView{bcos::ledger::SYS_TABLES, "/apps/" + linkAddress}));
         co_return;
     }());

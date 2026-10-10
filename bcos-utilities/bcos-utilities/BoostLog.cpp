@@ -23,7 +23,10 @@
  * @brief: add file collector
  */
 #include "GzTools.h"
+#include "BoostLog.h"
 #include "BoostLogCollector.h"
+#include "Common.h"
+#include "LineAsyncSink.h"
 #include "Log.h"
 #include <boost/date_time/time_facet.hpp>
 #include <boost/enable_shared_from_this.hpp>
@@ -36,33 +39,193 @@
 #include <boost/log/attributes/time_traits.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/detail/singleton.hpp>
+#include <boost/log/trivial.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/spirit/home/qi/numeric/numeric_utils.hpp>
 #include <boost/system/detail/error_category.hpp>
 #include <boost/system/detail/error_code.hpp>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <ctime>
+#include <memory>
+#include <shared_mutex>
 #include <utility>
 #include <list>
 namespace bcos
 {
 std::string const FileLogger = "FileLogger";
-boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
-    FileLoggerHandler(boost::log::keywords::channel = FileLogger);
 
-std::string const StatFileLogger = "StatFileLogger";
-boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
-    StatFileLoggerHandler(boost::log::keywords::channel = StatFileLogger);
+// LogLevel is defined in LogStream.h without referencing boost; make sure the
+// values stay in sync with boost::log::trivial::severity_level.
+static_assert(static_cast<int>(LogLevel::TRACE) == boost::log::trivial::severity_level::trace);
+static_assert(static_cast<int>(LogLevel::DEBUG) == boost::log::trivial::severity_level::debug);
+static_assert(static_cast<int>(LogLevel::INFO) == boost::log::trivial::severity_level::info);
+static_assert(
+    static_cast<int>(LogLevel::WARNING) == boost::log::trivial::severity_level::warning);
+static_assert(static_cast<int>(LogLevel::ERROR) == boost::log::trivial::severity_level::error);
+static_assert(static_cast<int>(LogLevel::FATAL) == boost::log::trivial::severity_level::fatal);
 
 LogLevel c_fileLogLevel = LogLevel::TRACE;
-LogLevel c_statLogLevel = LogLevel::INFO;
+
+namespace log
+{
+namespace
+{
+// Process-wide registry of whole-line sinks (fast path, used when no custom
+// log.format is configured). Producers hold a shared_ptr copy while writing,
+// so a sink stays alive even if it is unregistered mid-write.
+// std::atomic<std::shared_ptr> is not portable (libc++ rejects it), so the
+// slots are plain shared_ptrs guarded by a shared_mutex: register/unregister
+// are rare, and readers only hold the shared lock long enough to copy the
+// fixed-size slot array.
+constexpr std::size_t MaxLineSinks = 4;
+std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> g_lineSinks;
+std::shared_mutex g_lineSinksMutex;
+std::atomic<int> g_lineSinkCount{0};
+
+constexpr std::string_view c_severityNames[] = {
+    "trace", "debug", "info", "warning", "error", "fatal"};
+
+// "<threadName>-0x<tid>" exactly as the ThreadName/ThreadID attributes format
+// it; the value only changes when the thread is renamed, so cache it.
+std::string_view threadPart()
+{
+    thread_local std::string cachedName;
+    thread_local std::string part;
+    auto const& name = bcos::pthread_getThreadNameRef();
+    if (cachedName != name)
+    {
+#ifdef _WIN32
+        char tid[16];
+        std::snprintf(
+            tid, sizeof(tid), "0x%08lx", static_cast<unsigned long>(::GetCurrentThreadId()));
+#else
+        char tid[24];
+        std::snprintf(tid, sizeof(tid), "0x%016llx",
+            static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(pthread_self())));
+#endif
+        cachedName = name;
+        part = name.empty() ? "Unnamed" : name;
+        part += '-';
+        part += tid;
+    }
+    return part;
+}
+
+// "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|", byte-identical to the
+// default formatter in BoostLogInitializer::setLogFormatter.
+void appendLinePrefix(std::string& _out, LogLevel _level)
+{
+    _out.append(c_severityNames[static_cast<int>(_level)]);
+    _out += '|';
+    auto const micros = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch());
+    std::time_t secs = static_cast<std::time_t>(micros.count() / 1000000);
+    std::tm tm{};
+#ifdef _WIN32
+    localtime_s(&tm, &secs);
+#else
+    localtime_r(&secs, &tm);
+#endif
+    char buf[40];
+    int n = std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%06ld",
+        tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+        static_cast<long>(micros.count() % 1000000));
+    _out.append(buf, static_cast<std::size_t>(n));
+    _out += '|';
+    _out.append(threadPart());
+    _out += '|';
+}
+}  // namespace
+
+void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
+{
+    std::unique_lock lock(g_lineSinksMutex);
+    for (auto& slot : g_lineSinks)
+    {
+        if (!slot)
+        {
+            slot = std::move(_sink);
+            g_lineSinkCount.fetch_add(1, std::memory_order_release);
+            return;
+        }
+    }
+}
+
+void unregisterLineSink(LineSinkWriter const* _sink)
+{
+    std::unique_lock lock(g_lineSinksMutex);
+    for (auto& slot : g_lineSinks)
+    {
+        if (slot.get() == _sink)
+        {
+            slot.reset();
+            g_lineSinkCount.fetch_sub(1, std::memory_order_release);
+            return;
+        }
+    }
+}
+
+bool hasLineSinks() noexcept
+{
+    return g_lineSinkCount.load(std::memory_order_acquire) > 0;
+}
+
+// Fans the line out to every registered whole-line sink; returns false when
+// no sink accepted it (e.g. all sinks were unregistered concurrently).
+bool commitLine(LogLevel _level, std::string_view _message)
+{
+    thread_local std::string prefix;
+    prefix.clear();
+    appendLinePrefix(prefix, _level);
+    // Copy the slots under the shared lock, then write without holding it so
+    // a slow sink never blocks register/unregister or sibling producers.
+    std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> sinks;
+    {
+        std::shared_lock lock(g_lineSinksMutex);
+        sinks = g_lineSinks;
+    }
+    bool any = false;
+    for (auto const& sink : sinks)
+    {
+        if (sink)
+        {
+            sink->writeLine(_level, prefix, _message);
+            any = true;
+        }
+    }
+    return any;
+}
+}  // namespace log
 
 void setFileLogLevel(LogLevel const& _level)
 {
     c_fileLogLevel = _level;
 }
 
-void setStatLogLevel(LogLevel const& _level)
+LogStream::~LogStream() noexcept
 {
-    c_statLogLevel = _level;
+    try
+    {
+        // The line is committed to every registered whole-line sink; when
+        // none is registered (before initLog / after stopLogging) it is
+        // dropped, same as logging with no sinks attached used to behave.
+        // The count check avoids formatting the prefix when logging is down.
+        if (log::hasLineSinks())
+        {
+            log::commitLine(m_level, view());
+        }
+    }
+    catch (...)
+    {}
 }
 
 namespace

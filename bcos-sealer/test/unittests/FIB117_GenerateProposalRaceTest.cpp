@@ -36,6 +36,7 @@
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <thread>
+#include <boost/log/core.hpp>
 
 using namespace bcos;
 using namespace bcos::sealer;

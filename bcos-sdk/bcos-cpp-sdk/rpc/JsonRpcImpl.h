@@ -23,7 +23,7 @@
 #include <bcos-cpp-sdk/rpc/JsonRpcRequest.h>
 #include <bcos-cpp-sdk/ws/Service.h>
 #include <bcos-framework/multigroup/GroupInfoCodec.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <functional>
 #include <utility>
 

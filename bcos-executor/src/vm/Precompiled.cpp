@@ -38,7 +38,7 @@
 #include <evmone_precompiles/sha256.hpp>
 #include <intx/intx.hpp>
 #include <span>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 using namespace std;
 using namespace bcos;

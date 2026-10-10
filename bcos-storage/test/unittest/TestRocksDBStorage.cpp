@@ -10,6 +10,7 @@
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/log/core.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>

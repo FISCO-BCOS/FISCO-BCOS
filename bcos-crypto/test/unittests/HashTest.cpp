@@ -23,10 +23,10 @@
 #include <bcos-crypto/hash/Sha3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace crypto;

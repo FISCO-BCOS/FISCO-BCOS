@@ -19,8 +19,9 @@
  * @date 2021-05-11
  */
 #include "TxsSyncMsg.h"
-#include "bcos-protocol/Common.h"
 #include "bcos-txpool/sync/utilities/Common.h"
+
+#include "bcos-protocol/Common.h"
 
 using namespace bcos;
 using namespace bcos::sync;

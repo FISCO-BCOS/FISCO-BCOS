@@ -55,8 +55,8 @@
 #include <bcos-framework/storage/Table.h>
 #include <bcos-task/Wait.h>
 #include <bcos-tool/BfsFileFactory.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/hex.hpp>

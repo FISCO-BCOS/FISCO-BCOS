@@ -22,6 +22,7 @@
  * @date 2026/8/18
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-codec/rlp/Common.h"
 #include "bcos-codec/rlp/RLPEncode.h"
@@ -48,7 +49,6 @@
 #include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
-#include "EthereumBlockHashLookup.h"
 #include <bcos-devp2p/eth/Protocol.h>
 #include <bcos-devp2p/rlpx/Client.h>
 #include <bcos-devp2p/sync/BlockExchange.h>

@@ -23,8 +23,8 @@
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <chrono>
 #include <cstdint>

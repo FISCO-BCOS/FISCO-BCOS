@@ -22,8 +22,9 @@
 #include "PBFTMessage.h"
 #include "PBFTProposal.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
-#include <bcos-protocol/Common.h>
 
+
+#include <bcos-protocol/Common.h>
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
