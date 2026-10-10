@@ -27,6 +27,7 @@
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -39,16 +40,19 @@ namespace
 // geth hashdb scheme: a state trie node is content-addressed by its 32-byte node hash, and
 // contract code is stored under the 33-byte "c" + codeHash form that kona-host's L2Code hint
 // sends (CODE_PREFIX = 'c' in kona-bin/host/src/single/handler.rs).
-constexpr std::size_t c_stateNodeKeySize = 32;
-constexpr std::size_t c_codeKeySize = 33;
 constexpr bcos::byte c_codeKeyPrefix = 'c';
 }  // namespace
 
 task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& response)
 {
-    // params: key(DATA, 32-byte node hash or 33-byte "c"+codeHash)
-    // result: raw preimage(DATA); an unknown key is an error (geth DbGet parity — kona-host's
-    // L2Code hint relies on the error to fall back to the unprefixed hash)
+    // params: key (DATA); result: the stored preimage (DATA)
+    // kona-host (bin/host/src/single/handler.rs) sends two key shapes: geth hashdb's code key
+    // 'c' || codeHash (33 bytes) and the bare 32-byte keccak hash (trie nodes). Both resolve
+    // against the two keccak-addressed stores: MPT nodes (mptNodeReader, "/mpt/" rows) and
+    // bytecode (s_code_binary). Content addressing makes either store a valid answer for either
+    // shape; the shape only picks which store to try first. A miss answers -32000 "not found"
+    // (geth's server-error code); kona-host then retries its code hint with the bare-hash form.
+    co_await requireOpStackLane(*m_nodeService->ledger(), "debug_dbGet");
     if (request.size() < 1 || !request[0U].isString())
     {
         BOOST_THROW_EXCEPTION(
@@ -62,149 +66,123 @@ task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& r
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid hex key"));
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid key: not hex"));
     }
 
-    bcos::bytes preimage;
-    if (rawKey.size() == c_codeKeySize && rawKey.front() == c_codeKeyPrefix)
+    auto const isCodeKey = rawKey.size() == h256::SIZE + 1 && rawKey.front() == c_codeKeyPrefix;
+    if (!isCodeKey && rawKey.size() != h256::SIZE)
     {
-        // Contract code: strip the "c" prefix, the remaining 32 bytes are the code hash.
-        // Content-addressed and immutable — resolved through the shared readCodeByHash helper
-        // (the same content-addressed read eth_getCode's historical path performs).
-        bcos::h256 const codeHash(bcos::bytes(rawKey.begin() + 1, rawKey.end()));
-        auto const ledger = m_nodeService->ledger();
-        auto const stateStorage = ledger->getStateStorage();
-        if (!stateStorage)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InternalError, "State storage not available on this node"));
-        }
-        auto const code = co_await readCodeByHash(*stateStorage, codeHash);
-        if (!code.has_value())
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "not found"));
-        }
-        preimage = *code;
+        BOOST_THROW_EXCEPTION(JsonRpcException(Web3DefaultError, "not found"));
     }
-    else if (rawKey.size() == c_stateNodeKeySize)
+    auto const mptReader = m_nodeService->mptNodeReader();
+    if (!mptReader) [[unlikely]]
     {
-        // State trie node: keyed by its 32-byte node hash in the committed MPT node rows.
-        auto const mptReader = m_nodeService->mptNodeReader();
-        if (!mptReader)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InternalError, "MPT not enabled on this node"));
-        }
-        bcos::h256 const nodeHash(rawKey);
-        auto const node = co_await bcos::storage2::readOne(*mptReader, nodeHash);
-        if (!node.has_value())
-        {
-            // A missing node is either a hash never committed, or one pruned beyond the node's
-            // mptPruneWindow — indistinguishable from the hash alone (debug_dbGet carries no
-            // block number to run the pruned-vs-missing diagnosis eth_getProof does). Fault
-            // proofs must be servable for the whole dispute window, so the deployment
-            // precondition is mptPruneWindow >= the maximum dispute duration; naming both
-            // causes here keeps an operator's miss from looking like a bogus hash.
-            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-                "MPT node not found: unknown hash or pruned beyond the node's mptPruneWindow"));
-        }
-        preimage = *node;
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
-    else if (rawKey.size() == c_codeKeySize)
+    h256 const hash(rawKey.data() + (isCodeKey ? 1 : 0), h256::FromPointer);
+    auto const stateStorage = m_nodeService->ledger()->getStateStorage();
+
+    std::optional<bcos::bytes> value;
+    if (isCodeKey)
     {
-        // 33 bytes but the leading byte is not 'c': the length is right but the form is not
-        // the "c"+codeHash this endpoint understands. Call it out distinctly from a plain
-        // length mismatch so the caller can tell the prefix apart from the size.
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
-            "debug_dbGet key must be a 32-byte node hash or the 33-byte \"c\"+codeHash form"));
+        if (stateStorage)
+        {
+            value = co_await readCodeByHash(*stateStorage, hash);
+        }
     }
-    else
+    if (!value)
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "debug_dbGet key must be 32 or 33 bytes"));
+        value = co_await bcos::storage2::readOne(*mptReader, hash);
+    }
+    if (!value && !isCodeKey && stateStorage)
+    {
+        value = co_await readCodeByHash(*stateStorage, hash);
+    }
+    if (!value)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(Web3DefaultError, "not found"));
     }
 
-    Json::Value result = toHexStringWithPrefix(preimage);
+    Json::Value result = toHexStringWithPrefix(*value);
     buildJsonContent(result, response);
     co_return;
 }
 
 task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::Value& response)
 {
-    // params: blockHash(DATA, 32 bytes)
-    // result: raw RLP header(DATA), whose keccak256 equals the block hash (geth GetRawHeader
-    // parity — kona-host's preimage key is the block hash itself)
+    // params: blockNumberOrHash (QTY|TAG|DATA 32B)
+    // result: the RLP-encoded Ethereum header (DATA); keccak256(result) is the block hash
+    // eth_getBlockBy* reports (canonicalBlockHash), which is what kona-host checks.
+    co_await requireOpStackLane(*m_nodeService->ledger(), "debug_getRawHeader");
     if (request.size() < 1 || !request[0U].isString())
     {
         BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "debug_getRawHeader expects one block hash"));
+            JsonRpcException(InvalidParams, "debug_getRawHeader expects one block parameter"));
     }
     auto const blockTag = toView(request[0U]);
-
-    bcos::crypto::HashType hash;
-    try
-    {
-        hash = bcos::crypto::HashType(blockTag, bcos::crypto::HashType::FromHex);
-    }
-    catch (std::exception const&)
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid block hash"));
-    }
-
     auto const ledger = m_nodeService->ledger();
-    protocol::BlockNumber blockNumber = 0;
-    try
-    {
-        blockNumber = co_await ledger::getBlockNumber(*ledger, hash);
-    }
-    catch (bcos::Error const& e)
-    {
-        // Same call shape as eth_getProof: an unknown hash answers GetStorageError with no
-        // chained cause (a client's "Block not found"); a storage fault carries one and must
-        // propagate as the internal error instead.
-        if (e.errorCode() == bcos::ledger::LedgerError::GetStorageError &&
-            boost::get_error_info<bcos::Error::STDError>(e) == nullptr)
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
-        }
-        throw;
-    }
 
-    auto const block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER);
-    if (!block || !block->blockHeader()) [[unlikely]]
+    protocol::BlockNumber blockNumber = 0;
+    protocol::BlockNumber head = 0;
+    if (blockTag.size() == 66 && blockTag[0] == '0' && (blockTag[1] == 'x' || blockTag[1] == 'X'))
+    {
+        bcos::crypto::HashType hash;
+        try
+        {
+            hash = bcos::crypto::HashType(blockTag, bcos::crypto::HashType::FromHex);
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid block hash"));
+        }
+        try
+        {
+            blockNumber = co_await ledger::getBlockNumber(*ledger, hash);
+            head = co_await ledger::getCurrentBlockNumber(*ledger);
+        }
+        catch (bcos::Error const& e)
+        {
+            if (e.errorCode() == bcos::ledger::LedgerError::GetStorageError &&
+                boost::get_error_info<bcos::Error::STDError>(e) == nullptr)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+            }
+            throw;
+        }
+    }
+    else
+    {
+        // QTY|TAG: resolve through the shared tag resolver (same as eth_getBlockByNumber).
+        auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
+        auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag,
+            m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth(), std::nullopt,
+            std::nullopt, false);
+        blockNumber = number;
+        head = latest;
+    }
+    if (blockNumber < 0 || blockNumber > head)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
-
-    // Encode the header via the pure-RLP bridge: the ms->s conversion and field projection
-    // happen here, producing the exact bytes whose keccak256 is the block hash. Throws
-    // RlpEncodeException for a sub-second timestamp or an incomplete fork field set.
-    bcos::bytes encoded;
-    try
+    auto const block = co_await ledger::getBlockData(*ledger, blockNumber, ledger::HEADER);
+    auto const headerPtr = block ? block->blockHeader() : nullptr;
+    if (!headerPtr) [[unlikely]]
     {
-        bcos::protocol::EthBlockHeader ethHeader(*block->blockHeader());
-        ethHeader.rlpEncode(encoded);
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
-    catch (std::exception const& e)
+    auto const& header = *headerPtr;
+    // The published hash (canonicalBlockHash) is keccak256 of this RLP for an OP header and for
+    // an Ethereum-versioned one, whose stored hash is that RLP hash (calculateRLPHash) — the
+    // rollup genesis from [eth_genesis_header] is the latter. A native FISCO header's hash is
+    // not, so serving it would hand the host bytes that do not hash to the published hash.
+    if (!protocol::isOpEthereumBlock(header) &&
+        header.ethBlockVersion() == protocol::EthBlockVersion::NON_ETH) [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InternalError, std::string("Header RLP encode failed: ") + e.what()));
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InternalError, "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
     }
-
-    // The preimage-oracle contract is byte-exact: the served RLP must hash back to the key it
-    // was requested under. A stale/non-canonical hash->number entry, or a header that survives
-    // the EthBlockHeader bridge without being Eth-shaped, would otherwise serve the wrong
-    // header's RLP under the requested key — a failure kona-host surfaces only far from its
-    // cause. Recompute the keccak and fail loudly on mismatch.
-    auto const recomputed = bcos::crypto::keccak256Hash(bcos::ref(encoded));
-    if (recomputed != hash)
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
-            "Header RLP keccak mismatch: requested " + hash.hexPrefixed() +
-                ", recomputed " + recomputed.hexPrefixed()));
-    }
-
-    Json::Value result = toHexStringWithPrefix(encoded);
+    Json::Value result =
+        toHexStringWithPrefix(protocol::EthBlockHeader::encodeHeader(header));
     buildJsonContent(result, response);
     co_return;
 }
