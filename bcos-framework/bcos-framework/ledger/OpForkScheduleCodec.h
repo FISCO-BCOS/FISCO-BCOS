@@ -20,10 +20,10 @@
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Exceptions.h>
 #include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/ledger/OpForkSchedule.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
 #include <magic_enum/magic_enum.hpp>
 
 #include <array>
@@ -122,7 +122,30 @@ static_assert(
         }
         return j == c_opForkNames.size();
     }(),
-    "c_opForkNames must equal the lowercased enum_names<OpFork>() minus the L1-only rungs (Bedrock, Delta)");
+    "c_opForkNames must equal the lowercased enum_names<OpFork>() minus the L1-only rungs "
+    "(Bedrock, Delta)");
+
+// ... and the table's own spelling must be LOWERCASE. The pin above compares
+// case-insensitively (the enum names are CamelCase), but `forkOrder` compares byte-exactly
+// against input that normalizeForkName has lowercased: a case-only edit of a ladder row.name
+// ("Jovian") would pass the pin above and then reject every schedule spelling the fork in any
+// case at load ("unknown fork" / "invalid baseline fork").
+static_assert(
+    [] {
+        for (auto const name : c_opForkNames)
+        {
+            for (char const ch : name)
+            {
+                if (ch >= 'A' && ch <= 'Z')
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }(),
+    "c_opForkNames entries must be lowercase (forkOrder compares byte-exact against the lowercased "
+    "input)");
 
 // Pure lookups: no allocation and no throw path, so they are noexcept like
 // legacyOpForkScheduleCanonical.

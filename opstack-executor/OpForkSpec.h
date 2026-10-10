@@ -300,7 +300,11 @@ static_assert(
         }
         for (std::size_t i = 0; i < rungs.size(); ++i)
         {
-            if (static_cast<std::size_t>(rungs[i]) != i)
+            // Both invariants the row order carries: the enum values are contiguous in
+            // declaration order AND row i dispatches rung i (the identity check its sibling
+            // c_opForkLadder pin uses — contiguity alone leaves a swapped table row silently
+            // mis-mapping opForkSpec's EVM revision and precompile set).
+            if (static_cast<std::size_t>(rungs[i]) != i || c_opForkSpecs[i].fork != rungs[i])
             {
                 return false;
             }
