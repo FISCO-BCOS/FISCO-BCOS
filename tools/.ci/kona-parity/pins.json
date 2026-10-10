@@ -1,0 +1,50 @@
+{
+  "comment": "Versions the kona parity gate runs against. run.sh reads kona_host.image and anvil.*; the CI jobs read op_stack_e2e_tests.commit from the workflow checkout step, which must equal the value here.",
+  "kona_host": {
+    "release": "kona-host/v1.7.0",
+    "commit": "64b043ea5bbca9bc6e57e0f1c8df0404b4cf5f68",
+    "image": "us-docker.pkg.dev/oplabs-tools-artifacts/images/kona-host:v1.7.0@sha256:8e3cd9503193bfed446b5bba566f9482a36cb0211b99d7bcad631d0bf8b6f562",
+    "reported_version": "kona-host 1.0.2",
+    "verified_from": "https://github.com/ethereum-optimism/optimism/releases/tag/kona-host/v1.7.0"
+  },
+  "kona_client": {
+    "release": "kona-client/v1.7.0",
+    "commit": "64b043ea5bbca9bc6e57e0f1c8df0404b4cf5f68",
+    "image": "us-docker.pkg.dev/oplabs-tools-artifacts/images/kona-client:v1.7.0@sha256:67f7912442bdc9b32e5a4f333ec354ecd9911280d67be13ae44c6a191ee58da8",
+    "note": "kona-host --native runs the kona-client program in-process (bin/host/src/single/cfg.rs:208-222), so the gate executes kona-client from the kona-host image; the kona-client image is the cannon build and is pinned for ticket 14.",
+    "verified_from": "https://github.com/ethereum-optimism/optimism/releases/tag/kona-client/v1.7.0"
+  },
+  "op_node": {
+    "commit": "da197e45ed44b9fca258b3b0d0709e8dfca1c7cd",
+    "describe": "v1.19.2",
+    "note": "Built from the OP monorepo commit the harness pins; op-batcher and op-deployer come from the same commit.",
+    "verified_from": "https://github.com/FISCO-BCOS/op-stack-e2e-tests/blob/378774e100dd4658aa79e150c545f73812acdca5/tools/op-e2e/versions.json"
+  },
+  "op_reth": {
+    "release": "op-reth/v2.4.4",
+    "image": "us-docker.pkg.dev/oplabs-tools-artifacts/images/op-reth:v2.4.4@sha256:72be3e2f8c9ff6b33bfcc528905d01615b64619abfc5c3ad2f29c717faea6084",
+    "note": "Acceptance oracle of ADR 0001. Not started by this gate; recorded so a mismatch can be re-run against op-reth with the same pins.",
+    "verified_from": "https://github.com/ethereum-optimism/optimism/releases/tag/op-reth/v2.4.4"
+  },
+  "op_stack_e2e_tests": {
+    "commit": "378774e100dd4658aa79e150c545f73812acdca5",
+    "verified_from": ".github/workflows/workflow.yml (kona_parity_legs / kona_parity harness checkout steps) and c2-e2e.yml (kona_parity_negative_control)"
+  },
+  "cast": {
+    "min_version": "1.7.1",
+    "note": "run.sh refuses an older cast. The harness l2_tx_scenarios.sh (op-stack-e2e-tests tools/op-e2e/l2_tx_scenarios.sh:48-51) orders its flags for the `cast send --create` re-parse that cast >= 1.7.1 does. forge stays at the op-deployer pin (mise.toml, 1.2.3), so the CI jobs take cast from the anvil tarball below and put it first on PATH for run.sh only.",
+    "verified_from": "local runs with the foundry v1.8.3 toolchain; cast 1.2.3 rejects the harness's --create flag order"
+  },
+  "anvil": {
+    "release": "foundry v1.8.3",
+    "linux_amd64_tarball": "https://github.com/foundry-rs/foundry/releases/download/v1.8.3/foundry_v1.8.3_linux_amd64.tar.gz",
+    "linux_amd64_sha256": "7ca48e6ca3cac1bce1403ca67e5bc1dc3bc1fd818199c9957c7165079c228568",
+    "note": "kona-host reads L1 through debug_getRawHeader and debug_getRawReceipts (bin/host/src/single/handler.rs:82,109). anvil serves them from foundry v1.8.0 (crates/anvil/core/src/eth/mod.rs:369,377); v1.2.3 and v1.7.1 do not register them.",
+    "verified_from": "https://github.com/foundry-rs/foundry/releases/tag/v1.8.3"
+  },
+  "genesis_hash": {
+    "overlay_on": null,
+    "overlay_off": null,
+    "note": "Placeholder. The harness writes the L1 head timestamp into the L2 genesis header on every run (setup_c2.sh step 3, header_override.json), so the hash changes per run and cannot be pinned until ticket 12 makes genesis reproducible. run.sh prints the observed hash."
+  }
+}
