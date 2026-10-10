@@ -43,6 +43,7 @@
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/Web3BlobTxWrapper.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/Common.h>
@@ -52,6 +53,7 @@
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-rpc/web3jsonrpc/utils/AdmissionError.h>
+#include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
@@ -227,6 +229,24 @@ task::Task<void> EthEndpoint::blockNumber(const Json::Value&, Json::Value& respo
 /// enabled, or the block predates MPT activation), or — scenario A — a dormant account absent
 /// from the incomplete trie.
 constexpr int32_t EthHistoricalStateUnavailable = -32004;
+
+/// Contract bytecode by codeHash from the content-addressed code store (s_code_binary, the
+/// row EVMAccount::setCode writes; MPTAccount::code reads the same row). Rows are never
+/// deleted, so the latest plane answers for every block. nullopt = no such blob.
+static task::Task<std::optional<bcos::bytes>> readCodeByHash(
+    ledger::LedgerInterface& ledger, h256 const& codeHash)
+{
+    auto const stateStorage = ledger.getStateStorage();
+    auto const entry = co_await bcos::storage2::readOne(
+        *stateStorage, executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY,
+                           bcos::concepts::bytebuffer::toView(codeHash)});
+    if (!entry)
+    {
+        co_return std::nullopt;
+    }
+    auto const raw = entry->get();
+    co_return bcos::bytes(raw.begin(), raw.end());
+}
 
 /// Historical MPT read context: the block's committed state root plus whether the chain's
 /// storage tries are complete. getProof reads the same executor_version lane
@@ -948,13 +968,9 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
         {
             if (account->codeHash != bcos::ledger::mpt::emptyCodeHash())
             {
-                auto const stateStorage = ledger->getStateStorage();
-                std::string const codeHashStr = account->codeHash.toRawString();
-                if (auto const codeEntry = co_await bcos::storage2::readOne(*stateStorage,
-                        executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
-                    codeEntry.has_value())
+                if (auto stored = co_await readCodeByHash(*ledger, account->codeHash))
                 {
-                    code.assign(codeEntry.value().get().begin(), codeEntry.value().get().end());
+                    code = std::move(*stored);
                 }
             }
         }
@@ -1822,6 +1838,48 @@ EthEndpoint::getBlockNumberAndHeadByTag(std::string_view blockTag)
     co_return std::make_tuple(number, latest);
 }
 
+task::Task<std::tuple<protocol::BlockNumber, protocol::BlockNumber>>
+EthEndpoint::getBlockNumberAndHeadByTagOrHash(std::string_view blockTagOrHash)
+{
+    // op-node (eth_getProof) and kona-host (debug_getRawHeader) pass the 32-byte block hash
+    // (DATA), unlike the number/tag the other eth_* endpoints take. Decode the hash FIRST (a
+    // malformed hex string is a client error) and let getBlockNumber distinguish "not found"
+    // from a storage fault.
+    if (!(blockTagOrHash.size() == 66 && blockTagOrHash[0] == '0' &&
+            (blockTagOrHash[1] == 'x' || blockTagOrHash[1] == 'X')))
+    {
+        co_return co_await getBlockNumberAndHeadByTag(blockTagOrHash);
+    }
+    bcos::crypto::HashType hash;
+    try
+    {
+        hash = bcos::crypto::HashType(blockTagOrHash, bcos::crypto::HashType::FromHex);
+    }
+    catch (std::exception const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid block hash"));
+    }
+    try
+    {
+        auto const blockNumber = co_await ledger::getBlockNumber(*m_nodeService->ledger(), hash);
+        auto const head = co_await ledger::getCurrentBlockNumber(*m_nodeService->ledger());
+        co_return std::make_tuple(blockNumber, head);
+    }
+    catch (bcos::Error const& e)
+    {
+        // asyncGetBlockNumberByHash answers GetStorageError for an unknown hash (no chained
+        // cause) and for a storage read fault (with a chained std::exception). Only the
+        // former is a client's "Block not found"; the latter must propagate as the internal
+        // error the number/tag path produces for a storage failure.
+        if (e.errorCode() == bcos::ledger::LedgerError::GetStorageError &&
+            boost::get_error_info<bcos::Error::STDError>(e) == nullptr)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+        }
+        throw;
+    }
+}
+
 EthEndpoint::ForkchoiceContext EthEndpoint::forkchoiceContext() const
 {
     ForkchoiceContext context;
@@ -2022,45 +2080,9 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         }
     }
     auto const blockTag = toView(request[2U]);
-    // op-node passes the 32-byte block hash (DATA) for eth_getProof, unlike the number/tag the
-    // other eth_* endpoints take. Decode the hash FIRST (a malformed hex string is a client
-    // error) and let getBlockNumber distinguish "not found" from a storage fault.
     protocol::BlockNumber blockNumber = 0;
     protocol::BlockNumber head = 0;
-    if (blockTag.size() == 66 && blockTag[0] == '0' && (blockTag[1] == 'x' || blockTag[1] == 'X'))
-    {
-        bcos::crypto::HashType hash;
-        try
-        {
-            hash = bcos::crypto::HashType(blockTag, bcos::crypto::HashType::FromHex);
-        }
-        catch (std::exception const&)
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid block hash"));
-        }
-        try
-        {
-            blockNumber = co_await ledger::getBlockNumber(*m_nodeService->ledger(), hash);
-            head = co_await ledger::getCurrentBlockNumber(*m_nodeService->ledger());
-        }
-        catch (bcos::Error const& e)
-        {
-            // asyncGetBlockNumberByHash answers GetStorageError for an unknown hash (no chained
-            // cause) and for a storage read fault (with a chained std::exception). Only the
-            // former is a client's "Block not found"; the latter must propagate as the internal
-            // error the number/tag path produces for a storage failure.
-            if (e.errorCode() == bcos::ledger::LedgerError::GetStorageError &&
-                boost::get_error_info<bcos::Error::STDError>(e) == nullptr)
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
-            }
-            throw;
-        }
-    }
-    else
-    {
-        std::tie(blockNumber, head) = co_await getBlockNumberAndHeadByTag(blockTag);
-    }
+    std::tie(blockNumber, head) = co_await getBlockNumberAndHeadByTagOrHash(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getProof" << LOG_KV("address", address.hexPrefixed())
@@ -2086,14 +2108,15 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
 
-    // The exclusion-vs-cold-slot distinction is lane-driven (spec §5.9): only on the
-    // Ethereum lane (executor_version >= ETHEREUM_EXECUTOR_VERSION, scenario B) are the
-    // storage tries complete, making an
-    // exclusion walk a provable zero. Otherwise (scenario A) the trie omits slots never
-    // written after MPT activation, and generateProof marks such slots inMPT=false instead
-    // of emitting a lying value-0 exclusion proof. Single-row read (one SYS_CONFIG row,
-    // same helper as resolveHistoricalMptContext); degrades to false (honest scenario-A
-    // behavior) on fetch failure.
+    // The exclusion-vs-cold distinction is lane-driven (spec §5.9): only on the Ethereum lane
+    // (executor_version >= ETHEREUM_EXECUTOR_VERSION, scenario B) are the tries complete, making
+    // an exclusion walk a provable zero — an absent account answers an exclusion proof of the
+    // empty account (as getBalance reads it as zero), an absent slot a zero value. Otherwise
+    // (scenario A) the trie omits slots never written after MPT activation, and generateProof
+    // marks such slots inMPT=false (and absent accounts AccountNotInMPT) instead of emitting a
+    // lying exclusion. Single-row read (one SYS_CONFIG row, same helper as
+    // resolveHistoricalMptContext); degrades to false (honest scenario-A behavior) on fetch
+    // failure.
     auto const fullTrie =
         co_await executorVersionAt(*ledger, blockNumber) >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 
@@ -2188,6 +2211,92 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     }
     output["storageProof"] = std::move(storageProof);
     buildJsonContent(output, response);
+}
+
+task::Task<void> EthEndpoint::getRawHeader(const Json::Value& request, Json::Value& response)
+{
+    // params: blockNumberOrHash (QTY|TAG|DATA 32B)
+    // result: the RLP-encoded Ethereum header (DATA); keccak256(result) is the block hash
+    // eth_getBlockBy* reports (canonicalBlockHash), which is what kona-host checks.
+    co_await requireOpStackLane(*m_nodeService->ledger(), "debug_getRawHeader");
+    protocol::BlockNumber blockNumber = 0;
+    protocol::BlockNumber head = 0;
+    std::tie(blockNumber, head) = co_await getBlockNumberAndHeadByTagOrHash(toView(request[0U]));
+    if (blockNumber < 0 || blockNumber > head)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+    }
+    auto const block =
+        co_await ledger::getBlockData(*m_nodeService->ledger(), blockNumber, ledger::HEADER);
+    auto const headerPtr = block ? block->blockHeader() : nullptr;
+    if (!headerPtr) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+    }
+    auto const& header = *headerPtr;
+    // The published hash (canonicalBlockHash) is keccak256 of this RLP for an OP header and for
+    // an Ethereum-versioned one, whose stored hash is that RLP hash (calculateRLPHash) — the
+    // rollup genesis from [eth_genesis_header] is the latter. A native FISCO header's hash is
+    // not, so serving it would hand the host bytes that do not hash to the published hash.
+    if (!protocol::isOpEthereumBlock(header) &&
+        header.ethBlockVersion() == protocol::EthBlockVersion::NON_ETH) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InternalError, "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
+    }
+    Json::Value result = toHexStringWithPrefix(protocol::EthBlockHeader::encodeHeader(header));
+    buildJsonContent(result, response);
+}
+
+task::Task<void> EthEndpoint::dbGet(const Json::Value& request, Json::Value& response)
+{
+    // params: key (DATA); result: the stored preimage (DATA)
+    // kona-host (bin/host/src/single/handler.rs) sends two key shapes: geth hashdb's code key
+    // 'c' || codeHash (33 bytes) and, when that misses, the bare 32-byte keccak hash (trie
+    // nodes, and code on a path-scheme geth). Both resolve here against the two
+    // keccak-addressed stores: MPT nodes (mptNodeReader, "/mpt/" rows) and bytecode
+    // (s_code_binary). Content addressing makes either store a valid answer for either shape;
+    // the shape only picks which store to try first. A miss answers -32000 "not found" (geth's
+    // server-error code); kona-host then retries its code hint with the bare-hash form.
+    co_await requireOpStackLane(*m_nodeService->ledger(), "debug_dbGet");
+    auto const key = safeFromHex(toView(request[0U]));
+    if (!key) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid key: not hex"));
+    }
+    constexpr bcos::byte codeKeyPrefix = 'c';  // geth rawdb CodePrefix
+    auto const isCodeKey = key->size() == h256::SIZE + 1 && key->front() == codeKeyPrefix;
+    if (!isCodeKey && key->size() != h256::SIZE)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(Web3DefaultError, "not found"));
+    }
+    auto const mptReader = m_nodeService->mptNodeReader();
+    if (!mptReader) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
+    }
+    h256 const hash(key->data() + (isCodeKey ? 1 : 0), h256::FromPointer);
+    auto& ledger = *m_nodeService->ledger();
+
+    std::optional<bcos::bytes> value;
+    if (isCodeKey)
+    {
+        value = co_await readCodeByHash(ledger, hash);
+    }
+    if (!value)
+    {
+        value = co_await bcos::storage2::readOne(*mptReader, hash);
+    }
+    if (!value && !isCodeKey)
+    {
+        value = co_await readCodeByHash(ledger, hash);
+    }
+    if (!value)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(Web3DefaultError, "not found"));
+    }
+    Json::Value result = toHexStringWithPrefix(*value);
+    buildJsonContent(result, response);
 }
 
 bcos::rpc::EthEndpoint::EthEndpoint(
