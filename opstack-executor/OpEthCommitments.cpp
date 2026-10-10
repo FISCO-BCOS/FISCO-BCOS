@@ -1,6 +1,6 @@
 /// @file OpEthCommitments.cpp
 /// @brief Non-template parts of OpEthCommitments.h: the computed/announced
-///        projections and the six-way comparison. Ported from OpCommitments.h
+///        projections and the six-way comparison. Ported from the pre-cutover OpCommitments.h
 ///        (commitmentsOf/mismatchedFieldOf) and OpBlockExecute.h
 ///        (announcedCommitmentsOf) with the seal fields already in framework
 ///        types — the evmone BloomFilter/hash256 conversions are gone.

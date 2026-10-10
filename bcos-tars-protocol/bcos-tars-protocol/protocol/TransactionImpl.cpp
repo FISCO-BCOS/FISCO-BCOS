@@ -44,7 +44,7 @@ DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 // EIP-2718 deposit transaction type byte (OP Stack). Matches
 // rpc::TransactionType::Deposit in bcos-rpc; defined here as a local literal because
 // bcos-tars-protocol sits below bcos-rpc and must not depend on it.
-constexpr uint8_t kDepositTxType = 0x7e;
+constexpr uint8_t c_depositTxType = 0x7e;
 
 #define WEB3_ACCESS_LIST_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
 
@@ -394,7 +394,7 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
         // defense (kyonRay R4 #1). isDepositTx() uses the same envelope byte.
         auto const extraBytes = extraTransactionBytes();
         bool const isDepositEnvelope =
-            (!extraBytes.empty() && extraBytes[0] == static_cast<bcos::byte>(kDepositTxType));
+            (!extraBytes.empty() && extraBytes[0] == static_cast<bcos::byte>(c_depositTxType));
         if (isDepositEnvelope)
         {
             auto const depositHash = bcos::crypto::keccak256Hash(extraBytes);
@@ -635,7 +635,7 @@ bool bcostars::protocol::TransactionImpl::isDepositTx() const
         return false;
     }
     auto const extra = extraTransactionBytes();
-    return !extra.empty() && extra[0] == kDepositTxType;
+    return !extra.empty() && extra[0] == c_depositTxType;
 }
 
 bool bcostars::protocol::TransactionImpl::depositIsSystemTransaction() const
@@ -785,6 +785,23 @@ size_t bcostars::protocol::TransactionImpl::size() const
             size += key.size();
         }
     }
+    // EIP-7702 authorization entries: count the variable-length hex strings (address/signer/r/s).
+    // The fixed chainID/nonce/v scalars are excluded, like the other fixed scalars above.
+    for (auto const& entry : m_inner()->data.authorizationList)
+    {
+        size += entry.address.size();
+        size += entry.signer.size();
+        size += entry.r.size();
+        size += entry.s.size();
+    }
+    // EIP-4844 blob commitments: each versioned hash is a 32-byte payload.
+    for (auto const& hash : m_inner()->data.blobVersionedHashes)
+    {
+        size += hash.size();
+    }
+    // The sibling variable-length field of the same 0x03 shape: maxFeePerBlobGas is a
+    // variable-length hex string, same class as the counted maxFeePerGas above.
+    size += m_inner()->data.maxFeePerBlobGas.size();
     size += m_inner()->signature.size();
     size += m_inner()->sender.size();
     size += m_inner()->extraData.size();

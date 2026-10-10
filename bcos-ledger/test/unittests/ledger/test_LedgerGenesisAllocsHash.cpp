@@ -291,5 +291,41 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
     }());
 }
 
+// The verification is keyed on the SLOT (derived from the SystemConfig storage layout),
+// not an address literal: the C2 layout puts the SystemConfig account at
+// 0x4200...1000, and both layouts must be verified alike.
+BOOST_AUTO_TEST_CASE(FeatureFlagsSlotVerifiedAtANonTemplateAddress)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto param = makeParam();
+        // C2 layout: the same account (with the slot) at the C2 address instead of the
+        // template's 0x43...C0.
+        auto config = makeL2Config();
+        config.m_allocs[0].address = "4200000000000000000000000000000000001000";
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, config, param));
+    }());
+}
+
+// A slot-less account at a non-template address is the documented residual: the node
+// cannot identify it as the SystemConfig role (address literals skip layouts, and the
+// slot key is absent), so the build proceeds. The refusal lives in the generator
+// (build-allocs.py's name-keyed guard — pinned by tools/opstack-genesis/
+// test_build_allocs.py), and the template layout's own omission case stays refused
+// (MissingFlagsSlotRefusesToBuild).
+BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtANonTemplateAddressIsSkipped)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto param = makeParam();
+        auto config = makeL2Config();
+        config.m_allocs[0].address = "4200000000000000000000000000000000001000";
+        config.m_allocs[0].storage.clear();  // drop the feature_flags slot
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, config, param));
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

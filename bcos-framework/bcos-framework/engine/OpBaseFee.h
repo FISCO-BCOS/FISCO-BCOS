@@ -20,6 +20,7 @@
 #pragma once
 
 #include "Errors.h"
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -230,6 +231,37 @@ inline bcos::u256 calcOpBaseFeeFromFields(bcos::u256 const& parentGasLimit,
     auto const gasMetered = opGasMetered(parentGasUsed, parentBlobGasUsed, parentIsJovian);
     return detail::calcOpBaseFeeCore(
         parentGasLimit, gasMetered, parentBaseFee, denominator, elasticity, minBaseFee);
+}
+
+/// Pre-Holocene OP pricing (op-geth CalcBaseFee's pre-Holocene branch): the parameters come
+/// from the chain's declared triple, and the denominator is keyed on the CHILD block's Canyon
+/// activation — op-geth CalcBaseFee calls config.BaseFeeChangeDenominator(time) with the CHILD
+/// timestamp (consensus/misc/eip1559/eip1559.go:72; params/config.go:1349-1359), while the
+/// Holocene decode is keyed on parent.Time. Callers resolve childIsCanyon through the fork
+/// schedule (engine: seam predicate; sync validator: resolveOpFork); the RPC fee-history
+/// prediction keys on the parent's header shape (a documented one-boundary approximation —
+/// the next block's exact timestamp is unknown to a prediction). A zero Canyon denominator
+/// with Canyon active is a config fault: op-geth panics (config.go:1352-1354); we fail closed.
+[[nodiscard]] inline bcos::u256 calcOpBaseFeePreHolocene(bcos::u256 const& parentGasLimit,
+    bcos::u256 const& parentGasUsed, bcos::u256 const& parentBaseFee, bool childIsCanyon,
+    OpEip1559Params const& params)
+{
+    // All three are arithmetic poisons (gasTarget = gasLimit/elasticity,
+    // delta/denominator): the config loader (NodeConfig [op_eip1559]) and the
+    // SYS_CONFIG row parser (LedgerConfig::parseOpEip1559Params) refuse zeros at their
+    // doors; guard here as well so a params producer bypassing both still fails closed
+    // instead of dividing by zero. denominatorCanyon only matters when the child is
+    // Canyon-active (op-geth panics there — config.go:1352-1354).
+    if (params.elasticity == 0 || params.denominator == 0 ||
+        (childIsCanyon && params.denominatorCanyon == 0))
+    {
+        throwOpBaseFeeError(
+            "OP base-fee parameters carry a zero elasticity/denominator/denominatorCanyon");
+    }
+    return calcOpBaseFeeFromFields(parentGasLimit, parentGasUsed, parentBaseFee,
+        /*parentBlobGasUsed=*/std::nullopt, /*parentExtraData=*/{},
+        /*parentIsHolocene=*/false, /*parentIsJovian=*/false,
+        childIsCanyon ? params.denominatorCanyon : params.denominator, params.elasticity);
 }
 
 /// Next-block baseFee (op-geth CalcBaseFee). Holocene-active and later only:

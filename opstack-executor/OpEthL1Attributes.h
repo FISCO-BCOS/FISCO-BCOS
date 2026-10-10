@@ -36,6 +36,12 @@ inline constexpr std::array<uint8_t, 4> OP_ETH_ISTHMUS_L1_ATTRIBUTES_SELECTOR = 
 /// Gas limit used when synthesizing the L1-attributes deposit.
 inline constexpr int64_t OP_ETH_L1_INFO_DEPOSIT_GAS = 1'000'000;
 
+/// setL1BlockValues calldata offsets of the operator-fee fields (op-node
+/// L1BlockInfo binary layout; the full offset table lives in the .cpp). The t8n
+/// replay's emission-flag probe reads these two — the same constants, one home.
+inline constexpr std::size_t OP_ETH_L1_OPERATOR_FEE_SCALAR_OFFSET = 164;
+inline constexpr std::size_t OP_ETH_L1_OPERATOR_FEE_CONSTANT_OFFSET = 168;
+
 /// L1 block fields for synthesizing the L1-attributes deposit (the
 /// bcos::u256 counterpart of bcos-evm's L1BlockInfo).
 /// All-zero number/time/blockHash is the unset snapshot sentinel.

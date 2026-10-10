@@ -26,6 +26,11 @@
 #include <json/json.h>
 #include <optional>
 
+namespace bcos::protocol
+{
+class TransactionReceipt;
+}
+
 namespace bcos::rpc
 {
 
@@ -65,5 +70,13 @@ bcos::Error::UniquePtr decodeDepositTransaction(
 /// nonce lives in the receipt and is filled by the receipt path once available), and no
 /// chainId is emitted.
 void combineDepositTxResponse(Json::Value& result, const DepositTransaction& deposit);
+
+/// Fill the receipt-driven fields of a deposit tx response — nonce from the receipt's
+/// depositNonce, and depositReceiptVersion when the receipt carries one — mirroring
+/// op-geth's newRPCTransaction (internal/ethapi/api.go:1182-1227): a deposit's tx nonce
+/// is the deposit nonce, never just 0x0. No-op when the receipt carries no OP meta
+/// (pre-Canyon or non-deposit receipts); called by combineTxResponse after the deposit
+/// branch, so it applies whether or not the envelope decoded.
+void fillDepositReceiptFields(Json::Value& result, const protocol::TransactionReceipt& receipt);
 
 }  // namespace bcos::rpc

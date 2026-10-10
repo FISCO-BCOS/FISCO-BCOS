@@ -1,0 +1,166 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
+/// @file OpMismatchedFieldTest.cpp
+/// @brief Field-level mismatch detection between announced and executed OP headers.
+
+// Unit tests for the OP commitments comparison pure function (OpEthCommitments.h): 8 fields,
+// comparison order (first mismatch wins), the "transactionsRoot" literal, and the optional
+// computed-side-only gating (blobGasUsed/requestsHash).
+
+#include <bcos-framework/engine/Types.h>
+#include <opstack-executor/OpEthCommitments.h>  // OpEthBlockCommitments / opEthMismatchedFieldOf
+#include <boost/test/unit_test.hpp>
+
+namespace bcos::executor_v1::opstack
+{
+namespace
+{
+using C = OpEthBlockCommitments;
+
+C match()  // two identical default commitments: all-zero, both optionals nullopt
+{
+    return C{};
+}
+
+/// h256 with a distinctive first byte (deterministic, avoids hex-string ctor dependence).
+bcos::h256 makeH256(bcos::byte firstByte)
+{
+    bcos::h256 h;
+    h.data()[0] = firstByte;
+    return h;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_SUITE(OpMismatchedFieldSuite)
+
+BOOST_AUTO_TEST_CASE(AllFieldsMatchReturnsNullopt)
+{
+    const C c = match();
+    const C a = match();
+    BOOST_CHECK(!opEthMismatchedFieldOf(c, a).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(ReportsReceiptsRootFirst)
+{
+    C c = match();
+    C a = match();
+    a.receiptsRoot.data()[0] = 0x01;
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "receiptsRoot");
+}
+
+BOOST_AUTO_TEST_CASE(ReportsLogsBloomSecond)
+{
+    C c = match();
+    C a = match();
+    a.logsBloom.data()[0] = 0x01;
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "logsBloom");
+}
+
+BOOST_AUTO_TEST_CASE(ReportsWithdrawalsRoot)
+{
+    C c = match();
+    C a = match();
+    a.withdrawalsRoot = makeH256(0x01);
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "withdrawalsRoot");
+}
+
+BOOST_AUTO_TEST_CASE(ReportsStateRoot)
+{
+    C c = match();
+    C a = match();
+    a.stateRoot.data()[0] = 0x01;
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "stateRoot");
+}
+
+BOOST_AUTO_TEST_CASE(ReportsGasUsed)
+{
+    C c = match();
+    C a = match();
+    a.gasUsed = bcos::u256(1);
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "gasUsed");
+}
+
+BOOST_AUTO_TEST_CASE(TxRootSlotReportsTransactionsRootLiteral)
+{
+    C c = match();
+    C a = match();
+    a.txRoot.data()[0] = 0x01;
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "transactionsRoot");  // NOT "txRoot"
+}
+
+BOOST_AUTO_TEST_CASE(FirstMismatchWins)
+{
+    C c = match();
+    C a = match();
+    a.receiptsRoot.data()[0] = 0x01;
+    a.stateRoot.data()[0] = 0x01;
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "receiptsRoot");
+}
+
+BOOST_AUTO_TEST_CASE(FirstMismatchWinsMidField)
+{
+    C c = match();
+    C a = match();
+    a.gasUsed = bcos::u256(1);                               // field 5 differs
+    a.txRoot.data()[0] = 0x01;                               // field 6 also differs
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "gasUsed");  // mid-field order pinned
+}
+
+BOOST_AUTO_TEST_CASE(BlobGasUsedPresenceAsymmetryIsMismatch)
+{
+    // Deliberate strict semantic (OpEthCommitments.h opEthMismatchedFieldOf): presence asymmetry between
+    // computed and announced is REPORTED as a mismatch — fork-config divergence between the peers
+    // must be loud, never silently passed. (The real pre-Jovian path — seal leaves blobGasUsed
+    // nullopt while the payload always carries 0 — is normalized upstream of the comparison: the
+    // seal copies the announced value onto the executed header, so both sides present 0.)
+    C c = match();
+    C a = match();
+    a.blobGasUsed = 1;
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "blobGasUsed");
+
+    // computed value + announced value different → compare
+    C c2 = match();
+    C a2 = match();
+    c2.blobGasUsed = 1;
+    a2.blobGasUsed = 2;
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c2, a2), "blobGasUsed");
+
+    // computed value + announced value equal → match
+    C c3 = match();
+    C a3 = match();
+    c3.blobGasUsed = 7;
+    a3.blobGasUsed = 7;
+    BOOST_CHECK(!opEthMismatchedFieldOf(c3, a3).has_value());
+
+    // the fourth cell the matrix claims to cover: computed set, announced ABSENT —
+    // the same presence asymmetry in the other direction, equally loud.
+    C c4 = match();
+    C a4 = match();
+    c4.blobGasUsed = 1;
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c4, a4), "blobGasUsed");
+}
+
+BOOST_AUTO_TEST_CASE(RequestsHashPresenceAsymmetryIsMismatch)
+{
+    // Same strict-presence semantic as blobGasUsed (see above).
+    C c = match();
+    C a = match();
+    a.requestsHash = bcos::h256{};
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "requestsHash");
+
+    C c2 = match();
+    C a2 = match();
+    c2.requestsHash = makeH256(0x01);
+    a2.requestsHash = makeH256(0x02);
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c2, a2), "requestsHash");
+
+    // equal → match (4-element matrix completed)
+    C c3 = match();
+    C a3 = match();
+    c3.requestsHash = makeH256(0x09);
+    a3.requestsHash = makeH256(0x09);
+    BOOST_CHECK(!opEthMismatchedFieldOf(c3, a3).has_value());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+}  // namespace bcos::executor_v1::opstack

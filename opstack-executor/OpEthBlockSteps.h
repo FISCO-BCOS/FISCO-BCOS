@@ -86,7 +86,7 @@ task::Task<void> preBlockOpEthSteps(Storage& view, bcos::protocol::BlockHeader c
     OpForkSpec const& spec, RawTxRange const& rawTxBytes, std::vector<DepositTx> const& deposits,
     evmc::VM& vm, std::shared_ptr<OpStorageErrorSlot> const& errorSlot,
     std::optional<OpRecentBlockHashes<Storage>>& hashes, std::optional<std::string>& hashErr,
-    std::optional<uint16_t>& daFootprintGasScalar)
+    std::optional<uint16_t>& daFootprintGasScalar, bool noUserTxActivationBlock)
 {
     // buildOpEthBlockInfo's leniency rule is the legacy toBlockInfo one
     // (pre-Ecotone optionals zero-filled — dead EVM inputs pre-Cancun);
@@ -171,6 +171,24 @@ task::Task<void> preBlockOpEthSteps(Storage& view, bcos::protocol::BlockHeader c
         if (auto scalar =
                 opEthJovianDaFootprintGasScalar(std::span<uint8_t const>{data.data(), data.size()}))
             daFootprintGasScalar = *scalar;
+
+        // Schedule-driven activation gate (alloy-op-evm block/mod.rs:869): EVERY envelope
+        // must be a deposit. The op-geth shape check above inspects only the last tx, so a
+        // user tx hidden between deposits would pass it — upstream's consensus rule does
+        // not have that blind spot, and this scan is the restored gate the cutover port
+        // dropped. There is no post-exec SDM envelope on this lane to exempt.
+        if (noUserTxActivationBlock)
+        {
+            for (auto const& raw : rawTxBytes)
+            {
+                if (raw.empty() || raw[0] != OP_DEPOSIT_TX_TYPE)
+                {
+                    throw bcos::evm::OpConsensusError(
+                        "op block: unexpected non-deposit transaction in fork-activation "
+                        "block (post-Jovian fork-activation blocks are deposits-only)");
+                }
+            }
+        }
     }
     co_return;
 }

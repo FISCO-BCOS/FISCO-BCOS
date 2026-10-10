@@ -172,6 +172,12 @@ void bcos::rpc::combineBlockResponse(
         for (auto [index, tx] : ::ranges::views::enumerate(block.transactions()))
         {
             Json::Value txJson = Json::objectValue;
+            // Receipt-less rendering, matching op-geth's newRPCTransaction without a
+            // receipt: a deposit tx renders with nonce "0x0" and no
+            // depositReceiptVersion HERE — both live in the receipt and are filled only
+            // by the receipt overload (TransactionResponse.cpp) that every
+            // eth_getTransaction* caller with a receipt goes through. Accepted risk:
+            // block-context deposit shape is receipt-less on both implementations.
             combineTxResponse(txJson, *tx, index, blockNumber, blockHash);
             txList.append(txJson);
         }

@@ -37,6 +37,7 @@
 #include "bcos-devp2p/sync/OpHeaderValidator.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/engine/OpEip1559Params.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
@@ -271,13 +272,21 @@ private:
     /// validateL2Invariants for opstack-el), the block cadence knob ([ethereum]
     /// op_block_time_seconds) and the OP fork schedule from [op_fork_timestamps],
     /// carried whole so the validator resolves forks through the same
-    /// bcos::ledger::resolveOpFork ladder the executor uses.
+    /// bcos::ledger::resolveOpFork ladder the executor uses. The declared
+    /// [op_eip1559] triple rides along too: a chain declaring its own pair must
+    /// have its pre-Holocene headers re-priced with those constants, not the
+    /// superchain preset — otherwise every replayed header fails the baseFee
+    /// check (the declared channel reaches every consumer, not just the engine).
     bcos::devp2p::sync::OpChainConfig opChainConfig() const
     {
         bcos::devp2p::sync::OpChainConfig config;
         config.chainId = m_nodeConfig->ethereumChainId();
         config.blockTimeSeconds = m_nodeConfig->opBlockTimeSeconds();
         config.forkSchedule = m_nodeConfig->opForkSchedule().value();
+        auto const eip1559 = bcos::engine::effectiveOpEip1559(m_nodeConfig->opEip1559());
+        config.eip1559DenominatorBedrock = eip1559.denominator;
+        config.eip1559DenominatorCanyon = eip1559.denominatorCanyon;
+        config.eip1559Elasticity = eip1559.elasticity;
         return config;
     }
 

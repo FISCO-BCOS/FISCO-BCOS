@@ -354,5 +354,17 @@ BOOST_AUTO_TEST_CASE(legacyV2GenesisStringUnchanged)
     BOOST_CHECK_EQUAL(data, expected);
 }
 
+BOOST_AUTO_TEST_CASE(sentinelAsDeclaredTimestampRejected)
+{
+    // UINT64_MAX is the not-scheduled sentinel (readOptionalForkTimestamp's answer for an
+    // ABSENT key); writing the literal must not silently read as "never activates" —
+    // declare a real activation time or omit the key.
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
+                              "[op_fork_timestamps]\njovian_time=18446744073709551615\n")),
+        InvalidConfig,
+        [](auto const& e) { return errinfoContains(e, "not-scheduled sentinel"); });
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

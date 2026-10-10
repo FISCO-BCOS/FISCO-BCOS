@@ -75,7 +75,7 @@ template bcos::task::Task<void> bcos::executor_v1::opstack::preBlockOpEthSteps<M
     std::vector<bcos::executor_v1::opstack::DepositTx> const&, evmc::VM&,
     std::shared_ptr<bcos::executor_v1::opstack::OpStorageErrorSlot> const&,
     std::optional<bcos::executor_v1::opstack::OpRecentBlockHashes<MutableStorage>>&,
-    std::optional<std::string>&, std::optional<uint16_t>&);
+    std::optional<std::string>&, std::optional<uint16_t>&, bool);
 
 // finalizeOpEthBlockResult is NOT explicitly instantiated here: its state-root path calls
 // ledger::mpt::computeMptStateRoot, which requires a MultiLayerStorage view

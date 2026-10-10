@@ -109,7 +109,7 @@ bcos::bytes signEip1559(bcos::crypto::KeyPairInterface const& keyPair, uint64_t 
 {
     bcos::rpc::Web3Transaction w3;
     w3.type = bcos::rpc::TransactionType::EIP1559;
-    w3.chainId = kOpChainId;
+    w3.chainId = c_opChainId;
     w3.nonce = nonce;
     w3.maxPriorityFeePerGas = maxPriority;
     w3.maxFeePerGas = maxFee;
@@ -859,7 +859,7 @@ BOOST_AUTO_TEST_CASE(AlwaysWarmPrecompilesNoGhost)
     eth::EthBlockInfo block{};
     opeth::OpPolicy const opPolicy{opeth::OP_JOVIAN_SPEC, block};
     eth::EthereumHost<opstack_test::MutableStorage, opeth::OpPolicy> opHost{EVMC_PRAGUE, vm,
-        opState, block, {}, std::nullopt, eth::EthCallParams{}, kOpChainId, opPolicy};
+        opState, block, {}, std::nullopt, eth::EthCallParams{}, c_opChainId, opPolicy};
 
     BOOST_CHECK_EQUAL(static_cast<int>(opHost.access_account(opeth::OP_P256_VERIFY_ADDRESS)),
         static_cast<int>(EVMC_ACCESS_WARM));
@@ -873,7 +873,7 @@ BOOST_AUTO_TEST_CASE(AlwaysWarmPrecompilesNoGhost)
     eth::EthereumState<opstack_test::MutableStorage> l1State{l1Storage};
     eth::EthL1Policy const l1Policy{};
     eth::EthereumHost<opstack_test::MutableStorage, eth::EthL1Policy> l1Host{EVMC_PRAGUE, vm,
-        l1State, block, {}, std::nullopt, eth::EthCallParams{}, kOpChainId, l1Policy};
+        l1State, block, {}, std::nullopt, eth::EthCallParams{}, c_opChainId, l1Policy};
 
     // 0x08 is a Prague precompile: warm on first access, but only AFTER the ghost insert.
     BOOST_CHECK_EQUAL(static_cast<int>(l1Host.access_account(evmc::address{0x08})),

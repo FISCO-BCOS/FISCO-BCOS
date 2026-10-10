@@ -44,7 +44,7 @@ using bcos::ledger::resolveOpFork;
 
 namespace
 {
-constexpr uint64_t kNever = std::numeric_limits<uint64_t>::max();
+constexpr uint64_t c_never = std::numeric_limits<uint64_t>::max();
 
 /// Full Bedrock..Karst ladder, 100 seconds per rung: regolith=100, canyon=200, ...,
 /// karst=1000. isthmus_time is SET, which is what turns the pre-Isthmus rungs live.
@@ -80,12 +80,12 @@ BOOST_AUTO_TEST_CASE(unsetIsthmusIsTheZeroStartBaseline)
     BOOST_CHECK(resolveOpFork(s, 1000) == OpFork::Jovian);
     BOOST_CHECK(resolveOpFork(s, 1999) == OpFork::Jovian);
     BOOST_CHECK(resolveOpFork(s, 2000) == OpFork::Karst);
-    BOOST_CHECK(resolveOpFork(s, kNever - 1) == OpFork::Karst);
+    BOOST_CHECK(resolveOpFork(s, c_never - 1) == OpFork::Karst);
 
     // Nothing scheduled at all: still the Isthmus baseline, for every timestamp.
     OpForkSchedule empty;
     BOOST_CHECK(resolveOpFork(empty, 0) == OpFork::Isthmus);
-    BOOST_CHECK(resolveOpFork(empty, kNever - 1) == OpFork::Isthmus);
+    BOOST_CHECK(resolveOpFork(empty, c_never - 1) == OpFork::Isthmus);
 
     // jovian/karst active from genesis (the [op_fork_timestamps] jovian_time=0
     // karst_time=0 shape): Karst everywhere.
@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(unsetIsthmusIsTheZeroStartBaseline)
     fromGenesis.m_jovianTime = 0;
     fromGenesis.m_karstTime = 0;
     BOOST_CHECK(resolveOpFork(fromGenesis, 0) == OpFork::Karst);
-    BOOST_CHECK(resolveOpFork(fromGenesis, kNever - 1) == OpFork::Karst);
+    BOOST_CHECK(resolveOpFork(fromGenesis, c_never - 1) == OpFork::Karst);
 }
 
 // The full ladder with isthmus_time set: every rung at its exact boundary second
@@ -128,7 +128,7 @@ BOOST_AUTO_TEST_CASE(unscheduledRungsAreImpliedNotInactive)
     BOOST_CHECK(resolveOpFork(isthmusOnly, 0) == OpFork::Bedrock);
     BOOST_CHECK(resolveOpFork(isthmusOnly, 499) == OpFork::Bedrock);
     BOOST_CHECK(resolveOpFork(isthmusOnly, 500) == OpFork::Isthmus);
-    BOOST_CHECK(resolveOpFork(isthmusOnly, kNever - 1) == OpFork::Isthmus);
+    BOOST_CHECK(resolveOpFork(isthmusOnly, c_never - 1) == OpFork::Isthmus);
 
     OpForkSchedule sparse;
     sparse.m_canyonTime = 200;
@@ -166,6 +166,27 @@ BOOST_AUTO_TEST_CASE(forkEnumOrderIsTheActivationOrder)
     BOOST_CHECK(OpFork::Holocene < OpFork::Isthmus);
     BOOST_CHECK(OpFork::Isthmus < OpFork::Jovian);
     BOOST_CHECK(OpFork::Jovian < OpFork::Karst);
+}
+
+BOOST_AUTO_TEST_CASE(activationGateNeverReadsAnUnsetRungAsACrossing)
+{
+    using bcos::ledger::isOpNoUserTxActivationBlock;
+    // All rungs unset (the zero-start Isthmus baseline): no crossing can ever fire —
+    // not even at the sentinel boundary itself (the sentinel means "not scheduled").
+    OpForkSchedule unset;
+    BOOST_CHECK(!isOpNoUserTxActivationBlock(unset, 0, 100));
+    BOOST_CHECK(
+        !isOpNoUserTxActivationBlock(unset, 0, std::numeric_limits<uint64_t>::max()));
+    // A scheduled rung crosses exactly at its activation second.
+    OpForkSchedule jovian;
+    jovian.m_jovianTime = 100;
+    BOOST_CHECK(isOpNoUserTxActivationBlock(jovian, 99, 100));
+    BOOST_CHECK(!isOpNoUserTxActivationBlock(jovian, 100, 101));
+    // The fold rule: karst without jovian fires only on the karst crossing.
+    OpForkSchedule karst;
+    karst.m_karstTime = 50;
+    BOOST_CHECK(isOpNoUserTxActivationBlock(karst, 49, 50));
+    BOOST_CHECK(!isOpNoUserTxActivationBlock(karst, 50, 51));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

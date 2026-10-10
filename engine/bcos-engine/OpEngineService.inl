@@ -100,6 +100,18 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
                 .payloadId = std::nullopt,
             };
         }
+        // The OP lane's build path is Isthmus-baseline: canonicalBlockHash recognizes
+        // OP blocks by the Isthmus+ header field set, and rebuildOpEthHeader stamps the
+        // fork fields on that assumption. A pre-Isthmus child would die deep in the
+        // build with an opaque EmptyBlockHeaderHash — reject here as a clean INVALID.
+        if (!m_scheduler.isIsthmusActive(payloadAttributes->timestamp))
+        {
+            co_return ForkchoiceUpdatedResult{
+                .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                    std::string("OP payload building requires an Isthmus+ block time "
+                                "(the lane's Engine-API baseline)")),
+                .payloadId = std::nullopt};
+        }
         if (auto validationError = engine_common::op::requireL1AttributesDeposit(
                 *payloadAttributes, m_allowSynthesizedL1Attributes);
             validationError.has_value())
@@ -184,6 +196,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
             forkchoiceState.safeBlockHash, canonicalSafeHash),
         .finalizedCanonical = engine_common::forkchoiceHashIsCanonical(
             forkchoiceState.finalizedBlockHash, canonicalFinalizedHash),
+        // A jump to a KNOWN canonical head is legal on the OP lane (§4.3: the CL may
+        // re-drive an FCU across already-committed blocks after a reorg or a resumed
+        // session) — the tracker still rejects non-canonical jumps (headCanonical gates
+        // the relaxation) and non-jump shape errors.
+        .allowCanonicalHeadJump = true,
     };
     if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Swallowed)
     {
@@ -262,7 +279,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         // the Holocene extraData decode and the Jovian DA-footprint branch on parent.Time
         // (consensus/misc/eip1559/eip1559.go:64-110).
         parentTimestampMs = parentHeader->timestamp();
-        baseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive(parentTimestampMs));
+        baseFee = calcOpBaseFeeForParent(
+            *parentHeader, parentTimestampMs, payloadAttributes.timestamp);
     }
 
     requireDelegate();
@@ -380,6 +398,52 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             candidateTransactions.push_back(
                 EngineTransaction{.raw = std::move(env), .decoded = nullptr});
         }
+        // op-geth accepts an all-zero attribute pair and substitutes the chain config's pair
+        // (miner/worker.go:377-381); encodeOptimismExtraData does the same from this node's
+        // declaration, so the substitution is never a refusal. But when nothing is declared
+        // the pair written into this block is the OP-mainnet preset, which need not be this
+        // chain's — say so once, rather than leaving it to the boot line alone.
+        auto const effectiveEip1559 = effectiveOpEip1559(m_eip1559);
+        if (payloadAttributes.eip1559Params.has_value() &&
+            payloadAttributes.eip1559Params->size() == c_eip1559ParamsBytes)
+        {
+            auto const [attrDenominator, attrElasticity] =
+                decodeEip1559Params(*payloadAttributes.eip1559Params);
+            if (attrDenominator == 0 && attrElasticity == 0)
+            {
+                // Once per process PER SOURCE: a node declares or does not, so only one
+                // branch is reachable in production, but a shared guard would let the
+                // harmless INFO suppress the WARNING (and a test process runs both).
+                if (m_eip1559.has_value())
+                {
+                    static std::atomic<bool> declaredSubstitutionLogged{false};
+                    if (!declaredSubstitutionLogged.exchange(true))
+                    {
+                        BCOS_LOG(INFO) << LOG_BADGE("OpEngineService")
+                                       << LOG_DESC("attributes carry zero EIP-1559 params; "
+                                                   "substituting the DECLARED pair")
+                                       << LOG_KV("denominatorCanyon",
+                                              effectiveEip1559.denominatorCanyon)
+                                       << LOG_KV("elasticity", effectiveEip1559.elasticity);
+                    }
+                }
+                else
+                {
+                    static std::atomic<bool> presetSubstitutionLogged{false};
+                    if (!presetSubstitutionLogged.exchange(true))
+                    {
+                        BCOS_LOG(WARNING)
+                            << LOG_BADGE("OpEngineService")
+                            << LOG_DESC("attributes carry zero EIP-1559 params and this node "
+                                        "declares no [op_eip1559]: block extraData will carry "
+                                        "the OP-mainnet PRESET pair")
+                            << LOG_KV("denominatorCanyon", effectiveEip1559.denominatorCanyon)
+                            << LOG_KV("elasticity", effectiveEip1559.elasticity)
+                            << LOG_DESC("declare [op_eip1559] if this chain's own values differ");
+                    }
+                }
+            }
+        }
         ExecutionPayload candidate{
             .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
@@ -391,7 +455,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             .baseFeePerGas = baseFee,
             .blockHash = h256{},
             .transactions = std::move(candidateTransactions),
-            .extraData = detail::encodeOptimismExtraData(payloadAttributes),
+            .extraData = detail::encodeOptimismExtraData(payloadAttributes, effectiveEip1559),
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
             .blockNumber = nextBlockNumber,
@@ -776,7 +840,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     {
         // PARENT time (op-geth eip1559.go:64-110 keys CalcBaseFee on parent.Time).
         auto expectedBaseFee =
-            calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive(parentHeader->timestamp()));
+            calcOpBaseFeeForParent(*parentHeader, parentHeader->timestamp(), payload.timestamp);
         if (payload.baseFeePerGas != expectedBaseFee)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
