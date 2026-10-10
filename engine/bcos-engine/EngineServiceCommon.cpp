@@ -82,23 +82,24 @@ std::vector<std::string> supportedCapabilities()
     // here would also break the pre-Karst callers this node still serves — the v1 Engine
     // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
     //
-    // Eth and Op advertise the same list. FCU V4 is unimplemented (Endpoint -38005)
-    // and absent upstream (op-geth / op-node top out at V3), so it is not listed.
-    // A V4-shaped build still stores PayloadV3 (payloadShapeVersion).
+    // This is the Eth-lane list; the OP lane advertises its own narrower window
+    // (op::supportedOpCapabilities). FCU V4 is unimplemented (Endpoint -38005) and absent
+    // upstream (op-geth / op-node top out at V3), so it is not listed. A V4-shaped build
+    // still stores PayloadV3 (payloadShapeVersion).
     //
     // getPayloadBodies*V1 and getClientVersionV1 are vanilla engine methods both lanes
     // answer mechanically from the committed ledger / build info (geth advertises them
-    // from the same auto-derived caps list), so the OP table carries them too;
-    // engine_getBlobsV1 is likewise listed on both lanes and simply answers all-null on
-    // an L2 (no blob pool sidecars, no blob sidecar rows — a shape the spec explicitly
-    // allows). engine_exchangeClientVersionV1 is the pre-rename draft name of
-    // engine_getClientVersionV1, kept routable for older CLs.
+    // from the same auto-derived caps list), so the OP table carries them too.
+    // engine_getBlobsV1 is Eth-lane only: the OP lane admits no blob transactions and
+    // does not advertise it. engine_exchangeClientVersionV1 is the pre-rename draft name
+    // of engine_getClientVersionV1, kept routable for older CLs.
     static const std::vector<std::string> caps{"engine_exchangeCapabilities",
         "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
         "engine_getPayloadV1", "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4",
         "engine_getPayloadV5", "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3",
-        "engine_newPayloadV4", "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
-        "engine_getBlobsV1", "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
+        "engine_newPayloadV4", "engine_getPayloadBodiesByHashV1",
+        "engine_getPayloadBodiesByRangeV1", "engine_getBlobsV1", "engine_getClientVersionV1",
+        "engine_exchangeClientVersionV1"};
     return caps;
 }
 
