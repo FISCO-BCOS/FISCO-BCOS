@@ -77,7 +77,7 @@ namespace
 {
 
 constexpr uint64_t c_chainId = 0x2105;  // 8453 — the FISCO OP chain id (vector eip1559 chainId)
-const bcos::Address kSender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
+const bcos::Address c_sender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
                                                                             // sender
 
 // Corpus isthmus_transfer_basic.json: block.transactions[1]._op_raw (op-geth-signed eip1559
@@ -261,7 +261,7 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
     }
     else
     {
-        tx->forceSender(kSender.asBytes());
+        tx->forceSender(c_sender.asBytes());
     }
     return tx;
 }
@@ -355,7 +355,7 @@ struct Fixture
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
                 c_chainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
-        seedSender(multiLayerStorage, kSender, hashImpl);
+        seedSender(multiLayerStorage, c_sender, hashImpl);
         seedSysTables(multiLayerStorage);
     }
 };
@@ -1047,6 +1047,11 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
     BOOST_CHECK_MESSAGE(
         refused.err->errorMessage().find("Uncommitted pending block 2") != std::string::npos,
         "RefuseOtherHeight must pin pending height 2, got: " << refused.err->errorMessage());
+    // Recoverable CL-side state: tagged so mapDelegateError answers SYNCING, the same
+    // family as the sibling/gap refusals — never a -32603 internal fault.
+    BOOST_CHECK_MESSAGE(
+        boost::get_error_info<bcos::engine::OpSiblingReorgUnsupported>(*refused.err) != nullptr,
+        "RefuseOtherHeight must carry the recoverable tag");
 
     // KeepProbe: verify=false sibling at the pending height must not drop the slot.
     auto probe =
@@ -1582,14 +1587,14 @@ BOOST_AUTO_TEST_CASE(StorageReadFaultRejectsBlockAsStorageFault)
         bcos::storage::Entry e;
         e.set(std::string("abcd"));
         bcos::task::syncWait(bcos::storage2::writeOne(view,
-            StateKey{bcos::ledger::account::ethLaneAccountTableName(kSender),
+            StateKey{bcos::ledger::account::ethLaneAccountTableName(c_sender),
                 std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE)},
             std::move(e)));
         bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
     }
 
     // The minimal OP block from CommitPersistsSevenLedgerTables: L1 attributes deposit + one
-    // eip1559 transfer (buildFiscoTx forceSenders kSender for non-deposit envelopes, so the
+    // eip1559 transfer (buildFiscoTx forceSenders c_sender for non-deposit envelopes, so the
     // corrupt BALANCE row is read at the transfer's validation).
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
@@ -1644,14 +1649,14 @@ BOOST_AUTO_TEST_CASE(SenderAccountFaultRejectsAsStorageFaultNotConsensus)
         bcos::storage::Entry e;
         e.set(std::string("abcd"));
         bcos::task::syncWait(bcos::storage2::writeOne(view,
-            StateKey{bcos::ledger::account::ethLaneAccountTableName(kSender),
+            StateKey{bcos::ledger::account::ethLaneAccountTableName(c_sender),
                 std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)},
             std::move(e)));
         bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
     }
 
-    // Minimal OP block: L1 attributes deposit + one eip1559 transfer whose sender is kSender
-    // (buildFiscoTx forceSenders kSender for non-deposit envelopes).
+    // Minimal OP block: L1 attributes deposit + one eip1559 transfer whose sender is c_sender
+    // (buildFiscoTx forceSenders c_sender for non-deposit envelopes).
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
     auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
@@ -1742,23 +1747,23 @@ BOOST_AUTO_TEST_CASE(CallAtBlockLatestEqualsLatestCall)
 BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
 {
     Fixture f;
-    // Committed state: kSender's trie-backed nonce is 0 (seedSender), and the genesis header
+    // Committed state: c_sender's trie-backed nonce is 0 (seedSender), and the genesis header
     // carries the root so the historical arm can resolve it.
     auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
-    // Pending layer (pushed, never merged): the in-flight block advanced kSender's nonce to 7.
+    // Pending layer (pushed, never merged): the in-flight block advanced c_sender's nonce to 7.
     {
         auto view = f.multiLayerStorage.fork();
         view.newMutable();
         bcos::ledger::account::EVMAccount account(
-            view, kSender, bcos::ledger::account::AddressTableMode::Hex);
+            view, c_sender, bcos::ledger::account::AddressTableMode::Hex);
         bcos::task::syncWait(account.setNonce("7"));
         f.multiLayerStorage.pushView(std::move(view));
     }
 
     auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
+        c_sender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
     BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
 }
@@ -1779,13 +1784,13 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtBinaryModeReadsThePendingLayer)
         auto view = f.multiLayerStorage.fork();
         view.newMutable();
         bcos::ledger::account::EVMAccount account(
-            view, kSender, bcos::ledger::account::AddressTableMode::Binary);
+            view, c_sender, bcos::ledger::account::AddressTableMode::Binary);
         bcos::task::syncWait(account.setNonce("7"));
         f.multiLayerStorage.pushView(std::move(view));
     }
 
     auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
+        c_sender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
     BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
 }

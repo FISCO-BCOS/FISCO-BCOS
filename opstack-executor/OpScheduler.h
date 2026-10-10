@@ -551,9 +551,16 @@ private:
                             "before execute {}",
                             pendingHeight, number);
                         OP_SCHEDULER_LOG(INFO) << message;
-                        co_return {BCOS_ERROR_UNIQUE_PTR(
-                                       scheduler::SchedulerError::InvalidStatus, message),
-                            nullptr, false};
+                        // Tagged like the sibling/gap branches: recoverable CL-side
+                        // state (the CL retries after the pending height is committed or
+                        // replaced), not an internal fault — the Engine-API router must
+                        // answer SYNCING, never -32603. The tag name says "sibling
+                        // reorg" for historical reasons; to mapDelegateError its meaning
+                        // is "recoverable scheduler state".
+                        auto pendingError = BCOS_ERROR_UNIQUE_PTR(
+                            scheduler::SchedulerError::InvalidStatus, message);
+                        *pendingError << bcos::engine::OpSiblingReorgUnsupported{true};
+                        co_return {std::move(pendingError), nullptr, false};
                     }
                     if (conflict == PendingConflict::ReplaceSameHeight)
                     {
