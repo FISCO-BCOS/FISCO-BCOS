@@ -44,7 +44,7 @@ DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 // EIP-2718 deposit transaction type byte (OP Stack). Matches
 // rpc::TransactionType::Deposit in bcos-rpc; defined here as a local literal because
 // bcos-tars-protocol sits below bcos-rpc and must not depend on it.
-constexpr uint8_t c_depositTxType = 0x7e;
+constexpr uint8_t kDepositTxType = 0x7e;
 
 #define WEB3_ACCESS_LIST_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
 
@@ -394,7 +394,7 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
         // defense (kyonRay R4 #1). isDepositTx() uses the same envelope byte.
         auto const extraBytes = extraTransactionBytes();
         bool const isDepositEnvelope =
-            (!extraBytes.empty() && extraBytes[0] == static_cast<bcos::byte>(c_depositTxType));
+            (!extraBytes.empty() && extraBytes[0] == static_cast<bcos::byte>(kDepositTxType));
         if (isDepositEnvelope)
         {
             auto const depositHash = bcos::crypto::keccak256Hash(extraBytes);
@@ -635,7 +635,7 @@ bool bcostars::protocol::TransactionImpl::isDepositTx() const
         return false;
     }
     auto const extra = extraTransactionBytes();
-    return !extra.empty() && extra[0] == c_depositTxType;
+    return !extra.empty() && extra[0] == kDepositTxType;
 }
 
 bool bcostars::protocol::TransactionImpl::depositIsSystemTransaction() const

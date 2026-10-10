@@ -38,7 +38,7 @@ namespace
 const h256 c_opSepoliaGenesisHash{std::string_view(
     "0x102de6ffb001480cc9b8b548fd05c34cd4f46ae4aa91759393db90ea0409887d"), h256::FromHex};
 constexpr uint64_t c_genesisTime = 1691802540;
-constexpr uint64_t c_never = std::numeric_limits<uint64_t>::max();
+constexpr uint64_t kNever = std::numeric_limits<uint64_t>::max();
 const eth::OpForkIdLadder c_opSepoliaLadder{
     1699981200,  // canyon
     1708534800,  // ecotone
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(opSepoliaLadderPinned)
 // unscheduled intermediate fork must NOT terminate the checksum chain.
 BOOST_AUTO_TEST_CASE(unscheduledIntermediateRungsDropped)
 {
-    eth::OpForkIdLadder const baseline{c_never, c_never, c_never, c_never, c_never, c_never,
+    eth::OpForkIdLadder const baseline{kNever, kNever, kNever, kNever, kNever, kNever,
         1763568001 /*jovian*/, 1781712001 /*karst*/};
     // Head past both: both rungs are chained even though six rungs precede them unset.
     auto pastAll = eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, 1781712001, baseline);
@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE(genesisActiveForksSkipped)
     // Two forks activating at the same timestamp chain into the checksum ONCE
     // (op-geth dedups; e.g. a chain whose canyon and ecotone coincide).
     eth::OpForkIdLadder const dup{
-        1700000000, 1700000000, c_never, c_never, c_never, c_never, c_never, c_never};
+        1700000000, 1700000000, kNever, kNever, kNever, kNever, kNever, kNever};
     auto dupId =
         eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, 1700000001, dup);
     uint32_t dupExpected = eth::forkIdAddForkPoint(
