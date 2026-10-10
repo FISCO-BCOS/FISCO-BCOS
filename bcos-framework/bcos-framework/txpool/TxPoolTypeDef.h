@@ -21,7 +21,7 @@
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include <bcos-utilities/BoostLog.h>
 
-#define TXPOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXPOOL")
+#define TXPOOL_LOG(LEVEL) BCOS_MODULE_LOG(TXPOOL, LEVEL) << LOG_BADGE("TXPOOL")
 
 
 namespace bcos::txpool

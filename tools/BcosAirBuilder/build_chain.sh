@@ -1109,23 +1109,23 @@ gauge p2p_session_actived by host , node
 }
 
 gauge block_exec_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]ProposalExecuted,.*?execMs=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 }
 
 histogram block_exec_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]ProposalExecuted,.*?execMs=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
 gauge block_commit_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]BlockCommitted,.*?commitMs=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 }
 
 
 histogram block_commit_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]BlockCommitted,.*?commitMs=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
@@ -1135,7 +1135,7 @@ gauge ledger_block_height by chain , group , host , node
 }
 
 gauge txpool_pending_tx_size by chain , group , host , node
-/\[TXPOOL\]\[METRIC\]batchFetchTxs success,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
+/\[TXPOOL\]TxsFetched,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
   txpool_pending_tx_size[chain][group][host][node] = \$pendingTxs
 }
 EOF

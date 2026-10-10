@@ -26,6 +26,7 @@
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
 #include "txpool/interfaces/TxPoolStorageInterface.h"
+#include <bcos-utilities/BlockStat.h>
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/Timer.h>
@@ -89,6 +90,23 @@ public:
         protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
         bool checkPoolLimit, bool lock);
 
+    /// Slots of the per-block [TXPOOL][METRIC]BlockStat line (printed in batchRemoveSealedTxs).
+    enum BlockStatSlot : size_t
+    {
+        Added,
+        Removed,
+        Expired,
+        Rejected,
+        RejectNonce,
+        RejectBlockLimit,
+        RejectSignature,
+        RejectDuplicate,
+        RejectFull,
+        RejectOther,
+        BlockStatSlotCount
+    };
+    bcos::BlockStatCounters<BlockStatSlotCount>& blockStatCounters() { return m_blockStat; }
+
     // For testing
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction);
     void remove(crypto::HashType const& _txHash);
@@ -106,6 +124,11 @@ protected:
 
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
+    bcos::protocol::TransactionStatus doVerifyAndSubmitTransaction(
+        protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
+        bool checkPoolLimit);
+    void recordRejected(bcos::protocol::TransactionStatus _status);
+    void checkPoolFullTransition();
     bcos::protocol::TransactionStatus txpoolStorageCheck(
         const bcos::protocol::Transaction& transaction,
         protocol::TxSubmitCallback& txSubmitCallback);
@@ -143,5 +166,9 @@ protected:
     // timer to notify txs size
     std::shared_ptr<Timer> m_txsSizeNotifierTimer;
     bcos::crypto::HashType m_knownLatestSealedTxHash;
+
+    bcos::BlockStatCounters<BlockStatSlotCount> m_blockStat;
+    // TxPoolFull / TxPoolRecovered are printed once per state flip
+    std::atomic<bool> m_poolFull{false};
 };
 }  // namespace bcos::txpool

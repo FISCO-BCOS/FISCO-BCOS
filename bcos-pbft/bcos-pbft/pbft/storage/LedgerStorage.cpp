@@ -235,8 +235,8 @@ void LedgerStorage::asyncCommitProposal(PBFTProposalInterface::Ptr _committedPro
         return;
     }
     m_maxCommittedProposalIndex.store(_committedProposal->index());
-    PBFT_STORAGE_LOG(INFO) << LOG_DESC("asyncCommitProposal: write the committed proposal into db")
-                           << LOG_KV("index", _committedProposal->index());
+    PBFT_STORAGE_LOG(DEBUG) << LOG_DESC("asyncCommitProposal: write the committed proposal into db")
+                            << LOG_KV("index", _committedProposal->index());
     // commit the max-index proposal information
     auto maxIndexStr = boost::lexical_cast<std::string>(m_maxCommittedProposalIndex);
     auto maxIndexBytes = std::make_shared<bytes>(maxIndexStr.begin(), maxIndexStr.end());
@@ -312,11 +312,11 @@ void LedgerStorage::asyncCommitStableCheckPoint(PBFTProposalInterface::Ptr _stab
         m_blockFactory->blockHeaderFactory()->createBlockHeader(_stableProposal->data());
     blockHeader->setSignatureList(*signatureList);
     auto blockSignatureList = blockHeader->signatureList();
-    PBFT_LOG(INFO) << LOG_DESC("asyncCommitStableCheckPoint: set signatureList")
-                   << LOG_KV("index", blockHeader->number())
-                   << LOG_KV("hash", blockHeader->hash().abridged())
-                   << LOG_KV("proofSize", signatureList->size())
-                   << LOG_KV("blockProofSize", blockSignatureList.size());
+    PBFT_LOG(DEBUG) << LOG_DESC("asyncCommitStableCheckPoint: set signatureList")
+                    << LOG_KV("index", blockHeader->number())
+                    << LOG_KV("hash", blockHeader->hash().abridged())
+                    << LOG_KV("proofSize", signatureList->size())
+                    << LOG_KV("blockProofSize", blockSignatureList.size());
     // Note: enqueue here to increase the performance since commitBlock is a sync implementation
     auto self = weak_from_this();
     m_strand.post([self, blockHeader, _stableProposal]() {
@@ -387,24 +387,22 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
             auto commitPerTx =
                 (double)(utcTime() - startT) / (double)(_blockInfo->transactionsHashSize());
             PBFT_STORAGE_LOG(INFO)
-                << METRIC << LOG_DESC("commitStableCheckPoint success")
-                << LOG_KV("index", _blockHeader->number())
+                << METRIC << LOG_DESC("BlockCommitted") << LOG_KV("index", _blockHeader->number())
                 << LOG_KV("hash", _ledgerConfig->hash().abridged())
                 << LOG_KV("txs", _blockInfo->transactionsHashSize())
-                << LOG_KV("timeCost", utcTime() - startT) << LOG_KV("commitPerTx", commitPerTx);
+                << LOG_KV("commitMs", utcTime() - startT) << LOG_KV("commitPerTx", commitPerTx);
             auto txsSize = _blockInfo->transactionsHashSize();
             // Note:Here the thread pool is used to asynchronize the operation of PBFT finalize to
             // prevent the commitBlock from calling the callback synchronously and affecting the
             // performance.
-            ledgerStorage->m_strand.post(
-                [self, txsSize, _blockHeader, _ledgerConfig]() {
-                    auto storage = self.lock();
-                    if (!storage)
-                    {
-                        return;
-                    }
-                    storage->onStableCheckPointCommitted(txsSize, _blockHeader, _ledgerConfig);
-                });
+            ledgerStorage->m_strand.post([self, txsSize, _blockHeader, _ledgerConfig]() {
+                auto storage = self.lock();
+                if (!storage)
+                {
+                    return;
+                }
+                storage->onStableCheckPointCommitted(txsSize, _blockHeader, _ledgerConfig);
+            });
         }
         catch (std::exception const& e)
         {

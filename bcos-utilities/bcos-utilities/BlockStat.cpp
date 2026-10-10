@@ -1,5 +1,5 @@
-/*
- *  Copyright (C) 2021 FISCO BCOS.
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,12 +13,29 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Common.h
- * @author: yujiechen
- * @date: 2021-05-14
+ * @file BlockStat.cpp
  */
-#pragma once
-#include <bcos-framework/Common.h>
-#include <bcos-utilities/BoostLog.h>
-#define SEAL_LOG(LEVEL) \
-    BCOS_MODULE_LOG(PBFT, LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
+#include "BlockStat.h"
+
+namespace bcos
+{
+namespace
+{
+std::atomic<bool> c_enableBlockStat{false};
+}
+
+void BlockStat::enable()
+{
+    c_enableBlockStat.store(true, std::memory_order_relaxed);
+}
+
+void BlockStat::disable()
+{
+    c_enableBlockStat.store(false, std::memory_order_relaxed);
+}
+
+bool BlockStat::enabled()
+{
+    return c_enableBlockStat.load(std::memory_order_relaxed);
+}
+}  // namespace bcos

@@ -22,9 +22,10 @@
 #include "VRFBasedSealer.h"
 #include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
+#include <bcos-pbft/pbft/utilities/SealStall.h>
 #include <bcos-utilities/ITTAPI.h>
-#include <range/v3/view/transform.hpp>
 #include <chrono>
+#include <range/v3/view/transform.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -210,15 +211,14 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     }
     if (_block->transactionsMetaDataSize() == 0 && _block->transactionsSize() == 0)
     {
-        SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has no transactions")
-                       << LOG_KV("proposalIndex", _block->blockHeader()->number());
+        bcos::consensus::noteSealSkipped(
+            bcos::consensus::SealSkipReason::NoTxs, _block->blockHeader()->number(), -1);
         return;
     }
     if (_block->blockHeader()->number() <= m_sealingManager->latestNumber())
     {
-        SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has already been committed")
-                       << LOG_KV("proposalIndex", _block->blockHeader()->number())
-                       << LOG_KV("currentNumber", m_sealingManager->latestNumber());
+        bcos::consensus::noteSealSkipped(bcos::consensus::SealSkipReason::AlreadyCommitted,
+            _block->blockHeader()->number(), m_sealingManager->latestNumber());
         m_sealingManager->notifyResetTxsFlag(
             ::ranges::to<std::vector>(_block->transactionHashes()), false);
         return;
@@ -243,6 +243,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     _block->blockHeader()->setTxsRoot(txsRoot);
     _block->blockHeader()->calculateHash(*m_hashImpl);
 
+    bcos::consensus::noteSealResumed(_block->blockHeader()->number());
     SEAL_LOG(INFO) << LOG_DESC("++++++++++++++++ Generate proposal")
                    << LOG_KV("index", _block->blockHeader()->number())
                    << LOG_KV("curNum", m_sealingManager->latestNumber())

@@ -20,7 +20,6 @@
 #include <boost/filesystem/fstream.hpp>
 #include <cstdlib>
 #include <fstream>
-using namespace std;
 
 namespace bcos
 {
@@ -36,7 +35,7 @@ inline T genericReadContents(boost::filesystem::path const& _file)
         return content;
     }
     fileStream.seekg(0, fileStream.end);
-    streamoff length = fileStream.tellg();
+    std::streamoff length = fileStream.tellg();
 
     if (length == 0)
     {
