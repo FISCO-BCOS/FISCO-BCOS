@@ -2319,11 +2319,12 @@ bool Ledger::buildGenesisBlock(
         // the RPC estimate gas-cap gate (M1) among them — keys fork activation on the
         // chain's own schedule in every deployment. The SYS_OP_CHAIN_METADATA triple is the
         // integrity-bound copy the Initializer's boot probe validates (absent = legal;
-        // partial/corrupt/mis-bound = startup refusal). Both declaration channels land
-        // here with the NORMALIZED canonical (buildOpForkScheduleMetadata re-parses and
-        // normalizes, so "0:Isthmus" persists as "0:isthmus"): the canonical section
-        // and the [op_fork_timestamps] shorthand folded by the same rule
-        // (foldOpForkShorthand) the executor applies.
+        // partial/corrupt/mis-bound = startup refusal). Both declaration channels resolve
+        // through the ONE resolver the boot probe also compares against
+        // ([op_fork_schedule] canonicalized verbatim, else the [op_fork_timestamps]
+        // shorthand folded by the rule the executor applies), so the writer and the probe
+        // cannot disagree about what this node declares — and the NORMALIZED canonical is
+        // what gets bound ("0:Isthmus" persists as "0:isthmus").
         std::optional<std::string> resolvedOpSchedule;
         // A dual declaration must agree before this branch resolves it: the loader refuses a
         // divergent pair (NodeConfig), and a direct GenesisConfig caller (tooling, tests, a
@@ -2335,23 +2336,13 @@ bool Ledger::buildGenesisBlock(
         {
             throwInvalidOpForkSchedule(*problem);
         }
-        if (genesis.m_opstackForkSchedule.has_value())
+        if (auto const resolved = resolvedLocalOpForkScheduleCanonical(
+                genesis.m_opForkSchedule, genesis.m_opstackForkSchedule);
+            resolved.has_value())
         {
-            const auto metadata =
-                buildOpForkScheduleMetadata(*genesis.m_opstackForkSchedule, header->hash());
-            co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
-            resolvedOpSchedule = metadata.schedule;
-        }
-        else if (genesis.m_opForkSchedule.has_value())
-        {
-            // Same integrity triple for the shorthand channel: fold first, then bind the
-            // NORMALIZED canonical (both channels persist identical triples; a chain
-            // declared via [op_fork_timestamps] must not lack the integrity-bound copy).
-            const auto metadata =
-                buildOpForkScheduleMetadata(canonicalOpForkSchedule(foldOpForkShorthand(
-                                               genesis.m_opForkSchedule->m_jovianTime,
-                                               genesis.m_opForkSchedule->m_karstTime)),
-                    header->hash());
+            // Same integrity triple for either channel (both persist identical triples; a
+            // chain declared via [op_fork_timestamps] must not lack the integrity-bound copy).
+            const auto metadata = buildOpForkScheduleMetadata(*resolved, header->hash());
             co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
             resolvedOpSchedule = metadata.schedule;
         }
