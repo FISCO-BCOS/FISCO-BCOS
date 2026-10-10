@@ -103,59 +103,5 @@ public:
     virtual void stop(){};
     virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig){};
 
-    // OP lane only (OpEngineService::newPayload): execute @p block on the parent
-    // block's post-state WITHOUT any canonical-table write (no NUMBER_2_HASH / no
-    // SYS_CURRENT_STATE / no prewriteBlockToBuffer / no pending slot).
-    // @p parentFlat is the parent block's materialized post-state, type-erased as
-    // shared_ptr<void> across this boundary (the real scheduler casts to its own
-    // MultiLayerStorage mutable type; null = parent is the canonical tip). Receipts
-    // are attached to @p block; the block's own storage delta returns type-erased
-    // for the caller's staged import.
-    // After the engine's SetCanonical merged an imported chain: watermarks
-    // (lastCommitted / lastExecuted) move to @p number so the scheduler's continuity
-    // view agrees with the new canonical tip. Default: no-op (Eth).
-    virtual void canonicalizedTo(bcos::protocol::BlockNumber number) { (void)number; }
-
-    // Post-condition of a SetCanonical batch: stateRoot(SYS_CURRENT_STATE) must equal
-    // the head header's stateRoot. An implementation MUST throw on mismatch — a
-    // half-written canonical chain must never be answered VALID. Lives here because
-    // the state-root rebuild needs the executor's trie adapter, which implementations
-    // of this interface already link. Default: no-op (Eth/baseline schedulers have no
-    // import lane).
-    virtual void verifyCanonicalStateRoot(const bcos::h256& expectedStateRoot)
-    {
-        (void)expectedStateRoot;
-    }
-
-    // Default: unsupported — the Eth/baseline schedulers have no import lane.
-    // @p parentHeaders are the decoded ancestors (genesis-side FIRST) used to seed
-    // NUMBER_2_HASH / NUMBER_2_BLOCK_HEADER for the parent chain, so BLOCKHASH and
-    // parent-header reads walk the payload chain, not the canonical tables.
-    // The callback's @p blockFlat is the MATERIALIZED post-state of @p block, restored
-    // wholesale when an imported head later replaces canonical heights. @p parentFlat
-    // is the PARENT block's materialized post-state (null when the parent is the
-    // canonical tip, where the committed flat already IS the parent plane): the import
-    // plane erases the committed rows and re-materializes parentFlat, so the block
-    // executes exactly on its parent's post-state — required for canonical-ancestor
-    // siblings whose parent plane differs from the tip.
-    //
-    // All three type-erased payloads (@p parentFlat, @p blockDelta, @p blockFlat) are
-    // shared_ptr to the scheduler's MultiLayerStorage MutableStorage — the concrete
-    // type the scheduler and its OP-lane caller agree on. This framework header cannot
-    // name that type (the dependency direction is exactly why the signature erases),
-    // so the consumer un-erases with static_pointer_cast and a producer that stores
-    // any other type is silent UB, not a catchable error. Baseline schedulers never
-    // produce these payloads: the default implementation answers UnknownError.
-    virtual void importExecute(bcos::protocol::Block::Ptr block,
-        std::vector<bcos::protocol::BlockHeader::Ptr> const& parentHeaders,
-        std::shared_ptr<void> const& parentFlat,
-        std::function<void(Error::Ptr, bcos::protocol::BlockHeader::Ptr,
-            std::shared_ptr<void> blockDelta, std::shared_ptr<void> blockFlat)>
-            callback)
-    {
-        callback(BCOS_ERROR_PTR(scheduler::SchedulerError::UnknownError,
-                     "importExecute is not supported by this scheduler"),
-            nullptr, nullptr, nullptr);
-    }
 };
 }  // namespace bcos::scheduler
