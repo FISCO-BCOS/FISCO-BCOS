@@ -20,6 +20,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -33,6 +34,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
+#include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <string>
 
@@ -84,6 +86,11 @@ public:
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
         BOOST_TEST(web3JsonRpc != nullptr);
+        // The debug namespace is OP-lane-only (requireOpStackLane reads the executor_version
+        // SYS_CONFIG entry); the challenger data plane (kona-host) only talks to an OP node.
+        m_ledger->setSystemConfig(
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION));
     }
 
     /// Inject the type-erased MPT node reader; the AnyStorage view is non-owning, m_mptNodes
@@ -172,6 +179,7 @@ BOOST_AUTO_TEST_CASE(DbGetStateNodeHappyPath)
 // debug_dbGet on the 33-byte "c" + codeHash form returns the injected contract code.
 BOOST_AUTO_TEST_CASE(DbGetCodePrefixHappyPath)
 {
+    wireReader();
     bcos::h256 codeHash{0x11U};
     bcos::bytes codeBytes{0x60, 0x00, 0x60, 0x01};
     m_ledger->setStateStorageEntry(
@@ -190,7 +198,7 @@ BOOST_AUTO_TEST_CASE(DbGetCodePrefixHappyPath)
     BOOST_CHECK(resp["result"].asString() == "0x60006001");
 }
 
-// debug_dbGet on an unknown 32-byte hash answers -32603 "not found".
+// debug_dbGet on an unknown 32-byte hash answers -32000 "not found" (geth's server-error code).
 BOOST_AUTO_TEST_CASE(DbGetUnknownStateNodeReturnsError)
 {
     wireReader();
@@ -202,10 +210,11 @@ BOOST_AUTO_TEST_CASE(DbGetUnknownStateNodeReturnsError)
         return p;
     }());
     BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32603);
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32000);
 }
 
-// debug_dbGet on a key that is neither 32 nor 33 bytes answers -32602 InvalidParams.
+// debug_dbGet on a key that is neither the 33-byte "c"+codeHash form nor a bare 32-byte hash
+// answers -32000 "not found" (the key shape only picks which store to try first).
 BOOST_AUTO_TEST_CASE(DbGetInvalidKeyLengthReturnsInvalidParams)
 {
     auto resp = call("debug_dbGet", [&] {
@@ -214,11 +223,11 @@ BOOST_AUTO_TEST_CASE(DbGetInvalidKeyLengthReturnsInvalidParams)
         return p;
     }());
     BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32000);
 }
 
-// debug_dbGet on a 33-byte key whose leading byte is not 'c' answers -32602 with the
-// distinct non-'c'-prefix message (not the length-mismatch message).
+// debug_dbGet on a 33-byte key whose leading byte is not 'c' answers -32000 "not found" — it is
+// not the code-key form, and its length is not a bare 32-byte hash either.
 BOOST_AUTO_TEST_CASE(DbGetNonCPrefixKeyReturnsInvalidParams)
 {
     // 33 bytes = 66 hex chars, leading byte 0xdd (not 0x63 == 'c').
@@ -229,9 +238,7 @@ BOOST_AUTO_TEST_CASE(DbGetNonCPrefixKeyReturnsInvalidParams)
         return p;
     }());
     BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
-    BOOST_CHECK(resp["error"]["message"].asString().find("33-byte \"c\"+codeHash form") !=
-                std::string::npos);
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32000);
 }
 
 // debug_getRawHeader on a malformed hash answers -32602 InvalidParams.
@@ -286,13 +293,13 @@ BOOST_AUTO_TEST_CASE(GetRawHeaderEthHeaderHappyPath)
     BOOST_CHECK(recomputed == hash);
 }
 
-// debug_getRawHeader on a FISCO-native header (non-whole-second timestamp) answers -32603 —
-// the EthBlockHeader bridge rejects the sub-second millisecond timestamp.
+// debug_getRawHeader on a FISCO-native header answers -32603 — the native header has no
+// Ethereum RLP (its published hash is not keccak of an RLP header), so serving it would hand
+// kona-host bytes that do not hash to the published hash.
 BOOST_AUTO_TEST_CASE(GetRawHeaderNativeHeaderEncodeFailure)
 {
-    // The FakeLedger default headers carry a millisecond timestamp (utcTime()), which the
-    // EthBlockHeader ctor rejects. Capture the latest hash first: the header's hash is the
-    // FISCO-native hash, so the lookup resolves, then the RLP encode throws.
+    // The FakeLedger default headers are FISCO-native (EthBlockVersion::NON_ETH). Capture the
+    // latest hash first: the lookup resolves, then the OP/Ethereum-header guard refuses it.
     auto const latestHash = m_ledger->ledgerData().back()->blockHeader()->hash();
     auto resp = call("debug_getRawHeader", [&] {
         Json::Value p(Json::arrayValue);
@@ -302,7 +309,7 @@ BOOST_AUTO_TEST_CASE(GetRawHeaderNativeHeaderEncodeFailure)
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32603);
     BOOST_CHECK(
-        resp["error"]["message"].asString().find("Header RLP encode failed") != std::string::npos);
+        resp["error"]["message"].asString().find("has no Ethereum header") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
