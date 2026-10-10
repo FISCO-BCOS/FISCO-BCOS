@@ -28,7 +28,7 @@ namespace bcos::tool
 {
 
 /// The executor lane a chain runs. Derived from ONE authoritative signal — executor.version,
-/// which is already genesis-frozen, already maps to a scheduler slot (LedgerConfig.h:288-296)
+/// which is already genesis-frozen, already maps to a scheduler slot (LedgerConfig.h:333-350)
 /// and already carries a static_assert — instead of the four signals that used to answer this
 /// question independently (executor.version, feature_l2_ethereum_compat, [ethereum] mode=el,
 /// the OP schedule section).

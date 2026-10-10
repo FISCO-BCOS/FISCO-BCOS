@@ -78,6 +78,8 @@ using OpPendingDropped = boost::error_info<struct OpPendingDroppedTag, bool>;
 /// True when execution failed because the block is a same-height sibling of the committed
 /// tip and this scheduler slice has no one-level tip-reorg (ReorgUndo follow-up). The
 /// Engine-API answer for that is SYNCING (the CL retries after re-parenting), never -32603.
+/// The producer (the scheduler's classifyException) and the Engine-API consumer land with the
+/// scheduler slice; declared here so both sides share one tag.
 using OpSiblingReorgUnsupported = boost::error_info<struct OpSiblingReorgUnsupportedTag, bool>;
 
 /// True when an Engine API payload carries a transaction envelope this service cannot

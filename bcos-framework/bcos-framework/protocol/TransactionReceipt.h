@@ -79,7 +79,7 @@ public:
     virtual std::string_view effectiveGasPrice() const = 0;
     virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
 
-    // OP Stack (Isthmus/Jovian) receipt metadata (13 OP-specific fields). nullopt means "not an
+    // OP Stack (Isthmus/Jovian) receipt metadata (14 OP-specific fields). nullopt means "not an
     // OP receipt" -- legacy receipts never set this, and old serialized receipts decode to an
     // empty opStackMeta (tars optional field). The tars layer stores every value as a hex string,
     // including explicit zeros ("0x0"), so per-field presence survives serialization.
