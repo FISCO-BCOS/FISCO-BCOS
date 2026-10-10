@@ -191,6 +191,9 @@ public:
     }
 
     auto& msgQueue() { return m_msgQueue; }
+    // expose the view-change trigger and its recorded reason to tests
+    using PBFTEngine::lastViewChangeReason;
+    using PBFTEngine::triggerTimeout;
 
     // PBFT main processing function
     void executeWorker() override

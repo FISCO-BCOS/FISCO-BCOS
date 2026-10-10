@@ -70,6 +70,7 @@
       "description": "Full node dependencies",
       "dependencies": [
         "evmone",
+        "ftxui",
         "boost-coroutine2",
         {
           "name": "rocksdb",

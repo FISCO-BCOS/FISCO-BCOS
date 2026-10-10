@@ -90,15 +90,24 @@ using namespace std::string_view_literals;
 void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
     bcos::protocol::Block::ConstPtr block, std::function<void(Error::UniquePtr&&)> _callback)
 {
+    auto startT = utcTime();
+    // The single log line of this function; reason= tells which of the three exits was taken.
+    auto logResult = [startT](std::string_view reason, int64_t number, size_t txsSize,
+                         size_t unStoredTxs, bcos::Error const* error) {
+        LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs") << LOG_KV("reason", reason)
+                         << LOG_KV("number", number) << LOG_KV("txsSize", txsSize)
+                         << LOG_KV("unStoredTxs", unStoredTxs)
+                         << LOG_KV("msg", error ? error->errorMessage() : "success")
+                         << LOG_KV("code", error ? error->errorCode() : 0)
+                         << LOG_KV("timeCost", (utcTime() - startT));
+    };
     // Note: in the case of block-sync, no-need to save transactions when prewriteBlock
     if (!_blockTxs || _blockTxs->empty())
     {
-        LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: empty txs")
-                         << LOG_KV("number", (block ? block->blockHeader()->number() : -1));
+        logResult("empty", (block ? block->blockHeader()->number() : -1), 0, 0, nullptr);
         _callback(nullptr);
         return;
     }
-    auto startT = utcTime();
     auto blockTxsSize = _blockTxs->size();
     auto blockNumber = block->blockHeader()->number();
     // Select + encode the transactions not yet persisted (dedup via the storeToBackend
@@ -107,8 +116,7 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
     auto pending = encodeUnsavedBlockTransactions(block, _blockTxs);
     if (pending.empty())
     {
-        LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: no unstored txs")
-                         << LOG_KV("txsSize", blockTxsSize) << LOG_KV("number", blockNumber);
+        logResult("no_unstored", blockNumber, blockTxsSize, 0, nullptr);
         _callback(nullptr);
         return;
     }
@@ -125,13 +133,7 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
         // transactional, preventing write conflicts
         RecursiveGuard l(m_mutex);
         auto error = getBlockStorage()->setRows(SYS_HASH_2_TX, keys, values);
-        LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: store uncommitted txs")
-                         << LOG_KV("blockNumber", blockNumber)
-                         << LOG_KV("blockTxsSize", blockTxsSize)
-                         << LOG_KV("unStoredTxs", pending.size())
-                         << LOG_KV("msg", error ? error->errorMessage() : "success")
-                         << LOG_KV("code", error ? error->errorCode() : 0)
-                         << LOG_KV("timeCost", (utcTime() - startT));
+        logResult("stored", blockNumber, blockTxsSize, pending.size(), error.get());
         if (error)
         {
             _callback(std::make_unique<Error>(*error));
@@ -261,6 +263,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     std::atomic_int64_t totalCount = 0;
     std::atomic_int64_t failedCount = 0;
+    // -1 when this call does not write txs/receipts (block-sync path)
+    int64_t writeReceiptsTime = -1;
+    int64_t writeTxsTime = -1;
     if (writeTxsAndReceipts)
     {
         // hash 2 receipts
@@ -287,7 +292,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
         auto start = utcTime();
         auto error = getBlockStorage()->setRows(SYS_HASH_2_RECEIPT, txsHash, receiptsView);
-        auto writeReceiptsTime = utcTime() - start;
+        writeReceiptsTime = static_cast<int64_t>(utcTime() - start);
         if (error)
         {
             LEDGER_LOG(ERROR) << LOG_DESC("ledger write receipts failed")
@@ -296,11 +301,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
         start = utcTime();
         asyncPreStoreBlockTxs(_blockTxs, block, setRowCallback);
-        auto writeTxsTime = utcTime() - start;
-        LEDGER_LOG(INFO) << LOG_DESC("asyncPrewriteBlock")
-                         << LOG_KV("number", block->blockHeader()->number())
-                         << LOG_KV("writeReceiptsTime(ms)", writeReceiptsTime)
-                         << LOG_KV("writeTxsTime(ms)", writeTxsTime);
+        writeTxsTime = static_cast<int64_t>(utcTime() - start);
     }
     else
     {
@@ -319,40 +320,42 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                       << LOG_KV("failedCount", failedCount);
 
     // total transaction count
-    asyncGetTotalTransactionCount(
-        [storage, block, &setRowCallback, &totalCount, &failedCount](
-            Error::Ptr error, int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
-            if (error)
-            {
-                setRowCallback(std::make_unique<Error>(*error), 2);
-                return;
-            }
-            auto totalTxsCount = total + totalCount;
-            Entry totalEntry;
-            totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
-            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
-                std::move(totalEntry), [setRowCallback](auto&& error) {
+    asyncGetTotalTransactionCount([storage, block, &setRowCallback, &totalCount, &failedCount,
+                                      &writeReceiptsTime, &writeTxsTime](Error::Ptr error,
+                                      int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
+        if (error)
+        {
+            setRowCallback(std::make_unique<Error>(*error), 2);
+            return;
+        }
+        auto totalTxsCount = total + totalCount;
+        Entry totalEntry;
+        totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
+        storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
+            std::move(totalEntry), [setRowCallback](auto&& error) {
+                setRowCallback(std::forward<decltype(error)>(error));
+            });
+        auto failedTxs = failed + failedCount;
+        if (failedCount != 0)
+        {
+            Entry failedEntry;
+            failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
+            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
+                std::move(failedEntry), [setRowCallback](auto&& error) {
                     setRowCallback(std::forward<decltype(error)>(error));
                 });
-            auto failedTxs = failed + failedCount;
-            if (failedCount != 0)
-            {
-                Entry failedEntry;
-                failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
-                storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
-                    std::move(failedEntry), [setRowCallback](auto&& error) {
-                        setRowCallback(std::forward<decltype(error)>(error));
-                    });
-            }
-            else
-            {
-                setRowCallback({}, true);
-            }
-            LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
-                             << LOG_KV("number", block->blockHeader()->number())
-                             << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
-                             << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount);
-        });
+        }
+        else
+        {
+            setRowCallback({}, true);
+        }
+        LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
+                         << LOG_KV("number", block->blockHeader()->number())
+                         << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
+                         << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount)
+                         << LOG_KV("writeReceiptsMs", writeReceiptsTime)
+                         << LOG_KV("writeTxsMs", writeTxsTime);
+    });
 }
 
 task::Task<std::optional<ledger::StorageState>> Ledger::getStorageState(
@@ -2168,8 +2171,8 @@ bool Ledger::buildGenesisBlock(
         }
 
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
-            *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
+        co_await importGenesisState(
+            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
 
         // Ethereum lane (executor_version >= 2): block 1 builds the MPT incrementally on top
         // of the genesis state
@@ -2600,8 +2603,7 @@ task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockN
 {
     // Same single-row idiom as fetchFeature: an absent row is a pre-Ethereum-lane chain (0);
     // a row whose enableNumber is after _blockNumber reads as 0 for that block.
-    auto const key =
-        std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+    auto const key = std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
     auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
     if (error || !entry)
     {
@@ -2621,8 +2623,8 @@ task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockN
     {
         // Boot (readOnChainExecutorVersion) refuses an unparseable row, so reaching this
         // means the row was corrupted afterwards -- corruption, not a legacy chain.
-        BOOST_THROW_EXCEPTION(std::runtime_error(
-            "on-chain executor_version is not an integer: '" + value + "'"));
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("on-chain executor_version is not an integer: '" + value + "'"));
     }
 }
 bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()

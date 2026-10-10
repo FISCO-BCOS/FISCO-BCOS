@@ -37,6 +37,9 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 target_link_libraries(${TEST_BINARY_NAME} txpool mempool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/rpc/RpcReadHandlersTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# keep the unity grouping of the older tests unchanged (FakeTxPool.h is namespace-fragile)
+set_source_files_properties("unittests/rpc/IpcServerTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("unittests/rpc/AdminMethodsTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # FullChainFixture.h pulls RocksDB and testutils headers whose names collide with the
 # using-directives other unity-merged TUs carry; compile its user standalone.
 set_source_files_properties(

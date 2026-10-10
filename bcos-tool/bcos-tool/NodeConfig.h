@@ -184,6 +184,8 @@ public:
     uint32_t rpcMaxProcessBlock() const;
     bool rpcSmSsl() const;
     bool rpcDisableSsl() const;
+    /// [rpc] ipc_enable: the local attach socket under storage.data_path (default true)
+    bool rpcIpcEnable() const { return m_rpcIpcEnable; }
 
     // the web3 rpc configurations
     bool enableWeb3Rpc() const;
@@ -606,6 +608,7 @@ private:
     uint32_t m_rpcMaxProcessBlock{};
     bool m_rpcSmSsl{};
     bool m_rpcDisableSsl = false;
+    bool m_rpcIpcEnable = true;
 
     // config fro web3 rpc
     bool m_enableWeb3Rpc = false;

@@ -14,17 +14,17 @@
 #include "bcos-task/Wait.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Error.h>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
-#include <boost/algorithm/string.hpp>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <exception>
-#include <tbb/blocked_range.h>
-#include <tbb/parallel_for.h>
-#include <tbb/task_arena.h>
 #include <utility>
 
 #ifdef USE_TCMALLOC
@@ -755,17 +755,14 @@ void BlockExecutive::asyncNotify(
         index++;
         results->emplace_back(submitResult);
     }
-    auto txsSize = m_executiveResults.size();
-    notifier(number, results, [_callback, number, blockHash, txsSize](Error::Ptr _error) {
+    notifier(number, results, [_callback, number](Error::Ptr _error) {
         if (_callback)
         {
             _callback(_error);
         }
         if (_error == nullptr)
         {
-            SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number) << LOG_DESC("notify block result success")
-                                << LOG_KV("hash", blockHash.abridged())
-                                << LOG_KV("txsSize", txsSize);
+            // SchedulerImpl prints "Notify block result success" once per block
             return;
         }
         SCHEDULER_LOG(INFO) << BLOCK_NUMBER(number) << LOG_DESC("notify block result failed")
@@ -1124,10 +1121,6 @@ void BlockExecutive::onDmcExecuteFinish(
     }
     else
     {
-        DMC_LOG(INFO) << LOG_BADGE("Stat") << "DMCExecute.6:" << "\t " << LOG_BADGE("DMCRecorder")
-                      << " DMCExecute for transaction finished " << LOG_KV("blockNumber", number())
-                      << LOG_KV("checksum", dmcChecksum);
-
         DMC_LOG(INFO) << BLOCK_NUMBER(number()) << LOG_BADGE("BlockTrace")
                       << LOG_BADGE("DMCRecorder") << " DMCExecute for transaction finished "
                       << LOG_KV("checksum", dmcChecksum);
@@ -1726,6 +1719,12 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     }
     m_gasUsed.fetch_add(txGasUsed);
     auto version = m_executiveResults[output->contextID() - m_startContextID].version;
+    // one line per executed tx, whichever receipt version is built below
+    SCHEDULER_LOG(DEBUG) << LOG_DESC("TxExecuted")
+                         << LOG_KV("tx", m_executiveResults[output->contextID() - m_startContextID]
+                                             .transactionHash.abridged())
+                         << LOG_KV("number", number()) << LOG_KV("status", output->status())
+                         << LOG_KV("gasUsed", txGasUsed);
     switch (version)
     {
     case int32_t(bcos::protocol::TransactionVersion::V0_VERSION):

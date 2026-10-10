@@ -21,12 +21,12 @@ P2PSession::P2PSession()
 {
     // init with the minVersion
     m_protocolInfo->setVersion(m_protocolInfo->minVersion());
-    P2PSESSION_LOG(INFO) << "[P2PSession::P2PSession] this=" << this;
+    P2PSESSION_LOG(DEBUG) << "[P2PSession::P2PSession] this=" << this;
 }
 
 P2PSession::~P2PSession()
 {
-    P2PSESSION_LOG(INFO) << "[P2PSession::~P2PSession] this=" << this;
+    P2PSESSION_LOG(DEBUG) << "[P2PSession::~P2PSession] this=" << this;
 }
 
 bool P2PSession::active()
@@ -89,7 +89,7 @@ bcos::protocol::ProtocolInfo::ConstPtr P2PSession::protocolInfo() const
 
 void P2PSession::start()
 {
-    P2PSESSION_LOG(INFO) << "[P2PSession::start] this=" << this;
+    P2PSESSION_LOG(DEBUG) << "[P2PSession::start] this=" << this;
     if (!m_run && m_session)
     {
         m_run = true;
@@ -124,12 +124,12 @@ void P2PSession::heartBeat()
                                       << LOG_KV("p2pid", printShortP2pID(m_p2pInfo->p2pID))
                                       << LOG_KV("endpoint", m_session->nodeIPEndpoint());
             }
-            // value message in frame, sent through the fast path (zero-copy). The service shared_ptr
-            // is passed as a coroutine parameter so it is copied into the frame and kept alive for
-            // the whole (possibly deferred) send. The pre-send checks (outgoing rate limit / max
-            // size) run synchronously on the caller thread and may throw — catch so the heartbeat
-            // timer below is always re-armed (otherwise this session would be dropped by the peer's
-            // idle timeout).
+            // value message in frame, sent through the fast path (zero-copy). The service
+            // shared_ptr is passed as a coroutine parameter so it is copied into the frame and kept
+            // alive for the whole (possibly deferred) send. The pre-send checks (outgoing rate
+            // limit / max size) run synchronously on the caller thread and may throw — catch so the
+            // heartbeat timer below is always re-armed (otherwise this session would be dropped by
+            // the peer's idle timeout).
             auto self = shared_from_this();
             try
             {

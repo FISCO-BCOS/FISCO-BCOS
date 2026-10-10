@@ -256,6 +256,14 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
         static_cast<uint32_t>(TxsSyncPacketType::TxsRequestPacket), *_missedTxs);
     auto encodedData = txsRequest->encode();
     auto startT = utcTime();
+    SYNC_LOG(INFO) << LOG_DESC("TxsRequested")
+                   << LOG_KV("number",
+                          _verifiedProposal ? _verifiedProposal->blockHeader()->number() : -1)
+                   << LOG_KV("hash", _verifiedProposal ?
+                                         _verifiedProposal->blockHeader()->hash().abridged() :
+                                         "null")
+                   << LOG_KV("peer", _generatedNodeID->shortHex())
+                   << LOG_KV("count", _missedTxs->size());
     auto self = weak_from_this();
     auto front = m_config->frontService();
     auto networkTimeout = m_config->networkTimeout();
@@ -331,17 +339,15 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     auto recordT = utcTime();
     if (_error != nullptr)
     {
-        SYNC_LOG(INFO) << LOG_DESC("asyncVerifyBlock: fetch missed txs failed")
+        SYNC_LOG(INFO) << LOG_DESC("TxsRequestFailed")
+                       << LOG_KV("number",
+                              _verifiedProposal ? _verifiedProposal->blockHeader()->number() : -1)
+                       << LOG_KV("hash", _verifiedProposal ?
+                                             _verifiedProposal->blockHeader()->hash().abridged() :
+                                             "unknown")
                        << LOG_KV("peer", _nodeID ? _nodeID->shortHex() : "unknown")
-                       << LOG_KV("missedTxsSize", _missedTxs->size())
-                       << LOG_KV("code", _error->errorCode())
-                       << LOG_KV("msg", _error->errorMessage())
-                       << LOG_KV(
-                              "propHash", _verifiedProposal ?
-                                              _verifiedProposal->blockHeader()->hash().abridged() :
-                                              "unknown")
-                       << LOG_KV("propIndex",
-                              _verifiedProposal ? _verifiedProposal->blockHeader()->number() : -1);
+                       << LOG_KV("count", _missedTxs->size()) << LOG_KV("code", _error->errorCode())
+                       << LOG_KV("msg", _error->errorMessage());
         _onVerifyFinished(_error, false);
         return;
     }
@@ -429,14 +435,15 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         return;
     }
     _onVerifyFinished(error, true);
-    SYNC_LOG(DEBUG) << METRIC << LOG_DESC("requestMissedTxs and verify success")
-                    << LOG_KV("hash", (_verifiedProposal) ?
-                                          _verifiedProposal->blockHeader()->hash().abridged() :
-                                          "unknown")
-                    << LOG_KV("consNum",
-                           (_verifiedProposal) ? _verifiedProposal->blockHeader()->number() : -1)
-                    << LOG_KV("decodeT", decodeT) << LOG_KV("importT", (utcTime() - startT))
-                    << LOG_KV("timecost", (utcTime() - recordT));
+    SYNC_LOG(INFO) << METRIC << LOG_DESC("TxsReceived")
+                   << LOG_KV("number",
+                          (_verifiedProposal) ? _verifiedProposal->blockHeader()->number() : -1)
+                   << LOG_KV("hash", (_verifiedProposal) ?
+                                         _verifiedProposal->blockHeader()->hash().abridged() :
+                                         "unknown")
+                   << LOG_KV("peer", _nodeID->shortHex()) << LOG_KV("count", _missedTxs->size())
+                   << LOG_KV("decodeT", decodeT) << LOG_KV("importT", (utcTime() - startT))
+                   << LOG_KV("costMs", (utcTime() - recordT));
 }
 
 std::tuple<bool, std::shared_ptr<protocol::Transactions>>
