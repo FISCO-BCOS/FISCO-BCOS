@@ -25,7 +25,7 @@
  */
 
 #include "Initializer.h"
-#include <bcos-framework/ledger/ChainMetadata.h>
+#include <bcos-framework/ledger/OpForkScheduleMetadata.h>
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"

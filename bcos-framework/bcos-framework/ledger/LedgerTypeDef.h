@@ -178,7 +178,7 @@ constexpr static std::string_view SYS_NUMBER_2_BLOBS{"s_number_2_blobs"};
 constexpr static std::string_view SYS_ROLLBACK_JOURNAL{"s_rollback_journal"};
 constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
-// OP fork schedule metadata (all-or-none triple; see ChainMetadata.h).
+// OP fork schedule metadata (all-or-none triple; see OpForkScheduleMetadata.h).
 constexpr static std::string_view SYS_CHAIN_METADATA{"s_chain_metadata"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};

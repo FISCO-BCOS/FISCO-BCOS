@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file ChainMetadata.h
+ * @file OpForkScheduleMetadata.h
  * @brief Chain-level metadata helpers, including the OP fork-schedule triple.
  */
 #pragma once

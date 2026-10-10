@@ -13,10 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file ChainMetadata.cpp
+ * @file OpForkScheduleMetadata.cpp
  * @brief Translation-unit anchor for header-only OP fork-schedule metadata helpers.
  */
-#include "bcos-framework/ledger/ChainMetadata.h"
+#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 
 // Storage read/write helpers are header-only templates; this translation unit
 // anchors the ledger metadata component in the build graph.
