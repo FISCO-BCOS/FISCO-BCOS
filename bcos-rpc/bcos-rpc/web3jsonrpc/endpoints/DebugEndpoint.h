@@ -37,14 +37,16 @@ public:
     virtual ~DebugEndpoint() = default;
 
     /// debug_dbGet: return the raw preimage stored under a content-address key. The key is
-    /// either a 32-byte state trie node hash, or the 33-byte "c" + codeHash form of the geth
-    /// hashdb scheme that kona-host's L2Code hint sends.
+    /// either the 33-byte "c" + codeHash form of the geth hashdb scheme, or a bare 32-byte
+    /// keccak hash; the shape only picks which keccak-addressed store to try first (code store
+    /// vs MPT node rows). A miss answers -32000 "not found", geth's server-error code.
     task::Task<void> dbGet(const Json::Value&, Json::Value&);
 
-    /// debug_getRawHeader: return the RLP encoding of a block header, keyed by block hash.
-    /// kona-host's L2BlockHeader / StartingL2Output hints call this with a 32-byte hash and
-    /// expect the exact bytes whose keccak256 equals the block hash (JSON forms cannot
-    /// satisfy the preimage-oracle key). Mirrors geth DebugAPI.GetRawHeader.
+    /// debug_getRawHeader: return the RLP encoding of a block header, resolved from a block
+    /// number, tag, or 32-byte block hash. kona-host expects the exact bytes whose keccak256
+    /// equals the published block hash (canonicalBlockHash); the bytes come from
+    /// EthBlockHeader::encodeHeader, the same encoding computeHash hashes. Mirrors geth
+    /// DebugAPI.GetRawHeader.
     task::Task<void> getRawHeader(const Json::Value&, Json::Value&);
 
     /// debug_executePayload: kona-host's high-level "execute a payload and return the whole

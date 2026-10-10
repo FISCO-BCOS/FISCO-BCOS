@@ -258,6 +258,13 @@ public:
         updateLedgerConfig(_header);
     }
 
+    /// Map @p _hash to @p _number for asyncGetBlockNumberByHash, e.g. after a test rewrites a
+    /// header so its hash() changes (an OP header's RLP hash).
+    void indexBlockHash(HashType const& _hash, BlockNumber _number)
+    {
+        m_hash2Block[_hash] = _number;
+    }
+
     Block::Ptr populateFromHeader(BlockHeader::Ptr _blockHeader)
     {
         auto block = m_blockFactory->createBlock();
