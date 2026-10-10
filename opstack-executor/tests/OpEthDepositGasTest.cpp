@@ -226,10 +226,10 @@ BOOST_AUTO_TEST_CASE(WarmColdDifferentialIs2500)
 // override without the flag would report 24450.
 BOOST_AUTO_TEST_CASE(DelegationToPrecompileFallsBackToEmptyCode)
 {
-    constexpr auto k100 = 0x0000000000000000000000000000000000000100_address;
+    constexpr auto c_addr100 = 0x0000000000000000000000000000000000000100_address;
     constexpr auto c_eoa = 0x00000000000000000000000000000000000000ac_address;
     bcos::bytes delegation{0xef, 0x01, 0x00};
-    delegation.insert(delegation.end(), k100.bytes, k100.bytes + sizeof(k100.bytes));
+    delegation.insert(delegation.end(), c_addr100.bytes, c_addr100.bytes + sizeof(c_addr100.bytes));
     MutableStorage storage{1};
     seedAccount(storage, c_from, 0, bcos::u256{0}, {});
     seedAccount(storage, c_eoa, 1, bcos::u256{0}, std::move(delegation));

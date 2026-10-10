@@ -1,7 +1,8 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 /// @file OpL1BlockDepositTest.cpp
-/// @brief L1-attributes deposit handling across the OP fork ladder (block build/execute through the scheduler path).
+/// @brief L1-attributes deposit handling across the OP fork ladder (block
+/// build/execute through the scheduler path).
 
 // OpL1BlockDepositTest — offline reproduction of the B3a node's L1Block deposit behaviour.
 //

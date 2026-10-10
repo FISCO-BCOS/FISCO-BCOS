@@ -12,10 +12,11 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
+ */
 
- *
- * @file MemoryStorage.h
- * @brief In-memory Storage2 backend: ordered/concurrent buckets, logical deletion and the merge primitives. */
+/// @file MemoryStorage.h
+/// @brief In-memory Storage2 backend: ordered/concurrent buckets, logical deletion
+/// and the merge primitives (each merge destination needs its own copy of a row).
 
 #pragma once
 
@@ -618,8 +619,8 @@ public:
                     // second pass write a moved-from (gutted) Entry — a nondeterministic
                     // corruption of one layer (observed as intermittent state-root
                     // mismatches on the switch-SetCanonical path). The no-cache
-                    // single-pass shape pays the same copy to keep the primitive uniform
-                    // (its only in-tree uses are benchmarks); recovering it needs an
+                    // single-pass shape pays the same copy to keep the primitive uniform;
+                    // recovering it needs an
                     // explicit move-and-erase contract on the source, agreed with every
                     // caller of mergeBackStorage/mergeToBackends — not a silent move here.
                     std::visit(

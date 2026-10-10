@@ -19,8 +19,10 @@
 #pragma once
 
 #include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 
 #include <cstdint>
+#include <optional>
 #include <variant>
 
 namespace bcos::engine
@@ -40,6 +42,42 @@ enum class OpForkId : uint8_t
     Jovian,
     Karst,
 };
+
+/// The ONE fork -> OpForkId ladder mapping, beside the profile tables it feeds.
+/// Fully enumerated switch (no default): a rung added or renamed on the ledger
+/// enum becomes a build break HERE instead of letting a consumer-local table
+/// drift. Bedrock predates the Engine API and Delta/future rungs carry no
+/// profile yet — they answer nullopt (an unmapped fork is a mapping bug, never
+/// the Isthmus profile).
+[[nodiscard]] inline std::optional<OpForkId> opForkIdFor(bcos::ledger::OpFork fork)
+{
+    using bcos::ledger::OpFork;
+    switch (fork)
+    {
+    case OpFork::Bedrock:
+    case OpFork::Delta:
+        return std::nullopt;
+    case OpFork::Regolith:
+        return OpForkId::Regolith;
+    case OpFork::Canyon:
+        return OpForkId::Canyon;
+    case OpFork::Ecotone:
+        return OpForkId::Ecotone;
+    case OpFork::Fjord:
+        return OpForkId::Fjord;
+    case OpFork::Granite:
+        return OpForkId::Granite;
+    case OpFork::Holocene:
+        return OpForkId::Holocene;
+    case OpFork::Isthmus:
+        return OpForkId::Isthmus;
+    case OpFork::Jovian:
+        return OpForkId::Jovian;
+    case OpFork::Karst:
+        return OpForkId::Karst;
+    }
+    return std::nullopt;
+}
 
 /// Shape of a block's extraData for an OP fork: empty before Holocene, the
 /// 9-byte Holocene 1559 params, or the 17-byte Jovian form with minBaseFee.
