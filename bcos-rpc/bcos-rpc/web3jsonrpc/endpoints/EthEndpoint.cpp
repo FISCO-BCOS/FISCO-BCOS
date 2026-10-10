@@ -77,6 +77,45 @@ namespace
 /// never execute a call with a zero budget — a raw `gas=0` is rejected as "intrinsic gas too
 /// low". The target block's own gasLimit bounds it further when it is readable and non-zero.
 constexpr uint64_t c_ethCallGasCap = 50'000'000;
+
+/// Resolve an EIP-1186/EIP-1898 block parameter to its canonical string form. The fault-proof
+/// preimage server (kona-host) sends the OBJECT form for a block hash — alloy's BlockId::Hash
+/// serializes to {"blockHash": "0x…"} — which the string-only toView would turn into an empty
+/// tag and misread as "latest". Accept the object form alongside the plain string forms
+/// ("latest", "0x1", a 66-char "0x…" hash) so eth_getProof resolves the block the caller
+/// actually named. An OBJECT form that is neither a blockHash-string nor a blockNumber
+/// string/integral is unsupported and throws InvalidParams — it must NOT return an empty
+/// string, which the shared getBlockNumberByTag resolver silently reads as "latest" (the exact
+/// wrong-block read this helper exists to prevent).
+std::string resolveBlockTagString(const Json::Value& tag)
+{
+    if (tag.isString())
+    {
+        return tag.asString();
+    }
+    if (tag.isObject())
+    {
+        if (tag.isMember("blockHash") && tag["blockHash"].isString())
+        {
+            return tag["blockHash"].asString();
+        }
+        if (tag.isMember("blockNumber"))
+        {
+            auto const& number = tag["blockNumber"];
+            if (number.isString())
+            {
+                return number.asString();
+            }
+            if (number.isIntegral())
+            {
+                return fmt::format("0x{:x}", number.asUInt64());
+            }
+        }
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Unsupported EIP-1898 block parameter"));
+    }
+    return {};
+}
 }  // namespace
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
@@ -949,12 +988,10 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
             if (account->codeHash != bcos::ledger::mpt::emptyCodeHash())
             {
                 auto const stateStorage = ledger->getStateStorage();
-                std::string const codeHashStr = account->codeHash.toRawString();
-                if (auto const codeEntry = co_await bcos::storage2::readOne(*stateStorage,
-                        executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
-                    codeEntry.has_value())
+                if (auto const codeBytes = co_await readCodeByHash(*stateStorage, account->codeHash);
+                    codeBytes.has_value())
                 {
-                    code.assign(codeEntry.value().get().begin(), codeEntry.value().get().end());
+                    code = std::move(*codeBytes);
                 }
             }
         }
@@ -2021,7 +2058,11 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid storage key"));
         }
     }
-    auto const blockTag = toView(request[2U]);
+    // Resolve the block parameter to a string, accepting the EIP-1898 object form the
+    // fault-proof preimage server (kona-host) sends for a block hash; the plain string forms
+    // are unchanged.
+    auto const blockTagStr = resolveBlockTagString(request[2U]);
+    std::string_view const blockTag = blockTagStr;
     // op-node passes the 32-byte block hash (DATA) for eth_getProof, unlike the number/tag the
     // other eth_* endpoints take. Decode the hash FIRST (a malformed hex string is a client
     // error) and let getBlockNumber distinguish "not found" from a storage fault.

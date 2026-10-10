@@ -218,6 +218,14 @@ public:
     // so the batcher's handshake never leaks onto the public port.
     bool enableOpEngineMinerApi() const;
     bool enableMinerApi() const;
+    // scopes the geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload) to
+    // a listener that explicitly opts in via enable_debug_api. Off by default: it serves the
+    // fault-proof preimage oracle (kona-host), not general clients, so geth-style the namespace
+    // is only exposed where configured — enableOpEngineDebugApi() gates the op-engine listener
+    // ([op_engine_rpc] enable_debug_api), enableDebugApi() the web3 listener
+    // ([web3_rpc] enable_debug_api).
+    bool enableOpEngineDebugApi() const;
+    bool enableDebugApi() const;
     const std::string& opEngineRpcListenIP() const;
     uint16_t opEngineRpcListenPort() const;
     uint32_t opEngineHttpBodySizeLimit() const;
@@ -636,6 +644,8 @@ private:
     bool m_enableOpEngineRpc = false;
     bool m_enableMinerApi = false;
     bool m_enableOpEngineMinerApi = false;
+    bool m_enableDebugApi = false;
+    bool m_enableOpEngineDebugApi = false;
     std::string m_opEngineRpcListenIP = "127.0.0.1";
     uint16_t m_opEngineRpcListenPort{};
     uint32_t m_opEngineHttpBodySizeLimit{};

@@ -68,10 +68,12 @@ public:
     {}
 
     // notify related interfaces: useless for the PBFT module
-    void notifyConsensusNodeList(ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
+    void notifyConsensusNodeList(
+        bcos::consensus::ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
     {}
     // notify related interfaces: useless for the PBFT module
-    void notifyObserverNodeList(ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
+    void notifyObserverNodeList(
+        bcos::consensus::ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
     {}
 
     void notifyConnectedNodes(

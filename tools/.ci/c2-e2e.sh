@@ -29,9 +29,20 @@ BIN_DIR="${BIN_DIR:-${REPO_ROOT}/.ci-c2-bins}"
 FISCO_BIN="${FISCO_BIN:-${REPO_ROOT}/build/fisco-bcos-air/fisco-bcos}"
 CONTEST="${CONTEST:-1}"
 XDM="${XDM:-0}"
+# Kona fault-proof verification (native replay, no cannon): 1 = build kona-host +
+# kona-client and run the native state-transition check against FISCO's claimed output.
+KONA_VERIFY="${KONA_VERIFY:-1}"
+SKIP_KONA_BUILD="${SKIP_KONA_BUILD:-0}"
 
 log() { echo "[c2-e2e] $*"; }
 die() { echo "[c2-e2e] ERROR: $*" >&2; exit 1; }
+
+# KONA_VERIFY=1 replays a dispute game's root claim, so it needs a dispute game to exist —
+# CONTEST=1 creates one. Fail fast on the contradiction instead of paying the full devnet
+# setup and then dying inside the harness or at the PASS-marker guard (the script's own
+# kona_verify.py error spells this coupling out).
+[[ "$KONA_VERIFY" == "1" && "$CONTEST" != "1" ]] && \
+  die "KONA_VERIFY=1 requires CONTEST=1 (kona replays a dispute game's root claim); set KONA_VERIFY=0 for a contest-free run"
 
 [ -f "$VERSIONS" ] || die "missing $VERSIONS (check out FISCO-BCOS/op-stack-e2e-tests at the pinned ref into $OP_E2E_DIR first)"
 
@@ -108,6 +119,27 @@ if [[ "${SKIP_OP_BUILD:-0}" != "1" ]]; then
   (cd "$OP_MONOREPO" && go build -o "$BIN_DIR/op-batcher" ./op-batcher/cmd)
 fi
 
+# Kona binaries live in the same OP monorepo (rust/kona); build them when native
+# replay verification is on. kona-host is the preimage oracle + native executor that
+# drives the fault-proof program (kona-client) outside cannon.
+if [[ "$KONA_VERIFY" == "1" && "$SKIP_KONA_BUILD" != "1" ]]; then
+  if ! command -v cargo >/dev/null; then
+    die "cargo not on PATH (required to build kona-host/kona-client)"
+  fi
+  log "building kona-host / kona-client (native)…"
+  # kona's cargo workspace root is rust/ (not the monorepo root, which has no
+  # Cargo.toml). Pin the toolchain via rust-toolchain.toml's channel.
+  (cd "$OP_MONOREPO/rust" && cargo build --release -p kona-host -p kona-client)
+  cp "$OP_MONOREPO/rust/target/release/kona-host" "$BIN_DIR/kona-host"
+  cp "$OP_MONOREPO/rust/target/release/kona-client" "$BIN_DIR/kona-client"
+fi
+
+if [[ "$KONA_VERIFY" == "1" ]]; then
+  for b in kona-host kona-client; do
+    [ -x "$BIN_DIR/$b" ] || die "missing $BIN_DIR/$b (build kona with KONA_VERIFY=1)"
+  done
+fi
+
 for b in op-deployer op-node op-batcher; do
   [ -x "$BIN_DIR/$b" ] || die "missing $BIN_DIR/$b"
 done
@@ -135,8 +167,8 @@ REQS="${REPO_ROOT}/tools/.ci/c2-e2e-requirements.txt"
 python3 -m pip install --quiet -r "$REQS" 2>/dev/null \
   || pip3 install --quiet -r "$REQS" 2>/dev/null \
   || pip3 install --break-system-packages --quiet -r "$REQS"
-python3 -c "import yaml, eth_hash, trie, rlp" 2>/dev/null \
-  || die "C2 python deps unavailable after install (pyyaml/eth-hash/trie/rlp)"
+python3 -c "import yaml, eth_hash, trie, rlp, requests" 2>/dev/null \
+  || die "C2 python deps unavailable after install (pyyaml/eth-hash/trie/rlp/requests)"
 
 export NO_PROXY="${NO_PROXY:-127.0.0.1,localhost}"
 export no_proxy="${no_proxy:-127.0.0.1,localhost}"
@@ -157,4 +189,17 @@ FISCO_REPO="$REPO_ROOT" \
 OP_NODE_EXTRA_FLAGS="--p2p.disable" \
 CONTEST="$CONTEST" \
 XDM="$XDM" \
-bash "${OP_E2E_DIR}/tools/op-e2e/withdraw_e2e_ephemeral.sh"
+KONA_VERIFY="$KONA_VERIFY" \
+KONA_HOST="$BIN_DIR/kona-host" \
+KONA_VERIFY_SCRIPT="${REPO_ROOT}/tools/.ci/kona_verify.py" \
+bash "${OP_E2E_DIR}/tools/op-e2e/withdraw_e2e_ephemeral.sh" 2>&1 | tee /tmp/c2-e2e.log
+
+# Regression guard against the "silently green" failure mode: if the harness pin is
+# stale (its withdraw_e2e_ephemeral.sh does not consume KONA_VERIFY), the kona leg is
+# skipped without any error and the suite still exits 0. Assert the kona verification
+# actually ran by requiring its PASS marker in the harness output. Only enforced when
+# KONA_VERIFY=1 (the per-PR and nightly/manual legs), where the marker is mandatory.
+if [[ "$KONA_VERIFY" == "1" ]]; then
+  grep -q "\[kona-verify\] PASS" /tmp/c2-e2e.log \
+    || die "kona verification did not produce a PASS marker (stale harness pin?)"
+fi
