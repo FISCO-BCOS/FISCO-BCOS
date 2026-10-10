@@ -22,6 +22,8 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
+#include <magic_enum/magic_enum.hpp>
 
 #include <array>
 #include <cctype>
@@ -79,6 +81,47 @@ inline constexpr auto c_opForkNames = std::to_array<std::string_view>({
     "jovian",
     "karst",
 });
+
+// Pin the spelling AND the order to the ledger enum (declaration order): the table
+// is the ladder minus its L1-only rungs (Bedrock, Delta are never decodable OP names).
+// Without this a rung renamed on either side drifts into silently accepting the old
+// text — the same magic_enum idiom LedgerTypeDef.h uses for the SYS_CONFIG keys.
+static_assert(
+    [] {
+        auto const asciiLowerEqual = [](std::string_view a, std::string_view b) {
+            if (a.size() != b.size())
+            {
+                return false;
+            }
+            for (std::size_t k = 0; k < a.size(); ++k)
+            {
+                auto const lower = [](char c) {
+                    return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+                };
+                if (lower(a[k]) != lower(b[k]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        };
+        std::size_t j = 0;
+        for (auto const name : magic_enum::enum_names<OpFork>())
+        {
+            if (name == magic_enum::enum_name(OpFork::Bedrock) ||
+                name == magic_enum::enum_name(OpFork::Delta))
+            {
+                continue;
+            }
+            if (j >= c_opForkNames.size() || !asciiLowerEqual(name, c_opForkNames[j]))
+            {
+                return false;
+            }
+            ++j;
+        }
+        return j == c_opForkNames.size();
+    }(),
+    "c_opForkNames must equal the lowercased enum_names<OpFork>() minus the L1-only rungs (Bedrock, Delta)");
 
 // Pure lookups: no allocation and no throw path, so they are noexcept like
 // legacyOpForkScheduleCanonical.

@@ -275,6 +275,30 @@ def test_el_forks_pinned_to_cpp_loader_order_and_membership():
         f"  Python (EL_FORKS):          {gen.EL_FORKS}")
 
 
+_CXX_NODECONFIG = (Path(__file__).resolve().parents[2] /
+                   "bcos-tool" / "bcos-tool" / "NodeConfig.cpp")
+
+
+def test_emitted_timestamp_keys_are_accepted_by_the_loader():
+    """The [op_fork_timestamps] keys this generator emits must be exactly the keys
+    NodeConfig's OP-ladder loader accepts.
+
+    Each side was pinned alone (the emitted section text; the loader's key table);
+    only this case proves the seam, so a rename on either side cannot land silently.
+    """
+    text = _CXX_NODECONFIG.read_text()
+    accepted = set(re.findall(
+        r'\{"([a-z]+_time)",\s*&ledger::OpForkSchedule::m_', text))
+    assert accepted, f"loader key table not found in {_CXX_NODECONFIG}"
+    section = gen.build_op_fork_timestamps_section(
+        {"regolith": 0, "isthmus": 0, "jovian": 1764691201, "karst": 1781712001})
+    emitted = set(re.findall(r"^([a-z]+_time)=", section, re.M))
+    assert emitted == {"isthmus_time", "jovian_time", "karst_time"}
+    assert emitted <= accepted, (
+        f"generator emits keys the loader does not accept: {emitted - accepted}\n"
+        f"  loader table ({_CXX_NODECONFIG}): {sorted(accepted)}")
+
+
 TOML_FORKS = {"hardforks": {"canyon_time": 100, "delta_time": 150,
                             "ecotone_time": 200, "fjord_time": 300,
                             "granite_time": 400, "holocene_time": 500,
