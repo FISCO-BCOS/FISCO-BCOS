@@ -20,6 +20,7 @@
 #pragma once
 
 #include <ethereum-executor/EthExecutionPolicy.h>
+#include <ethereum-executor/EthLogs.h>
 #include <ethereum-executor/EthereumHost.h>
 #include <ethereum-executor/EthereumState.h>
 #include <opstack-executor/OpEthReceipt.h>
@@ -99,42 +100,14 @@ public:
 
         const auto maxGasPrice = eth::ethMaxGasPrice(tx, callParams);
         const auto maxPriorityGasPrice = eth::ethMaxPriorityGasPrice(tx, callParams);
-        const auto hasTo = protocol::ethToAddress(tx).has_value();
 
-        switch (txKind)  // Validate "special" transaction types.
+        if (txKind == 4)  // set_code
         {
-        case 4:  // set_code
-            if (rev < EVMC_PRAGUE)
-                return make_error_code(eth::evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
-            if (!hasTo)
-                return make_error_code(eth::evm::ErrorCode::CREATE_SET_CODE_TX);
-            if (tx.authorizationList().empty())
-                return make_error_code(eth::evm::ErrorCode::EMPTY_AUTHORIZATION_LIST);
-            break;
-
-        default:;
+            if (const auto error = eth::validateSetCodeTxType(tx, rev))
+                return error;
         }
 
-        switch (txKind)  // Validate the "regular" transaction type hierarchy.
-        {
-        case 4:  // set_code
-        case 2:  // eip1559
-            if (rev < EVMC_LONDON)
-                return make_error_code(eth::evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
-
-            if (maxPriorityGasPrice > maxGasPrice)
-                return make_error_code(
-                    eth::evm::ErrorCode::TIP_GT_FEE_CAP);  // Priority gas price is too high.
-            [[fallthrough]];
-
-        case 1:  // access_list
-            if (rev < EVMC_BERLIN)
-                return make_error_code(eth::evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
-            [[fallthrough]];
-
-        case 0:;  // legacy
-        }
-        return std::nullopt;
+        return eth::validateRegularTypeHierarchy(txKind, rev, maxGasPrice, maxPriorityGasPrice);
     }
 
     /// OP addition to the sender's theoretical maximum cost (ported opValidate's
@@ -242,20 +215,10 @@ public:
         int64_t delegationRefund, int64_t evmRefund, uint256 txMaxCost, uint256 effectiveGasPrice,
         uint256 priorityGasPrice, eth::EthAccount& senderAcc) const
     {
-        auto gas_used = gasLimit - gasLeft;
-
-        const auto max_refund_quotient = rev >= EVMC_LONDON ? 5 : 2;
-        const auto refund_limit = gas_used / max_refund_quotient;
-        const auto refund = std::min(delegationRefund + evmRefund, refund_limit);
-        gas_used -= refund;
-        assert(gas_used > 0);
-
-        // EIP-7623: The gas used by the transaction must be at least the min_gas_cost.
-        gas_used = std::max(gas_used, minGasCost);
-
-        senderAcc.balance += txMaxCost - uint256(static_cast<uint64_t>(gas_used)) * effectiveGasPrice;
-        state.touch(block.coinbase).balance +=
-            uint256(static_cast<uint64_t>(gas_used)) * priorityGasPrice;
+        const auto gas_used = eth::applyRefundAndFloor(
+            rev, minGasCost, gasLimit, gasLeft, delegationRefund + evmRefund);
+        eth::refundPrepaymentAndTipCoinbase(
+            state, block, gas_used, txMaxCost, effectiveGasPrice, priorityGasPrice, senderAcc);
 
         // Operator fee: charge the vault with the SAME formula/params that priced the
         // sender's pre-charge (operator_cost_at_gas_limit), taken from the validate-time
@@ -371,16 +334,7 @@ public:
         if (gasUsed < 0)
             throw std::runtime_error("opTransition: negative gas_used");
 
-        std::vector<protocol::LogEntry> logs;
-        for (auto const& l : host.take_logs())
-        {
-            bcos::bytes addr(l.addr.bytes, l.addr.bytes + sizeof(evmc_address));
-            bcos::h256s topics;
-            for (auto const& t : l.topics)
-                topics.emplace_back(bcos::bytesConstRef(t.bytes, sizeof(evmc_bytes32)));
-            bcos::bytes data(l.data.begin(), l.data.end());
-            logs.emplace_back(std::move(addr), std::move(topics), std::move(data));
-        }
+        std::vector<protocol::LogEntry> logs = eth::takeBcosLogs(host);
         // Guard output_data nullptr (void-return calls): `nullptr + 0` is UB.
         const bcos::bytes outputBytes{result.output_size != 0 ?
                                           bcos::bytes{result.output_data,

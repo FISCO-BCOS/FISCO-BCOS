@@ -24,16 +24,8 @@ namespace
     return out;
 }
 
-/// Bounds-checked u256→u64 narrowing for the payload's announced blobGasUsed
-/// (mirror of OpCommon.h's detail::narrowU256ToU64): an over-wide announced
-/// value is a consensus reject, never a silent truncation.
-[[nodiscard]] uint64_t narrowAnnouncedU256ToU64(const bcos::u256& v, const char* fieldName)
-{
-    if (!bcos::u256FitsUint64(v))
-        throw bcos::evm::OpConsensusError(
-            std::string("field exceeds uint64_t range: ") + fieldName);
-    return static_cast<uint64_t>(v);
-}
+using bcos::evm::engine::detail::narrowU256ToU64;
+
 }  // namespace
 
 OpEthBlockCommitments opEthCommitmentsOf(
@@ -69,7 +61,7 @@ OpEthBlockCommitments announcedOpEthCommitmentsOf(const bcos::engine::ExecutionP
         .gasUsed = payload.gasUsed,
         .txRoot = transactionsRoot,
         .blobGasUsed = payload.blobGasUsed.has_value() ?
-                           std::optional<uint64_t>(narrowAnnouncedU256ToU64(
+                           std::optional<uint64_t>(narrowU256ToU64(
                                *payload.blobGasUsed, "ExecutionPayload.blobGasUsed")) :
                            std::nullopt,
         .requestsHash = ethHeader.requestsHash(),
