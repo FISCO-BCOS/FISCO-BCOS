@@ -46,6 +46,10 @@
 #include <boost/system/detail/error_code.hpp>
 #ifdef _WIN32
 #include <windows.h>
+// wingdi.h (pulled in by windows.h) defines ERROR as a macro, which breaks
+// LogLevel::ERROR below; LogStream.h's #undef cannot help because windows.h
+// is included after it here (and leaks ahead in unity builds).
+#undef ERROR
 #else
 #include <pthread.h>
 #endif
