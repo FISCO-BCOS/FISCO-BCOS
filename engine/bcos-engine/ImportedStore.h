@@ -211,7 +211,10 @@ public:
         // split in the opposite direction). Arbitration must not depend on
         // unordered_map iteration order: canonical-lineage blocks take their heights
         // first, off-lineage live blocks only fill still-empty heights, and the head
-        // always wins its own.
+        // always wins its own. Within one category a height can still tie (two live
+        // same-height siblings, e.g. two children of the head awaiting reorg): the
+        // winner is the LOWEST hash, so the answer is identical across runs and
+        // standard libraries instead of following hash-bucket order.
         auto const onCanonicalLineage = [&](bcos::h256 const& candidate) {
             return candidate == hash || descendsFrom(hash, candidate);
         };
@@ -224,10 +227,14 @@ public:
         }
         for (auto const& [blockHash, block] : m_blocks)
         {
-            if (!block.detached && !onCanonicalLineage(blockHash) &&
-                m_byNumber.find(block.number) == m_byNumber.end())
+            if (block.detached || onCanonicalLineage(blockHash))
             {
-                m_byNumber.emplace(block.number, blockHash);
+                continue;
+            }
+            auto const [it, inserted] = m_byNumber.try_emplace(block.number, blockHash);
+            if (!inserted && !onCanonicalLineage(it->second) && blockHash < it->second)
+            {
+                it->second = blockHash;
             }
         }
         m_byNumber[number] = hash;

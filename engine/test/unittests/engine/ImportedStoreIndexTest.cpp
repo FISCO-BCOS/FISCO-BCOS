@@ -174,15 +174,45 @@ BOOST_AUTO_TEST_CASE(CanonicalAncestorWinsHeightOverLiveSibling)
     BOOST_CHECK(store.put(block('A', 0, 100)));
     BOOST_CHECK(store.put(block('B', 'A', 101)));
     BOOST_CHECK(store.put(block('C', 'B', 102)));
-    // Sibling at the same height as A, with an unstored parent: stays live (sparse
-    // ancestry is undecidable, so the store must not detach it) — but must not take
-    // height 100 from the canonical ancestor. Same-height coexistence needs the caller
-    // vouching the existing occupant is canonical (§4.3), like every sibling import.
+    // Sibling at the same height as A, with an unstored parent. The head's chain is
+    // complete (C->B->A), so height 100 is DECIDED to belong to A and the below-head
+    // detach fires on S (an undecided sparse head range would be the stay-live case) —
+    // S must not take height 100 from the canonical ancestor, and its body stays
+    // hash-addressable for re-import. hasBlock is addressability (true for detached
+    // bodies), so the detach itself is asserted on the stored entry.
     BOOST_CHECK(store.put(block('S', 0, 100), /*occupantCanonical=*/true));
     store.adoptCanonicalHead(102, hashOf('C'));
     BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
     BOOST_CHECK_EQUAL(*store.occupantAt(102), hashOf('C'));
     BOOST_CHECK(store.hasBlock(hashOf('S')));  // still hash-addressable for re-import
+    BOOST_REQUIRE(store.get(hashOf('S')).has_value());
+    BOOST_CHECK(store.get(hashOf('S'))->detached);  // decided non-ancestor of the head
+}
+
+// Two live children of the head at head+1 tie at one height (both off-lineage). The
+// rebuild's fill pass must resolve the tie by the LOWEST hash — identically across
+// import orders and standard libraries — never by hash-bucket order.
+BOOST_AUTO_TEST_CASE(SameHeightOffLineageTieResolvesDeterministically)
+{
+    auto const expected = hashOf('X') < hashOf('Y') ? hashOf('X') : hashOf('Y');
+    for (bool flipOrder : {false, true})
+    {
+        bcos::engine::ImportedStore store;
+        BOOST_CHECK(store.put(block('A', 0, 100)));
+        BOOST_CHECK(store.put(block('B', 'A', 101)));
+        if (!flipOrder)
+        {
+            BOOST_CHECK(store.put(block('X', 'B', 102)));
+            BOOST_CHECK(store.put(block('Y', 'B', 102), /*occupantCanonical=*/true));
+        }
+        else
+        {
+            BOOST_CHECK(store.put(block('Y', 'B', 102)));
+            BOOST_CHECK(store.put(block('X', 'B', 102), /*occupantCanonical=*/true));
+        }
+        store.adoptCanonicalHead(101, hashOf('B'));
+        BOOST_CHECK_EQUAL(*store.occupantAt(102), expected);
+    }
 }
 
 // The detach must actually FIRE when ancestry is decidable: an old-branch block at a
