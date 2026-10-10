@@ -21,6 +21,7 @@
 
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <json/json.h>
@@ -72,6 +73,7 @@ void combineDepositTxResponse(Json::Value& result, const DepositTransaction& dep
 /// is the deposit nonce, never just 0x0. No-op when the receipt carries no OP meta
 /// (pre-Canyon or non-deposit receipts); called by combineTxResponse after the deposit
 /// branch, so it applies whether or not the envelope decoded.
-void fillDepositReceiptFields(Json::Value& result, const protocol::TransactionReceipt& receipt);
+void fillDepositReceiptFields(
+    Json::Value& result, const bcos::protocol::TransactionReceipt& receipt);
 
 }  // namespace bcos::rpc

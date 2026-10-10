@@ -574,7 +574,7 @@ void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Pt
 /// The stateRoot mirrors production's rule (OpScheduler.h): for block numbers > 0 the root is
 /// the INCREMENTAL buildAndCollect over the probe view's delta with the parent header's
 /// stateRoot (read from the ledger rows through the view) — the genesis trie must be seeded
-/// (computeAndPersistGenesisTrie + seedCallGenesis) before probing block 1. Pass
+/// (computeAndPersistParentTrie + seedCallGenesis) before probing block 1. Pass
 /// incrementalRoot=false for scenarios whose parent trie deliberately does not resolve
 /// (missing-node fault-injection) or whose root value is never consumed: the root then comes
 /// from finalize's full rebuild over the probe view alone.
@@ -1779,11 +1779,11 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
 BOOST_AUTO_TEST_CASE(PendingStorageAtServesTheOpLaneBalanceFromTheFlatPlane)
 {
     Fixture f;
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto committed = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
+        c_sender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(committed.has_value(), "the committed balance row must be visible");
     BOOST_CHECK_EQUAL(std::string(committed->get()), (bcos::u256(1) << 200).str({}, {}));
 
@@ -1791,12 +1791,12 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtServesTheOpLaneBalanceFromTheFlatPlane)
         auto view = f.multiLayerStorage.fork();
         view.newMutable();
         bcos::ledger::account::EVMAccount account(
-            view, kSender, bcos::ledger::account::AddressTableMode::Hex);
+            view, c_sender, bcos::ledger::account::AddressTableMode::Hex);
         bcos::task::syncWait(account.setBalance(bcos::u256(42)));
         f.multiLayerStorage.pushView(std::move(view));
     }
     auto pending = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
+        c_sender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(pending.has_value(), "the pending balance row must be visible");
     BOOST_CHECK_EQUAL(std::string(pending->get()), "42");
 }
@@ -1856,7 +1856,7 @@ bcos::ledger::LedgerConfig commitL1BlockSlotsAsHead(
         }
         bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
     }
-    auto header = makeCallGenesisHeader(computeAndPersistGenesisTrie(f.multiLayerStorage));
+    auto header = makeCallGenesisHeader(opstack_test::computeAndPersistParentTrie(f.multiLayerStorage));
     header->setNumber(number);
     header->setTimestamp((1000 + number) * 1000);  // whole seconds in ms, fork at ~1000 s
     seedCallGenesis(f.multiLayerStorage, header);
@@ -1899,7 +1899,7 @@ struct RollupCostOwner
 BOOST_AUTO_TEST_CASE(AdmissionRollupCostReadsTheSlotsOfTheHeadItIsKeyedBy)
 {
     Fixture f;
-    auto const envelopeBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto const envelopeBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes const envelope(envelopeBytes.begin(), envelopeBytes.end());
     evmc::bytes_view const envelopeView{envelopeBytes.data(), envelopeBytes.size()};
     constexpr uint64_t gasLimit = 100000;
@@ -1961,7 +1961,7 @@ BOOST_AUTO_TEST_CASE(AdmissionRollupCostReadsTheSlotsOfTheHeadItIsKeyedBy)
 BOOST_AUTO_TEST_CASE(AdmissionRollupCostCarriesTheTotalPast2To256)
 {
     Fixture f;
-    auto const envelopeBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto const envelopeBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes const envelope(envelopeBytes.begin(), envelopeBytes.end());
     constexpr uint64_t gasLimit = 100000;
 
