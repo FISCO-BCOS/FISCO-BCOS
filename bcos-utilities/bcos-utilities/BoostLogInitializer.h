@@ -56,6 +56,9 @@ public:
     virtual ~BoostLogInitializer() { stopLogging(); }
     BoostLogInitializer() = default;
 
+    // _logger (the legacy boost::log channel name) is retained for source
+    // compatibility and ignored: the whole-line pipeline applies no channel
+    // filtering.
     void initLog(const std::string& _configFile, std::string const& _logger = bcos::FileLogger,
         std::string const& _logPrefix = "log");
 

@@ -149,14 +149,9 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
 
     // Custom log.format strings are no longer supported: the pipeline formats
     // the built-in line layout on the producer thread and never builds a
-    // boost record. Warn instead of silently ignoring the key.
+    // boost record. Warn instead of silently ignoring the key; emitted after
+    // the sinks are registered so the warning lands in the log file.
     auto logFormat = _pt.get<std::string>("log.format", "");
-    if (!logFormat.empty())
-    {
-        std::cout << "log.format is no longer supported, the built-in log line format is always "
-                     "used, configured format = "
-                  << logFormat << std::endl;
-    }
 
     if (m_consoleLog)
     {
@@ -192,6 +187,13 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     else
     {
         bcos::RateCollector::disable();
+    }
+
+    if (!logFormat.empty())
+    {
+        BCOS_LOG(WARNING) << "log.format is no longer supported, the built-in log line format "
+                             "is always used, configured format = "
+                          << logFormat;
     }
 }
 
@@ -358,6 +360,9 @@ void bcos::BoostLogInitializer::Sink::consumeLine(LogLevel _level, const std::st
         // abort if encounter fatal, will generate coredump
         // must make sure only use LOG(FATAL) when encounter the most serious problem
         // forbid use LOG(FATAL) in the function that should exit normally
+        // flush first: auto_flush may be off, and abort() would lose the
+        // FATAL line (and everything buffered before it) otherwise
+        boost::log::sinks::text_file_backend::flush();
         std::abort();
     }
 }
@@ -367,6 +372,7 @@ void bcos::BoostLogInitializer::ConsoleSink::consumeLine(LogLevel _level, const 
     boost::log::sinks::text_ostream_backend::consume(boost::log::record_view(), _line);
     if (_level == LogLevel::FATAL)
     {
+        boost::log::sinks::text_ostream_backend::flush();
         std::abort();
     }
 }

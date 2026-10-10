@@ -13,13 +13,15 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief: asynchronous sink for fully formatted log lines. Unlike
- *  BoundedAsyncSink it never touches boost::log core: the producer thread
- *  assembles the complete line (prefix + message) into a pooled std::string
- *  slot and hands the slot to the feeding thread, which passes the line
- *  straight to the boost text backend (rotation, file collector, auto-flush
- *  are kept). When all slots are in flight the line is dropped
- *  (drop-on-overflow) instead of blocking the producer.
+ * @brief: asynchronous sink for fully formatted log lines. It never touches
+ *  boost::log core: the producer thread assembles the complete line (prefix +
+ *  message) into a pooled std::string slot and hands the slot to the feeding
+ *  thread, which passes the line straight to the boost text backend (rotation,
+ *  file collector, auto-flush are kept). When all slots are in flight the line
+ *  is dropped (drop-on-overflow) instead of blocking the producer; dropped
+ *  lines are counted and reported with a marker line once the backlog clears.
+ *  FATAL lines bypass the queue entirely and are written synchronously, so a
+ *  FATAL can neither be dropped nor delayed past the backend's abort().
  *
  *  The hand-off is one mutex + two std::deque<uint32_t> (free/ready slot
  *  indices), the same architecture spdlog's async thread pool uses. A
@@ -30,7 +32,13 @@
  *  single short critical section.
  *
  *  Slot strings keep their heap capacity between rounds, so after warmup a
- *  steady-state log line causes no allocation on either thread.
+ *  steady-state log line causes no allocation on either thread. A slot that
+ *  once held an outsized line (beyond MaxRetainedLineCapacity) gets a fresh
+ *  string when it returns to the pool, so one huge line cannot pin memory.
+ *
+ *  The feeding thread flushes the backend whenever the queue drains and, under
+ *  a continuous flood, at least every FlushInterval — log lines reach the file
+ *  within ~100ms without paying a per-line flush on the producer.
  *
  * @file: LineAsyncSink.h
  */
@@ -41,6 +49,7 @@
 #include <boost/smart_ptr/shared_ptr.hpp>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -72,7 +81,10 @@ public:
 void registerLineSink(std::shared_ptr<LineSinkWriter> _sink);
 void unregisterLineSink(LineSinkWriter const* _sink);
 bool hasLineSinks() noexcept;
-bool commitLine(LogLevel _level, std::string_view _message);
+void commitLine(LogLevel _level, std::string_view _message);
+// "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|" — shared with the sink so the
+// dropped-lines marker keeps the same line layout as producer-formatted lines.
+void appendLinePrefix(std::string& _out, LogLevel _level);
 
 // BackendT must provide consumeLine(LogLevel, const std::string&) and
 // flush(), as BoostLogInitializer::Sink/ConsoleSink do.
@@ -111,13 +123,43 @@ public:
 
     LockedBackend locked_backend() { return LockedBackend(m_backend, m_backendMutex); }
 
+    // Lines dropped on slot-pool overflow since the last marker was emitted.
+    std::uint64_t droppedLines() const noexcept
+    {
+        return m_droppedLines.load(std::memory_order_relaxed);
+    }
+
     void writeLine(LogLevel _level, std::string_view _prefix, std::string_view _message) override
     {
+        // FATAL bypasses the queue: a queued FATAL could be dropped on
+        // overflow or sit behind a backlog, and the abort lives in the
+        // backend's consumeLine — write it synchronously so it always lands.
+        if (_level == LogLevel::FATAL)
+        {
+            std::string line;
+            line.reserve(_prefix.size() + _message.size());
+            line.append(_prefix);
+            line.append(_message);
+            try
+            {
+                std::lock_guard<std::mutex> lock(m_backendMutex);
+                m_backend->consumeLine(_level, line);
+            }
+            catch (...)
+            {}
+            return;
+        }
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
-            if (m_stop || m_freeSlots.empty())
+            if (m_stop)
             {
-                return;  // stopped or out of slots: drop
+                return;  // stopped: drop
+            }
+            if (m_freeSlots.empty())
+            {
+                // out of slots: drop, and leave a marker once the backlog clears
+                m_droppedLines.fetch_add(1, std::memory_order_relaxed);
+                return;
             }
             std::uint32_t slot = m_freeSlots.front();
             m_freeSlots.pop_front();
@@ -147,8 +189,8 @@ public:
                 feedOne(slot);
                 lock.lock();
             }
-            std::lock_guard<std::mutex> backendLock(m_backendMutex);
-            m_backend->flush();
+            reportDroppedLocked();
+            flushBackendLocked();
             return;
         }
         m_flushRequested = true;
@@ -181,6 +223,61 @@ private:
         LogLevel level = LogLevel::TRACE;
     };
 
+    // A slot that once held a line this large does not keep the heap buffer
+    // when it returns to the pool.
+    static constexpr std::size_t MaxRetainedLineCapacity = 4096;
+    // Staleness bound for buffered lines: flush when the queue drains, and
+    // under a continuous flood re-check the clock every this many lines.
+    static constexpr auto FlushInterval = std::chrono::milliseconds(100);
+    static constexpr std::uint64_t FlushCheckEvery = 64;
+
+    // FIB-184: a backend exception must never kill the feeding thread.
+    void flushBackendLocked()
+    {
+        try
+        {
+            std::lock_guard<std::mutex> backendLock(m_backendMutex);
+            m_backend->flush();
+        }
+        catch (...)
+        {}
+    }
+
+    // Emits one marker line for the lines dropped since the last report.
+    // m_queueMutex must be held.
+    void reportDroppedLocked()
+    {
+        auto const dropped = m_droppedLines.exchange(0, std::memory_order_relaxed);
+        if (dropped == 0)
+        {
+            return;
+        }
+        std::string line;
+        appendLinePrefix(line, LogLevel::WARNING);
+        line += "[log] dropped ";
+        line += std::to_string(dropped);
+        line += " log line(s): slot pool exhausted";
+        try
+        {
+            std::lock_guard<std::mutex> backendLock(m_backendMutex);
+            m_backend->consumeLine(LogLevel::WARNING, line);
+        }
+        catch (...)
+        {}
+    }
+
+    // m_queueMutex must be held.
+    void maybeFlushLocked()
+    {
+        auto const now = std::chrono::steady_clock::now();
+        if (now - m_lastFlush < FlushInterval)
+        {
+            return;
+        }
+        m_lastFlush = now;
+        flushBackendLocked();
+    }
+
     void feedOne(std::uint32_t _slot)
     {
         Slot& s = m_slots[_slot];
@@ -193,6 +290,10 @@ private:
         {
             // FIB-184: a backend exception must never kill the feeding thread.
         }
+        if (s.line.capacity() > MaxRetainedLineCapacity)
+        {
+            std::string().swap(s.line);
+        }
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
             m_freeSlots.push_back(_slot);
@@ -200,21 +301,27 @@ private:
     }
     void feedLoop()
     {
+        std::uint64_t linesSinceFlushCheck = 0;
         for (;;)
         {
             std::uint32_t slot = 0;
             {
                 std::unique_lock<std::mutex> lock(m_queueMutex);
+                if (m_queue.empty() && !m_stop && !m_flushRequested)
+                {
+                    // Queue drained: surface dropped lines, then flush so the
+                    // tail of the burst reaches the file right away.
+                    reportDroppedLocked();
+                    maybeFlushLocked();
+                }
                 m_cv.wait(lock,
                     [this] { return m_stop || m_flushRequested || !m_queue.empty(); });
                 if (m_queue.empty())
                 {
+                    reportDroppedLocked();
                     if (m_flushRequested)
                     {
-                        {
-                            std::lock_guard<std::mutex> backendLock(m_backendMutex);
-                            m_backend->flush();
-                        }
+                        flushBackendLocked();
                         m_flushRequested = false;
                         m_flushDone.notify_all();
                     }
@@ -228,6 +335,14 @@ private:
                 m_queue.pop_front();
             }
             feedOne(slot);
+            // Under a continuous flood the queue never drains; keep the flush
+            // staleness bounded. One clock read per FlushCheckEvery lines.
+            if (++linesSinceFlushCheck >= FlushCheckEvery)
+            {
+                linesSinceFlushCheck = 0;
+                std::lock_guard<std::mutex> lock(m_queueMutex);
+                maybeFlushLocked();
+            }
         }
     }
 
@@ -240,6 +355,8 @@ private:
     std::mutex m_queueMutex;
     std::condition_variable m_cv;
     std::condition_variable m_flushDone;
+    std::atomic<std::uint64_t> m_droppedLines{0};
+    std::chrono::steady_clock::time_point m_lastFlush{};
     bool m_stop = false;
     bool m_flushRequested = false;
 };

@@ -16,8 +16,6 @@
  * @brief: lightweight log facade. BCOS_LOG and the LOG_* formatting macros
  *  expand to bcos::LogStream, so including this header does NOT pull in any
  *  boost/log headers; the actual logging backend lives in BoostLog.cpp.
- *  Code that needs the raw boost::log logger objects (FileLoggerHandler etc.)
- *  should include BoostLog.h instead.
  *
  * @file: LogStream.h
  */
@@ -97,14 +95,14 @@ constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
 
 void setFileLogLevel(LogLevel const& _level);
 
-// Buffers one log record and commits it to the file logger on destruction.
-// Constructed only when the level check in BCOS_LOG passes, so disabled log
-// statements evaluate nothing.
+// Buffers one log record and commits it to the registered whole-line sinks on
+// destruction. Constructed only when the level check in BCOS_LOG passes, so
+// disabled log statements evaluate nothing.
 //
 // The record is assembled in an inline stack buffer (no heap allocation for
 // lines up to InlineCapacity bytes, which covers virtually all log
 // statements); longer lines spill to a doubling heap buffer. The buffered
-// text is handed to the boost log record exactly once on destruction.
+// text is handed to the sinks exactly once on destruction.
 class LogStream
 {
 public:

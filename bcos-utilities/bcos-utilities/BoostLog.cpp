@@ -99,13 +99,17 @@ constexpr std::string_view c_severityNames[] = {
     "trace", "debug", "info", "warning", "error", "fatal"};
 
 // "<threadName>-0x<tid>" exactly as the ThreadName/ThreadID attributes format
-// it; the value only changes when the thread is renamed, so cache it.
+// it; the value only changes when the thread is renamed, so cache it. Cache
+// validity is tracked separately from the cached name: an empty name is a
+// valid lookup result (unnamed threads on macOS, every thread on Windows)
+// and must still build the "Unnamed-0x..." fragment on the first call.
 std::string_view threadPart()
 {
+    thread_local bool initialized = false;
     thread_local std::string cachedName;
     thread_local std::string part;
     auto const& name = bcos::pthread_getThreadNameRef();
-    if (cachedName != name)
+    if (!initialized || cachedName != name)
     {
 #ifdef _WIN32
         char tid[16];
@@ -120,25 +124,34 @@ std::string_view threadPart()
         part = name.empty() ? "Unnamed" : name;
         part += '-';
         part += tid;
+        initialized = true;
     }
     return part;
 }
+}  // namespace
 
 // "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|", byte-identical to the
 // default formatter in BoostLogInitializer::setLogFormatter.
+// localtime_r takes glibc's internal timezone lock, so the broken-down time
+// is cached per thread and recomputed only when the second ticks over.
 void appendLinePrefix(std::string& _out, LogLevel _level)
 {
     _out.append(c_severityNames[static_cast<int>(_level)]);
     _out += '|';
     auto const micros = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::system_clock::now().time_since_epoch());
-    std::time_t secs = static_cast<std::time_t>(micros.count() / 1000000);
-    std::tm tm{};
+    std::time_t const secs = static_cast<std::time_t>(micros.count() / 1000000);
+    thread_local std::time_t cachedSecs = 0;
+    thread_local std::tm tm{};
+    if (secs != cachedSecs)
+    {
 #ifdef _WIN32
-    localtime_s(&tm, &secs);
+        localtime_s(&tm, &secs);
 #else
-    localtime_r(&secs, &tm);
+        localtime_r(&secs, &tm);
 #endif
+        cachedSecs = secs;
+    }
     char buf[40];
     int n = std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%06ld",
         tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
@@ -148,7 +161,6 @@ void appendLinePrefix(std::string& _out, LogLevel _level)
     _out.append(threadPart());
     _out += '|';
 }
-}  // namespace
 
 void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
 {
@@ -162,6 +174,10 @@ void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
             return;
         }
     }
+    // All slots taken: more than MaxLineSinks sinks registered. Not reachable
+    // with today's single-initializer deployments; say so instead of dropping
+    // the sink silently.
+    std::fputs("registerLineSink: registry full, sink not registered\n", stderr);
 }
 
 void unregisterLineSink(LineSinkWriter const* _sink)
@@ -183,30 +199,23 @@ bool hasLineSinks() noexcept
     return g_lineSinkCount.load(std::memory_order_acquire) > 0;
 }
 
-// Fans the line out to every registered whole-line sink; returns false when
-// no sink accepted it (e.g. all sinks were unregistered concurrently).
-bool commitLine(LogLevel _level, std::string_view _message)
+// Fans the line out to every registered whole-line sink. The shared lock is
+// held across writeLine: it only takes the sink's queue mutex (the FATAL path
+// excepted, which aborts the process anyway), so producers never block a
+// reader on backend I/O, and register/unregister are rare by construction.
+void commitLine(LogLevel _level, std::string_view _message)
 {
     thread_local std::string prefix;
     prefix.clear();
     appendLinePrefix(prefix, _level);
-    // Copy the slots under the shared lock, then write without holding it so
-    // a slow sink never blocks register/unregister or sibling producers.
-    std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> sinks;
-    {
-        std::shared_lock lock(g_lineSinksMutex);
-        sinks = g_lineSinks;
-    }
-    bool any = false;
-    for (auto const& sink : sinks)
+    std::shared_lock lock(g_lineSinksMutex);
+    for (auto const& sink : g_lineSinks)
     {
         if (sink)
         {
             sink->writeLine(_level, prefix, _message);
-            any = true;
         }
     }
-    return any;
 }
 }  // namespace log
 
