@@ -551,9 +551,16 @@ private:
                             "before execute {}",
                             pendingHeight, number);
                         OP_SCHEDULER_LOG(INFO) << message;
-                        co_return {BCOS_ERROR_UNIQUE_PTR(
-                                       scheduler::SchedulerError::InvalidStatus, message),
-                            nullptr, false};
+                        // Tagged like the sibling/gap branches: recoverable CL-side
+                        // state (the CL retries after the pending height is committed or
+                        // replaced), not an internal fault — the Engine-API router must
+                        // answer SYNCING, never -32603. The tag name says "sibling
+                        // reorg" for historical reasons; to mapDelegateError its meaning
+                        // is "recoverable scheduler state".
+                        auto pendingError = BCOS_ERROR_UNIQUE_PTR(
+                            scheduler::SchedulerError::InvalidStatus, message);
+                        *pendingError << bcos::engine::OpSiblingReorgUnsupported{true};
+                        co_return {std::move(pendingError), nullptr, false};
                     }
                     if (conflict == PendingConflict::ReplaceSameHeight)
                     {
@@ -599,9 +606,13 @@ private:
                     "is not in this scheduler slice",
                     number);
                 OP_SCHEDULER_LOG(WARNING) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false};
+                // Tagged: the Engine-API router answers SYNCING for this class (the CL
+                // retries after re-parenting), never -32603 — the code alone
+                // (InvalidBlockNumber) is shared with real corruption faults.
+                auto siblingError = BCOS_ERROR_UNIQUE_PTR(
+                    scheduler::SchedulerError::InvalidBlockNumber, message);
+                *siblingError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(siblingError), nullptr, false};
             }
             if (lastExecuted != -1 && number - lastExecuted != 1 && !probeAtPending)
             {
@@ -609,9 +620,14 @@ private:
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
                         lastExecuted + 1, number);
                 OP_SCHEDULER_LOG(INFO) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false};
+                // Same SYNCING family as the sibling-reorg branch above: the payload's
+                // parent is not the executed head — the CL retries after re-parenting.
+                // (The adoptProbeAsPending InvalidBlockNumber sites answer probe-lifecycle
+                // faults — internal by contract, not chain conditions.)
+                auto gapError = BCOS_ERROR_UNIQUE_PTR(
+                    scheduler::SchedulerError::InvalidBlockNumber, message);
+                *gapError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(gapError), nullptr, false};
             }
 
             // Writes go to a committed-parent view. KeepProbe must not see the uncommitted
@@ -1050,12 +1066,45 @@ private:
             sharedError = std::make_shared<OpStorageErrorSlot>();
             OpEthExecutor executor(m_receiptFactory, spec, sharedError);
 
-            // Block-start system call, deposit-first check, Jovian shape, DA scalar.
+            // Fork-activation gate input: the parent header's timestamp. Fetched here only
+            // when the gate can fire (Jovian+ block with a parent); pre-Jovian blocks keep
+            // their failure ordering (the MPT step below reads it for number > 0).
+            // getBlockData throws NotFoundBlockHeader for a number with no committed
+            // header — translate to the fail-closed storage fault.
+            bcos::protocol::BlockHeader::Ptr parentHeader;
+            if (spec.has_da_footprint && header.number() > 0)
+            {
+                try
+                {
+                    auto parentBlock = co_await ledger::getBlockData(
+                        view, header.number() - 1, ledger::HEADER, *m_blockFactory);
+                    parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
+                }
+                catch (bcos::ledger::NotFoundBlockHeader const&)
+                {
+                    parentHeader = nullptr;
+                }
+                if (!parentHeader)
+                {
+                    throw bcos::evm::engine::OpStorageError(fmt::format(
+                        "OpScheduler: parent block header is missing from storage "
+                        "(block {}) — the fork-activation gate needs the parent timestamp",
+                        header.number() - 1));
+                }
+            }
+            bool const noUserTxActivationBlock =
+                parentHeader ? ledger::isOpNoUserTxActivationBlock(m_forkSchedule,
+                                     opForkTimestampSec(parentHeader->timestamp()),
+                                     opForkTimestampSec(header.timestamp())) :
+                               false;
+
+            // Block-start system call, deposit-first check, Jovian shape, DA scalar,
+            // activation deposits-only gate.
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<OpRecentBlockHashes<ViewType>> hashes;
             co_await preBlockOpEthSteps(view, header, spec, rawTxBytes, deposits, executor.vm(),
-                sharedError, hashes, hashErr, daFootprintGasScalar);
+                sharedError, hashes, hashErr, daFootprintGasScalar, noUserTxActivationBlock);
 
             // Fee params load on the first normal tx. blockGasLeft is narrowed from gasLimit.
             // BLOCKHASH answers come from the per-block OpRecentBlockHashes (op-geth GetHashFn
@@ -1092,9 +1141,32 @@ private:
             if (incrementalRoot)
             {
                 bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
-                auto parentBlock = co_await ledger::getBlockData(
-                    view, header.number() - 1, ledger::HEADER, *m_blockFactory);
-                auto const parentRoot = parentBlock->blockHeader()->stateRoot();
+                // getBlockData throws NotFoundBlockHeader for a number with no committed
+                // header — translate it to the fail-closed storage fault: the incremental
+                // build cannot run without the parent's state root. Jovian+ blocks already
+                // fetched the header for the activation gate above; pre-Jovian ones read
+                // it here (their only consumer).
+                if (!parentHeader)
+                {
+                    try
+                    {
+                        auto parentBlock = co_await ledger::getBlockData(
+                            view, header.number() - 1, ledger::HEADER, *m_blockFactory);
+                        parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
+                    }
+                    catch (bcos::ledger::NotFoundBlockHeader const&)
+                    {
+                        parentHeader = nullptr;
+                    }
+                    if (!parentHeader)
+                    {
+                        throw bcos::evm::engine::OpStorageError(fmt::format(
+                            "OpScheduler: parent block header is missing from storage "
+                            "(block {}) — the incremental MPT build needs its state root",
+                            header.number() - 1));
+                    }
+                }
+                auto const parentRoot = parentHeader->stateRoot();
                 try
                 {
                     auto delta = co_await ledger::mpt::buildAndCollect(nodeStorage, parentRoot,

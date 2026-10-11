@@ -10,7 +10,9 @@
 // receiptsRoot constant was computed by the reference implementation over those
 // exact leaves and is pinned by value here.
 
-#include <opstack-executor/OpEthBlockExecute.h>  // sealOpEthBlock / OP_DEPOSIT_TX_TYPE (via OpEthDeposit.h)
+// sealOpEthBlock / OP_DEPOSIT_TX_TYPE arrive via OpEthDeposit.h:
+#include <opstack-executor/OpEthBlockExecute.h>
+#include <opstack-executor/OpEthReceipt.h>  // deriveOpReceiptMeta / toOpStackMeta / OpTxSnapshot
 #include <opstack-executor/OpForkSpec.h>
 
 #include <bcos-crypto/hash/Keccak256.h>
@@ -117,6 +119,45 @@ BOOST_AUTO_TEST_CASE(NormalReceiptGoldenBytes)
 // cumGas 42000), sealed under the Isthmus spec. The two leaves are pinned byte-for-byte
 // by the cases above; the root below is what the reference trie construction committed
 // over {rlp(0): depositLeaf, rlp(1): normalLeaf}.
+// The Bedrock-era receipt must carry the RAW L1Block slot-6 scalar as l1_fee_scalar
+// (op-geth's L1FeeScalar = scalar/1e6, rendered by the RPC as a decimal string), and the
+// Ecotone-shaped snapshot must NOT carry it (nil from Ecotone on upstream).
+BOOST_AUTO_TEST_CASE(DeriveOpReceiptMetaCarriesLegacyL1FeeScalar)
+{
+    using bcos::executor_v1::opstack::OpFeeParams;
+    using bcos::executor_v1::opstack::OpTxSnapshot;
+    using bcos::executor_v1::opstack::deriveOpReceiptMeta;
+
+    OpTxSnapshot snapshot;
+    snapshot.fee.l1_base_fee = intx::uint256{25'000'000'000};
+    snapshot.fee.l1_fee_scalar = intx::uint256{684'000};
+    snapshot.l1_cost = intx::uint256{1234};
+    snapshot.legacy_l1_gas_used = 2100;  // marks the Bedrock–Delta legacy pricing path
+
+    const auto legacy = deriveOpReceiptMeta(snapshot, {}, /*fill_operator_scalars=*/false);
+    BOOST_REQUIRE(legacy.l1_fee_scalar.has_value());
+    BOOST_CHECK(*legacy.l1_fee_scalar == intx::uint256{684'000});
+    BOOST_CHECK(legacy.l1_gas_used.has_value() && *legacy.l1_gas_used == 2100u);
+    // Pre-Ecotone: the 32-bit scalars / blob base fee must stay absent.
+    BOOST_CHECK(!legacy.l1_base_fee_scalar.has_value());
+    BOOST_CHECK(!legacy.l1_blob_base_fee_scalar.has_value());
+
+    // Ecotone shape: legacy_l1_gas_used absent -> no l1_fee_scalar either, even with the
+    // (stale) slot-6 word still present in the fee snapshot.
+    OpTxSnapshot ecotone = snapshot;
+    ecotone.legacy_l1_gas_used = std::nullopt;
+    ecotone.ecotone_calldata_gas_used = 400;
+    const auto modern = deriveOpReceiptMeta(ecotone, {}, false);
+    BOOST_CHECK(!modern.l1_fee_scalar.has_value());
+    BOOST_CHECK(modern.l1_base_fee_scalar.has_value());
+
+    // The projection preserves presence and value (u256 full-width).
+    const auto projected =
+        bcos::executor_v1::opstack::toOpStackMeta(legacy);
+    BOOST_REQUIRE(projected.l1_fee_scalar.has_value());
+    BOOST_CHECK_EQUAL(projected.l1_fee_scalar->str(), "684000");
+}
+
 BOOST_AUTO_TEST_CASE(SealReceiptsRootMatchesPinnedReferenceRoot)
 {
     auto const factory = makeReceiptFactory();

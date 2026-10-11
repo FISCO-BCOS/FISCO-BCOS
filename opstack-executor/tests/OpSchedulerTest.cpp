@@ -37,7 +37,8 @@
 #include <bcos-ledger/LedgerMethods.h>  // getBlockData (probe's parent-root lookup)
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>           // buildAndCollect (①a incremental cross-check)
-#include <bcos-ledger/mpt/StateRoots.h>           // computeMptStateDelta (genesis trie)
+#include <bcos-ledger/mpt/StateRoots.h>
+#include "support/GenesisTrie.h"           // computeMptStateDelta (genesis trie)
 #include <bcos-storage/KeyPrefixes.h>             // mptNodeStateKey (corrupt-root seeding)
 #include <bcos-table/src/LegacyStorageWrapper.h>  // LegacyStorageWrapper<BackendMemStorage>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -77,13 +78,13 @@ namespace opeth = bcos::executor_v1::opstack;
 namespace
 {
 
-constexpr uint64_t kChainId = 0x2105;  // 8453 — the FISCO OP chain id (vector eip1559 chainId)
-const bcos::Address kSender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
+constexpr uint64_t c_chainId = 0x2105;  // 8453 — the FISCO OP chain id (vector eip1559 chainId)
+const bcos::Address c_sender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
                                                                             // sender
 
 // Corpus isthmus_transfer_basic.json: block.transactions[1]._op_raw (op-geth-signed eip1559
 // envelope).
-constexpr const char* kEip1559EnvelopeHex =
+constexpr const char* c_eip1559EnvelopeHex =
     "0x02f874822105808405f5e100847735940082520894b0b0000000000000000000000000000000000001880de"
     "0b6b3a764000080c001a0e37533ddb9f696c0b21788f1b00c78adc4a81b1d811d84e70fad672096fc924ea00ae"
     "693f4d68955a4c01ee8bab26f5be740ee416dd2556822f68b747d5aab7714";
@@ -241,7 +242,7 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
     }
     else if (!env.empty())
     {
-        // Corpus eip1559 (kEip1559EnvelopeHex): mirror fields must match the signed envelope
+        // Corpus eip1559 (c_eip1559EnvelopeHex): mirror fields must match the signed envelope
         // or envelopeExecutionFieldsMismatch rejects the block.
         tars.web3TypedTxKind = static_cast<tars::Char>(env[0]);
         tars.data.nonce = "0x0";
@@ -262,7 +263,7 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
     }
     else
     {
-        tx->forceSender(kSender.asBytes());
+        tx->forceSender(c_sender.asBytes());
     }
     return tx;
 }
@@ -354,9 +355,9 @@ struct Fixture
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         scheduler(
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
-                kChainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
+                c_chainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
-        seedSender(multiLayerStorage, kSender, hashImpl);
+        seedSender(multiLayerStorage, c_sender, hashImpl);
         seedSysTables(multiLayerStorage);
     }
 };
@@ -573,7 +574,7 @@ void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Pt
 /// The stateRoot mirrors production's rule (OpScheduler.h): for block numbers > 0 the root is
 /// the INCREMENTAL buildAndCollect over the probe view's delta with the parent header's
 /// stateRoot (read from the ledger rows through the view) — the genesis trie must be seeded
-/// (computeAndPersistGenesisTrie + seedCallGenesis) before probing block 1. Pass
+/// (computeAndPersistParentTrie + seedCallGenesis) before probing block 1. Pass
 /// incrementalRoot=false for scenarios whose parent trie deliberately does not resolve
 /// (missing-node fault-injection) or whose root value is never consumed: the root then comes
 /// from finalize's full rebuild over the probe view alone.
@@ -607,11 +608,13 @@ opeth::OpEthExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& view,
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<opeth::OpRecentBlockHashes<ViewType>> hashes;
     bcos::task::syncWait(opeth::preBlockOpEthSteps(view, header, spec, rawTxBytes, deposits,
-        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar));
+        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar,
+        /*noUserTxActivationBlock=*/false));  // single-block probe, no activation crossing;
+    // the schedule gate runs for real inside OpScheduler::execute (Karst suite pins it)
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
         .blockHashLookup = opeth::opEthBlockHashLookup(*hashes),
-        .chainId = kChainId,
+        .chainId = c_chainId,
         .daFootprintGasScalar = daFootprintGasScalar};
     bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);
@@ -657,22 +660,6 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeaderAt(
     return h;
 }
 
-/// Copy every flat row visible through @p from into @p to's top mutable layer. The
-/// incremental MPT build scans the top mutable layer ONLY (buildAndCollect), so a
-/// backend-merged seed is invisible to it — this re-materializes the committed state as the
-/// genesis build's delta.
-template <class From, class To>
-bcos::task::Task<void> copyFlatRows(From& from, To& to)
-{
-    auto it = co_await bcos::storage2::range(from);
-    while (auto kv = co_await it.next())
-    {
-        auto const& [k, v] = *kv;
-        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
-            co_await bcos::storage2::writeOne(to, k, *entry);
-    }
-}
-
 /// Build the scenario-B genesis trie over the seeded accounts via the production MPT builder
 /// (computeMptStateDelta, parent = the empty root) and return the delta (root + newNodes).
 /// The build view is discarded — the caller decides which of the nodes to persist, so the
@@ -682,27 +669,12 @@ bcos::ledger::mpt::MPTDeltaLayer buildGenesisTrieDelta(MLS& mls)
     auto readView = mls.fork();  // read-through to the committed backend (never merged)
     auto view = mls.fork();
     view.newMutable();
-    bcos::task::syncWait(copyFlatRows(readView, view));
+    opstack_test::copyFlatRows(readView, view);
     bcos::ledger::LedgerConfig ledgerConfig;
     ledgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
     return bcos::task::syncWait(bcos::ledger::mpt::computeMptStateDelta(
         view, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
 }
-
-/// Compute the scenario-B genesis state trie over the seeded accounts and persist every node
-/// as "/mpt/" rows — the test-local mirror of Ledger::buildGenesisBlock's Ethereum-lane
-/// (executor_version >= 2) genesis import. Returns the root to stamp on the genesis header.
-bcos::h256 computeAndPersistGenesisTrie(MLS& mls)
-{
-    auto delta = buildGenesisTrieDelta(mls);
-    auto view = mls.fork();
-    view.newMutable();
-    bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
-    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, delta.newNodes));
-    bcos::task::syncWait(mls.mergeView(std::move(view)));
-    return delta.stateRoot;
-}
-
 /// Seed a contract account holding real bytecode and one storage slot (same create()+
 /// setCode existence pattern as seedSender; setStorage writes the raw 32-byte slot row the
 /// full-rebuild trie enumerates). The bytecode is a read-or-set getter:
@@ -880,13 +852,13 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
 
     // The OP lane builds the incremental MPT from genesis on: block 1's build resolves its
     // parent (genesis) trie nodes, so seed the scenario-B genesis (trie nodes + header root).
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     // Corpus envelopes (same as ExecutesMinimalOpBlockEqualToDirectRouteB): deposit + eip1559.
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, eipEnvBytes};
 
@@ -1036,7 +1008,7 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
 {
     Fixture f;
     auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     auto dep2a = depositEnvWithSource(
         0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_bytes32);
@@ -1048,7 +1020,7 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
         0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd_bytes32);
 
     // Scenario-B genesis: block 1's incremental MPT build starts from the genesis root.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     driveOpBlock(f, makeHeader(), {depEnv, eipEnvBytes});
@@ -1077,6 +1049,11 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
     BOOST_CHECK_MESSAGE(
         refused.err->errorMessage().find("Uncommitted pending block 2") != std::string::npos,
         "RefuseOtherHeight must pin pending height 2, got: " << refused.err->errorMessage());
+    // Recoverable CL-side state: tagged so mapDelegateError answers SYNCING, the same
+    // family as the sibling/gap refusals — never a -32603 internal fault.
+    BOOST_CHECK_MESSAGE(
+        boost::get_error_info<bcos::engine::OpSiblingReorgUnsupported>(*refused.err) != nullptr,
+        "RefuseOtherHeight must carry the recoverable tag");
 
     // KeepProbe: verify=false sibling at the pending height must not drop the slot.
     auto probe =
@@ -1161,13 +1138,13 @@ BOOST_AUTO_TEST_CASE(CommitWithoutLedgerReturnsInvalidStatus)
 {
     Fixture f;
     auto execOnly = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(f.receiptFactory,
-        f.hashImpl, kChainId, f.forkSchedule, f.blockFactory, f.multiLayerStorage, nullptr,
+        f.hashImpl, c_chainId, f.forkSchedule, f.blockFactory, f.multiLayerStorage, nullptr,
         f.ioServicePool);
     auto saved = f.scheduler;
     f.scheduler = execOnly;
 
     // Scenario-B genesis: block 1's incremental MPT build starts from the genesis root.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
@@ -1252,7 +1229,7 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
     Fixture f;
     // call() at the latest height is served through the committed MPT, so genesis must carry
     // the scenario-B trie root (and persisted nodes) before the call reaches tx validation.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
     auto tx = buildWeb3Tx(/*maxFeePerGas=*/1, /*maxPriorityFeePerGas=*/0,
         bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7"), kCallSender,
@@ -1280,7 +1257,7 @@ BOOST_AUTO_TEST_CASE(CallGasAboveBlockPoolClassifiesAsConsensusRejected)
     Fixture f;
     // Same scenario-B genesis as CallInvalidReturnsError: the latest call resolves through the
     // committed MPT before the gas-pool validation fault can surface.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
     auto tx = buildWeb3Tx(/*maxFeePerGas=*/2'000'000'000, /*maxPriorityFeePerGas=*/0);
     auto* fakeTx = dynamic_cast<FakeCallTx*>(tx.get());
@@ -1317,8 +1294,8 @@ BOOST_AUTO_TEST_CASE(CallGasAboveBlockPoolClassifiesAsConsensusRejected)
 /// one second short. Nothing else about the two runs differs.
 BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
 {
-    constexpr uint64_t kHeaderSecond = 0x3f2;
-    constexpr auto kP256Verify = 0x0000000000000000000000000000000000000100_address;
+    constexpr uint64_t c_headerSecond = 0x3f2;
+    constexpr auto c_p256Verify = 0x0000000000000000000000000000000000000100_address;
 
     // Both arms are Jovian-or-later, so the block keeps ONE shape: a Jovian-sized L1-attributes
     // deposit first (has_da_footprint carries from Jovian into Karst unchanged), then the probe.
@@ -1340,10 +1317,10 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
     auto gasUsedWithKarstAt = [&](uint64_t karstTime) {
         Fixture f(bcos::ledger::OpForkSchedule{.m_jovianTime = 0, .m_karstTime = karstTime});
         // Scenario-B genesis: block 1's incremental MPT build starts from the genesis root.
-        auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+        auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
         seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
         auto dep = makeDeposit();
-        dep.to = kP256Verify;  // empty input: the precompile succeeds and only the price moves
+        dep.to = c_p256Verify;  // empty input: the precompile succeeds and only the price moves
         auto const depEnv = opeth::encodeOpEthDepositEnvelope(dep);
         auto out = invokeExecute(
             f, assembleBlock(f, makeHeader(), {l1AttributesEnv, depEnv}), /*verify=*/false);
@@ -1354,8 +1331,8 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
         return out.header->gasUsed();
     };
 
-    auto const jovianGasUsed = gasUsedWithKarstAt(kHeaderSecond + 1);  // one second short
-    auto const karstGasUsed = gasUsedWithKarstAt(kHeaderSecond);       // exactly at activation
+    auto const jovianGasUsed = gasUsedWithKarstAt(c_headerSecond + 1);  // one second short
+    auto const karstGasUsed = gasUsedWithKarstAt(c_headerSecond);       // exactly at activation
     BOOST_CHECK_EQUAL(karstGasUsed - jovianGasUsed, 6900U - 3450U);
 }
 
@@ -1365,7 +1342,7 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockGasPoolFullTagsCapacity)
     auto dep = makeDeposit();
     dep.gasLimit = 25'000;
     auto const depEnv = opeth::encodeOpEthDepositEnvelope(dep);
-    auto const eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto const eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes const eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
 
     auto header = makeHeader();
@@ -1424,7 +1401,7 @@ BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
     // The funded sender must be INSIDE the genesis trie: call() at the latest height is served
     // through the committed MPT, never the flat plane.
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto tx = buildWeb3Tx(
@@ -1459,7 +1436,7 @@ BOOST_AUTO_TEST_CASE(CallUnfundedSenderSucceedsViaFakeBalance)
 {
     Fixture f;
     // No fundCallAccount for kCallSender — the sender exists nowhere in the genesis trie.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto makeCall = [] {
@@ -1494,7 +1471,7 @@ BOOST_AUTO_TEST_CASE(CallWithoutPricingIsFlooredToBaseFee)
 {
     Fixture f;
     // Unfunded sender is fine here too — the fake-balance arm above is on the same path.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto tx = std::make_shared<FakeCallTx>();
@@ -1612,18 +1589,18 @@ BOOST_AUTO_TEST_CASE(StorageReadFaultRejectsBlockAsStorageFault)
         bcos::storage::Entry e;
         e.set(std::string("abcd"));
         bcos::task::syncWait(bcos::storage2::writeOne(view,
-            StateKey{bcos::ledger::account::ethLaneAccountTableName(kSender),
+            StateKey{bcos::ledger::account::ethLaneAccountTableName(c_sender),
                 std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE)},
             std::move(e)));
         bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
     }
 
     // The minimal OP block from CommitPersistsSevenLedgerTables: L1 attributes deposit + one
-    // eip1559 transfer (buildFiscoTx forceSenders kSender for non-deposit envelopes, so the
+    // eip1559 transfer (buildFiscoTx forceSenders c_sender for non-deposit envelopes, so the
     // corrupt BALANCE row is read at the transfer's validation).
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
 
     auto header = makeHeader();
@@ -1674,17 +1651,17 @@ BOOST_AUTO_TEST_CASE(SenderAccountFaultRejectsAsStorageFaultNotConsensus)
         bcos::storage::Entry e;
         e.set(std::string("abcd"));
         bcos::task::syncWait(bcos::storage2::writeOne(view,
-            StateKey{bcos::ledger::account::ethLaneAccountTableName(kSender),
+            StateKey{bcos::ledger::account::ethLaneAccountTableName(c_sender),
                 std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)},
             std::move(e)));
         bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
     }
 
-    // Minimal OP block: L1 attributes deposit + one eip1559 transfer whose sender is kSender
-    // (buildFiscoTx forceSenders kSender for non-deposit envelopes).
+    // Minimal OP block: L1 attributes deposit + one eip1559 transfer whose sender is c_sender
+    // (buildFiscoTx forceSenders c_sender for non-deposit envelopes).
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
 
     auto header = makeHeader();
@@ -1752,7 +1729,7 @@ BOOST_AUTO_TEST_CASE(CallAtBlockLatestEqualsLatestCall)
 {
     Fixture f;
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto [err, receipt] = callAt(f, buildWeb3Tx(bcos::u256(30'000'000'000ULL), bcos::u256(0)), 0);
@@ -1772,23 +1749,23 @@ BOOST_AUTO_TEST_CASE(CallAtBlockLatestEqualsLatestCall)
 BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
 {
     Fixture f;
-    // Committed state: kSender's trie-backed nonce is 0 (seedSender), and the genesis header
+    // Committed state: c_sender's trie-backed nonce is 0 (seedSender), and the genesis header
     // carries the root so the historical arm can resolve it.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
-    // Pending layer (pushed, never merged): the in-flight block advanced kSender's nonce to 7.
+    // Pending layer (pushed, never merged): the in-flight block advanced c_sender's nonce to 7.
     {
         auto view = f.multiLayerStorage.fork();
         view.newMutable();
         bcos::ledger::account::EVMAccount account(
-            view, kSender, bcos::ledger::account::AddressTableMode::Hex);
+            view, c_sender, bcos::ledger::account::AddressTableMode::Hex);
         bcos::task::syncWait(account.setNonce("7"));
         f.multiLayerStorage.pushView(std::move(view));
     }
 
     auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
+        c_sender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
     BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
 }
@@ -1802,11 +1779,11 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
 BOOST_AUTO_TEST_CASE(PendingStorageAtServesTheOpLaneBalanceFromTheFlatPlane)
 {
     Fixture f;
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto committed = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
+        c_sender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(committed.has_value(), "the committed balance row must be visible");
     BOOST_CHECK_EQUAL(std::string(committed->get()), (bcos::u256(1) << 200).str({}, {}));
 
@@ -1814,12 +1791,12 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtServesTheOpLaneBalanceFromTheFlatPlane)
         auto view = f.multiLayerStorage.fork();
         view.newMutable();
         bcos::ledger::account::EVMAccount account(
-            view, kSender, bcos::ledger::account::AddressTableMode::Hex);
+            view, c_sender, bcos::ledger::account::AddressTableMode::Hex);
         bcos::task::syncWait(account.setBalance(bcos::u256(42)));
         f.multiLayerStorage.pushView(std::move(view));
     }
     auto pending = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
+        c_sender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(pending.has_value(), "the pending balance row must be visible");
     BOOST_CHECK_EQUAL(std::string(pending->get()), "42");
 }
@@ -1879,7 +1856,7 @@ bcos::ledger::LedgerConfig commitL1BlockSlotsAsHead(
         }
         bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
     }
-    auto header = makeCallGenesisHeader(computeAndPersistGenesisTrie(f.multiLayerStorage));
+    auto header = makeCallGenesisHeader(opstack_test::computeAndPersistParentTrie(f.multiLayerStorage));
     header->setNumber(number);
     header->setTimestamp((1000 + number) * 1000);  // whole seconds in ms, fork at ~1000 s
     seedCallGenesis(f.multiLayerStorage, header);
@@ -1922,7 +1899,7 @@ struct RollupCostOwner
 BOOST_AUTO_TEST_CASE(AdmissionRollupCostReadsTheSlotsOfTheHeadItIsKeyedBy)
 {
     Fixture f;
-    auto const envelopeBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto const envelopeBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes const envelope(envelopeBytes.begin(), envelopeBytes.end());
     evmc::bytes_view const envelopeView{envelopeBytes.data(), envelopeBytes.size()};
     constexpr uint64_t gasLimit = 100000;
@@ -1984,7 +1961,7 @@ BOOST_AUTO_TEST_CASE(AdmissionRollupCostReadsTheSlotsOfTheHeadItIsKeyedBy)
 BOOST_AUTO_TEST_CASE(AdmissionRollupCostCarriesTheTotalPast2To256)
 {
     Fixture f;
-    auto const envelopeBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto const envelopeBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes const envelope(envelopeBytes.begin(), envelopeBytes.end());
     constexpr uint64_t gasLimit = 100000;
 
@@ -2013,7 +1990,7 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtBinaryModeReadsThePendingLayer)
     const bcos::test::ScopedNodeAddressTableMode guard(
         bcos::ledger::account::AddressTableMode::Binary);
     Fixture f;
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     // Pending layer (pushed, never merged), seeded with the binary account-table naming.
@@ -2021,13 +1998,13 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtBinaryModeReadsThePendingLayer)
         auto view = f.multiLayerStorage.fork();
         view.newMutable();
         bcos::ledger::account::EVMAccount account(
-            view, kSender, bcos::ledger::account::AddressTableMode::Binary);
+            view, c_sender, bcos::ledger::account::AddressTableMode::Binary);
         bcos::task::syncWait(account.setNonce("7"));
         f.multiLayerStorage.pushView(std::move(view));
     }
 
     auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
+        c_sender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
     BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
 }
@@ -2040,13 +2017,13 @@ BOOST_AUTO_TEST_CASE(CallAtBlockServesHistoricalCallWithoutFeatureFlags)
 {
     Fixture f;
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     // Commit block 1 so block 0 is a historical (non-latest) height. No feature rows seeded.
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     driveOpBlock(f, makeHeader(), {depEnv, eipEnvBytes});
 
@@ -2068,7 +2045,7 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockUnmovedByDeprecatedRawAddressFlag)
     Fixture f;
     // Scenario-B genesis (the OP lane's normal state): a persisted genesis trie so block 1 can
     // do its incremental MPT build.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
     {
         auto view = f.multiLayerStorage.fork();
@@ -2091,7 +2068,7 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockUnmovedByDeprecatedRawAddressFlag)
 BOOST_AUTO_TEST_CASE(ExecuteBlockAcceptedWithoutRawAddress)
 {
     Fixture f;
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto depTx = makeDeposit();
@@ -2253,7 +2230,7 @@ BOOST_AUTO_TEST_CASE(CallAtBlockCorruptTrieNodeIsStorageFault)
 {
     Fixture f;
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     // Overwrite the root node row with bytes that are not a valid MPT node RLP (0xde claims a
     // 30-byte (0x1e) list payload that is not there).
     {
@@ -2295,7 +2272,7 @@ BOOST_AUTO_TEST_CASE(CallLatestStorageReadFaultFailsLoudly)
     seedContractWithSlot(f.multiLayerStorage, kContract,
         bcos::h256{"0x00000000000000000000000000000000000000000000000000000000000000a1"},
         f.hashImpl);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     // Overwrite the root node row with bytes that are not a valid MPT node RLP (same corruption
     // shape as CallAtBlockCorruptTrieNodeIsStorageFault): the row EXISTS, so the M5 existence
     // probe passes and the decode fault surfaces on the first trie walk.
@@ -2363,7 +2340,7 @@ BOOST_AUTO_TEST_CASE(CallAtBlockServesEachHeightWithOpSemantics)
 
     // Scenario-B genesis: persist the genesis trie nodes and stamp the root on the header
     // (production: Ledger::buildGenesisBlock's Ethereum-lane (executor_version >= 2) import).
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     // Block 1 (baseFee 1e9): deposit + eip1559 transfer. Block 2 (baseFee 2e9) carries a
@@ -2371,7 +2348,7 @@ BOOST_AUTO_TEST_CASE(CallAtBlockServesEachHeightWithOpSemantics)
     // writes), block 3 (baseFee 3e9) makes block 2 a HISTORICAL height.
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     bcos::bytes setterEnv = makeSetterDepositEnvelope(kContract, kV2);
     driveOpBlock(f, makeHeaderAt(1, bcos::u256(1'000'000'000)), {depEnv, eipEnvBytes});
@@ -2595,12 +2572,12 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
     seedContractWithSlot(f.multiLayerStorage, kContract,
         bcos::h256{"0x00000000000000000000000000000000000000000000000000000000000000a1"},
         f.hashImpl);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
 
     // mint>0 deposit: exercises the mint-balance write shape.
@@ -2756,7 +2733,7 @@ BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
     Fixture f;
     // execute() builds the incremental MPT from the parent (genesis) root even when the
     // announcement is later rejected, so seed the scenario-B genesis before any block runs.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
     auto commitmentMsg = [](const char* fieldName) {
         return std::string{"commitment mismatch on field "} + fieldName;
@@ -2826,7 +2803,7 @@ BOOST_AUTO_TEST_CASE(ExecutedHeaderMirrorsAnnouncedEthMetadataFields)
 {
     Fixture f;
     // Scenario-B genesis: block 1's incremental MPT build starts from the genesis root.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
     std::vector<bcos::bytes> const rawTxBytes{opeth::encodeOpEthDepositEnvelope(makeDeposit())};
 
@@ -2939,11 +2916,11 @@ BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlock)
     Fixture f;
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
     seedContractWithSlot(f.multiLayerStorage, kContract, kV1, f.hashImpl);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     bcos::bytes setterEnv = makeSetterDepositEnvelope(kContract, kV2);
 
@@ -3005,7 +2982,7 @@ BOOST_AUTO_TEST_CASE(verifyTrueClearsRetainedProbe)
 {
     Fixture f;
     // Scenario-B genesis: block 1's incremental MPT build starts from the genesis root.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
     auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
     auto probe = executeOpBlock(f, makeHeader(), {depEnv}, /*verify=*/false);
@@ -3035,7 +3012,7 @@ BOOST_AUTO_TEST_CASE(adoptRejectsCommitmentMismatch)
 {
     Fixture f;
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     std::vector<bcos::bytes> const rawTxBytes{opeth::encodeOpEthDepositEnvelope(makeDeposit())};
@@ -3081,7 +3058,7 @@ BOOST_AUTO_TEST_CASE(adoptRejectsHashMismatchWhenCommitmentsMatch)
 {
     Fixture f;
     fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     std::vector<bcos::bytes> const rawTxBytes{opeth::encodeOpEthDepositEnvelope(makeDeposit())};
@@ -3134,7 +3111,7 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
 {
     Fixture f;
     // Scenario-B genesis: block 1's incremental MPT build starts from the genesis root.
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);

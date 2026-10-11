@@ -25,6 +25,7 @@
  */
 
 #include "Initializer.h"
+#include <bcos-framework/ledger/OpForkScheduleMetadata.h>
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
@@ -733,10 +734,39 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         if (!m_nodeConfig->opStackELModeEnabled())
         {
             m_daCaps = std::make_shared<bcos::engine::DACaps>();
+            // The declared-ness travels with it: an undeclared OP lane is announced at WARNING,
+            // because the engine will substitute this preset whenever op-node reports zero params
+            // and the preset need not be this chain's pair.
+            auto const& declaredOpEip1559 = m_nodeConfig->genesisConfig().m_opEip1559;
+            auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
+            if (declaredOpEip1559.has_value())
+            {
+                INITIALIZER_LOG(INFO)
+                    << LOG_DESC("OP chain EIP-1559 parameters") << LOG_KV("declared", true)
+                    << LOG_KV("elasticity", opEip1559.elasticity)
+                    << LOG_KV("denominator", opEip1559.denominator)
+                    << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+            }
+            else
+            {
+                // Never silent: the engine substitutes exactly this preset into a block's
+                // extraData whenever op-node reports zero params (op-deployer leaves L1
+                // SystemConfig's params zero unless setEIP1559Params is called), and the
+                // preset need not be this chain's pair.
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("OP chain declares no [op_eip1559]: zero-attribute-params "
+                                "substitution will use the OP-mainnet PRESET")
+                    << LOG_KV("elasticity", opEip1559.elasticity)
+                    << LOG_KV("denominator", opEip1559.denominator)
+                    << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+            }
             m_engineServiceInitializer = EngineServiceInitializer::buildOp(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
                 m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
                 opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+            // NOTE (split): the declaredOpEip1559 wiring into the engine constructor rides
+            // the engine-side PR (the OpEngineService ctor param lands there); this branch
+            // keeps the config-channel reading + boot diagnostics only.
         }
 
         m_opScheduler = opDelegate;
@@ -833,6 +863,87 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                     "on-chain; the effective EVM revision would be a binary-side default. "
                     "Refusing to start — configure executor.evm_revision at genesis, or run "
                     "executor_version 0/1"));
+        }
+    }
+
+    // Boot probe parity for the OP lane's fail-closed rows (review finding T):
+    // applyLedgerConfig throws on a malformed op_eip1559_params / op_fork_schedule row,
+    // and without a boot-side parse a corrupt row would only surface as the per-block
+    // "Execute block failed!" loop plus -32603 on every RPC reader. Parse both rows
+    // here on the OP lane so the failure is an explicit startup refusal, mirroring the
+    // evmc_revision probe above. Absent rows stay legal (pre-existing OP chains). The
+    // same probe refuses a node whose OWN declared material diverges from the chain's
+    // recorded copy — see the two comparisons below.
+    if (ledger::isOpLaneVersion(m_executorVersion))
+    {
+        std::optional<std::string> recordedEip1559Row;
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_eip1559_params))))
+        {
+            // Throws InvalidEVMCRevisionConfig on a malformed row — the exact parse
+            // applyLedgerConfig performs on every snapshot read.
+            (void)ledger::parseOpEip1559Params(std::get<0>(*row));
+            recordedEip1559Row = std::get<0>(*row);
+        }
+        // The recorded triple is genesis-frozen; the triple THIS node prices with
+        // (effectiveOpEip1559 of the local [op_eip1559], the preset when it declares
+        // nothing) must equal it, or header validation and the zero-param substitution
+        // run on constants the chain never recorded.
+        if (auto const problem =
+                ledger::opEip1559BootProbeProblem(recordedEip1559Row, m_nodeConfig->opEip1559()))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
+        }
+
+        std::optional<std::string> recordedScheduleRow;
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_fork_schedule))))
+        {
+            // opForkScheduleFromCanonical throws ledger::InvalidOpForkSchedule on a
+            // malformed canonical row — the exact parse applyLedgerConfig performs.
+            (void)ledger::opForkScheduleFromCanonical(std::get<0>(*row));
+            recordedScheduleRow = std::get<0>(*row);
+        }
+        // SYS_OP_CHAIN_METADATA integrity triple: absent is legal (pre-triple chain);
+        // PRESENT-but-partial/corrupt/mis-bound is an explicit startup refusal — the
+        // triple exists precisely so a tampered schedule cannot survive unnoticed.
+        std::optional<std::string> recordedTripleSchedule;
+        if (auto stateStorage = m_ledger->getStateStorage())
+        {
+            auto rows = task::syncWait(ledger::readOpForkScheduleMetadataRows(*stateStorage));
+            if (!ledger::opForkScheduleMetadataRowsAbsent(rows))
+            {
+                auto const& genesisHeader = m_nodeConfig->genesisConfig().m_ethGenesisHeader;
+                if (!genesisHeader.has_value())
+                {
+                    BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig()
+                                          << bcos::errinfo_comment(
+                                              "SYS_OP_CHAIN_METADATA triple is present but the "
+                                              "node config carries no [eth_genesis_header] to "
+                                              "validate its genesis binding against"));
+                }
+                // Throws ledger::InvalidOpForkSchedule on partial triple, hash mismatch
+                // or genesis-binding mismatch; returns the validated, normalized triple.
+                recordedTripleSchedule = ledger::validateOpForkScheduleMetadataRows(
+                                             rows, genesisHeader->m_hash)
+                                             .schedule;
+            }
+        }
+        // The schedule this node will actually run comes from WHICHEVER declaration channel
+        // it carries — the canonical [op_fork_schedule] (Optional) or the folded
+        // [op_fork_timestamps] shorthand (Required) — so a shorthand-only chain, which is
+        // legal and populates only the required channel, is compared too. The recorded side
+        // is the row every snapshot reader consumes, else the pre-triple chain's triple, else
+        // nothing to compare against; a node booted with a different schedule than the
+        // chain's recorded one must refuse, or the divergence surfaces only at the next fork
+        // activation.
+        auto const localSchedule = ledger::resolvedLocalOpForkScheduleCanonical(
+            m_nodeConfig->genesisConfig().m_opForkSchedule,
+            m_nodeConfig->genesisConfig().m_opstackForkSchedule);
+        if (auto const problem = ledger::opForkScheduleBootProbeProblem(
+                recordedScheduleRow, recordedTripleSchedule, localSchedule))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
         }
     }
 

@@ -35,9 +35,10 @@ namespace bcos::test
 // genesis config, enableNumber = 0) exactly as Ledger::importGenesisState
 // expects it, and append it to the SystemConfig predeploy alloc (address
 // 0x43...00c0) of @p genesis. No-op if that alloc is absent.
-inline void appendGenesisFeatureFlagsSlot(bcos::ledger::GenesisConfig& genesis)
+inline void appendGenesisFeatureFlagsSlot(bcos::ledger::GenesisConfig& genesis,
+    std::string_view systemConfigAddress = "43000000000000000000000000000000000000c0")
 {
-    constexpr std::string_view c_systemConfigAddress = "43000000000000000000000000000000000000c0";
+    std::string const c_systemConfigAddress(systemConfigAddress);
     auto allocIt = std::find_if(
         genesis.m_allocs.begin(), genesis.m_allocs.end(), [&](bcos::ledger::Alloc const& alloc) {
             std::string address =

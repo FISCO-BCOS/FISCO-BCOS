@@ -291,5 +291,43 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
     }());
 }
 
+// The verification is keyed on the SLOT (derived from the SystemConfig storage layout),
+// not an address literal: the C2 layout puts the SystemConfig account at
+// 0x4200...1000, and both layouts must be verified alike.
+BOOST_AUTO_TEST_CASE(FeatureFlagsSlotVerifiedAtANonTemplateAddress)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto param = makeParam();
+        // C2 layout: the same account (with the slot) at the C2 address instead of the
+        // template's 0x43...C0.
+        auto config = makeL2Config();
+        config.m_allocs[0].address = "4200000000000000000000000000000000001000";
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, config, param));
+    }());
+}
+
+// A slot-less account at a non-template address still builds — the documented residual, and it
+// now has a measured precondition: the presence mandate is keyed on the template layout because
+// the harness's committed C2 config leaves `system_config` empty, so the generator writes no
+// slot for the C2 layout and mandating it there refuses real nodes (making the C2 e2e red).
+// The VALUE check below is not affected: an account carrying the slot is verified on any layout
+// (MismatchingFlagsSlotAtTheC2LayoutRefusesToBuild), and the generator's name-keyed guard
+// (build-allocs.py, pinned by tools/opstack-genesis/test_build_allocs.py) stays the enforcement
+// for a slot-less layout until that generator change lands and the mandate can follow it.
+BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtANonTemplateAddressIsSkipped)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto param = makeParam();
+        auto config = makeL2Config();
+        config.m_allocs[0].address = "4200000000000000000000000000000000001000";
+        config.m_allocs[0].storage.clear();  // drop the feature_flags slot
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, config, param));
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

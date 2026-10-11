@@ -991,9 +991,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataMissingTxRowFailsClosed)
     deletedEntry.setStatus(Entry::DELETED);
     std::promise<bool> deletePromise;
     m_storage->asyncSetRow(SYS_HASH_2_TX, std::string((char*)txHash.data(), txHash.size()),
-        std::move(deletedEntry), [&deletePromise](Error::UniquePtr error) {
-            deletePromise.set_value(!error);
-        });
+        std::move(deletedEntry),
+        [&deletePromise](Error::UniquePtr error) { deletePromise.set_value(!error); });
     BOOST_CHECK(deletePromise.get_future().get());
 
     // No assertions inside the callback: a failing BOOST_REQUIRE would unwind through
@@ -1001,12 +1000,11 @@ BOOST_AUTO_TEST_CASE(getBlockDataMissingTxRowFailsClosed)
     Error::Ptr readError;
     Block::Ptr readBlock;
     std::promise<bool> p1;
-    m_ledger->asyncGetBlockDataByNumber(
-        3, FULL_BLOCK, [&](Error::Ptr _error, Block::Ptr _block) {
-            readError = std::move(_error);
-            readBlock = std::move(_block);
-            p1.set_value(true);
-        });
+    m_ledger->asyncGetBlockDataByNumber(3, FULL_BLOCK, [&](Error::Ptr _error, Block::Ptr _block) {
+        readError = std::move(_error);
+        readBlock = std::move(_block);
+        p1.set_value(true);
+    });
     BOOST_CHECK(p1.get_future().get());
     BOOST_REQUIRE(readError != nullptr);
     BOOST_CHECK_EQUAL(readError->errorCode(), LedgerError::GetStorageError);
@@ -1023,21 +1021,18 @@ BOOST_AUTO_TEST_CASE(getBlockDataMissingTxRowFailsClosed)
     deletedReceiptEntry.setStatus(Entry::DELETED);
     std::promise<bool> deletePromise2;
     m_storage->asyncSetRow(SYS_HASH_2_RECEIPT,
-        std::string((char*)receiptHash.data(), receiptHash.size()),
-        std::move(deletedReceiptEntry), [&deletePromise2](Error::UniquePtr error) {
-            deletePromise2.set_value(!error);
-        });
+        std::string((char*)receiptHash.data(), receiptHash.size()), std::move(deletedReceiptEntry),
+        [&deletePromise2](Error::UniquePtr error) { deletePromise2.set_value(!error); });
     BOOST_CHECK(deletePromise2.get_future().get());
 
     Error::Ptr readError2;
     Block::Ptr readBlock2;
     std::promise<bool> p2;
-    m_ledger->asyncGetBlockDataByNumber(
-        4, RECEIPTS, [&](Error::Ptr _error, Block::Ptr _block) {
-            readError2 = std::move(_error);
-            readBlock2 = std::move(_block);
-            p2.set_value(true);
-        });
+    m_ledger->asyncGetBlockDataByNumber(4, RECEIPTS, [&](Error::Ptr _error, Block::Ptr _block) {
+        readError2 = std::move(_error);
+        readBlock2 = std::move(_block);
+        p2.set_value(true);
+    });
     BOOST_CHECK(p2.get_future().get());
     BOOST_REQUIRE(readError2 != nullptr);
     BOOST_CHECK_EQUAL(readError2->errorCode(), LedgerError::GetStorageError);
@@ -1936,6 +1931,149 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
         ledger::applyEVMCRevisionConfig(parsed, encoded);
         BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
         BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(0)), rev);
+    }
+}
+
+// Unknown revision NAMES must fail closed instead of being silently skipped. Before
+// this guard, an OLDER binary reading a NEWER chain config (e.g. evmc_revision=osaka
+// on a binary that only knows prague) parsed "successfully" with the unknown entries
+// dropped and the rest falling back — mixed binaries then executed the same blocks
+// under different revisions (a silent state-root fork at upgrades). The boot-time
+// probe (Initializer's "Effective EVMC revision" block) reaches this parser before
+// any block, so the operator sees the named entry instead of a per-block loop.
+// A negative block height cannot be spelled in the row format (the encoder only emits
+// heights above zero), so a row carrying one is foreign or hand-written — the exact input
+// this parser is the defence against. Accepting it let "-5:cancun" govern blocks 0..4 and
+// then silently move that transition onto the block-0 base on the round trip.
+BOOST_AUTO_TEST_CASE(evmcRevisionNegativeBlockHeightsRefused)
+{
+    LedgerConfig parsed;
+    BOOST_CHECK_EXCEPTION(ledger::applyEVMCRevisionConfig(parsed, "-5:cancun,10:osaka"),
+        ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+            return boost::diagnostic_information(e).find("negative block number") !=
+                   std::string::npos;
+        });
+    // ... and the encoder refuses to mint one instead of dropping it silently.
+    BOOST_CHECK_EXCEPTION(
+        ledger::encodeEVMCRevisionConfig(EVMC_PRAGUE, {{-5, EVMC_CANCUN}, {10, EVMC_OSAKA}}),
+        ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+            return boost::diagnostic_information(e).find("negative block number") !=
+                   std::string::npos;
+        });
+    // The valid sibling still round-trips (the happy path is untouched).
+    auto const encoded = ledger::encodeEVMCRevisionConfig(EVMC_PRAGUE, {{10, EVMC_OSAKA}});
+    LedgerConfig reparsed;
+    ledger::applyEVMCRevisionConfig(reparsed, encoded);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*reparsed.evmcRevisionForBlock(0)), static_cast<int>(EVMC_PRAGUE));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*reparsed.evmcRevisionForBlock(10)), static_cast<int>(EVMC_OSAKA));
+}
+
+BOOST_AUTO_TEST_CASE(evmcRevisionUnknownNamesFailClosed)
+{
+    LedgerConfig parsed;
+    // Bare unknown name: previously silently dropped -> nothing-parsed throw only when
+    // it was the ONLY entry; mixed values kept the known part and lost the unknown.
+    for (std::string_view bad : {"notarevision", "cancun,notarevision", "notarevision,cancun"})
+    {
+        BOOST_CHECK_EXCEPTION(ledger::applyEVMCRevisionConfig(parsed, bad),
+            ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+                return boost::diagnostic_information(e).find("unknown EVM revision name") !=
+                       std::string::npos;
+            });
+    }
+    // Transition entries: unknown fork name, and a block number with trailing junk
+    // ("12abc" used to be silently accepted AS BLOCK 12 — from_chars partial parse).
+    for (std::string_view bad : {"100:notarevision", "12abc:cancun", "1:cancun,abc:osaka"})
+    {
+        BOOST_CHECK_EXCEPTION(ledger::applyEVMCRevisionConfig(parsed, bad),
+            ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+                return boost::diagnostic_information(e).find("evmc_revision config value") !=
+                       std::string::npos;
+            });
+    }
+    // The error names the offending entry so the operator can act on it.
+    try
+    {
+        ledger::applyEVMCRevisionConfig(parsed, "cancun,notarevision");
+        BOOST_FAIL("expected InvalidEVMCRevisionConfig");
+    }
+    catch (ledger::InvalidEVMCRevisionConfig const& e)
+    {
+        BOOST_CHECK(boost::diagnostic_information(e).find("notarevision") != std::string::npos);
+    }
+    // Valid mixed transitions still parse (the happy path is untouched).
+    ledger::applyEVMCRevisionConfig(parsed, "0:cancun,100:osaka");
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100), EVMC_OSAKA);
+}
+
+// The evmc row codec's accepted domain round-trips: every shape an honest loader can
+// produce re-encodes to a string whose parse reproduces the same revision schedule.
+// Base selection order: forks.find(0) > explicitRev > forks.begin().
+BOOST_AUTO_TEST_CASE(evmcRowAcceptedDomainRoundTrip_F3)
+{
+    struct Case
+    {
+        std::optional<evmc_revision> explicitRev;
+        std::map<bcos::protocol::BlockNumber, evmc_revision> forks;
+        std::string_view expected;
+        evmc_revision revAt0;
+        evmc_revision revAt10;
+    };
+    for (auto const& c : std::array<Case, 5>{{
+             {EVMC_PRAGUE, {}, "0:prague", EVMC_PRAGUE, EVMC_PRAGUE},
+             {std::nullopt, {{0, EVMC_CANCUN}, {10, EVMC_OSAKA}}, "0:cancun,10:osaka", EVMC_CANCUN,
+                 EVMC_OSAKA},
+             {EVMC_PRAGUE, {{10, EVMC_OSAKA}}, "0:prague,10:osaka", EVMC_PRAGUE, EVMC_OSAKA},
+             {EVMC_PRAGUE, {{0, EVMC_CANCUN}, {10, EVMC_OSAKA}}, "0:cancun,10:osaka", EVMC_CANCUN,
+                 EVMC_OSAKA},
+             {std::nullopt, {{100000, EVMC_CANCUN}}, "0:cancun,100000:cancun", EVMC_CANCUN,
+                 EVMC_CANCUN},
+         }})
+    {
+        auto const encoded = ledger::encodeEVMCRevisionConfig(c.explicitRev, c.forks);
+        BOOST_CHECK_EQUAL(encoded, std::string(c.expected));
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, encoded);
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(0), c.revAt0);
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(10).has_value());
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(10), c.revAt10);
+    }
+}
+
+// The block-0 entry is emitted once as the base and is not repeated as a transition;
+// ascending positive entries keep their order through the round trip.
+BOOST_AUTO_TEST_CASE(evmcRowZeroBaseAndOrderConsistency_F3)
+{
+    auto const singled = ledger::encodeEVMCRevisionConfig(std::nullopt,
+        std::map<bcos::protocol::BlockNumber, evmc_revision>{{0, EVMC_CANCUN}, {100, EVMC_OSAKA}});
+    BOOST_CHECK_EQUAL(singled, "0:cancun,100:osaka");
+    LedgerConfig parsed;
+    ledger::applyEVMCRevisionConfig(parsed, singled);
+    BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(0), EVMC_CANCUN);
+    BOOST_REQUIRE(parsed.evmcRevisionForBlock(99).has_value());
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(99), EVMC_CANCUN);
+    BOOST_REQUIRE(parsed.evmcRevisionForBlock(100).has_value());
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100), EVMC_OSAKA);
+
+    // Table: three ascending shapes re-parse pointwise.
+    struct Chain
+    {
+        std::string_view text;
+        bcos::protocol::BlockNumber probe;
+        evmc_revision expected;
+    };
+    for (auto const& c :
+        std::array<Chain, 3>{{{"0:cancun", 500, EVMC_CANCUN}, {"0:cancun,10:osaka", 10, EVMC_OSAKA},
+            {"0:cancun,10:osaka,20:prague", 20, EVMC_PRAGUE}}})
+    {
+        LedgerConfig round;
+        ledger::applyEVMCRevisionConfig(round, c.text);
+        BOOST_REQUIRE(round.evmcRevisionForBlock(c.probe).has_value());
+        BOOST_CHECK_EQUAL(*round.evmcRevisionForBlock(c.probe), c.expected);
     }
 }
 

@@ -1,3 +1,23 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
+/// @file MemoryStorage.h
+/// @brief In-memory Storage2 backend: ordered/concurrent buckets, logical deletion
+/// and the merge primitives (each merge destination needs its own copy of a row).
+
 #pragma once
 
 #include "Storage.h"
@@ -589,9 +609,21 @@ public:
                 for (auto& [data, _] : chunk)
                 {
                     auto&& [key, value] = *data;
+                    // Copy, never move — and the copy is the floor for this shape, not
+                    // overhead to be optimized away. mergeIntoBackends merges the SAME
+                    // source storage into the backend and the cache in parallel
+                    // (tbb::parallel_invoke), so two mergeConcurrent passes read this
+                    // source concurrently: moving out of the shared source would let the
+                    // second pass write a moved-from (gutted) Entry — a nondeterministic
+                    // corruption of one layer (observed as intermittent state-root
+                    // mismatches on the switch-SetCanonical path). The no-cache
+                    // single-pass shape pays the same copy to keep the primitive uniform;
+                    // recovering it needs an
+                    // explicit move-and-erase contract on the source, agreed with every
+                    // caller of mergeBackStorage/mergeToBackends — not a silent move here.
                     std::visit(
                         [&](auto& innerValue) {
-                            toStorage.writeOne(bucket, key, std::move(innerValue), false);
+                            toStorage.writeOne(bucket, key, innerValue, false);
                         },
                         value);
                 }

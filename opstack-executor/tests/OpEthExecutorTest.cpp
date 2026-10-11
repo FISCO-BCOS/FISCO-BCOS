@@ -108,7 +108,7 @@ bcos::bytes signEip1559(bcos::crypto::KeyPairInterface const& keyPair, uint64_t 
 {
     bcos::rpc::Web3Transaction w3;
     w3.type = bcos::rpc::TransactionType::EIP1559;
-    w3.chainId = kOpChainId;
+    w3.chainId = c_opChainId;
     w3.nonce = nonce;
     w3.maxPriorityFeePerGas = maxPriority;
     w3.maxFeePerGas = maxFee;
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE(BlockPathRequiresWiredBlockHashLookup)
     opeth::OpEthExecutor executor{f.receiptFactory, opeth::OP_ECOTONE_SPEC};
     opeth::OpEthBlockContext ctx{};
     ctx.blockGasLeft = static_cast<int64_t>(kBlockGasLimit);
-    ctx.chainId = kOpChainId;
+    ctx.chainId = c_opChainId;
     // ctx.blockHashLookup deliberately left empty.
 
     auto execCtx = bcos::task::syncWait(

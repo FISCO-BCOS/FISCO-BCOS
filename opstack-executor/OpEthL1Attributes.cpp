@@ -65,8 +65,8 @@ inline constexpr std::size_t c_baseFeeOffset = 36;
 inline constexpr std::size_t c_blobBaseFeeOffset = 68;
 inline constexpr std::size_t c_blockHashOffset = 100;
 inline constexpr std::size_t c_batcherHashOffset = 132;
-inline constexpr std::size_t c_operatorFeeScalarOffset = 164;
-inline constexpr std::size_t c_operatorFeeConstantOffset = 168;
+inline constexpr std::size_t c_operatorFeeScalarOffset = OP_ETH_L1_OPERATOR_FEE_SCALAR_OFFSET;
+inline constexpr std::size_t c_operatorFeeConstantOffset = OP_ETH_L1_OPERATOR_FEE_CONSTANT_OFFSET;
 }  // namespace
 
 bcos::bytes encodeOpEthDepositEnvelope(const DepositTx& dep)

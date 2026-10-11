@@ -20,6 +20,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/ledger/SystemConfigs.h>
@@ -279,6 +280,26 @@ BOOST_AUTO_TEST_CASE(NextOpBaseFeeByParentShape)
     BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent({}, 10'000'000, true)), 1'004'000'000);
     // Pre-Canyon: denominator 50: + 1e9 * 5M / 5M / 50 = +20,000,000
     BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent({}, 10'000'000, false)), 1'020'000'000);
+}
+
+// The declared-triple substitution: a chain that declares [op_eip1559] prices the
+// pre-Holocene prediction with its own pair, never the legacy preset (the same
+// substitution the engine performs on the attributes path).
+BOOST_AUTO_TEST_CASE(NextOpBaseFeeDeclaredTripleSubstitutesThePreset)
+{
+    auto h = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    h->setGasLimit(30'000'000);
+    h->setGasUsed(10'000'000);
+    h->setBaseFee(1'000'000'000);
+    h->setBlobGasUsed(0);
+    h->setWithdrawalsRoot(h256(1U));  // Canyon+ child: the Canyon denominator applies
+    auto const declared = bcos::engine::OpEip1559Params{
+        .elasticity = 8, .denominator = 100, .denominatorCanyon = 400};
+    // Preset (250/6): +4,000,000 → 1,004,000,000. Declared (400/8):
+    // 1e9 * (10M − 30M/8) / (30M/8) / 400 = +4,166,666 → 1,004,166,666 — the two are
+    // distinguishable, and the declared one must win.
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*h, std::nullopt), 1'004'000'000);
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*h, declared), 1'004'166'666);
 }
 
 BOOST_AUTO_TEST_CASE(FeeHistoryShape)

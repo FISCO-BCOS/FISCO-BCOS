@@ -278,7 +278,10 @@ std::optional<std::string> validateOpNewPayloadRequest(
     }
     if (jovianActive && *payload.blobGasUsed > payload.gasLimit)
     {
-        return std::string("DA footprint (blobGasUsed) exceeds the block gas limit");
+        // op-geth's wording (block_validator.go:129) — the corpus' invalid_jovian_*_11
+        // vectors pin this substring on validation_error_contains.
+        return std::string(
+            "invalid DA footprint in blobGasUsed field (DA footprint exceeds the block gas limit)");
     }
     // Same reasoning as the Eth sibling (EngineServiceImpl.h): the wire already enforces
     // the fourth newPayloadV4 parameter (parseNewPayloadRequest always sets the list for
@@ -327,9 +330,23 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     header->setExtraData(payload.extraData);
     header->setPrevRandao(payload.prevRandao);
     header->setBaseFee(payload.baseFeePerGas);
-    header->setWithdrawalsRoot(payload.withdrawalsRoot.value());
-    header->setBlobGasUsed(payload.blobGasUsed.value());
-    header->setExcessBlobGas(bcos::u256(0));
+    // Fork-optional fields are stamped only when the payload carries them: a pre-Canyon
+    // (Regolith) build has no withdrawalsRoot/blob pair, and a bare .value() on the
+    // absent optional escapes as std::bad_optional_access — the Regolith-window e2e
+    // build path hit exactly this. Isthmus+ payloads always carry the trio, so the
+    // golden-pinned 21-field form is unchanged.
+    if (payload.withdrawalsRoot.has_value())
+    {
+        header->setWithdrawalsRoot(*payload.withdrawalsRoot);
+    }
+    if (payload.blobGasUsed.has_value())
+    {
+        header->setBlobGasUsed(*payload.blobGasUsed);
+    }
+    if (payload.excessBlobGas.has_value())
+    {
+        header->setExcessBlobGas(*payload.excessBlobGas);
+    }
     header->setParentBeaconBlockRoot(parentBeaconBlockRoot);
     header->setRequestsHash(engine_common::c_emptyRequestsHash);
     applyOpHeaderConstants(*header);

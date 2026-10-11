@@ -133,8 +133,8 @@ BOOST_AUTO_TEST_CASE(genesisActiveForksSkipped)
 
     // Two forks activating at the same timestamp chain into the checksum ONCE
     // (op-geth dedups; e.g. a chain whose canyon and ecotone coincide).
-    eth::OpForkIdLadder const dup{1700000000, 1700000000, kNever, kNever, kNever, kNever,
-        kNever, kNever};
+    eth::OpForkIdLadder const dup{
+        1700000000, 1700000000, kNever, kNever, kNever, kNever, kNever, kNever};
     auto dupId =
         eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, 1700000001, dup);
     uint32_t dupExpected = eth::forkIdAddForkPoint(

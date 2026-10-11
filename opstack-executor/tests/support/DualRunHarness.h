@@ -31,6 +31,7 @@
 #include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateRoot
 #include <bcos-rlp-protocol/Web3Transaction.h>  // decodeWeb3RawTransaction
 #include <bcos-storage/KeyPrefixes.h>          // kMPTTable (row-diff filter)
+#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>  // makeMinimalHeader
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>  // mutableInner (buildFiscoTx)
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
@@ -58,7 +59,7 @@ namespace opeth = bcos::executor_v1::opstack;
 
 // The FISCO OP chain id — the same constant OpSchedulerTest's kChainId pins and the t8n corpus
 // envelopes embed (8453 = 0x2105).
-inline constexpr uint64_t kOpChainId = 0x2105;
+inline constexpr uint64_t c_opChainId = 0x2105;
 
 // Minimal CheckpointStorage stub (same shape as OpSchedulerTest's).
 template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
@@ -111,6 +112,50 @@ struct DualRunFixture
     bcos::IOServicePool::Ptr ioServicePool{std::make_shared<bcos::IOServicePool>(1)};
 };
 
+/// Minimal tars header carrying the fields the OP block path reads (number/ms timestamp/
+/// gasLimit/baseFee/coinbase/prevRandao/parentBeaconBlockRoot + parentHash via ParentInfo).
+/// Commitment fields (state/txs/receipts roots) stay zero — fillAnnouncedHeaderFromGolden
+/// backfills them from the vector where a golden compare runs.
+/// Fork-optional fields follow the fork's header shape, never stamped unconditionally:
+/// Canyon+ withdrawalsRoot, Ecotone+ blob pair + parentBeaconBlockRoot, Isthmus+
+/// requestsHash — an unconditional stamp would leak the field into a pre-fork header and
+/// fail the six-way presence compare (regolith_* vectors caught exactly this).
+inline std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeMinimalHeader(
+    bcos::protocol::BlockNumber number, int64_t timestampMillis, int64_t gasLimit,
+    bcos::u256 baseFee, bcos::Address coinbase, bcos::h256 prevRandao,
+    bcos::h256 parentBeaconBlockRoot, bcos::h256 parentHash, opeth::OpForkSpec const& spec)
+{
+    auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    h->setNumber(number);
+    h->setTimestamp(timestampMillis);
+    h->setParentInfo(
+        bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = parentHash});
+    h->setCoinbase(std::move(coinbase));
+    h->setStateRoot(bcos::h256{});
+    h->setTxsRoot(bcos::h256{});
+    h->setReceiptsRoot(bcos::h256{});
+    h->setGasLimit(bcos::u256(gasLimit));
+    h->setGasUsed(bcos::u256(0));
+    h->setExtraData(bcos::bytes{});
+    h->setPrevRandao(prevRandao);
+    h->setBaseFee(std::move(baseFee));
+    if (spec.has_withdrawals)
+    {
+        h->setWithdrawalsRoot(bcos::h256{});
+    }
+    if (spec.fork >= bcos::ledger::OpFork::Ecotone)
+    {
+        h->setBlobGasUsed(bcos::u256(0));
+        h->setExcessBlobGas(bcos::u256(0));
+        h->setParentBeaconBlockRoot(parentBeaconBlockRoot);
+    }
+    if (spec.fork >= bcos::ledger::OpFork::Isthmus)
+    {
+        h->setRequestsHash(bcos::h256{});
+    }
+    return h;
+}
+
 /// Envelope → executable tars transaction, mirroring the engine's opEnvelopeToTars +
 /// decodedTransactionFromEnvelope carrier step: decodeWeb3RawTransaction fills the tars mirror
 /// from the decoded envelope and recovers/assigns the sender (deposit senders come from the
@@ -133,6 +178,17 @@ inline bcos::protocol::Transaction::Ptr buildFiscoTx(
     return tx;
 }
 
+/// Envelope → tars transaction for the suites that hold the pre-cutover helper name.
+/// buildFiscoTxFromEnvelope is the same envelope bridge buildFiscoTx provides; the alias
+/// exists so the ported suites (OpT8nReplayTest, OpBlockInjectorTest) call one shared
+/// definition instead of each keeping a private copy.
+inline bcos::protocol::Transaction::Ptr buildFiscoTxFromEnvelope(
+    bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
+{
+    return buildFiscoTx(env, hashImpl);
+}
+
+
 /// Production-scheduler driver (the shape OpScheduler::execute and
 /// OpBlockVerifier::verifyAndCommit run): preBlockOpEthSteps ->
 /// SchedulerSerialImpl(serial=true) over OpEthExecutor -> finalizeOpEthBlockResult with the
@@ -142,7 +198,7 @@ template <class ViewType>
 opeth::OpEthExecuteBlockResult runExecutorPath(DualRunFixture& f, ViewType& view,
     bcos::protocol::BlockHeader const& header, opeth::OpForkSpec const& spec,
     std::vector<bcos::protocol::Transaction::ConstPtr> const& transactions,
-    std::vector<bcos::bytes> const& rawTxBytes)
+    std::vector<bcos::bytes> const& rawTxBytes, bool noUserTxActivationBlock = false)
 {
     std::vector<opeth::DepositTx> deposits;
     deposits.reserve(rawTxBytes.size());
@@ -158,12 +214,13 @@ opeth::OpEthExecuteBlockResult runExecutorPath(DualRunFixture& f, ViewType& view
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<opeth::OpRecentBlockHashes<ViewType>> hashes;
     bcos::task::syncWait(opeth::preBlockOpEthSteps(view, header, spec, rawTxBytes, deposits,
-        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar));
+        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar,
+        noUserTxActivationBlock));
 
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
         .blockHashLookup = opeth::opEthBlockHashLookup(*hashes),
-        .chainId = kOpChainId,
+        .chainId = c_opChainId,
         .daFootprintGasScalar = daFootprintGasScalar};
 
     bcos::ledger::LedgerConfig execLedgerConfig;

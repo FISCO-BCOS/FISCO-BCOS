@@ -33,6 +33,9 @@ target_link_libraries(opstack-executor-tests PRIVATE
     jsoncpp_static
     Boost::unit_test_framework
 )
+# Locate the bcos-evm osaka fixture manifest (sha256 provenance check) at runtime.
+target_compile_definitions(opstack-executor-tests PRIVATE
+    OPSTACK_TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
 # The OP templates instantiate in these consumer TUs, so the GNU downgrades that the library
 # marks PRIVATE (opstack-executor/CMakeLists.txt) must be re-added here explicitly — keeping
 # them out of every other downstream target.
@@ -41,6 +44,88 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
 add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
+
+# C1 golden harness (OpEthExecutorDualRunTest) reads the t8n corpus — same locations and override
+# semantics as the engine parity suite (engine/test/CMakeLists.txt).
+if(NOT DEFINED OP_T8N_VECTORS_DIR)
+    set(OP_T8N_VECTORS_DIR "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors")
+endif()
+if(NOT DEFINED OP_T8N_GOLDEN_ENGINE_DIR)
+    set(OP_T8N_GOLDEN_ENGINE_DIR
+        "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/golden/engine")
+endif()
+set(_t8n_defs
+    OP_T8N_VECTORS_DIR="${OP_T8N_VECTORS_DIR}"
+    OP_T8N_GOLDEN_ENGINE_DIR="${OP_T8N_GOLDEN_ENGINE_DIR}")
+if(REQUIRE_T8N_CORPUS OR DEFINED ENV{GITHUB_ACTIONS} OR DEFINED ENV{CI})
+    list(APPEND _t8n_defs FISCO_REQUIRE_T8N_CORPUS=1)
+endif()
+
+# The OP block-path suites, all ported onto the post-cutover surface.
+add_executable(opstack-executor-block-tests
+    TestMain.cpp
+    OpDaMatrixSchemaTest.cpp
+    OpDualPathEquivalenceTest.cpp
+    OpGoldenCorpusProvenanceTest.cpp
+    OpKarstActivationTest.cpp
+    OpKarstReleaseGateTest.cpp
+    OpL1BlockDepositTest.cpp
+    OpL1EdgeGateTest.cpp
+    OpMismatchedFieldTest.cpp
+    OpNewPayloadRpcE2eTest.cpp
+    OpBlockInjectorTest.cpp
+    OpEngineBranchSmokeTest.cpp
+    OpT8nReplayTest.cpp
+    support/GoldenSampleTest.cpp
+    support/KarstNutHelpers.cpp
+)
+target_include_directories(opstack-executor-block-tests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/opstack-executor/tests
+    ${CMAKE_SOURCE_DIR}/bcos-rpc
+)
+target_compile_definitions(opstack-executor-block-tests PRIVATE
+    ${_t8n_defs}
+    OP_DA_MATRIX_PATH="${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json"
+    OPSTACK_TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
+target_link_libraries(opstack-executor-block-tests PRIVATE
+    opstack-executor
+    # engine: OpEngineService's non-template symbols (EngineTracker, engine_common::*)
+    # — the e2e suites instantiate OpEngineService.inl over the fixture types.
+    engine
+    # rpc: parseNewPayloadRequest (EngineHelper.cpp) — the e2e suites enter through
+    # the real JSON request parser.
+    rpc
+    jsoncpp_static
+    Boost::unit_test_framework
+    # evmmax::secp256k1::ecrecover (OpT8nReplayTest's 7702 authority recovery) lives in
+    # the precompiles archive, which evmone::evmone does not carry transitively.
+    evmone::precompiles
+)
+# GoldenSampleTest reads the t8n corpus — same availability semantics as the
+# scheduler-tests target (skip when absent, required in CI).
+set_source_files_properties(TestMain.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
+
+# da-matrix differential runner (run_fisco.cpp): a standalone main that computes the
+# fee grid and — in --check mode — compares against the COMMITTED golden snapshots.
+# The known_divergence rows are skipped+counted inside the runner (DIVERGENCES.md).
+# NOT EXCLUDE_FROM_ALL: the ctest gate below references the binary, and a target excluded
+# from ALL is never built by `cmake --build .` — ctest then fails it as "Unable to find
+# executable" on every leg (M02).
+add_executable(opstack-da-matrix-runner da-matrix/run_fisco.cpp)
+target_include_directories(opstack-da-matrix-runner PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(opstack-da-matrix-runner PRIVATE
+    opstack-executor  # OpFeeParams/OpRollupCost/OpForkSpec (the post-cutover home)
+    jsoncpp_static)
+
+# The differential gate: run the runner in --check mode against the COMMITTED goldens
+# (all four ends must agree except registered known_divergence rows). Wired so the
+# gate actually executes in ctest instead of being a manual-only comparison.
+add_test(NAME OpDaMatrixCheck
+    COMMAND opstack-da-matrix-runner
+        --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
+        --check fisco --golden ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden)
 
 # Runtime suite (OpstackExecutorTest.cpp) stays with the web3-model decoupling follow-up.
 # Scheduler execute/commit/call coverage is opstack-executor-scheduler-tests below.
@@ -76,21 +161,6 @@ target_include_directories(opstack-executor-scheduler-tests PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/bcos-ledger
 )
-# C1 golden harness (OpEthExecutorDualRunTest) reads the t8n corpus — same locations and override
-# semantics as the engine parity suite (engine/test/CMakeLists.txt).
-if(NOT DEFINED OP_T8N_VECTORS_DIR)
-    set(OP_T8N_VECTORS_DIR "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors")
-endif()
-if(NOT DEFINED OP_T8N_GOLDEN_ENGINE_DIR)
-    set(OP_T8N_GOLDEN_ENGINE_DIR
-        "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/golden/engine")
-endif()
-set(_t8n_defs
-    OP_T8N_VECTORS_DIR="${OP_T8N_VECTORS_DIR}"
-    OP_T8N_GOLDEN_ENGINE_DIR="${OP_T8N_GOLDEN_ENGINE_DIR}")
-if(REQUIRE_T8N_CORPUS OR DEFINED ENV{GITHUB_ACTIONS} OR DEFINED ENV{CI})
-    list(APPEND _t8n_defs FISCO_REQUIRE_T8N_CORPUS=1)
-endif()
 target_compile_definitions(opstack-executor-scheduler-tests PRIVATE ${_t8n_defs})
 target_link_libraries(opstack-executor-scheduler-tests PRIVATE
     opstack-executor

@@ -2299,4 +2299,30 @@ BOOST_AUTO_TEST_CASE(op_golden_vector_rebuild_matches_op_geth_block_hash)
     BOOST_CHECK_EQUAL(rebuilt.hex(), golden.hex());
 }
 
+BOOST_AUTO_TEST_CASE(preHolocenePricingRejectsZeroParameters)
+{
+    // The loader and the SYS_CONFIG row parser refuse zeros; the helper itself fails
+    // closed for a params producer that bypasses both (divide-by-zero guards).
+    using bcos::engine::InvalidEngineEncoding;
+    using bcos::engine::OpEip1559Params;
+    using bcos::engine::calcOpBaseFeePreHolocene;
+    auto const bad = [](OpEip1559Params p, bool canyon) {
+        return calcOpBaseFeePreHolocene(bcos::u256(30'000'000), bcos::u256(15'000'000),
+            bcos::u256(1'000'000'000), canyon, p);
+    };
+    BOOST_CHECK_EXCEPTION((void)bad({.elasticity = 0, .denominator = 50,
+                                      .denominatorCanyon = 250}, false),
+        InvalidEngineEncoding,
+        [](auto const& e) { return std::string_view(e.what()).find("zero") != std::string_view::npos; });
+    BOOST_CHECK_THROW(
+        (void)bad({.elasticity = 6, .denominator = 0, .denominatorCanyon = 250}, false),
+        InvalidEngineEncoding);
+    BOOST_CHECK_THROW(
+        (void)bad({.elasticity = 6, .denominator = 50, .denominatorCanyon = 0}, true),
+        InvalidEngineEncoding);
+    // denominatorCanyon is inert while Canyon is off — the guard must not fire on it.
+    BOOST_CHECK_NO_THROW((void)bad(
+        {.elasticity = 6, .denominator = 50, .denominatorCanyon = 0}, false));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

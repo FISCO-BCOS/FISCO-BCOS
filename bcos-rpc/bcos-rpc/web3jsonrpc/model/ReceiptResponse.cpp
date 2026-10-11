@@ -1,3 +1,19 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 #include "ReceiptResponse.h"
 #include "Log.h"
 #include "bcos-crypto/ChecksumAddress.h"
@@ -13,6 +29,37 @@
 // The shared helper deliberately does NOT run bcos::toAddress as a validator: tx.to() is
 // transaction input and may be a FISCO-native form (BFS path, raw bytes), which must
 // degrade to an unchecked string, not fail the whole eth_getTransactionReceipt call.
+
+/// op-geth renders the pre-Ecotone FeeScalar as `scalar/1e6` through a *big.Float
+/// marshalled by encoding/json (core/types/rollup_cost.go intToScaledFloat,
+/// gen_receipt_json.go:40): a decimal JSON string that keeps the fractional part and
+/// trims trailing zeros ("0.684", "1", "2.000001"). The raw remainder is always six
+/// digits wide (the divisor is 1e6), so a u256 whole part plus a u64 remainder
+/// reproduces that rendering at the magnitudes the field carries. Known divergence:
+/// big.Float's 'g' formatting switches to exponent form for values below 1e-4 —
+/// rawScalar < 100 renders as "1e-06" there vs "0.000001" here — so tiny scalars do
+/// not match byte-for-byte; L1 fee scalars in practice sit far inside the agreeing
+/// plain-decimal range.
+namespace
+{
+std::string formatL1FeeScalar(const bcos::u256& rawScalar)
+{
+    const bcos::u256 c_feeScalarScale{1'000'000};
+    auto const whole = (rawScalar / c_feeScalarScale).str();
+    auto const fraction = static_cast<uint64_t>(rawScalar % c_feeScalarScale);
+    if (fraction == 0)
+    {
+        return whole;
+    }
+    auto digits = std::to_string(fraction);
+    auto fractional = std::string(6 - digits.size(), '0') + std::move(digits);
+    while (fractional.back() == '0')
+    {
+        fractional.pop_back();
+    }
+    return whole + '.' + fractional;
+}
+}  // namespace
 
 void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& receipt,
     const bcos::protocol::Transaction& tx, const crypto::HashType& blockHash)
@@ -105,6 +152,15 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
             result["l1GasUsed"] = toQuantity(*meta->l1_gas_used);
         if (meta->l1_fee)
             result["l1Fee"] = toQuantity(*meta->l1_fee);
+        // Bedrock-era (pre-Ecotone) FeeScalar. op-geth emits l1FeeScalar only there, as
+        // `FeeScalar = scalar/1e6` (core/types/rollup_cost.go intToScaledFloat; nil from
+        // Ecotone on, gen_receipt_json.go:40). FISCO's meta stores the RAW slot-6 scalar
+        // and the field is only present on the Bedrock formula path, so gating on presence
+        // reproduces upstream's fork gate; formatL1FeeScalar reproduces its decimal string
+        // rendering including the fractional part (canonical Bedrock 684000 -> "0.684",
+        // which the old truncating quantity rendered as "0x0").
+        if (meta->l1_fee_scalar)
+            result["l1FeeScalar"] = formatL1FeeScalar(*meta->l1_fee_scalar);
         if (meta->l1_blob_base_fee)
             result["l1BlobBaseFee"] = toQuantity(*meta->l1_blob_base_fee);
         if (meta->l1_base_fee_scalar)

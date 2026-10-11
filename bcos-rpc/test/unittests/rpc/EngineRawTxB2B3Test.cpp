@@ -331,7 +331,10 @@ BOOST_AUTO_TEST_CASE(depositJsonMatchesGethShape)
     combineDepositTxResponse(systemResult, systemDeposit);
     BOOST_CHECK_EQUAL(systemResult["isSystemTx"].asBool(), true);
     BOOST_CHECK(systemResult["to"].isNull());
-    BOOST_CHECK(!systemResult.isMember("mint"));
+    // op-geth always emits mint (its decoder materializes *big.Int(0) for the empty
+    // RLP item, so a system deposit reports "0x0", never an omitted field) — the
+    // always-emit contract in combineDepositTxResponse pins this.
+    BOOST_CHECK_EQUAL(systemResult["mint"].asString(), "0x0");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
