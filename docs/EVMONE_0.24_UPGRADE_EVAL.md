@@ -166,3 +166,27 @@
 - 核心收益:7702 安全修复(条件见 §5)、Osaka 语义对齐(7825 深度、blob fee 修复)、Amsterdam 就绪、持续跟进上游(0.21 已落后三个 minor)。
 - 最大单点风险是 R1(fnTable 静默错位),但它同时是最便宜的修复(designated initializer)。
 - 本 worktree(`eval/evmone-0.24.0`)可直接作为实施分支;阶段 1 的 port 改动可以在此分支上开始。
+
+## 9. 实施进展(2026-10-11,提交 a128e5c42)
+
+**阶段 1(port)与阶段 2(宿主适配)已完成并提交**,32 文件,+394/−238。
+
+### 已验证
+- `fisco-sm3.patch` 在 0.24.0 上以 **fuzz 0** 干净应用,与原补丁 +/- 内容逐行一致(仅上下文随上游刷新)。
+- vcpkg 实际构建 evmone@0.24.0 + evmc@0.24.0(x64-linux-release)成功;安装产物含 ABI 19 头(`get_nonce`、`EVMC_ABI_VERSION=19`)、`create_address.hpp`/`state_gas.hpp`、test/utils 源码(chain_id 替换生效)。
+- 冒烟测试:SM3 `hash_fn` 钩子在 Cancun/Prague/Osaka 三个 revision 正确劫持 KECCAK256 输出;无钩子时默认 keccak256(空输入哈希 `c5d246…`)不变。
+
+### 阶段 2 落地内容
+- 两个 C 宿主 fnTable(bcos-executor、transaction-executor)改 designated initializer + 新增 `getNonce` 回调;`EthereumHost` 实现 `get_nonce`(读自身 state 账本)。
+- 创建地址流改造:`evmc_result::create_address`/`evmc_message::create2_salt`/`evmc_result.padding` 全部移除;deploy 地址改从准备后消息的 `recipient` 读取(TransactionExecutorImpl::finish、测试);`EthereumHost::prepare_message` 与 transaction-executor `getMessage` 按 "recipient 为空 → 交易级创建(自算)/ 非空 → VM 预计算(信任)" 双路径处理。
+- 清理:EOFCREATE 防护/分支、initcodes 填充、ExecutiveWrapper 的 ErrorMessage-over-create_address 死通道(确认无写入方,行为不变)。
+- fork 名表(LedgerConfig、EESTRunner):新增 `amsterdam`;`constantinople`/`constantinoplefix` 重定向 `petersburg`。
+
+### 实施中确认的新风险(并入登记册)
+- **R9(P1)旧链嵌套 CREATE 地址分歧**:ABI 19 下 evmone 用 `get_nonce` 返回值 + keccak 自行计算嵌套 CREATE/CREATE2 的压栈地址,host 返回值被忽略(`instructions_calls.cpp:300,335`)。`feature_evm_address` 链上 nonce 读取一致时两者相同;**未开该 feature 的旧链上,EVM 栈上返回地址(keccak)与实际存储地址(FISCO 公式)会分歧**。bcos-executor 旧 lane 的 `createSalt` 已置零并注释;需要产品决策(是否为旧链补 executive 侧适配,或声明仅支持 feature 链)。
+- **R10(P2)**:`evmc_result::padding` 字段也被移除(评估时未列入);所有 designated 初始化点已清理,编译器兜底。
+- ExecutiveWrapper 错误信息通道(ErrorMessage 指针藏在 create_address 里)为死代码(全树无写入方),删除后行为等价——确认了评估时的猜测。
+
+### 剩余工作
+- **阶段 3**:vendored `bcos-evm/bcos-evm/eth/state/` 以 0.24 `test/state` 为底 rebase(含 `authorization.cpp` 7702 验签、`precompiles_libsecp256k1/gmp` 取舍、host.cpp 的 get_nonce/recipient 化);这是最大工作量块。
+- **阶段 4**:全量编译(本机未做,worktree 尚无 build 目录)、bcos-evm/engine/opstack 测试回归、Karst 语义对账(R3/R4/R9)、e2e。
