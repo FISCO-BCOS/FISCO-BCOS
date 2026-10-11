@@ -24,6 +24,11 @@ jobs:
     runs-on: ${{ matrix.os == 'ubuntu-26.04-static' && 'ubuntu-26.04' || matrix.os }}
     permissions:
       contents: write
+    env:
+      # ccache lives under the workspace so actions/cache can persist it; 2G cap keeps
+      # the repo-level 10GB cache budget from being exhausted by one leg.
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 2G
     strategy:
       fail-fast: false
       matrix:
@@ -67,6 +72,18 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.os }}-cache-key-v4
+      # ccache persists the compiler output keyed on source+flags content (not mtime), so a
+      # warm cache reuses .o across runs and only recompiles the files that actually changed.
+      # The key is compiler/OS/arch-scoped (a .o is not portable across those) and deliberately
+      # does NOT bind the source tree: ccache already misses on any content change.
+      - name: Restore ccache
+        if: matrix.os != 'windows-2025'
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-${{ matrix.os }}-${{ runner.arch }}-v1
+          restore-keys: |
+            ccache-${{ matrix.os }}-${{ runner.arch }}-
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2025'
         uses: actions/setup-node@v4
@@ -79,10 +96,10 @@ jobs:
           sudo apt install -y --no-install-recommends \
               lcov wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16 ccache
       - name: Install macOS dependencies
         if: matrix.os == 'macos-26'
-        run: brew install libomp autoconf automake libtool
+        run: brew install libomp autoconf automake libtool ccache
       - name: Set up MSVC environment
         # The windows-2025 image ships Visual Studio 18 (2026), which the pinned
         # CMake 3.28 cannot recognize as a generator: generator auto-detection
@@ -115,13 +132,13 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
         if: matrix.os == 'ubuntu-26.04-arm'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
         if: matrix.os == 'macos-26'
         run: |
@@ -131,7 +148,7 @@ jobs:
           mkdir -p build
           cd build
           ARCH=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
-          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=${ARCH}-osx-release ${EXTRA_FLAGS} ..
+          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=${ARCH}-osx-release ${EXTRA_FLAGS} ..
       - name: Configure for windows
         if: matrix.os == 'windows-2025'
         run: |
@@ -321,6 +338,8 @@ jobs:
       # ("incomplete uploads on the first attempt"). The token-carrying run is the
       # push event on the base branch (and on a fork that sets the secret).
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 2G
     steps:
       - uses: actions/checkout@v3
         with:
@@ -352,6 +371,13 @@ jobs:
             !${{ github.workspace }}/vcpkg/packages
             !${{ github.workspace }}/vcpkg/downloads
           key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1
+          restore-keys: |
+            ccache-coverage-ubuntu-26.04-${{ runner.arch }}-
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -362,7 +388,7 @@ jobs:
           sudo apt install -y --no-install-recommends \
               lcov wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16 ccache
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-02-25
@@ -371,7 +397,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -469,6 +495,9 @@ jobs:
     runs-on: ubuntu-26.04
     permissions:
       contents: read
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 2G
     steps:
       - uses: actions/checkout@v4
         with:
@@ -494,13 +523,20 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1
+          restore-keys: |
+            ccache-l2-ubuntu-26.04-${{ runner.arch }}-
       - name: Install linux dependencies
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
               wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16 ccache
       - name: Install Foundry
         # WITH_L2_CONTRACTS=ON does find_program(FORGE forge REQUIRED) at
         # configure time, so forge must be on PATH before cmake runs.
@@ -514,7 +550,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -624,17 +660,7 @@ jobs:
           COMMIT=$(python3 -c "import json; print(json.load(open('.ci-op-e2e-tests/tools/op-e2e/versions.json'))['op_monorepo']['commit'])")
           echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
 
-      - name: Cache OP monorepo + binaries
-        id: op-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            .ci-op-monorepo
-            .ci-c2-bins
-          key: c2-op-${{ steps.op-pin.outputs.commit }}-${{ runner.os }}-${{ runner.arch }}
-
       - name: Build OP stack binaries
-        if: steps.op-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           mkdir -p .ci-c2-bins
