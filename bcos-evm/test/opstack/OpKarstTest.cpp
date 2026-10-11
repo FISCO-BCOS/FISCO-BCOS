@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(KarstTxGasCapErrorIsTheOsakaOne)
         {env.data(), env.size()}, underKarst(), OpFeeParams{}, kKarstBlockGas);
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
     BOOST_CHECK_EQUAL(std::get<std::error_code>(r),
-        evmone::state::make_error_code(evmone::state::MAX_GAS_LIMIT_EXCEEDED));
+        evmone::state::make_error_code(evmone::state::GAS_LIMIT_EXCEEDS_MAXIMUM));
 }
 
 // Deposits are exempt from EIP-7825 (docs.optimism.io/notices/upgrade-19: deposits are already

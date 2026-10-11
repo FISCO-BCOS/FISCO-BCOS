@@ -5,6 +5,7 @@
 #include <array>
 #include <bcos-evm/eth/state/precompiles_internal.hpp>
 #include <cassert>
+#include <evmone/constants.hpp>
 
 using namespace evmc::literals;
 
@@ -50,8 +51,8 @@ evmc::Result executeGasOverridePrecompile(
 void applyCallValueSemantics(evmone::state::State& state, const evmc_message& msg) noexcept
 {
     const auto exists = state.find(msg.recipient) != nullptr;
-    if (!exists)
-        state.journal_create(msg.recipient, exists);
+    if (!exists)  // evmone 0.24 split journal_create(addr, existed) into two entries.
+        state.journal_new_account(msg.recipient);
 
     if (evmc::is_zero(msg.value))
     {
@@ -106,8 +107,6 @@ evmc_tx_context OpHost::get_tx_context() const noexcept
         intx::be::store<evmc::uint256be>(m_block.blob_base_fee.value_or(1)),
         m_tx.blob_hashes.data(),
         m_tx.blob_hashes.size(),
-        nullptr,
-        0,
     };
 }
 
@@ -139,7 +138,7 @@ evmc::Result OpHost::call(const evmc_message& msg) noexcept
     if (msg.depth == 0)
     {
         if (const auto* sender = m_state.find(msg.sender);
-            sender != nullptr && sender->nonce == evmone::state::Account::NonceMax)
+            sender != nullptr && sender->nonce == evmone::MAX_NONCE)
             return evmc::Result{EVMC_FAILURE, msg.gas};
     }
 

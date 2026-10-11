@@ -29,9 +29,6 @@ struct StorageValue
 /// The state account.
 struct Account
 {
-    /// The maximum allowed nonce value.
-    static constexpr auto NonceMax = std::numeric_limits<uint64_t>::max();
-
     /// The keccak256 hash of the empty input. Used to identify empty account's code.
     static constexpr auto EMPTY_CODE_HASH =
         0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470_bytes32;
@@ -43,9 +40,6 @@ struct Account
     intx::uint256 balance;
 
     bytes32 code_hash = EMPTY_CODE_HASH;
-
-    /// If the account has non-empty initial storage (when accessing the cold account).
-    bool has_initial_storage = false;
 
     /// The cached and modified account storage entries.
     std::unordered_map<bytes32, StorageValue> storage;
@@ -59,7 +53,18 @@ struct Account
     /// Empty here only means it has not been loaded from the initial storage.
     bytes code;
 
+    // TODO: Consider moving the flags up (to lower offsets) for shorter x86 machine code (disp8).
+
+    /// The account access status (EIP-2929): warm once accessed earlier in the transaction.
+    /// Revertible.
+    evmc_access_status access_status = EVMC_ACCESS_COLD;
+
+    /// The account does not exist in the state.
+    /// Revertible, usually false→true.
+    bool nonexistent = false;
+
     /// The account has been destructed and should be erased at the end of a transaction.
+    /// Revertible.
     bool destructed = false;
 
     /// The account should be erased if it is empty at the end of a transaction.
@@ -68,15 +73,24 @@ struct Account
     ///
     /// Yellow Paper uses term "delete" but it is a keyword in C++ while
     /// the term "erase" is used for deleting objects from C++ collections.
+    ///
+    /// Revertible.
     bool erase_if_empty = false;
 
     /// The account has been created in the current transaction.
+    ///
+    /// FIXME: Not reverted on CREATE rollback; a leaked value suppresses the
+    /// EIP-161 touch-delete of the now-empty account (state-root divergence).
     bool just_created = false;
 
-    // This account's code has been modified.
+    /// This account's code has been modified.
+    ///
+    /// FIXME: Not reverted on CREATE rollback; a leaked value adds a
+    /// false-positive code entry to the state diff.
     bool code_changed = false;
 
-    evmc_access_status access_status = EVMC_ACCESS_COLD;
+    /// If the account has non-empty initial storage (when accessing the cold account).
+    bool has_initial_storage = false;
 
     [[nodiscard]] bool is_empty() const noexcept
     {

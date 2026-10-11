@@ -4,7 +4,10 @@
 #pragma once
 
 #include "requests.hpp"
+#include "transaction.hpp"
 #include <evmc/evmc.hpp>
+#include <system_error>
+#include <variant>
 
 namespace evmone::state
 {
@@ -49,7 +52,13 @@ struct RequestsResult
 ///
 /// Executes code of pre-defined accounts via pseudo-transaction from the system sender (0xff...fe).
 /// The sender's nonce is not increased.
-/// @return The collected requests and state diff or std::nullopt if the execution has failed.
-[[nodiscard]] std::optional<RequestsResult> system_call_block_end(const StateView& state_view,
-    const BlockInfo& block, const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm);
+/// @return The collected requests and state diff, or the error code identifying why the block
+///         requests collection failed.
+[[nodiscard]] std::variant<RequestsResult, std::error_code> system_call_block_end(
+    const StateView& state_view, const BlockInfo& block, const BlockHashes& block_hashes,
+    evmc_revision rev, evmc::VM& vm);
+
+/// Emit an ETH transfer log (LOG3) from SYSTEM_ADDRESS for a value transfer (EIP-7708).
+void emit_transfer_log(
+    std::vector<Log>& logs, const address& sender, const address& recipient, const uint256& amount);
 }  // namespace evmone::state

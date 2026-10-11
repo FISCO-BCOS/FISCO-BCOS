@@ -135,7 +135,8 @@ BOOST_AUTO_TEST_CASE(SimpleTransferMatchesEthExceptBaseFeeVault)
     // eth side: validate -> transition -> sanitize, the three steps EthTransition.{h,cpp}
     // used to wrap. Both sides sanitize, so the diffs stay comparable.
     const auto ethValidated =
-        state::validate_transaction(ts, block, tx, cfg.rev, block.gas_limit, /*blobGasLeft=*/0);
+        state::validate_transaction(ts, block, tx, cfg.rev, block.gas_limit,
+            /*block_state_gas_left=*/0, /*blobGasLeft=*/0);
     BOOST_REQUIRE(std::holds_alternative<state::TransactionProperties>(ethValidated));
     auto ethReceipt = state::transition(ts, block, hashes, tx, cfg.rev, vm,
         std::get<state::TransactionProperties>(ethValidated), /*chainId=*/1);

@@ -13,7 +13,7 @@ namespace
 /// Adds an entry to the bloom filter.
 /// based on
 /// https://ethereum.github.io/execution-specs/autoapi/ethereum/shanghai/bloom/index.html#add-to-bloom
-inline void add_to(BloomFilter& bf, const bytes_view& entry)
+inline void add_to(BloomFilter& bf, bytes_view entry)
 {
     const auto hash = keccak256(entry);
 
@@ -54,7 +54,7 @@ BloomFilter compute_bloom_filter(std::span<const TransactionReceipt> receipts) n
     return res;
 }
 
-BloomFilter bloom_filter_from_bytes(const bytes_view& data) noexcept
+BloomFilter bloom_filter_from_bytes(bytes_view data) noexcept
 {
     assert(data.size() == 256);
     BloomFilter res;

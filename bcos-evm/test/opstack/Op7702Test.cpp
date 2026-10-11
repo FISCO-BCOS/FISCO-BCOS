@@ -171,10 +171,9 @@ BOOST_AUTO_TEST_CASE(RecoversAuthorityAndWritesDelegation, * boost::unit_test::l
     state::Authorization auth{.chain_id = 1,
         .addr = kDelegate,
         .nonce = 0,
-        .signer = std::nullopt,
+        .y_parity = uint8_t{kV_ok},
         .r = intx::be::load<intx::uint256>(kR_ok),
-        .s = intx::be::load<intx::uint256>(kS_ok),
-        .v = intx::uint256{kV_ok}};
+        .s = intx::be::load<intx::uint256>(kS_ok)};
     const auto r = runWithAuth(ts, vm, auth);
     BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);
@@ -214,10 +213,9 @@ BOOST_AUTO_TEST_CASE(BadSignatureRecoverFailsNoDelegation, * boost::unit_test::l
     state::Authorization auth{.chain_id = 1,
         .addr = kDelegate,
         .nonce = 0,
-        .signer = std::nullopt,
+        .y_parity = uint8_t{kV_ok},
         .r = intx::be::load<intx::uint256>(badR),
-        .s = intx::be::load<intx::uint256>(kS_ok),
-        .v = intx::uint256{kV_ok}};
+        .s = intx::be::load<intx::uint256>(kS_ok)};
     const auto r = runWithAuth(ts, vm, auth);
     // 坏签名只 skip 该条 authorization，tx 本身必须成功——否则"无委托"断言会把
     // "交易整体失败"误判为"正确跳过坏签名"。
@@ -255,10 +253,9 @@ BOOST_AUTO_TEST_CASE(NonceMismatchSkips, * boost::unit_test::label("fork-isthmus
     state::Authorization auth{.chain_id = 1,
         .addr = kDelegate,
         .nonce = 5,  // 与 state nonce=0 不匹配
-        .signer = std::nullopt,
+        .y_parity = uint8_t{kV_nonce5},
         .r = intx::be::load<intx::uint256>(kR_nonce5),
-        .s = intx::be::load<intx::uint256>(kS_nonce5),
-        .v = intx::uint256{kV_nonce5}};
+        .s = intx::be::load<intx::uint256>(kS_nonce5)};
     const auto r = runWithAuth(ts, vm, auth);
     // 交易本身必须成功（nonce 不匹配只 skip 该条 authorization）——否则"无委托"断言会把
     // opValidate 拒绝交易（status=1 空 diff 兜底 receipt）误判为"正确跳过"。
@@ -293,10 +290,9 @@ BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips, * boost::unit_test::label("fork-isthm
     state::Authorization auth{.chain_id = 999,
         .addr = kDelegate,
         .nonce = 0,
-        .signer = std::nullopt,
+        .y_parity = uint8_t{kV_ok},
         .r = intx::be::load<intx::uint256>(kR_ok),
-        .s = intx::be::load<intx::uint256>(kS_ok),
-        .v = intx::uint256{kV_ok}};
+        .s = intx::be::load<intx::uint256>(kS_ok)};
     const auto r = runWithAuth(ts, vm, auth, /*chainId=*/1);
     // 交易本身必须成功（chain_id 不匹配只 skip 该条 authorization）——否则"无委托"断言
     // 会把 opValidate 拒绝交易误判为"正确跳过"。
@@ -404,10 +400,9 @@ BOOST_AUTO_TEST_CASE(ChainIdZeroIsUniversal, * boost::unit_test::label("fork-ist
     state::Authorization auth{.chain_id = 0,  // universal
         .addr = kDelegate,
         .nonce = 0,
-        .signer = std::nullopt,
+        .y_parity = uint8_t{kV_ok},
         .r = intx::be::load<intx::uint256>(kR_ok),
-        .s = intx::be::load<intx::uint256>(kS_ok),
-        .v = intx::uint256{kV_ok}};
+        .s = intx::be::load<intx::uint256>(kS_ok)};
     // 节点在链 999：universal 授权仍须被处理。
     const auto r = runWithAuth(ts, vm, auth, /*chainId=*/999);
     BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
@@ -435,10 +430,9 @@ BOOST_AUTO_TEST_CASE(HighSValueIsRejected, * boost::unit_test::label("fork-isthm
     state::Authorization auth{.chain_id = 1,
         .addr = kDelegate,
         .nonce = 0,
-        .signer = std::nullopt,
+        .y_parity = uint8_t{kV_ok},
         .r = intx::be::load<intx::uint256>(kR_ok),
-        .s = bcos::evm::eth::SECP256K1N_OVER_2 + 1,  // 恰好越过 EIP-2 上界
-        .v = intx::uint256{kV_ok}};
+        .s = bcos::evm::eth::SECP256K1N_OVER_2 + 1};  // 恰好越过 EIP-2 上界
     const auto r = runWithAuth(ts, vm, auth);
     BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);
@@ -463,11 +457,10 @@ BOOST_AUTO_TEST_CASE(InvalidYParityIsRejected, * boost::unit_test::label("fork-i
     state::Authorization auth{.chain_id = 1,
         .addr = kDelegate,
         .nonce = 0,
-        .signer = std::nullopt,
+        .y_parity = uint8_t{2},  // 非法 parity
         .r = intx::be::load<intx::uint256>(kR_ok),
-        .s = intx::be::load<intx::uint256>(kS_ok),
-        .v = intx::uint256{2}};  // 非法 parity
-    const auto r = runWithAuth(ts, vm, auth);
+        .s = intx::be::load<intx::uint256>(kS_ok)};
+    非法 parity const auto r = runWithAuth(ts, vm, auth);
     BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);
 
@@ -503,10 +496,9 @@ BOOST_AUTO_TEST_CASE(NonceMaxIsRejected, * boost::unit_test::label("fork-isthmus
     state::Authorization auth{.chain_id = 1,
         .addr = kDelegate,
         .nonce = kNonceMax,
-        .signer = std::nullopt,
+        .y_parity = uint8_t{kV_ok},
         .r = intx::be::load<intx::uint256>(kR_ok),
-        .s = intx::be::load<intx::uint256>(kS_ok),
-        .v = intx::uint256{kV_ok}};
+        .s = intx::be::load<intx::uint256>(kS_ok)};
     const auto r = runWithAuth(ts, vm, auth);
     BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);
@@ -541,10 +533,9 @@ BOOST_AUTO_TEST_CASE(AuthorityWithNonDelegatedCodeIsSkipped, * boost::unit_test:
     state::Authorization auth{.chain_id = 1,
         .addr = kDelegate,
         .nonce = 0,
-        .signer = std::nullopt,
+        .y_parity = uint8_t{kV_ok},
         .r = intx::be::load<intx::uint256>(kR_ok),
-        .s = intx::be::load<intx::uint256>(kS_ok),
-        .v = intx::uint256{kV_ok}};
+        .s = intx::be::load<intx::uint256>(kS_ok)};
     const auto r = runWithAuth(ts, vm, auth);
     BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);

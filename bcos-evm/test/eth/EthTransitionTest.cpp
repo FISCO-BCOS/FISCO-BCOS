@@ -43,8 +43,8 @@ EthResult runTx(const state::StateView& view, const state::BlockInfo& block,
     const state::BlockHashes& hashes, const state::Transaction& tx, evmc_revision rev, evmc::VM& vm,
     int64_t blockGasLeft, int64_t blobGasLeft, uint64_t chainId)
 {
-    const auto validated =
-        state::validate_transaction(view, block, tx, rev, blockGasLeft, blobGasLeft);
+    const auto validated = state::validate_transaction(
+        view, block, tx, rev, blockGasLeft, /*blockStateGasLeft=*/0, blobGasLeft);
     if (const auto* err = std::get_if<std::error_code>(&validated))
         return *err;
     auto receipt = state::transition(view, block, hashes, tx, rev, vm,
@@ -201,8 +201,9 @@ BOOST_AUTO_TEST_CASE(InvalidTxRejectedWithoutSideEffect)
         runTx(state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, 786432, /*chainId=*/1);
 
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(res));
-    BOOST_CHECK(std::get<std::error_code>(res) ==
-                state::make_error_code(state::INSUFFICIENT_FUNDS));  // 钉住拒因，防其他校验失败假绿
+    BOOST_CHECK(
+        std::get<std::error_code>(res) ==
+        state::make_error_code(state::INSUFFICIENT_ACCOUNT_FUNDS));  // 钉住拒因，防其他校验失败假绿
 }
 
 // 钉死 blockGasLeft/blobGasLeft 两个相邻 int64_t 形参不被换序：
@@ -293,10 +294,9 @@ BOOST_AUTO_TEST_CASE(AuthorizationForAnotherChainIsSkipped)
         tx.authorization_list = {state::Authorization{.chain_id = 1,
             .addr = kDelegate,
             .nonce = 0,
-            .signer = std::nullopt,  // 强制走真 ecrecover
+            .y_parity = 0,
             .r = intx::be::load<intx::uint256>(kAuthR),
-            .s = intx::be::load<intx::uint256>(kAuthS),
-            .v = intx::uint256{0}}};
+            .s = intx::be::load<intx::uint256>(kAuthS)}};
 
         evmc::VM vm{evmc_create_evmone()};
         StubBlockHashes hashes;

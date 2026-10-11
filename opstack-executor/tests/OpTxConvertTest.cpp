@@ -273,9 +273,7 @@ BOOST_AUTO_TEST_CASE(FixedWidthFieldsCopyEveryByte)
     BOOST_REQUIRE_EQUAL(evmTx.authorization_list.size(), 1u);
     BOOST_CHECK_EQUAL(evmTx.authorization_list[0].addr.bytes[0], 0x44);
     BOOST_CHECK_EQUAL(evmTx.authorization_list[0].addr.bytes[19], 0x44);
-    BOOST_REQUIRE(evmTx.authorization_list[0].signer.has_value());
-    BOOST_CHECK_EQUAL(evmTx.authorization_list[0].signer->bytes[0], 0x55);
-    BOOST_CHECK_EQUAL(evmTx.authorization_list[0].signer->bytes[19], 0x55);
+    // signer 字段已随 evmone 0.23 移除;受权地址在 transition 时经 ecrecover 恢复。
 }
 
 BOOST_AUTO_TEST_SUITE_END()

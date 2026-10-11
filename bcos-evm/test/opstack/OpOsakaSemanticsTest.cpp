@@ -646,7 +646,7 @@ BOOST_AUTO_TEST_CASE(KarstOrdinaryTxRejectsGasOverEip7825Cap, * boost::unit_test
         ts, makeOsakaBlock(), tx, {env.data(), env.size()}, osakaCfg(), OpFeeParams{}, 30000000);
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
     BOOST_CHECK(std::get<std::error_code>(r) ==
-                evmone::state::make_error_code(evmone::state::MAX_GAS_LIMIT_EXCEEDED));
+                evmone::state::make_error_code(evmone::state::GAS_LIMIT_EXCEEDS_MAXIMUM));
 }
 
 // clang-format off
@@ -791,7 +791,7 @@ BOOST_AUTO_TEST_CASE(OverCapTxIsNotRejectedByEip7825BeforeOsaka, * boost::unit_t
     const bool rejectedByEip7825 =
         std::holds_alternative<std::error_code>(r) &&
         std::get<std::error_code>(r) ==
-            evmone::state::make_error_code(evmone::state::MAX_GAS_LIMIT_EXCEEDED);
+            evmone::state::make_error_code(evmone::state::GAS_LIMIT_EXCEEDS_MAXIMUM);
     BOOST_CHECK(!rejectedByEip7825);
 }
 

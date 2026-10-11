@@ -3,13 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "system_contracts.hpp"
+#include "errors.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
+#include <evmone/constants.hpp>
 
 namespace evmone::state
 {
 namespace
 {
+/// Convert an address to a 32-byte value, left-padded with zeros.
+/// TODO: Deduplicate with to_bytes32 in test/utils/utils.hpp.
+bytes32 to_bytes32(const address& addr) noexcept
+{
+    bytes32 res{};
+    std::copy_n(addr.bytes, sizeof(addr), &res.bytes[sizeof(res) - sizeof(addr)]);
+    return res;
+}
+
 /// Information about a registered "storage" system contract. They are executed at the block start
 /// to store additional information in the State.
 struct StorageSystemContract
@@ -69,18 +80,12 @@ evmc::Result execute_system_call(State& state, const BlockInfo& block,
 {
     const evmc_message msg{
         .kind = EVMC_CALL,
-        .flags = 0,
-        .depth = 0,
         .gas = 30'000'000,
+        .state_gas = 16 * STORAGE_SET_STATE_GAS,  // Additional state-gas (EIP-8037).
         .recipient = addr,
         .sender = SYSTEM_ADDRESS,
         .input_data = input.data(),
         .input_size = input.size(),
-        .value = {},
-        .create2_salt = {},
-        .code_address = {},
-        .code = nullptr,
-        .code_size = 0,
     };
 
     const Transaction empty_tx{};
@@ -113,7 +118,7 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
     return state.build_diff(rev);
 }
 
-std::optional<RequestsResult> system_call_block_end(const StateView& state_view,
+std::variant<RequestsResult, std::error_code> system_call_block_end(const StateView& state_view,
     const BlockInfo& block, const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm)
 {
     State state{state_view};
@@ -126,13 +131,30 @@ std::optional<RequestsResult> system_call_block_end(const StateView& state_view,
         // Fail if the target account doesn't exist. This is by EIP-7002 and EIP-7251 spec.
         const auto code = state_view.get_account_code(addr);
         if (code.empty())
-            return std::nullopt;
+            return make_error_code(SYSTEM_CONTRACT_EMPTY);
 
         const auto res = execute_system_call(state, block, block_hashes, rev, vm, addr, code, {});
         if (res.status_code != EVMC_SUCCESS)
-            return std::nullopt;
+            return make_error_code(SYSTEM_CONTRACT_CALL_FAILED);
         requests.emplace_back(request_type, bytes_view{res.output_data, res.output_size});
     }
     return RequestsResult{state.build_diff(rev), requests};
+}
+
+void emit_transfer_log(
+    std::vector<Log>& logs, const address& sender, const address& recipient, const uint256& amount)
+{
+    /// The ETH transfer log topic (EIP-7708): keccak256("Transfer(address,address,uint256)")
+    constexpr auto TRANSFER_EVENT_TOPIC =
+        0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef_bytes32;
+
+    if (amount == 0)  // No log for 0 value transfers.
+        return;
+
+    if (sender == recipient)  // No log for self transfers (balance unchanged).
+        return;
+
+    logs.push_back({SYSTEM_ADDRESS, bytes{intx::be::store<uint256be>(amount)},
+        {TRANSFER_EVENT_TOPIC, to_bytes32(sender), to_bytes32(recipient)}});
 }
 }  // namespace evmone::state

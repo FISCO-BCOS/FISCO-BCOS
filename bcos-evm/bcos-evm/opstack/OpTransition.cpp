@@ -165,7 +165,7 @@ inline int32_t toFiscoStatus(evmc_status_code status) noexcept
 /// stateRoot.
 inline std::string toFiscoContractAddress(const evmc::address& sender, uint64_t nonce)
 {
-    const auto addr = evmone::state::compute_create_address(sender, nonce);
+    const auto addr = evmone::compute_create_address(sender, nonce);
     // evmc::address::bytes is a plain uint8_t[20]; brace-init a bytes_view (same as
     // TestPrinters.h).
     return std::string(evmc::hex({addr.bytes, sizeof(addr.bytes)}));
@@ -436,8 +436,8 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     if (signedTxEnvelope.empty())
         return make_error_code(std::errc::invalid_argument);
 
-    auto base =
-        evmone::state::validate_transaction(view, block, tx, cfg.rev, blockGasLeft, 0, policy);
+    auto base = evmone::state::validate_transaction(view, block, tx, cfg.rev, blockGasLeft,
+        /*block_state_gas_left=*/0, /*blob_gas_left=*/0, policy);
     if (auto* err = std::get_if<std::error_code>(&base))
         return *err;
 
@@ -663,7 +663,8 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     validateBlock.base_fee = 0;
     const DepositValidationView maskedView{view, dep.from};
     const auto props = evmone::state::validate_transaction(maskedView, validateBlock, tx, cfg.rev,
-        unmeteredSystemTx ? std::numeric_limits<int64_t>::max() : blockGasLeft, 0,
+        unmeteredSystemTx ? std::numeric_limits<int64_t>::max() : blockGasLeft,
+        /*block_state_gas_left=*/0, /*blob_gas_left=*/0,
         {.enforce_max_tx_gas = !cfg.deposit_exempt_from_max_tx_gas});
     // Two exemptions folded into one call:
     // * Deposit EIP-7825 exemption (release-line #5576 used a rev clamp to Prague here):
@@ -679,7 +680,7 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
 
     if (const auto* err = std::get_if<std::error_code>(&props))
     {
-        if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED))
+        if (*err == evmone::state::make_error_code(evmone::state::GAS_ALLOWANCE_EXCEEDED))
             throw OpDepositGasLimitReached("op deposit: block gas limit reached (block error)");
         // Processing-level failure (op-geth Regolith, state_transition.go:486-513):
         // mint is retained, nonce is force-incremented, gasUsed = gasLimit in full (:498).

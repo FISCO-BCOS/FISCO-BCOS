@@ -81,6 +81,8 @@ endif()
 
 # 4c. Install phase-1 precompile crypto headers used directly by FISCO-BCOS.
 #     (lib/evmone/*.hpp internal headers are installed by the patch's DIRECTORY install.)
+#     modarith.hpp is pulled in by ecc.hpp (evmone 0.24 rewrote the field arithmetic on it);
+#     kzg_precomputed_lines.{hpp,cpp} is only consumed by evmone's own kzg TU, not by us.
 file(INSTALL
     "${SOURCE_PATH}/lib/evmone_precompiles/sha256.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/ripemd160.hpp"
@@ -88,6 +90,7 @@ file(INSTALL
     "${SOURCE_PATH}/lib/evmone_precompiles/blake2b.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/bn254.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/ecc.hpp"
+    "${SOURCE_PATH}/lib/evmone_precompiles/modarith.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/hash_types.h"
     "${SOURCE_PATH}/lib/evmone_precompiles/keccak.h"
     "${SOURCE_PATH}/lib/evmone_precompiles/keccak.hpp"

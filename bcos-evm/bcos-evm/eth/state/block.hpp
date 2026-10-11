@@ -51,6 +51,9 @@ struct BlockInfo
     /// The EIP-1559 base fee, since London.
     uint64_t base_fee = 0;
 
+    /// The chain id transactions must target.
+    uint64_t chain_id = 1;
+
     /// The "blob gas used" parameter from EIP-4844
     std::optional<uint64_t> blob_gas_used;
 
@@ -60,6 +63,9 @@ struct BlockInfo
 
     /// Blob gas price from EIP-4844, computed from excess_blob_gas.
     std::optional<intx::uint256> blob_base_fee;
+
+    /// The beacon chain slot number (EIP-7843). Absent before Amsterdam.
+    std::optional<uint64_t> slot_number;
 
     std::vector<Ommer> ommers;
     std::vector<Withdrawal> withdrawals;

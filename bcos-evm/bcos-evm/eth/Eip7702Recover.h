@@ -17,6 +17,7 @@
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <cstdint>
 #include <evmc/evmc.hpp>
+#include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
 #include <optional>
@@ -27,7 +28,7 @@
 namespace bcos::evm::eth
 {
 /// Secp256k1's N/2 is the upper bound of an EIP-2 canonical signature's s value.
-inline constexpr auto SECP256K1N_OVER_2 = evmmax::secp256k1::Curve::ORDER / 2;
+inline constexpr auto SECP256K1N_OVER_2 = evmone::crypto::secp256k1::Curve::ORDER / 2;
 
 /// EIP-7702 authorization magic byte (prefix of the signing hash).
 inline constexpr uint8_t kSetCodeMagic = 0x05;
@@ -41,9 +42,9 @@ inline std::optional<evmc::address> recoverAuthority(const evmone::state::Author
     const auto h = evmone::keccak256(msg);
     const auto r = intx::be::store<evmc::bytes32>(auth.r);
     const auto s = intx::be::store<evmc::bytes32>(auth.s);
-    return evmmax::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.bytes, 32},
+    return evmone::crypto::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.bytes, 32},
         std::span<const uint8_t, 32>{r.bytes, 32}, std::span<const uint8_t, 32>{s.bytes, 32},
-        auth.v != 0);
+        auth.y_parity != 0);
 }
 
 /// EIP-7702: The cost of authorization that sets delegation to an account that didn't exist before.
@@ -55,9 +56,8 @@ inline constexpr int64_t AUTHORIZATION_BASE_COST = 12500;
 /// refund earned by authorities that already existed. The SINGLE implementation both execution
 /// paths call — see the file header for why this is not duplicated per path.
 ///
-/// Ported from evmone's transition() with the signer-shortcut stub replaced by real ecrecover
-/// (auth.signer is ignored — see the comment at the recovery site); a recovery failure skips
-/// that authorization.
+/// Ported from evmone's transition() with real ecrecover at the recovery site; a recovery
+/// failure skips that authorization.
 inline int64_t processAuthorizationList(evmone::state::State& state, uint64_t chainId,
     const evmone::state::AuthorizationList& authorizationList)
 {
@@ -69,25 +69,24 @@ inline int64_t processAuthorizationList(evmone::state::State& state, uint64_t ch
             continue;
 
         // 2. Verify the nonce is less than 2**64 - 1.
-        if (auth.nonce == evmone::state::Account::NonceMax)
+        if (auth.nonce == evmone::MAX_NONCE)
             continue;
 
         // 3. Verify if the signer has been successfully recovered from the signature.
         //    authority = ecrecover(...)
         // y_parity must be 0 or 1 for EIP-7702/2930 signatures.
-        if (auth.v > 1)
+        if (auth.y_parity > 1)
             continue;
         // s value must be less than or equal to secp256k1n/2, as specified in EIP-2.
         // Validated before ecrecover, as op-geth does (ValidateSignatureValues before Recover).
         if (auth.s > SECP256K1N_OVER_2)
             continue;
 
-        // ALWAYS recover the signer via ecrecover. auth.signer (evmone's fixture-loader
-        // shortcut field) is deliberately ignored: honouring it would be a signature-verification
-        // bypass in the single implementation both consensus paths share — an Authorization built
-        // from decoded user input with an attacker-supplied signer would skip ecrecover entirely.
-        // No in-repo test relies on the shortcut (they all pass signer = nullopt), and the
-        // fixture loader that populated it is no longer built.
+        // ALWAYS recover the signer via ecrecover. evmone's Authorization struct carried a
+        // fixture-loader shortcut field (`signer`) until 0.21 — honouring it was a
+        // signature-verification bypass, and upstream removed it in 0.23 while also doing
+        // real ecrecover here. This implementation predates that fix and keeps the strict
+        // form: the recovered address is the only source of the authority.
         const auto signer = recoverAuthority(auth);
         if (!signer.has_value())
             continue;  // ecrecover failed → skip this authorization

@@ -37,9 +37,9 @@
 #include "ethereum-executor/EVMSupport.h"
 #include "opstack-executor/OpCommon.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include "opstack-executor/OpDepositEncode.h"  // detail::encodeRlpItem (call-path sizing envelope)
-#include <bcos-evm/adapter/Storage2State.h>    // Storage2State / SharedErrorSlot
-#include <bcos-codec/rlp/Common.h>     // BYTES_HEAD_BASE (consensus deposit-envelope decode)
-#include <bcos-codec/rlp/RLPDecode.h>  // tryDecodeHeader / decode / decodeItems / captureRlp
+#include <bcos-codec/rlp/Common.h>           // BYTES_HEAD_BASE (consensus deposit-envelope decode)
+#include <bcos-codec/rlp/RLPDecode.h>        // tryDecodeHeader / decode / decodeItems / captureRlp
+#include <bcos-evm/adapter/Storage2State.h>  // Storage2State / SharedErrorSlot
 #include <bcos-rlp-protocol/Web3Transaction.h>  // AuthorizationListEntry decode (EIP-7702 bind)
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>   // isTypedWeb3Envelope (header-only)
 #include <bcos-utilities/BoostLog.h>            // BCOS_LOG
@@ -242,10 +242,11 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         ea.chain_id = toIntxU256(bcos::u256(auth.chainId));
         ea.addr = bcos::evm::engine::detail::toEvmcAddress(auth.address);
         ea.nonce = auth.nonce;
-        ea.signer = bcos::evm::engine::detail::toEvmcAddress(auth.signer);
+        // evmone 0.23 removed the fixture-shortcut `signer` field; the authority is
+        // recovered by ecrecover at transition time (Eip7702Recover.h).
         ea.r = toIntxU256(auth.r);
         ea.s = toIntxU256(auth.s);
-        ea.v = toIntxU256(bcos::u256(auth.v));
+        ea.y_parity = static_cast<uint8_t>(bcos::u256(auth.v));
         evmTx.authorization_list.push_back(std::move(ea));
     }
     return evmTx;
@@ -929,8 +930,8 @@ template <typename Out>
     return std::nullopt;
 }
 
-/// Block-path only: 7702 authorizationList[].signer is copied from the tars mirror and is
-/// not recovered from the signed envelope (part-5 ecrecover). A non-empty list on a non-0x04
+/// Block-path only: the 7702 authorizationList is copied from the tars mirror; the authority
+/// is recovered by ecrecover at transition (part-5). A non-empty list on a non-0x04
 /// tx would let processAuthorizationList apply unbound signers. set_code (0x04) tuples are
 /// bound by envelopeExecutionFieldsMismatch; empty-list rejection is opValidate's job.
 /// Used by both m_prepare and processOpBlock.
@@ -1669,9 +1670,10 @@ private:
         // clamp the cap to the block base fee for the simulation. Only a call that carries NO
         // explicit fee cap (gasPrice / maxFeePerGas both unset — the pricing-less shape) gets
         // clamped: a caller that explicitly requested a cap below the base fee keeps it, and
-        // opValidate's FEE_CAP_LESS_THAN_BLOCKS (evmone state.cpp) then rejects it exactly like
-        // op-geth's ErrFeeCapTooLow instead of silently simulating at an unrequested price.
-        if (call && !transaction.gasPrice().has_value() && !transaction.maxFeePerGas().has_value())
+        X
+            // op-geth's ErrFeeCapTooLow instead of silently simulating at an unrequested price.
+            if (call && !transaction.gasPrice().has_value() &&
+                !transaction.maxFeePerGas().has_value())
         {
             evmTx.max_gas_price = std::max(evmTx.max_gas_price, intx::uint256{blockInfo.base_fee});
         }
@@ -1746,7 +1748,8 @@ private:
         {
             // On the block path, a full gas pool is a capacity fault, not a poisoned tx.
             // eth_call / estimateGas keep GAS_LIMIT_REACHED as ordinary validation.
-            if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED) && !call)
+            if (*err == evmone::state::make_error_code(evmone::state::GAS_ALLOWANCE_EXCEEDED) &&
+                !call)
             {
                 BOOST_THROW_EXCEPTION(
                     OpBlockGasPoolFull{} << bcos::errinfo_comment(err->message()));

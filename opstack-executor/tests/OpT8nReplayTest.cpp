@@ -422,7 +422,8 @@ inline const intx::uint256 kSecpHalfN = kSecpN >> 1;
 
 inline bool structurallyUnrecoverable(const evmone::state::Authorization& a)
 {
-    return a.v > 1 || a.s > kSecpHalfN || a.r == 0 || a.r >= kSecpN || a.s == 0 || a.s >= kSecpN;
+    return a.y_parity > 1 || a.s > kSecpHalfN || a.r == 0 || a.r >= kSecpN || a.s == 0 ||
+           a.s >= kSecpN;
 }
 
 std::optional<evmc::address> replayRecoverAuthority(const state::Authorization& auth)
@@ -431,9 +432,9 @@ std::optional<evmc::address> replayRecoverAuthority(const state::Authorization& 
     const auto h = keccak256(msg);
     const auto r = intx::be::store<evmc::bytes32>(auth.r);
     const auto s = intx::be::store<evmc::bytes32>(auth.s);
-    return evmmax::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.bytes, 32},
+    return evmone::crypto::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.bytes, 32},
         std::span<const uint8_t, 32>{r.bytes, 32}, std::span<const uint8_t, 32>{s.bytes, 32},
-        auth.v != 0);
+        auth.y_parity != 0);
 }
 
 // ── manifest.txt: one required vector filename per line ('#' comments and blank lines ignored) ─
@@ -674,7 +675,7 @@ bool loadBlockContext(
                     auth.nonce = test::from_json<uint64_t>(jAt(a, "nonce"));
                     auth.r = parseU256(jAt(a, "r"));
                     auth.s = parseU256(jAt(a, "s"));
-                    auth.v = parseU256(jAt(a, "yParity"));
+                    auth.y_parity = static_cast<uint8_t>(parseU256(jAt(a, "yParity")));
 
                     const bool marked = a.isMember("_op_signer_unrecoverable");
                     if (marked && (!jAt(a, "_op_signer_unrecoverable").isBool() ||
@@ -696,10 +697,10 @@ bool loadBlockContext(
                     }
                     else
                     {
-                        // Fill recovered signer + assert per tuple (evmone silently skips tuples
-                        // without a signer).
-                        auth.signer = replayRecoverAuthority(auth);
-                        if (!auth.signer.has_value())
+                        // Recover the authority locally for the anchor assertion; the
+                        // transition itself always re-recovers via ecrecover.
+                        const auto signer = replayRecoverAuthority(auth);
+                        if (!signer.has_value())
                             BOOST_ERROR(id << ": authorization signer recovery failed (unmarked "
                                               "tuple)");
                         else
@@ -708,7 +709,7 @@ bool loadBlockContext(
                             // Non-empty delegation anchor existence: the authority must
                             // carry 0xef0100||tuple.addr delegation code in the vector
                             // postState (required only when this tx has marked tuples).
-                            const auto authAddr = hexAddr(*auth.signer);
+                            const auto authAddr = hexAddr(*signer);
                             // wantPostState 门控（与 replaySingleBlockInto 同语义）：
                             // 采样链向量（--poststate boundary，sampledBlocks 存在）的
                             // 未采样块不携带 postState，jAt 会 throw——这里只在采样块上

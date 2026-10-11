@@ -53,8 +53,7 @@ inline EvmcBytes toEvmcBE(bcos::u256 const& val)
 }
 
 /// Load a 32-byte big-endian evmc value as a bcos::u256.
-inline bcos::u256 fromEvmcBE(auto const& be)
-    requires(sizeof(be.bytes) == 32)
+inline bcos::u256 fromEvmcBE(auto const& be) requires(sizeof(be.bytes) == 32)
 {
     return bcos::fromBigEndian<bcos::u256>(be.bytes);
 }
@@ -73,31 +72,38 @@ inline evmc::bytes32 keccak256(evmc::bytes_view data) noexcept
     return std::bit_cast<evmc::bytes32>(ethash::keccak256(data.data(), data.size()));
 }
 
-// ---- Transaction validation error codes (ported evmone errors.hpp) ----
+// ---- Transaction validation error codes (mirrors bcos-evm eth/state/errors.hpp BY VALUE;
+// evmone 0.24 renamed entries and inserted INVALID_CHAIN_ID/INVALID_ENCODING/INVALID_SIGNATURE
+// before UNKNOWN_ERROR — keep this enum in lockstep or status mapping silently misclassifies) ----
 
 enum ErrorCode : int  // NOLINT(*-use-enum-class)
 {
     SUCCESS = 0,
     INTRINSIC_GAS_TOO_LOW,
-    TX_TYPE_NOT_SUPPORTED,
-    INSUFFICIENT_FUNDS,
-    NONCE_HAS_MAX_VALUE,
+    TYPE_NOT_SUPPORTED,
+    INSUFFICIENT_ACCOUNT_FUNDS,
+    NONCE_IS_MAX,
     NONCE_TOO_HIGH,
     NONCE_TOO_LOW,
-    TIP_GT_FEE_CAP,
-    FEE_CAP_LESS_THAN_BLOCKS,
-    BLOB_FEE_CAP_LESS_THAN_BLOCKS,
-    GAS_LIMIT_REACHED,
+    PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS,
+    INSUFFICIENT_MAX_FEE_PER_GAS,
+    INSUFFICIENT_MAX_FEE_PER_BLOB_GAS,
+    GAS_ALLOWANCE_EXCEEDED,
     SENDER_NOT_EOA,
-    INIT_CODE_SIZE_LIMIT_EXCEEDED,
+    INITCODE_SIZE_EXCEEDED,
     CREATE_BLOB_TX,
     EMPTY_BLOB_HASHES_LIST,
     INVALID_BLOB_HASH_VERSION,
     BLOB_GAS_LIMIT_EXCEEDED,
     CREATE_SET_CODE_TX,
     EMPTY_AUTHORIZATION_LIST,
-    MAX_GAS_LIMIT_EXCEEDED,
+    GAS_LIMIT_EXCEEDS_MAXIMUM,
+    INVALID_CHAIN_ID,
+    INVALID_ENCODING,
+    INVALID_SIGNATURE,
     UNKNOWN_ERROR,
+    // evmone 0.24 appends block-level codes after UNKNOWN_ERROR (INCORRECT_BLOCK_FORMAT
+    // …); they never surface through transaction validation, so the mirror stops here.
 };
 
 /// Obtains a reference to the static error category object for EVM errors.
@@ -115,27 +121,27 @@ inline const std::error_category& evm_error_category() noexcept
                 return "";
             case INTRINSIC_GAS_TOO_LOW:
                 return "intrinsic gas too low";
-            case TX_TYPE_NOT_SUPPORTED:
+            case TYPE_NOT_SUPPORTED:
                 return "transaction type not supported";
-            case INSUFFICIENT_FUNDS:
+            case INSUFFICIENT_ACCOUNT_FUNDS:
                 return "insufficient funds for gas * price + value";
-            case NONCE_HAS_MAX_VALUE:
+            case NONCE_IS_MAX:
                 return "nonce has max value:";
             case NONCE_TOO_HIGH:
                 return "nonce too high";
             case NONCE_TOO_LOW:
                 return "nonce too low";
-            case TIP_GT_FEE_CAP:
+            case PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS:
                 return "max priority fee per gas higher than max fee per gas";
-            case FEE_CAP_LESS_THAN_BLOCKS:
+            case INSUFFICIENT_MAX_FEE_PER_GAS:
                 return "max fee per gas less than block base fee";
-            case BLOB_FEE_CAP_LESS_THAN_BLOCKS:
+            case INSUFFICIENT_MAX_FEE_PER_BLOB_GAS:
                 return "max blob fee per gas less than block base fee";
-            case GAS_LIMIT_REACHED:
+            case GAS_ALLOWANCE_EXCEEDED:
                 return "gas limit reached";
             case SENDER_NOT_EOA:
                 return "sender not an eoa:";
-            case INIT_CODE_SIZE_LIMIT_EXCEEDED:
+            case INITCODE_SIZE_EXCEEDED:
                 return "max initcode size exceeded";
             case CREATE_BLOB_TX:
                 return "blob transaction must not be a create transaction";
@@ -149,8 +155,14 @@ inline const std::error_category& evm_error_category() noexcept
                 return "set code transaction must not be a create transaction";
             case EMPTY_AUTHORIZATION_LIST:
                 return "empty authorization list";
-            case MAX_GAS_LIMIT_EXCEEDED:
-                return "max gas limit exceeded";
+            case GAS_LIMIT_EXCEEDS_MAXIMUM:
+                return "gas limit exceeds maximum";
+            case INVALID_CHAIN_ID:
+                return "invalid chain id";
+            case INVALID_ENCODING:
+                return "invalid encoding";
+            case INVALID_SIGNATURE:
+                return "invalid signature";
             case UNKNOWN_ERROR:
                 return "Unknown error";
             default:

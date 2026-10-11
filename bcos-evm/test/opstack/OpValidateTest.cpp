@@ -134,10 +134,9 @@ BOOST_AUTO_TEST_CASE(RejectsEveryOutOfEnumTxType)
             tx.authorization_list = {state::Authorization{.chain_id = 1,
                 .addr = 0x00000000000000000000000000000000000000cc_address,
                 .nonce = 0,
-                .signer = std::nullopt,
+                .y_parity = uint8_t{0},
                 .r = 1_u256,
-                .s = 1_u256,
-                .v = intx::uint256{0}}};
+                .s = 1_u256}};
         const auto r = opValidate(ts, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(),
             OpFeeParams{}, 30000000);
         BOOST_CHECK_MESSAGE(std::holds_alternative<OpTxProperties>(r),

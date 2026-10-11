@@ -251,7 +251,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 // -32603 for a full gas pool on every retry.
                 // The block itself is still voided — op-geth has no failed-receipt
                 // mechanism for normal txs.
-                if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED))
+                if (*err == evmone::state::make_error_code(evmone::state::GAS_ALLOWANCE_EXCEEDED))
                 {
                     OpConsensusError capacityFault(
                         "op block: tx does not fit the remaining block gas");

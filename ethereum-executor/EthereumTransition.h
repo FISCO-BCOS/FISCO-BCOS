@@ -264,7 +264,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     // trip the maxPriorityGasPrice assert (debug) or silently run as legacy
     // (release), diverging from geth.
     if (txKind > 4)
-        return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+        return make_error_code(ErrorCode::TYPE_NOT_SUPPORTED);
     const auto gasLimit = effectiveGasLimit(tx, callParams);
     const auto nonce = effectiveNonce(tx, callParams);
     const auto maxGasPrice = ethMaxGasPrice(tx, callParams);
@@ -276,7 +276,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     {
     case 3:  // blob
         if (rev < EVMC_CANCUN)
-            return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(ErrorCode::TYPE_NOT_SUPPORTED);
         if (!hasTo)
             return make_error_code(ErrorCode::CREATE_BLOB_TX);
         if (blobHashes.empty())
@@ -286,7 +286,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
 
         assert(block.blob_base_fee.has_value());
         if (ethMaxBlobGasPrice(tx) < *block.blob_base_fee)
-            return make_error_code(ErrorCode::BLOB_FEE_CAP_LESS_THAN_BLOCKS);
+            return make_error_code(ErrorCode::INSUFFICIENT_MAX_FEE_PER_BLOB_GAS);
 
         if (std::ranges::any_of(blobHashes, [](const auto& h) { return h[0] != 0x01; }))
             return make_error_code(ErrorCode::INVALID_BLOB_HASH_VERSION);
@@ -297,7 +297,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
 
     case 4:  // set_code
         if (rev < EVMC_PRAGUE)
-            return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(ErrorCode::TYPE_NOT_SUPPORTED);
         if (!hasTo)
             return make_error_code(ErrorCode::CREATE_SET_CODE_TX);
         if (tx.authorizationList().empty())
@@ -313,15 +313,17 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     case 3:  // blob
     case 2:  // eip1559
         if (rev < EVMC_LONDON)
-            return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(ErrorCode::TYPE_NOT_SUPPORTED);
 
         if (maxPriorityGasPrice > maxGasPrice)
-            return make_error_code(ErrorCode::TIP_GT_FEE_CAP);  // Priority gas price is too high.
+            return make_error_code(
+                ErrorCode::PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS);  // Priority gas price is too
+                                                                    // high.
         [[fallthrough]];
 
     case 1:  // access_list
         if (rev < EVMC_BERLIN)
-            return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(ErrorCode::TYPE_NOT_SUPPORTED);
         [[fallthrough]];
 
     case 0:;  // legacy
@@ -330,13 +332,13 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     assert(maxPriorityGasPrice <= maxGasPrice);
 
     if (rev >= EVMC_OSAKA && gasLimit > evm::MAX_TX_GAS_LIMIT)
-        return make_error_code(ErrorCode::MAX_GAS_LIMIT_EXCEEDED);
+        return make_error_code(ErrorCode::GAS_LIMIT_EXCEEDS_MAXIMUM);
 
     if (gasLimit > blockGasLeft)
-        return make_error_code(ErrorCode::GAS_LIMIT_REACHED);
+        return make_error_code(ErrorCode::GAS_ALLOWANCE_EXCEEDED);
 
     if (maxGasPrice < block.base_fee)
-        return make_error_code(ErrorCode::FEE_CAP_LESS_THAN_BLOCKS);
+        return make_error_code(ErrorCode::INSUFFICIENT_MAX_FEE_PER_GAS);
 
     // We need some information about the sender so lookup the account in the state.
     const auto* const senderPtr = state.find(ethSender(tx));
@@ -348,7 +350,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
                                                             // (EIP-3607).
 
     if (senderNonce == EthAccount::NonceMax)  // Nonce value limit (EIP-2681).
-        return make_error_code(ErrorCode::NONCE_HAS_MAX_VALUE);
+        return make_error_code(ErrorCode::NONCE_IS_MAX);
 
     if (senderNonce < nonce)
         return make_error_code(ErrorCode::NONCE_TOO_HIGH);
@@ -358,7 +360,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
 
     // initcode size is limited by EIP-3860.
     if (rev >= EVMC_SHANGHAI && !hasTo && tx.input().size() > evmone::MAX_INITCODE_SIZE)
-        return make_error_code(ErrorCode::INIT_CODE_SIZE_LIMIT_EXCEEDED);
+        return make_error_code(ErrorCode::INITCODE_SIZE_EXCEEDED);
 
     // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
     // Widened to u512 so gasLimit * gasPrice + value cannot wrap, as the original intx::umul did.
@@ -373,7 +375,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     }
     const auto senderBalance = senderPtr != nullptr ? senderPtr->balance : uint256{};
     if (bcos::u512(senderBalance) < max_total_fee)
-        return make_error_code(ErrorCode::INSUFFICIENT_FUNDS);
+        return make_error_code(ErrorCode::INSUFFICIENT_ACCOUNT_FUNDS);
 
     const auto [intrinsic_cost, min_cost] =
         eth_transition_detail::compute_tx_intrinsic_cost(rev, tx);

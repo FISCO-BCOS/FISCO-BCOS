@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "authorization.hpp"
 #include "blob_params.hpp"
 #include "bloom_filter.hpp"
 #include "state_diff.hpp"
@@ -18,19 +19,10 @@ constexpr auto MAX_TX_GAS_LIMIT = 0x1000000;  // 2**24
 
 using AccessList = std::vector<std::pair<address, std::vector<bytes32>>>;
 
-struct Authorization
-{
-    intx::uint256 chain_id;
-    address addr;
-    uint64_t nonce = 0;
-    /// Signer is empty if it cannot be ecrecovered from r, s, v.
-    std::optional<address> signer;
-    intx::uint256 r;
-    intx::uint256 s;
-    intx::uint256 v;
-};
-
-using AuthorizationList = std::vector<Authorization>;
+/// Decodes an EIP-7702 authorization.
+///
+/// Declared here (not file-local) so the generic rlp::decode(std::vector<T>&) finds it by ADL.
+[[nodiscard]] bool decode(bytes_view& from, Authorization& to) noexcept;
 
 struct Transaction
 {
@@ -63,6 +55,12 @@ struct Transaction
     /// Returns amount of blob gas used by this transaction
     [[nodiscard]] uint64_t blob_gas_used() const { return GAS_PER_BLOB * blob_hashes.size(); }
 
+    /// Whether the transaction specifies expected chain id. Always true for typed transactions.
+    [[nodiscard]] bool chain_id_protected() const noexcept
+    {
+        return type != Type::legacy || v >= 35;
+    }
+
     Type type = Type::legacy;
     bytes data;
     int64_t gas_limit = 0;
@@ -78,15 +76,36 @@ struct Transaction
     uint64_t nonce = 0;
     intx::uint256 r;
     intx::uint256 s;
-    uint8_t v = 0;
+
+    /// The verbatim v value of the signature.
+    /// It encodes y_parity and for legacy transactions chain id.
+    uint64_t v = 0;
     AuthorizationList authorization_list;
 };
+
+/// Decodes a transaction from its complete serialization @p data.
+///
+/// Handles the legacy RLP list and the EIP-2718 typed envelope (type byte followed by an RLP list).
+[[nodiscard]] std::optional<Transaction> decode_transaction(bytes_view data) noexcept;
+
+/// Recovers the sender (the signer) of the transaction @p tx decoded from @p txbytes,
+/// or std::nullopt if the signature is invalid.
+///
+/// The serialization is needed as well because the signing preimage is a slice of it; @p tx must
+/// be what decode_transaction(@p txbytes) returned.
+///
+/// The recovery is strict at every revision: r, s in [1, secp256k1n) and low s (EIP-2).
+[[nodiscard]] std::optional<address> recover_sender(
+    const Transaction& tx, bytes_view txbytes) noexcept;
 
 /// Transaction properties computed during the validation needed for the execution.
 struct TransactionProperties
 {
     /// The amount of gas provided to the EVM for the transaction execution.
     int64_t execution_gas_limit = 0;
+
+    /// The amount of state-gas spendable by EVM on state increase (since EIP-8037).
+    int64_t state_gas_limit = 0;
 
     /// The minimal amount of gas the transaction must use.
     int64_t min_gas_cost = 0;
@@ -113,8 +132,15 @@ struct TransactionReceipt
     Transaction::Type type = Transaction::Type::legacy;
     evmc_status_code status = EVMC_INTERNAL_ERROR;
 
-    /// Amount of gas used by this transaction.
+    /// Amount of gas used by this transaction (after refund, with the min gas applied).
     int64_t gas_used = 0;
+
+    /// Amount of gas counted against the block gas limit by this transaction (EIP-7778).
+    int64_t block_gas_used = 0;
+
+    /// The amount of state-gas used by this transaction (since EIP-8037).
+    /// It is the state-gas part of #block_gas_used; the rest is the execution-gas part.
+    int64_t state_gas_used = 0;
 
     /// Amount of gas used by this and previous transactions in the block.
     int64_t cumulative_gas_used = 0;

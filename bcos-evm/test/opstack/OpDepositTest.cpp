@@ -259,7 +259,7 @@ BOOST_AUTO_TEST_CASE(ContractCreationDerivesAddressFromPreExecutionNonce, * boos
     bcos::evm::applyStateDiffStrict(ts, diff);
 
     // 地址须由「执行前」nonce（5）派生，而非 host.call 内部已 bump 过的 6。
-    const auto expectedAddr = evmone::state::compute_create_address(kFrom, 5);
+    const auto expectedAddr = evmone::compute_create_address(kFrom, 5);
 
     BOOST_CHECK_EQUAL(r->status(), 0);
     const auto& meta = r->opStackMeta();
@@ -811,7 +811,7 @@ BOOST_AUTO_TEST_CASE(FailedCreateDepositStillBumpsNonceAndDeploysNothing, * boos
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21000);  // 处理级失败收 gasLimit（此处恰 21000）
     BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 6u);
     BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{7});
-    BOOST_CHECK_EQUAL(ts.count(evmone::state::compute_create_address(kFrom, 5)), 0u);
+    BOOST_CHECK_EQUAL(ts.count(evmone::compute_create_address(kFrom, 5)), 0u);
 }
 
 // Mint wraps mod 2^256 (op-geth AddBalance).

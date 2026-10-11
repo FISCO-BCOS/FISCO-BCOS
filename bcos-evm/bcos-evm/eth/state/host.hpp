@@ -6,33 +6,11 @@
 
 #include "state.hpp"
 #include "state_view.hpp"
-#include <optional>
+#include <evmone/create_address.hpp>
 
 namespace evmone::state
 {
 using evmc::uint256be;
-
-/// Computes the address of to-be-created contract with the CREATE scheme.
-///
-/// Computes the new account address for the contract creation context of the CREATE instruction
-/// or a create transaction.
-/// This is defined by 𝐀𝐃𝐃𝐑 in Yellow Paper, 7. Contract Creation, (88-90), the case for ζ = ∅.
-///
-/// @param sender        The address of the message sender. YP: 𝑠.
-/// @param sender_nonce  The sender's nonce before the increase. YP: 𝑛.
-/// @return              The address computed with the CREATE scheme.
-[[nodiscard]] address compute_create_address(const address& sender, uint64_t sender_nonce) noexcept;
-
-/// Computes the address of to-be-created contract with the CREATE2 scheme.
-///
-/// Computes the new account address for the contract creation context of the CREATE2 instruction.
-///
-/// @param sender        The address of the message sender.
-/// @param salt          The salt.
-/// @param init_code     The init_code to hash (initcode or initcontainer).
-/// @return              The address computed with the scheme.
-[[nodiscard]] address compute_create2_address(
-    const address& sender, const bytes32& salt, bytes_view init_code) noexcept;
 
 class Host : public evmc::Host
 {
@@ -71,6 +49,8 @@ private:
 
     [[nodiscard]] uint256be get_balance(const address& addr) const noexcept override;
 
+    [[nodiscard]] uint64_t get_nonce(const address& addr) const noexcept override;
+
     [[nodiscard]] size_t get_code_size(const address& addr) const noexcept override;
 
     [[nodiscard]] bytes32 get_code_hash(const address& addr) const noexcept override;
@@ -94,14 +74,6 @@ public:
 
 private:
     evmc_access_status access_storage(const address& addr, const bytes32& key) noexcept override;
-
-    /// Prepares message for execution.
-    ///
-    /// This contains mostly checks and logic related to the sender
-    /// which may finally be moved to EVM.
-    /// Any state modification is not reverted.
-    /// @return Modified message or std::nullopt in case of EVM exception.
-    std::optional<evmc_message> prepare_message(evmc_message msg) noexcept;
 
     evmc::Result execute_message(const evmc_message& msg) noexcept;
 };
