@@ -11,6 +11,7 @@ network, no op-geth binary, and the only external process is the zstd CLI.
 """
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -32,8 +33,14 @@ def default_decompress(zst_bytes, dictionary):
     with tempfile.NamedTemporaryFile() as dict_file:
         dict_file.write(dictionary)
         dict_file.flush()
+        zstd = shutil.which("zstd")
+        if zstd is None:
+            raise RegistryError("the zstd CLI is required to decompress the registry "
+                                "dictionary but was not found in PATH")
+        # nosec B603: the "untrusted input" is the operator's own registry zip and a
+        # tempfile this function created; the absolute path above addresses B607.
         proc = subprocess.run(
-            ["zstd", "-d", "-D", dict_file.name, "-c"],
+            [zstd, "-d", "-D", dict_file.name, "-c"],
             input=zst_bytes, capture_output=True)
     if proc.returncode != 0:
         # A frame the dictionary cannot decode is a registry problem, so report it as

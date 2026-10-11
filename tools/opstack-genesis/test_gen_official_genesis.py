@@ -93,7 +93,11 @@ GENESIS_ISTHMUS = {**GENESIS,
                              {"balance": "0x0", "nonce": "0x0", "storage": _MP_STORAGE}}}
 
 
-def _make_zip(tmp_path, toml=TOML, genesis=GENESIS):
+def _make_zip(tmp_path, toml=TOML, genesis=None):
+    # None sentinel instead of the GENESIS dict: a mutable default would let any future
+    # mutation inside this helper leak into every test that shares the default.
+    if genesis is None:
+        genesis = GENESIS
     path = tmp_path / "superchain-configs.zip"
     with zipfile.ZipFile(path, "w") as zf:
         zf.writestr("COMMIT", "deadbeef")
