@@ -121,6 +121,30 @@ static_assert(
         return true;
     }(),
     "c_opForkLadder must map every OpForkId rung exactly once (bijection, not a count)");
+static_assert(
+    [] {
+        // The PAIRING the two pins above do not check: order pins the fork column, the
+        // bijection pins the id SET — but permuting the engineForkId payloads between two
+        // rows satisfies both while opForkIdFor then answers the wrong Engine-API profile
+        // for every consumer of the swapped rungs. The k-th id-carrying row must carry
+        // OpForkId(k): the ids follow the same declaration order the fork column is pinned
+        // to (Bedrock/Delta carry no id and are skipped by this and the bijection alike).
+        std::uint8_t next = 0;
+        for (auto const& row : c_opForkLadder)
+        {
+            if (!row.engineForkId.has_value())
+            {
+                continue;
+            }
+            if (static_cast<std::uint8_t>(*row.engineForkId) != next)
+            {
+                return false;
+            }
+            ++next;
+        }
+        return next == magic_enum::enum_count<OpForkId>();
+    }(),
+    "c_opForkLadder ids must pair with their own rungs (id-carrying row k carries OpForkId(k))");
 
 [[nodiscard]] inline std::optional<OpForkId> opForkIdFor(bcos::ledger::OpFork fork)
 {

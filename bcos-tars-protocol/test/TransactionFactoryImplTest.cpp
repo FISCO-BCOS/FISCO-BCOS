@@ -402,42 +402,58 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
 // the other variable-length fields (accessList, signature, extraTransactionBytes) are counted.
 // Without this, a 0x04 SetCode tx makes BlockResponse["size"] under-report. 0x04 requires the
 // Prague revision (OP Isthmus+), so it is config-gated; blobVersionedHashes is defensive only
-// (0x03 is refused at admission). Exact deltas per field group: a >= bound accepts any
-// over-count (the mis-accounting class this change fixes), and every field the change added is
-// exercised — including maxFeePerBlobGas, the sibling variable-length field of the 0x03 shape.
-BOOST_AUTO_TEST_CASE(sizeCountsAuthorizationListAndBlobVersionedHashes)
+// (0x03 is refused at admission). PER-FIELD deltas: the authorization strings are width-fixed
+// by their formats (address/signer 40, r/s 66 with the 0x prefix), so one sum over them cannot
+// attribute a copy-paste error — each field is added alone and its delta asserted against its
+// own width. The envelope's remaining variable-length fields (chainID/groupID/dataHash) are
+// pinned the same way.
+BOOST_AUTO_TEST_CASE(sizeCountsEachVariableLengthFieldSeparately)
 {
     auto tx = std::make_shared<TransactionImpl>();
     auto& inner = tx->mutableInner();
     inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
     inner.web3TypedTxKind = static_cast<tars::Char>(4);  // EIP-7702 SetCode
+
+    // One authorization entry per field, only that field set: each push's delta is exactly
+    // that field's width — an implementation that counts address twice and never signer
+    // (both 40) fails on the signer push.
+    auto const pushEntryWith =
+        [&](std::string bcostars::AuthorizationEntry::* field, std::string value) {
+            bcostars::AuthorizationEntry entry;
+            entry.*field = std::move(value);
+            inner.data.authorizationList.push_back(entry);
+        };
     std::size_t const base = tx->size();
+    pushEntryWith(&bcostars::AuthorizationEntry::address, std::string(40, 'a'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 40U);
+    pushEntryWith(&bcostars::AuthorizationEntry::signer, std::string(40, 'b'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 80U);
+    pushEntryWith(&bcostars::AuthorizationEntry::r, "0x" + std::string(64, 'c'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 80U + 66U);
+    pushEntryWith(&bcostars::AuthorizationEntry::s, "0x" + std::string(64, 'd'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 80U + 2U * 66U);
 
-    bcostars::AuthorizationEntry auth;
-    auth.chainID = 1;
-    auth.address = std::string(40, 'a');  // 20-byte address, hex without 0x (tars form)
-    auth.nonce = 7;
-    auth.signer = std::string(40, 'b');
-    auth.r = "0x" + std::string(64, 'c');
-    auth.s = "0x" + std::string(64, 'd');
-    auth.v = 1;
-    inner.data.authorizationList.push_back(auth);
-
-    bcostars::AuthorizationEntry auth2 = auth;
-    auth2.address = std::string(40, 'e');
-    inner.data.authorizationList.push_back(auth2);
-
-    std::size_t const authBytes =
-        2 * (auth.address.size() + auth.signer.size() + auth.r.size() + auth.s.size());
-    BOOST_CHECK_EQUAL(tx->size() - base, authBytes);
-
+    // Blob commitments (32 bytes each) and the sibling variable-length gas field.
+    std::size_t const afterAuth = tx->size();
     inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x11));
     inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x22));
+    BOOST_CHECK_EQUAL(tx->size() - afterAuth, 64U);
+    std::size_t const afterBlobs = tx->size();
     inner.data.maxFeePerBlobGas = "0x" + std::string(64, 'f');
+    BOOST_CHECK_EQUAL(tx->size() - afterBlobs, 66U);
 
-    std::size_t const blobBytes = 2 * 32;
-    BOOST_CHECK_EQUAL(
-        tx->size() - base - authBytes, blobBytes + inner.data.maxFeePerBlobGas.size());
+    // The envelope's remaining variable-length fields (counted since the
+    // every-variable-length-field sweep): chainID/groupID hex strings and the dataHash
+    // byte payload that mirrors extraTransactionHash.
+    std::size_t const afterGas = tx->size();
+    inner.data.chainID = std::string(42, '1');
+    BOOST_CHECK_EQUAL(tx->size() - afterGas, 42U);
+    std::size_t const afterChainId = tx->size();
+    inner.data.groupID = std::string(7, '2');
+    BOOST_CHECK_EQUAL(tx->size() - afterChainId, 7U);
+    std::size_t const afterGroupId = tx->size();
+    inner.dataHash = std::vector<tars::Char>(32, 0x33);
+    BOOST_CHECK_EQUAL(tx->size() - afterGroupId, 32U);
 }
 
 // Deposit hash: the canonical txHash of a 0x7e tx is keccak256 of the full envelope (type byte

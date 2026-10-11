@@ -102,8 +102,9 @@ GenesisConfig makeEthGenesisConfig()
 
 // Pre-Holocene (London/Bedrock) L2 genesis: non-empty extraData is the spec
 // exception S1 must accept. 16-field header; the hash was computed OFFLINE by
-// tools/opstack-genesis/gen_eth_header_fixture.py (independent python rlp + keccak),
-// which is the same construction Base's official genesis.l2.hash comes from.
+// tools/opstack-genesis/gen_eth_header_fixture.py (independent python rlp + keccak;
+// out-of-tree — the FISCO-BCOS/op-stack-e2e-tests harness above owns it), which is the
+// same construction Base's official genesis.l2.hash comes from.
 //   extraData = "all your base are belong to you." (ASCII, 32 bytes)
 constexpr std::string_view c_preHoloceneGenesisHash =
     "d043c3480e0aa1b2163f2790e622f8cf404bc188a4e4da0097f276a477f459a9";

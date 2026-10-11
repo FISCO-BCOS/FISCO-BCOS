@@ -35,9 +35,9 @@
 #include "bcos-devp2p/sync/BlockExchange.h"
 #include "bcos-devp2p/sync/Bootnodes.h"
 #include "bcos-devp2p/sync/OpHeaderValidator.h"
+#include "bcos-framework/engine/OpEip1559Params.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-framework/engine/OpEip1559Params.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
@@ -276,7 +276,9 @@ private:
     /// [op_eip1559] triple rides along too: a chain declaring its own pair must
     /// have its pre-Holocene headers re-priced with those constants, not the
     /// superchain preset — otherwise every replayed header fails the baseFee
-    /// check (the declared channel reaches every consumer, not just the engine).
+    /// check (at this head the declared channel reaches every WIRED consumer —
+    /// this sync validator and the boot probe; the engine's zero-param
+    /// substitution rides part B).
     bcos::devp2p::sync::OpChainConfig opChainConfig() const
     {
         bcos::devp2p::sync::OpChainConfig config;

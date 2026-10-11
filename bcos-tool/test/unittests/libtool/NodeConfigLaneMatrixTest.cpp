@@ -219,7 +219,7 @@ BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(genesisWith("jovian_time=0\n", "0:isthmus,100:jovian")),
             InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "activates jovian/karst at");
+                return errinfoContains(e, "declare different schedules");
             });
     }
     // The karst rung diverges on its own too (the jovian pair above agrees): shorthand
@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(genesisWith("karst_time=5\n", "0:isthmus,100:karst")),
             InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "activates jovian/karst at");
+                return errinfoContains(e, "declare different schedules");
             });
     }
 }

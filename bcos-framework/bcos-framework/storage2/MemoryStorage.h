@@ -609,18 +609,18 @@ public:
                 for (auto& [data, _] : chunk)
                 {
                     auto&& [key, value] = *data;
-                    // Copy, never move — and the copy is the floor for this shape, not
-                    // overhead to be optimized away. mergeIntoBackends merges the SAME
-                    // source storage into the backend and the cache in parallel
-                    // (tbb::parallel_invoke), so two mergeConcurrent passes read this
-                    // source concurrently: moving out of the shared source would let the
-                    // second pass write a moved-from (gutted) Entry — a nondeterministic
-                    // corruption of one layer (observed as intermittent state-root
-                    // mismatches on the switch-SetCanonical path). The no-cache
-                    // single-pass shape pays the same copy to keep the primitive uniform;
-                    // recovering it needs an
-                    // explicit move-and-erase contract on the source, agreed with every
-                    // caller of mergeBackStorage/mergeToBackends — not a silent move here.
+                    // A copy, spelled as one. The source is const-bound (the transform
+                    // lambda above takes Data const&), so innerValue deduces const and
+                    // this line was ALREADY a copy when it read std::move(innerValue) —
+                    // a const rvalue selects the copy constructor. Keep it explicit so
+                    // nobody "optimizes" it into a real move: mergeIntoBackends merges
+                    // the SAME source storage into the backend and the cache in
+                    // parallel (tbb::parallel_invoke), so two mergeConcurrent passes
+                    // read this source concurrently, and a real move here would let the
+                    // second pass write a moved-from (gutted) Entry — one layer silently
+                    // corrupted. Recovering the move needs an explicit move-and-erase
+                    // contract on the source, agreed with every caller of
+                    // mergeBackStorage/mergeToBackends — not a silent move here.
                     std::visit(
                         [&](auto& innerValue) {
                             toStorage.writeOne(bucket, key, innerValue, false);

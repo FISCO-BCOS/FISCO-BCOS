@@ -186,6 +186,9 @@ constexpr static std::string_view SYS_ROLLBACK_JOURNAL{"s_rollback_journal"};
 constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
 // OP fork schedule metadata (all-or-none triple; see OpForkScheduleMetadata.h).
+// New table vs the release-3.18.0 base (the ChainMetadata→OpForkScheduleMetadata rename
+// happened inside this PR's own stack, so against the base this is a net-new surface —
+// the table is empty there, no data migration involved).
 constexpr static std::string_view SYS_OP_CHAIN_METADATA{"s_op_chain_metadata"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};

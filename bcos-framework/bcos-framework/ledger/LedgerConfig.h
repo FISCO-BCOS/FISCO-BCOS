@@ -50,6 +50,12 @@ namespace bcos::ledger
 /// differ between binaries (a silent state-root fork).
 DERIVE_BCOS_EXCEPTION(InvalidEVMCRevisionConfig);
 
+/// Thrown when a persisted op_eip1559_params SYS_CONFIG value cannot be parsed — its own
+/// domain type, so consumers can classify EIP-1559 row faults apart from evmc_revision
+/// faults (same policy: the triple prices every pre-Holocene block, so a corrupt value
+/// must halt loudly rather than degrade to a preset).
+DERIVE_BCOS_EXCEPTION(InvalidOpEip1559Config);
+
 /// Thrown when a persisted web3_chain_id SYS_CONFIG value cannot be parsed. The value
 /// feeds the EVM CHAINID opcode, so a corrupt value must halt loudly rather than
 /// silently serve 0 — a sentinel indistinguishable from "unset", and one the admission
@@ -564,32 +570,35 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
 inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value)
 {
     auto parseField = [&value](std::string_view field) -> std::uint64_t {
-        std::uint64_t out = 0;
-        auto [ptr, ec] = std::from_chars(field.data(), field.data() + field.size(), out);
-        if (ec != std::errc{} || ptr != field.data() + field.size())
+        // One acceptance window with the loaders and the codec (parseConfigUint64): the
+        // whole string must be consumed. The u32 bound is the Holocene extraData width
+        // every field must fit — a foreign row must fail the same way instead of
+        // silently carrying a value no header can emit.
+        auto const parsed =
+            parseConfigUint64(field, ConfigUint64Options{
+                                         .maxValue = std::numeric_limits<std::uint32_t>::max(),
+                                     });
+        if (parsed.error == ConfigUint64Error::outOfRange)
         {
             BOOST_THROW_EXCEPTION(
-                InvalidEVMCRevisionConfig()
-                << errinfo_comment("cannot parse op_eip1559_params value: " + std::string(value)));
-        }
-        // Holocene extraData encodes each field as u32; the [op_eip1559] loader refuses
-        // wider values at load and the row parser shares the invariant — a foreign row
-        // must fail the same way instead of silently carrying a value no header can emit.
-        if (out > std::numeric_limits<std::uint32_t>::max())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidEVMCRevisionConfig()
+                InvalidOpEip1559Config()
                 << errinfo_comment(
                        "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
         }
-        return out;
+        if (!parsed.value.has_value())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidOpEip1559Config()
+                << errinfo_comment("cannot parse op_eip1559_params value: " + std::string(value)));
+        }
+        return *parsed.value;
     };
     auto comma1 = value.find(',');
     auto comma2 =
         comma1 == std::string_view::npos ? std::string_view::npos : value.find(',', comma1 + 1);
     if (comma1 == std::string_view::npos || comma2 == std::string_view::npos)
     {
-        BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+        BOOST_THROW_EXCEPTION(InvalidOpEip1559Config() << errinfo_comment(
                                   "cannot parse op_eip1559_params value: " + std::string(value)));
     }
     auto params = bcos::engine::OpEip1559Params{.elasticity = parseField(value.substr(0, comma1)),
@@ -601,17 +610,21 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
     // parser would refuse.
     if (auto const problem = opEip1559ParamsRowProblem(params))
     {
-        BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+        BOOST_THROW_EXCEPTION(InvalidOpEip1559Config() << errinfo_comment(
                                   "op_eip1559_params value carries a " + *problem + ": " +
                                   std::string(value)));
     }
     return params;
 }
 
-/// The OP-lane boot probe's eip1559 check, symmetric with the schedule one: the chain's
+/// The OP-lane boot probe's eip1559 check, symmetric with the schedule one except on the
+/// absent-recorded side: the chain's
 /// recorded triple (the genesis-frozen SYS_CONFIG row, absent on chains that never declared
 /// [op_eip1559]) must equal the triple THIS node will price with — effectiveOpEip1559 of the
-/// local section, i.e. the preset when it declares nothing. A dropped or edited local section
+/// local section, i.e. the preset when it declares nothing. An ABSENT row still compares
+/// (against the preset), unlike the schedule probe's skip: the preset is a binary-side
+/// constant every unrecording node prices with, so a declared non-preset triple is a real
+/// divergence even with nothing recorded. A dropped or edited local section
 /// otherwise makes this node's header validation and zero-param substitution use constants the
 /// chain did not record, which the corpus devnet already demonstrated once (op-geth's own
 /// denominator vs the preset). Returns the violation text, or nullopt when the node may start;

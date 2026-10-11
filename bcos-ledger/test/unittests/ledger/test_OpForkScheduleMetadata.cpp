@@ -31,7 +31,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-tool/Exceptions.h"
 #include <bcos-framework/testutils/faker/FakeBlock.h>
-#include <magic_enum/magic_enum.hpp>
 #include <boost/test/unit_test.hpp>
 #include <array>
 #include <magic_enum/magic_enum.hpp>
@@ -347,7 +346,7 @@ BOOST_AUTO_TEST_CASE(dualDeclarationProblemNamesBothPairs)
     auto const problem =
         opForkScheduleDualDeclarationProblem(std::string{"0:isthmus,1000:jovian"}, shorthand);
     BOOST_REQUIRE(problem.has_value());
-    BOOST_CHECK(problem->find("activates jovian/karst at") != std::string::npos);
+    BOOST_CHECK(problem->find("declare different schedules") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(eip1559BootProbeComparesTheRecordedTripleWithTheNodeTriple)
@@ -363,6 +362,154 @@ BOOST_AUTO_TEST_CASE(eip1559BootProbeComparesTheRecordedTripleWithTheNodeTriple)
     // Both sides declare the same triple: start; neither declares: start.
     BOOST_CHECK(!opEip1559BootProbeProblem(std::string{"2,8,250"}, declared).has_value());
     BOOST_CHECK(!opEip1559BootProbeProblem(std::nullopt, std::nullopt).has_value());
+}
+
+// The schedule probe's mirror of the absent-row arm above — and the DELIBERATE asymmetry
+// between the two probes: eip1559 refuses an absent row plus a declared non-preset triple
+// (the preset is a knowable binary-side constant), while the schedule probe SKIPS when
+// EITHER side is absent — the chain recorded nothing (a nothing-recorded chain's legacy
+// schedule is not derivable from storage; each node ran its own config) or this node
+// declares nothing (it runs the legacy path). Both skips are guarded off the config path
+// by the OP lane's Required [op_fork_timestamps] rule (ChainLaneConfig.h), so they are
+// reachable only through direct-API callers; see opForkScheduleBootProbeProblem's
+// docstring for the accepted residual exposure.
+BOOST_AUTO_TEST_CASE(scheduleProbeSkipsOnEitherAbsentSide)
+{
+    // Nothing recorded, nothing declared: start (the pre-triple, pre-row legacy chain).
+    BOOST_CHECK(!opForkScheduleBootProbeProblem(std::nullopt, std::nullopt, std::nullopt)
+                    .has_value());
+    // Nothing recorded, local DECLARED (the changed-config shape eip1559 refuses): still
+    // start — pinned here so the asymmetry is a documented contract, not an accident.
+    BOOST_CHECK(!opForkScheduleBootProbeProblem(
+                    std::nullopt, std::nullopt, std::string{"0:isthmus,1000:karst"})
+                    .has_value());
+    // Recorded, local UNDECLARED (F14's arm — the node runs the legacy path): skip too.
+    BOOST_CHECK(
+        !opForkScheduleBootProbeProblem(std::string{"0:isthmus"}, std::nullopt, std::nullopt)
+             .has_value());
+    // Anything recorded plus a diverging local schedule still refuses, both record sides.
+    BOOST_CHECK(opForkScheduleBootProbeProblem(
+                    std::string{"0:isthmus"}, std::nullopt, std::string{"0:isthmus,1000:karst"})
+                    .has_value());
+    BOOST_CHECK(opForkScheduleBootProbeProblem(
+                    std::nullopt, std::string{"0:isthmus"}, std::string{"0:isthmus,1000:karst"})
+                    .has_value());
+}
+
+// The snapshot fail-closed branch the PR highlights was unexercised: the round-trip tests
+// parse rows directly, and nothing drove applyLedgerConfig's OP-lane rows. Drive the real
+// assembler: a valid row populates the snapshot fields (narrowed to the jovian/karst
+// pair), a corrupt row fails closed with the eip1559 domain error, and a non-OP lane
+// leaves the fields untouched even with a garbage row present. (headBaseFee stays unset —
+// the release-merge-added eighth parameter is orthogonal to the OP rows under test.)
+BOOST_AUTO_TEST_CASE(applyLedgerConfigPopulatesAndFailClosesTheOpRows)
+{
+    SystemConfigs sysConfig;
+    sysConfig.set(SystemConfig::executor_version, "3", 0);
+    sysConfig.set(SystemConfig::op_eip1559_params, "6,50,250", 0);
+    sysConfig.set(SystemConfig::op_fork_schedule, "0:isthmus,1000:jovian", 0);
+    LedgerConfig config;
+    applyLedgerConfig(config, {}, sysConfig, Features{}, 0, std::nullopt, std::nullopt, std::nullopt);
+    BOOST_REQUIRE(config.opEip1559Params().has_value());
+    BOOST_CHECK_EQUAL(config.opEip1559Params()->denominatorCanyon, 250U);
+    BOOST_REQUIRE(config.opForkSchedule().has_value());
+    BOOST_CHECK_EQUAL(config.opForkSchedule()->m_jovianTime, 1000U);
+    BOOST_CHECK_EQUAL(
+        config.opForkSchedule()->m_karstTime, std::numeric_limits<uint64_t>::max());
+
+    // Corrupt row: the snapshot read itself fails closed (this is the branch the boot
+    // probe mirrors), with the eip1559 domain type rather than the evmc one.
+    SystemConfigs corrupt;
+    corrupt.set(SystemConfig::executor_version, "3", 0);
+    corrupt.set(SystemConfig::op_eip1559_params, "6,0,250", 0);
+    BOOST_CHECK_EXCEPTION(
+        (void)applyLedgerConfig(config, {}, corrupt, Features{}, 0, std::nullopt, std::nullopt, std::nullopt),
+        InvalidOpEip1559Config,
+        [](auto const& e) { return messageContains(e, "zero"); });
+
+    // Non-OP lane (executor_version 2): the OP rows are not read at all — a garbage row
+    // must not refuse an Ethereum-lane snapshot.
+    SystemConfigs ethLane;
+    ethLane.set(SystemConfig::executor_version, "2", 0);
+    ethLane.set(SystemConfig::op_eip1559_params, "garbage", 0);
+    LedgerConfig untouched;
+    applyLedgerConfig(untouched, {}, ethLane, Features{}, 0, std::nullopt, std::nullopt, std::nullopt);
+    BOOST_CHECK(!untouched.opEip1559Params().has_value());
+    BOOST_CHECK(!untouched.opForkSchedule().has_value());
+}
+
+// The guard compares WHOLE normalized schedules, not just the (jovian, karst) pair (review
+// F4): a canonical channel describing a replay ladder while the shorthand declares the
+// isthmus baseline is refused even when the two rungs every current consumer keys on agree
+// — the executor runs the shorthand struct while the canonical side feeds the stored row.
+BOOST_AUTO_TEST_CASE(dualDeclarationComparesTheWholeLadder)
+{
+    // Same jovian/karst pair (jovian@1000, karst unset), different lower rungs: refuse.
+    OpForkSchedule shorthand;  // isthmus zero-start baseline
+    shorthand.m_jovianTime = 1000;
+    auto const problem = opForkScheduleDualDeclarationProblem(
+        std::string{"0:regolith,5:canyon,20:ecotone,30:fjord,40:granite,50:holocene,"
+                    "60:isthmus,1000:jovian"},
+        shorthand);
+    BOOST_REQUIRE(problem.has_value());
+    BOOST_CHECK(problem->find("declare different schedules") != std::string::npos);
+    // Whole-ladder agreement (the baseline ladder spelled as canonical text): pass.
+    BOOST_CHECK(!opForkScheduleDualDeclarationProblem(
+                    std::string{"0:isthmus,1000:jovian"}, shorthand)
+                    .has_value());
+    // The historical pair-only false-positive shape stays legal when the FULL ladders
+    // agree: karst-without-jovian folds to the same text the canonical spells.
+    OpForkSchedule karstOnly;
+    karstOnly.m_karstTime = 2000;
+    BOOST_CHECK(!opForkScheduleDualDeclarationProblem(
+                    std::string{"0:isthmus,2000:karst"}, karstOnly)
+                    .has_value());
+}
+
+// The boot-probe triple validation resolves the binding target (review F5): the config's
+// [eth_genesis_header] hash when the node declares one, else the chain's OWN block-0
+// header — so a schedule-carrying genesis built by a direct-API caller (no config
+// section) boots with its tamper evidence intact instead of being refused.
+BOOST_AUTO_TEST_CASE(bootTripleValidationFallsBackToTheChainGenesisHash)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
+            *ledger, scheduleGenesis(c_isthmusJovianSchedule), emptyLedgerConfig()));
+        auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
+        BOOST_REQUIRE(block);
+
+        // No config header: the probe falls back to the chain's own B0 hash and passes.
+        auto metadata = co_await readValidatedOpForkScheduleMetadataForBoot(
+            *storage, *m_blockFactory, std::nullopt);
+        BOOST_REQUIRE(metadata.has_value());
+        BOOST_CHECK_EQUAL(metadata->genesisHash, block->blockHeader()->hash());
+
+        // A config-declared hash is authoritative when present: a WRONG one refuses even
+        // though the chain's own B0 hash would match (the config-side pin stays).
+        crypto::HashType const foreign{
+            std::string("0x") + std::string(64, 'a'), crypto::HashType::FromHex};
+        BOOST_CHECK_EXCEPTION(
+            (void)(co_await readValidatedOpForkScheduleMetadataForBoot(
+                *storage, *m_blockFactory, std::optional<crypto::HashType>{foreign})),
+            InvalidOpForkSchedule,
+            [](InvalidOpForkSchedule const& e) {
+                return messageContains(e, "genesis binding mismatch");
+            });
+
+        // A triple bound to a DIFFERENT genesis than both targets refuses either way.
+        auto rows = co_await readOpForkScheduleMetadataRows(*storage);
+        BOOST_REQUIRE(!opForkScheduleMetadataRowsAbsent(rows));
+        rows.genesisHash = foreign.hex();
+        BOOST_CHECK_EXCEPTION(
+            (void)validateOpForkScheduleMetadataRows(rows, block->blockHeader()->hash()),
+            InvalidOpForkSchedule,
+            [](InvalidOpForkSchedule const& e) {
+                return messageContains(e, "genesis binding mismatch");
+            });
+        co_return;
+    }());
 }
 
 BOOST_AUTO_TEST_CASE(configUint64WindowIsSharedByTheLoadersAndTheCodec)
@@ -822,7 +969,7 @@ BOOST_AUTO_TEST_CASE(opEip1559ParamsRowRejectsAboveUint32)
     for (auto const* row : {"4294967296,50,250", "6,4294967296,250", "6,50,4294967296"})
     {
         BOOST_CHECK_EXCEPTION((void)bcos::ledger::parseOpEip1559Params(row),
-            bcos::ledger::InvalidEVMCRevisionConfig,
+            bcos::ledger::InvalidOpEip1559Config,
             [](auto const& e) { return messageContains(e, "exceeds uint32"); });
     }
     BOOST_CHECK(bcos::ledger::opEip1559ParamsRowProblem(
@@ -842,7 +989,7 @@ BOOST_AUTO_TEST_CASE(opEip1559RowRejectsZeroTriple)
     for (auto const* row : {"0,0,0", "6,0,250", "0,50,250"})
     {
         BOOST_CHECK_EXCEPTION((void)bcos::ledger::parseOpEip1559Params(row),
-            bcos::ledger::InvalidEVMCRevisionConfig,
+            bcos::ledger::InvalidOpEip1559Config,
             [](auto const& e) { return messageContains(e, "zero"); });
     }
     // The legacy preset itself still parses, and so does any declared non-zero triple.

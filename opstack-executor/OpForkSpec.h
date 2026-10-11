@@ -335,8 +335,9 @@ static_assert(
 /// ExecutionPayload::timestamp); the OP fork schedule ([op_fork_timestamps],
 /// op-node's rollup.json jovian_time/karst_time) is SECONDS. Every fork judgement on the new OP
 /// lane converts through this alias, which delegates to the framework's single implementation
-/// (bcos-framework/engine/OpTime.h) — the same conversion the RPC's EIP-7825 gate uses, so the
-/// two cannot round differently (the alias is kept because the OP lane's call sites name the
+/// (bcos-framework/engine/OpTime.h) — the same conversion the RPC's EIP-7825 gate will use
+/// (part B — no bcos-rpc consumer exists at this head), so the two cannot round differently
+/// once that gate lands (the alias is kept because the OP lane's call sites name the
 /// domain conversion; the bcos-evm-free successor of the retired OpCommon.h's
 /// detail::forkTimestampSec).
 [[nodiscard]] inline constexpr uint64_t opForkTimestampSec(int64_t internalTimestampMs) noexcept

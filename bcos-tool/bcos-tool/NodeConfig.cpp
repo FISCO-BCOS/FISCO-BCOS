@@ -134,7 +134,9 @@ uint64_t parseForkTimestamp(
 {
     // One acceptance window with the other loaders and the canonical-channel codec
     // (ledger::parseConfigUint64): decimal or 0x-hex, the whole string consumed, and the
-    // not-scheduled sentinel refused.
+    // not-scheduled sentinel refused. NOTE: the sentinel refusal is shared with the L1
+    // [fork_timestamps] ladder (this helper is its parser too) — a deliberate fail-closed
+    // widening over the old permissive from_chars, which accepted the all-9s value.
     auto const parsed = ledger::parseConfigUint64(value,
         ledger::ConfigUint64Options{.allowHex = true,
             .maxValue = std::numeric_limits<uint64_t>::max(),
@@ -1762,7 +1764,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     ledger::OpForkSchedule schedule;
     for (auto const& [key, member] : keys)
     {
-        schedule.*member = readOptionalForkTimestamp(*section, "op_fork_timestamps", std::string(key));
+        schedule.*member =
+            readOptionalForkTimestamp(*section, "op_fork_timestamps", std::string(key));
     }
     // Same rule as the L1 ladder: activation times must be non-decreasing down the fork
     // order, because a later fork is defined as a superset of the earlier one (Karst is
@@ -1815,26 +1818,15 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
             }
         }
     }
-    // The jovian/karst pair is validated through (ledger::foldOpForkShorthand), so the
-    // shorthand and the canonical channel share ONE
-    // rule set. Equal jovian/karst times are LEGAL and merge into the later fork
-    // downstream, and karst scheduled with jovian unscheduled is a legal implied jump
-    // (jovian folds into karst's second); only a later fork at an EARLIER second is
-    // rejected with the keys named.
-    try
-    {
-        (void)ledger::foldOpForkShorthand(schedule.m_jovianTime, schedule.m_karstTime);
-    }
-    catch (ledger::InvalidOpForkSchedule const& e)
-    {
-        if (const auto* comment = boost::get_error_info<errinfo_comment>(e))
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment("[op_fork_timestamps] " + *comment));
-        }
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(std::string("[op_fork_timestamps] ") + e.what()));
-    }
+    // The jovian/karst pair rides the SAME fold rule set the canonical channel and the
+    // genesis writer use (ledger::foldOpForkShorthand). The pairwise ladder check above
+    // already rejects every input fold could throw on (karst earlier than the effective
+    // jovian — the keys array is listed in fork order, and karst-without-jovian is a legal
+    // jump fold accepts), so the call below is a documented second line of defence, not
+    // the enforcement: equal jovian/karst times are LEGAL and merge into the later fork,
+    // and a later fork at an EARLIER second is rejected — with the keys named — by the
+    // ladder check above.
+    (void)ledger::foldOpForkShorthand(schedule.m_jovianTime, schedule.m_karstTime);
     m_genesisConfig.m_opForkSchedule = schedule;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpForkTimestamps")
@@ -1859,6 +1851,20 @@ void NodeConfig::loadOpForkSchedule(boost::property_tree::ptree const& _genesisC
     if (!section)
     {
         return;
+    }
+    // Same unknown-key policy as the sibling [op_fork_timestamps] / [op_eip1559] loaders:
+    // this section carries exactly one key, and a stray one (schedule syntax pasted from
+    // another section, a misspelling) would otherwise be silently ignored — the canonical
+    // text is genesis-frozen into the SYS_CONFIG row, so the chain would boot a schedule
+    // that never saw the intended change, with no diagnostic at all.
+    for (auto const& entry : *section)
+    {
+        if (entry.first != "canonical")
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[op_fork_schedule] has an unrecognised key \"" +
+                                      entry.first + "\" (supported: canonical)"));
+        }
     }
     auto canonical = section->get_optional<std::string>("canonical");
     if (!canonical)
@@ -1912,7 +1918,10 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
         // Decimal and 0x-hex both, matching the sibling [op_fork_timestamps] section: a chain
         // operator writing one section hex-formatted must not be surprised by the other. One
         // acceptance window with the other loaders (ledger::parseConfigUint64); the message
-        // differs because "invalid timestamp" would misname an EIP-1559 parameter.
+        // differs because "invalid timestamp" would misname an EIP-1559 parameter. The u32
+        // row bound is NOT checked here — the assembled triple goes through the shared
+        // opEip1559ParamsRowProblem below, the same rule set the SYS_CONFIG reader and the
+        // genesis writer enforce.
         auto const parsed = ledger::parseConfigUint64(text,
             ledger::ConfigUint64Options{.allowHex = true,
                 .maxValue = std::numeric_limits<uint64_t>::max()});
@@ -1921,17 +1930,7 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "[op_eip1559]." + key + " is not a valid uint64: " + text));
         }
-        auto const out = *parsed.value;
-        if (out > std::numeric_limits<uint32_t>::max())
-        {
-            // The Holocene extraData encodes denominator and elasticity as uint32
-            // (encodeOptimismExtraData's 4-byte big-endian spans): a larger value would
-            // silently truncate there, so the loader refuses it instead.
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "[op_eip1559]." + key + " exceeds the uint32 range: " + text));
-        }
-        return out;
+        return *parsed.value;
     };
     auto requireKey = [&](std::string const& key) -> uint64_t {
         auto value = section->get_optional<std::string>(key);
@@ -1944,7 +1943,8 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
     };
     ledger::OpEip1559Params params{.elasticity = requireKey("elasticity"),
         .denominator = requireKey("denominator"),
-        // Optional: op-deployer's standard value is the default, and the pin records the
+        // Optional: op-deployer's standard value is the default (derived from the ONE preset
+        // home, c_legacyOpEip1559Params — not a re-typed literal), and the pin records the
         // EFFECTIVE triple, so an explicit 250 and an omitted key are the same declaration.
         // A PRESENT key parses strictly like the other two — get_optional<uint64_t> would
         // silently truncate "0xfa" to 0, silently default "abc" or an overflowing value to
@@ -1953,20 +1953,22 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
             auto value = section->get_optional<std::string>("denominator_canyon");
             if (!value)
             {
-                return 250;
+                return bcos::engine::c_legacyOpEip1559Params.denominatorCanyon;
             }
             return parseStrictUint64("denominator_canyon", *value);
         }()};
-    if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
+    // The row invariant is SHARED with the SYS_CONFIG reader and the genesis writer
+    // (opEip1559ParamsRowProblem): zeros are arithmetic poison (gasLimit/0 in pricing; op-geth
+    // panics on a nil denominator, params/config.go:1352-1355) and the Holocene extraData
+    // encodes each field as u32 — one rule set instead of a loader-local copy.
+    if (auto const problem = ledger::opEip1559ParamsRowProblem(params))
     {
-        // op-geth panics on a nil/zero denominator (params/config.go:1352-1355) and would
-        // divide by zero on a zero elasticity; a panic is not a model, so refuse at load.
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "[op_eip1559] values must be non-zero: elasticity=" +
-                std::to_string(params.elasticity) +
-                " denominator=" + std::to_string(params.denominator) +
-                " denominator_canyon=" + std::to_string(params.denominatorCanyon)));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[op_eip1559] triple carries a " + *problem +
+                                  ": elasticity=" + std::to_string(params.elasticity) +
+                                  " denominator=" + std::to_string(params.denominator) +
+                                  " denominator_canyon=" +
+                                  std::to_string(params.denominatorCanyon)));
     }
     m_genesisConfig.m_opEip1559 = params;
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEip1559") << LOG_KV("elasticity", params.elasticity)

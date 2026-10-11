@@ -809,6 +809,13 @@ size_t bcostars::protocol::TransactionImpl::size() const
     size += m_inner()->extraTransactionHash.size();
     size += m_inner()->sourceHash.size();
     size += m_inner()->mint.size();
+    // The remaining variable-length envelope fields, completing the "count every
+    // variable-length field" rule: chainID/groupID are hex strings like the counted
+    // value/gasPrice above, and dataHash is a byte payload like the counted
+    // extraTransactionBytes/extraTransactionHash pair it mirrors.
+    size += m_inner()->data.chainID.size();
+    size += m_inner()->data.groupID.size();
+    size += m_inner()->dataHash.size();
     // isSystemTransaction (optional byte) is a fixed-length scalar — excluded from
     // size() like other fixed scalars (type, version, blockLimit).
     return size;

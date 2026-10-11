@@ -314,8 +314,10 @@ BOOST_AUTO_TEST_CASE(FeatureFlagsSlotVerifiedAtANonTemplateAddress)
 // slot for the C2 layout and mandating it there refuses real nodes (making the C2 e2e red).
 // The VALUE check below is not affected: an account carrying the slot is verified on any layout
 // (MismatchingFlagsSlotAtTheC2LayoutRefusesToBuild), and the generator's name-keyed guard
-// (build-allocs.py, pinned by tools/opstack-genesis/test_build_allocs.py) stays the enforcement
-// for a slot-less layout until that generator change lands and the mandate can follow it.
+// (build-allocs.py) stays the enforcement for a slot-less layout until that generator change
+// lands and the mandate can follow it. That guard is OUT-OF-TREE: build-allocs.py and its
+// test suite live in the bcos-l2-contracts checkout this repo's docs point at — there is no
+// tools/opstack-genesis/ in this tree at this head.
 BOOST_AUTO_TEST_CASE(FeatureFlagsSlotAbsentAtANonTemplateAddressIsSkipped)
 {
     task::syncWait([this]() -> task::Task<void> {

@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(zeroValuesRejected)
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
                                   opExecutor(), std::string(c_schedule) + "[op_eip1559]\n" + body)),
             InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "[op_eip1559] values must be non-zero");
+                return errinfoContains(e, "triple carries a zero elasticity");
             });
     }
 }
@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(valuesExceedingUint32Rejected)
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
                                   opExecutor(), std::string(c_schedule) + "[op_eip1559]\n" + body)),
             InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "exceeds the uint32 range"); });
+            [](auto const& e) { return errinfoContains(e, "exceeding uint32"); });
     }
 }
 
