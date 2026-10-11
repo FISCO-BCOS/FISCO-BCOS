@@ -190,3 +190,26 @@
 ### 剩余工作
 - **阶段 3**:vendored `bcos-evm/bcos-evm/eth/state/` 以 0.24 `test/state` 为底 rebase(含 `authorization.cpp` 7702 验签、`precompiles_libsecp256k1/gmp` 取舍、host.cpp 的 get_nonce/recipient 化);这是最大工作量块。
 - **阶段 4**:全量编译(本机未做,worktree 尚无 build 目录)、bcos-evm/engine/opstack 测试回归、Karst 语义对账(R3/R4/R9)、e2e。
+
+## 10. 阶段 3 实施记录(提交 33 文件,+825/−588)
+
+### 重要认知修正:R4(7702 验签)在本仓库已被自研修复
+rebase 时确认:`bcos-evm/bcos-evm/eth/Eip7702Recover.h` 是 eth 与 opstack 两条共识路径共享的**单一** 7702 实现,自升级前就做真实 ecrecover(文件头注释明确"real ecrecover, not the upstream signer-shortcut stub"),并忽略上游 fixture 的 signer 捷径字段。因此 §5 的安全动机应修正为:**漏洞风险已被本仓库先行修复;升级的意义在于与上游(0.23 起同样真验签、并删除了 signer 字段)对齐,而非补救**。rebase 策略因此改变:不引入上游 `authorization.cpp`,保留 FISCO 实现作为唯一实现。
+
+### 落地内容
+- **vendored eth/state 24 文件**:20 个从 0.24 test/state 原样快进(含新 `authorization.hpp`(仅结构体)与 `rlp_common.hpp`(包内 rlp.hpp 新依赖));`state.cpp/hpp/block.cpp` 重放本地分歧(chain_id 尾参、TxValidationPolicy 门控 0.24 的 `rev == OSAKA` 形态、未用 include 删除);`host.cpp` 原样快进即获得 get_nonce 与 recipient 化 create。
+- **Eip7702Recover.h** 适配 0.24 API:`v`→`y_parity`(uint8_t)、`evmmax::secp256k1`→`evmone::crypto::secp256k1`、`Account::NonceMax`→`evmone::MAX_NONCE`。
+- **消费方**:OpHost 的 `journal_create(addr,existed)` 拆分为 `journal_new_account`+`journal_create`;`compute_create_address` 移至 `evmone::` 命名空间;错误码重命名三连(`INSUFFICIENT_FUNDS→INSUFFICIENT_ACCOUNT_FUNDS` 等)波及测试与 opstack-executor;`validate_transaction` 新增 `block_state_gas_left` 形参(4 个调用点);Authorization 构造(signer 删除、y_parity 顺序);opstack tars 转换器删除 signer 拷贝。
+- **port**:安装列表新增 `modarith.hpp`(0.24 的 ecc.hpp 新依赖,必装)。
+
+### 新风险登记
+- **R11(P1)ethereum-executor 的 ErrorCode 按值镜像**:EVMSupport.h 的枚举按**数值**镜像 evmone::state 的错误码;0.24 重命名 9 个码并在 UNKNOWN_ERROR 前插入 3 个新码(其值 20→23)。本次已同步;今后每次 evmone 升级都必须人肉核对这张镜像表——数值错位会**静默错分回执状态**(如把 INVALID_CHAIN_ID 映射成 MaxGasLimit)。建议后续改为按名映射或加 static_assert 防呆。
+- 测试文件的 designated initializer 顺序(y_parity 须在 r/s 之前)是本次最多的人工修正点(约 12 处),已全部处理。
+
+### 验证
+- 11 个可独立编译的 TU(vendored 7 个 .cpp + MemoryState + OpHost + EthTransitionTest + 包内 test_state.cpp)对真实安装的 0.24 port 头文件全部语法零错。
+- **集成冒烟(链接真实 port 库)全过**:LONDON 转账经 0.24 八参 validate + chain_id transition 得 SUCCESS 回执与 state diff;7702 不可恢复签名(r=0)被跳过;跨链授权(chain_id≠节点)被拒绝——chain_id 安全语义在 rebase 后保持。
+- 未覆盖:依赖 bcos-framework/bcos-crypto 头的 TU(OpTransition、多数 opstack 测试、opstack-executor、engine)仅经 API 触点枚举 + 人工核对,需阶段 4 全量构建确认。
+
+### 剩余(阶段 4)
+全量 cmake 构建 + 单测回归(重点:Op7702/OpOsaka/OpKarst/EthTransition/EEST/t8n 回放)、Karst(Osaka)行为对账(R3 深度上限、R9 旧链嵌套 CREATE 地址)、e2e(c2-e2e)、可选 ethereum-tests fixture 升级。
