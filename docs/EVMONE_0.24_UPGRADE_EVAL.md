@@ -213,3 +213,36 @@ rebase 时确认:`bcos-evm/bcos-evm/eth/Eip7702Recover.h` 是 eth 与 opstack �
 
 ### 剩余(阶段 4)
 全量 cmake 构建 + 单测回归(重点:Op7702/OpOsaka/OpKarst/EthTransition/EEST/t8n 回放)、Karst(Osaka)行为对账(R3 深度上限、R9 旧链嵌套 CREATE 地址)、e2e(c2-e2e)、可选 ethereum-tests fixture 升级。
+
+## 11. 阶段 4 实施记录(提交 668ac2c91,42 文件,+260/−85)
+
+**全树零错误构建**通过(首个对 evmone 0.24 的完整构建;Debug/x64-linux-release,与主构建同参)。修复轮次覆盖:
+- `evmc_message`/`evmc_result`/`evmc_tx_context` designated 初始化补新成员(state_gas/block_slot_number)共 30+ 处;OpTransition 回执聚合按 0.24 新布局。
+- **R12(P0,新)**:0.24 的 `BlockInfo.chain_id` + `validate_transaction` 新增 INVALID_CHAIN_ID 门——`toBlockInfo` 原先不设置它(默认 1),**链 id≠1 的 OP 链上所有 protected 交易会被全量拒绝**。已从节点链 id 全管线贯通(toBlockInfo/buildBlockInfo/preBlockOpSteps/所有生产调用点);eth_call 模拟交易对齐 block 链 id(op-geth 宽容语义,与费用帽 clamp 同款)。
+- **R9 实体化(嵌套 CREATE 地址)**:0.24 中 CREATE 压栈地址 = `keccak(rlp(sender, get_nonce(sender)))`,host 无法覆盖。三处生产修复:OpTransition 顶层创建预计算 recipient(Host::create 断言要求);transaction-executor `getMessage` 对 depth≠0 信任 VM 地址(depth-0 保持 FISCO 公式);嵌套创建的 sender nonce bump 改为按 EVM depth 门控且缺失 nonce 记 0(否则 `NonceNotInitialized` 异常/同笔交易第二个合约地址碰撞)。
+- `evmmax::` → `evmone::crypto::` 曲线库迁移波及 bcos-executor Precompiled 与 ethereum-executor 镜像(pairing 改用 0.24 的 Fq 元素解析,值 ≥p 拒绝而非回绕——与上游行为对齐)。
+
+### 测试矩阵(worktree 真实运行)
+
+| 套件 | 结果 |
+|---|---|
+| bcos-evm-eth-tests / opstack-tests(222 例) | ✅ 全绿 |
+| opstack-executor tests/receipt/scheduler/block(除下述)/detail | ✅ 全绿 |
+| engine test-bcos-engine | ✅ 全绿 |
+| ethereum-executor state-smoke | ✅ 全绿 |
+| transaction-executor | ✅ 除 2 个顺序依赖用例(见下) |
+| bcos-executor 单测 | ✅ 除 3 例(见下) |
+
+**剩余失败全部定级,无未分类回归**:
+1. **block-tests 15 例**:全部为 fixture 文案期差——t8n 语料(外部仓库,pin b82691a)期望 0.21 散文错误文案("insufficient funds…"),0.24 返回枚举名("TransactionException.INSUFFICIENT_ACCOUNT_FUNDS")。属语料再生成后续项,非代码缺陷。
+2. **transaction-executor delegateCall/nestConstructor**:顺序依赖(单跑全绿);根因是**预存在的全局可执行体缓存缺陷**(仅按地址键控 + 每用例确定性地址跨用例投毒);nestConstructor 在 0.21 基线全模块运行中同样失败。建议后续把缓存键改为(地址, code hash)。
+3. **bcos-executor createAccountTest/EvmProductionMap**:**非升级所致**——分歧流程零 EVM 帧(evmone 完全未参与),且对照基线二进制为 09-27 旧构建、早于这两个测试的近期改动(08d79e9d1);testSM3AndKeccak256 在基线上同样失败(预存在)。
+
+### 升级后行为变化定案(供产品/发布说明)
+- 嵌套 CREATE/CREATE2 地址在全链型上统一为 Ethereum EIP 公式(经 get_nonce);旧非 web3 链的创建者账户将出现 nonce 写入(R9)。
+- validate_transaction 拒绝 tx.chain_id ≠ block.chain_id 的 protected 交易(R12 对齐 op-geth)。
+- 错误码/文案重命名(INSUFFICIENT_FUNDS→INSUFFICIENT_ACCOUNT_FUNDS 等)对外部依赖文案的语料/工具需同步。
+- Osaka(Karst)起 1024 深度上限取消(R3,上游 EIP-7825 语义)。
+
+### 交付状态
+分支 `eval/evmone-0.24.0` 六个提交(a128e5c42…668ac2c91):port rebase + ABI 19 适配 + vendored state rebase + 全树构建与回归修复 + 两轮报告。**建议合入前**:CI 全矩阵(含 mac/win)、t8n 语料再生成、Karst 语义评审(R3/R9/R12 签字)、e2e。
