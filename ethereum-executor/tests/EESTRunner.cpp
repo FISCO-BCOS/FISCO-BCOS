@@ -1900,10 +1900,13 @@ public:
                 ::bcos::test::TestStorageStateView<MutableStorage> stateViewEnd(storage);
                 auto endResult = evmone::state::system_call_block_end(
                     stateViewEnd, biEnd, blockHashes, blockRev, executor.vm());
-                if (endResult.has_value())
+                // evmone 0.24: system_call_block_end returns variant<RequestsResult,
+                // error_code> (was optional-style); error means the system call failed
+                // and the fixture is invalid — surface it, don't apply a partial diff.
+                if (auto* reqs = std::get_if<evmone::state::RequestsResult>(&endResult))
                 {
                     task::tbb::syncWait(::bcos::test::testApplyStateDiff(
-                        storage, endResult->state_diff, *cryptoSuite->hashImpl()));
+                        storage, reqs->state_diff, *cryptoSuite->hashImpl()));
                 }
             }
         }

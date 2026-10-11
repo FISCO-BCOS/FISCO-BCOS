@@ -51,6 +51,7 @@ state::Transaction baseTx()
     tx.max_gas_price = 1000;
     tx.max_priority_gas_price = 10;
     tx.nonce = 0;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     return tx;
 }
 }  // namespace

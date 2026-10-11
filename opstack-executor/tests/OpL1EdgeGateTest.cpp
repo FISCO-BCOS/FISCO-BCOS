@@ -314,6 +314,7 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
     tx.max_priority_gas_price = 10;
     tx.value = intx::uint256{0};
     tx.nonce = 0;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
 
     // Inject fee F: l1_base_fee = 1 gwei (non-zero), base_fee_scalar 1100 -> props.l1_cost
     // non-zero.

@@ -198,6 +198,7 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::makeErrorEVMCResult(crypto::Has
     EVMCResult result{evmc_result{.status_code = evmStatus,
                           .gas_left = gasLeft,
                           .gas_refund = 0,
+                          .state_gas = {},
                           .output_data = outputData,
                           .output_size = outputSize,
                           .release = release},

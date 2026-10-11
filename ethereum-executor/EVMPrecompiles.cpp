@@ -350,7 +350,7 @@ ExecutionResult ecrecover_execute_evmone(const uint8_t* input, size_t input_size
         return {EVMC_SUCCESS, 0};
     const auto& [hash, sig_bytes, parity] = *o;
 
-    const auto res = evmmax::secp256k1::ecrecover(
+    const auto res = crypto::secp256k1::ecrecover(
         hash, sig_bytes.subspan<0, 32>(), sig_bytes.subspan<32, 32>(), parity);
     if (!res)
         return {EVMC_SUCCESS, 0};
@@ -364,7 +364,12 @@ ExecutionResult ecrecover_execute(
     const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept
 {
     assert(output_size >= 32);
+// Select better implementation.
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+    return ecrecover_execute_libsecp256k1(input, input_size, output, output_size);
+#else
     return ecrecover_execute_evmone(input, input_size, output, output_size);
+#endif
 }
 
 ExecutionResult sha256_execute(const uint8_t* input, size_t input_size, uint8_t* output,
@@ -470,7 +475,7 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
 
     const auto input_span = std::span{input_buffer};
 
-    using namespace evmmax::bn254;
+    using namespace crypto::bn254;
 
     const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
     const auto q = AffinePoint::from_bytes(input_span.subspan<64, 64>());
@@ -479,7 +484,7 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
     if (!validate(*p) || !validate(*q)) [[unlikely]]
         return {EVMC_PRECOMPILE_FAILURE, 0};
 
-    const auto res = evmmax::ecc::add_affine(*p, *q);
+    const auto res = crypto::ecc::add_affine(*p, *q);
     const std::span<uint8_t, 64> output_span{output, 64};
     res.to_bytes(output_span);
     return {EVMC_SUCCESS, output_span.size()};
@@ -496,7 +501,7 @@ ExecutionResult ecmul_execute(const uint8_t* input, size_t input_size, uint8_t* 
 
     const auto input_span = std::span{input_buffer};
 
-    using namespace evmmax::bn254;
+    using namespace crypto::bn254;
 
     const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
     if (!p.has_value() || !validate(*p)) [[unlikely]]
@@ -504,7 +509,7 @@ ExecutionResult ecmul_execute(const uint8_t* input, size_t input_size, uint8_t* 
 
     const auto c = intx::be::unsafe::load<uint256>(input_buffer + 64);
 
-    const auto res = evmmax::bn254::mul(*p, c);
+    const auto res = crypto::bn254::mul(*p, c);
     const std::span<uint8_t, 64> output_span{output, 64};
     res.to_bytes(output_span);
     return {EVMC_SUCCESS, output_span.size()};
@@ -520,24 +525,28 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
     if (input_size % PAIR_SIZE != 0)
         return {EVMC_PRECOMPILE_FAILURE, 0};
 
-    std::vector<std::pair<evmmax::bn254::Point, evmmax::bn254::ExtPoint>> pairs;
+    std::vector<std::pair<crypto::bn254::AffinePoint, crypto::bn254::ExtPoint>> pairs;
     pairs.reserve(input_size / PAIR_SIZE);  // TODO: may throw std::bad_alloc.
     for (auto input_ptr = input; input_ptr != input + input_size; input_ptr += PAIR_SIZE)
     {
-        const evmmax::bn254::Point p{
-            intx::be::unsafe::load<intx::uint256>(input_ptr),
-            intx::be::unsafe::load<intx::uint256>(input_ptr + 32),
-        };
-        const evmmax::bn254::ExtPoint q{
-            {intx::be::unsafe::load<intx::uint256>(input_ptr + 96),
-                intx::be::unsafe::load<intx::uint256>(input_ptr + 64)},
-            {intx::be::unsafe::load<intx::uint256>(input_ptr + 160),
-                intx::be::unsafe::load<intx::uint256>(input_ptr + 128)},
-        };
-        pairs.emplace_back(p, q);
+        namespace bn = crypto::bn254;
+        const auto p = bn::AffinePoint::from_bytes(std::span<const uint8_t, 64>{input_ptr, 64});
+        if (!p.has_value()) [[unlikely]]
+            return {EVMC_PRECOMPILE_FAILURE, 0};
+
+        // G2 EVM ABI feeds the imaginary coefficient before the real one for each Fq²,
+        // so swap the offsets when reading into (real, imaginary) order.
+        const auto qx_real = bn::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 96, 32});
+        const auto qx_imag = bn::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 64, 32});
+        const auto qy_real = bn::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 160, 32});
+        const auto qy_imag = bn::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 128, 32});
+        if (!qx_real || !qx_imag || !qy_real || !qy_imag) [[unlikely]]
+            return {EVMC_PRECOMPILE_FAILURE, 0};
+        const bn::ExtPoint q{bn::Fq2({*qx_real, *qx_imag}), bn::Fq2({*qy_real, *qy_imag})};
+        pairs.emplace_back(*p, q);
     }
 
-    const auto res = evmmax::bn254::pairing_check(pairs);
+    const auto res = crypto::bn254::pairing_check(pairs);
     if (!res.has_value())
         return {EVMC_PRECOMPILE_FAILURE, 0};
 
@@ -739,7 +748,7 @@ ExecutionResult p256verify_execute(const uint8_t* input, size_t input_size, uint
     const auto qx = intx::be::unsafe::load<intx::uint256>(input + 96);
     const auto qy = intx::be::unsafe::load<intx::uint256>(input + 128);
 
-    if (!evmmax::secp256r1::verify(h, r, s, qx, qy))
+    if (!crypto::secp256r1::verify(h, r, s, qx, qy))
         return {EVMC_SUCCESS, 0};  // In case of invalid signature, return empty output.
 
     // Return 1_u256.
@@ -840,9 +849,15 @@ evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcep
     const auto output_data = new (std::nothrow) uint8_t[max_output_size];  // TODO: handle nullptr.
     const auto [status_code, output_size] =
         execute(msg.input_data, msg.input_size, output_data, max_output_size);
-    const evmc_result result{status_code, status_code == EVMC_SUCCESS ? gas_left : 0, 0,
-        output_data, output_size,
-        [](const evmc_result* res) noexcept { delete[] res->output_data; }};
+    // evmc ABI 19: evmc_result gained state_gas after gas_refund; positional init would
+    // hand the old zero padding slot to it — bind by name.
+    const evmc_result result{.status_code = status_code,
+        .gas_left = status_code == EVMC_SUCCESS ? gas_left : 0,
+        .gas_refund = 0,
+        .state_gas = {},
+        .output_data = output_data,
+        .output_size = output_size,
+        .release = [](const evmc_result* res) noexcept { delete[] res->output_data; }};
     return evmc::Result{result};
 }
 }  // namespace bcos::executor_v1::eth::evm

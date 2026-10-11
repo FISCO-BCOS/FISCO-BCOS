@@ -271,6 +271,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     evmc_result result{.status_code = toEVMStatus(response, blockContext),
         .gas_left = response->gas,
         .gas_refund = 0,
+        .state_gas = {},  // evmc ABI 19 (EIP-8037); unused below Amsterdam.
         .output_data = response->data.data(),
         .output_size = response->data.size(),
         .release = nullptr};  // TODO: check if the response data need to release

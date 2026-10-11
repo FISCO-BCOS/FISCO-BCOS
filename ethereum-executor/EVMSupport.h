@@ -287,7 +287,7 @@ inline bcos::u256 compute_blob_gas_price(
 /// boundary left in this header. Runtime-initialized: do not read it from
 /// another static initializer.
 inline const bcos::u256 SECP256K1N_OVER_2 =
-    fromEvmcBE(intx::be::store<evmc::bytes32>(evmmax::secp256k1::Curve::ORDER / 2));
+    fromEvmcBE(intx::be::store<evmc::bytes32>(evmone::crypto::secp256k1::Curve::ORDER / 2));
 
 /// EIP-7702 authorization magic byte (prefix of the signing hash).
 inline constexpr uint8_t kSetCodeMagic = 0x05;
@@ -323,7 +323,8 @@ inline std::optional<evmc::address> recoverAuthority(protocol::Authorization con
     const auto h = keccak256(evmc::bytes_view{msg.data(), msg.size()});
     const auto r = toEvmcBE(auth.r);
     const auto s = toEvmcBE(auth.s);
-    return evmmax::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.bytes, 32},
+    // evmone 0.24 moved the curve code under evmone::crypto (evmmax:: is gone).
+    return evmone::crypto::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.bytes, 32},
         std::span<const uint8_t, 32>{r.bytes, 32}, std::span<const uint8_t, 32>{s.bytes, 32},
         auth.v != 0);
 }

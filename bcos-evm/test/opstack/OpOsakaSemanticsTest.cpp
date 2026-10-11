@@ -146,6 +146,7 @@ OsakaTxRun runOsakaContractWithCode(
     seedOpPredeploys(ts);
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kOsakaSender;
     tx.to = kOsakaContract;
@@ -167,6 +168,7 @@ int64_t osakaModExpExecutionGasUsed(
     seedOpPredeploys(ts);
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kOsakaSender;
     tx.to = kOsakaModExp;
@@ -205,6 +207,7 @@ OsakaTxRun runOsakaModExpOpTx(
     seedOpPredeploys(ts);
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kOsakaSender;
     tx.to = kOsakaModExp;
@@ -228,6 +231,7 @@ OsakaTxRun runOsakaPrecompileOpTx(test::TestState& ts, evmc::VM& vm,
     seedOpPredeploys(ts);
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kOsakaSender;
     tx.to = precompile;
@@ -257,6 +261,7 @@ OsakaHostCallResult osakaHostCall(evmc_revision rev, const PrecompileOverrides* 
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = kOsakaSender;
     const auto block = makeOsakaBlock();
     OpHost host{rev, vm, st, block, hashes, tx, 1234, overrides};
@@ -634,6 +639,7 @@ BOOST_AUTO_TEST_CASE(KarstOrdinaryTxRejectsGasOverEip7825Cap, * boost::unit_test
     ts[kOsakaSender] = {
         .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kOsakaSender;
     tx.to = 0x0000000000000000000000000000000000001234_address;
@@ -659,6 +665,7 @@ BOOST_AUTO_TEST_CASE(KarstEthCallSkipsEip7825MaxGasLimit, * boost::unit_test::la
     ts[kOsakaSender] = {
         .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kOsakaSender;
     tx.to = 0x0000000000000000000000000000000000001234_address;
@@ -751,6 +758,7 @@ BOOST_AUTO_TEST_CASE(OrdinaryTxAtExactlyEip7825CapIsAccepted, * boost::unit_test
     test::TestState ts;
     ts[kOsakaSender] = {.nonce = 0, .balance = intx::uint256{1} << 60, .storage = {}, .code = {}};
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kOsakaSender;
     tx.to = 0x0000000000000000000000000000000000001234_address;
@@ -775,6 +783,7 @@ BOOST_AUTO_TEST_CASE(OverCapTxIsNotRejectedByEip7825BeforeOsaka, * boost::unit_t
     test::TestState ts;
     ts[kOsakaSender] = {.nonce = 0, .balance = intx::uint256{1} << 60, .storage = {}, .code = {}};
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kOsakaSender;
     tx.to = 0x0000000000000000000000000000000000001234_address;

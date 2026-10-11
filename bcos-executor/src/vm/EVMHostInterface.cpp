@@ -157,7 +157,7 @@ uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr) noexce
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    return hostContext.codeSizeAt(evmAddress2String(*_addr));
+    return hostContext.codeSizeAt(fromEvmC(*_addr));
 }
 
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)

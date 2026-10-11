@@ -809,10 +809,23 @@ private:
                 m_seq, m_ledgerConfig);
         }
 
-        if (m_web3Tx && m_level != 0)
+        // evmc ABI 19: evmone derives nested-CREATE addresses from the sender's nonce
+        // (get_nonce -> keccak(rlp(sender, nonce))), so the nonce MUST bump on every
+        // nested create — without it the second new-contract in one tx collides with
+        // the first (same address, observed as createTwice revert). Gated on the EVM
+        // message depth (NOT m_level, which counts scheduler nesting and is nonzero for
+        // depth-0 test/probe messages). Mirrors upstream Host::call ("bump the creator's
+        // nonce, not reverted if the creation fails"). An absent nonce field counts as 0
+        // — same default as the get_nonce callback — because contract accounts on legacy
+        // chains were never nonce-initialized (EVMAccount::increaseNonce would throw
+        // NonceNotInitialized). Legacy non-web3 chains now see nonce writes on creators —
+        // part of the 0.24 nested-create semantics alignment (upgrade-notes R9).
+        if (ref.depth != 0)
         {
             auto senderAccount = getAccount(*this, ref.sender);
-            co_await senderAccount.increaseNonce();
+            const auto currentNonce = co_await senderAccount.nonce();
+            const auto newNonce = u256(currentNonce.value_or(std::string("0"))) + 1;
+            co_await senderAccount.setNonce(newNonce.convert_to<std::string>());
         }
 
         co_await m_recipientAccount.create();
@@ -955,6 +968,7 @@ private:
             co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
                                      .gas_left = ref.gas,
                                      .gas_refund = 0,
+                                     .state_gas = {},
                                      .output_data = nullptr,
                                      .output_size = 0,
                                      .release = nullptr},

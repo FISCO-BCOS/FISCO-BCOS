@@ -51,13 +51,19 @@ namespace
 evmc_message build_message(
     const evmone::state::Transaction& tx, int64_t execution_gas_limit) noexcept
 {
-    const auto recipient = tx.to.has_value() ? *tx.to : evmc::address{};
+    // evmc ABI 19 / evmone 0.24: the created address is derived by the CALLER for
+    // top-level creates (the VM only computes it for nested ones) and Host::create
+    // asserts recipient is set. tx.nonce is the pre-execution nonce — the same value
+    // the deposit test pins via compute_create_address(kFrom, preNonce).
+    const auto recipient =
+        tx.to.has_value() ? *tx.to : evmone::compute_create_address(tx.sender, tx.nonce);
 
     return {
         .kind = tx.to.has_value() ? EVMC_CALL : EVMC_CREATE,
         .flags = 0,
         .depth = 0,
         .gas = execution_gas_limit,
+        .state_gas = {},
         .recipient = recipient,
         .sender = tx.sender,
         .input_data = tx.data.data(),
@@ -314,7 +320,7 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
     evmone::state::State state{view};
 
     auto& sender_acc = state.get_or_insert(tx.sender);
-    assert(sender_acc.nonce < evmone::state::Account::NonceMax);
+    assert(sender_acc.nonce < evmone::MAX_NONCE);
     ++sender_acc.nonce;
 
     const auto delegation_refund = processAuthorizationList(state, chainId, tx.authorization_list);
@@ -381,8 +387,10 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
                                   intx::uint256{0};
     }
 
-    evmone::state::TransactionReceipt receipt{tx.type, outcome.result.status_code, gas_used, {},
-        host.take_logs(), {}, bcos::evm::sanitizeStateDiff(view, state.build_diff(rev)), {}};
+    // 0.24 receipt layout: gas_used, block_gas_used, state_gas_used, cumulative_gas_used.
+    evmone::state::TransactionReceipt receipt{tx.type, outcome.result.status_code, gas_used,
+        /*block_gas_used=*/{}, /*state_gas_used=*/{}, /*cumulative_gas_used=*/{}, host.take_logs(),
+        {}, bcos::evm::sanitizeStateDiff(view, state.build_diff(rev)), {}};
 
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
 
@@ -707,7 +715,7 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
             // The bump is unconditional across forks: deposits increment the sender nonce in
             // every era (spec deposits.md "Nonce Handling"; op-geth innerExecute Call branch and
             // evm.create's SetNonce are not Regolith-gated).
-            assert(fromAcc.nonce < evmone::state::Account::NonceMax);
+            assert(fromAcc.nonce < evmone::MAX_NONCE);
             ++fromAcc.nonce;
             OpHost host{cfg.rev, vm, state, block, hashes, tx, chainId, cfg.precompiles};
             auto outcome = runTxMessage(state, host, tx, cfg.rev, block.coinbase,

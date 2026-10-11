@@ -216,6 +216,7 @@ struct EVMHostInterface
             .blob_base_fee = {},
             .blob_hashes = {},
             .blob_hashes_count = 0,
+            .block_slot_number = 0,  // EIP-7843 (evmc ABI 19): no beacon slots on this chain.
         };
         return result;
     }

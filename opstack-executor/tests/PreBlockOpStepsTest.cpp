@@ -12,12 +12,12 @@
 
 #include <bcos-evm/test/opstack/OpTestReceiptFactory.h>
 
+#include <bcos-evm/adapter/RecentBlockHashes.h>
+#include <bcos-evm/adapter/Storage2State.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpDepositEncode.h>
 #include <opstack-executor/OpstackExecutor.h>
-#include <bcos-evm/adapter/RecentBlockHashes.h>
-#include <bcos-evm/adapter/Storage2State.h>
 
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-framework/storage/Entry.h>
@@ -214,6 +214,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockRejectsNullSchedule)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
     evmone::state::BlockInfo block;
+    block.chain_id = 10;  // match the tx envelope chain id (0.24 validate gate)
     block.gas_limit = 30'000'000;
     bcos::executor_v1::opstack::NullBlockHashes hashes;
     auto vm = evmc::VM{evmc_create_evmone()};
@@ -389,6 +390,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockNormalizesWritebackFailure)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
     evmone::state::BlockInfo block;
+    block.chain_id = 10;  // match the tx envelope chain id (0.24 validate gate)
     block.gas_limit = 30'000'000;
     bcos::executor_v1::opstack::NullBlockHashes hashes;
     auto vm = evmc::VM{evmc_create_evmone()};
@@ -420,6 +422,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
     evmone::state::BlockInfo block;
+    block.chain_id = 10;  // match the tx envelope chain id (0.24 validate gate)
     block.gas_limit = 30'000'000;
     bcos::executor_v1::opstack::NullBlockHashes hashes;
     auto vm = evmc::VM{evmc_create_evmone()};
@@ -434,6 +437,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
     tx.type = evmone::state::Transaction::Type::eip1559;
     tx.nonce = 0;
     tx.gas_limit = block.gas_limit + 1;
+    tx.chain_id = 10;  // must match the block/validate chain id (evmone 0.24 gate)
     tx.to = evmc::address{};
     std::memset(tx.to->bytes, 0x11, sizeof(tx.to->bytes));
     tx.value = intx::uint256{0};
@@ -578,6 +582,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockTagsRuntimeErrorWithCulpritHash)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
     evmone::state::BlockInfo block;
+    block.chain_id = 10;  // match the tx envelope chain id (0.24 validate gate)
     block.gas_limit = 30'000'000;
     bcos::executor_v1::opstack::NullBlockHashes hashes;
     auto vm = evmc::VM{evmc_create_evmone()};
@@ -590,6 +595,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockTagsRuntimeErrorWithCulpritHash)
     tx.type = evmone::state::Transaction::Type::eip1559;
     tx.nonce = 0;
     tx.gas_limit = 21000;
+    tx.chain_id = 10;  // must match the block/validate chain id (evmone 0.24 gate)
     tx.to = evmc::address{};
     std::memset(tx.to->bytes, 0x11, sizeof(tx.to->bytes));
     tx.value = intx::uint256{0};
@@ -666,6 +672,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockKarstActivationRejectsUserTx)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
     evmone::state::BlockInfo block;
+    block.chain_id = 10;  // match the tx envelope chain id (0.24 validate gate)
     block.gas_limit = 30'000'000;
     block.timestamp = 100;
     bcos::executor_v1::opstack::NullBlockHashes hashes;
@@ -734,6 +741,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockQ5RejectsDepositVariantWithTypedEnvelope)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
     evmone::state::BlockInfo block;
+    block.chain_id = 10;  // match the tx envelope chain id (0.24 validate gate)
     block.gas_limit = 30'000'000;
     block.timestamp = 100;
     bcos::executor_v1::opstack::NullBlockHashes hashes;

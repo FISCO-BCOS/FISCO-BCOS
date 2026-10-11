@@ -91,6 +91,7 @@ RunWithAuthResult runWithAuth(
     tx.max_priority_gas_price = 10;
     tx.value = intx::uint256{0};
     tx.nonce = 0;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.authorization_list = {auth};
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
@@ -345,6 +346,7 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization, * boost::unit_test::label(
     tx.max_priority_gas_price = 10;
     tx.value = intx::uint256{0};
     tx.nonce = 0;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
         .l1_fee_overhead = 0_u256,
@@ -460,7 +462,7 @@ BOOST_AUTO_TEST_CASE(InvalidYParityIsRejected, * boost::unit_test::label("fork-i
         .y_parity = uint8_t{2},  // 非法 parity
         .r = intx::be::load<intx::uint256>(kR_ok),
         .s = intx::be::load<intx::uint256>(kS_ok)};
-    非法 parity const auto r = runWithAuth(ts, vm, auth);
+    const auto r = runWithAuth(ts, vm, auth);
     BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);
 

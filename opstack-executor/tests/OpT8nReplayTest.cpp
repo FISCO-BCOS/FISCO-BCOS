@@ -1782,7 +1782,7 @@ BOOST_AUTO_TEST_CASE(StructurallyUnrecoverablePredicateBoundaries)
 {
     auto mk = [](uint64_t v, const intx::uint256& r, const intx::uint256& s) {
         evmone::state::Authorization a{};
-        a.v = v;
+        a.y_parity = static_cast<uint8_t>(v);  // evmone 0.23: v -> y_parity (uint8_t)
         a.r = r;
         a.s = s;
         return a;

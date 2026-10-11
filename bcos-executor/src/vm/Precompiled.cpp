@@ -23,6 +23,7 @@
 #include "../Common.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "wedpr-crypto/WedprCrypto.h"
+#include <bcos-utilities/BoostLog.h>
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -38,7 +39,6 @@
 #include <evmone_precompiles/sha256.hpp>
 #include <intx/intx.hpp>
 #include <span>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace std;
 using namespace bcos;
@@ -323,7 +323,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(modexp)(bytesConstRef _in)
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
 {
-    using namespace evmmax::bn254;
+    using namespace evmone::crypto::bn254;  // evmone 0.24: evmmax::bn254 moved here.
 
     uint8_t buf[128]{};
     std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
@@ -334,13 +334,13 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
         return {false, bytes(64, 0)};
 
     bytes output(64, 0);
-    evmmax::ecc::add_affine(*p, *q).to_bytes(std::span<uint8_t, 64>{output.data(), 64});
+    evmone::crypto::ecc::add_affine(*p, *q).to_bytes(std::span<uint8_t, 64>{output.data(), 64});
     return {true, std::move(output)};
 }
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
 {
-    using namespace evmmax::bn254;
+    using namespace evmone::crypto::bn254;  // evmone 0.24: evmmax::bn254 moved here.
 
     uint8_t buf[96]{};
     std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
@@ -361,10 +361,10 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
     if (_in.size() % PAIR_SIZE != 0)
         return {false, bytes(32, 0)};
 
-    using namespace evmmax::bn254;
+    using namespace evmone::crypto::bn254;  // evmone 0.24: evmmax::bn254 moved here.
     using intx::be::unsafe::load;
 
-    std::vector<std::pair<Point, ExtPoint>> pairs;
+    std::vector<std::pair<AffinePoint, ExtPoint>> pairs;
     pairs.reserve(_in.size() / PAIR_SIZE);
     for (const uint8_t* ptr = _in.data(); ptr != _in.data() + _in.size(); ptr += PAIR_SIZE)
     {
@@ -372,9 +372,17 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
         if (!g1.has_value() || !validate(*g1))
             return {false, bytes(32, 0)};
 
-        const ExtPoint g2{{load<intx::uint256>(ptr + 96), load<intx::uint256>(ptr + 64)},
-            {load<intx::uint256>(ptr + 160), load<intx::uint256>(ptr + 128)}};
-        pairs.emplace_back(Point{g1->x.value(), g1->y.value()}, g2);
+        // G2 EVM ABI feeds the imaginary coefficient before the real one for each Fq²
+        // (evmone 0.24 parses coordinates through bounded Fq elements instead of raw
+        // uint256 loads — a value >= p must reject, not wrap).
+        const auto gx_real = Fq::from_bytes(std::span<const uint8_t, 32>{ptr + 96, 32});
+        const auto gx_imag = Fq::from_bytes(std::span<const uint8_t, 32>{ptr + 64, 32});
+        const auto gy_real = Fq::from_bytes(std::span<const uint8_t, 32>{ptr + 160, 32});
+        const auto gy_imag = Fq::from_bytes(std::span<const uint8_t, 32>{ptr + 128, 32});
+        if (!gx_real || !gx_imag || !gy_real || !gy_imag)
+            return {false, bytes(32, 0)};
+        const ExtPoint g2{Fq2({*gx_real, *gx_imag}), Fq2({*gy_real, *gy_imag})};
+        pairs.emplace_back(*g1, g2);
     }
 
     bytes output(32, 0);
@@ -674,7 +682,7 @@ ETH_REGISTER_PRECOMPILED(p256verify)(bytesConstRef _in)
     const auto s = intx::be::unsafe::load<intx::uint256>(d + 64);
     const auto qx = intx::be::unsafe::load<intx::uint256>(d + 96);
     const auto qy = intx::be::unsafe::load<intx::uint256>(d + 128);
-    bool ok = evmmax::secp256r1::verify(h, r, s, qx, qy);
+    bool ok = evmone::crypto::secp256r1::verify(h, r, s, qx, qy);
     if (!ok)
         return {true, {}};  // EIP-7212: invalid signature → success with empty output
     bytes output(32, 0);

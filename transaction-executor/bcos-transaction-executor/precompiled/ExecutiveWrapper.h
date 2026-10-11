@@ -81,6 +81,7 @@ public:
             .flags = input->staticCall ? static_cast<uint32_t>(EVMC_STATIC) : 0,
             .depth = 0,
             .gas = input->gas,
+            .state_gas = {},
             .recipient = unhexAddress(input->receiveAddress),
             .sender = unhexAddress(input->senderAddress),
             .input_data = input->data.data(),

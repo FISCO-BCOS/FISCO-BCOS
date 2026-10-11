@@ -79,6 +79,7 @@ BOOST_AUTO_TEST_CASE(RoutesFeesToFourVaults, * boost::unit_test::label("fork-reg
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -143,6 +144,7 @@ BOOST_AUTO_TEST_CASE(ReceiptCarriesL1AndOperatorMeta, * boost::unit_test::label(
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -229,6 +231,7 @@ BOOST_AUTO_TEST_CASE(ReceiptBloomMatchesRecomputedBloom, * boost::unit_test::lab
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -287,6 +290,7 @@ BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula, * boost::unit_test::la
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -372,6 +376,7 @@ BOOST_AUTO_TEST_CASE(AccessListKeepsStorageWarm, * boost::unit_test::label("fork
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -422,6 +427,7 @@ BOOST_AUTO_TEST_CASE(AccessListWithOverridePrecompileStorageKey, * boost::unit_t
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -478,6 +484,7 @@ BOOST_AUTO_TEST_CASE(OperatorFeeConservesWhenCfgDisagreesWithProps, * boost::uni
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -549,6 +556,7 @@ BOOST_AUTO_TEST_CASE(ReceiptMetaFollowsSnapshotNotTransitionCfg, * boost::unit_t
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -628,6 +636,7 @@ BOOST_AUTO_TEST_CASE(L1CostIsDebitedFromSenderAndConserves, * boost::unit_test::
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -707,6 +716,7 @@ BOOST_AUTO_TEST_CASE(CallSimulationMaskVisibleToBalanceOpcode, * boost::unit_tes
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;
@@ -769,6 +779,7 @@ BOOST_AUTO_TEST_CASE(BedrockTransitionRoutesLegacyL1Fee)
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;

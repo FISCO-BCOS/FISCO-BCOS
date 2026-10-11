@@ -34,6 +34,7 @@ BOOST_AUTO_TEST_CASE(GetTxContextUsesConfiguredChainId)
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = 0x00000000000000000000000000000000000000aa_address;
     const auto block = makeBlock();
     OpHost host{
@@ -49,6 +50,7 @@ BOOST_AUTO_TEST_CASE(GetTxContextGasPriceZeroForSystemCall)
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
     BOOST_CHECK_EQUAL(
@@ -65,6 +67,7 @@ BOOST_AUTO_TEST_CASE(BlobBaseFeeDefaultsToOneWhenUnset)
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     auto block = makeBlock();
     BOOST_CHECK(!block.blob_base_fee.has_value());  // toBlockInfo never sets it
     OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
@@ -93,6 +96,7 @@ BOOST_AUTO_TEST_CASE(CallToP256EmptyAccountIsNotSilentSuccess)
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = kSender;
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
@@ -115,6 +119,7 @@ BOOST_AUTO_TEST_CASE(CallToP256TransfersValue)
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = kSender;
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
@@ -140,6 +145,7 @@ BOOST_AUTO_TEST_CASE(DelegateCallToP256IsNotSilentSuccess)
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = kSender;
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
@@ -163,6 +169,7 @@ BOOST_AUTO_TEST_CASE(DelegatedFlagToP256FallsBackToEmptyCode)
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = kSender;
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
@@ -189,6 +196,7 @@ BOOST_AUTO_TEST_CASE(JovianBn256PairingInputOverLimitFails)
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = kSender;
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &jovianPrecompileOverrides()};
@@ -224,6 +232,7 @@ BOOST_AUTO_TEST_CASE(JovianBn256PairingInputAtLimitExecutes)
     evmone::state::State st{ts};
     test::TestBlockHashes hashes;
     evmone::state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = kSender;
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &jovianPrecompileOverrides()};
@@ -251,6 +260,7 @@ BOOST_AUTO_TEST_CASE(OverrideTablePrecompilesAreWarm)
     evmone::state::State state{ts};
     test::TestBlockHashes hashes;
     evmone::state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, state, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
 
@@ -267,6 +277,7 @@ BOOST_AUTO_TEST_CASE(OffTableAccessTransitionsColdToWarm)
     evmone::state::State state{ts};
     test::TestBlockHashes hashes;
     evmone::state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, state, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
 

@@ -78,6 +78,7 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 300 * 10000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = {},
             .sender = {},
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
@@ -116,6 +117,7 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 5000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = address,
             .sender = sender,
             .input_data = input.data(),
@@ -163,6 +165,7 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = callAddress,
             .sender = {},
             .input_data = input.data(),
@@ -270,6 +273,7 @@ BOOST_AUTO_TEST_CASE(emptyCreate)
             .flags = 0,
             .depth = 0,
             .gas = CREATE_GAS,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = {},
             .sender = {},
             .input_data = nullptr,
@@ -382,6 +386,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = callAddress,
             .sender = {},
             .input_data = input.data(),
@@ -594,6 +599,7 @@ BOOST_AUTO_TEST_CASE(setStorageStatusWithBugfix)
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = helloworldAddress,
             .sender = {},
             .input_data = nullptr,
@@ -652,6 +658,7 @@ BOOST_AUTO_TEST_CASE(setStorageStatusLegacy)
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = helloworldAddress,
             .sender = {},
             .input_data = nullptr,
@@ -975,6 +982,7 @@ BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
             .flags = 0,
             .depth = 0,
             .gas = 300 * 10000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = {},
             .sender = {},
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
@@ -1056,6 +1064,7 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
                 .flags = 0,
                 .depth = 0,
                 .gas = 10000000,
+                .state_gas = {},  // evmc ABI 19 (EIP-8037)
                 .recipient = callAddress,
                 .sender = {},
                 .input_data = input.data(),

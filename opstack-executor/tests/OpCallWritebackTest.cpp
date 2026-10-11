@@ -298,9 +298,10 @@ BOOST_AUTO_TEST_CASE(ExplicitLowFeeCapCallRejectedNotClamped)
     catch (bcos::evm::OpConsensusError const& e)
     {
         // m_prepare's OpTxValidationFailed is normalized to OpConsensusError (INVALID) by
-        // executeTransaction, carrying the evmone validation message.
-        BOOST_TEST(std::string(e.what()).find("max fee per gas less than block base fee") !=
-                   std::string::npos);
+        // executeTransaction, carrying the evmone validation message. evmone 0.24 renamed
+        // FEE_CAP_LESS_THAN_BLOCKS to INSUFFICIENT_MAX_FEE_PER_GAS and the message is now
+        // the enumerator name.
+        BOOST_TEST(std::string(e.what()).find("INSUFFICIENT_MAX_FEE_PER_GAS") != std::string::npos);
     }
     BOOST_CHECK_EQUAL(countRows(storage), 0u);
 }

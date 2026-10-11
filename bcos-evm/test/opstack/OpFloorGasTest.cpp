@@ -87,6 +87,7 @@ BOOST_AUTO_TEST_CASE(UserTxGasUsedRaisedToFloor, * boost::unit_test::label("fork
     block.coinbase = OP_SEQUENCER_FEE_VAULT;
 
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = sender;
     tx.to = dest;

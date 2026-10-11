@@ -67,10 +67,10 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <semaphore>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
+#include <semaphore>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -95,8 +95,8 @@ public:
     {
         m_gate.acquire();
     }
-    CrossThreadGate(std::counting_semaphore<1>& gate, std::try_to_lock_t) :
-        m_gate(gate), m_held(gate.try_acquire())
+    CrossThreadGate(std::counting_semaphore<1>& gate, std::try_to_lock_t)
+      : m_gate(gate), m_held(gate.try_acquire())
     {}
     ~CrossThreadGate() { release(); }
     CrossThreadGate(CrossThreadGate const&) = delete;
@@ -1450,7 +1450,7 @@ private:
                 }
             }
             bcos::evm::engine::preBlockOpSteps(view, header, cfg, rawTxBytes, deposits, executor,
-                hashes, hashErr, daFootprintGasScalar, m_schedule.get(), parentTsSec);
+                hashes, hashErr, daFootprintGasScalar, m_schedule.get(), parentTsSec, m_chainId);
 
             // Fee params load on the first normal tx. blockGasLeft is narrowed from gasLimit.
             OpBlockExecutionContext ctx{.fee = {},

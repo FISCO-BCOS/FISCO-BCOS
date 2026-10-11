@@ -6,15 +6,15 @@
 // every public header and EXPLICITLY INSTANTIATES that surface, so a base-API break fails this
 // build immediately.
 
+#include <bcos-evm/adapter/RecentBlockHashes.h>
+#include <bcos-evm/adapter/Storage2State.h>
+#include <bcos-evm/adapter/Storage2StateHelpers.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpCommitments.h>
 #include <opstack-executor/OpCommon.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerPolicy.h>
 #include <opstack-executor/OpstackExecutor.h>
-#include <bcos-evm/adapter/RecentBlockHashes.h>
-#include <bcos-evm/adapter/Storage2State.h>
-#include <bcos-evm/adapter/Storage2StateHelpers.h>
 
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -56,7 +56,7 @@ template void bcos::evm::engine::preBlockOpSteps<MutableStorage, std::vector<bco
     bcos::executor_v1::opstack::OpstackExecutor&,
     std::optional<bcos::evm::engine::detail::RecentBlockHashes<MutableStorage>>&,
     std::optional<std::string>&, std::optional<uint16_t>&,
-    bcos::evm::opstack::OpForkSchedule const*, uint64_t);
+    bcos::evm::opstack::OpForkSchedule const*, uint64_t, uint64_t);
 
 BOOST_AUTO_TEST_SUITE(SmokeCompileTest)
 

@@ -73,6 +73,7 @@ state::BlockInfo karstBlock()
 state::Transaction karstTx(int64_t gasLimit)
 {
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kKarstSender;
     tx.to = kKarstCallee;
@@ -132,6 +133,7 @@ evmc::Result callCode(evmc::VM& vm, state::State& st, const OpForkConfig& cfg)
 {
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = kKarstSender;
     const auto block = karstBlock();
     OpHost host{cfg.rev, vm, st, block, hashes, tx, 1234, cfg.precompiles};
@@ -156,6 +158,7 @@ int64_t precompileGas(const OpForkConfig& cfg, const evmc::address& addr,
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.sender = kKarstSender;
     const auto block = karstBlock();
     OpHost host{cfg.rev, vm, st, block, hashes, tx, 1234, cfg.precompiles};
@@ -309,6 +312,7 @@ BOOST_AUTO_TEST_CASE(KarstBn256PairingInputLimitBoundary)
         state::State st{ts};
         test::TestBlockHashes hashes;
         state::Transaction tx;
+        tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
         tx.sender = kKarstSender;
         const auto block = karstBlock();
         OpHost host{cfg.rev, vm, st, block, hashes, tx, 1234, cfg.precompiles};

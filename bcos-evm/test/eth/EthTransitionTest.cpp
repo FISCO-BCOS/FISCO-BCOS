@@ -37,8 +37,9 @@ using EthResult = std::variant<state::TransactionReceipt, std::error_code>;
 
 /// validate -> transition -> sanitize, inlined here after EthTransition.{h,cpp} was removed.
 /// chainId is the NODE's chain id: state::transition compares each EIP-7702 authorization
-/// against it, and validate_transaction never checks tx.chain_id, so it must not be read off
-/// the transaction.
+/// against it. (Since evmone 0.24 validate_transaction DOES reject protected txs whose
+/// tx.chain_id differs from block.chain_id — these tests set both to 1; the authorization
+/// chain check in transition() still takes the node's value, never tx.chain_id.)
 EthResult runTx(const state::StateView& view, const state::BlockInfo& block,
     const state::BlockHashes& hashes, const state::Transaction& tx, evmc_revision rev, evmc::VM& vm,
     int64_t blockGasLeft, int64_t blobGasLeft, uint64_t chainId)
@@ -157,6 +158,7 @@ BOOST_AUTO_TEST_CASE(SimpleTransfer21000)
     tx.max_gas_price = 1000;
     tx.max_priority_gas_price = 10;
     tx.nonce = 0;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects protected tx with a mismatched chain id
 
     evmc::VM vm{evmc_create_evmone()};
     StubBlockHashes hashes;
@@ -194,6 +196,7 @@ BOOST_AUTO_TEST_CASE(InvalidTxRejectedWithoutSideEffect)
     tx.max_gas_price = 1000;
     tx.max_priority_gas_price = 10;
     tx.nonce = 0;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects protected tx with a mismatched chain id
 
     evmc::VM vm{evmc_create_evmone()};
     StubBlockHashes hashes;
@@ -230,6 +233,7 @@ BOOST_AUTO_TEST_CASE(BlobTxRejectedWhenNoBlobGasLeft)
     tx.max_blob_gas_price = 1;
     tx.blob_hashes = {0x0100000000000000000000000000000000000000000000000000000000000001_bytes32};
     tx.nonce = 0;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects protected tx with a mismatched chain id
 
     evmc::VM vm{evmc_create_evmone()};
     StubBlockHashes hashes;
@@ -441,6 +445,7 @@ BOOST_AUTO_TEST_CASE(UnknownTimestampRevertsWithEmptyOutput, * boost::unit_test:
         .flags = 0,
         .depth = 0,
         .gas = 30'000'000,
+        .state_gas = {},
         .recipient = state::BEACON_ROOTS_ADDRESS,
         .sender = kCaller,  // 非 SYSTEM_ADDRESS → 走查询路径而非写路径
         .input_data = ts.bytes,

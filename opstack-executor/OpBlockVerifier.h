@@ -541,7 +541,7 @@ public:
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<edetail::RecentBlockHashes<ViewType>> hashes;
             engine::preBlockOpSteps(view, *header, cfg, rawTxBytes, deposits, executor, hashes,
-                hashErr, daFootprintGasScalar, &opSchedule, parentTsSec);
+                hashErr, daFootprintGasScalar, &opSchedule, parentTsSec, m_chainId);
 
             OpBlockExecutionContext ctx{.fee = {},
                 .blockGasLeft =

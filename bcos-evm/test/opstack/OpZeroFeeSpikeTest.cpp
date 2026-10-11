@@ -47,6 +47,7 @@ state::BlockInfo spikeBlk()
 state::Transaction spikeBaseTx()
 {
     state::Transaction tx;
+    tx.chain_id = 1;  // evmone 0.24: validate rejects mismatched chain ids
     tx.type = state::Transaction::Type::eip1559;
     tx.sender = kSpikeSender;
     tx.gas_limit = 100000;

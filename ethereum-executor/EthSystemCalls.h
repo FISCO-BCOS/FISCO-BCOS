@@ -157,6 +157,7 @@ evmc::Result executeSystemCall(EthereumState<Storage>& state, EthBlockInfo const
         .flags = 0,
         .depth = 0,
         .gas = 30'000'000,
+        .state_gas = {},
         .recipient = addr,
         .sender = SYSTEM_ADDRESS,
         .input_data = input.data(),

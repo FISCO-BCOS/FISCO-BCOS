@@ -690,7 +690,10 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     bcos::executor_v1::opstack::OpstackExecutor& executor,
     std::optional<detail::RecentBlockHashes<Storage>>& hashes, std::optional<std::string>& hashErr,
     std::optional<uint16_t>& daFootprintGasScalar,
-    bcos::evm::opstack::OpForkSchedule const* schedule, uint64_t parentTsSec)
+    bcos::evm::opstack::OpForkSchedule const* schedule, uint64_t parentTsSec,
+    // evmone 0.24: BlockInfo::chain_id feeds validate_transaction's INVALID_CHAIN_ID
+    // gate; tests default to 1, block-path callers pass the node's chain id.
+    uint64_t chainId = 1)
 {
     namespace op = bcos::evm::opstack;
 
@@ -708,7 +711,7 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     // beacon-roots system call, no blob fee), so the leniency is semantics-neutral; Ecotone+
     // headers carry the fields and stay strict.
     auto blk = detail::toBlockInfo(header, std::nullopt, /*lenientOptionals=*/false,
-        /*requireEcotoneHeaderFields=*/cfg.fork >= op::OpFork::Ecotone);
+        /*requireEcotoneHeaderFields=*/cfg.fork >= op::OpFork::Ecotone, chainId);
     hashes.emplace(
         view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
     bcos::evm::evmstate::Storage2State<Storage> stateView(view, executor.sharedError());

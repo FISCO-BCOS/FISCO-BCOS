@@ -78,6 +78,7 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
             evmc_result{.status_code = static_cast<evmc_status_code>(params->evmStatus),
                 .gas_left = params->gas,
                 .gas_refund = 0,
+                .state_gas = {},
                 .output_data = buffer.release(),
                 .output_size = errorOutput.size(),
                 .release = [](const struct evmc_result* result) { delete[] result->output_data; }},

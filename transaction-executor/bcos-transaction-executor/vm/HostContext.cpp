@@ -18,6 +18,21 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
     {
     case EVMC_CREATE:
     {
+        // evmc ABI 19: nested creates (depth != 0) arrive with recipient already computed
+        // by evmone (keccak(rlp(sender, get_nonce(sender)))) and the CREATE instruction
+        // pushes THAT address onto the EVM stack. Overwriting it with the FISCO formula
+        // would split the account address from the stack address — the constructor's
+        // stored address then points at nothing and every later call misses (observed as
+        // contractDeploy revert). Depth-0 (transaction-level) creates keep the legacy
+        // FISCO formula unconditionally: their executor-built messages may carry a
+        // decorative recipient (e.g. precompile wrappers, eip2929 probes) that 0.21
+        // always overwrote.
+        if (message.depth != 0 && !concepts::bytebuffer::equalTo(
+                                      message.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+        {
+            message.code_address = message.recipient;
+            break;
+        }
         if (concepts::bytebuffer::equalTo(
                 message.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
         {

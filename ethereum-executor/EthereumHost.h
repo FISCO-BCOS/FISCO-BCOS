@@ -531,7 +531,9 @@ evmc::Result EthereumHost<Storage>::create(const evmc_message& msg) noexcept
     if (gas_left < 0)
     {
         return (m_rev == EVMC_FRONTIER) ?
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient} :
+                   // evmc ABI 19: Result lost the created-address ctor; the caller reads
+                   // msg.recipient (set by prepare_message / evmone for nested creates).
+                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund} :
                    evmc::Result{EVMC_FAILURE};
     }
 
@@ -653,17 +655,13 @@ evmc_tx_context EthereumHost<Storage>::get_tx_context() const noexcept
 
     return evmc_tx_context{
         evm::toEvmcBE<evmc::uint256be>(effective_gas_price),  // By EIP-1559.
-        sender,
-        m_block.coinbase,
-        m_block.number,
-        m_block.timestamp,
-        m_block.gas_limit,
+        sender, m_block.coinbase, m_block.number, m_block.timestamp, m_block.gas_limit,
         m_block.prev_randao,
         evmc::uint256be{static_cast<uint64_t>(m_chainId)},  // Chain ID (EIP-155).
         evmc::uint256be{base_fee},
-        evm::toEvmcBE<evmc::uint256be>(m_block.blob_base_fee.value_or(0)),
-        m_blobHashes.data(),
+        evm::toEvmcBE<evmc::uint256be>(m_block.blob_base_fee.value_or(0)), m_blobHashes.data(),
         m_blobHashes.size(),
+        0,  // block_slot_number (EIP-7843, evmc ABI 19): no beacon slot on this chain.
     };
 }
 

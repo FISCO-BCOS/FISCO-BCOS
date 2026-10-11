@@ -90,6 +90,7 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = gas,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = recipientIn,
             .sender = {},
             .input_data = nullptr,
@@ -430,6 +431,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_shared_across_external_call_depth)
         .flags = 0,
         .depth = parent.message().depth + 1,
         .gas = 500000,
+        .state_gas = {},  // evmc ABI 19 (EIP-8037)
         .recipient = emptyCallee,
         .sender = parent.message().recipient,
         .input_data = nullptr,
@@ -794,6 +796,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_access_list_multi_slot)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = childContract,
             .sender = host.message().recipient,
             .input_data = nullptr,
@@ -889,6 +892,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_child_warm)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = childContract,
             .sender = host.message().recipient,
             .input_data = nullptr,
@@ -939,6 +943,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_success_commits_child_warm)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = childContract,
             .sender = host.message().recipient,
             .input_data = nullptr,
@@ -1004,6 +1009,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_fail_outer_ok)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = outer,
             .sender = host.message().recipient,
             .input_data = nullptr,
@@ -1121,6 +1127,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_sequential_child_revert_then_success_warm)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = {},
             .sender = host.message().recipient,
             .input_data = nullptr,
@@ -1390,6 +1397,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_oog_rolls_back_child_warm)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 500,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = childContract,
             .sender = host.message().recipient,
             .input_data = nullptr,
@@ -1453,6 +1461,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_preserves_tx_baseline)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = childContract,
             .sender = host.message().recipient,
             .input_data = nullptr,
@@ -1513,6 +1522,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_storage_slot)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = childContract,
             .sender = host.message().recipient,
             .input_data = nullptr,
@@ -1627,6 +1637,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_keeps_contract_warm)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = {},
             .sender = host.message().recipient,
             .input_data = initCode.data(),
@@ -1678,6 +1689,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_evmone_inner_warm_rolled_back)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = {},
             .sender = host.message().recipient,
             .input_data = initCode.data(),
@@ -1861,6 +1873,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_checkpoint_off_nested_call)
             .flags = 0,
             .depth = host.message().depth + 1,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = childContract,
             .sender = host.message().recipient,
             .input_data = nullptr,

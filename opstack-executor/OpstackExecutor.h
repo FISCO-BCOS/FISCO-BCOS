@@ -444,7 +444,7 @@ template <typename Out>
             return "authorizationList is not bound to the signed envelope";
         if (entry.nonce != m.nonce)
             return "authorizationList is not bound to the signed envelope";
-        if (intx::uint256{entry.yParity} != m.v)
+        if (entry.yParity != m.y_parity)
             return "authorizationList is not bound to the signed envelope";
         if (eth::toIntxU256(entry.r) != m.r)
             return "authorizationList is not bound to the signed envelope";
@@ -1114,12 +1114,12 @@ public:
     /// kind: eth_call (lenientOptionals=true) reads unset header fields as 0; block execution
     /// (false) rejects a malformed header at the point of use instead of failing open. The
     /// per-block fork config decides whether the Cancun/Ecotone fields must be present.
-    evmone::state::BlockInfo buildBlockInfo(
-        protocol::BlockHeader const& header, uint64_t gasLimit, bool lenientOptionals = true) const
+    evmone::state::BlockInfo buildBlockInfo(protocol::BlockHeader const& header, uint64_t gasLimit,
+        bool lenientOptionals = true, uint64_t chainId = 1) const
     {
         return bcos::evm::engine::detail::toBlockInfo(header, gasLimit, lenientOptionals,
-            /*requireEcotoneHeaderFields=*/m_forkConfig.fork >=
-                bcos::evm::opstack::OpFork::Ecotone);
+            /*requireEcotoneHeaderFields=*/m_forkConfig.fork >= bcos::evm::opstack::OpFork::Ecotone,
+            chainId);
     }
 
     /// Real header gasLimit, falling back to the caller's blockGasLeft when the header leaves it
@@ -1238,7 +1238,8 @@ public:
             // Bedrock..Delta blocks; both are dead EVM inputs pre-Cancun), so only the
             // eth_call leniency is selected here.
             m_blockInfo = executor.buildBlockInfo(blockHeader,
-                opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)), call);
+                opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)), call,
+                m_ctx->chainId);
             try
             {  // Validation failure is a consensus reject.
                 m_props = co_await executor.m_prepare(*stateView, blockHeader, transaction,
@@ -1457,7 +1458,7 @@ public:
         // no parentBeaconBlockRoot / blobGasUsed (devp2p sync lane, OpBlockVerifier).
         auto blockInfo = buildBlockInfo(blockHeader,
             opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)),
-            call || m_forkConfig.fork < bcos::evm::opstack::OpFork::Ecotone);
+            call || m_forkConfig.fork < bcos::evm::opstack::OpFork::Ecotone, chainId);
         bcos::evm::opstack::OpTxProperties props;
         try
         {  // Validation failure is a consensus reject.
@@ -1653,7 +1654,8 @@ private:
         auto blockInfo = (prebuiltBlockInfo != nullptr) ?
                              *prebuiltBlockInfo :
                              buildBlockInfo(blockHeader,
-                                 opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
+                                 opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)),
+                                 /*lenientOptionals=*/true, chainId.value_or(1));
         auto evmTx = eth::toEvmoneTransaction(transaction);
         // TRUST BOUNDARY (envelope↔mirror gate, below): the execution fields come from the tars
         // mirror, so they are bound against the signed envelope by
@@ -1670,12 +1672,20 @@ private:
         // clamp the cap to the block base fee for the simulation. Only a call that carries NO
         // explicit fee cap (gasPrice / maxFeePerGas both unset — the pricing-less shape) gets
         // clamped: a caller that explicitly requested a cap below the base fee keeps it, and
-        X
-            // op-geth's ErrFeeCapTooLow instead of silently simulating at an unrequested price.
-            if (call && !transaction.gasPrice().has_value() &&
-                !transaction.maxFeePerGas().has_value())
+        // gets op-geth's ErrFeeCapTooLow instead of silently simulating at an unrequested price.
+        if (call && !transaction.gasPrice().has_value() && !transaction.maxFeePerGas().has_value())
         {
             evmTx.max_gas_price = std::max(evmTx.max_gas_price, intx::uint256{blockInfo.base_fee});
+        }
+        if (call)
+        {
+            // evmone 0.24: validate_transaction rejects chain-id-protected txs whose
+            // chain_id differs from the block's (INVALID_CHAIN_ID). The RPC call tx
+            // carries no chainId (toEvmoneTransaction leaves 0) and op-geth's eth_call
+            // is lenient about chain binding — the simulated tx represents "executed
+            // on this chain", so bind it to the block's chain id (same leniency as the
+            // fee-cap clamp above).
+            evmTx.chain_id = blockInfo.chain_id;
         }
         // Block path: compare the SIGNED envelope to the node (op-geth ErrInvalidChainId).
         // Never use tars data.chainID / evmTx.chain_id — the signature does not bind the mirror.

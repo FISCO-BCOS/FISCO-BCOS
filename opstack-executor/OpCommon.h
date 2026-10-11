@@ -212,11 +212,16 @@ template <class T>
 /// present) from the pre-Ecotone RLP shape, where those fields do not exist at all.
 inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& env,
     std::optional<uint64_t> gasLimitOverride = std::nullopt, bool lenientOptionals = false,
-    bool requireEcotoneHeaderFields = true)
+    bool requireEcotoneHeaderFields = true, uint64_t chainId = 1)
 {
     bool const lenient = lenientOptionals || !requireEcotoneHeaderFields;
     evmone::state::BlockInfo blk;
     blk.number = static_cast<int64_t>(env.number());
+    // evmone 0.24: BlockInfo gained chain_id and validate_transaction rejects protected
+    // transactions whose chainId differs (INVALID_CHAIN_ID). op-geth checks the same via
+    // its signer; without this every protected tx on a chainId != 1 network would be
+    // rejected by the new default (BlockInfo::chain_id defaults to 1).
+    blk.chain_id = chainId;
     // TIMESTAMP UNIT CONVENTION (do not "fix" — see below):
     // FISCO tars store MILLISECONDS; evmone wants SECONDS, so this conversion is REQUIRED.
     // The RPC boundary converts seconds→milliseconds on the way in (EngineHelper.cpp

@@ -143,6 +143,7 @@ inline evmc_message build_message(
         .flags = 0,
         .depth = 0,
         .gas = execution_gas_limit,
+        .state_gas = {},
         .recipient = recipient,
         .sender = ethSender(tx),
         .input_data = input.data(),
