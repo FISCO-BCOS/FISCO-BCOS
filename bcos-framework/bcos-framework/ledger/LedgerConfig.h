@@ -413,9 +413,10 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_SPURIOUS_DRAGON;
     if (n == "byzantium")
         return EVMC_BYZANTIUM;
-    if (n == "constantinople")
-        return EVMC_CONSTANTINOPLE;
-    if (n == "petersburg" || n == "constantinoplefix")
+    if (n == "constantinople" || n == "petersburg" || n == "constantinoplefix")
+        // evmone 0.23 removed the Constantinople revision (its opcodes retarget to
+        // Petersburg, which is Constantinople minus the reverted EIP-1283 — identical
+        // EVM semantics); accept the legacy name for old persisted configs.
         return EVMC_PETERSBURG;
     if (n == "istanbul" || n == "muirglacier" || n == "muir glacier")
         return EVMC_ISTANBUL;
@@ -433,6 +434,8 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_PRAGUE;
     if (n == "osaka")
         return EVMC_OSAKA;
+    if (n == "amsterdam")
+        return EVMC_AMSTERDAM;
     if (n == "experimental")
         return EVMC_EXPERIMENTAL;
     return std::nullopt;
@@ -458,8 +461,6 @@ inline std::string_view evmcRevisionName(evmc_revision rev)
         return "spuriousdragon";
     case EVMC_BYZANTIUM:
         return "byzantium";
-    case EVMC_CONSTANTINOPLE:
-        return "constantinople";
     case EVMC_PETERSBURG:
         return "petersburg";
     case EVMC_ISTANBUL:
@@ -478,6 +479,8 @@ inline std::string_view evmcRevisionName(evmc_revision rev)
         return "prague";
     case EVMC_OSAKA:
         return "osaka";
+    case EVMC_AMSTERDAM:
+        return "amsterdam";
     case EVMC_EXPERIMENTAL:
         return "experimental";
     }

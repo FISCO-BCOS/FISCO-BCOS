@@ -1,4 +1,4 @@
-# Official evmone (ipsilon) v0.21.0. FISCO-BCOS's SM3 (national crypto) support is
+# Official evmone (ipsilon) v0.24.0. FISCO-BCOS's SM3 (national crypto) support is
 # applied as a transparent patch instead of consuming a private fork: evmone::VM
 # carries an optional host-provided hash_fn used by the KECCAK256 opcode, so SM
 # chains hash with SM3. The evmc/ headers are NOT modified (evmc_host_context stays
@@ -19,8 +19,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO ipsilon/evmone
-    REF v0.21.0
-    SHA512 bc2928d42140d2fbb47d1e06773e634d208945e52ac70a418798586897a60164910cc2b23c80479ae172941d8d9142ea6fdd86e13f560195cff44ccdc1f1d0f2
+    REF v0.24.0
+    SHA512 83351c486c0638e8cae7fb826c9341ccadc1362d46346a331451695b53a79366e8354843bed431afddd0102221c48644d38385330f1198b5705bb2e8c60c6d53
     HEAD_REF master
     PATCHES fisco-sm3.patch
 )
@@ -185,7 +185,7 @@ endif()
 # Write version file
 set(EVMONE_VERSION_CONFIG "${CURRENT_PACKAGES_DIR}/share/evmone/evmoneConfigVersion.cmake")
 file(WRITE "${EVMONE_VERSION_CONFIG}" [=[
-set(PACKAGE_VERSION "0.21.0")
+set(PACKAGE_VERSION "0.24.0")
 if(PACKAGE_VERSION VERSION_LESS PACKAGE_FIND_VERSION)
     set(PACKAGE_VERSION_COMPATIBLE FALSE)
 else()

@@ -148,7 +148,6 @@ inline evmc_message build_message(
         .input_data = input.data(),
         .input_size = input.size(),
         .value = evm::toEvmcBE<evmc::uint256be>(tx.value()),
-        .create2_salt = {},
         .code_address = recipient,
         .code = nullptr,
         .code_size = 0,

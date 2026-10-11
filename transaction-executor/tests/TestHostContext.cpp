@@ -83,7 +83,6 @@ public:
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
             .input_size = helloworldBytecodeBinary.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -97,7 +96,7 @@ public:
         auto result = syncWait(hostContext.execute());
         BOOST_REQUIRE_EQUAL(result.status_code, 0);
 
-        helloworldAddress = result.create_address;
+        helloworldAddress = hostContext.message().recipient;
         BCOS_LOG(INFO) << "Hello world address: " << bcos::address2HexString(helloworldAddress);
     }
 
@@ -122,7 +121,6 @@ public:
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = address,
             .code = nullptr,
             .code_size = 0};
@@ -170,7 +168,6 @@ public:
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = callAddress,
             .code = nullptr,
             .code_size = 0};
@@ -278,7 +275,6 @@ BOOST_AUTO_TEST_CASE(emptyCreate)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},  // zero value
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -293,7 +289,7 @@ BOOST_AUTO_TEST_CASE(emptyCreate)
         auto result = co_await hostContext.execute();
 
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
-        auto size = co_await hostContext.codeSizeAt(result.create_address);
+        auto size = co_await hostContext.codeSizeAt(hostContext.message().recipient);
         BOOST_CHECK_EQUAL(size, 0);
 
         co_return;
@@ -391,7 +387,6 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = callAddress,
             .code = nullptr,
             .code_size = 0};
@@ -604,7 +599,6 @@ BOOST_AUTO_TEST_CASE(setStorageStatusWithBugfix)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = helloworldAddress,
             .code = nullptr,
             .code_size = 0};
@@ -663,7 +657,6 @@ BOOST_AUTO_TEST_CASE(setStorageStatusLegacy)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = helloworldAddress,
             .code = nullptr,
             .code_size = 0};
@@ -987,7 +980,6 @@ BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
             .input_size = helloworldBytecodeBinary.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = codeAddress,
             .code = nullptr,
             .code_size = 0};
@@ -1069,7 +1061,6 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
                 .input_data = input.data(),
                 .input_size = input.size(),
                 .value = {},
-                .create2_salt = {},
                 .code_address = callAddress,
                 .code = nullptr,
                 .code_size = 0};

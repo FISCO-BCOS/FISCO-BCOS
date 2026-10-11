@@ -145,10 +145,19 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
     }
 }
 
+// evmc ABI 19: the VM reads the sender's nonce itself to compute CREATE addresses
+// (evmone instructions_calls.cpp create_impl) and to enforce EIP-2681; the value
+// must match the nonce the executive reads when it assigns the created address.
+uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr) noexcept
+{
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
+    return hostContext.getNonce(_addr);
+}
+
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    return hostContext.codeSizeAt(fromEvmC(*_addr));
+    return hostContext.codeSizeAt(evmAddress2String(*_addr));
 }
 
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
@@ -306,23 +315,27 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
 
 /// function table
 // clang-format off
+// Designated initializers (C++20) keep each function pointer bound to its named
+// slot: evmc ABI 13..19 inserted get_nonce mid-struct, which would silently
+// shift every positional initializer that follows it.
 evmc_host_interface const fnTable = {
-    accountExists,
-    getStorage,
-    setStorage,
-    getBalance,
-    getCodeSize,
-    getCodeHash,
-    copyCode,
-    selfdestruct,
-    call,
-    getTxContext,
-    getBlockHash,
-    log,
-    access_account,
-    access_storage,
-    getTransientStorage,
-    setTransientStorage,
+    .account_exists = accountExists,
+    .get_storage = getStorage,
+    .set_storage = setStorage,
+    .get_balance = getBalance,
+    .get_nonce = getNonce,
+    .get_code_size = getCodeSize,
+    .get_code_hash = getCodeHash,
+    .copy_code = copyCode,
+    .selfdestruct = selfdestruct,
+    .call = call,
+    .get_tx_context = getTxContext,
+    .get_block_hash = getBlockHash,
+    .emit_log = log,
+    .access_account = access_account,
+    .access_storage = access_storage,
+    .get_transient_storage = getTransientStorage,
+    .set_transient_storage = setTransientStorage,
 };
 // clang-format on
 

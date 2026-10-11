@@ -446,7 +446,6 @@ BOOST_AUTO_TEST_CASE(UnknownTimestampRevertsWithEmptyOutput, * boost::unit_test:
         .input_data = ts.bytes,
         .input_size = sizeof(ts.bytes),
         .value = {},
-        .create2_salt = {},
         .code_address = {},
         .code = nullptr,
         .code_size = 0,

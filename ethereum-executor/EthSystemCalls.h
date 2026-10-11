@@ -162,7 +162,6 @@ evmc::Result executeSystemCall(EthereumState<Storage>& state, EthBlockInfo const
         .input_data = input.data(),
         .input_size = input.size(),
         .value = {},
-        .create2_salt = {},
         .code_address = {},
         .code = nullptr,
         .code_size = 0,
@@ -261,9 +260,8 @@ task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(
                 co_return result;
             }
 
-            const auto res =
-                eth_system_calls_detail::executeSystemCall(state, block, rev, vm, contract.addr,
-                    code, {});
+            const auto res = eth_system_calls_detail::executeSystemCall(
+                state, block, rev, vm, contract.addr, code, {});
             if (res.status_code != EVMC_SUCCESS)
             {
                 result.error = "block-end system call (EIP-7002/7251) failed: execution reverted";

@@ -66,6 +66,7 @@
 #include <cassert>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <range/v3/algorithm/equal.hpp>
@@ -330,6 +331,21 @@ public:
     {
         auto account = getAccount(*this, addr);
         co_return co_await account.balance();
+    }
+
+    // evmc ABI 19: the VM reads the sender's nonce itself (CREATE address computation
+    // and EIP-2681); it must agree with the nonce externalCall reads for the same
+    // sender, so both go through getAccount().nonce().
+    task::Task<uint64_t> nonce(evmc_address addr, auto&&... /*unused*/)
+    {
+        auto account = getAccount(*this, addr);
+        auto nonceStr = co_await account.nonce();
+        const auto value = u256(nonceStr.value_or(std::string("0")));
+        // EIP-2681 caps the EVM-visible nonce at 2^64-1; saturate oversized stored
+        // values so evmone treats them as MAX_NONCE and rejects the CREATE.
+        constexpr auto u64Max = u256{std::numeric_limits<uint64_t>::max()};
+        co_return value > u64Max ? std::numeric_limits<uint64_t>::max() :
+                                   static_cast<uint64_t>(value);
     }
 
     task::Task<evmc_bytes32> getTransientStorage(const evmc_bytes32* key, auto&&... /*unused*/)
@@ -819,7 +835,6 @@ private:
                 co_await m_recipientAccount.setNonce("1");
             }
             result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
-            result.create_address = ref.code_address;
 
             // Clear the output
             if (result.release)
@@ -942,9 +957,7 @@ private:
                                      .gas_refund = 0,
                                      .output_data = nullptr,
                                      .output_size = 0,
-                                     .release = nullptr,
-                                     .create_address = {},
-                                     .padding = {}},
+                                     .release = nullptr},
                 protocol::TransactionStatus::None};
         }
         processDynamicPrecompiled();

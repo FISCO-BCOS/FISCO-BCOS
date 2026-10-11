@@ -82,7 +82,6 @@ public:
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};

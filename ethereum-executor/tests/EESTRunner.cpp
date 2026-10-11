@@ -581,9 +581,10 @@ evmc_revision forkNameToRevision(std::string const& forkName)
         return EVMC_SPURIOUS_DRAGON;
     if (lower == "byzantium")
         return EVMC_BYZANTIUM;
-    if (lower == "constantinople")
-        return EVMC_CONSTANTINOPLE;
-    if (lower == "constantinoplefix" || lower == "petersburg")
+    // evmone 0.23 removed the Constantinople revision; EEST fixtures naming it run
+    // under Petersburg (identical EVM semantics — Constantinople minus reverted
+    // EIP-1283).
+    if (lower == "constantinople" || lower == "constantinoplefix" || lower == "petersburg")
         return EVMC_PETERSBURG;
     if (lower == "istanbul")
         return EVMC_ISTANBUL;

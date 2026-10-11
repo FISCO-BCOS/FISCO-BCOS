@@ -95,7 +95,6 @@ public:
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -207,10 +206,9 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_helpers_smoke)
 
     evmc_address sender{};
     sender.bytes[19] = 0x01;
-    evmc_bytes32 salt{};
     auto const initcode = eip2929::revertInitcode();
     auto const msg = eip2929::makeCreate2Message(
-        sender, salt, bcos::bytesConstRef(initcode.data(), initcode.size()), 1'000'000);
+        sender, bcos::bytesConstRef(initcode.data(), initcode.size()), 1'000'000);
     BOOST_CHECK_EQUAL(msg.kind, EVMC_CREATE2);
     BOOST_CHECK_EQUAL(msg.input_size, initcode.size());
     BOOST_CHECK(msg.input_data == initcode.data());
@@ -437,7 +435,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_shared_across_external_call_depth)
         .input_data = nullptr,
         .input_size = 0,
         .value = {},
-        .create2_salt = {},
         .code_address = emptyCallee,
         .code = nullptr,
         .code_size = 0};
@@ -802,7 +799,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_access_list_multi_slot)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
             .code_size = 0};
@@ -898,7 +894,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_child_warm)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
             .code_size = 0};
@@ -949,7 +944,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_success_commits_child_warm)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
             .code_size = 0};
@@ -1015,7 +1009,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_fail_outer_ok)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = outer,
             .code = nullptr,
             .code_size = 0};
@@ -1133,7 +1126,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_sequential_child_revert_then_success_warm)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -1403,7 +1395,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_oog_rolls_back_child_warm)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
             .code_size = 0};
@@ -1467,7 +1458,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_preserves_tx_baseline)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
             .code_size = 0};
@@ -1528,7 +1518,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_storage_slot)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
             .code_size = 0};
@@ -1643,7 +1632,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_keeps_contract_warm)
             .input_data = initCode.data(),
             .input_size = initCode.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -1695,7 +1683,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_evmone_inner_warm_rolled_back)
             .input_data = initCode.data(),
             .input_size = initCode.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -1734,10 +1721,8 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create2_fail_keeps_contract_warm)
         auto const nonceStr = co_await senderAcc.nonce();
         u256 const nonce(nonceStr.value_or(std::string("0")));
 
-        evmc_bytes32 salt{};
-        salt.bytes[31] = 0x42;
         auto const initCode = eip2929::revertInitcodeAfterWarmOtherBytecode(other);
-        auto nested = eip2929::makeCreate2Message(host.message().recipient, salt,
+        auto nested = eip2929::makeCreate2Message(host.message().recipient,
             bcos::bytesConstRef(initCode.data(), initCode.size()), 1'000'000);
         nested.depth = host.message().depth + 1;
         int64_t const childSeq = seq + 1;
@@ -1881,7 +1866,6 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_checkpoint_off_nested_call)
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
             .code_size = 0};

@@ -5,9 +5,9 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/vm/HostContext.h"
+#include <bcos-utilities/BoostLog.h>
 #include <evmc/evmc.h>
 #include <memory>
-#include <bcos-utilities/BoostLog.h>
 
 #define EXECUTIVE_WRAPPER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
 
@@ -18,12 +18,6 @@ inline std::shared_ptr<precompiled::Precompiled> getInnerPrecompiled(auto const&
 {
     return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled.m_precompiled);
 }
-
-struct ErrorMessage
-{
-    uint8_t* buffer{};
-    size_t size{};
-};
 
 template <class T>
 concept ExternalCaller = std::is_invocable_r_v<EVMCResult, T, const evmc_message&>;
@@ -92,7 +86,6 @@ public:
             .input_data = input->data.data(),
             .input_size = input->data.size(),
             .value = toEvmC(0x0_cppui256),
-            .create2_salt = toEvmC(0x0_cppui256),
             .code_address = unhexAddress(input->codeAddress),
             .code = nullptr,
             .code_size = 0};
@@ -135,15 +128,11 @@ public:
         else
         {
             callResult->status = result.status_code;
-            if (result.status_code != 0)
-            {
-                if (auto* errorMessage = (ErrorMessage*)result.create_address.bytes;
-                    errorMessage->buffer != nullptr && errorMessage->size > 0)
-                {
-                    callResult->message.assign(
-                        errorMessage->buffer, errorMessage->buffer + errorMessage->size);
-                }
-            }
+            // Legacy (pre-bugfix_v1_error_handling) branch: error text used to ride
+            // back through evmc_result::create_address reinterpreted as ErrorMessage*.
+            // That field is gone in evmc ABI 19 and no producer of the pointer exists
+            // in-tree, so this branch never obtained a message anyway (buffer was
+            // always null) — keep the equivalent no-message behavior.
         }
 
         return callResult;

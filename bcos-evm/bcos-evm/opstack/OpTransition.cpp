@@ -63,7 +63,6 @@ evmc_message build_message(
         .input_data = tx.data.data(),
         .input_size = tx.data.size(),
         .value = intx::be::store<evmc::uint256be>(tx.value),
-        .create2_salt = {},
         .code_address = recipient,
         .code = nullptr,
         .code_size = 0,
@@ -378,8 +377,8 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
         // Same NDEBUG-proofing as the gas-price clamp: opValidate guarantees the
         // precondition; clamp so a violation cannot wrap the refund to ~2^256.
         sender_acc.balance += props.operator_cost_at_gas_limit >= opAtUsed ?
-            props.operator_cost_at_gas_limit - opAtUsed :
-            intx::uint256{0};
+                                  props.operator_cost_at_gas_limit - opAtUsed :
+                                  intx::uint256{0};
     }
 
     evmone::state::TransactionReceipt receipt{tx.type, outcome.result.status_code, gas_used, {},

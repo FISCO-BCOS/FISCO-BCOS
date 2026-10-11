@@ -200,9 +200,7 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::makeErrorEVMCResult(crypto::Has
                           .gas_refund = 0,
                           .output_data = outputData,
                           .output_size = outputSize,
-                          .release = release,
-                          .create_address = {},
-                          .padding = {}},
+                          .release = release},
         status};
 
     return result;
@@ -219,7 +217,6 @@ std::ostream& operator<<(std::ostream& output, const evmc_message& message)
     output << "sender: " << bcos::bytesConstRef(message.sender.bytes) << ", ";
     output << "input_data: " << bcos::bytesConstRef(message.input_data, message.input_size) << ", ";
     output << "value: " << bcos::bytesConstRef(message.value.bytes) << ", ";
-    output << "create2_salt: " << bcos::bytesConstRef(message.create2_salt.bytes) << ", ";
     output << "code_address: " << bcos::bytesConstRef(message.code_address.bytes) << "}";
     return output;
 }
@@ -232,8 +229,7 @@ std::ostream& operator<<(std::ostream& output, const evmc_result& result)
     output << "gas_refund: " << result.gas_refund << ", ";
     output << "output_data: " << bcos::bytesConstRef(result.output_data, result.output_size)
            << ", ";
-    output << "release: " << (result.release != nullptr) << ", ";
-    output << "create_address: " << bcos::bytesConstRef(result.create_address.bytes) << "}";
+    output << "release: " << (result.release != nullptr) << "}";
     return output;
 }
 

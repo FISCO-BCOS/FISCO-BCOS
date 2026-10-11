@@ -30,8 +30,8 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
-#include <memory>
 #include <list>
+#include <memory>
 
 namespace bcos
 {
@@ -144,6 +144,7 @@ public:
     }
 
     evmc_bytes32 getBalance(const evmc_address* _addr);
+    uint64_t getNonce(const evmc_address* _addr);
     bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
     CallParameters::UniquePtr&& takeCallParameters();

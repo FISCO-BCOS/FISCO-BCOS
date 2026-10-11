@@ -84,8 +84,8 @@ struct EVMHostInterface
             // registered in the parallel scheduler's read set, otherwise pure SSTORE
             // writes would create false RAW edges against any earlier writer of the
             // same slot.
-            auto existingValue = syncWait(hostContext.get(
-                key, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER));
+            auto existingValue = syncWait(
+                hostContext.get(key, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER));
             const bool existingIsZero = concepts::bytebuffer::equalTo(
                 existingValue.bytes, executor::EMPTY_EVM_BYTES32.bytes);
             if (newIsZero)
@@ -119,6 +119,12 @@ struct EVMHostInterface
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         auto balance = syncWait(hostContext.balance(*addr));
         return toEvmC(balance);
+    }
+
+    static uint64_t getNonce(evmc_host_context* context, const evmc_address* addr) noexcept
+    {
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
+        return syncWait(hostContext.nonce(*addr));
     }
 
     static size_t getCodeSize(evmc_host_context* context, const evmc_address* addr) noexcept
@@ -210,8 +216,6 @@ struct EVMHostInterface
             .blob_base_fee = {},
             .blob_hashes = {},
             .blob_hashes_count = 0,
-            .initcodes = {},
-            .initcodes_count = 0,
         };
         return result;
     }
@@ -244,23 +248,27 @@ const evmc_host_interface* getHostInterface(auto&& syncWait)
 {
     constexpr static std::decay_t<decltype(syncWait)> localWaitOperator{};
     using HostContextImpl = EVMHostInterface<HostContextType, localWaitOperator>;
+    // Designated initializers (C++20) keep each function pointer bound to its named
+    // slot: evmc ABI 13..19 inserted get_nonce mid-struct, which would silently
+    // shift every positional initializer that follows it.
     static evmc_host_interface const fnTable = {
-        HostContextImpl::accountExists,
-        HostContextImpl::getStorage,
-        HostContextImpl::setStorage,
-        HostContextImpl::getBalance,
-        HostContextImpl::getCodeSize,
-        HostContextImpl::getCodeHash,
-        HostContextImpl::copyCode,
-        HostContextImpl::selfdestruct,
-        HostContextImpl::call,
-        HostContextImpl::getTxContext,
-        HostContextImpl::getBlockHash,
-        HostContextImpl::log,
-        HostContextImpl::accessAccount,
-        HostContextImpl::accessStorage,
-        HostContextImpl::getTransientStorage,
-        HostContextImpl::setTransientStorage,
+        .account_exists = HostContextImpl::accountExists,
+        .get_storage = HostContextImpl::getStorage,
+        .set_storage = HostContextImpl::setStorage,
+        .get_balance = HostContextImpl::getBalance,
+        .get_nonce = HostContextImpl::getNonce,
+        .get_code_size = HostContextImpl::getCodeSize,
+        .get_code_hash = HostContextImpl::getCodeHash,
+        .copy_code = HostContextImpl::copyCode,
+        .selfdestruct = HostContextImpl::selfdestruct,
+        .call = HostContextImpl::call,
+        .get_tx_context = HostContextImpl::getTxContext,
+        .get_block_hash = HostContextImpl::getBlockHash,
+        .emit_log = HostContextImpl::log,
+        .access_account = HostContextImpl::accessAccount,
+        .access_storage = HostContextImpl::accessStorage,
+        .get_transient_storage = HostContextImpl::getTransientStorage,
+        .set_transient_storage = HostContextImpl::setTransientStorage,
     };
     return &fnTable;
 }

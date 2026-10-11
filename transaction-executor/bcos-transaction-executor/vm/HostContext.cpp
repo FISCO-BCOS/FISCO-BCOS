@@ -30,10 +30,8 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
             }
             else
             {
-                auto legacyAddr =
-                    newLegacyEVMAddress(bytesConstRef(message.sender.bytes), nonce);
-                std::copy(
-                    legacyAddr.begin(), legacyAddr.end(), message.code_address.bytes);
+                auto legacyAddr = newLegacyEVMAddress(bytesConstRef(message.sender.bytes), nonce);
+                std::copy(legacyAddr.begin(), legacyAddr.end(), message.code_address.bytes);
             }
         }
         message.recipient = message.code_address;
@@ -41,13 +39,24 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
     }
     case EVMC_CREATE2:
     {
-        std::array<bcos::byte, 1 + sizeof(message.sender.bytes) + sizeof(message.create2_salt) +
-                                   crypto::HashType::SIZE>
+        // evmc ABI 19: evmc_message no longer carries create2_salt. Nested CREATE2
+        // messages arrive with recipient already computed by evmone (keccak of
+        // 0xff||sender||salt||initcode-hash) — only transaction-level messages
+        // (recipient empty, salt historically always zero) take this branch.
+        if (!concepts::bytebuffer::equalTo(
+                message.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+        {
+            message.code_address = message.recipient;
+            break;
+        }
+        constexpr evmc_bytes32 zero_salt{};
+        std::array<bcos::byte,
+            1 + sizeof(message.sender.bytes) + sizeof(zero_salt) + crypto::HashType::SIZE>
             buffer;
         uint8_t* ptr = buffer.data();
         *ptr++ = 0xff;
         ptr = std::uninitialized_copy_n(message.sender.bytes, sizeof(message.sender.bytes), ptr);
-        auto salt = toBigEndian(fromEvmC(message.create2_salt));
+        auto salt = toBigEndian(fromEvmC(zero_salt));
         ptr = std::uninitialized_copy(salt.begin(), salt.end(), ptr);
         auto inputHash = hashImpl.hash(bytesConstRef(message.input_data, message.input_size));
         ptr = std::uninitialized_copy(inputHash.begin(), inputHash.end(), ptr);

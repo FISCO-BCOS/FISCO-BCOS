@@ -50,13 +50,13 @@
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/Common.h"
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <memory>
 #include <string>
-#include <boost/algorithm/string.hpp>
 
 
 using namespace std;
@@ -1032,7 +1032,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 evmcMessage.value = toEvmC(h256(0));
             }
-            evmcMessage.create2_salt = toEvmC(0x0_cppui256);
 
             evmcMessage.input_data = hostContext.data().data();
             evmcMessage.input_size = hostContext.data().size();

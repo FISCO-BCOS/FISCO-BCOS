@@ -35,6 +35,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <exception>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -154,26 +155,12 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     switch (_msg->kind)
     {
-    // Phase 1: EVMC_EOFCREATE is rejected as a defensive guard.
-    // This branch is unreachable in practice: EOF contracts can only exist on-chain if they were
-    // deployed via EOFCREATE, which this guard prevents. Therefore no EOF bytecode will ever
-    // generate this callback.
-    // gas_left=0 is intentional and matches standard EVM semantics for an invalid/unsupported
-    // opcode (all remaining gas is consumed). EVMC_REJECTED must NOT be used here — it is a
-    // VM-selection signal (negative status), not an EVM execution error.
-    case EVMC_EOFCREATE:
-    {
-        return evmc_result{.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION),
-            .gas_left = 0,
-            .gas_refund = 0,
-            .output_data = nullptr,
-            .output_size = 0,
-            .release = nullptr,
-            .create_address = {},
-            .padding = {}};
-    }
     case EVMC_CREATE2:
-        request->createSalt = fromEvmC(_msg->create2_salt);
+        // evmc ABI 19: evmc_message no longer carries create2_salt; the VM folds the
+        // salt into the recipient it computes before calling the host. The executive
+        // layer's create-address formula keeps its own (zero) salt here — documented
+        // divergence on legacy (non-feature_evm_address) chains, see the upgrade notes.
+        request->createSalt = u256(0);
         if (features().get(
                 ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
         {
@@ -286,9 +273,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         .gas_refund = 0,
         .output_data = response->data.data(),
         .output_size = response->data.size(),
-        .release = nullptr,  // TODO: check if the response data need to release
-        .create_address = toEvmC(boost::algorithm::unhex(response->newEVMContractAddress)),
-        .padding = {}};
+        .release = nullptr};  // TODO: check if the response data need to release
 
     if (features().get(ledger::Features::Flag::bugfix_event_log_order))
     {
@@ -800,6 +785,18 @@ evmc_bytes32 HostContext::getBalance(const evmc_address* _addr)
     m_responseStore.emplace_back(std::move(response));
 
     return toEvmC(result);
+}
+
+uint64_t HostContext::getNonce(const evmc_address* _addr)
+{
+    ledger::account::EVMAccount account(
+        *m_executive->storage().getRawStorage(), *_addr, ledger::account::nodeAddressTableMode());
+    auto nonceStr = task::syncWait(account.nonce());
+    const auto nonce = u256(nonceStr.value_or("0"));
+    // EIP-2681 caps the EVM-visible nonce at 2^64-1; saturate oversized stored
+    // values so evmone treats them as MAX_NONCE and rejects the CREATE.
+    constexpr auto u64Max = u256(std::numeric_limits<uint64_t>::max());
+    return nonce > u64Max ? std::numeric_limits<uint64_t>::max() : static_cast<uint64_t>(nonce);
 }
 
 bool HostContext::selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary)

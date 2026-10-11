@@ -80,9 +80,7 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
                 .gas_refund = 0,
                 .output_data = buffer.release(),
                 .output_size = errorOutput.size(),
-                .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-                .create_address = {},
-                .padding = {}},
+                .release = [](const struct evmc_result* result) { delete[] result->output_data; }},
             static_cast<protocol::TransactionStatus>(params->status)});
     }
     return {};
