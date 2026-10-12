@@ -22,6 +22,9 @@
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/RpcCall.h"
 #include <bcos-utilities/DataConvertUtility.h>
+#include <openssl/ec.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <unistd.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
@@ -87,6 +90,23 @@ BOOST_AUTO_TEST_CASE(generatedPemLoadsBackToTheSameAddress)
         auto loaded = makeAccount(sm, files.privateKeyFile);
         BOOST_CHECK_EQUAL(accountAddress(sm, *loaded), address);
         BOOST_CHECK_EQUAL(hexOf(*loaded), hexOf(*keyPair));
+        // the public pem must hold the same point as the key pair (x||y, 64 bytes)
+        std::unique_ptr<BIO, decltype(&BIO_free)> bio(
+            BIO_new_file(files.publicKeyFile.c_str(), "r"), BIO_free);
+        BOOST_REQUIRE(bio);
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pub(
+            PEM_read_bio_PUBKEY(bio.get(), nullptr, nullptr, nullptr), EVP_PKEY_free);
+        BOOST_REQUIRE(pub);
+        std::unique_ptr<EC_KEY, decltype(&EC_KEY_free)> ec(
+            EVP_PKEY_get1_EC_KEY(pub.get()), EC_KEY_free);
+        BOOST_REQUIRE(ec);
+        std::vector<unsigned char> point(65, 0);
+        auto len = EC_POINT_point2oct(EC_KEY_get0_group(ec.get()), EC_KEY_get0_public_key(ec.get()),
+            POINT_CONVERSION_UNCOMPRESSED, point.data(), point.size(), nullptr);
+        BOOST_REQUIRE_EQUAL(len, 65U);
+        auto const& expected = keyPair->publicKey()->data();
+        BOOST_REQUIRE_EQUAL(expected.size(), 64U);
+        BOOST_CHECK(std::equal(expected.begin(), expected.end(), point.begin() + 1));
     }
 }
 

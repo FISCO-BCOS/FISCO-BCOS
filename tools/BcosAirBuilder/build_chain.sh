@@ -2369,16 +2369,12 @@ check_auth_account()
   fi
 }
 
-# the fisco-bcos binary that generates the admin account: -e <path>, the binary directory of a
-# pro/max build, or one on PATH
+# the fisco-bcos binary that generates the admin account: the file -e points at (air; the pro/max
+# binary directory holds tars services only), or one on PATH
 find_fisco_bcos_for_account()
 {
   if [[ -n "${binary_path}" && -f "${binary_path}" && -x "${binary_path}" ]]; then
       echo "${binary_path}"
-      return 0
-  fi
-  if [[ -n "${binary_path}" && -d "${binary_path}" && -x "${binary_path}/fisco-bcos" ]]; then
-      echo "${binary_path}/fisco-bcos"
       return 0
   fi
   if command -v fisco-bcos >/dev/null 2>&1; then
@@ -2404,13 +2400,22 @@ generate_auth_account()
   else
       account_target="${BcosBuilder_path}/${chain_version}/${account_dir}"
   fi
-  local fisco_bcos_bin
-  if ! fisco_bcos_bin=$(find_fisco_bcos_for_account); then
-      LOG_FATAL "fisco-bcos binary not found; the auth admin account is generated with 'fisco-bcos account new', pass -e <fisco-bcos> or -a <admin address>"
-  fi
   local account_json
-  if ! account_json=$("${fisco_bcos_bin}" account new ${sm_flag} --out "${account_target}" --json 2>&1); then
-      LOG_FATAL "'${fisco_bcos_bin} account new' failed: ${account_json}"
+  if [ -n "${docker_mode}" ]; then
+      # docker mode downloads no binary: the image's own fisco-bcos generates the account
+      mkdir -p "${account_target}"
+      local docker_tag="${compatibility_version}"
+      if ! account_json=$(docker run --rm -v "$(cd "${account_target}" && pwd)":/data -w /data "fiscoorg/fiscobcos:${docker_tag}" account new ${sm_flag} --out /data --json 2>&1); then
+          LOG_FATAL "'docker run fiscoorg/fiscobcos:${docker_tag} account new' failed: ${account_json}"
+      fi
+  else
+      local fisco_bcos_bin
+      if ! fisco_bcos_bin=$(find_fisco_bcos_for_account); then
+          LOG_FATAL "fisco-bcos binary not found; the auth admin account is generated with 'fisco-bcos account new', pass -e <fisco-bcos> or -a <admin address>"
+      fi
+      if ! account_json=$("${fisco_bcos_bin}" account new ${sm_flag} --out "${account_target}" --json 2>&1); then
+          LOG_FATAL "'${fisco_bcos_bin} account new' failed: ${account_json}"
+      fi
   fi
   auth_admin_account=$(echo "${account_json}" | grep '"address"' | sed -E 's/.*"address"[^"]*"([^"]*)".*/\1/')
   # fail fast: an empty/garbage address surfaces only minutes later as an obscure

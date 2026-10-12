@@ -156,9 +156,16 @@ void writePem(std::string const& _path, mode_t _mode, std::function<int(BIO*)> c
         ::fclose(file);
         throw OpsError(c_exitUsage, "cannot write " + _path);
     }
-    if (_write(bio.get()) != 1)
+    // PEM_write_* returns 1 once the text sits in the stdio buffer; the write(2) happens in
+    // BIO_flush (fclose inside BIO_free drops its return value), so a full disk is only visible
+    // here. Never leave a truncated key file behind.
+    if (_write(bio.get()) != 1 || BIO_flush(bio.get()) != 1)
     {
-        throw OpsError(c_exitUsage, "cannot write " + _path);
+        int err = errno;
+        bio.reset();
+        ::unlink(_path.c_str());
+        throw OpsError(c_exitUsage,
+            "cannot write " + _path + (err != 0 ? std::string(": ") + std::strerror(err) : ""));
     }
 }
 }  // namespace
