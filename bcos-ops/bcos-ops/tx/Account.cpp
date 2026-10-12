@@ -140,6 +140,14 @@ namespace
 void writePem(std::string const& _path, mode_t _mode, std::function<int(BIO*)> const& _write)
 {
     int fd = ::open(_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, _mode);
+    // open() applies _mode only when it creates the file: an existing 0644 file would keep its
+    // mode and hold the new private key world-readable
+    if (fd >= 0 && ::fchmod(fd, _mode) != 0)
+    {
+        int err = errno;
+        ::close(fd);
+        throw OpsError(c_exitUsage, "cannot set the mode of " + _path + ": " + std::strerror(err));
+    }
     if (fd < 0)
     {
         throw OpsError(c_exitUsage, "cannot create " + _path + ": " + std::strerror(errno));

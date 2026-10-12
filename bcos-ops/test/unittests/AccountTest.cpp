@@ -110,6 +110,25 @@ BOOST_AUTO_TEST_CASE(generatedPemLoadsBackToTheSameAddress)
     }
 }
 
+BOOST_AUTO_TEST_CASE(rewrittenKeyFileIsTightenedTo0600)
+{
+    TempDir temp;
+    auto keyPair = makeAccount(false, std::nullopt);
+    auto address = accountAddress(false, *keyPair);
+    auto dir = temp.dir / "accounts";
+    std::filesystem::create_directories(dir);
+    auto target = dir / (address + ".pem");
+    std::ofstream(target) << "old\n";
+    std::filesystem::permissions(
+        target, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write |
+                    std::filesystem::perms::group_read | std::filesystem::perms::others_read);
+    auto files = writePemKeyPair(dir.string(), false, *keyPair);
+    auto perms = std::filesystem::status(files.privateKeyFile).permissions();
+    BOOST_CHECK((perms & (std::filesystem::perms::group_all |
+                             std::filesystem::perms::others_all)) == std::filesystem::perms::none);
+    BOOST_CHECK_EQUAL(accountAddress(false, *makeAccount(false, files.privateKeyFile)), address);
+}
+
 BOOST_AUTO_TEST_CASE(hexAndPemGiveTheSameAddress)
 {
     for (bool sm : {false, true})
