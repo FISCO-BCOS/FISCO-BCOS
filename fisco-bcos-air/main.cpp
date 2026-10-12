@@ -69,8 +69,10 @@ int main(int argc, const char* argv[])
                 // Offline RLP block import (the hive simulator contract): needs the
                 // FULL node init — EL config validation, state/ledger stores opened,
                 // the v2 pipeline built — but NO start(): nothing serves the network,
-                // the import commits through the EL verifier lane, then we exit 0 and
-                // the entrypoint starts the node normally.
+                // the import commits through the EL verifier lane. Exits 0 on success,
+                // or 1 when nothing could be imported and the chain never advanced
+                // past genesis (the check below); the entrypoint starts the node
+                // normally either way.
                 initializer->init(param);
                 std::cout << "[" << bcos::getCurrentDateTime() << "] ";
                 std::cout << "importing Ethereum blocks from " << param.importBlocksPath

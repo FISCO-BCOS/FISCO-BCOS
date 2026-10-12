@@ -831,8 +831,11 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // Fork-gated fields: present in the JSON -> set on the header AND emitted
         // as an INI key. Absent fields follow geth's ToBlock semantics: when a
         // fork is active at the genesis timestamp, its header fields take their
-        // empty defaults (the node's header-version detection keys off field
-        // presence, so an active fork's fields must be emitted consistently).
+        // empty defaults. The node derives the header version from the configured
+        // fork schedule, and validateForkFieldPresence (EthPoSHeaderValidation.h)
+        // rejects a header whose fork-gated field set disagrees with that schedule
+        // in either direction, so an active fork's fields must be emitted
+        // consistently.
         auto forkActiveAtGenesis = [&](uint64_t forkTime) {
             // timestamp is range-checked above (<= int64 max / 1000), and the
             // shared predicate maps forkTime 0 -> active and UINT64_MAX (kNever)
