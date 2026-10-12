@@ -91,6 +91,7 @@ int snapshotPages(
         _connection, tuiFallbacks(_connection), thresholdsFrom(_args), model, nullptr, 100000);
     refresher.setRowCapacity([]() { return tui::explorerCapacity(40); });
     refresher.setVisibleTxRange([]() { return std::make_pair(size_t(0), size_t(40)); });
+    refresher.setGovernanceWants([]() { return tui::GovernanceWants{.rows = 20, .ids = {}}; });
     refresher.runOnce();
     if (_connection.nodeDir)
     {
@@ -162,6 +163,16 @@ int snapshotPages(
                 }},
         {.name = "send", .width = 120, .height = 40, .setup = sendSetup},
         {.name = "send-confirm", .width = 120, .height = 40, .setup = sendConfirmSetup},
+        // the gov page and the newest proposal (auth chains; a note elsewhere)
+        {.name = "gov", .width = 80, .height = 24, .setup = onPage(tui::Page::gov)},
+        {.name = "proposal",
+            .width = 80,
+            .height = 24,
+            .setup =
+                [](tui::Nav& nav, tui::SendForm&) {
+                    nav.page = tui::Page::gov;
+                    nav.stack.push_back({.kind = tui::DetailKind::proposal, .number = 0});
+                }},
     };
     int index = 1;
     for (auto const& shot : shots)
@@ -172,12 +183,16 @@ int snapshotPages(
         if (nav.inDetail())
         {
             std::vector<tui::DetailWant> wants;
+            tui::GovernanceWants govWants;
             {
                 std::lock_guard<std::mutex> lock(model.mutex);
                 tui::resolveDetailRefs(nav, model.explorer);
+                tui::resolveProposalRefs(nav, model.governance);
                 wants = tui::detailWants(nav);
+                govWants = tui::governanceWants(nav);
             }
             refresher.setDetailWants([wants]() { return wants; });
+            refresher.setGovernanceWants([govWants]() { return govWants; });
             refresher.runOnce();
         }
         auto screen = ftxui::Screen::Create(
@@ -238,9 +253,14 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
     // the open detail pages: written by the UI thread after each render, read by the refresher
     std::mutex wantsMutex;
     std::vector<tui::DetailWant> wants;
+    tui::GovernanceWants govWants;
     refresher.setDetailWants([&]() {
         std::lock_guard<std::mutex> lock(wantsMutex);
         return wants;
+    });
+    refresher.setGovernanceWants([&]() {
+        std::lock_guard<std::mutex> lock(wantsMutex);
+        return govWants;
     });
 
     // log tail thread: 1 s
@@ -370,6 +390,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         {
             std::lock_guard<std::mutex> wantsLock(wantsMutex);
             wants = tui::detailWants(nav);
+            govWants = tui::governanceWants(nav);
         }
         return element;
     });
@@ -381,7 +402,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
             if (model.send.last.seq != seenOutcome)
             {
                 seenOutcome = model.send.last.seq;
-                if (!model.send.last.txHash.empty() && !nav.help)
+                if (!model.send.last.txHash.empty() && model.send.last.openTx && !nav.help)
                 {
                     nav.stack.push_back({.kind = tui::DetailKind::tx,
                         .number = -1,
@@ -398,6 +419,25 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         if (editingFilter && event.is_character())
         {
             return false;  // the filter box owns plain characters; Tab/Esc still reach Nav
+        }
+        if (nav.inDetail() && nav.stack.back().kind == tui::DetailKind::proposal &&
+            nav.stack.back().resolved && !nav.help)
+        {
+            tui::SendContext context;
+            {
+                std::lock_guard<std::mutex> lock(model.mutex);
+                context = sendContextOf();
+            }
+            auto govAction = tui::govFormHandle(form, context, nav.stack.back().number, event);
+            if (govAction == tui::SendAction::submit)
+            {
+                sender.submit(form.pending);
+                return true;
+            }
+            if (govAction != tui::SendAction::toNav)
+            {
+                return true;
+            }
         }
         if (!nav.inDetail() && !nav.help && nav.page == tui::Page::send)
         {
@@ -444,10 +484,12 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
             {
                 std::lock_guard<std::mutex> lock(model.mutex);
                 tui::resolveDetailRefs(nav, model.explorer);
+                tui::resolveProposalRefs(nav, model.governance);
             }
             {
                 std::lock_guard<std::mutex> wantsLock(wantsMutex);
                 wants = tui::detailWants(nav);
+                govWants = tui::governanceWants(nav);
             }
             refresher.refreshNow();
         }
@@ -488,8 +530,9 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
 void registerTuiCommand()
 {
     registerCommand("tui",
-        Command{"browser-style panel: recent blocks and txs, consensus, send, log tail, node",
+        Command{"browser-style panel: recent blocks and txs, consensus, send, log tail, node, gov",
             "[--node-dir <dir> | --rpc <host:port>] [--key <pem|hex file>] [--version-check] "
+            "(auth chains add page 6 gov: committee, proposals, vote) "
             "[--snapshot-dir <dir> [--filter <text>]]",
             {"version-check"}, runTui});
 }

@@ -163,9 +163,11 @@ std::vector<TxRow> detailBlockTxs(ExplorerState const& _explorer, int64_t _numbe
     return rows;
 }
 
+/// every value comes from the node (hashes, addresses, messages): never verbatim to the terminal
 Element detailField(std::string const& _label, std::string const& _value, int _labelWidth = 12)
 {
-    return hbox({text(_label) | dim | size(WIDTH, EQUAL, _labelWidth), text(_value)});
+    return hbox(
+        {text(_label) | dim | size(WIDTH, EQUAL, _labelWidth), text(sanitizeForTerminal(_value))});
 }
 
 Element renderBlockDetail(Model const& _model, Nav& _nav, Frame const& _frame, DetailRef const& _ref)
@@ -399,14 +401,17 @@ std::vector<DetailWant> detailWants(Nav const& _nav)
     return wants;
 }
 
-Element renderDetail(Model const& _model, Nav& _nav, Frame const& _frame)
+Element renderDetail(Model const& _model, Nav& _nav, Frame const& _frame, SendForm const* _form)
 {
     auto const& ref = _nav.stack.back();
     if (ref.kind == DetailKind::proposal)
     {
         _nav.detailTxs.count = 0;
-        return window(text(" proposal " + std::to_string(ref.number) + " "),
-            text("proposal detail arrives with ticket 16") | dim, LIGHT);
+        if (!ref.resolved)
+        {
+            return window(text(" proposal "), text("row no longer loaded; Esc") | dim, LIGHT);
+        }
+        return renderProposalDetail(_model, _frame, ref, _form);
     }
     if (!ref.resolved)
     {

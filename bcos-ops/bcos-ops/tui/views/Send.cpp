@@ -147,7 +147,8 @@ Element sendRightPane(Model const& _model, SendForm& _form, Frame const& _frame)
         rows.push_back(text("deploys the embedded HelloWorld (constructor without arguments)"));
         if (!_model.send.helloAddress.empty())
         {
-            rows.push_back(hbox({text("last deployed: ") | dim, text(_model.send.helloAddress)}));
+            rows.push_back(hbox({text("last deployed: ") | dim,
+                text(sanitizeForTerminal(_model.send.helloAddress))}));
         }
     }
     for (size_t i = 0; i < specs.size(); ++i)

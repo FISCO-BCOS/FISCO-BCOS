@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "bcos-ops/Output.h"
 #include "bcos-ops/tui/Nav.h"
 #include <algorithm>
 #include <deque>
@@ -60,9 +61,11 @@ inline std::vector<ListColumn> fitListColumns(std::vector<ListColumn> _all, int 
     return _all;
 }
 
+/// cells carry node text (hashes, addresses): control bytes are dropped before the terminal
 inline Element listCell(std::string const& _text, int _width)
 {
-    return ftxui::text(_text) | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, _width);
+    return ftxui::text(sanitizeForTerminal(_text)) |
+           ftxui::size(ftxui::WIDTH, ftxui::EQUAL, _width);
 }
 
 inline Element listRow(std::vector<std::pair<ListColumn const*, std::string>> const& _cells)

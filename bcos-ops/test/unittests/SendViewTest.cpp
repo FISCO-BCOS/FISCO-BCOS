@@ -155,5 +155,23 @@ BOOST_AUTO_TEST_CASE(featuresEntryListsFlagsAndTinySizesDoNotThrow)
     BOOST_CHECK(text.find("consensus") == std::string::npos);
 }
 
+BOOST_AUTO_TEST_CASE(outcomeLinesNeverCarryControlBytes)
+{
+    // a receipt message from the node is terminal input: an escape sequence in it must not
+    // reach the screen (FTXUI writes cell text verbatim)
+    tui::Model model;
+    model.keyAddress = "0x3f12000000000000000000000000000000009a00";
+    model.send.last.seq = 1;
+    model.send.last.ok = false;
+    model.send.last.line = "tx 0x9c FAILED status 16 revert \x1b[2Jwiped";
+    model.send.helloAddress = "0xa1\x1b[2J";
+    auto form = sendViewAddSealer();
+    tui::Frame frame{.width = 120, .height = 40, .nowMs = 0};
+    auto raw = renderRaw(tui::renderSend(model, form, frame), 120, 40);
+    BOOST_CHECK(raw.find("\x1b[2J") == std::string::npos);
+    BOOST_CHECK(stripAnsi(raw).find("revert ") != std::string::npos);  // the text survives
+    BOOST_CHECK(stripAnsi(raw).find("wiped") != std::string::npos);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::ops::test
