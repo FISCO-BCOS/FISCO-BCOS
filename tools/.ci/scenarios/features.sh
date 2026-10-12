@@ -28,10 +28,10 @@ scenario_17_features()
     listing=$(ops "${node_dir}" sysconfig features) || return 1
     assert_jq "${listing}" 'length > 50 and all(.[]; has("name") and has("enabled"))' "sysconfig features lists the flags" || return 1
     pending=$(jq -r '.[] | select(.enabled == false and .deprecated != true) | .name' <<<"${listing}")
-    [[ -n "${pending}" ]] || { echo "scenario 17: every flag is already on"; return 0; }
     local known
     known=$(features_known_refusals "${chain}")
     local flag result enabled=() refused=() unexpected=()
+    [[ -n "${pending}" ]] || echo "scenario 17: every flag is already on"
     for flag in ${pending}; do
         if result=$(ops "${node_dir}" sysconfig enable-features "${flag}" --yes --account "${governor}" --timeout 60000 2>/dev/null); then
             enabled+=("${flag}")
@@ -43,7 +43,7 @@ scenario_17_features()
     done
     listing=$(ops "${node_dir}" sysconfig features) || return 1
     local flag_json
-    flag_json=$(printf '%s\n' "${enabled[@]}" | jq -R . | jq -s .)
+    flag_json=$( (( ${#enabled[@]} )) && printf '%s\n' "${enabled[@]}" | jq -R . | jq -s . || echo '[]')
     assert_jq "${listing}" 'map(select(.name as $n | '"${flag_json}"' | index($n)) | .enabled) | all' "every flag that reported ok reads back enabled" || return 1
     assert_jq "${listing}" '[.[] | select(.enabled == false and .deprecated != true) | .name] | length == '"${#refused[@]}" "only the refused flags stay off" || return 1
     (( ${#unexpected[@]} == 0 )) || { scenario_fail "flags refused on ${chain} that are not in features_known_refusals: ${unexpected[*]}"; return 1; }

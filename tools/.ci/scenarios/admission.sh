@@ -121,8 +121,8 @@ scenario_15_admission()
         limited=$(ops "${node_dir}" sysconfig set tx_gas_limit 100000 --yes --account "${governor}") || { echo "${limited}"; return 1; }
         assert_jq "${limited}" '.ok == true' "tx_gas_limit lowered to 100000" || return 1
         local ctor_abi heavy
-        ctor_abi=$(contract_abi_without_constructor ComplexSol) || return 1
-        heavy=$(ops_expect_exit 2 "${node_dir}" tx deploy "$(cat "$(contract_bin ComplexSol "${chain}")")${c_complex_ctor_args}" --abi "${ctor_abi}") || return 1
+        ctor_abi=$(contract_abi ComplexSol) || return 1
+        heavy=$(ops_expect_exit 2 "${node_dir}" tx deploy "$(contract_bin ComplexSol "${chain}")" --abi "${ctor_abi}" 7 "init s") || return 1
         local over_status
         over_status=$(jq_get "${heavy}" '.status')
         # 12 = TransactionStatus::OutOfGas (bcos-protocol/bcos-protocol/TransactionStatus.h:38):
@@ -132,7 +132,7 @@ scenario_15_admission()
         assert_jq "${sent}" '.status == 0 and (.gasUsed | tonumber) < 100000' "a call under the limit still runs" || return 1
         restored=$(ops "${node_dir}" sysconfig set tx_gas_limit "${current}" --yes --account "${governor}") || { echo "${restored}"; return 1; }
         assert_jq "${restored}" '.ok == true' "tx_gas_limit restored to ${current}" || return 1
-        heavy=$(ops "${node_dir}" tx deploy "$(cat "$(contract_bin ComplexSol "${chain}")")${c_complex_ctor_args}" --abi "${ctor_abi}" --timeout 60000) || { echo "${heavy}"; return 1; }
+        heavy=$(ops "${node_dir}" tx deploy "$(contract_bin ComplexSol "${chain}")" --abi "${ctor_abi}" 7 "init s" --timeout 60000) || { echo "${heavy}"; return 1; }
         assert_jq "${heavy}" '.status == 0' "the same creation deploys once the limit is back" || return 1
         echo "scenario 15: creation over tx_gas_limit 100000 failed with status ${over_status} before, 0 after restoring ${current}"
     fi

@@ -11,11 +11,11 @@
 | v1 | 2 + 扩容 node2 | genesis `executor version=1`，node0 开 web3 | base + 200 | 1 2 4 5 8 9 7 14 10 11 15 16 12 web3 17（13 跳过；第二个参数为 `true` 时 `web3_suite` 在 17 之前跑 `web3_test.sh`，监听端口 = base web3 + 200，经 `WEB3_PORT` 传给脚本） |
 | auth | 2 + 扩容 node2 | `-a <fisco-bcos account new>` | base + 300 | 1 2 4 5 8 9 7 14 10 11 15 16 12 18 17（13 跳过；5、7、14、17、18 与 8/9 的治理写走提案；5 断言 `--direct` 为 NO_AUTHORIZED；15 不改 tx_gas_limit；18 结束时把投票比例还原成 0/0、部署权限恢复开放） |
 
-每条链一个后台子 shell，日志在 `logs/<chain>.log`；任一链失败，主脚本打印该链日志尾 200 行、每个节点的 error/warn 行与 nohup，退出 1。ops 命令通过 `--node-dir` 走 `node0/data/fisco-bcos.ipc`，与 RPC 端口的 TLS 无关；只有 AMOP（场景 12）走 WebSocket RPC，所以 `build_chain_for` 把每条链 node0 的 `[rpc] enable_ssl` 改成 false（其他节点保持 TLS）。
+每条链一个后台子 shell，日志在 `logs/<chain>.log`；任一链失败，主脚本打印该链日志尾 200 行、每个节点的 error/warn 行与 nohup，退出 1。ops 命令通过 `--node-dir` 走 `node0/data/fisco-bcos.ipc`，与 RPC 端口的 TLS 无关；只有 AMOP（场景 12）走 WebSocket RPC，所以 `build_chain_for` 把每条链 node0 的 `[rpc] enable_ssl` 改成 false、`listen_ip` 改成 127.0.0.1。扩容节点由 `expand_node` 复制 node0 的 config.ini（`build_chain.sh:2049`），因此也是明文、只监听回环；其余初始节点保持 TLS。
 
 ## web3（Hardhat）套件
 
-`web3_test.sh` 不是 Java，保留：`ci_check_air.sh` 的 `web3_suite` 在 v1 链跑完场景 16/12 之后、17 之前调用它（17 会把全部 feature 打开，corpus 一直是在默认 feature 集上跑的）。签名账户是 build_chain 生成到 `ca/accounts` 的管理员 pem；充值 200 ether 与 `tx_gas_price 0x1` 由 `balance enable` / `balance add` / `sysconfig set` 经 node0 的 socket 完成（过去是 console `addBalance` / `setSystemConfigByKey`，三次重试）。v1 链的 web3 端口是 `CI_PORT_BASE` 的第三项 + 200（默认 8745），通过 `WEB3_PORT` 传给 `web3_test.sh`（它原来写死 8545）。
+`web3_test.sh` 不是 Java，保留：`ci_check_air.sh` 的 `web3_suite` 在 v1 链跑完场景 16/12 之后、17 之前调用它。此时 v1 链是场景 1–16 留下的状态：场景 8/11 开了 `feature_balance` / `feature_balance_precompiled`，场景 9 开了 `feature_dmc2serial`；17 会把全部 feature（含 corpus 没写过的新 EVM 分叉）打开，所以放在它之前。签名账户是 build_chain 生成到 `ca/accounts` 的管理员 pem；充值 200 ether 与 `tx_gas_price 0x1` 由 `balance enable` / `balance add` / `sysconfig set` 经 node0 的 socket 完成（过去是 console `addBalance` / `setSystemConfigByKey`，三次重试）。金额是纯数字串 `200000000000000000000`：`typedArg`（`bcos-ops/tx/PresetCall.cpp`）把整数参数按十进制文本交给编码器，不需要引号。v1 链的 web3 端口是 `CI_PORT_BASE` 的第三项 + 200（默认 8745），通过 `WEB3_PORT` 传给 `web3_test.sh`（它原来写死 8545）。
 
 ## 本机运行
 
@@ -34,7 +34,7 @@ bash /path/to/FISCO-BCOS/tools/.ci/ci_check_air.sh release-3.18.0 false   # 第�
 | `CI_KEEP_NODES` | `true` 跑完不清链、节点继续运行（本机调试） |
 | `CI_FAIL_SCENARIO` | 在场景 n 之后注入失败，验证失败报告路径（本机调试） |
 
-SM 链需要 `~/.fisco/tassl`；`jq` 与 `python3`（场景 10 的 ABI 编码辅助，`contracts2.sh`）必装；bash ≥ 4（`declare -A`、`${x,,}`，macOS 自带的 3.2 不行，用 Homebrew bash）。四条链的 build_chain 串行执行（并发会在 tassl 下载/安装与 `/tmp/secp256k1.param` 上互相踩），之后并行启动。清链先停 `nodes/127.0.0.1/stop_all.sh`（workflow 前一步 `rpcapi_ci_prepare.sh` 留下的四个节点占着 30300/20200），再只杀本工作目录 `nodes/` 下启动的进程，不会碰同机的其他链。
+SM 链需要 `~/.fisco/tassl`；`jq` 必装；bash ≥ 4（`declare -A`、`${x,,}`，macOS 自带的 3.2 不行，用 Homebrew bash）。四条链的 build_chain 串行执行（并发会在 tassl 下载/安装与 `/tmp/secp256k1.param` 上互相踩），之后并行启动。清链先停 `nodes/127.0.0.1/stop_all.sh`（workflow 前一步 `rpcapi_ci_prepare.sh` 留下的四个节点占着 30300/20200），再只杀本工作目录 `nodes/` 下启动的进程，不会碰同机的其他链。
 
 ## 合约产物 `contracts/`
 
@@ -48,7 +48,7 @@ SM 链需要 `~/.fisco/tassl`；`jq` 与 `python3`（场景 10 的 ABI 编码辅
 | `Payable` | 本套件自写（`contracts/Payable/Payable.sol`），ABI 与 java-sdk `e5ec9236` 的 `PayableTest.java` 内嵌合约相同（该仓库没有它的 .sol） | 场景 11：`constructor() payable`、`incWithPayable(string) payable`、非 payable 的 `inc(string)`、`value()` |
 | `Reverter` | 本套件自写（`contracts/Reverter/Reverter.sol`） | 场景 16：`fail()` 带原因 `require`、`failNoReason()` 裸 `revert()`；场景 15 也用它做准入探针 |
 
-三点说明：cpp-sdk 的 `ContractABICodec::encodeConstructor` 把构造函数当普通方法编码、在参数前多塞 4 字节选择子（`bcos-sdk/bcos-cpp-sdk/utilities/abi/ContractABICodec.cpp:69-73,111-119`），节点解码构造参数时就 revert（status 16），所以带构造参数的部署（场景 10、15 的 ComplexSol）用 `contract_abi_without_constructor` 去掉 ABI 里的构造函数条目、让 `tx deploy` 原样发送「字节码 + 手工 ABI 编码的参数」（`scenarios/contracts2.sh` 的 `c_complex_ctor_args`，`(int256 7, string "init s")`）；编码器修好后删掉这个常量即可。console 的 `build.gradle` 钉的是 `solcJ:1.0.0`，CI 脚本里把它 sed 成 0.6.10 的那行早已匹配不到；这些源码在 0.6.10 下也编不过（`address payable[]` 字面量），所以统一用 0.8.11。solc 不把隐式构造函数写进 ABI，而 `tx deploy` 背后的 cpp-sdk 编码器要有这一项，`scenarios/common.sh` 的 `contract_abi` 在 `$TMPDIR` 里写一份追加了空构造函数的副本给命令用，仓库里的 `.abi` 保持 solc 原样。
+两点说明：构造参数编码与隐式构造函数的两个工具侧问题已修（见下文「工具侧问题」）。console 的 `build.gradle` 钉的是 `solcJ:1.0.0`，CI 脚本里把它 sed 成 0.6.10 的那行早已匹配不到；这些源码在 0.6.10 下也编不过（`address payable[]` 字面量），所以统一用 0.8.11。仓库里的 `.abi` 是 solc 原样输出，`scenarios/common.sh` 的 `contract_abi` 直接返回它。
 
 ## 对照表
 
@@ -94,7 +94,8 @@ SM 链需要 `~/.fisco/tassl`；`jq` 与 `python3`（场景 10 的 ABI 编码辅
 
 4. **本机 Debug 构建跑 web3 套件时 node0 在 `test/exception/RecursiveCall-test.js` 崩溃**：macOS 崩溃报告为 `EXC_BAD_ACCESS / SIGBUS`「Could not determine thread index for stack guard region」（栈溢出，深递归调用在 Debug 帧大小下打穿线程栈），此前 52 个用例已通过、端口与充值无误。CI 的 Air 腿用的是 RelWithDebInfo 构建，旧流程在同一 corpus 上一直是绿的；本机验证 web3 段时要用 Release 构建的二进制。
 
-## 工具侧待修（bcos-ops）
+## 工具侧问题（bcos-ops，已修）
 
-1. `Abi::encodeConstructor` 要去掉 cpp-sdk 给构造参数前面多塞的 4 字节选择子（`bcos-sdk/bcos-cpp-sdk/utilities/abi/ContractABIMethodDefinition.h:269-277`、`ContractABICodec.cpp:111-116`）。修好后删除：`scenarios/contracts2.sh` 的 `c_complex_ctor_args` 与 `contract_abi_without_constructor`、`scenarios/admission.sh` 里同一手工拼接（`contract_abi_without_constructor ComplexSol` 与 `${c_complex_ctor_args}` 两处）。
-2. `tx send --json` 的失败回执应填 `message`（预设命令已走 `revertReason()`，SM 链的 `Error(string)` 选择子是 sm3 的 `c703cb12`）；填上后场景 16 改成断言 `.message == "reverted on purpose"`，脚本内的 output 解码可删。
+1. cpp-sdk 的 `ContractABICodec::encodeConstructor` 给构造参数前面多塞 4 字节选择子（`bcos-sdk/bcos-cpp-sdk/utilities/abi/ContractABIMethodDefinition.h:269-277`、`ContractABICodec.cpp:111-116`），带构造参数的部署 revert（status 16）。`aa9550cd2` 让 `Abi::encodeConstructor` 不带选择子编码；场景 10、15 现在直接 `tx deploy ComplexSol.bin --abi ComplexSol.abi 7 "init s"`，手工拼接的参数常量与去掉构造函数的 ABI 副本已删除。
+2. 失败回执的 `message` 为空。`aa9550cd2` 让 `tx send/get --json` 从 `Error(string)` output 解出原因填进 `message`（keccak `08c379a0`，SM 链 sm3 `c703cb12`）；场景 16 直接断言 `.message == "reverted on purpose"`，脚本内的 output 解码已删除。
+3. `tx deploy` 曾要求 ABI 里有构造函数条目，而 solc 不写隐式构造函数。`85e24b2bd` 起没有条目时只发字节码；`contract_abi` 直接返回仓库里的 solc 原样 `.abi`，不再在 `$TMPDIR` 写副本。

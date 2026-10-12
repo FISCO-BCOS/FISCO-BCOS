@@ -158,9 +158,10 @@ build_chain_for()
         perl -p -i -e 's/listen_port=8545/listen_port='"${ports[2]}"'/g' "${node}/config.ini"
     done
     # AMOP (scenario 12) rides the WebSocket RPC, not the unix socket, and the ops commands
-    # refuse a TLS port: node0's [rpc] listener goes plaintext. Every other scenario keeps
-    # using the socket under node0/data, so nothing else notices.
-    perl -p -i -e 'if (/^\[rpc\]/) { $flag=1 } elsif ($flag && s/enable_ssl\s*=\s*true/enable_ssl=false/) { $flag=0; }' \
+    # refuse a TLS port: node0's [rpc] listener goes plaintext and binds loopback only. Every
+    # other scenario keeps using the socket under node0/data, so nothing else notices.
+    # expand_node copies node0's config.ini, so the expanded node is plaintext/loopback too.
+    perl -p -i -e 'if (/^\[rpc\]/) { $flag=1 } elsif ($flag && /^\[/) { $flag=0 } elsif ($flag) { s/^(\s*)listen_ip\s*=.*/${1}listen_ip=127.0.0.1/; s/enable_ssl\s*=\s*true/enable_ssl=false/ }' \
         "$(chain_node_dir "${chain}" 0)/config.ini"
     if [[ "${chain}" == "v1" ]]; then
         perl -p -i -e 's/version=0/version=1/g' "$(chain_nodes_dir "${chain}")"/node*/config.genesis
@@ -262,8 +263,10 @@ print_chain_failure()
 # chain's web3 listener. The signing account is the admin pem build_chain generated into
 # ca/accounts; it is funded with 200 ether and tx_gas_price set to 1 through the node's own
 # subcommands over node0's socket (console addBalance / setSystemConfigByKey before, with
-# retries against RPC timeouts). Runs before scenario 17 so the corpus sees the default
-# feature set, as it always did.
+# retries against RPC timeouts). Runs right before scenario 17: the corpus sees the v1 chain
+# as scenarios 1-16 left it (feature_balance/_precompiled on from 8 and 11, feature_dmc2serial
+# on from 9, tx_gas_price 1), but not the everything-on state of 17, whose newer EVM forks the
+# corpus was never written against.
 web3_suite()
 {
     local chain="${1}"
@@ -274,16 +277,23 @@ web3_suite()
     [[ -f "${pem}" ]] || { LOG_ERROR "chain ${chain}: no admin pem for the web3 suite"; return 1; }
     local account
     account=$(pem_address "${pem}")
-    local step attempt output rc
-    for step in "balance enable" "balance add ${account} \"200000000000000000000\"" "sysconfig set tx_gas_price 0x1"; do
+    # 200 ether in wei is a plain digit string: typedArg (bcos-ops tx/PresetCall.cpp) hands
+    # integer arguments to the codec as decimal text, so no quoting is involved
+    local -a step_enable=(balance enable)
+    local -a step_fund=(balance add "${account}" 200000000000000000000)
+    local -a step_price=(sysconfig set tx_gas_price 0x1)
+    local name attempt output rc
+    for name in step_enable step_fund step_price; do
+        local -n step="${name}"
         for attempt in 1 2 3; do
-            # the 21-digit amount is quoted so the argument parser keeps it a string
-            output=$(eval "\"\${fisco_bcos_path}\" ${step} --node-dir \"\${node_dir}\" --yes --json --account \"\${pem}\"" 2>&1) && rc=0 || rc=$?
+            output=$("${fisco_bcos_path}" "${step[@]}" --node-dir "${node_dir}" --yes --json \
+                --account "${pem}" 2>&1) && rc=0 || rc=$?
             (( rc == 0 )) && break
-            LOG_WARN "chain ${chain}: web3 setup '${step}' attempt ${attempt} failed (rc=${rc}): ${output}; retrying in 10s"
+            LOG_WARN "chain ${chain}: web3 setup '${step[*]}' attempt ${attempt} failed (rc=${rc}): ${output}; retrying in 10s"
             sleep 10
         done
-        (( rc == 0 )) || { LOG_ERROR "chain ${chain}: web3 setup '${step}' failed"; return 1; }
+        (( rc == 0 )) || { LOG_ERROR "chain ${chain}: web3 setup '${step[*]}' failed"; return 1; }
+        unset -n step
     done
     LOG_INFO "chain ${chain}: web3 suite on 127.0.0.1:${ports[2]} with ${account}"
     ( cd "${current_path}" && WEB3_PORT="${ports[2]}" bash "${ci_dir}/web3_test.sh" "${pem}" ) || {
@@ -299,10 +309,6 @@ run_chain()
 {
     local chain="${1}"
     local started=${SECONDS}
-    # the patched ABI copies scenarios 2/9 hand to `tx deploy` (scenarios/common.sh contract_abi)
-    ci_abi_list=$(mktemp "${TMPDIR:-/tmp}/ci-abi-files-${chain}.XXXXXX") || return 1
-    # every return path (start/consensus/expand failures, CI_FAIL_SCENARIO) drops the copies
-    trap contract_abi_cleanup RETURN
     wait_and_start "$(chain_nodes_dir "${chain}")" || return 1
     check_consensus "${chain}" || return 1
     expand_node "${chain}" || return 1
