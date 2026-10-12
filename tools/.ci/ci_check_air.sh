@@ -85,6 +85,13 @@ clear_node()
     for chain in "${chains[@]}"; do
         stop_chain_processes "${chain}"
     done
+    # the workflow's earlier "prepare RPCAPI Tests" step (tools/.ci/rpcapi_ci_prepare.sh) leaves
+    # four nodes from nodes/127.0.0.1 running on 30300-30303 / 20200-20203 and never stops
+    # them; they hold the nonsm chain's ports. Stop them, then kill whatever still runs from
+    # this working directory's nodes/ (node command lines carry that path) — never a bare
+    # `pkill -f fisco-bcos`, other chains may run on the same machine
+    [[ -f "${current_path}/nodes/127.0.0.1/stop_all.sh" ]] && bash "${current_path}/nodes/127.0.0.1/stop_all.sh" >/dev/null 2>&1
+    pkill -9 -f "${current_path}/nodes/" 2>/dev/null || true
     rm -rf "${current_path}/nodes" "${current_path}/config"
 }
 
@@ -120,8 +127,11 @@ wait_and_start()
     return 1
 }
 
-# init_chain <chain>: build_chain + per-chain genesis/config tweaks + start
-init_chain()
+# build_chain_for <chain>: build_chain + per-chain genesis/config tweaks. Runs serially for
+# the four chains before they start in parallel: concurrent build_chain runs race on
+# check_and_install_tassl (the same tgz curl'ed into the same cwd, then moved to
+# ~/.fisco/tassl-1.1.1b, a truncated binary persisting) and on /tmp/secp256k1.param
+build_chain_for()
 {
     local chain="${1}"
     local ports=($(chain_ports "${chain}"))
@@ -153,7 +163,6 @@ init_chain()
         perl -p -i -e 'if (/\[web3_rpc\]/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' \
             "$(chain_node_dir "${chain}" 0)/config.ini"
     fi
-    wait_and_start "$(chain_nodes_dir "${chain}")"
 }
 
 # check_consensus <chain>: every node is in consensus. A node that went through a view change
@@ -245,12 +254,12 @@ print_chain_failure()
 }
 
 # ---------------------------------------------------------------------------- scenarios
-# run_chain <chain>: build, start, expand, native scenarios in spec order, stop
+# run_chain <chain>: start the built chain, expand, native scenarios in spec order, stop
 run_chain()
 {
     local chain="${1}"
     local started=${SECONDS}
-    init_chain "${chain}" || return 1
+    wait_and_start "$(chain_nodes_dir "${chain}")" || return 1
     check_consensus "${chain}" || return 1
     expand_node "${chain}" || return 1
     local node0
@@ -285,10 +294,17 @@ if (( ${#current_path} > 50 )); then
 fi
 clear_node
 mkdir -p "${current_path}/logs"
-LOG_INFO "======== native scenarios: ${chains[*]} in parallel (ports from ${CI_PORT_BASE}) ========"
+LOG_INFO "======== native scenarios: build ${chains[*]} (serial), then run in parallel (ports from ${CI_PORT_BASE}) ========"
+for chain in "${chains[@]}"; do
+    build_chain_for "${chain}" > "${current_path}/logs/${chain}.log" 2>&1 || {
+        print_chain_failure "${chain}"
+        LOG_ERROR "======== build_chain for ${chain} FAILED ========"
+        exit 1
+    }
+done
 declare -A chain_pid
 for chain in "${chains[@]}"; do
-    ( run_chain "${chain}" ) > "${current_path}/logs/${chain}.log" 2>&1 &
+    ( run_chain "${chain}" ) >> "${current_path}/logs/${chain}.log" 2>&1 &
     chain_pid[${chain}]=$!
 done
 failed=()
