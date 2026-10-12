@@ -151,20 +151,29 @@ void Refresher::runOnce()
         // the gov page (auth chains): committee + proposals through the CLI's reader, built
         // once on this thread; a copy is updated outside the lock like the explorer
         std::optional<GovernanceState> governance;
-        if (status.authCheck.value_or(false) && !m_stop)
+        auto govWants = m_governanceWants ? m_governanceWants() : GovernanceWants{};
+        if (status.authCheck.value_or(false) && govWants.shown && !m_stop)
         {
-            if (!m_committee)
-            {
-                Connection stopAware = m_connection;
-                stopAware.call = call;
-                m_committee = std::make_unique<CommitteeReader>(stopAware);
-            }
             {
                 std::lock_guard<std::mutex> lock(m_model.mutex);
                 governance = m_model.governance;
             }
-            governanceFetch(*governance, *m_committee,
-                m_governanceWants ? m_governanceWants() : GovernanceWants{}, &m_stop);
+            // the reader needs chain facts; a failure there is the gov page's error, not the
+            // round's (status / explorer above stay)
+            try
+            {
+                if (!m_committee)
+                {
+                    Connection stopAware = m_connection;
+                    stopAware.call = call;
+                    m_committee = std::make_unique<CommitteeReader>(stopAware);
+                }
+                governanceFetch(*governance, *m_committee, govWants, &m_stop);
+            }
+            catch (std::exception const& e)
+            {
+                governance->error = e.what();
+            }
         }
         std::lock_guard<std::mutex> lock(m_model.mutex);
         if (governance)

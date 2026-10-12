@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the browser rows of the home page: recent blocks and the transactions flattened out of
+ * @brief see Governance.h
  * @file Governance.cpp
  */
 #include "Governance.h"
@@ -128,11 +128,16 @@ void governanceFetch(GovernanceState& _state, CommitteeReader& _reader,
     try
     {
         govCheckStop(_stop);
-        auto committee = _reader.read("committee-address", {})[0].asString();
+        // the two contract addresses are fixed at genesis: read once, then reused every round
+        auto committee = !_state.committee.empty() ?
+                             _state.committee :
+                             _reader.read("committee-address", {})[0].asString();
         govCheckStop(_stop);
         auto info = _reader.read("info", {}, committee);
         govCheckStop(_stop);
-        auto manager = _reader.read("proposal-mgr-address", {})[0].asString();
+        auto manager = !_state.proposalManager.empty() ?
+                           _state.proposalManager :
+                           _reader.read("proposal-mgr-address", {})[0].asString();
         govCheckStop(_stop);
         auto count = std::stoll(govText(_reader.read("proposal-count", {}, manager)[0]));
 
@@ -154,8 +159,12 @@ void governanceFetch(GovernanceState& _state, CommitteeReader& _reader,
         for (auto id = count; id >= 1 && id > count - rows; --id)
         {
             govCheckStop(_stop);
-            next.proposals.push_back(
-                proposalRowFrom(_reader.runner.proposalOutcome(std::to_string(id), Receipt{})));
+            auto outcome = _reader.runner.proposalOutcome(std::to_string(id), Receipt{});
+            if (!outcome.error.empty())
+            {
+                next.error = outcome.error;
+            }
+            next.proposals.push_back(proposalRowFrom(outcome));
         }
         for (auto id : _wants.ids)
         {

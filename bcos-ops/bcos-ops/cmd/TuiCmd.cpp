@@ -419,6 +419,10 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
                     wants = tui::detailWants(nav);
                     refresher.refreshNow();
                 }
+                else if (!model.send.last.openTx)
+                {
+                    refresher.refreshNow();  // a vote / revoke: show the proposal's new state
+                }
             }
             return false;
         }
@@ -434,6 +438,15 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
             {
                 std::lock_guard<std::mutex> lock(model.mutex);
                 context = sendContextOf();
+            }
+            {
+                std::lock_guard<std::mutex> lock(model.mutex);
+                auto const& gov = model.governance;
+                auto id = nav.stack.back().number;
+                if (auto it = gov.details.find(id); it != gov.details.end())
+                {
+                    context.proposalStatus = it->second.status;
+                }
             }
             auto govAction = tui::govFormHandle(form, context, nav.stack.back().number, event);
             if (govAction == tui::SendAction::submit)

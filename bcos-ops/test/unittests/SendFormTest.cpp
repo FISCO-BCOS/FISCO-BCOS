@@ -285,9 +285,15 @@ BOOST_AUTO_TEST_CASE(theLayerNeedsTheRoutingAndFreezesItIntoTheRequest)
     tui::sendFormHandle(form, context, Event::Escape);
     tui::SendRequest read;
     read.kind = tui::SendRequest::Kind::preset;
-    read.preset = findPreset("consensus", "list-sealers");
-    BOOST_CHECK(!tui::SendRequest::mayRouteThroughProposal(read.kind, read.preset) ||
-                read.preset == nullptr);
+    read.preset = findPreset("consensus", "sealers");
+    BOOST_REQUIRE(read.preset != nullptr);
+    BOOST_CHECK(!tui::SendRequest::mayRouteThroughProposal(read.kind, read.preset));
+    // a write without a ProposalSpec (3-arg addSealer) never routes through a proposal
+    auto const* direct = findPreset("consensus", "add-sealer-term");
+    BOOST_REQUIRE(direct != nullptr);
+    BOOST_CHECK(!tui::SendRequest::mayRouteThroughProposal(read.kind, direct));
+    BOOST_CHECK(tui::SendRequest::mayRouteThroughProposal(
+        read.kind, findPreset("consensus", "add-observer")));
     BOOST_CHECK(
         tui::SendRequest::mayRouteThroughProposal(tui::SendRequest::Kind::enableFeatures, nullptr));
 }
@@ -307,7 +313,16 @@ BOOST_AUTO_TEST_CASE(featuresConfirmationShowsTheDependencyOrder)
     request.routing.proposals = true;
     rows = tui::sendConfirmRows(request, context);
     BOOST_CHECK_EQUAL(rows[0].second, "proposal");
+    // what is actually sent in proposal mode: the committee's proposal, not setValueByKey
+    BOOST_CHECK_EQUAL(rows[1].second, "0x0000000000000000000000000000000000010001");
+    BOOST_CHECK(rows[2].second.starts_with("createSetSysConfigProposal("));
     BOOST_CHECK(rows.back().second.find("createSetSysConfigProposal") != std::string::npos);
+    // a flag the page read as on is not a step
+    context.features = {{.name = "feature_balance", .enabled = true}};
+    rows = tui::sendConfirmRows(request, context);
+    BOOST_CHECK(rows[3].second.starts_with("1 step(s): feature_balance_precompiled=1"));
+    BOOST_CHECK_EQUAL(rows[4].first, "already on");
+    BOOST_CHECK_EQUAL(rows[4].second, "feature_balance");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

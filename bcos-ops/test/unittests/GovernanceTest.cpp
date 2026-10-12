@@ -232,6 +232,13 @@ BOOST_AUTO_TEST_CASE(voteKeysOpenTheConfirmationLayerOfTheCommitteePreset)
     BOOST_CHECK_EQUAL(form.pending.params[0], "7");
     BOOST_CHECK(tui::govFormHandle(form, context, 7, Event::Return) == tui::SendAction::submit);
     BOOST_CHECK(!form.confirm);
+    // a proposal that is no longer voting: a notice, no layer
+    context.proposalStatus = 2;
+    BOOST_CHECK(
+        tui::govFormHandle(form, context, 7, Event::Character('v')) == tui::SendAction::redraw);
+    BOOST_CHECK(!form.confirm);
+    BOOST_CHECK(form.notice.find("not voting") != std::string::npos);
+    context.proposalStatus = 1;
     // other keys belong to the page map
     BOOST_CHECK(
         tui::govFormHandle(form, context, 7, Event::Character('q')) == tui::SendAction::toNav);
