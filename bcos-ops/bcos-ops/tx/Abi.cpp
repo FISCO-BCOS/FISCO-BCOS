@@ -88,8 +88,18 @@ bytes Abi::encodeConstructor(
         }
         return guarded("decode bytecode", [&]() { return fromHex(_bin); });
     }
-    return guarded("encode constructor",
-        [&]() { return makeCodec(m_sm).encodeConstructor(_abi, _bin, _jsonParams); });
+    // ContractABICodec::encodeConstructor goes through encodeMethod, which always prepends the
+    // 4-byte id of the "constructor" signature (ContractABICodec.cpp encodeMethod); the init
+    // code then reads the selector as the first argument and a deploy with arguments reverts.
+    // Constructor arguments are the bare ABI encoding appended to the bytecode.
+    return guarded("encode constructor", [&]() {
+        auto encoded = makeCodec(m_sm).encodeMethod(_abi, "constructor", _jsonParams);
+        constexpr size_t c_selectorSize = 4;
+        auto data = fromHex(_bin);
+        data.insert(data.end(), encoded.begin() + static_cast<std::ptrdiff_t>(c_selectorSize),
+            encoded.end());
+        return data;
+    });
 }
 
 bytes Abi::encodeMethod(

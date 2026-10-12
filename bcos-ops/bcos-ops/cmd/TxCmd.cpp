@@ -24,6 +24,7 @@
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/Output.h"
 #include "bcos-ops/tx/Abi.h"
+#include "bcos-ops/tx/PresetCall.h"
 #include "bcos-ops/tx/Smoke.h"
 #include "bcos-ops/tx/TxSender.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -113,8 +114,24 @@ int printRpcRefusal(std::ostream& _out, OpsRpcError const& _error, bool _json)
 
 namespace
 {
-void printReceipt(std::ostream& _out, Receipt const& _receipt, bool _json)
+/// a failed receipt carries no message on 3.18 (the revert text sits in the output as
+/// Error(string)); fill it in so --json consumers can read .message
+Receipt withRevertMessage(Receipt _receipt)
 {
+    if (!_receipt.ok() && _receipt.message.empty())
+    {
+        _receipt.message = revertReason(_receipt.output, false);
+        if (!_receipt.message.empty())
+        {
+            _receipt.raw["message"] = _receipt.message;
+        }
+    }
+    return _receipt;
+}
+
+void printReceipt(std::ostream& _out, Receipt const& _given, bool _json)
+{
+    auto _receipt = withRevertMessage(_given);
     if (_json)
     {
         printJson(_out, _receipt.raw);
@@ -393,6 +410,10 @@ int runTxGet(Connection const& _connection, Args const& _args, std::ostream& _ou
     bool proof = _args.flag("proof");
     auto merged =
         fetchTransaction(_connection.call, _connection.group, _args.positionals()[0], proof);
+    if (merged["receipt"].isObject())
+    {
+        merged["receipt"] = withRevertMessage(Receipt::fromJson(merged["receipt"])).raw;
+    }
     if (wantJson(_args.flag("json")))
     {
         printJson(_out, merged);

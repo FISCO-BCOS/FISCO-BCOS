@@ -47,13 +47,11 @@ BOOST_AUTO_TEST_CASE(abiWithoutConstructorDeploysTheBytecodeAlone)
     auto bin = std::string(helloworld::binary(false));
     auto data = abi.encodeConstructor(c_abiNoCtor, bin, "[]");
     BOOST_CHECK(data == fromHex(bin));
-    // with the constructor entry the SDK appends its 4-byte selector (ignored by the init
-    // code); without it the bytecode alone goes out, which is what tx smoke sends too
+    // an argument-less constructor entry adds nothing after the bytecode either
     auto withCtor = abi.encodeConstructor(std::string(helloworld::c_abi), bin, "[]");
-    BOOST_CHECK_EQUAL(withCtor.size(), data.size() + 4);
-    BOOST_CHECK(std::equal(data.begin(), data.end(), withCtor.begin()));
-    BOOST_CHECK_EXCEPTION(abi.encodeConstructor(c_abiNoCtor, bin, R"(["x"])"), OpsError,
-        [](OpsError const& e) {
+    BOOST_CHECK(withCtor == data);
+    BOOST_CHECK_EXCEPTION(
+        abi.encodeConstructor(c_abiNoCtor, bin, R"(["x"])"), OpsError, [](OpsError const& e) {
             return e.exitCode == c_exitUsage &&
                    std::string(e.what()).find("no constructor") != std::string::npos;
         });
@@ -92,6 +90,24 @@ BOOST_AUTO_TEST_CASE(txDeployWithSuchAnAbiSendsTheBytecode)
     }
     BOOST_CHECK(sent);
     std::filesystem::remove_all(dir);
+}
+
+BOOST_AUTO_TEST_CASE(constructorArgumentsFollowTheBytecodeWithoutASelector)
+{
+    // constructor(int256 a, string s): abi.encode(7, "init s") =
+    //   0x07 | offset 0x40 | len 6 | "init s" right-padded — no 4-byte selector in front
+    std::string const abiText =
+        R"([{"inputs":[{"name":"a","type":"int256"},{"name":"s","type":"string"}],"stateMutability":"nonpayable","type":"constructor"}])";
+    std::string const expectedArgs =
+        "0000000000000000000000000000000000000000000000000000000000000007"
+        "0000000000000000000000000000000000000000000000000000000000000040"
+        "0000000000000000000000000000000000000000000000000000000000000006"
+        "696e697420730000000000000000000000000000000000000000000000000000";
+    for (bool sm : {false, true})
+    {
+        auto data = Abi(sm).encodeConstructor(abiText, "6080", R"([7,"init s"])");
+        BOOST_CHECK_EQUAL(toHex(data), "6080" + expectedArgs);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
