@@ -23,8 +23,10 @@
 #include "bcos-ops/tx/HelloWorld.h"
 #include "fixtures/FakeRpc.h"
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
+#include <bcos-protocol/bcos-protocol/TransactionStatus.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -155,7 +157,9 @@ BOOST_AUTO_TEST_CASE(signPrintsTheRawHexWithoutSending)
 BOOST_AUTO_TEST_CASE(txpoolRefusalIsPrintedAsErrorAndExit2)
 {
     FakeRpc rpc;
-    rpc.fail("sendTransaction", c_statusBlockLimitCheckFail, "BlockLimitCheckFail");
+    rpc.fail("sendTransaction",
+        static_cast<int>(bcos::protocol::TransactionStatus::BlockLimitCheckFail),
+        "BlockLimitCheckFail");
     std::ostringstream out;
     auto code = runTxOn(flagsConnection(rpc),
         flagsArgs(
@@ -199,6 +203,104 @@ BOOST_AUTO_TEST_CASE(deployLinkCallsBfsWithTheNewAddress)
     auto expected = Abi(false).encodeMethodBySignature(
         "link(string,string,string,string)", Json::writeString(writer, params));
     BOOST_CHECK_EQUAL(toHex(linkTx->data.input), toHex(expected));
+}
+
+BOOST_AUTO_TEST_CASE(valueIsBoundedTo256Bits)
+{
+    FakeRpc rpc;
+    rpc.set("sendTransaction", flagsReceipt());
+    std::ostringstream out;
+    // 2^256 and 2^256+5 used to wrap to 0x0 / 0x5 through the modular u256
+    for (auto const& value :
+        {"115792089237316195423570985008687907853269984665640564039457584007913129639936",
+            "115792089237316195423570985008687907853269984665640564039457584007913129639941",
+            "0x10000000000000000000000000000000000000000000000000000000000000000"})
+    {
+        BOOST_CHECK_EXCEPTION(
+            runTxOn(flagsConnection(rpc),
+                flagsArgs({"send", "0xa1", "--abi", flagsAbiFile(), "set", "hi", "--value", value}),
+                out),
+            OpsError, [](OpsError const& e) {
+                return std::string(e.what()).find("256 bits") != std::string::npos;
+            });
+    }
+    BOOST_CHECK(rpc.calls().empty() || std::ranges::none_of(rpc.calls(), [](auto const& c) {
+        return c.first == "sendTransaction";
+    }));
+    runTxOn(flagsConnection(rpc),
+        flagsArgs({"send", "0xa1", "--abi", flagsAbiFile(), "set", "hi", "--value", "0X10"}), out);
+    BOOST_CHECK_EQUAL(flagsSentTx(rpc, 0)->data.value, "0x10");  // 0X normalised
+    runTxOn(flagsConnection(rpc),
+        flagsArgs({"send", "0xa1", "--abi", flagsAbiFile(), "set", "hi", "--value",
+            "115792089237316195423570985008687907853269984665640564039457584007913129639935"}),
+        out);
+    BOOST_CHECK_EQUAL(flagsSentTx(rpc, 1)->data.value, "0x" + std::string(64, 'f'));
+}
+
+BOOST_AUTO_TEST_CASE(sendWithoutValueKeepsTheVersion0Shape)
+{
+    FakeRpc rpc;
+    rpc.set("sendTransaction", flagsReceipt());
+    std::ostringstream out;
+    runTxOn(flagsConnection(rpc), flagsArgs({"send", "0xa1", "--abi", flagsAbiFile(), "set", "hi"}),
+        out);
+    auto tx = flagsSentTx(rpc);
+    BOOST_CHECK_EQUAL(tx->data.version, 0);
+    BOOST_CHECK(tx->data.value.empty());
+    BOOST_CHECK(tx->data.gasPrice.empty());
+    BOOST_CHECK_EQUAL(tx->data.gasLimit, 0);
+    BOOST_CHECK_EQUAL(tx->data.blockLimit, 128 + 500);
+}
+
+BOOST_AUTO_TEST_CASE(linkFailureKeepsTheDeployReceipt)
+{
+    // the deploy is on chain; the link then returns -53002 FILE_ALREADY_EXIST in its output
+    FakeRpc rpc;
+    rpc.queue("sendTransaction",
+        flagsReceipt("0xa1", "0x0000000000000000000000000000000000000000000000000000000000000000"));
+    rpc.queue("sendTransaction",
+        flagsReceipt("", "0x00000000000000000000000000000000000000000000000000000000ffff30f6"));
+    std::ostringstream out;
+    auto code = runTxOn(flagsConnection(rpc),
+        flagsArgs({"deploy", std::string(helloworld::c_binKeccak), "--abi", flagsAbiFile(),
+            "--link", "/apps/hello/v1", "--json"}),
+        out);
+    BOOST_CHECK_EQUAL(code, c_exitChecksFailed);
+    auto json = parseJson(out.str(), "deploy");
+    BOOST_CHECK_EQUAL(json["contractAddress"].asString(), "0xa1");  // not lost
+    BOOST_CHECK_EQUAL(json["status"].asInt(), 0);
+    BOOST_CHECK_EQUAL(json["linkCode"].asInt(), -53002);
+    BOOST_CHECK_EQUAL(json["linkCodeName"].asString(), "FILE_ALREADY_EXIST");
+
+    // the link transaction itself is refused by the txpool: still the deploy receipt + exit 2
+    FakeRpc refused;
+    refused.queue("sendTransaction",
+        flagsReceipt("0xa2", "0x0000000000000000000000000000000000000000000000000000000000000000"));
+    refused.fail("sendTransaction",
+        static_cast<int>(bcos::protocol::TransactionStatus::TxPoolIsFull), "TxPoolIsFull");
+    std::ostringstream out2;
+    code = runTxOn(flagsConnection(refused),
+        flagsArgs({"deploy", std::string(helloworld::c_binKeccak), "--abi", flagsAbiFile(),
+            "--link", "/apps/hello/v1", "--json"}),
+        out2);
+    BOOST_CHECK_EQUAL(code, c_exitChecksFailed);
+    auto json2 = parseJson(out2.str(), "deploy");
+    BOOST_CHECK_EQUAL(json2["contractAddress"].asString(), "0xa2");
+    BOOST_CHECK(json2["linkError"].asString().find("10002") != std::string::npos);
+
+    // a link receipt without a code word is a failure, never code 0
+    FakeRpc empty;
+    empty.queue("sendTransaction",
+        flagsReceipt("0xa3", "0x0000000000000000000000000000000000000000000000000000000000000000"));
+    empty.queue("sendTransaction", flagsReceipt("", "0x"));
+    std::ostringstream out3;
+    code = runTxOn(flagsConnection(empty),
+        flagsArgs({"deploy", std::string(helloworld::c_binKeccak), "--abi", flagsAbiFile(),
+            "--link", "/apps/hello/v1", "--json"}),
+        out3);
+    BOOST_CHECK_EQUAL(code, c_exitChecksFailed);
+    BOOST_CHECK(parseJson(out3.str(), "deploy")["linkError"].asString().find("no code") !=
+                std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(deployLinkRejectsRelativePaths)

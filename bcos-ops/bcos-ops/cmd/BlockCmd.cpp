@@ -166,7 +166,14 @@ int runBlockOn(Connection const& _connection, Args const& _args, std::ostream& _
         throw OpsError(c_exitUsage, "usage: block get <height|hash> [--txs] [--proof]");
     }
     std::vector<std::string> rest(_args.positionals().begin() + 1, _args.positionals().end());
-    return runBlockGet(_connection, _args.withPositionals(rest), _out);
+    try
+    {
+        return runBlockGet(_connection, _args.withPositionals(rest), _out);
+    }
+    catch (OpsRpcError const& e)
+    {
+        return printRpcRefusal(_out, e, wantJson(_args.flag("json")));
+    }
 }
 
 void registerBlockCommand()

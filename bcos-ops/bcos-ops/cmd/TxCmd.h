@@ -20,6 +20,7 @@
 #pragma once
 
 #include "bcos-ops/Args.h"
+#include "bcos-ops/OpsError.h"
 #include "bcos-ops/RpcCall.h"
 #include <iosfwd>
 
@@ -29,15 +30,17 @@ namespace bcos::ops
 int runTxOn(Connection const& _connection, Args const& _args, std::ostream& _out);
 /// block get <height|hash> [--txs] [--proof]
 int runBlockOn(Connection const& _connection, Args const& _args, std::ostream& _out);
-/// txpool admission rejections (protocol::TransactionStatus, bcos-protocol/TransactionStatus.h)
-/// reach the client as a JSON-RPC error whose code is the status value:
-///   10000 NonceCheckFail       duplicate nonce (MemoryStorage.cpp verifyAndSubmit)
+/// prints a JSON-RPC refusal as {"error":{"code","message","method"}} (text: `rejected: …`)
+/// and returns exit code 2 (the chain answered; the request was not admitted)
+int printRpcRefusal(std::ostream& _out, OpsRpcError const& _error, bool _json);
+/// A JSON-RPC error (OpsRpcError) raised by any tx or block subcommand is printed once by
+/// runTxOn / runBlockOn as {"error":{"code","message","method"}} (text mode: `rejected: …`)
+/// with exit 2. For a txpool admission rejection the code is the protocol::TransactionStatus
+/// value (bcos-protocol/bcos-protocol/TransactionStatus.h; MemoryStorage.cpp verifyAndSubmit):
+///   10000 NonceCheckFail       duplicate nonce
 ///   10001 BlockLimitCheckFail  blockLimit already passed or too far ahead
 ///   10002 TxPoolIsFull         txpool.limit reached
-///   10023 MaxGasLimitExceeded  gasLimit above tx_gas_limit (TxValidator.cpp checkMaxGasLimit)
-/// The tx commands print them as {"error":{"code","message","method"}} and exit 2.
-constexpr int c_statusNonceCheckFail = 10000;
-constexpr int c_statusBlockLimitCheckFail = 10001;
-constexpr int c_statusTxPoolIsFull = 10002;
-constexpr int c_statusMaxGasLimitExceeded = 10023;
+/// A gasLimit above tx_gas_limit is not an admission check for tars transactions
+/// (bcos-tx-validator CheckSet.h: the Bcos column carries no MaxGasLimit); it surfaces at
+/// execution as receipt status 2 OutOfGasLimit, so no 10023 ever reaches this client.
 }  // namespace bcos::ops

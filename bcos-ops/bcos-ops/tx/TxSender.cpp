@@ -21,6 +21,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <boost/multiprecision/cpp_int.hpp>
 #include <algorithm>
 #include <cctype>
 #include <sstream>
@@ -31,27 +32,42 @@ namespace
 {
 constexpr int64_t c_blockLimitRange = 500;  // same as the SDK's Service::getBlockLimit
 
-/// "" → ""; "0x1f" → "0x1f"; "31" → "0x1f"; anything else throws OpsError{1}
+constexpr size_t c_maxValueHexDigits = 64;  // uint256
+
+/// "" → ""; "0x1f"/"0X1f" → "0x1f"; "31" → "0x1f"; more than 256 bits or anything else throws
+/// OpsError{1} (u256 is unchecked: 2^256 would wrap to 0 and the node's hex2u truncates too)
 std::string hexValue(std::string const& _value)
 {
-    if (_value.empty() || _value.starts_with("0x") || _value.starts_with("0X"))
+    if (_value.empty())
     {
-        if (_value.size() > 2 && std::any_of(_value.begin() + 2, _value.end(),
-                                     [](unsigned char c) { return std::isxdigit(c) == 0; }))
+        return _value;
+    }
+    if (_value.starts_with("0x") || _value.starts_with("0X"))
+    {
+        auto digits = _value.substr(2);
+        if (digits.empty() || std::any_of(digits.begin(), digits.end(),
+                                  [](unsigned char c) { return std::isxdigit(c) == 0; }))
         {
             throw OpsError(c_exitUsage, "value is not a number: " + _value);
         }
-        return _value;
+        if (digits.size() > c_maxValueHexDigits)
+        {
+            throw OpsError(c_exitUsage, "value exceeds 256 bits: " + _value);
+        }
+        return "0x" + digits;
     }
     if (std::any_of(
             _value.begin(), _value.end(), [](unsigned char c) { return std::isdigit(c) == 0; }))
     {
         throw OpsError(c_exitUsage, "value is not a decimal or 0x number: " + _value);
     }
-    u256 number(_value);
-    std::ostringstream hex;
-    hex << "0x" << std::hex << number;
-    return hex.str();
+    // 2^256 has 78 decimal digits; parse through the checked cpp_int, not the modular u256
+    boost::multiprecision::cpp_int number(_value);
+    if (number >= (boost::multiprecision::cpp_int(1) << 256))
+    {
+        throw OpsError(c_exitUsage, "value exceeds 256 bits: " + _value);
+    }
+    return toQuantity(u256(number));
 }
 
 Json::Value txParams(std::string const& _group)
