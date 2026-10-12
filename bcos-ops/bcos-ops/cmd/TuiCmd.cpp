@@ -29,12 +29,15 @@
 #include "bcos-ops/tui/Model.h"
 #include "bcos-ops/tui/Nav.h"
 #include "bcos-ops/tui/Refresher.h"
+#include "bcos-ops/tui/SendForm.h"
+#include "bcos-ops/tui/Sender.h"
 #include "bcos-ops/tui/views/Pages.h"
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <ftxui/component/component.hpp>
+#include <ftxui/component/component_options.hpp>
 #include <ftxui/component/event.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/screen/screen.hpp>
@@ -101,48 +104,71 @@ int snapshotPages(
         std::string name;
         int width;
         int height;
-        std::function<void(tui::Nav&)> setup;
+        std::function<void(tui::Nav&, tui::SendForm&)> setup;
+    };
+    auto onPage = [](tui::Page page) {
+        return [page](tui::Nav& nav, tui::SendForm&) { nav.page = page; };
+    };
+    auto noSetup = [](tui::Nav&, tui::SendForm&) {};
+    // the send page with consensus add-sealer selected and no key; then its confirmation layer
+    auto sendSetup = [](tui::Nav& nav, tui::SendForm& form) {
+        nav.page = tui::Page::send;
+        form = tui::makeSendForm(false);
+        form.expanded = {"consensus"};
+        form.rebuild();
+        for (size_t i = 0; i < form.entries.size(); ++i)
+        {
+            if (form.entries[i].preset && form.entries[i].preset->name == "add-sealer")
+            {
+                form.tree.selected = i;
+            }
+        }
+        form.fields[0] = "3a1f00…";
+        form.fields[1] = "1";
+    };
+    auto sendConfirmSetup = [sendSetup](tui::Nav& nav, tui::SendForm& form) {
+        sendSetup(nav, form);
+        form.focus = form.buttonFocus();
+        tui::SendContext context;
+        context.hasKey = true;
+        form.pending = tui::sendFormRequest(form, context);
+        form.confirmRows = tui::sendConfirmRows(form.pending, context);
+        form.confirm = true;
     };
     std::vector<Shot> shots = {
-        {.name = "home", .width = 80, .height = 24, .setup = [](tui::Nav&) {}},
-        {.name = "home-wide", .width = 120, .height = 40, .setup = [](tui::Nav&) {}},
-        {.name = "consensus",
-            .width = 80,
-            .height = 24,
-            .setup = [](tui::Nav& nav) { nav.page = tui::Page::consensus; }},
-        {.name = "node",
-            .width = 80,
-            .height = 24,
-            .setup = [](tui::Nav& nav) { nav.page = tui::Page::node; }},
-        {.name = "log",
-            .width = 80,
-            .height = 24,
-            .setup = [](tui::Nav& nav) { nav.page = tui::Page::log; }},
+        {.name = "home", .width = 80, .height = 24, .setup = noSetup},
+        {.name = "home-wide", .width = 120, .height = 40, .setup = noSetup},
+        {.name = "consensus", .width = 80, .height = 24, .setup = onPage(tui::Page::consensus)},
+        {.name = "node", .width = 80, .height = 24, .setup = onPage(tui::Page::node)},
+        {.name = "log", .width = 80, .height = 24, .setup = onPage(tui::Page::log)},
         {.name = "help",
             .width = 80,
             .height = 24,
-            .setup = [](tui::Nav& nav) { nav.help = true; }},
+            .setup = [](tui::Nav& nav, tui::SendForm&) { nav.help = true; }},
         // the detail pages: the newest block and the newest transaction (when there is one)
         {.name = "block",
             .width = 80,
             .height = 24,
             .setup =
-                [](tui::Nav& nav) {
+                [](tui::Nav& nav, tui::SendForm&) {
                     nav.stack.push_back({.kind = tui::DetailKind::block, .number = 0});
                 }},
         {.name = "tx",
             .width = 80,
             .height = 24,
             .setup =
-                [](tui::Nav& nav) {
+                [](tui::Nav& nav, tui::SendForm&) {
                     nav.stack.push_back({.kind = tui::DetailKind::tx, .number = 0});
                 }},
+        {.name = "send", .width = 120, .height = 40, .setup = sendSetup},
+        {.name = "send-confirm", .width = 120, .height = 40, .setup = sendConfirmSetup},
     };
     int index = 1;
     for (auto const& shot : shots)
     {
         tui::Nav nav;
-        shot.setup(nav);
+        tui::SendForm form = tui::makeSendForm(false);
+        shot.setup(nav, form);
         if (nav.inDetail())
         {
             std::vector<tui::DetailWant> wants;
@@ -158,8 +184,8 @@ int snapshotPages(
             ftxui::Dimension::Fixed(shot.width), ftxui::Dimension::Fixed(shot.height));
         {
             std::lock_guard<std::mutex> lock(model.mutex);
-            tui::Frame frame{shot.width, shot.height, tuiNowMs(), nullptr};
-            ftxui::Render(screen, tui::renderFrame(model, nav, frame, filter));
+            tui::Frame frame{.width = shot.width, .height = shot.height, .nowMs = tuiNowMs()};
+            ftxui::Render(screen, tui::renderFrame(model, nav, frame, filter, &form));
         }
         auto path = _dir + "/" + std::to_string(index++) + "-" + shot.name + ".txt";
         std::ofstream out(path);
@@ -185,8 +211,21 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
     }
     tui::Model model;
     tui::Nav nav;
+    tui::SendForm form = tui::makeSendForm(false);
     auto screen = ScreenInteractive::Fullscreen();
     auto redraw = [&screen]() { screen.PostEvent(ftxui::Event::Custom); };
+    // the send page's worker owns the signing key; --key (or --account) loads it before the loop.
+    // It gets its own connection: the local socket serves one request at a time, and a send
+    // must not queue behind a refresh round of up to 50 block fetches
+    tui::Sender sender(connect(connectOptionsFrom(_args)), model, redraw);
+    if (auto key = _args.option("key"); key || _args.option("account"))
+    {
+        tui::SendRequest load;
+        load.kind = tui::SendRequest::Kind::loadKey;
+        load.keyFile = key ? *key : *_args.option("account");
+        form.keyFile = load.keyFile;
+        sender.submit(std::move(load));
+    }
     // the refresher thread reads these; the UI thread writes them while rendering
     std::atomic<int> terminalRows{24};
     std::atomic<size_t> visibleTxFrom{0};
@@ -228,6 +267,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
     }
     auto stopWorkers = [&]() {
         refresher.stop();
+        sender.stop();
         stopTail = true;
         if (tailThread.joinable())
         {
@@ -237,13 +277,94 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
 
     std::string filter;
     auto filterInput = Input(&filter, "event name or channel (e.g. ViewChange, TXPOOL)");
-    auto root = Renderer(filterInput, [&]() {
+    // the send page's inputs: one per field id, all created once (the form only shows the ones
+    // its entry has); Container::Vertical routes keys to the one sendSelector points at
+    std::vector<std::string> sendIds = {"key", "to", "sig", "value", "raw"};
+    for (size_t i = 0; i < tui::c_sendMaxFields; ++i)
+    {
+        sendIds.push_back("p" + std::to_string(i));
+    }
+    std::map<std::string, Component> sendInputs;
+    Components sendChildren;
+    for (auto const& id : sendIds)
+    {
+        InputOption option;
+        option.multiline = id == "raw";
+        option.placeholder = id == "key" ? "path to a PEM or hex private key" :
+                             id == "raw" ? "signed tx hex, or @file" :
+                                           "";
+        auto component =
+            id == "key"   ? Input(&form.keyFile, option) :
+            id == "raw"   ? Input(&form.rawText, option) :
+            id == "to"    ? Input(&form.customTo, option) :
+            id == "sig"   ? Input(&form.customSig, option) :
+            id == "value" ? Input(&form.customValue, option) :
+                            Input(&form.fields[static_cast<size_t>(id[1] - '0')], option);
+        sendInputs[id] = component;
+        sendChildren.push_back(component);
+    }
+    auto helloToInput = Input(&form.helloTo, "");  // hello set/get address
+    sendChildren.push_back(helloToInput);
+    int sendSelector = 0;
+    auto sendContainer = Container::Vertical(sendChildren, &sendSelector);
+    int inputTab = 0;  // 0: the log filter, 1: the send page
+    auto inputs = Container::Tab({filterInput, sendContainer}, &inputTab);
+    auto sendInputFor = [&](std::string const& id) -> Component {
+        auto const* entry = form.current();
+        if (id == "to" && entry && entry->kind != tui::SendEntryKind::custom)
+        {
+            return helloToInput;
+        }
+        auto it = sendInputs.find(id);
+        return it == sendInputs.end() ? nullptr : it->second;
+    };
+    auto sendContextOf = [&]() {
+        // under model.mutex
+        tui::SendContext context;
+        context.hasKey = !model.keyAddress.empty();
+        context.routingKnown = model.send.routingKnown;
+        context.proposals = model.send.proposals;
+        context.helloAddress = model.send.helloAddress;
+        context.featuresLoaded = model.send.featuresLoaded;
+        context.features = model.send.features;
+        context.busy = model.send.busy;
+        return context;
+    };
+    uint64_t seenOutcome = 0;
+    auto root = Renderer(inputs, [&]() {
         std::lock_guard<std::mutex> lock(model.mutex);
         terminalRows = screen.dimy();
         bool editingFilter = !nav.inDetail() && nav.page == tui::Page::log && nav.focus == 1;
-        tui::Frame frame{screen.dimx(), screen.dimy(), tuiNowMs(),
-            editingFilter ? filterInput->Render() : nullptr};
-        auto element = tui::renderFrame(model, nav, frame, filter);
+        bool onSend = !nav.inDetail() && nav.page == tui::Page::send;
+        inputTab = onSend ? 1 : 0;
+        tui::Frame frame{.width = screen.dimx(),
+            .height = screen.dimy(),
+            .nowMs = tuiNowMs(),
+            .filterInput = editingFilter ? filterInput->Render() : nullptr};
+        if (onSend)
+        {
+            auto focused = form.inputId();
+            for (auto const& spec : form.fieldSpecs())
+            {
+                if (auto component = sendInputFor(spec.id))
+                {
+                    frame.inputs[spec.id] = component->Render();
+                }
+            }
+            frame.inputs["key"] = sendInputs["key"]->Render();
+            if (!focused.empty())
+            {
+                auto component = sendInputFor(focused);
+                for (size_t i = 0; i < sendChildren.size(); ++i)
+                {
+                    if (sendChildren[i] == component)
+                    {
+                        sendSelector = static_cast<int>(i);
+                    }
+                }
+            }
+        }
+        auto element = tui::renderFrame(model, nav, frame, filter, &form);
         visibleTxFrom = nav.txs.firstVisible();
         visibleTxCount = nav.txs.pageRows;
         {
@@ -253,10 +374,67 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         return element;
     });
     root = CatchEvent(root, [&](ftxui::Event event) {
+        if (event == ftxui::Event::Custom)
+        {
+            // a worker posted a redraw; a new send outcome with a hash opens that transaction
+            std::lock_guard<std::mutex> lock(model.mutex);
+            if (model.send.last.seq != seenOutcome)
+            {
+                seenOutcome = model.send.last.seq;
+                if (!model.send.last.txHash.empty() && !nav.help)
+                {
+                    nav.stack.push_back({.kind = tui::DetailKind::tx,
+                        .number = -1,
+                        .hash = model.send.last.txHash,
+                        .resolved = true});
+                    std::lock_guard<std::mutex> wantsLock(wantsMutex);
+                    wants = tui::detailWants(nav);
+                    refresher.refreshNow();
+                }
+            }
+            return false;
+        }
         bool editingFilter = !nav.inDetail() && nav.page == tui::Page::log && nav.focus == 1;
         if (editingFilter && event.is_character())
         {
             return false;  // the filter box owns plain characters; Tab/Esc still reach Nav
+        }
+        if (!nav.inDetail() && !nav.help && nav.page == tui::Page::send)
+        {
+            tui::SendContext context;
+            {
+                std::lock_guard<std::mutex> lock(model.mutex);
+                context = sendContextOf();
+            }
+            auto sendAction = tui::sendFormHandle(form, context, event);
+            switch (sendAction)
+            {
+            case tui::SendAction::passToInput:
+                return false;
+            case tui::SendAction::redraw:
+            case tui::SendAction::none:
+                return true;
+            case tui::SendAction::loadKey:
+            {
+                tui::SendRequest load;
+                load.kind = tui::SendRequest::Kind::loadKey;
+                load.keyFile = form.keyFile;
+                sender.submit(std::move(load));
+                return true;
+            }
+            case tui::SendAction::submit:
+                sender.submit(form.pending);
+                return true;
+            case tui::SendAction::readFeatures:
+            {
+                tui::SendRequest read;
+                read.kind = tui::SendRequest::Kind::readFeatures;
+                sender.submit(std::move(read));
+                return true;
+            }
+            case tui::SendAction::toNav:
+                break;
+            }
         }
         auto depthBefore = nav.stack.size();
         auto action = tui::navHandle(nav, event);
@@ -278,7 +456,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         case tui::NavAction::quit:
             // stop every worker before Exit(): ScreenInteractive drops its event sender inside
             // Exit, and a redraw posted after that from another thread is a use-after-free. The
-            // explorer checks the stop flag before every RPC, so the wait is at most one
+            // worker checks the stop flag between requests, so the wait is at most one
             // in-flight request (the request timeout).
             stopWorkers();
             screen.Exit();
@@ -300,6 +478,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
     screen.ForceHandleCtrlC(false);
 
     refresher.start();
+    sender.start();
     screen.Loop(root);
     stopWorkers();  // no-op after a q exit; covers Loop ending for any other reason
     return c_exitOk;
@@ -310,7 +489,7 @@ void registerTuiCommand()
 {
     registerCommand("tui",
         Command{"browser-style panel: recent blocks and txs, consensus, send, log tail, node",
-            "[--node-dir <dir> | --rpc <host:port>] [--version-check] "
+            "[--node-dir <dir> | --rpc <host:port>] [--key <pem|hex file>] [--version-check] "
             "[--snapshot-dir <dir> [--filter <text>]]",
             {"version-check"}, runTui});
 }

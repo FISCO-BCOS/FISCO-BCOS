@@ -141,19 +141,12 @@ Element renderHelp(Model const& _model)
         text("Tab   next focus area (home: blocks / txs; log: list / filter)"),
         text("j k   or arrows: select a row;  PgUp PgDn: a page of rows"),
         text("Enter open the selected block / tx / proposal;  Esc: back"),
+        text("send  Tab: tree / key file / fields / button;  Enter on [ send ] confirms"),
         text("r     refresh now;  q: quit;  ?: this help"),
         text(""),
         text("any key closes this layer") | dim,
     };
     return window(text(" help "), vbox(std::move(lines)), LIGHT);
-}
-
-Element renderSend(Model const& _model)
-{
-    (void)_model;
-    return window(text(" send "),
-        text("send page: presets, custom calls and raw transactions arrive with ticket 15") | dim,
-        LIGHT);
 }
 
 Element renderLogPage(
@@ -170,7 +163,8 @@ Element renderLogPage(
         LIGHT);
 }
 
-Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::string const& _filter)
+Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::string const& _filter,
+    SendForm* _form)
 {
     _nav.authChain = _model.authChain;
     Frame body = _frame;
@@ -192,8 +186,11 @@ Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::st
             page = renderConsensus(_model);
             break;
         case Page::send:
-            page = renderSend(_model);
+        {
+            static SendForm s_snapshotForm = makeSendForm(false);  // headless renders only
+            page = renderSend(_model, _form ? *_form : s_snapshotForm, body);
             break;
+        }
         case Page::log:
             page = renderLogPage(_model, _nav, body, _filter);
             break;
@@ -209,6 +206,10 @@ Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::st
     _nav.barRow = _frame.height - 1;
     auto frame =
         vbox({renderTopBar(_model), page | flex, renderBottomBar(_model, _nav, _frame.width)});
+    if (_form && _form->confirm && !_nav.inDetail() && _nav.page == Page::send)
+    {
+        frame = dbox({frame, renderSendConfirm(*_form) | clear_under | center});
+    }
     if (_nav.help)
     {
         frame = dbox({frame, renderHelp(_model) | clear_under | center});
