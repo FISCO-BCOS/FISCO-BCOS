@@ -107,8 +107,10 @@ contract_bin()
 # for it, so a copy with one appended is written under $TMPDIR (noted in README; the
 # vendored .abi stays the solc output so regenerate.sh --check keeps meaning something).
 # Each call gets its own file: the four chains run in `( run_chain ) &` subshells that share
-# $$, so a fixed name would be truncated under another chain's deploy. The files are removed
-# by contract_abi_cleanup at the end of run_chain.
+# $$, so a fixed name would be truncated under another chain's deploy. Every path is appended
+# to ${ci_abi_list}, set by run_chain for its chain (contract_abi itself runs inside a
+# $(...) substitution, so it cannot key the list on its own BASHPID), and
+# contract_abi_cleanup removes them at the end of run_chain.
 contract_abi()
 {
     local abi="$(contracts_dir)/${1}/${1}.abi"
@@ -116,14 +118,14 @@ contract_abi()
     patched=$(mktemp "${TMPDIR:-/tmp}/ci-abi-${1}.XXXXXX") || return 1
     jq 'if any(.[]; .type == "constructor") then . else . + [{"inputs": [], "stateMutability": "nonpayable", "type": "constructor"}] end' \
         "${abi}" > "${patched}" || { rm -f "${patched}"; return 1; }
-    echo "${patched}" >> "${TMPDIR:-/tmp}/ci-abi-files-${BASHPID}"
+    echo "${patched}" >> "${ci_abi_list:-${TMPDIR:-/tmp}/ci-abi-files-$$}"
     echo "${patched}"
 }
 
-# contract_abi_cleanup: remove the patched ABI copies this process (chain subshell) wrote
+# contract_abi_cleanup: remove the patched ABI copies listed in ${ci_abi_list}
 contract_abi_cleanup()
 {
-    local list="${TMPDIR:-/tmp}/ci-abi-files-${BASHPID}"
+    local list="${ci_abi_list:-${TMPDIR:-/tmp}/ci-abi-files-$$}"
     [[ -f "${list}" ]] || return 0
     xargs rm -f < "${list}" 2>/dev/null
     rm -f "${list}"
