@@ -124,6 +124,10 @@ public:
     Routing const& routing() const { return m_routing; }
     /// true when run() will send a CommitteeManager proposal instead of _preset's call
     bool routesThroughProposal(Preset const& _preset) const;
+    /// the same decision for a routing not yet installed in a runner (the TUI's confirmation
+    /// layer asks before anything is sent): write preset with a ProposalSpec, proposals on,
+    /// not --direct
+    static bool routesThroughProposal(Routing const& _routing, Preset const& _preset);
     /// the committee preset that stands in for _preset on an auth chain (nullptr when none)
     static Preset const* proposalPreset(Preset const& _preset);
     /// _preset.proposal->args expanded: `$N` → _args[N], `$interval` → proposalInterval(),

@@ -291,16 +291,7 @@ int runRaw(Connection const& _connection, Args const& _args, std::ostream& _out)
     {
         throw OpsError(c_exitUsage, "usage: tx raw <signed-hex|@file>");
     }
-    auto hex = hexOrFile(_args.positionals()[0], "raw transaction file");
-    if (hex.starts_with("0x"))
-    {
-        hex = hex.substr(2);
-    }
-    if (hex.empty() || hex.size() % 2 != 0 ||
-        std::any_of(hex.begin(), hex.end(), [](unsigned char c) { return std::isxdigit(c) == 0; }))
-    {
-        throw OpsError(c_exitUsage, "raw transaction is not hex");
-    }
+    auto hex = normalizeRawTxHex(hexOrFile(_args.positionals()[0], "raw transaction file"));
     auto facts = chainFacts(_connection);
     auto sender = makeSender(_connection, facts, _args);
     bool json = wantJson(_args.flag("json"));

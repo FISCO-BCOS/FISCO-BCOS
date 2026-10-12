@@ -125,6 +125,8 @@ enum class SendAction
 };
 
 SendForm makeSendForm(bool _elMode);
+/// whether sending the entry needs the loaded key (the button's disabled state)
+bool sendEntryNeedsKey(SendEntry const& _entry);
 /// moves the cursor / focus, toggles groups, opens and answers the confirmation layer
 SendAction sendFormHandle(SendForm& _form, SendContext const& _context, ftxui::Event _event);
 /// the request for the current entry from the field values; OpsError{1} names a missing value

@@ -24,6 +24,7 @@
 #include "Model.h"
 #include "bcos-ops/RpcCall.h"
 #include "bcos-ops/cmd/TxContext.h"
+#include "bcos-ops/tx/PresetCall.h"
 #include "bcos-ops/tx/Presets.h"
 #include "bcos-ops/tx/TxSender.h"
 #include <atomic>
@@ -61,7 +62,13 @@ struct SendRequest
     std::string raw;
     std::vector<std::string> features;
     bool openTxDetail = true;  // open the produced tx in a detail page (gov votes stay put)
+    // the direct | proposal decision the confirmation layer showed; the worker sends exactly
+    // that (it never re-asks the chain), so the layer cannot lie
+    Routing routing;
     bool needsKey() const;
+    /// whether a request of _kind for _preset can route through a proposal (its routing must
+    /// be known before the confirmation layer opens)
+    static bool mayRouteThroughProposal(Kind _kind, Preset const* _preset);
 };
 
 class Sender
@@ -70,15 +77,13 @@ public:
     Sender(Connection _connection, Model& _model, std::function<void()> _onUpdate);
     ~Sender();
     void start();
-    /// stops after the request in flight (an RPC waits at most its timeout) and joins
+    /// stops before the next RPC (every call checks the flag) and joins
     void stop();
     void submit(SendRequest _request);
     /// runs one request on the calling thread and publishes its outcome; the worker calls it,
     /// tests call it directly
     void execute(SendRequest const& _request);
     bool hasKey() const { return m_hasKey.load(); }
-    /// the loaded key's address ("" when none)
-    std::string keyAddress() const;
 
 private:
     void loop();
@@ -101,7 +106,6 @@ private:
     std::unique_ptr<TxSender> m_sender;        // the loaded key
     std::unique_ptr<TxSender> m_readerSender;  // a random key for reads
     std::optional<bool> m_proposals;
-    std::string m_keyAddress;
     uint64_t m_seq = 0;
 };
 

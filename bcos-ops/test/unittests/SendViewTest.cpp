@@ -110,8 +110,8 @@ BOOST_AUTO_TEST_CASE(confirmationLayerListsWhatIsSent)
     BOOST_CHECK(text.find("method addSealer(string,uint256)") != std::string::npos);
     BOOST_CHECK(text.find("params nodeId=3a1f00, weight=1") != std::string::npos);
     BOOST_CHECK(text.find("Enter send   Esc cancel") != std::string::npos);
-    // proposal mode on an auth chain
-    context.proposals = true;
+    // proposal mode on an auth chain: the routing frozen into the request drives the text
+    form.pending.routing.proposals = true;
     form.confirmRows = tui::sendConfirmRows(form.pending, context);
     text = renderText(tui::renderFrame(model, nav, frame, "", &form), 120, 40);
     BOOST_CHECK(text.find("mode   proposal") != std::string::npos);

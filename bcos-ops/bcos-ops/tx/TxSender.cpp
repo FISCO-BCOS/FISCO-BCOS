@@ -188,4 +188,26 @@ Json::Value fetchTransaction(
     merged["receipt"] = _call("getTransactionReceipt", query);
     return merged;
 }
+std::string normalizeRawTxHex(std::string const& _text)
+{
+    std::string hex;
+    hex.reserve(_text.size());
+    for (unsigned char c : _text)
+    {
+        if (std::isspace(c) == 0)
+        {
+            hex.push_back(static_cast<char>(c));
+        }
+    }
+    if (hex.starts_with("0x") || hex.starts_with("0X"))
+    {
+        hex = hex.substr(2);
+    }
+    if (hex.empty() || hex.size() % 2 != 0 ||
+        std::any_of(hex.begin(), hex.end(), [](unsigned char c) { return std::isxdigit(c) == 0; }))
+    {
+        throw OpsError(c_exitUsage, "raw transaction is not hex");
+    }
+    return hex;
+}
 }  // namespace bcos::ops

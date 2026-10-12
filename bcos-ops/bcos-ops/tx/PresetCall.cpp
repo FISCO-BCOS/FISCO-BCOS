@@ -379,8 +379,12 @@ PresetResult PresetRunner::runCall(
 
 bool PresetRunner::routesThroughProposal(Preset const& _preset) const
 {
-    return _preset.write && _preset.proposal.has_value() && m_routing.proposals &&
-           !m_routing.direct;
+    return routesThroughProposal(m_routing, _preset);
+}
+
+bool PresetRunner::routesThroughProposal(Routing const& _routing, Preset const& _preset)
+{
+    return _preset.write && _preset.proposal.has_value() && _routing.proposals && !_routing.direct;
 }
 
 Preset const* PresetRunner::proposalPreset(Preset const& _preset)
