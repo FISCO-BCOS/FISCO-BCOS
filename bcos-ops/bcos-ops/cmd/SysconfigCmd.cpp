@@ -180,7 +180,8 @@ void registerSysconfigCommand()
                 "feature_/bugfix_ flag with its state) | enable-features <flag...> (turns them on "
                 "in dependency order, already-on skipped)",
             "get <key> | set <key> <value> | features | enable-features <flag...>   [--account "
-            "<key-file>] [--yes] [--node-dir <dir> | --rpc <host:port>] [--json]",
-            {"yes"}, runSysconfig});
+            "<key-file>] [--yes] [--direct] [--interval <blocks>] [--node-dir <dir> | --rpc "
+            "<host:port>] [--json]",
+            {"yes", "direct"}, runSysconfig});
 }
 }  // namespace bcos::ops

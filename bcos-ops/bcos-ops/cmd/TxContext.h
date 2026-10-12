@@ -41,10 +41,15 @@ ChainFacts chainFacts(Connection const& _connection);
 /// a sender signing with --account (PEM or hex) or a random key when absent
 std::unique_ptr<TxSender> makeSender(
     Connection const& _connection, ChainFacts const& _facts, Args const& _args);
-/// prints `to / method / params` and asks `proceed? [y/N]` on an interactive stdin without
-/// --yes; returns false when the operator declined. Non-interactive stdin proceeds.
+/// prints `mode / to / method / params` (and the proposal method standing in for the direct
+/// call) and asks `proceed? [y/N]` on an interactive stdin without --yes; returns false when the
+/// operator declined. A non-interactive stdin without --yes is a usage error.
 bool confirmWrite(Args const& _args, std::ostream& _out, Preset const& _preset,
-    std::string const& _to, std::vector<std::string> const& _params);
+    std::string const& _to, std::vector<std::string> const& _params,
+    std::string const& _mode = "direct", std::string const& _proposalMethod = "");
+/// --direct / --interval and the chain's auth mode (one getSystemConfigByKey, only asked when
+/// _preset has a proposal form)
+Routing routingFor(Connection const& _connection, Args const& _args, Preset const& _preset);
 /// shared rendering of a PresetResult: JSON (toJson) or the table rows
 void printPresetResult(std::ostream& _out, PresetResult const& _result, bool _json);
 /// run a write preset end to end: confirm, send, print, exit code

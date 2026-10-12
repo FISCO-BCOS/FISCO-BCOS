@@ -144,7 +144,8 @@ void registerConsensusCommand()
                 "committee proposal on an auth chain.",
             "list | add-sealer <nodeId> <weight> [--term-weight N] | add-observer <nodeId> | "
             "remove <nodeId> | set-weight <nodeId> <weight> | set-term-weight <nodeId> <weight>   "
-            "[--account <key-file>] [--yes] [--node-dir <dir> | --rpc <host:port>] [--json]",
-            {"yes"}, runConsensus});
+            "[--account <key-file>] [--yes] [--direct] [--interval <blocks>] [--node-dir <dir> | "
+            "--rpc <host:port>] [--json]",
+            {"yes", "direct"}, runConsensus});
 }
 }  // namespace bcos::ops

@@ -20,6 +20,7 @@
 #include "bcos-ops/Output.h"
 #include "bcos-ops/collect/GroupFacts.h"
 #include "bcos-ops/tx/Account.h"
+#include "bcos-ops/tx/AuthMode.h"
 #include <unistd.h>
 #include <iostream>
 #include <ostream>
@@ -58,8 +59,24 @@ std::unique_ptr<TxSender> makeSender(
         _connection.call, _connection.group, _facts.chainId, _facts.sm, std::move(account));
 }
 
+Routing routingFor(Connection const& _connection, Args const& _args, Preset const& _preset)
+{
+    Routing routing;
+    routing.direct = _args.flag("direct");
+    if (auto interval = _args.option("interval"))
+    {
+        routing.interval = _args.numberOr<int64_t>("interval", 0);
+    }
+    if (_preset.proposal && !routing.direct)
+    {
+        routing.proposals = chainUsesProposals(_connection);
+    }
+    return routing;
+}
+
 bool confirmWrite(Args const& _args, std::ostream& _out, Preset const& _preset,
-    std::string const& _to, std::vector<std::string> const& _params)
+    std::string const& _to, std::vector<std::string> const& _params, std::string const& _mode,
+    std::string const& _proposalMethod)
 {
     if (_args.flag("yes"))
     {
@@ -76,7 +93,13 @@ bool confirmWrite(Args const& _args, std::ostream& _out, Preset const& _preset,
     {
         params += (i == 0 ? "" : ", ") + std::string(_preset.params[i].name) + "=" + _params[i];
     }
-    printRows(_out, {{"to", _to}, {"method", std::string(_preset.signature)}, {"params", params}});
+    std::vector<std::pair<std::string, std::string>> rows = {{"mode", _mode}, {"to", _to},
+        {"method", std::string(_preset.signature)}, {"params", params}};
+    if (!_proposalMethod.empty())
+    {
+        rows.emplace_back("proposal", _proposalMethod);
+    }
+    printRows(_out, rows);
     _out << "proceed? [y/N] " << std::flush;
     std::string answer;
     std::getline(std::cin, answer);
@@ -93,6 +116,10 @@ void printPresetResult(std::ostream& _out, PresetResult const& _result, bool _js
     std::vector<std::pair<std::string, std::string>> rows;
     rows.emplace_back("mode", _result.mode);
     rows.emplace_back("method", _result.method);
+    if (!_result.directMethod.empty())
+    {
+        rows.emplace_back("replaces", _result.directMethod);
+    }
     if (!_result.receipt.txHash.empty())
     {
         rows.emplace_back("txHash", _result.receipt.txHash);
@@ -114,6 +141,19 @@ void printPresetResult(std::ostream& _out, PresetResult const& _result, bool _js
     {
         rows.emplace_back("message", _result.receipt.message);
     }
+    if (_result.proposal)
+    {
+        auto const& proposal = *_result.proposal;
+        rows.emplace_back("proposal", proposal.id + " " + proposal.statusName);
+        rows.emplace_back("executed", proposal.executed ? "yes" : "no");
+        if (proposal.execCode)
+        {
+            rows.emplace_back(
+                "execCode", std::to_string(*proposal.execCode) + " " + proposal.execCodeName);
+        }
+        rows.emplace_back("agree", std::to_string(proposal.info["agreeVoters"].size()));
+        rows.emplace_back("against", std::to_string(proposal.info["againstVoters"].size()));
+    }
     rows.emplace_back("ok", _result.ok ? "yes" : "no");
     printRows(_out, rows);
 }
@@ -121,14 +161,20 @@ void printPresetResult(std::ostream& _out, PresetResult const& _result, bool _js
 int runWritePreset(Connection const& _connection, Args const& _args, std::ostream& _out,
     Preset const& _preset, std::vector<std::string> const& _params)
 {
-    if (!confirmWrite(_args, _out, _preset, std::string(_preset.to), _params))
+    auto routing = routingFor(_connection, _args, _preset);
+    auto facts = chainFacts(_connection);
+    auto sender = makeSender(_connection, facts, _args);
+    PresetRunner runner(*sender, facts.sm, _connection.call, _connection.group);
+    runner.setRouting(routing);
+    bool viaProposal = runner.routesThroughProposal(_preset);
+    auto const* committeePreset = viaProposal ? PresetRunner::proposalPreset(_preset) : nullptr;
+    if (!confirmWrite(_args, _out, _preset, std::string(_preset.to), _params,
+            viaProposal ? "proposal" : "direct",
+            committeePreset != nullptr ? std::string(committeePreset->signature) : ""))
     {
         _out << "aborted\n";
         return c_exitUsage;
     }
-    auto facts = chainFacts(_connection);
-    auto sender = makeSender(_connection, facts, _args);
-    PresetRunner runner(*sender, facts.sm);
     auto result = runner.run(_preset, _params);
     printPresetResult(_out, result, wantJson(_args.flag("json")));
     return result.exitCode();
