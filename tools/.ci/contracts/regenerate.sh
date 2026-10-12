@@ -99,14 +99,16 @@ for name in "${names[@]}"; do
     if ${check_mode}; then
         tmp=$(mktemp -d)
         compile_one "${name}" "${tmp}"
+        name_status=0
         for artefact in "${name}.bin" "${name}.sm.bin" "${name}.abi"; do
             if ! cmp -s "${tmp}/${artefact}" "${contracts_dir}/${name}/${artefact}"; then
                 echo "DRIFT: ${name}/${artefact} differs from a fresh solc ${SOLC_VERSION} build" >&2
+                name_status=1
                 status=1
             fi
         done
         rm -rf "${tmp}"
-        (( status == 0 )) && echo "ok: ${name} artefacts match solc ${SOLC_VERSION}"
+        (( name_status == 0 )) && echo "ok: ${name} artefacts match solc ${SOLC_VERSION}"
     else
         compile_one "${name}" "${contracts_dir}/${name}"
         echo "wrote ${contracts_dir}/${name}/${name}.{bin,sm.bin,abi}"

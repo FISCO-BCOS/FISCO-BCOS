@@ -11,7 +11,7 @@ scenario_20_ops_status()
     local node_dir="${2}"
     scenario_banner 20 ops-status "existing ops_tool_test"
     local status smoke logStatus
-    smoke=$(ops "${node_dir}" tx smoke) || return 1
+    smoke=$(ops "${node_dir}" tx smoke --timeout 60000) || return 1
     assert_jq "${smoke}" '.ok == true' "tx smoke ok" || return 1
     status=$(ops "${node_dir}" status) || return 1
     assert_jq "${status}" '[.checks[] | .ok] | all' "status checks ok" || return 1

@@ -13,7 +13,7 @@ scenario_1_rpc_shape()
     # a fresh idle chain reports consensus_stable/height_advancing as failed until its first
     # block (the startup view change never completes without a transaction): warm it up
     local warm
-    warm=$(ops "${node_dir}" tx smoke) || return 1
+    warm=$(ops "${node_dir}" tx smoke --timeout 60000) || return 1
     assert_jq "${warm}" '.ok == true' "warm-up tx smoke" || return 1
     local status
     status=$(ops "${node_dir}" status) || return 1

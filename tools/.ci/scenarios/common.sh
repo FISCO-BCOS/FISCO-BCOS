@@ -105,14 +105,28 @@ contract_bin()
 # contract_abi <Name>: the ABI file with an explicit default constructor. solc omits the
 # implicit constructor from the ABI and the cpp-sdk codec behind `tx deploy` wants an entry
 # for it, so a copy with one appended is written under $TMPDIR (noted in README; the
-# vendored .abi stays the solc output so regenerate.sh --check keeps meaning something)
+# vendored .abi stays the solc output so regenerate.sh --check keeps meaning something).
+# Each call gets its own file: the four chains run in `( run_chain ) &` subshells that share
+# $$, so a fixed name would be truncated under another chain's deploy. The files are removed
+# by contract_abi_cleanup at the end of run_chain.
 contract_abi()
 {
     local abi="$(contracts_dir)/${1}/${1}.abi"
-    local patched="${TMPDIR:-/tmp}/ci-abi-$$-${1}.abi"
+    local patched
+    patched=$(mktemp "${TMPDIR:-/tmp}/ci-abi-${1}.XXXXXX") || return 1
     jq 'if any(.[]; .type == "constructor") then . else . + [{"inputs": [], "stateMutability": "nonpayable", "type": "constructor"}] end' \
-        "${abi}" > "${patched}" || return 1
+        "${abi}" > "${patched}" || { rm -f "${patched}"; return 1; }
+    echo "${patched}" >> "${TMPDIR:-/tmp}/ci-abi-files-${BASHPID}"
     echo "${patched}"
+}
+
+# contract_abi_cleanup: remove the patched ABI copies this process (chain subshell) wrote
+contract_abi_cleanup()
+{
+    local list="${TMPDIR:-/tmp}/ci-abi-files-${BASHPID}"
+    [[ -f "${list}" ]] || return 0
+    xargs rm -f < "${list}" 2>/dev/null
+    rm -f "${list}"
 }
 
 # chain_governor_pem <node_dir>: the account allowed to govern the chain behind <node_dir>:

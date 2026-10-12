@@ -20,7 +20,7 @@ scenario_19_account()
     [[ "${address}" =~ ^0x[0-9a-fA-F]{40}$ ]] || { scenario_fail "account new address: ${address}"; return 1; }
     [[ -f "${pem}" && -f "$(jq_get "${created}" '.publicKeyFile')" ]] || { scenario_fail "account files missing"; return 1; }
     local smoke
-    smoke=$(ops "${node_dir}" tx smoke --account "${pem}") || { echo "${smoke}"; return 1; }
+    smoke=$(ops "${node_dir}" tx smoke --timeout 60000 --account "${pem}") || { echo "${smoke}"; return 1; }
     assert_jq "${smoke}" '.ok == true' "tx smoke with the new account" || return 1
     assert_jq "${smoke}" '.account | ascii_downcase == "'"${address,,}"'"' "smoke signed by the new account" || return 1
     local tx

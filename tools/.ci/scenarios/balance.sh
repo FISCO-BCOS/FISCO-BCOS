@@ -50,8 +50,23 @@ scenario_8_balance()
     balance=$(ops "${node_dir}" balance get "${other}") || return 1
     assert_jq "${balance}" '.value == "500"' "balance get after sub" || return 1
     # an account that is not a caller is refused by the precompiled (receipt status != 0)
-    local denied
-    denied=$(ops_expect_exit 2 "${node_dir}" balance add "${other}" 1 --yes --account "$(dirname "${node_dir}")/../scenario8-acct/${other}.pem") || return 1
+    local denied other_pem
+    other_pem="$(dirname "${node_dir}")/../scenario8-acct/${other}.pem"
+    denied=$(ops_expect_exit 2 "${node_dir}" balance add "${other}" 1 --yes --account "${other_pem}") || return 1
     assert_jq "${denied}" '.ok == false and .status != 0' "non-caller add is refused" || return 1
+    if [[ "${chain}" == "auth" ]]; then
+        # the governor registers a second caller (spec: auth chains register-caller first);
+        # registerCaller/unregisterCaller are Governor-only direct calls (BalancePrecompiled.cpp)
+        result=$(ops "${node_dir}" balance register-caller "${other}" --yes --account "${governor}") || { echo "${result}"; return 1; }
+        assert_jq "${result}" '.ok == true' "balance register-caller" || return 1
+        callers=$(ops "${node_dir}" balance list-caller) || return 1
+        assert_jq "${callers}" '.value | map(ascii_downcase) | index("'"${other,,}"'") != null' "registered caller listed" || return 1
+        result=$(ops "${node_dir}" balance add "${governor_addr}" 5 --yes --account "${other_pem}") || { echo "${result}"; return 1; }
+        assert_jq "${result}" '.ok == true and .status == 0' "the registered caller may add" || return 1
+        result=$(ops "${node_dir}" balance unregister-caller "${other}" --yes --account "${governor}") || { echo "${result}"; return 1; }
+        assert_jq "${result}" '.ok == true' "balance unregister-caller" || return 1
+        callers=$(ops "${node_dir}" balance list-caller) || return 1
+        assert_jq "${callers}" '.value | map(ascii_downcase) | index("'"${other,,}"'") == null' "unregistered caller gone" || return 1
+    fi
     echo "scenario 8 ok: balance add/transfer/sub by ${governor_addr} on ${chain}"
 }
