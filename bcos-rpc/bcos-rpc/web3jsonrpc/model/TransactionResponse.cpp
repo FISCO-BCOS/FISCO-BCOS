@@ -55,6 +55,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     // signature-derived fields below have no deposit semantics.
     if (isDepositTransaction(tx))
     {
+        auto extraBytes = tx.extraTransactionBytes();
         DepositTransaction deposit;
         auto rawCursor = bcos::bytesRef(const_cast<byte*>(extraBytes.data()), extraBytes.size());
         if (auto error = decodeDepositTransaction(rawCursor, deposit); error == nullptr)
