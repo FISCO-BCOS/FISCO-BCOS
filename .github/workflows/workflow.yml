@@ -25,10 +25,13 @@ jobs:
     permissions:
       contents: write
     env:
-      # ccache lives under the workspace so actions/cache can persist it; 2G cap keeps
-      # the repo-level 10GB cache budget from being exhausted by one leg.
+      # ccache lives under the workspace so actions/cache can persist it. The cap is sized
+      # per run, not per leg, because the key below carries the run id: every run also
+      # WRITES a fresh entry, and the sum over the legs has to stay well inside the
+      # repo-level 10GB cache budget (over it GitHub evicts LRU, which would take the far
+      # costlier vcpkg entries first). 4 non-Windows legs x 200M is ~0.8GB.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 2G
+      CCACHE_MAXSIZE: 200M
     strategy:
       fail-fast: false
       matrix:
@@ -76,14 +79,19 @@ jobs:
       # warm cache reuses .o across runs and only recompiles the files that actually changed.
       # The key is compiler/OS/arch-scoped (a .o is not portable across those) and deliberately
       # does NOT bind the source tree: ccache already misses on any content change.
+      # The run id makes the PRIMARY key unique per run. A cache entry is immutable and the
+      # post step skips saving on an exact primary-key hit, so a constant key would be written
+      # once by the first run and then restored, frozen, forever. It is restore-keys' "v1-"
+      # prefix that actually matches across runs (most recent wins), so a run still warms from
+      # the previous run's entry while save always writes a fresh, current one.
       - name: Restore ccache
         if: matrix.os != 'windows-2025'
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ccache-${{ matrix.os }}-${{ runner.arch }}-v1
+          key: ccache-${{ matrix.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
           restore-keys: |
-            ccache-${{ matrix.os }}-${{ runner.arch }}-
+            ccache-${{ matrix.os }}-${{ runner.arch }}-v1-
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2025'
         uses: actions/setup-node@v4
@@ -160,7 +168,9 @@ jobs:
           cd build
           cmake --build .
       - name: ccache stats
-        if: matrix.os != 'windows-2025'
+        # always(): the hit rate and cache size are the evidence for the cache sizing, and a
+        # failed or timed-out build is exactly the run whose numbers are wanted.
+        if: always() && matrix.os != 'windows-2025'
         run: ccache --show-stats
       - name: Test
         if: matrix.os != 'windows-2025'
@@ -342,6 +352,9 @@ jobs:
       # push event on the base branch (and on a fork that sets the secret).
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
+      # The one job that keeps a large cap: --coverage instrumented objects plus -g are several
+      # times the size of the MinSizeRel objects the other legs cache, and there is a single
+      # coverage key (no matrix fan-out), so it cannot swamp the shared 10GB budget by itself.
       CCACHE_MAXSIZE: 2G
     steps:
       - uses: actions/checkout@v3
@@ -378,9 +391,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1
+          key: ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-${{ github.run_id }}
           restore-keys: |
-            ccache-coverage-ubuntu-26.04-${{ runner.arch }}-
+            ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -406,6 +419,8 @@ jobs:
           cd build
           cmake --build . --parallel 3
       - name: ccache stats
+        # always(): see the build matrix — stats must survive a failed/timed-out build.
+        if: always()
         run: ccache --show-stats
       - name: Run tests
         run: |
@@ -501,8 +516,10 @@ jobs:
     permissions:
       contents: read
     env:
+      # Same per-run sizing as the build matrix: 200M x (4 legs) + 200M (here) + 2G (coverage)
+      # stays well inside the 10GB repo budget.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 2G
+      CCACHE_MAXSIZE: 200M
     steps:
       - uses: actions/checkout@v4
         with:
@@ -532,9 +549,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1
+          key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-${{ github.run_id }}
           restore-keys: |
-            ccache-l2-ubuntu-26.04-${{ runner.arch }}-
+            ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-
       - name: Install linux dependencies
         run: |
           sudo apt update
@@ -561,6 +578,8 @@ jobs:
           cd build
           cmake --build .
       - name: ccache stats
+        # always(): see the build matrix — stats must survive a failed/timed-out build.
+        if: always()
         run: ccache --show-stats
       - name: Run L2 unit suites
         run: |
@@ -667,7 +686,18 @@ jobs:
           COMMIT=$(python3 -c "import json; print(json.load(open('.ci-op-e2e-tests/tools/op-e2e/versions.json'))['op_monorepo']['commit'])")
           echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
 
+      - name: Cache OP binaries
+        id: op-cache
+        uses: actions/cache@v4
+        with:
+          # Binaries only: the OP monorepo clone was 689MB of the old 905MB entry and is cheap
+          # to re-clone relative to rebuilding the binaries, so cache just .ci-c2-bins (216MB).
+          # Keyed on the OP pin, so it refreshes exactly when the pin moves and hits in between.
+          path: ${{ github.workspace }}/.ci-c2-bins
+          key: c2-op-${{ steps.op-pin.outputs.commit }}-${{ runner.os }}-${{ runner.arch }}
+
       - name: Build OP stack binaries
+        if: steps.op-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           mkdir -p .ci-c2-bins
