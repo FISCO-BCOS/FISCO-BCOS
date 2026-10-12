@@ -80,6 +80,7 @@ struct ExplorerState
     std::map<std::string, TxDetail> txDetails;    // by 0x hash
     std::deque<int64_t> blockDetailOrder;
     std::deque<std::string> txDetailOrder;
+    int64_t reorgs = 0;  // times a new block's parent did not match the row below it
 };
 
 constexpr size_t c_explorerMinRows = 20;
@@ -90,6 +91,8 @@ constexpr size_t c_explorerDetailCache = 64;
 /// max(terminal rows, 20) capped at 200
 size_t explorerCapacity(int _terminalRows);
 BlockRow blockRowFromJson(Json::Value const& _block);
+/// parentInfo[0].blockHash (the node's shape) or parentHash; empty when neither is present
+std::string blockParentHash(Json::Value const& _block);
 /// block order preserved (first tx of the block first)
 std::vector<TxRow> txRowsFromBlock(Json::Value const& _block);
 /// fetches (lastFetchedHeight, _height] with getBlockByNumber [group,"",n,false,false]; at most

@@ -27,7 +27,6 @@ namespace bcos::ops::test
 {
 namespace
 {
-using ftxui::Event;
 using tui::SendAction;
 using tui::SendForm;
 
@@ -66,7 +65,7 @@ BOOST_AUTO_TEST_CASE(treeListsTheGroupsAndExpandsOnEnter)
     BOOST_CHECK_EQUAL(form.entries[4].label, "+ consensus");
     // Enter on a closed group opens it; the write presets appear, the reads do not
     form.tree.selected = 4;
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::redraw);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Return) == SendAction::redraw);
     BOOST_CHECK_EQUAL(form.entries[4].label, "- consensus");
     BOOST_CHECK_EQUAL(form.entries[5].label, "  add-sealer");
     bool hasRead = false;
@@ -90,31 +89,32 @@ BOOST_AUTO_TEST_CASE(tabCyclesTreeKeyFieldsButtonAndEscGoesBackToTheTree)
     tui::SendContext context;
     BOOST_REQUIRE_EQUAL(form.fieldCount(), 2);  // nodeId, weight
     BOOST_CHECK_EQUAL(form.buttonFocus(), 4);
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Tab) == SendAction::redraw);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Tab) == SendAction::redraw);
     BOOST_CHECK_EQUAL(form.focus, 1);
     BOOST_CHECK_EQUAL(form.inputId(), "key");
-    tui::sendFormHandle(form, context, Event::Tab);
+    tui::sendFormHandle(form, context, ftxui::Event::Tab);
     BOOST_CHECK_EQUAL(form.inputId(), "p0");
-    tui::sendFormHandle(form, context, Event::Tab);
+    tui::sendFormHandle(form, context, ftxui::Event::Tab);
     BOOST_CHECK_EQUAL(form.inputId(), "p1");
-    tui::sendFormHandle(form, context, Event::Tab);
+    tui::sendFormHandle(form, context, ftxui::Event::Tab);
     BOOST_CHECK_EQUAL(form.focus, form.buttonFocus());
     BOOST_CHECK(!form.editing());
-    tui::sendFormHandle(form, context, Event::Tab);
+    tui::sendFormHandle(form, context, ftxui::Event::Tab);
     BOOST_CHECK_EQUAL(form.focus, 0);
     // plain characters on a field go to the Input; Esc leaves the field
     form.focus = 2;
-    BOOST_CHECK(
-        tui::sendFormHandle(form, context, Event::Character('x')) == SendAction::passToInput);
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Escape) == SendAction::redraw);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Character('x')) ==
+                SendAction::passToInput);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Escape) == SendAction::redraw);
     BOOST_CHECK_EQUAL(form.focus, 0);
     // on the tree Esc and digits belong to the page key map
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Escape) == SendAction::toNav);
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Character('1')) == SendAction::toNav);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Escape) == SendAction::toNav);
+    BOOST_CHECK(
+        tui::sendFormHandle(form, context, ftxui::Event::Character('1')) == SendAction::toNav);
     // Enter on the key field loads the key
     form.focus = 1;
     form.keyFile = "/tmp/k.pem";
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::loadKey);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Return) == SendAction::loadKey);
 }
 
 BOOST_AUTO_TEST_CASE(sendButtonNeedsAKeyThenOpensTheConfirmationLayer)
@@ -124,12 +124,12 @@ BOOST_AUTO_TEST_CASE(sendButtonNeedsAKeyThenOpensTheConfirmationLayer)
     form.fields[0] = "3a1f00";
     form.fields[1] = "1";
     form.focus = form.buttonFocus();
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::redraw);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Return) == SendAction::redraw);
     BOOST_CHECK(!form.confirm);
     BOOST_CHECK_EQUAL(form.notice, "load a key first");
     context.hasKey = true;
     context.routingKnown = true;  // the key load answered direct | proposal
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::redraw);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Return) == SendAction::redraw);
     BOOST_REQUIRE(form.confirm);
     BOOST_REQUIRE_EQUAL(form.confirmRows.size(), 4U);
     BOOST_CHECK_EQUAL(form.confirmRows[0].second, "direct");
@@ -137,11 +137,11 @@ BOOST_AUTO_TEST_CASE(sendButtonNeedsAKeyThenOpensTheConfirmationLayer)
     BOOST_CHECK_EQUAL(form.confirmRows[2].second, "addSealer(string,uint256)");
     BOOST_CHECK_EQUAL(form.confirmRows[3].second, "nodeId=3a1f00, weight=1");
     // Esc closes the layer first, Enter submits the pending request
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Escape) == SendAction::redraw);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Escape) == SendAction::redraw);
     BOOST_CHECK(!form.confirm);
-    tui::sendFormHandle(form, context, Event::Return);
+    tui::sendFormHandle(form, context, ftxui::Event::Return);
     BOOST_REQUIRE(form.confirm);
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::submit);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Return) == SendAction::submit);
     BOOST_CHECK(!form.confirm);
     BOOST_CHECK_EQUAL(form.focus, 0);  // back on the tree once the detail closes
     BOOST_CHECK(form.pending.kind == tui::SendRequest::Kind::preset);
@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(sendButtonNeedsAKeyThenOpensTheConfirmationLayer)
     // a missing value is a notice, not a request
     form.fields[1].clear();
     form.focus = form.buttonFocus();
-    tui::sendFormHandle(form, context, Event::Return);
+    tui::sendFormHandle(form, context, ftxui::Event::Return);
     BOOST_CHECK(!form.confirm);
     BOOST_CHECK_EQUAL(form.notice, "missing weight");
 }
@@ -165,7 +165,7 @@ BOOST_AUTO_TEST_CASE(authChainConfirmationShowsTheProposal)
     form.fields[0] = "3a1f00";
     form.fields[1] = "2";
     form.focus = form.buttonFocus();
-    tui::sendFormHandle(form, context, Event::Return);
+    tui::sendFormHandle(form, context, ftxui::Event::Return);
     BOOST_REQUIRE(form.confirm);
     BOOST_REQUIRE_EQUAL(form.confirmRows.size(), 5U);
     BOOST_CHECK_EQUAL(form.confirmRows[0].second, "proposal");
@@ -195,13 +195,13 @@ BOOST_AUTO_TEST_CASE(featuresRawAndCustomBuildTheirRequests)
         }
     }
     form.entryKey.clear();
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::redraw);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Return) == SendAction::redraw);
     BOOST_CHECK_EQUAL(form.focus, 2);  // the list
-    tui::sendFormHandle(form, context, Event::Character(' '));
+    tui::sendFormHandle(form, context, ftxui::Event::Character(' '));
     BOOST_CHECK(form.featureChecked.contains("feature_balance"));
-    tui::sendFormHandle(form, context, Event::Character('j'));
-    tui::sendFormHandle(form, context, Event::Character('j'));
-    tui::sendFormHandle(form, context, Event::Character(' '));
+    tui::sendFormHandle(form, context, ftxui::Event::Character('j'));
+    tui::sendFormHandle(form, context, ftxui::Event::Character('j'));
+    tui::sendFormHandle(form, context, ftxui::Event::Character(' '));
     BOOST_CHECK(!form.featureChecked.contains("bugfix_revert"));
     BOOST_CHECK(form.notice.find("already on") != std::string::npos);
     auto request = tui::sendFormRequest(form, context);
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(featuresRawAndCustomBuildTheirRequests)
     // raw
     form.tree.selected = form.entries.size() - 2;
     form.entryKey.clear();
-    tui::sendFormHandle(form, context, Event::Tab);
+    tui::sendFormHandle(form, context, ftxui::Event::Tab);
     form.rawText = "@/tmp/signed.hex";
     request = tui::sendFormRequest(form, context);
     BOOST_CHECK(request.kind == tui::SendRequest::Kind::raw);
@@ -223,7 +223,7 @@ BOOST_AUTO_TEST_CASE(featuresRawAndCustomBuildTheirRequests)
     // custom: the fields follow the signature
     form.tree.selected = form.entries.size() - 1;
     form.entryKey.clear();
-    tui::sendFormHandle(form, context, Event::Tab);
+    tui::sendFormHandle(form, context, ftxui::Event::Tab);
     form.customTo = "0xa1";
     form.customSig = "set(string,uint256)";
     auto specs = form.fieldSpecs();
@@ -244,11 +244,11 @@ BOOST_AUTO_TEST_CASE(featuresRawAndCustomBuildTheirRequests)
     // hello set needs the deployed address
     form.tree.selected = 2;
     form.entryKey.clear();
-    tui::sendFormHandle(form, context, Event::Tab);
+    tui::sendFormHandle(form, context, ftxui::Event::Tab);
     BOOST_CHECK_THROW(tui::sendFormRequest(form, context), OpsError);
     context.helloAddress = "0xc02d";
     form.entryKey.clear();
-    tui::sendFormHandle(form, context, Event::Tab);
+    tui::sendFormHandle(form, context, ftxui::Event::Tab);
     form.fields[0] = "hi";
     request = tui::sendFormRequest(form, context);
     BOOST_CHECK_EQUAL(request.to, "0xc02d");
@@ -264,25 +264,25 @@ BOOST_AUTO_TEST_CASE(theLayerNeedsTheRoutingAndFreezesItIntoTheRequest)
     form.fields[0] = "3a1f00";
     form.fields[1] = "1";
     form.focus = form.buttonFocus();
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::redraw);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Return) == SendAction::redraw);
     BOOST_CHECK(!form.confirm);
     BOOST_CHECK(form.notice.find("routing unknown") != std::string::npos);
     // known and proposals: the layer says proposal and the request carries exactly that
     context.routingKnown = true;
     context.proposals = true;
-    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::redraw);
+    BOOST_CHECK(tui::sendFormHandle(form, context, ftxui::Event::Return) == SendAction::redraw);
     BOOST_REQUIRE(form.confirm);
     BOOST_CHECK(form.pending.routing.proposals);
     BOOST_CHECK_EQUAL(form.confirmRows[0].second, "proposal");
-    tui::sendFormHandle(form, context, Event::Escape);
+    tui::sendFormHandle(form, context, ftxui::Event::Escape);
     // known and direct
     context.proposals = false;
-    tui::sendFormHandle(form, context, Event::Return);
+    tui::sendFormHandle(form, context, ftxui::Event::Return);
     BOOST_REQUIRE(form.confirm);
     BOOST_CHECK(!form.pending.routing.proposals);
     BOOST_CHECK_EQUAL(form.confirmRows[0].second, "direct");
     // a read preset never needs the routing
-    tui::sendFormHandle(form, context, Event::Escape);
+    tui::sendFormHandle(form, context, ftxui::Event::Escape);
     tui::SendRequest read;
     read.kind = tui::SendRequest::Kind::preset;
     read.preset = findPreset("consensus", "sealers");

@@ -21,6 +21,7 @@
 #include "bcos-ops/Args.h"
 #include "bcos-ops/Cli.h"
 #include "bcos-ops/Connect.h"
+#include "bcos-ops/Mode.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/cmd/StatusCmd.h"
 #include "bcos-ops/collect/RpcCollector.h"
@@ -87,6 +88,8 @@ int snapshotPages(
     Connection const& _connection, Args const& _args, std::string const& _dir, std::ostream& _out)
 {
     tui::Model model;
+    model.mode = _connection.mode;
+    bool el = isElMode(_connection.mode);
     tui::Refresher refresher(
         _connection, tuiFallbacks(_connection), thresholdsFrom(_args), model, nullptr, 100000);
     refresher.setRowCapacity([]() { return tui::explorerCapacity(40); });
@@ -112,9 +115,16 @@ int snapshotPages(
     };
     auto noSetup = [](tui::Nav&, tui::SendForm&) {};
     // the send page with consensus add-sealer selected and no key; then its confirmation layer
-    auto sendSetup = [](tui::Nav& nav, tui::SendForm& form) {
+    auto sendSetup = [el](tui::Nav& nav, tui::SendForm& form) {
         nav.page = tui::Page::send;
-        form = tui::makeSendForm(false);
+        form = tui::makeSendForm(el);
+        if (el)
+        {
+            // EL modes: the raw entry is the whole tree
+            form.rebuild();
+            form.rawText = "0x02f8…";
+            return;
+        }
         form.expanded = {"consensus"};
         form.rebuild();
         for (size_t i = 0; i < form.entries.size(); ++i)
@@ -139,7 +149,10 @@ int snapshotPages(
     std::vector<Shot> shots = {
         {.name = "home", .width = 80, .height = 24, .setup = noSetup},
         {.name = "home-wide", .width = 120, .height = 40, .setup = noSetup},
-        {.name = "consensus", .width = 80, .height = 24, .setup = onPage(tui::Page::consensus)},
+        {.name = el ? "txpool" : "consensus",
+            .width = 80,
+            .height = 24,
+            .setup = onPage(tui::Page::consensus)},
         {.name = "node", .width = 80, .height = 24, .setup = onPage(tui::Page::node)},
         {.name = "log", .width = 80, .height = 24, .setup = onPage(tui::Page::log)},
         {.name = "help",
@@ -225,8 +238,9 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         return snapshotPages(connection, _args, *snapshotDir, _out);
     }
     tui::Model model;
+    model.mode = connection.mode;
     tui::Nav nav;
-    tui::SendForm form = tui::makeSendForm(false);
+    tui::SendForm form = tui::makeSendForm(isElMode(connection.mode));
     auto screen = ScreenInteractive::Fullscreen();
     auto redraw = [&screen]() { screen.PostEvent(ftxui::Event::Custom); };
     // the send page's worker owns the signing key; --key (or --account) loads it before the loop.
@@ -553,7 +567,9 @@ void registerTuiCommand()
     registerCommand("tui",
         Command{"browser-style panel: recent blocks and txs, consensus, send, log tail, node, gov",
             "[--node-dir <dir> | --rpc <host:port>] [--key <pem|hex file>] [--version-check] "
-            "(auth chains add page 6 gov: committee, proposals, vote) "
+            "[--mode none|el|opstack-el] [--web3 host:port] "
+            "(auth chains add page 6 gov: committee, proposals, vote; EL modes turn page 2 into "
+            "the txpool and the send page into raw only) "
             "[--snapshot-dir <dir> [--filter <text>]]",
             {"version-check"}, runTui});
 }

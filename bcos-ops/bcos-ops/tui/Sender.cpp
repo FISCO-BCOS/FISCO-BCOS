@@ -16,8 +16,10 @@
  * @file Sender.cpp
  */
 #include "Sender.h"
+#include "bcos-ops/HttpRpc.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/Output.h"
+#include "bcos-ops/RpcClient.h"
 #include "bcos-ops/tx/Abi.h"
 #include "bcos-ops/tx/Account.h"
 #include "bcos-ops/tx/AuthMode.h"
@@ -58,6 +60,7 @@ bool SendRequest::needsKey() const
     {
     case Kind::loadKey:
     case Kind::readFeatures:
+    case Kind::raw:  // signed elsewhere: the page only forwards it
         return false;
     case Kind::preset:
         return preset != nullptr && preset->write;
@@ -131,6 +134,17 @@ std::string sendOutcomeLine(PresetResult const& _result)
 Sender::Sender(Connection _connection, Model& _model, std::function<void()> _onUpdate)
   : m_connection(std::move(_connection)), m_model(_model), m_onUpdate(std::move(_onUpdate))
 {
+    if (m_connection.web3Endpoint)
+    {
+        auto web3 = makeHttpRpcCall(*m_connection.web3Endpoint, c_defaultRequestTimeoutMs);
+        m_web3 = [this, web3](std::string_view _method, Json::Value const& _params) {
+            if (m_stop)
+            {
+                throw OpsError(c_exitUsage, "send stopped");
+            }
+            return web3(_method, _params);
+        };
+    }
     // every RPC of a request refuses to start once stop() was asked (same as the refresher),
     // so a quit waits for the call in flight and nothing after it
     auto inner = m_connection.call;
@@ -402,9 +416,27 @@ SendOutcome Sender::run(SendRequest const& _request)
     }
     case Kind::raw:
     {
-        auto& tx = sender(true);
         auto hex = normalizeRawTxHex(
             _request.raw.starts_with("@") ? senderReadFile(_request.raw.substr(1)) : _request.raw);
+        if (_request.web3Raw)
+        {
+            if (!m_web3)
+            {
+                throw OpsError(c_exitUsage,
+                    "EL mode sends raw transactions through the web3 listener: enable "
+                    "[web3_rpc] or pass --web3 host:port");
+            }
+            auto receipt = sendRawEth(*m_web3, hex, c_senderWeb3WaitMs, 500, &m_stop);
+            outcome.txHash = receipt.txHash;
+            outcome.ok = receipt.ok();
+            outcome.line =
+                "raw tx " + abridged(receipt.txHash, 6) +
+                (receipt.status < 0 ? " pending (no receipt yet)" :
+                                      " -> block " + std::to_string(receipt.blockNumber) +
+                                          (receipt.ok() ? " ok" : " FAILED (receipt status 0x0)"));
+            return outcome;
+        }
+        auto& tx = sender(false);
         auto receipt = tx.sendRaw(hex);
         outcome.txHash = receipt.txHash;
         outcome.ok = receipt.ok();

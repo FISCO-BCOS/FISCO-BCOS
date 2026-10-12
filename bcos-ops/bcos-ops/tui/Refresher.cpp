@@ -16,6 +16,8 @@
  * @file Refresher.cpp
  */
 #include "Refresher.h"
+#include "bcos-ops/HttpRpc.h"
+#include "bcos-ops/Mode.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/cmd/CommitteeCmd.h"
 #include <chrono>
@@ -41,7 +43,21 @@ Refresher::Refresher(Connection _connection, LocalFallbacks _fallbacks, Threshol
     m_model(_model),
     m_onUpdate(std::move(_onUpdate)),
     m_intervalMs(_intervalMs)
-{}
+{
+    if (isElMode(m_connection.mode) && m_connection.web3Endpoint)
+    {
+        // a plain HTTP POST per call (the SDK transport cannot speak to the web3 port), and
+        // stop-aware like every other refresher RPC
+        auto inner = makeHttpRpcCall(*m_connection.web3Endpoint, 5000);
+        m_web3 = [this, inner](std::string_view _method, Json::Value const& _params) {
+            if (m_stop)
+            {
+                throw OpsError(c_exitUsage, "refresh stopped");
+            }
+            return inner(_method, _params);
+        };
+    }
+}
 
 Refresher::~Refresher()
 {
@@ -94,10 +110,16 @@ void Refresher::runOnce()
             }
             return m_connection.call(_method, _params);
         };
-        auto status = collectFromRpc(call, m_connection.group, m_connection.source, m_fallbacks);
+        auto status = collectFromRpc(
+            call, m_connection.group, m_connection.source, m_fallbacks, m_connection.mode);
         if (m_stop)
         {
             return;
+        }
+        std::optional<TxpoolState> txpool;
+        if (isElMode(m_connection.mode))
+        {
+            txpool = txpoolFetch(m_connection.mode, m_web3 ? &*m_web3 : nullptr, &m_stop);
         }
         auto checks = evaluate(status, m_thresholds, nowMs());
         Json::Value params(Json::arrayValue);
@@ -106,12 +128,15 @@ void Refresher::runOnce()
         Json::Value consensus;
         Json::Value sync;
         Json::Value peers;
-        try
+        if (!isElMode(m_connection.mode))  // EL modes: no PBFT, and the call stops el nodes
         {
-            consensus = call("getConsensusStatus", params);
+            try
+            {
+                consensus = call("getConsensusStatus", params);
+            }
+            catch (std::exception const&)
+            {}
         }
-        catch (std::exception const&)
-        {}
         try
         {
             sync = call("getSyncStatus", params);
@@ -180,6 +205,11 @@ void Refresher::runOnce()
         {
             m_model.governance = std::move(*governance);
         }
+        if (txpool)
+        {
+            m_model.txpool = std::move(*txpool);
+        }
+        m_model.mode = m_connection.mode;
         m_model.status = std::move(status);
         m_model.checks = std::move(checks);
         m_model.explorer = std::move(explorer);
