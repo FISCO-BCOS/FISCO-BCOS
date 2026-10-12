@@ -2343,6 +2343,10 @@ bool Ledger::buildGenesisBlock(
         {
             // Same integrity triple for either channel (both persist identical triples; a
             // chain declared via [op_fork_timestamps] must not lack the integrity-bound copy).
+            // The binding target is header->hash() — block 0's own hash — so the boot probe
+            // validates it against the config's [eth_genesis_header] when the node declares
+            // one, and against this stored genesis header itself when it does not (the
+            // direct-API shape; readValidatedOpForkScheduleMetadataForBoot resolves both).
             const auto metadata = buildOpForkScheduleMetadata(*resolved, header->hash());
             co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
             resolvedOpSchedule = metadata.schedule;

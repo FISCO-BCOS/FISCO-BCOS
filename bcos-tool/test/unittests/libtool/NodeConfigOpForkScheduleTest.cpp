@@ -121,6 +121,29 @@ BOOST_AUTO_TEST_CASE(sectionWithoutCanonicalFailsClosed)
         [](auto const& e) { return errinfoContains(e, "canonical"); });
 }
 
+// The loader's unknown-key policy matches its two siblings ([op_fork_timestamps] and
+// [op_eip1559] both reject unrecognised keys): a stray key — schedule syntax pasted from
+// another section, or a misspelling — is refused instead of silently ignored, because the
+// canonical text is genesis-frozen into the SYS_CONFIG row (review F3).
+BOOST_AUTO_TEST_CASE(unknownKeyIsRejectedLikeTheSiblingLoaders)
+{
+    LoaderProbe probe;
+    BOOST_CHECK_EXCEPTION(
+        probe.loadOpForkSchedule(
+            fromIni("[op_fork_schedule]\n"
+                    "canonical=0:isthmus\n"
+                    "jovian_time=1000\n")),
+        InvalidConfig, [](auto const& e) { return errinfoContains(e, "unrecognised key"); });
+    BOOST_CHECK_EXCEPTION(
+        probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
+                                         "canonica=0:isthmus\n")),
+        InvalidConfig, [](auto const& e) { return errinfoContains(e, "unrecognised key"); });
+    // The recognised key alone still loads (the whitelist does not over-reject).
+    probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
+                                     "canonical=0:isthmus\n"));
+    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
+}
+
 BOOST_AUTO_TEST_CASE(missingSectionLeavesScheduleUnset)
 {
     LoaderProbe probe;

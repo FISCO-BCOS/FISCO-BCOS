@@ -82,10 +82,12 @@ struct OpChainConfig
     uint64_t blockTimeSeconds{2};
     bcos::ledger::OpForkSchedule forkSchedule{};
     // op-geth params ChainConfig.Optimism constants (superchain-registry [optimism]
-    // section; identical on every superchain chain: 50 / 250 / 6).
-    uint64_t eip1559DenominatorBedrock{50};
-    uint64_t eip1559DenominatorCanyon{250};
-    uint64_t eip1559Elasticity{6};
+    // section; identical on every superchain chain). Derived from the ONE preset home
+    // (c_legacyOpEip1559Params) so these defaults cannot drift from the pricing path —
+    // production fills them via effectiveOpEip1559 anyway (OpStackSyncInitializer).
+    uint64_t eip1559DenominatorBedrock{bcos::engine::c_legacyOpEip1559Params.denominator};
+    uint64_t eip1559DenominatorCanyon{bcos::engine::c_legacyOpEip1559Params.denominatorCanyon};
+    uint64_t eip1559Elasticity{bcos::engine::c_legacyOpEip1559Params.elasticity};
 };
 
 namespace detail

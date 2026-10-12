@@ -240,6 +240,47 @@ BOOST_AUTO_TEST_CASE(declaredEip1559TripleDrivesPreHolocenePricing)
         !validateOpHeader(presetPriced.child, presetPriced.parent, presetPriced.config).valid);
 }
 
+// The validator consumes all THREE chain-config parameters, but the cases above vary only
+// the Bedrock denominator — a regression that hardcodes the preset elasticity (6) or the
+// preset Canyon denominator (250) passes every one of them. Pin both remaining fields the
+// same way: declared-priced header accepted, preset-priced header rejected.
+BOOST_AUTO_TEST_CASE(declaredElasticityAndCanyonDenominatorDrivePricing)
+{
+    // Declared elasticity 4 (preset 6): target = 30M/4 = 7.5M, delta = 10M - 7.5M = 2.5M,
+    // deltaFee = 1e9 * 2.5M / 7.5M / 50 = +6'666'666 (floor).
+    auto p = makeBedrockPair();
+    p.config.eip1559Elasticity = 4;
+    BOOST_CHECK_EQUAL(expectedBaseFee(p), u256(1006666666));
+    p.child.baseFee = expectedBaseFee(p);
+    BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
+
+    // The preset-elasticity price (1020000000) must fail on the declared chain.
+    auto presetElasticity = makeBedrockPair();
+    presetElasticity.config.eip1559Elasticity = 4;
+    BOOST_CHECK(
+        !validateOpHeader(presetElasticity.child, presetElasticity.parent, presetElasticity.config)
+             .valid);
+
+    // Declared Canyon denominator 300 (preset 250), keyed on the CHILD's activation:
+    // deltaFee = 1e9 * 5M / 5M / 300 = +3'333'333 (floor).
+    auto c = makeBedrockPair();
+    c.config.forkSchedule.m_canyonTime = kChildTs;  // child is the first Canyon block
+    c.config.eip1559DenominatorCanyon = 300;
+    stampForkFields(c);
+    BOOST_CHECK_EQUAL(expectedBaseFee(c), u256(1003333333));
+    c.child.baseFee = expectedBaseFee(c);
+    BOOST_CHECK(validateOpHeader(c.child, c.parent, c.config).valid);
+
+    // The preset-Canyon price (1004000000, denominator 250) must fail on the declared chain.
+    auto presetCanyon = makeBedrockPair();
+    presetCanyon.config.forkSchedule.m_canyonTime = kChildTs;
+    presetCanyon.config.eip1559DenominatorCanyon = 300;
+    stampForkFields(presetCanyon);
+    presetCanyon.child.baseFee = u256(1004000000);
+    BOOST_CHECK(
+        !validateOpHeader(presetCanyon.child, presetCanyon.parent, presetCanyon.config).valid);
+}
+
 // Holocene: the EIP-1559 parameters come from the PARENT's 9-byte extraData
 // (op-geth IsOptimismHolocene(parent.Time)), not from the chain config.
 BOOST_AUTO_TEST_CASE(holoceneExtraDataParamsDriveBaseFee)
