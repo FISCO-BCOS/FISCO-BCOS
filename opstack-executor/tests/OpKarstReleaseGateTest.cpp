@@ -22,9 +22,9 @@ BOOST_AUTO_TEST_CASE(KarstConfigIsOsakaWithDepositExemption)
 {
     const auto& spec = op::OP_KARST_SPEC;
     BOOST_CHECK_EQUAL(spec.rev, EVMC_OSAKA);
-    // Deposits are exempt from Karst's EIP-7825 cap: the deposit validate path clamps
-    // the revision to Prague (OpEthDeposit.h revValidate) — pin the mechanism.
-    BOOST_CHECK_EQUAL(std::min(spec.rev, EVMC_PRAGUE), EVMC_PRAGUE);
+    // The deposit exemption from Karst's EIP-7825 cap (revValidate clamping to Prague)
+    // is pinned behaviourally by OpEthDepositGasTest::KarstDepositAbove7825CapAdmitted-
+    // ButNormalTxRejected — restating the clamp here was arithmetic, not a pin.
 }
 
 BOOST_AUTO_TEST_CASE(ParseAllowsKarstAfterJovian)

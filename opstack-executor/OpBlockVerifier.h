@@ -519,7 +519,9 @@ public:
             // The p2p child timestamp is already seconds; the stored parent header
             // carries internal milliseconds.
             bool noUserTxActivationBlock = false;
-            if (spec.has_da_footprint)
+            // number > 0 mirrors the scheduler lane: a Jovian-at-genesis schedule would
+            // otherwise fetch parent -1 and answer a storage fault for block 0.
+            if (spec.has_da_footprint && number > 0)
             {
                 bcos::protocol::BlockHeader::Ptr parentHeader;
                 try
