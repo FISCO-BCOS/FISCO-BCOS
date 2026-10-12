@@ -1054,7 +1054,26 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     expectedStorage[slotKey] = one;
     const auto expectedRoot = bcos::executor_v1::opstack::opEthStorageRoot(expectedStorage);
     BOOST_REQUIRE(result.seal.withdrawalsRoot.has_value());
+    BOOST_TEST_MESSAGE("seal withdrawalsRoot: 0x"
+                       << evmc::hex(evmc::bytes_view(result.seal.withdrawalsRoot->data(), 32)));
     BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->data(), expectedRoot.data(), 32), 0);
+    // EXTERNAL anchor (review F31): both sides above flow through opEthStorageRoot,
+    // so a slot-ordering/zero-skip bug in the helper would pass them both. This
+    // literal is the independently derived keccak-MPT root of the single entry
+    // {keccak256(0x00*64) => 1} (offline: tools/opstack-genesis/mpt_state_root.py,
+    // the repo's second independent MPT implementation) — the consensus-critical
+    // value must not drift from it.
+    evmc::bytes32 const goldenRoot{};
+    static_assert(sizeof(goldenRoot) == 32);
+    bcos::bytes const goldenWithdrawalsRootHex = bcos::fromHex(
+        "6961ade9fae3ecd879903fc614e5069ae6aff190e2dfb874c77a9f2b6a5efaab");
+    BOOST_REQUIRE_EQUAL(goldenWithdrawalsRootHex.size(), 32u);
+    BOOST_CHECK_MESSAGE(
+        std::equal(goldenWithdrawalsRootHex.begin(), goldenWithdrawalsRootHex.end(),
+            result.seal.withdrawalsRoot->data()),
+        "seal withdrawalsRoot 0x"
+            << evmc::hex(evmc::bytes_view(result.seal.withdrawalsRoot->data(), 32))
+            << " != golden 0x6961ade9fae3ecd879903fc614e5069ae6aff190e2dfb874c77a9f2b6a5efaab");
     // And it is NOT the empty-trie root (the sendMessage changed the state).
     const auto emptyRoot = bcos::ledger::mpt::emptyRootHash();
     BOOST_CHECK_NE(

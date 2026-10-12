@@ -1098,6 +1098,11 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
                             std::string::npos,
         "stale-header commit must be refused by the announced-hash binding, got: "
             << staleCommitErr->errorMessage());
+    // The mismatch refusal is CL-recoverable (re-parent and retry): it must carry the
+    // recoverable tag so mapDelegateError answers SYNCING, never -32603 (review F4).
+    BOOST_CHECK_MESSAGE(
+        boost::get_error_info<bcos::engine::OpSiblingReorgUnsupported>(*staleCommitErr) != nullptr,
+        "stale-header commit refusal must carry the recoverable tag");
 
     bcos::Error::Ptr commitErr;
     bool called = false;

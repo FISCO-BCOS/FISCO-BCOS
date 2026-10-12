@@ -78,11 +78,14 @@ class ImportedStore
 public:
     /// Same-hash re-put is idempotent (newPayload replay stays VALID, no double
     /// write). A same-height occupant with imported descendants rejects the
-    /// overwrite — UNLESS the occupant is canonical (@p occupantCanonical, decided
-    /// by the caller via the ledger): a canonical occupant's descendants stay
-    /// reachable through the canonical chain history, and the new block merely
-    /// awaits its own FCU (ancestor-sibling, §4.3).
-    bool put(ImportedBlock block, bool occupantCanonical = false)
+    /// overwrite — UNLESS the caller vouches THAT occupant as canonical
+    /// (@p vouchedCanonicalOccupant names the occupant's hash, decided by the
+    /// caller via the ledger): the waiver is occupant-scoped, not a height-wide
+    /// pass — a non-canonical co-tenant at the same height keeps its guard (review
+    /// F20). A canonical occupant's descendants stay reachable through the
+    /// canonical chain history, and the new block merely awaits its own FCU
+    /// (ancestor-sibling, §4.3).
+    bool put(ImportedBlock block, std::optional<bcos::h256> vouchedCanonicalOccupant = std::nullopt)
     {
         std::lock_guard lock(m_mutex);
         if (auto const it = m_blocks.find(block.hash); it != m_blocks.end())
@@ -115,7 +118,7 @@ public:
                     // switch; they must not block the new chain (review N3).
                     continue;
                 }
-                if (child.parent == hash && !occupantCanonical)
+                if (child.parent == hash && vouchedCanonicalOccupant != hash)
                 {
                     return false;
                 }
@@ -126,8 +129,11 @@ public:
         // kept the LAST one — either way put's occupancy depended on import order
         // while adoptCanonicalHead arbitrated deterministically (canonical lineage,
         // then lowest hash). rekeyOccupantLocked applies the tie half of that rule, so
-        // both writers answer the same heights the same way.
-        rekeyOccupantLocked(block.number, block.hash, occupantCanonical);
+        // both writers answer the same heights the same way. A vouched import (any
+        // voucher) is the arbitration winner here — the just-imported block in the
+        // ancestor-sibling shape the engine drives.
+        rekeyOccupantLocked(
+            block.number, block.hash, /*vouchedCanonical=*/vouchedCanonicalOccupant.has_value());
         m_blocks.emplace(block.hash, std::move(block));
         return true;
     }

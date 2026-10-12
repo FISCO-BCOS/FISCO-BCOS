@@ -39,11 +39,39 @@ convention, see DIVERGENCES.md); only its `operator_cost` is authoritative.
 Exit code 0 when every compared field matches; 1 on any mismatch; 2 on a
 malformed input.
 
-Usage: compare_snapshots.py [golden_dir] [da_matrix.json]
+Usage: compare_snapshots.py <golden_dir> <da_matrix.json>
+(Both arguments are required: without the grid the comparator cannot reconcile
+the id sets, and the grid itself is the ONLY anchor for which cases must exist —
+without an independent pin, a regeneration that drops a case from BOTH the grid
+and the snapshots would silently shrink the gate.)
 """
 
 import json
 import sys
+
+# The expected grid id set, pinned INDEPENDENTLY of da_matrix.json (review F11):
+# the grid was previously the only authority, so deleting a case from the grid
+# and regenerating all five snapshots kept both ctests green at reduced
+# coverage. A regeneration that legitimately changes the case set must update
+# this pin in the same change (the failure message says exactly that).
+EXPECTED_GRID_IDS = frozenset({
+    "baseline_isthmus",
+    "baseline_jovian",
+    "max_isthmus_scalars",
+    "max_jovian_scalars",
+    "overflow_isthmus",
+    "overflow_jovian",
+    "pre_isthmus_fjord",
+    "pre_isthmus_granite",
+    "pre_isthmus_holocene",
+    "missing_isthmus_slot8_zero",
+    "switch_ecotone",
+    "switch_fjord",
+    "switch_isthmus",
+    "switch_jovian",
+    "switch_karst",
+    "blob_jovian_blob_scalar",
+})
 
 # The registry in DIVERGENCES.md. Keep in sync with that file. The two
 # da_footprint_* tags are registered-but-never-triggered rows the registry tells
@@ -108,8 +136,13 @@ def load_grid(path):
 
 
 def main() -> int:
-    golden = sys.argv[1] if len(sys.argv) > 1 else "golden"
-    grid_path = sys.argv[2] if len(sys.argv) > 2 else None
+    if len(sys.argv) != 3:
+        print(f"usage: {sys.argv[0]} <golden_dir> <da_matrix.json>\n"
+              "(the grid argument is required — see the module docstring)",
+              file=sys.stderr)
+        return 2
+    golden = sys.argv[1]
+    grid_path = sys.argv[2]
     ends = {
         "fisco": f"{golden}/fisco/out_fisco.json",
         "opgeth": f"{golden}/opgeth/out_opgeth.json",
@@ -139,18 +172,29 @@ def main() -> int:
 
     base = data["fisco"]
     registered = {}
-    if grid_path:
-        grid_ids, registered = load_grid(grid_path)
-        for name, rows in data.items():
-            extra = sorted(set(rows) - grid_ids)
-            missing = sorted(grid_ids - set(rows))
-            for cid in extra:
-                print(f"STALE {cid} in {name}: not in the grid ({grid_path})")
-            for cid in missing:
-                print(f"MISSING {cid} from {name}: in the grid, absent from the snapshot")
-            if extra or missing:
-                print(f"mismatches: {len(extra) + len(missing)} case-set drift in {name}")
-                return 1
+    # The grid's own id set is pinned INDEPENDENTLY (EXPECTED_GRID_IDS, review
+    # F11): a case deleted from the grid and from every snapshot would otherwise
+    # pass every reconciliation below. A legitimate case-set change must update
+    # the pin in the same commit.
+    grid_ids, registered = load_grid(grid_path)
+    if grid_ids != EXPECTED_GRID_IDS:
+        dropped = sorted(EXPECTED_GRID_IDS - grid_ids)
+        added = sorted(grid_ids - EXPECTED_GRID_IDS)
+        print(f"[fatal] grid id set changed ({grid_path}): "
+              f"dropped={dropped} added={added} — update EXPECTED_GRID_IDS in the "
+              "same change as the regeneration, or the differential silently "
+              "shrinks", file=sys.stderr)
+        return 1
+    for name, rows in data.items():
+        extra = sorted(set(rows) - grid_ids)
+        missing = sorted(grid_ids - set(rows))
+        for cid in extra:
+            print(f"STALE {cid} in {name}: not in the grid ({grid_path})")
+        for cid in missing:
+            print(f"MISSING {cid} from {name}: in the grid, absent from the snapshot")
+        if extra or missing:
+            print(f"mismatches: {len(extra) + len(missing)} case-set drift in {name}")
+            return 1
 
     mismatches = 0
     compared = 0

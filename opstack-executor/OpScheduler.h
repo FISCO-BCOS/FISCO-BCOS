@@ -924,16 +924,25 @@ private:
                 auto message = fmt::format(
                     "Commit block {} does not match the announced block being committed", number);
                 OP_SCHEDULER_LOG(ERROR) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr};
+                // The announced and executed headers diverged — the head moved between
+                // execute and commit, which the CL resolves by re-parenting and
+                // retrying: the recoverable family, tagged like the execute lane so
+                // mapDelegateError answers SYNCING, never -32603 (review F4).
+                auto mismatchError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message);
+                *mismatchError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(mismatchError), nullptr};
             }
 
             if (!co_await commitContinuityCheck(number))
             {
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
-                               "Commit block continuity check failed!"),
-                    nullptr};
+                // Same recoverable family: continuity broke because the committed head
+                // advanced between execute and commit — the CL re-parents and retries.
+                auto continuityError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
+                        "Commit block continuity check failed!");
+                *continuityError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(continuityError), nullptr};
             }
 
             auto storage = co_await commitPersist(pending);

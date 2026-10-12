@@ -566,6 +566,19 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             }
             continue;
         }
+        // A tagged recoverable refusal (sibling/gap/pending racing the build) must
+        // answer SYNCING here too — mapDelegateError already does this on the
+        // newPayload lane, and the PR's taxonomy promises this class is never a
+        // -32603 internal fault on ANY lane (review F3).
+        if (executeError &&
+            boost::get_error_info<bcos::engine::OpSiblingReorgUnsupported>(*executeError) !=
+                nullptr)
+        {
+            co_return ForkchoiceUpdatedResult{
+                .payloadStatus =
+                    makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
+                .payloadId = std::nullopt};
+        }
         BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
                                   std::string("OP payload build execution failed: ") + message});
     }

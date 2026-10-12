@@ -501,8 +501,28 @@ w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
 ///    occupancy), then the same-height sibling (canonical read from vector `_op_canonical`;
 ///    Task 5 chain_fork_* carriers use the same schema)
 ///  - INVALID: assert status + latestValidHash(=parent or null) + validationError substring
-void runInvalidVector(std::string const& id)
+/// What runInvalidVector ACTUALLY asserted (review F10: the coverage gate used to
+/// count classifications/lvh/error-substrings from the vectors' DECLARED fields,
+/// which a renamed vector could satisfy without a single executed assertion).
+/// Each field is set only at the point its BOOST_CHECK ran and passed its shape.
+struct ObservedInvalidRun
 {
+    std::string classification;                 ///< branch whose assertions executed
+    std::optional<std::string> lvhShape;        ///< "parent"|"null" when that shape was checked
+    std::optional<std::string> errorSubstring;  ///< a validation_error_contains actually matched
+    /// True when the RPC shape layer rejected the request (InvalidParams): that IS
+    /// an executed assertion, of the RPC contract — but no engine message can be
+    /// matched on that lane, so message-level coverage cannot be claimed there.
+    bool rpcShapeRejected = false;
+    /// The declared error strings of RPC-shape-rejected vectors, recorded SEPARATELY
+    /// (never into errorSubstring): the gate counts them as RPC-lane coverage, and
+    /// the distinction keeps the engine-lane set honest.
+    std::set<std::string> rpcShapeErrorStrings;
+};
+
+ObservedInvalidRun runInvalidVector(std::string const& id)
+{
+    ObservedInvalidRun observed;
     auto sample =
         (id.rfind("inline_", 0) == 0) ? makeInlineInvalidSample(id) : w6test::loadInvalidSample(id);
     auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
@@ -529,6 +549,10 @@ void runInvalidVector(std::string const& id)
                 static_cast<int>(status.status) ==
                     static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing),
                 id << ": expected SYNCING, got " << static_cast<int>(status.status));
+            // Counted only when the SYNCING status assert above actually executed;
+            // the RPC shape-rejection catch below asserts a different contract and
+            // must not feed the coverage gate's SYNCING cell (review F10).
+            observed.classification = "SYNCING";
         }
         catch (const bcos::rpc::JsonRpcException& e)
         {
@@ -538,7 +562,7 @@ void runInvalidVector(std::string const& id)
             BOOST_CHECK_MESSAGE(e.code() == bcos::rpc::JsonRpcError::InvalidParams,
                 id << ": expected InvalidParams shape rejection, got " << e.code());
         }
-        return;
+        return observed;
     }
 
     // Non-SYNCING: seed pre + register parent first (after self-consistent corruption, parentHash
@@ -574,7 +598,8 @@ void runInvalidVector(std::string const& id)
     {
         // Committed-tip sibling reorg (two-pour VALID vectors) requires SYS_REORG_UNDO /
         // scheduler sibling execution — parked until ReorgUndo lands (OpScheduler.h:550).
-        return;
+        // Parked coverage must not count: no assertion executes, so observed stays empty.
+        return observed;
 #ifdef FISCO_REORG_E2E  // Re-enable when SYS_REORG_UNDO / committed-tip sibling reorg lands.
         // S-DRV-6/7 stage 1: the sibling is a genuinely valid alternative block — op-geth
         // answers "VALID (side chain)" and so must this engine now (the pre-rollback
@@ -594,7 +619,8 @@ void runInvalidVector(std::string const& id)
                                 *canonicalAtHeight == request.executionPayload.blockHash,
             id << ": sibling commit must switch SYS_NUMBER_2_HASH at the height to the sibling's "
                << "hash");
-        return;
+        observed.classification = "VALID";
+        return observed;
 #endif
     }
 
@@ -615,7 +641,7 @@ void runInvalidVector(std::string const& id)
             // swallowing an -32603 here would turn a vector into a zero-assertion pass.
             BOOST_CHECK_MESSAGE(e.code() == bcos::rpc::JsonRpcError::InvalidParams,
                 id << ": expected InvalidParams shape rejection, got " << e.code());
-            return;
+            return observed;
         }
         if (classification == "-38005")
         {
@@ -628,6 +654,7 @@ void runInvalidVector(std::string const& id)
                                "Isthmus+ payloads require engine_newPayloadV4") !=
                            std::string::npos;
                 });
+            observed.classification = "-38005";
         }
         else if (classification == "-32603")
         {
@@ -652,8 +679,9 @@ void runInvalidVector(std::string const& id)
                    << (importStatus.validationError ? " : " + *importStatus.validationError : ""));
             if (!imported && !syncing)
             {
-                return;
+                return observed;
             }
+            observed.classification = "-32603";
             if (imported)
             {
                 // Post-cutover equivalent of the old service.hasImportedBlock probe: a
@@ -680,7 +708,7 @@ void runInvalidVector(std::string const& id)
                                  .has_value());
             }
         }
-        return;
+        return observed;
     }
 
     // INVALID (default path)
@@ -696,6 +724,7 @@ void runInvalidVector(std::string const& id)
         BOOST_CHECK_MESSAGE(static_cast<int>(status.status) ==
                                 static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid),
             id << ": expected INVALID, got " << static_cast<int>(status.status));
+        observed.classification = "INVALID";
         // An INVALID vector must declare latest_valid_hash ("parent"|null); missing =
         // malformed corpus, fail loudly rather than reading the missing field as null and
         // asserting the wrong thing (stateRoot corruption returning parent would false-fail
@@ -708,11 +737,12 @@ void runInvalidVector(std::string const& id)
         {
             BOOST_CHECK_MESSAGE(
                 !status.latestValidHash.has_value(), id << ": latestValidHash should be null");
+            observed.lvhShape = "null";
         }
         else
         {
-            // Blob invalid vectors: parent LVH is set when the rejection is tx-scoped even if
-            // the message differs from the T8n decode-time type-byte string.
+            // Blob invalid vectors: parent LVH is set when the rejection is tx-scoped even if the
+            // message differs from the T8n decode-time type-byte string.
             const bool blobEngineReject = fisco.isMember("validation_error_contains") &&
                                           fisco["validation_error_contains"].asString().find(
                                               "unsupported tx type byte 0x03") != std::string::npos;
@@ -721,6 +751,7 @@ void runInvalidVector(std::string const& id)
                 BOOST_CHECK_MESSAGE(
                     status.latestValidHash.has_value() && *status.latestValidHash == parentHash,
                     id << ": latestValidHash should be parent");
+                observed.lvhShape = "parent";
             }
         }
         if (consumer != "executor" && fisco.isMember("validation_error_contains"))
@@ -750,6 +781,13 @@ void runInvalidVector(std::string const& id)
             BOOST_CHECK_MESSAGE(matched || blobAlt || txMissingAlt,
                 id << ": validationError missing '" << expected
                    << "', got: " << (status.validationError ? *status.validationError : "<none>"));
+            // Counted when an acceptor actually fired (review F10): blob and
+            // tx-missing vectors accept documented alternate wordings, but the
+            // assertion EXECUTED and passed — record the declared intent string.
+            if (matched || blobAlt || txMissingAlt)
+            {
+                observed.errorSubstring = expected;
+            }
         }
     }
     catch (const bcos::rpc::JsonRpcException& e)
@@ -762,7 +800,13 @@ void runInvalidVector(std::string const& id)
         BOOST_CHECK_MESSAGE(e.code() == bcos::rpc::JsonRpcError::InvalidParams,
             id << ": RPC-layer rejection must be InvalidParams (-32602), got code " << e.code()
                << ": " << e.msg());
+        observed.rpcShapeRejected = true;
+        if (fisco.isMember("validation_error_contains"))
+        {
+            observed.rpcShapeErrorStrings.insert(fisco["validation_error_contains"].asString());
+        }
     }
+    return observed;
 }
 
 /// One manifest line -> invalid-vector stem. Warning: must strip the `.json` suffix —
@@ -1197,51 +1241,48 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
     const auto names = loadInvalidManifest();
     BOOST_REQUIRE_MESSAGE(!names.empty(), "coverage: manifest has no invalid_* vectors");
     std::set<std::string> classifications;
-    std::set<std::string> lvh;  // "parent" | "null" | "absent"
+    std::set<std::string> lvh;  // "parent" | "null" (OBSERVED shapes only)
     std::set<int> staticItems;
     std::set<std::string> errStrings;
+    // Review F10: every counted cell comes from what runInvalidVector OBSERVED
+    // (the runner returns the branch/lvh-shape/error-substring whose assertions
+    // actually executed), never from the vectors' declared fields alone — a
+    // renamed or declared-only vector can no longer satisfy this gate without an
+    // executed assertion. The _static_N suffix harvest counts only when that
+    // vector's run executed an assertion (engine branch or RPC-shape rejection).
+    std::set<std::string> rpcShapeErrors;
+    auto const count = [&classifications, &lvh, &staticItems, &errStrings, &rpcShapeErrors](
+                           std::string const& id, ObservedInvalidRun const& observed) {
+        if (!observed.classification.empty() && observed.classification != "VALID")
+        {
+            classifications.insert(observed.classification);
+        }
+        if (observed.lvhShape)
+        {
+            lvh.insert(*observed.lvhShape);
+        }
+        if (observed.errorSubstring)
+        {
+            errStrings.insert(*observed.errorSubstring);
+        }
+        rpcShapeErrors.insert(
+            observed.rpcShapeErrorStrings.begin(), observed.rpcShapeErrorStrings.end());
+        const auto pos = id.rfind("_static_");
+        if (pos != std::string::npos &&
+            (!observed.classification.empty() || observed.rpcShapeRejected))
+        {
+            staticItems.insert(std::stoi(id.substr(pos + 8)));
+        }
+    };
     for (auto const& id : names)
     {
-        auto sample = w6test::loadInvalidSample(id);
-        auto const& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
-        auto const cls = fisco["classification"].asString();
-        // VALID-classified vectors are the committed-tip sibling-reorg shape — parked
-        // until SYS_REORG_UNDO/ReorgUndo lands (runInvalidVector returns before the
-        // sibling assertions). Counting them from the DECLARED field would satisfy the
-        // gate without any executed assertion; parked coverage must not count.
-        if (cls != "VALID")
-        {
-            classifications.insert(cls);
-        }
-        if (fisco.isMember("latest_valid_hash"))
-            lvh.insert(fisco["latest_valid_hash"].isNull() ? "null" :
-                                                             fisco["latest_valid_hash"].asString());
-        else
-            lvh.insert("absent");
-        if (fisco.isMember("validation_error_contains"))
-            errStrings.insert(fisco["validation_error_contains"].asString());
-        const auto pos = id.rfind("_static_");
-        if (pos != std::string::npos)
-            staticItems.insert(std::stoi(id.substr(pos + 8)));
+        count(id, runInvalidVector(id));
     }
     // Inline vectors (-38005 / sibling-fork / SYNCING satisfied inline; not in manifest).
     for (auto const* id : {"inline_invalid_stateRoot", "inline_invalid_parentUnknown",
              "inline_invalid_unsupportedFork", "inline_invalid_siblingFork"})
     {
-        auto sample = makeInlineInvalidSample(id);
-        auto const& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
-        auto const cls = fisco["classification"].asString();
-        // VALID-classified vectors are the committed-tip sibling-reorg shape — parked
-        // until SYS_REORG_UNDO/ReorgUndo lands (runInvalidVector returns before the
-        // sibling assertions). Counting them from the DECLARED field would satisfy the
-        // gate without any executed assertion; parked coverage must not count.
-        if (cls != "VALID")
-        {
-            classifications.insert(cls);
-        }
-        if (fisco.isMember("latest_valid_hash"))
-            lvh.insert(fisco["latest_valid_hash"].isNull() ? "null" :
-                                                             fisco["latest_valid_hash"].asString());
+        count(id, runInvalidVector(id));
     }
     // Required: classification (all states the runner actually asserts).
     //
@@ -1267,8 +1308,14 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
     for (int n : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
         BOOST_CHECK_MESSAGE(
             staticItems.count(n), "coverage: static item " << n << " has no vector");
-    // Required: full set of validation_error_contains target strings (corrupt fields / static faces
-    // / invalid-tx messages)
+    // Required: full set of validation_error_contains target strings. Review F10:
+    // the OBSERVED harvest can only ever count strings the engine lane actually
+    // matched; the executor-consumer strings (intrinsic gas / nonce / funds /
+    // eao / auth-list / set-code / Jovian-shape families — the corpus marks them
+    // consumer=executor, and the engine folds their RTTI into a generic message)
+    // are asserted by OpT8nReplayTest's reject path instead and are therefore NOT
+    // required here. They were previously satisfied by reading the declared field
+    // — coverage this gate never actually had.
     static const char* c_requiredErrors[] = {
         "stateRoot",
         "gasUsed",
@@ -1286,19 +1333,12 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         "invalid DA footprint in blobGasUsed field",
         "expectedBlobVersionedHashes must be an empty array on the OP path",
         "executionRequests must be a present-but-empty list on the OP path",
-        "intrinsic gas too low",
-        "nonce too low",
-        "nonce too high",
-        "insufficient funds for gas * price + value",
-        "max fee per gas less than block base fee",
-        "sender not an eoa",
-        "set code transaction must not be a create transaction",
-        "empty authorization list",
         "unsupported tx type byte 0x03",
     };
     for (auto const* s : c_requiredErrors)
-        BOOST_CHECK_MESSAGE(
-            errStrings.count(s), "coverage: validation_error_contains '" << s << "' has no vector");
+        BOOST_CHECK_MESSAGE(errStrings.count(s) || rpcShapeErrors.count(s),
+            "coverage: validation_error_contains '"
+                << s << "' has no vector (engine-matched or RPC-shape-rejected)");
 }
 
 // INT-F1 (post-cutover form): the engine's OP lane builds/imports Isthmus+ only —

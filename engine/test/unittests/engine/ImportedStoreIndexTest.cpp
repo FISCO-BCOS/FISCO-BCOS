@@ -56,7 +56,7 @@ BOOST_AUTO_TEST_CASE(AllowedCoexistenceReKeysTheHeightIndex)
     BOOST_CHECK(store.put(block('A', 0, 1)));
     // Second import at height 1 is allowed because the caller vouches the occupant
     // is canonical (ancestor-sibling shape, §4.3).
-    BOOST_CHECK(store.put(block('B', 0, 1), /*occupantCanonical=*/true));
+    BOOST_CHECK(store.put(block('B', 0, 1), /*vouchedCanonicalOccupant=*/hashOf('A')));
     BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('B'));
     BOOST_CHECK(store.hasBlock(hashOf('A')));
     BOOST_CHECK(store.hasBlock(hashOf('B')));
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(BelowTipSwitchDetachesAbandonedBranchBelowHead)
     BOOST_CHECK(store.put(block('A', 0, 0)));
     BOOST_CHECK(store.put(block('B', 'A', 1)));
     BOOST_CHECK(store.put(block('C', 'B', 2)));
-    BOOST_CHECK(store.put(block('D', 'A', 1), /*occupantCanonical=*/true));
+    BOOST_CHECK(store.put(block('D', 'A', 1), /*vouchedCanonicalOccupant=*/hashOf('B')));
     BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('D'));
 
     // Switch-SetCanonical to D at height 1 (below the old tip 2).
@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE(SwitchAwayAndBackReindexesLiveOccupant)
     BOOST_CHECK(store.put(block('A', 0, 1)));
     BOOST_CHECK(store.put(block('B', 'A', 2)));
     // Switch to a sibling chain: A' at 1 (canonical occupant shape).
-    BOOST_CHECK(store.put(block('D', 0, 1), /*occupantCanonical=*/true));
+    BOOST_CHECK(store.put(block('D', 0, 1), /*vouchedCanonicalOccupant=*/hashOf('A')));
     store.adoptCanonicalHead(1, hashOf('D'));
     BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('D'));
     BOOST_CHECK(!store.occupantAt(2).has_value());  // B detached, height 2 vacated
@@ -180,7 +180,7 @@ BOOST_AUTO_TEST_CASE(CanonicalAncestorWinsHeightOverLiveSibling)
     // S must not take height 100 from the canonical ancestor, and its body stays
     // hash-addressable for re-import. hasBlock is addressability (true for detached
     // bodies), so the detach itself is asserted on the stored entry.
-    BOOST_CHECK(store.put(block('S', 0, 100), /*occupantCanonical=*/true));
+    BOOST_CHECK(store.put(block('S', 0, 100), /*vouchedCanonicalOccupant=*/hashOf('A')));
     store.adoptCanonicalHead(102, hashOf('C'));
     BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
     BOOST_CHECK_EQUAL(*store.occupantAt(102), hashOf('C'));
@@ -203,12 +203,12 @@ BOOST_AUTO_TEST_CASE(SameHeightOffLineageTieResolvesDeterministically)
         if (!flipOrder)
         {
             BOOST_CHECK(store.put(block('X', 'B', 102)));
-            BOOST_CHECK(store.put(block('Y', 'B', 102), /*occupantCanonical=*/true));
+            BOOST_CHECK(store.put(block('Y', 'B', 102), /*vouchedCanonicalOccupant=*/hashOf('X')));
         }
         else
         {
             BOOST_CHECK(store.put(block('Y', 'B', 102)));
-            BOOST_CHECK(store.put(block('X', 'B', 102), /*occupantCanonical=*/true));
+            BOOST_CHECK(store.put(block('X', 'B', 102), /*vouchedCanonicalOccupant=*/hashOf('Y')));
         }
         store.adoptCanonicalHead(101, hashOf('B'));
         BOOST_CHECK_EQUAL(*store.occupantAt(102), expected);
@@ -224,7 +224,9 @@ BOOST_AUTO_TEST_CASE(BelowHeadOldBranchBlockDetachedWhenDecided)
 {
     bcos::engine::ImportedStore store;
     BOOST_CHECK(store.put(block('A', 0, 100)));
-    BOOST_CHECK(store.put(block('D', 0, 100), /*occupantCanonical=*/true));  // sibling at 100
+    BOOST_CHECK(
+        store.put(block('D', 0, 100), /*vouchedCanonicalOccupant=*/hashOf('A')));  // sibling
+                                                                                   // at 100
     BOOST_CHECK(store.put(block('B', 'D', 101)));
     BOOST_CHECK(store.put(block('C', 'B', 102)));
     store.adoptCanonicalHead(102, hashOf('C'));
@@ -251,7 +253,7 @@ BOOST_AUTO_TEST_CASE(DescendantConflictRefusesUnvouchedOverwrite)
     BOOST_CHECK(!store.put(block('D', 'A', 1)));
     BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('B'));
     // The canonical voucher (the caller decided B is canonical) is the documented bypass.
-    BOOST_CHECK(store.put(block('D', 'A', 1), /*occupantCanonical=*/true));
+    BOOST_CHECK(store.put(block('D', 'A', 1), /*vouchedCanonicalOccupant=*/hashOf('B')));
     BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('D'));
 }
 
@@ -263,7 +265,7 @@ BOOST_AUTO_TEST_CASE(SameHashReimportRelivensAndRekeys)
     BOOST_CHECK(store.put(block('A', 0, 0)));
     BOOST_CHECK(store.put(block('B', 'A', 1)));
     BOOST_CHECK(store.put(block('C', 'B', 2)));
-    BOOST_CHECK(store.put(block('D', 'A', 1), /*occupantCanonical=*/true));
+    BOOST_CHECK(store.put(block('D', 'A', 1), /*vouchedCanonicalOccupant=*/hashOf('B')));
     store.adoptCanonicalHead(1, hashOf('D'));
     BOOST_CHECK(!store.occupantAt(2).has_value());  // C detached, height 2 vacated
 
