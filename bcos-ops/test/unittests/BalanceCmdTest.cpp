@@ -212,6 +212,14 @@ BOOST_AUTO_TEST_CASE(unregisteredPrecompiledHintsAtEnable)
         parseJson(out.str(), "add")["hint"].asString().find("balance enable") != std::string::npos);
     rpc.setCall(balSelector("getBalance(address)"), balCallResult(19, "0x"));
     std::ostringstream read;
+    FakeRpc byMessage;  // what a 3.18 node actually answers: status 16 + "Call address error."
+    byMessage.set("sendTransaction", balReceipt(16, "0x", "Call address error."));
+    std::ostringstream msg;
+    BOOST_CHECK_EQUAL(runBalanceOn(balConnection(byMessage),
+                          balArgs({"sub", c_balAccount, "1", "--yes", "--json"}), msg),
+        c_exitChecksFailed);
+    BOOST_CHECK(
+        parseJson(msg.str(), "sub")["hint"].asString().find("balance enable") != std::string::npos);
     BOOST_CHECK_EQUAL(
         runBalanceOn(balConnection(rpc), balArgs({"get", c_balAccount, "--json"}), read),
         c_exitChecksFailed);

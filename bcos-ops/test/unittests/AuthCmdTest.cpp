@@ -254,6 +254,13 @@ BOOST_AUTO_TEST_CASE(committeeWritesBecomeProposalsOnAnAuthChain)
         {
             BOOST_CHECK_EQUAL(json["params"][1].asBool(), false);
         }
+        if (c.argv[0] == "reset-admin")
+        {
+            // CommitteeManager.sol:228 createResetAdminProposal(newAdmin, contractAddr, …):
+            // the CLI keeps <contract> <admin>, the proposal swaps them
+            BOOST_CHECK_EQUAL(json["params"][0].asString(), c_authAccount);
+            BOOST_CHECK_EQUAL(json["params"][1].asString(), c_authContract);
+        }
         auto tx = authSentTx(rpc);
         BOOST_CHECK_EQUAL(tx.to, c_authCommittee);
         BOOST_CHECK_EQUAL(tx.input.substr(0, 8), authSel(c.proposal));

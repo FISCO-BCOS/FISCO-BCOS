@@ -55,7 +55,7 @@ constexpr std::array c_committeeWrites{
     CommitteeWrite{"propose-deploy-auth", "propose-deploy-auth", 2, true,
         "committee propose-deploy-auth <account> <true|false> [--interval N]"},
     CommitteeWrite{"propose-reset-admin", "propose-reset-admin", 2, true,
-        "committee propose-reset-admin <contract> <admin> [--interval N]"},
+        "committee propose-reset-admin <newAdmin> <contract> [--interval N]"},
     CommitteeWrite{"propose-rm-node", "propose-rm-node", 1, true,
         "committee propose-rm-node <nodeId> [--interval N]"},
     CommitteeWrite{"propose-weight", "propose-weight", 3, true,
@@ -294,7 +294,7 @@ void registerCommitteeCommand()
                 "(getProposalInfo) | propose-governor <acct> <weight> (updateGovernorProposal) | "
                 "propose-rate <p> <w> (setRateProposal) | propose-deploy-auth-type <t> "
                 "(setDeployAuthTypeProposal) | propose-deploy-auth <acct> <open> "
-                "(modifyDeployAuthProposal) | propose-reset-admin <contract> <admin> "
+                "(modifyDeployAuthProposal) | propose-reset-admin <newAdmin> <contract> "
                 "(resetAdminProposal) | propose-rm-node <nodeId> (rmNodeProposal) | "
                 "propose-weight <nodeId> <weight> <add> (setConsensusWeightProposal) | "
                 "propose-sysconfig <key> <value> (setSysConfigProposal) | propose-vote-computer "
@@ -302,7 +302,7 @@ void registerCommitteeCommand()
                 "revoke <id> (revokeProposal). Governance contracts of an auth chain (-a).",
             "info | proposals [--last N] | proposal <id> | propose-governor <acct> <weight> | "
             "propose-rate <participates> <win> | propose-deploy-auth-type <0|1|2> | "
-            "propose-deploy-auth <acct> <true|false> | propose-reset-admin <contract> <admin> | "
+            "propose-deploy-auth <acct> <true|false> | propose-reset-admin <newAdmin> <contract> | "
             "propose-rm-node <nodeId> | propose-weight <nodeId> <weight> <add> | "
             "propose-sysconfig <key> <value> | propose-vote-computer <addr> | vote <id> "
             "<true|false> | revoke <id>   [--interval <blocks>] [--account <key-file>] [--yes] "
