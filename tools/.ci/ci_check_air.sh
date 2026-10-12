@@ -4,19 +4,20 @@
 #             binary start in parallel (nonsm 3 nodes, sm 2, executor-v1 2, auth 2; each
 #             expanded by one node) and run the native scenarios from tools/.ci/scenarios/
 #             with the fisco-bcos ops subcommands; every chain logs to logs/<chain>.log and
-#             the first failure prints that chain's log tail and node error/warn lines.
-#             Phase 2 (legacy, RUN_JAVA=true): tools/.ci/java_legacy_air.sh runs the java-sdk
-#             suite (its config hard-codes 127.0.0.1:20200) and the web3 Hardhat suite on fresh
-#             chains at the default ports; console and java-sdk-demo are already replaced, and
-#             the script goes away with the native suite's second phase (spec 2026-10-12 §5.4.4).
-#             Local run: FISCO_BCOS_BIN=<binary> CI_PORT_BASE=31300,21200,9545 RUN_JAVA=false \
+#             the first failure prints that chain's log tail and node error/warn lines. The
+#             Java suites (console, java-sdk, java-sdk-demo) are replaced by these scenarios
+#             (tools/.ci/README.md maps every Java test to its native function); the web3
+#             Hardhat suite (web3_test.sh) still runs on the executor-v1 chain when the second
+#             argument is "true", before that chain's last scenario.
+#             Local run: FISCO_BCOS_BIN=<binary> CI_PORT_BASE=31300,21200,9545 \
 #                        bash tools/.ci/ci_check_air.sh <branch> <web3:true|false>
 #             from an empty working directory; see tools/.ci/README.md.
 # @ file    : ci_check_air.sh
 
 ci_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 tools_dir=$(dirname "${ci_dir}")
-console_branch="${1:-master}"
+# the first argument was the console/java-sdk branch; the workflow still passes it, nothing
+# reads it any more
 check_web3_test="${2:-false}"
 # the binary under test; CI builds it at ../build relative to tools/
 fisco_bcos_path="${FISCO_BCOS_BIN:-${tools_dir}/../build/fisco-bcos-air/fisco-bcos}"
@@ -26,9 +27,6 @@ current_path=$(pwd)
 # "p2p,rpc,web3" of the nonsm chain; sm/v1/auth add 100 to p2p and rpc, 100 to web3; the
 # expanded node adds 3 to p2p/rpc and 1 to web3 (spec §5.4.3)
 CI_PORT_BASE="${CI_PORT_BASE:-30300,20200,8545}"
-# false skips the Java suites (local runs only: the CI leg keeps them until the native suite
-# replaces them)
-RUN_JAVA="${RUN_JAVA:-true}"
 # local debugging: CI_CHAINS="nonsm auth" runs a subset; CI_KEEP_NODES=true leaves the chains
 # running (and their directories in place) after the run instead of clearing them
 chains=(${CI_CHAINS:-nonsm sm v1 auth})
@@ -259,6 +257,42 @@ print_chain_failure()
     done
 }
 
+# ---------------------------------------------------------------------------- web3
+# web3_suite <chain> <node_dir>: the Hardhat corpus (web3_test.sh) against the executor-v1
+# chain's web3 listener. The signing account is the admin pem build_chain generated into
+# ca/accounts; it is funded with 200 ether and tx_gas_price set to 1 through the node's own
+# subcommands over node0's socket (console addBalance / setSystemConfigByKey before, with
+# retries against RPC timeouts). Runs before scenario 17 so the corpus sees the default
+# feature set, as it always did.
+web3_suite()
+{
+    local chain="${1}"
+    local node_dir="${2}"
+    local ports=($(chain_ports "${chain}"))
+    local pem
+    pem=$(chain_governor_pem "${node_dir}")
+    [[ -f "${pem}" ]] || { LOG_ERROR "chain ${chain}: no admin pem for the web3 suite"; return 1; }
+    local account
+    account=$(pem_address "${pem}")
+    local step attempt output rc
+    for step in "balance enable" "balance add ${account} \"200000000000000000000\"" "sysconfig set tx_gas_price 0x1"; do
+        for attempt in 1 2 3; do
+            # the 21-digit amount is quoted so the argument parser keeps it a string
+            output=$(eval "\"\${fisco_bcos_path}\" ${step} --node-dir \"\${node_dir}\" --yes --json --account \"\${pem}\"" 2>&1) && rc=0 || rc=$?
+            (( rc == 0 )) && break
+            LOG_WARN "chain ${chain}: web3 setup '${step}' attempt ${attempt} failed (rc=${rc}): ${output}; retrying in 10s"
+            sleep 10
+        done
+        (( rc == 0 )) || { LOG_ERROR "chain ${chain}: web3 setup '${step}' failed"; return 1; }
+    done
+    LOG_INFO "chain ${chain}: web3 suite on 127.0.0.1:${ports[2]} with ${account}"
+    ( cd "${current_path}" && WEB3_PORT="${ports[2]}" bash "${ci_dir}/web3_test.sh" "${pem}" ) || {
+        LOG_ERROR "chain ${chain}: web3 test failed"
+        return 1
+    }
+    LOG_INFO "chain ${chain}: web3 test success"
+}
+
 # ---------------------------------------------------------------------------- scenarios
 # run_chain <chain>: start the built chain, expand, native scenarios in spec order, stop
 run_chain()
@@ -286,6 +320,9 @@ run_chain()
     scenarios+=(scenario_17_features)
     local scenario number
     for scenario in "${scenarios[@]}"; do
+        if [[ "${scenario}" == "scenario_17_features" && "${chain}" == "v1" && "${check_web3_test}" == "true" ]]; then
+            web3_suite "${chain}" "${node0}" || { LOG_ERROR "chain ${chain}: web3 suite failed"; return 1; }
+        fi
         "${scenario}" "${chain}" "${node0}" || { LOG_ERROR "chain ${chain}: ${scenario} failed"; return 1; }
         # CI_FAIL_SCENARIO=<n> (local only) fails the chain after scenario n to exercise the
         # failure report path
@@ -344,8 +381,3 @@ for chain in "${chains[@]}"; do
 done
 [[ "${CI_KEEP_NODES}" == "true" ]] || clear_node
 LOG_INFO "======== native scenarios success ========"
-
-if [[ "${RUN_JAVA}" == "true" ]]; then
-    LOG_INFO "======== legacy java-sdk suite + web3 (java_legacy_air.sh) ========"
-    bash "${ci_dir}/java_legacy_air.sh" "${console_branch}" "${check_web3_test}" || exit 1
-fi
