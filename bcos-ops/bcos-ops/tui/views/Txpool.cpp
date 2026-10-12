@@ -104,9 +104,10 @@ Element renderTxpool(Model const& _model, Frame const& _frame)
     }
     Table table(rows);
     table.SelectRow(0).Decorate(dim);
+    // the counts come from txpool_content: getPendingTxSize counts the FISCO pool only and leaves
+    // the web3 mempool out, so next to these rows it would read 0 for a full pool
     auto head = hbox({text(" pending ") | dim, text(std::to_string(pendingRows)),
-        text("  queued ") | dim, text(std::to_string(pool.rows.size() - pendingRows)),
-        text("  getPendingTxSize ") | dim, text(pending)});
+        text("  queued ") | dim, text(std::to_string(pool.rows.size() - pendingRows))});
     Elements body = {head, separatorLight()};
     body.push_back(pool.rows.empty() ? text(" the pool is empty") | dim : table.Render());
     if (!pool.error.empty())

@@ -25,6 +25,7 @@
 #include "bcos-ops/tx/PresetCall.h"
 #include "bcos-ops/tx/Presets.h"
 #include <bcos-utilities/DataConvertUtility.h>
+#include <boost/multiprecision/cpp_int.hpp>
 #include <algorithm>
 
 namespace bcos::ops::tui
@@ -81,7 +82,21 @@ std::string detailParentHash(Json::Value const& _block)
     return "-";
 }
 
-/// the node hex-encodes the nonce's decimal digits (toHex(transaction.nonce())); show the number
+/// a 0x-quantity (any length) as a decimal string; "" when _hex is not one
+std::string detailQuantity(std::string const& _hex)
+{
+    if (!_hex.starts_with("0x") || _hex.size() == 2 ||
+        _hex.find_first_not_of("0123456789abcdefABCDEF", 2) != std::string::npos)
+    {
+        return {};
+    }
+    return boost::multiprecision::cpp_int(_hex).str();
+}
+
+/// getTransaction returns toHex(transaction.nonce()) (JsonRpcImpl_2_0.cpp:216): the hex of the
+/// nonce's text. A FISCO-lane nonce is decimal text ("123" → 0x313233); an Ethereum-lane nonce is
+/// already a quantity text ("0x1" → 0x307831). Decode the text; digits are the number, a 0x text
+/// is converted, and a field that is itself a quantity (web3-shaped) is converted directly.
 std::string detailNonce(Json::Value const& _nonce)
 {
     if (!_nonce.isString())
@@ -90,22 +105,35 @@ std::string detailNonce(Json::Value const& _nonce)
     }
     auto hex = _nonce.asString();
     auto body = hex.starts_with("0x") ? hex.substr(2) : hex;
-    if (body.empty() || body.size() % 2 != 0 ||
-        body.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
+    if (!body.empty() && body.size() % 2 == 0 &&
+        body.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos)
     {
-        return hex;
-    }
-    std::string digits;
-    for (size_t i = 0; i < body.size(); i += 2)
-    {
-        auto byte = static_cast<char>(std::stoi(body.substr(i, 2), nullptr, 16));
-        if (byte < '0' || byte > '9')
+        std::string decoded;
+        bool printable = true;
+        for (size_t i = 0; i < body.size() && printable; i += 2)
         {
-            return hex;  // not a decimal text: keep the node's form
+            auto byte = static_cast<char>(std::stoi(body.substr(i, 2), nullptr, 16));
+            printable = byte >= 0x21 && byte <= 0x7e;
+            decoded += byte;
         }
-        digits += byte;
+        if (printable && !decoded.empty() &&
+            decoded.find_first_not_of("0123456789") == std::string::npos)
+        {
+            return decoded;
+        }
+        if (printable)
+        {
+            if (auto quantity = detailQuantity(decoded); !quantity.empty())
+            {
+                return quantity;
+            }
+        }
     }
-    return digits;
+    if (auto quantity = detailQuantity(hex); !quantity.empty())
+    {
+        return quantity;
+    }
+    return detailText(_nonce);
 }
 
 /// the tx hash at _index of a cached block (the node returns objects or hash strings)
