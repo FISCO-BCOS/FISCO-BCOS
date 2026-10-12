@@ -245,7 +245,7 @@ int runAmopPub(AmopTransport& _transport, Args const& _args, std::ostream& _out,
         else
         {
             _err << "publish to " << topic << " failed: code=" << result.code << " "
-                 << result.message << '\n';
+                 << sanitizeForTerminal(result.message) << '\n';
         }
         return c_exitChecksFailed;
     }

@@ -113,7 +113,8 @@ int printRpcRefusal(std::ostream& _out, OpsRpcError const& _error, bool _json)
     }
     else
     {
-        _out << "rejected: code=" << _error.code << " msg=" << _error.message << '\n';
+        _out << "rejected: code=" << _error.code << " msg=" << sanitizeForTerminal(_error.message)
+             << '\n';
     }
     return c_exitChecksFailed;
 }

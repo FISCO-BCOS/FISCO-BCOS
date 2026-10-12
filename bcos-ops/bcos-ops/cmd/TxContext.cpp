@@ -16,6 +16,7 @@
  * @file TxContext.cpp
  */
 #include "TxContext.h"
+#include "TxCmd.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/Output.h"
 #include "bcos-ops/collect/GroupFacts.h"
@@ -202,7 +203,17 @@ int runWritePreset(Connection const& _connection, Args const& _args, std::ostrea
         _out << "aborted\n";
         return c_exitUsage;
     }
-    auto result = runner.run(_preset, _params);
+    PresetResult result;
+    try
+    {
+        result = runner.run(_preset, _params);
+    }
+    catch (OpsRpcError const& e)
+    {
+        // a refusal by the node (txpool full, nonce, block limit…) has the same shape and exit
+        // code as in the tx commands
+        return printRpcRefusal(_out, e, wantJson(_args.flag("json")));
+    }
     auto hint = _hint ? _hint(result) : std::string();
     if (wantJson(_args.flag("json")))
     {

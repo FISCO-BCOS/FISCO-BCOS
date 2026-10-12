@@ -63,11 +63,16 @@ RpcCall makeHttpRpcCall(std::string _host, uint16_t _port, int _timeoutMs)
         beast::error_code result;
         bool done = false;
         // one async chain on a private io_context, run for at most _timeoutMs: the deadline
-        // covers the name resolution as well as connect / write / read
+        // covers connect / write / read. An IP literal is resolved numerically (no lookup); a
+        // host name goes through getaddrinfo, which cancel() cannot interrupt, so a hanging DNS
+        // server can hold the call past the deadline until the lookup returns
         boost::asio::io_context ioc;
         tcp::resolver resolver(ioc);
         beast::tcp_stream stream(ioc);
-        resolver.async_resolve(host, std::to_string(_port),
+        boost::system::error_code parsed;
+        boost::asio::ip::make_address(host, parsed);
+        auto flags = parsed ? tcp::resolver::flags{} : tcp::resolver::numeric_host;
+        resolver.async_resolve(host, std::to_string(_port), flags,
             [&](beast::error_code _resolved, tcp::resolver::results_type _endpoints) {
                 if (_resolved)
                 {

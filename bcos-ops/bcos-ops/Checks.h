@@ -40,7 +40,7 @@ struct Check
 {
     std::string name;
     std::string state;  // "ok" | "fail" | "skipped"
-    std::string detail;
+    std::string detail{};
     Json::Value values{Json::objectValue};
     bool ok() const { return state == "ok"; }
     bool failed() const { return state == "fail"; }

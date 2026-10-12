@@ -158,6 +158,8 @@ BOOST_AUTO_TEST_CASE(proposalsListsTheLastN)
     BOOST_CHECK_EQUAL(json["proposals"][1]["statusName"].asString(), "voting");
     BOOST_CHECK_EQUAL(json["proposals"][1]["proposalType"].asString(), "11");
     BOOST_CHECK_EQUAL(json["proposals"][1]["agreeVoters"].size(), 1U);
+    // the CLI names the type with the same mapping the TUI uses
+    BOOST_CHECK_EQUAL(json["proposals"][1]["proposalTypeName"].asString(), "governor");
     std::ostringstream one;
     runCommitteeOn(cmtConnection(rpc), cmtArgs({"proposal", "3", "--json"}), one);
     auto detail = parseJson(one.str(), "proposal");
@@ -165,6 +167,7 @@ BOOST_AUTO_TEST_CASE(proposalsListsTheLastN)
     // the detail is the same outcome a write reports: expiry block, executed flag, status name
     BOOST_CHECK_EQUAL(detail["expiresAtBlock"].asString(), "1128");  // uint256 decodes as text
     BOOST_CHECK_EQUAL(detail["statusName"].asString(), "voting");
+    BOOST_CHECK_EQUAL(detail["proposalTypeName"].asString(), "governor");
     BOOST_CHECK(!detail["executed"].asBool());
     BOOST_CHECK(!detail.isMember("blockNumberInterval"));
 }

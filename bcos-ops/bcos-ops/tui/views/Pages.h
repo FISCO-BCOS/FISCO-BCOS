@@ -37,11 +37,11 @@ struct Frame
 {
     int width = 80;
     int height = 24;
-    int64_t nowMs = 0;           // for "2s ago"; the caller passes the wall clock
-    ftxui::Element filterInput;  // the log page's filter box (an Input when interactive)
+    int64_t nowMs = 0;             // for "2s ago"; the caller passes the wall clock
+    ftxui::Element filterInput{};  // the log page's filter box (an Input when interactive)
     // the send page's Input components by field id ("key", "to", "sig", "value", "raw",
     // "p0".."p7"); a missing id renders the plain value (snapshots, tests)
-    std::map<std::string, ftxui::Element> inputs;
+    std::map<std::string, ftxui::Element> inputs{};
 };
 
 ftxui::Element renderTopBar(Model const& _model);

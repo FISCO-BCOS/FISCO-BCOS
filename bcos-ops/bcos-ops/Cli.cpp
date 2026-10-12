@@ -17,6 +17,7 @@
  */
 #include "Cli.h"
 #include "OpsError.h"
+#include "Output.h"
 #include <boost/log/core.hpp>
 #include <cstdlib>
 #include <iostream>
@@ -80,7 +81,7 @@ void printUsage(std::ostream& _out)
          << "  --rpc <host:port>  connect to a plaintext RPC port instead of --node-dir\n"
          << "  --json             force JSON output (default when stdout is not a TTY)\n"
          << "\nexit codes: 0 ok; 1 usage or connection error; 2 node reachable but a check "
-            "failed\n";
+            "failed or the node refused the request; 3 accepted but still pending (EL tx raw)\n";
 }
 
 int runOps(std::vector<std::string> const& _args, std::ostream& _out, std::ostream& _err)
@@ -119,12 +120,12 @@ int runOps(std::vector<std::string> const& _args, std::ostream& _out, std::ostre
     }
     catch (OpsError const& e)
     {
-        _err << "error: " << e.what() << '\n';
+        _err << "error: " << sanitizeForTerminal(e.what()) << '\n';
         return e.exitCode;
     }
     catch (std::exception const& e)
     {
-        _err << "error: " << e.what() << '\n';
+        _err << "error: " << sanitizeForTerminal(e.what()) << '\n';
         return c_exitUsage;
     }
 }

@@ -52,7 +52,7 @@ struct DetailRef
     // the block height (block) or the block height + hash (tx) so new rows arriving above do not
     // move the page to another object
     int64_t number = -1;  // block height or proposal id; row index while !resolved
-    std::string hash;     // tx hash (resolved) / block hash
+    std::string hash{};   // tx hash (resolved) / block hash
     bool resolved = false;
 };
 
