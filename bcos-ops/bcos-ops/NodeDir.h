@@ -42,6 +42,12 @@ struct NodeDir
     size_t txpoolLimit = 15000;
     bool authCheck = false;
     std::optional<int64_t> consensusTimeoutMs;  // config.genesis [consensus] consensus_timeout
+    // config.ini [ethereum] mode (NodeConfig::loadEthereumConfig): none / el / opstack-el
+    std::string ethereumMode = "none";
+    // config.ini [web3_rpc] (NodeConfig::loadWeb3RpcConfig defaults)
+    bool web3Enable = false;
+    std::string web3ListenIp = "127.0.0.1";
+    uint16_t web3ListenPort = 8545;
 
     /// throws OpsError{1} when <dir>/config.ini is missing or unreadable
     static NodeDir load(std::string const& _dir);
@@ -53,5 +59,7 @@ struct NodeDir
     /// <storagePath>/fisco-bcos.ipc (absolute if dir is)
     std::string ipcPath() const;
     std::string logDir() const;
+    /// host:port of the web3 listener (0.0.0.0 / :: become 127.0.0.1)
+    std::string web3Endpoint() const;
 };
 }  // namespace bcos::ops

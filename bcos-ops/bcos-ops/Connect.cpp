@@ -17,6 +17,7 @@
  */
 #include "Connect.h"
 #include "IpcClient.h"
+#include "Mode.h"
 #include "NodeDir.h"
 #include "OpsError.h"
 #include "RpcClient.h"
@@ -39,6 +40,8 @@ ConnectOptions connectOptionsFrom(Args const& _args)
     options.rpc = _args.option("rpc");
     options.connectTimeoutMs = _args.numberOr<int>("connect-timeout", 3000);
     options.requestTimeoutMs = _args.numberOr<int>("timeout", 15000);
+    options.mode = _args.option("mode");
+    options.web3 = _args.option("web3");
     return options;
 }
 
@@ -79,6 +82,26 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     return {host, static_cast<uint16_t>(port)};
 }
 
+namespace
+{
+/// mode and web3 endpoint: the flags win, then the node dir, then none / no web3
+Connection withMode(Connection _connection, ConnectOptions const& _options, NodeDir const* _node)
+{
+    _connection.mode =
+        checkedMode(_options.mode.value_or(_node != nullptr ? _node->ethereumMode : "none"));
+    if (_options.web3)
+    {
+        auto [host, port] = parseHostPort(*_options.web3);
+        _connection.web3Endpoint = host + ":" + std::to_string(port);
+    }
+    else if (_node != nullptr && _node->web3Enable)
+    {
+        _connection.web3Endpoint = _node->web3Endpoint();
+    }
+    return _connection;
+}
+}  // namespace
+
 Connection connect(ConnectOptions const& _options)
 {
     if (_options.rpc)
@@ -88,7 +111,7 @@ Connection connect(ConnectOptions const& _options)
             makeWsRpcCall(host, port, _options.connectTimeoutMs, _options.requestTimeoutMs);
         retainTransport(connection.keepAlive);
         connection.group = discoverGroup(connection.call);
-        return connection;
+        return withMode(std::move(connection), _options, nullptr);
     }
     auto node = NodeDir::load(_options.nodeDir);
     // the local socket first: zero configuration and it carries admin_*; fall back to the
@@ -103,7 +126,7 @@ Connection connect(ConnectOptions const& _options)
                 node.ipcPath(), _options.connectTimeoutMs, _options.requestTimeoutMs);
             connection.group = node.groupId;
             connection.nodeDir = node;
-            return connection;
+            return withMode(std::move(connection), _options, &node);
         }
         catch (OpsError const&)
         {
@@ -127,6 +150,6 @@ Connection connect(ConnectOptions const& _options)
     retainTransport(connection.keepAlive);
     connection.group = node.groupId;
     connection.nodeDir = node;
-    return connection;
+    return withMode(std::move(connection), _options, &node);
 }
 }  // namespace bcos::ops

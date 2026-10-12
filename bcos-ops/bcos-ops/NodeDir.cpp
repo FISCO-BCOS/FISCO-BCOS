@@ -90,6 +90,10 @@ NodeDir NodeDir::load(std::string const& _dir)
     node.logPath = ini.get<std::string>("log.log_path", "log");
     node.logFormat = ini.get<std::string>("log.format", "");
     node.txpoolLimit = ini.get<size_t>("txpool.limit", 15000);
+    node.ethereumMode = ini.get<std::string>("ethereum.mode", "none");
+    node.web3Enable = ini.get<bool>("web3_rpc.enable", false);
+    node.web3ListenIp = ini.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
+    node.web3ListenPort = static_cast<uint16_t>(ini.get<int>("web3_rpc.listen_port", 8545));
     return node;
 }
 
@@ -105,6 +109,16 @@ std::string NodeDir::rpcHost() const
 std::string NodeDir::rpcEndpoint() const
 {
     return rpcHost() + ":" + std::to_string(rpcListenPort);
+}
+
+std::string NodeDir::web3Endpoint() const
+{
+    auto host = web3ListenIp;
+    if (host == "0.0.0.0" || host == "::" || host.empty())
+    {
+        host = "127.0.0.1";
+    }
+    return host + ":" + std::to_string(web3ListenPort);
 }
 
 std::string NodeDir::ipcPath() const

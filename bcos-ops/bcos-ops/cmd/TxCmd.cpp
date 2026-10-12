@@ -21,8 +21,11 @@
 #include "bcos-ops/Args.h"
 #include "bcos-ops/Cli.h"
 #include "bcos-ops/Connect.h"
+#include "bcos-ops/HttpRpc.h"
+#include "bcos-ops/Mode.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/Output.h"
+#include "bcos-ops/RpcClient.h"
 #include "bcos-ops/tx/Abi.h"
 #include "bcos-ops/tx/PresetCall.h"
 #include "bcos-ops/tx/Smoke.h"
@@ -309,6 +312,21 @@ int runRaw(Connection const& _connection, Args const& _args, std::ostream& _out)
         throw OpsError(c_exitUsage, "usage: tx raw <signed-hex|@file>");
     }
     auto hex = normalizeRawTxHex(hexOrFile(_args.positionals()[0], "raw transaction file"));
+    if (isElMode(_connection.mode))
+    {
+        // EL modes: an Ethereum RLP transaction to the web3 listener, then poll its receipt
+        if (!_connection.web3Endpoint)
+        {
+            throw OpsError(c_exitUsage, "mode " + _connection.mode +
+                                            ": tx raw goes to eth_sendRawTransaction; enable "
+                                            "[web3_rpc] or pass --web3 host:port");
+        }
+        auto web3 = makeHttpRpcCall(*_connection.web3Endpoint, c_defaultRequestTimeoutMs);
+        auto waitMs = static_cast<int>(_args.numberOr<double>("wait", 60) * 1000);
+        auto receipt = sendRawEth(web3, hex, waitMs);
+        printReceipt(_out, receipt, wantJson(_args.flag("json")));
+        return receipt.ok() ? c_exitOk : c_exitChecksFailed;
+    }
     auto facts = chainFacts(_connection);
     auto sender = makeSender(_connection, facts, _args);
     bool json = wantJson(_args.flag("json"));
@@ -529,7 +547,9 @@ void registerTxCommand()
             "<fn> [args..] [--value N] [--nonce S] [--block-limit N] | sign <addr> --abi <abi> "
             "<fn> "
             "[args..] (sign only, prints the raw hex) | raw <hex|@file> (console: sendTransaction "
-            "with a signed tx) | get <hash> [--proof]   [--account <pem|hex-key>] [--node-dir "
+            "with a signed tx; EL modes: eth_sendRawTransaction on the web3 listener, receipt "
+            "polled up to --wait 60 s) | get <hash> [--proof]   [--account <pem|hex-key>] "
+            "[--mode none|el|opstack-el] [--web3 host:port] [--node-dir "
             "<dir> | --rpc <host:port>] [--json]",
             {"proof"}, runTx});
 }

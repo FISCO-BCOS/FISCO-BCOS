@@ -33,6 +33,8 @@ struct ConnectOptions
     std::optional<std::string> rpc;  // host:port
     int connectTimeoutMs = 3000;
     int requestTimeoutMs = 15000;
+    std::optional<std::string> mode;  // --mode: overrides the node dir's [ethereum].mode
+    std::optional<std::string> web3;  // --web3 host:port: overrides the node dir's [web3_rpc]
     bool allowIpc = true;
     bool allowRpc = true;
 };

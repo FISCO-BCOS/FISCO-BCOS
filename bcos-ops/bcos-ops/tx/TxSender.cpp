@@ -24,7 +24,9 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <sstream>
+#include <thread>
 
 namespace bcos::ops
 {
@@ -209,5 +211,77 @@ std::string normalizeRawTxHex(std::string const& _text)
         throw OpsError(c_exitUsage, "raw transaction is not hex");
     }
     return hex;
+}
+namespace
+{
+int64_t ethQuantity(Json::Value const& _value, int64_t _default)
+{
+    if (_value.isIntegral())
+    {
+        return _value.asInt64();
+    }
+    if (!_value.isString() || _value.asString().empty())
+    {
+        return _default;
+    }
+    try
+    {
+        return std::stoll(_value.asString(), nullptr, 0);  // "0x1a" and "26" alike
+    }
+    catch (std::exception const&)
+    {
+        return _default;
+    }
+}
+}  // namespace
+
+Receipt receiptFromEth(Json::Value const& _json)
+{
+    Receipt receipt;
+    receipt.raw = _json;
+    receipt.txHash = _json.get("transactionHash", "").asString();
+    receipt.status = ethQuantity(_json["status"], 0) == 1 ? 0 : 1;
+    receipt.blockNumber = ethQuantity(_json["blockNumber"], -1);
+    receipt.gasUsed = std::to_string(ethQuantity(_json["gasUsed"], 0));
+    receipt.contractAddress =
+        _json["contractAddress"].isString() ? _json["contractAddress"].asString() : "";
+    return receipt;
+}
+
+Receipt sendRawEth(RpcCall const& _web3, std::string const& _hex, int _waitMs, int _pollMs,
+    std::atomic<bool> const* _stop)
+{
+    Json::Value params(Json::arrayValue);
+    params.append("0x" + normalizeRawTxHex(_hex));
+    auto hash = _web3("eth_sendRawTransaction", params).asString();
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(_waitMs);
+    while (true)
+    {
+        Json::Value query(Json::arrayValue);
+        query.append(hash);
+        auto result = _web3("eth_getTransactionReceipt", query);
+        if (result.isObject())
+        {
+            auto receipt = receiptFromEth(result);
+            if (receipt.txHash.empty())
+            {
+                receipt.txHash = hash;
+            }
+            return receipt;
+        }
+        if (std::chrono::steady_clock::now() >= deadline || (_stop != nullptr && _stop->load()))
+        {
+            Receipt pending;
+            pending.txHash = hash;
+            pending.status = -1;
+            pending.message = "pending";
+            pending.raw["transactionHash"] = hash;
+            pending.raw["status"] = Json::nullValue;
+            pending.raw["message"] =
+                "pending: no receipt within " + std::to_string(_waitMs / 1000) + "s";
+            return pending;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(_pollMs));
+    }
 }
 }  // namespace bcos::ops

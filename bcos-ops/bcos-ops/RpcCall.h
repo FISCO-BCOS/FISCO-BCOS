@@ -44,6 +44,10 @@ struct Connection
     std::string group;
     std::string endpoint;
     std::optional<NodeDir> nodeDir;
+    // [ethereum].mode of the node (or --mode): none / el / opstack-el; see Mode.h
+    std::string mode = "none";
+    // host:port of the plaintext web3 HTTP listener when it is enabled (or --web3)
+    std::optional<std::string> web3Endpoint;
     std::shared_ptr<void> keepAlive;         // owns the transport
     std::shared_ptr<bcos::cppsdk::Sdk> sdk;  // set by makeWsRpcCall only (AMOP lives there)
 };

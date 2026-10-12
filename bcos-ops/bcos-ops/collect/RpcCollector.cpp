@@ -17,6 +17,7 @@
  */
 #include "RpcCollector.h"
 #include "GroupFacts.h"
+#include "bcos-ops/Mode.h"
 #include "bcos-ops/OpsError.h"
 #include <chrono>
 
@@ -78,7 +79,7 @@ std::string discoverGroup(RpcCall const& _call)
 }
 
 NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
-    std::string const& _source, LocalFallbacks const& _fallbacks)
+    std::string const& _source, LocalFallbacks const& _fallbacks, std::string const& _mode)
 {
     NodeStatus status;
     status.source = _source;
@@ -88,24 +89,35 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
     status.groupId = _group;
     std::string const node;  // empty: the node that serves the connection
 
-    tryCall(status, _call, "getConsensusStatus", params(_group, node),
-        {"nodeID", "isConsensusNode", "view", "leaderIndex", "changeCycle", "inTimeout",
-            "consensusNodesNum", "connectedGroupNodes", "minRequiredQuorum"},
-        [&](Json::Value const& v) {
-            status.nodeId = v["nodeID"].asString();
-            status.isConsensusNode = v["isConsensusNode"].asBool();
-            status.view = asInt64(v["view"]);
-            status.leaderIndex = asInt64(v["leaderIndex"]);
-            status.changeCycle = asInt64(v["changeCycle"]);
-            status.inTimeout = v["timeout"].asBool();
-            status.consensusNodesNum = asInt64(v["consensusNodesNum"]);
-            status.connectedGroupNodes = asInt64(v["connectedNodeList"]);
-            status.minRequiredQuorum = asInt64(v["minRequiredQuorum"]);
-            if (v.isMember("consensusTimeout"))  // 3.18+: the node reports its own period
-            {
-                status.consensusTimeoutMs = asInt64(v["consensusTimeout"]);
-            }
-        });
+    status.mode = _mode;
+    auto const consensusFields = {"nodeID", "isConsensusNode", "view", "leaderIndex", "changeCycle",
+        "inTimeout", "consensusNodesNum", "connectedGroupNodes", "minRequiredQuorum"};
+    if (isElMode(_mode))
+    {
+        for (auto const* field : consensusFields)
+        {
+            status.missing(field, "el mode: no PBFT (getConsensusStatus not sent)");
+        }
+    }
+    else
+    {
+        tryCall(status, _call, "getConsensusStatus", params(_group, node), consensusFields,
+            [&](Json::Value const& v) {
+                status.nodeId = v["nodeID"].asString();
+                status.isConsensusNode = v["isConsensusNode"].asBool();
+                status.view = asInt64(v["view"]);
+                status.leaderIndex = asInt64(v["leaderIndex"]);
+                status.changeCycle = asInt64(v["changeCycle"]);
+                status.inTimeout = v["timeout"].asBool();
+                status.consensusNodesNum = asInt64(v["consensusNodesNum"]);
+                status.connectedGroupNodes = asInt64(v["connectedNodeList"]);
+                status.minRequiredQuorum = asInt64(v["minRequiredQuorum"]);
+                if (v.isMember("consensusTimeout"))  // 3.18+: the node reports its own period
+                {
+                    status.consensusTimeoutMs = asInt64(v["consensusTimeout"]);
+                }
+            });
+    }
 
     try
     {
