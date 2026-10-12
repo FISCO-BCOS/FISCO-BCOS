@@ -76,29 +76,38 @@ int runFeatures(Connection const& _connection, Args const& _args, std::ostream& 
     return c_exitOk;
 }
 
-int runEnableFeatures(Connection const& _connection, Args const& _args, std::ostream& _out)
+}  // namespace
+
+int runEnableFeaturesOn(Connection const& _connection, Args const& _args, std::ostream& _out,
+    std::vector<std::string> const& _requested, std::string const& _hint)
 {
-    std::vector<std::string> requested(_args.positionals().begin() + 1, _args.positionals().end());
-    if (requested.empty())
+    if (_requested.empty())
     {
         throw OpsError(c_exitUsage, "usage: sysconfig enable-features <flag> [flag...]");
     }
-    auto order = featureEnableOrder(requested);  // validates the names before any prompt
+    auto order = featureEnableOrder(_requested);  // validates the names before any prompt
     auto const* preset = findPreset("sysconfig", "set");
     std::string listed;
     for (auto const& name : order)
     {
         listed += (listed.empty() ? "" : " ") + name;
     }
-    if (!confirmWrite(_args, _out, *preset, std::string(preset->to), {listed, "1"}))
+    // on an auth chain every flag is one createSetSysConfigProposal (spec §5.1.5)
+    auto routing = routingFor(_connection, _args, *preset);
+    auto facts = chainFacts(_connection);
+    auto sender = makeSender(_connection, facts, _args);
+    PresetRunner runner(*sender, facts.sm, _connection.call, _connection.group);
+    runner.setRouting(routing);
+    bool viaProposal = runner.routesThroughProposal(*preset);
+    auto const* committeePreset = viaProposal ? PresetRunner::proposalPreset(*preset) : nullptr;
+    if (!confirmWrite(_args, _out, *preset, std::string(preset->to), {listed, "1"},
+            viaProposal ? "proposal" : "direct",
+            committeePreset != nullptr ? std::string(committeePreset->signature) : ""))
     {
         _out << "aborted\n";
         return c_exitUsage;
     }
-    auto facts = chainFacts(_connection);
-    auto sender = makeSender(_connection, facts, _args);
-    PresetRunner runner(*sender, facts.sm);
-    auto steps = enableFeatures(_connection.call, _connection.group, runner, requested);
+    auto steps = enableFeatures(_connection.call, _connection.group, runner, _requested);
     bool ok = true;
     for (auto const& step : steps)
     {
@@ -108,10 +117,15 @@ int runEnableFeatures(Connection const& _connection, Args const& _args, std::ost
     {
         Json::Value value;
         value["ok"] = ok;
+        value["mode"] = viaProposal ? "proposal" : "direct";
         value["steps"] = Json::Value(Json::arrayValue);
         for (auto const& step : steps)
         {
             value["steps"].append(step.toJson());
+        }
+        if (!_hint.empty())
+        {
+            value["hint"] = _hint;
         }
         printJson(_out, value);
     }
@@ -120,6 +134,11 @@ int runEnableFeatures(Connection const& _connection, Args const& _args, std::ost
         for (auto const& step : steps)
         {
             _out << std::left << std::setw(56) << step.name << step.action;
+            if (step.result && step.result->proposal)
+            {
+                _out << " (proposal " << step.result->proposal->id << " "
+                     << step.result->proposal->statusName << ")";
+            }
             if (step.result && step.result->code && *step.result->code != 0)
             {
                 _out << " (" << step.result->codeName << ")";
@@ -130,10 +149,16 @@ int runEnableFeatures(Connection const& _connection, Args const& _args, std::ost
             }
             _out << '\n';
         }
+        if (!_hint.empty())
+        {
+            _out << _hint << '\n';
+        }
     }
     return ok ? c_exitOk : c_exitChecksFailed;
 }
 
+namespace
+{
 int runSysconfig(Args const& _args, std::ostream& _out, std::ostream& _err)
 {
     (void)_err;
@@ -167,7 +192,9 @@ int runSysconfigOn(Connection const& _connection, Args const& _args, std::ostrea
     }
     if (sub == "enable-features")
     {
-        return runEnableFeatures(_connection, _args, _out);
+        return runEnableFeaturesOn(_connection, _args, _out,
+            std::vector<std::string>(_args.positionals().begin() + 1, _args.positionals().end()),
+            "");
     }
     throw OpsError(c_exitUsage, "unknown sysconfig subcommand: " + sub);
 }

@@ -39,6 +39,8 @@ std::map<std::string, Command>& commandTable()
     static bool const registered = []() {
         registerAccountCommand();
         registerAmopCommand();
+        registerAuthCommand();
+        registerBalanceCommand();
         registerConsensusCommand();
         registerSysconfigCommand();
         registerStatusCommand();
