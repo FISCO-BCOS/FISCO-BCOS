@@ -262,6 +262,8 @@ run_chain()
     local started=${SECONDS}
     # the patched ABI copies scenarios 2/9 hand to `tx deploy` (scenarios/common.sh contract_abi)
     ci_abi_list=$(mktemp "${TMPDIR:-/tmp}/ci-abi-files-${chain}.XXXXXX") || return 1
+    # every return path (start/consensus/expand failures, CI_FAIL_SCENARIO) drops the copies
+    trap contract_abi_cleanup RETURN
     wait_and_start "$(chain_nodes_dir "${chain}")" || return 1
     check_consensus "${chain}" || return 1
     expand_node "${chain}" || return 1
@@ -276,7 +278,7 @@ run_chain()
     [[ "${chain}" == "nonsm" ]] && scenarios+=(scenario_20_ops_status)
     local scenario number
     for scenario in "${scenarios[@]}"; do
-        "${scenario}" "${chain}" "${node0}" || { LOG_ERROR "chain ${chain}: ${scenario} failed"; contract_abi_cleanup; return 1; }
+        "${scenario}" "${chain}" "${node0}" || { LOG_ERROR "chain ${chain}: ${scenario} failed"; return 1; }
         # CI_FAIL_SCENARIO=<n> (local only) fails the chain after scenario n to exercise the
         # failure report path
         number=${scenario#scenario_}
@@ -286,7 +288,6 @@ run_chain()
             return 1
         fi
     done
-    contract_abi_cleanup
     [[ "${CI_KEEP_NODES}" == "true" ]] || stop_chain_processes "${chain}"
     LOG_INFO "chain ${chain}: all native scenarios passed in $((SECONDS - started))s"
 }

@@ -202,16 +202,26 @@ scenario_13_viewchange()
     # a view beyond the one before the stop, reaching a leader
     local trace
     trace=$(ops "${survivor}" log viewchange --since 10m --last 50) || return 1
-    assert_jq "${trace}" '[.rows[] | select(.reason == "consensus_timeout" and (.toView | tonumber) > '"${view_before}"' and .newLeader != "-" and .newLeader != "")] | length > 0' \
-        "log viewchange has a consensus_timeout round after view ${view_before} with a new leader" || return 1
+    # PBFTEngine.cpp:1617 emits ViewChangeTriggered for consensus_timeout and for
+    # f_plus_one_higher_view (a follower joins a view change it saw from f+1 peers); the row
+    # must name a leader other than the stopped one, which idle-chain timeout flapping (a view
+    # change that lands back on the same leader) cannot satisfy
+    assert_jq "${trace}" '[.rows[] | select((.reason == "consensus_timeout" or .reason == "f_plus_one_higher_view") and (.toView | tonumber) > '"${view_before}"' and .newLeader != "-" and .newLeader != "" and (.newLeader | tostring) != "'"${leader_index}"'")] | length > 0' \
+        "log viewchange has a timeout/f+1 round after view ${view_before} naming a leader other than index ${leader_index}" || return 1
     # 3 of 4 sealers keep producing
     local smoke
     smoke=$(ops "${survivor}" tx smoke --timeout 60000) || { echo "${smoke}"; return 1; }
     assert_jq "${smoke}" '.ok == true' "tx smoke with the leader down" || return 1
+    # the stopped node already held height_before; it must catch up to what the survivors
+    # produced while it was down
+    local height_after
+    height_after=$(ops "${survivor}" attach getBlockNumber) || return 1
+    [[ "${height_after}" =~ ^[0-9]+$ ]] && (( height_after > height_before )) ||
+        { scenario_fail "survivor height ${height_after} did not advance past ${height_before} with the leader down"; return 1; }
     bash "${leader_dir}/start.sh" >/dev/null 2>&1
     local restarted=${SECONDS}
     status=$(wait_status_ok "${leader_dir}" 120) || return 1
-    assert_jq "${status}" '.chain.blockNumber >= '"${height_before}" "restarted leader is at or past the pre-stop height" || return 1
+    assert_jq "${status}" '.chain.blockNumber >= '"${height_after}" "restarted leader reached the survivors' height ${height_after}" || return 1
     echo "scenario 13 ok on ${chain}: timeout seen ${saw_timeout:--}s / new leader ${new_leader_at}s after stop; $(basename "${leader_dir}") back with all checks ok $((SECONDS - restarted))s after restart"
 }
 
@@ -233,6 +243,9 @@ scenario_14_sync()
     [[ -z "${pids}" ]] || kill -9 ${pids} 2>/dev/null || true
     rm -rf "${new_node}/data" "${new_node}/log"
     # 20 transactions the node will have to fetch: one deploy plus 19 sets
+    local before
+    before=$(ops "${node_dir}" attach getBlockNumber) || return 1
+    [[ "${before}" =~ ^[0-9]+$ ]] || { scenario_fail "getBlockNumber before the backlog: ${before}"; return 1; }
     local abi deploy deployed sent i
     abi=$(contract_abi HelloWorld) || return 1
     deploy=$(ops "${node_dir}" tx deploy "$(contract_bin HelloWorld "${chain}")" --abi "${abi}" --timeout 60000) || { echo "${deploy}"; return 1; }
@@ -242,8 +255,12 @@ scenario_14_sync()
         sent=$(ops "${node_dir}" tx send "${deployed}" --abi "${abi}" set "sync ${i}" --timeout 60000) || { echo "${sent}"; return 1; }
         assert_jq "${sent}" '.status == 0' "tx send set ${i}" || return 1
     done
+    # the backlog is 20 blocks (every tx seals its own block on an idle chain); a status
+    # time-out must not turn into target=null, which jq compares as smaller than any number
     local target
-    target=$(ops "${node_dir}" status | jq -r '.chain.blockNumber') || return 1
+    target=$(ops "${node_dir}" attach getBlockNumber) || return 1
+    [[ "${target}" =~ ^[0-9]+$ ]] && (( target >= before + 20 )) ||
+        { scenario_fail "height after 20 transactions is ${target}, expected >= $((before + 20))"; return 1; }
     bash "${new_node}/start.sh" >/dev/null 2>&1
     local started=${SECONDS} waited=0 probe first_state="" lag_seen="" caught=""
     while (( waited < 180 )); do
@@ -273,7 +290,11 @@ scenario_14_sync()
     [[ -n "${lag_seen}" ]] || { scenario_fail "status never reported a numeric sync.lag"; return 1; }
     case "${first_state}" in
         fail) ;;
-        ok | skipped) echo "scenario 14: the node caught up before the first status probe (${first_state}); only the final state is asserted" ;;
+        ok | skipped)
+            # it answered already at the target height: nothing to watch, the final state holds
+            jq -e '.chain.blockNumber >= '"${target}" >/dev/null <<<"${probe}" ||
+                { scenario_fail "first probe said ${first_state} below the target height ${target}"; return 1; }
+            echo "scenario 14: the node caught up before the first status probe (${first_state} at height >= ${target}); only the final state is asserted" ;;
         *) scenario_fail "unexpected first sync_caught_up state ${first_state}"; return 1 ;;
     esac
     echo "scenario 14 ok on ${chain}: $(basename "${new_node}") re-synced ${target} blocks (first probe ${first_state}) in ${caught}s"
