@@ -79,10 +79,9 @@ generate_auth_account()
         LOG_INFO "Downloading ${account_script} from ${get_account_link}..."
         curl -#LO "${get_account_link}"
   fi
-  # NOTE: this account-script patch block is duplicated in
-  # tools/BcosAirBuilder/build_chain.sh's generate_auth_account (build_chain.sh
-  # is a standalone release asset, so the logic cannot be factored into a shared
-  # helper); any change here must be mirrored there.
+  # NOTE: build_chain.sh generates the admin account with `fisco-bcos account new`; the pro
+  # CI has no air binary, so this script keeps the console script until it is retired with the
+  # native CI suite (spec 2026-10-12 §5.4.4).
   # The console get_*_account.sh scripts probe the arch with the non-portable
   # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04);
   # rewrite those probes to `uname -m` and fail loudly if any probe survives
