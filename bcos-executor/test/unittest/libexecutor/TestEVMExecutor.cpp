@@ -499,7 +499,12 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result2->newEVMContractAddress(), "");
     BOOST_CHECK_EQUAL(result2->origin(), std::string(sender));
     BOOST_CHECK_EQUAL(result2->from(), std::string(address));
-    BOOST_CHECK(result2->to().empty());
+    // evmc ABI 19: the created address is derived by the VM (keccak(rlp(sender,
+    // nonce))) before the host sees the create, so the scheduler-hop message now
+    // carries it in `to` (it must survive the hop or externalCall would re-derive
+    // the FISCO formula address on resume). Was `to().empty()` under 0.21's
+    // deferred address assignment.
+    BOOST_CHECK_EQUAL(result2->to().size(), 40u);
     BOOST_CHECK_LT(result2->gasAvailable(), gas);
     BOOST_CHECK_EQUAL(result2->keyLocks().size(), 2);  // code,codeHash
     BOOST_CHECK_EQUAL(result2->keyLocks()[0], "code");
@@ -513,10 +518,13 @@ BOOST_AUTO_TEST_CASE(externalCall)
     // Clear the key lock to avoid effect
     result2->setKeyLocks({});
 
-    h256 addressCreate2(
-        "ee6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");  // ee6f30856ad3bae00b1169808488502786a13e3c
-    std::string addressString2 = addressCreate2.hex().substr(0, 40);
-    result2->setTo(addressString2);
+    // evmc ABI 19: result2 already carries the created address in `to` (derived by
+    // the VM from the creator's nonce). The 0.21 flow returned `to` empty here and
+    // this simulation injected the FISCO-formula golden
+    // (ee6f30856ad3bae00b1169808488502786a13e3c); keep whatever the executor
+    // produced so the resume path stores at the address the CREATE pushed.
+    std::string addressString2{result2->to()};
+    BOOST_CHECK_EQUAL(addressString2.size(), 40u);
 
     std::promise<ExecutionMessage::UniquePtr> executePromise3;
     executor->dmcExecuteTransaction(std::move(result2),

@@ -1,6 +1,6 @@
 diff -ruN a/CMakeLists.txt b/CMakeLists.txt
---- a/CMakeLists.txt	2026-10-11 00:00:00.000000000 +0800
-+++ b/CMakeLists.txt	2026-10-11 00:00:00.000000000 +0800
+--- a/CMakeLists.txt	2026-10-12 00:00:00.000000000 +0800
++++ b/CMakeLists.txt	2026-10-12 00:00:00.000000000 +0800
 @@ -195,4 +195,8 @@
  install(DIRECTORY ${include_dir}/
      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
@@ -11,8 +11,8 @@ diff -ruN a/CMakeLists.txt b/CMakeLists.txt
 +
  cable_add_archive_package()
 diff -ruN a/cmake/LibraryTools.cmake b/cmake/LibraryTools.cmake
---- a/cmake/LibraryTools.cmake	2026-10-11 00:00:00.000000000 +0800
-+++ b/cmake/LibraryTools.cmake	2026-10-11 00:00:00.000000000 +0800
+--- a/cmake/LibraryTools.cmake	2026-10-12 00:00:00.000000000 +0800
++++ b/cmake/LibraryTools.cmake	2026-10-12 00:00:00.000000000 +0800
 @@ -18,14 +18,18 @@
      if(CMAKE_AR)
          # Generate ar linker script.
@@ -56,8 +56,8 @@ diff -ruN a/cmake/LibraryTools.cmake b/cmake/LibraryTools.cmake
  
          get_property(enabled_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
 diff -ruN a/lib/evmone/CMakeLists.txt b/lib/evmone/CMakeLists.txt
---- a/lib/evmone/CMakeLists.txt	2026-10-11 00:00:00.000000000 +0800
-+++ b/lib/evmone/CMakeLists.txt	2026-10-11 00:00:00.000000000 +0800
+--- a/lib/evmone/CMakeLists.txt	2026-10-12 00:00:00.000000000 +0800
++++ b/lib/evmone/CMakeLists.txt	2026-10-12 00:00:00.000000000 +0800
 @@ -52,13 +52,8 @@
  if(CABLE_COMPILER_GNULIKE)
      target_compile_options(
@@ -73,8 +73,8 @@ diff -ruN a/lib/evmone/CMakeLists.txt b/lib/evmone/CMakeLists.txt
  set_target_properties(
      evmone
 diff -ruN a/lib/evmone/advanced_execution.cpp b/lib/evmone/advanced_execution.cpp
---- a/lib/evmone/advanced_execution.cpp	2026-10-11 00:00:00.000000000 +0800
-+++ b/lib/evmone/advanced_execution.cpp	2026-10-11 00:00:00.000000000 +0800
+--- a/lib/evmone/advanced_execution.cpp	2026-10-12 00:00:00.000000000 +0800
++++ b/lib/evmone/advanced_execution.cpp	2026-10-12 00:00:00.000000000 +0800
 @@ -4,11 +4,12 @@
  
  #include "advanced_execution.hpp"
@@ -89,7 +89,7 @@ diff -ruN a/lib/evmone/advanced_execution.cpp b/lib/evmone/advanced_execution.cp
  {
      state.analysis.advanced = &analysis;  // Allow accessing the analysis by instructions.
  
-@@ -19,12 +20,14 @@
+@@ -19,12 +20,15 @@
      return make_execution_result(state, state.gas_left);
  }
  
@@ -102,13 +102,14 @@ diff -ruN a/lib/evmone/advanced_execution.cpp b/lib/evmone/advanced_execution.cp
      const auto analysis = analyze(rev, container);
      auto state = std::make_unique<AdvancedExecutionState>(*msg, rev, *host, ctx, container);
 +    state->hash_fn = static_cast<evmone::VM*>(c_vm)->hash_fn;
++    state->create_address_fn = static_cast<evmone::VM*>(c_vm)->create_address_fn;
 +    state->host_ctx_for_hash = ctx;
      return execute(*state, analysis);
  }
  }  // namespace evmone::advanced
 diff -ruN a/lib/evmone/advanced_execution.hpp b/lib/evmone/advanced_execution.hpp
---- a/lib/evmone/advanced_execution.hpp	2026-10-11 00:00:00.000000000 +0800
-+++ b/lib/evmone/advanced_execution.hpp	2026-10-11 00:00:00.000000000 +0800
+--- a/lib/evmone/advanced_execution.hpp	2026-10-12 00:00:00.000000000 +0800
++++ b/lib/evmone/advanced_execution.hpp	2026-10-12 00:00:00.000000000 +0800
 @@ -13,9 +13,9 @@
  
  /// Execute the already analyzed code using the provided execution state.
@@ -122,8 +123,8 @@ diff -ruN a/lib/evmone/advanced_execution.hpp b/lib/evmone/advanced_execution.hp
 +    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size);
  }  // namespace evmone::advanced
 diff -ruN a/lib/evmone/baseline.hpp b/lib/evmone/baseline.hpp
---- a/lib/evmone/baseline.hpp	2026-10-11 00:00:00.000000000 +0800
-+++ b/lib/evmone/baseline.hpp	2026-10-11 00:00:00.000000000 +0800
+--- a/lib/evmone/baseline.hpp	2026-10-12 00:00:00.000000000 +0800
++++ b/lib/evmone/baseline.hpp	2026-10-12 00:00:00.000000000 +0800
 @@ -93,11 +93,11 @@
  
  /// Executes in Baseline interpreter using EVMC-compatible parameters.
@@ -139,8 +140,8 @@ diff -ruN a/lib/evmone/baseline.hpp b/lib/evmone/baseline.hpp
  }  // namespace baseline
  }  // namespace evmone
 diff -ruN a/lib/evmone/baseline_execution.cpp b/lib/evmone/baseline_execution.cpp
---- a/lib/evmone/baseline_execution.cpp	2026-10-11 00:00:00.000000000 +0800
-+++ b/lib/evmone/baseline_execution.cpp	2026-10-11 00:00:00.000000000 +0800
+--- a/lib/evmone/baseline_execution.cpp	2026-10-12 00:00:00.000000000 +0800
++++ b/lib/evmone/baseline_execution.cpp	2026-10-12 00:00:00.000000000 +0800
 @@ -263,7 +263,7 @@
  }  // namespace
  
@@ -150,16 +151,17 @@ diff -ruN a/lib/evmone/baseline_execution.cpp b/lib/evmone/baseline_execution.cp
  {
      const auto code = analysis.code();
      const auto code_begin = code.data();
-@@ -271,6 +271,8 @@
+@@ -271,6 +271,9 @@
  
      auto& state = vm.get_execution_state(static_cast<size_t>(msg.depth));
      state.reset(msg, rev, host, ctx, code);
 +    state.hash_fn = vm.hash_fn;
 +    state.host_ctx_for_hash = ctx;
++    state.create_address_fn = vm.create_address_fn;
  
      state.analysis.baseline = &analysis;  // Assign code analysis for instruction implementations.
  
-@@ -301,7 +303,7 @@
+@@ -301,7 +304,7 @@
  }
  
  evmc_result execute(evmc_vm* c_vm, const evmc_host_interface* host, evmc_host_context* ctx,
@@ -169,9 +171,9 @@ diff -ruN a/lib/evmone/baseline_execution.cpp b/lib/evmone/baseline_execution.cp
      auto vm = static_cast<VM*>(c_vm);
      const bytes_view container{code, code_size};
 diff -ruN a/lib/evmone/execution_state.hpp b/lib/evmone/execution_state.hpp
---- a/lib/evmone/execution_state.hpp	2026-10-11 00:00:00.000000000 +0800
-+++ b/lib/evmone/execution_state.hpp	2026-10-11 00:00:00.000000000 +0800
-@@ -163,6 +163,12 @@
+--- a/lib/evmone/execution_state.hpp	2026-10-12 00:00:00.000000000 +0800
++++ b/lib/evmone/execution_state.hpp	2026-10-12 00:00:00.000000000 +0800
+@@ -163,6 +163,16 @@
      /// This is the last field to make other fields' offsets of reasonable values.
      StackSpace stack_space;
  
@@ -181,21 +183,26 @@ diff -ruN a/lib/evmone/execution_state.hpp b/lib/evmone/execution_state.hpp
 +        nullptr;
 +    evmc_host_context* host_ctx_for_hash = nullptr;
 +
++    /// FISCO-BCOS: optional host-provided CREATE address derivation (see VM::create_address_fn).
++    evmc_address (*create_address_fn)(struct evmc_host_context* context,
++        const evmc_address* sender, uint64_t nonce) = nullptr;
++
      ExecutionState() noexcept = default;
  
      ExecutionState(const evmc_message& message, evmc_revision revision,
-@@ -185,6 +191,8 @@
+@@ -185,6 +195,9 @@
          memory.clear();
          msg = &message;
          host = {host_interface, host_ctx};
 +        hash_fn = nullptr;
 +        host_ctx_for_hash = nullptr;
++        create_address_fn = nullptr;
          rev = revision;
          return_data.clear();
          original_code = _code;
 diff -ruN a/lib/evmone/instructions.hpp b/lib/evmone/instructions.hpp
---- a/lib/evmone/instructions.hpp	2026-10-11 00:00:00.000000000 +0800
-+++ b/lib/evmone/instructions.hpp	2026-10-11 00:00:00.000000000 +0800
+--- a/lib/evmone/instructions.hpp	2026-10-12 00:00:00.000000000 +0800
++++ b/lib/evmone/instructions.hpp	2026-10-12 00:00:00.000000000 +0800
 @@ -417,7 +417,16 @@
          return {EVMC_OUT_OF_GAS, gas_left};
  
@@ -214,10 +221,27 @@ diff -ruN a/lib/evmone/instructions.hpp b/lib/evmone/instructions.hpp
      return {EVMC_SUCCESS, gas_left};
  }
  
+diff -ruN a/lib/evmone/instructions_calls.cpp b/lib/evmone/instructions_calls.cpp
+--- a/lib/evmone/instructions_calls.cpp	2026-10-12 00:00:00.000000000 +0800
++++ b/lib/evmone/instructions_calls.cpp	2026-10-12 00:00:00.000000000 +0800
+@@ -297,8 +297,11 @@
+         bytes_view{init_code_size > 0 ? &state.memory[init_code_offset] : nullptr, init_code_size};
+ 
+     evmc_message msg{.kind = to_call_kind(Op)};
+-    msg.recipient = (Op == OP_CREATE) ? compute_create_address(sender, sender_nonce) :
+-                                        compute_create2_address(sender, salt, init_code);
++    msg.recipient = (Op == OP_CREATE) ?
++        (state.create_address_fn != nullptr ?
++            state.create_address_fn(state.host_ctx_for_hash, &sender, sender_nonce) :
++            compute_create_address(sender, sender_nonce)) :
++        compute_create2_address(sender, salt, init_code);
+ 
+     // Access to the new address is warmed and never reverted (EIP-2929).
+     if (state.rev >= EVMC_BERLIN)
 diff -ruN a/lib/evmone/vm.hpp b/lib/evmone/vm.hpp
---- a/lib/evmone/vm.hpp	2026-10-11 00:00:00.000000000 +0800
-+++ b/lib/evmone/vm.hpp	2026-10-11 00:00:00.000000000 +0800
-@@ -22,6 +22,11 @@
+--- a/lib/evmone/vm.hpp	2026-10-12 00:00:00.000000000 +0800
++++ b/lib/evmone/vm.hpp	2026-10-12 00:00:00.000000000 +0800
+@@ -22,6 +22,20 @@
  public:
      bool cgoto = EVMONE_CGOTO_SUPPORTED;
  
@@ -225,6 +249,15 @@ diff -ruN a/lib/evmone/vm.hpp b/lib/evmone/vm.hpp
 +    /// Set by the embedder after evmc_create_evmone(); nullptr keeps upstream keccak256.
 +    evmc_bytes32 (*hash_fn)(struct evmc_host_context* context, const uint8_t* data, size_t size) =
 +        nullptr;
++
++    /// FISCO-BCOS: optional host-provided address derivation for the CREATE opcode.
++    /// The DMC-style executor replays a frame from its start on every scheduler hop,
++    /// so the upstream nonce-derived address (compute_create_address) is not
++    /// replay-stable there; the host derives a replay-stable
++    /// (block, context, seq)-hashed address instead. nullptr keeps the upstream
++    /// derivation. CREATE2 is untouched (its 0xff scheme is deterministic already).
++    evmc_address (*create_address_fn)(struct evmc_host_context* context,
++        const evmc_address* sender, uint64_t nonce) = nullptr;
 +
  private:
      std::vector<ExecutionState> m_execution_states;

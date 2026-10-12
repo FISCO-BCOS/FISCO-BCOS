@@ -31,6 +31,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-crypto/ChecksumAddress.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <exception>
@@ -52,6 +53,16 @@ namespace bcos::executor
 evmc_bytes32 evm_hash_fn(evmc_host_context* /*context*/, const uint8_t* data, size_t size)
 {
     return toEvmC(HostContext::hashImpl()->hash(bytesConstRef(data, size)));
+}
+
+// FISCO extension (evmone create_address_fn): the CREATE opcode asks the CREATOR's
+// HostContext for the replay-stable legacy formula address instead of deriving
+// keccak(rlp(sender, nonce)) — see HostContext::createAddressForOpcode.
+evmc_address evm_create_address_fn(
+    evmc_host_context* context, const evmc_address* sender, uint64_t nonce)
+{
+    auto& hostContext = *reinterpret_cast<HostContext*>(context);
+    return hostContext.createAddressForOpcode(*sender, nonce);
 }
 
 HostContext::HostContext(CallParameters::UniquePtr callParameters,
@@ -156,18 +167,34 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     switch (_msg->kind)
     {
     case EVMC_CREATE2:
-        // evmc ABI 19: evmc_message no longer carries create2_salt; the VM folds the
-        // salt into the recipient it computes before calling the host. The executive
-        // layer's create-address formula keeps its own (zero) salt here — documented
-        // divergence on legacy (non-feature_evm_address) chains, see the upgrade notes.
-        request->createSalt = u256(0);
-        if (features().get(
+    case EVMC_CREATE:
+    {
+        // evmc ABI 19 + the create_address_fn hook: for CREATE, evmone derives the
+        // stack address via the host hook (legacy FISCO formula — replay-stable
+        // under the DMC per-hop frame replay, unlike a nonce-derived address); for
+        // CREATE2 it uses the deterministic 0xff scheme. ABI 18 removed the
+        // result->create_address echo this lane used to feed its formula address
+        // back, so the message now carries the address in recipient and
+        // TransactionExecutive::externalCall honors it (non-empty receiveAddress)
+        // as the creation address. Top-level deploys never pass through
+        // externalRequest — their executor-built messages carry the tx's own
+        // receiveAddress — so this only affects nested opcode creates.
+        if (!concepts::bytebuffer::equalTo(
+                _msg->recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+        {
+            request->receiveAddress = evmAddress2String(_msg->recipient);
+            request->codeAddress = request->receiveAddress;
+        }
+        if (_msg->kind == EVMC_CREATE2 &&
+            !features().get(
                 ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
         {
-            request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
-            request->create = true;
+            break;  // pre-bugfix chains keep rejecting CREATE2 (historical behavior)
         }
+        request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+        request->create = true;
         break;
+    }
     case EVMC_CALL:
         request->receiveAddress = evmAddress2String(_msg->code_address);
 
@@ -218,10 +245,6 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
         return result;
     }
-    case EVMC_CREATE:
-        request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
-        request->create = true;
-        break;
     }
     if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
     {
@@ -786,6 +809,31 @@ evmc_bytes32 HostContext::getBalance(const evmc_address* _addr)
     m_responseStore.emplace_back(std::move(response));
 
     return toEvmC(result);
+}
+
+evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const
+{
+    evmc_address out{};
+    if (m_executive->blockContext().features().get(ledger::Features::Flag::feature_evm_address))
+    {
+        // EIP-style: keccak(rlp(sender, nonce)) — the same value evmone's own
+        // derivation would produce (the hook receives the get_nonce result);
+        // mirrored host-side so externalCall's feature branch and the stack agree.
+        const auto addrStr = bcos::newLegacyEVMAddressString(
+            bytesConstRef{sender.bytes, sizeof(sender.bytes)}, u256(nonce));
+        boost::algorithm::unhex(addrStr, out.bytes);
+        return out;
+    }
+    // Legacy formula: same inputs as TransactionExecutive::externalCall's nested-create
+    // assignment (hash(blockNumber, contextID, seq+1) via the block's hash handler),
+    // so the address the CREATE opcode pushes is exactly where externalCall — which
+    // honors a non-empty receiveAddress — stores the contract. Replay-stable under
+    // the DMC per-hop frame replay (a nonce-derived address is not).
+    auto& exec = *m_executive;
+    const auto addrStr = bcos::newEVMAddress(exec.blockContext().hashHandler(),
+        exec.blockContext().number(), exec.contextID(), exec.seq() + 1);
+    boost::algorithm::unhex(addrStr, out.bytes);
+    return out;
 }
 
 uint64_t HostContext::getNonce(const evmc_address* _addr)

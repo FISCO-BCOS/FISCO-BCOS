@@ -42,6 +42,8 @@ class TransactionExecutive;
 /// Host-provided hash for the KECCAK256 opcode; dispatches via GlobalHashImpl::g_hashImpl
 /// (SM3 on SM chains). Installed on evmone::VM by VMInstance.
 evmc_bytes32 evm_hash_fn(evmc_host_context* context, const uint8_t* data, size_t size);
+evmc_address evm_create_address_fn(
+    evmc_host_context* context, const evmc_address* sender, uint64_t nonce);
 
 class HostContext
 {
@@ -145,6 +147,11 @@ public:
 
     evmc_bytes32 getBalance(const evmc_address* _addr);
     uint64_t getNonce(const evmc_address* _addr);
+    /// CREATE-opcode address for a contract created by THIS contract, via the
+    /// evmone create_address_fn hook: keccak(rlp(sender, nonce)) on
+    /// feature_evm_address chains, the legacy replay-stable FISCO formula
+    /// otherwise (both mirroring TransactionExecutive::externalCall).
+    evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const;
     bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
     CallParameters::UniquePtr&& takeCallParameters();
