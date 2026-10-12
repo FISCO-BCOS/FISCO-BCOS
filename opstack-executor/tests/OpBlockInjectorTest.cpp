@@ -52,7 +52,7 @@ using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
 
 constexpr uint64_t c_chainId = 0x2105;
 constexpr int64_t c_headerGasLimit = 30'000'000;
-const bcos::Address kSender{"0x1000000000000000000000000000000000000000"};
+const bcos::Address c_sender{"0x1000000000000000000000000000000000000000"};
 
 /// A header carrying every optional field buildOpEthBlockInfo requires (OpEthBlockExecute.h):
 /// baseFee / parentBeaconBlockRoot / blobGasUsed must be set or it throws OpEthBlockError.
@@ -124,7 +124,7 @@ bcos::protocol::Transaction::Ptr buildEip1559FiscoTx()
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [tarsHolder]() { return tarsHolder.get(); });
     tx->clearSenderAndHash();
-    tx->forceSender(kSender.asBytes());
+    tx->forceSender(c_sender.asBytes());
     return tx;
 }
 
@@ -135,7 +135,7 @@ template <class StorageT>
 void fundSender(StorageT& storage, bcos::crypto::Hash::Ptr const& hashImpl)
 {
     bcos::ledger::account::EVMAccount<StorageT> account(
-        storage, kSender, bcos::ledger::account::AddressTableMode::Hex);
+        storage, c_sender, bcos::ledger::account::AddressTableMode::Hex);
     bcos::task::syncWait(account.create());
     bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
     bcos::task::syncWait(account.setNonce("0"));

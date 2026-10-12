@@ -1,5 +1,18 @@
-// FISCO BCOS
-// SPDX-License-Identifier: Apache-2.0
+/*
+ * Copyright (c) FISCO-BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 /// @file OpT8nReplayTest.cpp
 /// @brief Block-by-block replay of the op-geth-generated t8n corpus into the FISCO execution path.
 
@@ -546,13 +559,13 @@ struct ParentOnlyBlockHashes final : state::BlockHashes
 // (EIP-2/EIP-7702 malleability boundary; no ecrecover, only whether r/s/v fall
 // outside the recoverable domain.)
 
-inline const intx::uint256 kSecpN = intx::from_string<intx::uint256>(
+inline const intx::uint256 c_secpN = intx::from_string<intx::uint256>(
     "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
-inline const intx::uint256 kSecpHalfN = kSecpN >> 1;
+inline const intx::uint256 c_secpHalfN = c_secpN >> 1;
 
 inline bool structurallyUnrecoverable(const evmone::state::Authorization& a)
 {
-    return a.v > 1 || a.s > kSecpHalfN || a.r == 0 || a.r >= kSecpN || a.s == 0 || a.s >= kSecpN;
+    return a.v > 1 || a.s > c_secpHalfN || a.r == 0 || a.r >= c_secpN || a.s == 0 || a.s >= c_secpN;
 }
 
 std::optional<evmc::address> replayRecoverAuthority(const state::Authorization& auth)
@@ -2032,12 +2045,12 @@ BOOST_AUTO_TEST_CASE(StructurallyUnrecoverablePredicateBoundaries)
     };
     const intx::uint256 one{1};
     BOOST_CHECK(!structurallyUnrecoverable(mk(0, one, one)));
-    BOOST_CHECK(!structurallyUnrecoverable(mk(1, one, kSecpHalfN)));       // s == N/2 is legal
+    BOOST_CHECK(!structurallyUnrecoverable(mk(1, one, c_secpHalfN)));       // s == N/2 is legal
     BOOST_CHECK(structurallyUnrecoverable(mk(2, one, one)));               // v > 1
-    BOOST_CHECK(structurallyUnrecoverable(mk(0, one, kSecpHalfN + 1)));    // s > N/2
+    BOOST_CHECK(structurallyUnrecoverable(mk(0, one, c_secpHalfN + 1)));    // s > N/2
     BOOST_CHECK(structurallyUnrecoverable(mk(0, intx::uint256{0}, one)));  // r == 0
-    BOOST_CHECK(!structurallyUnrecoverable(mk(0, kSecpN - 1, one)));
-    BOOST_CHECK(structurallyUnrecoverable(mk(0, kSecpN, one)));            // r >= N
+    BOOST_CHECK(!structurallyUnrecoverable(mk(0, c_secpN - 1, one)));
+    BOOST_CHECK(structurallyUnrecoverable(mk(0, c_secpN, one)));            // r >= N
     BOOST_CHECK(structurallyUnrecoverable(mk(0, one, intx::uint256{0})));  // s == 0
 }
 

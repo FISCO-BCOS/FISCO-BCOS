@@ -680,10 +680,10 @@ struct JovianShapeFixture
             seedCanonicalL1FeeSlots(view);
             // The user-tx fixture sender (fjord_transfer_basic.json) needs balance for the
             // normal-block test where the tx actually executes.
-            const auto kUserSender =
+            const auto c_userSender =
                 evmc::from_hex<evmc::address>("7e5f4552091a69125d5dfcb7b8c2659029395bdf").value();
             bcos::ledger::account::EVMAccount<ViewType> usr(
-                view, kUserSender, bcos::ledger::account::AddressTableMode::Hex);
+                view, c_userSender, bcos::ledger::account::AddressTableMode::Hex);
             co_await usr.create();
             co_await usr.setBalance(bcos::u256("1000000000000000000000"));  // 1000 ETH
             co_await usr.setNonce("0");
@@ -855,10 +855,10 @@ BOOST_AUTO_TEST_CASE(MessagePasserStorageDrivesWithdrawalRoot)
     JovianShapeFixture fx;
 
     // Seed the MessagePasser (0x4200...11) with two non-zero slots.
-    const auto kPasser = bcos::executor_v1::opstack::OP_L2_TO_L1_MESSAGE_PASSER;
+    const auto c_passer = bcos::executor_v1::opstack::OP_L2_TO_L1_MESSAGE_PASSER;
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
-            fx.view, kPasser, bcos::ledger::account::AddressTableMode::Hex);
+            fx.view, c_passer, bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setNonce("1");
         evmc::bytes32 k1{};
@@ -986,7 +986,7 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     constexpr uint64_t c_isthmusTime = 1000;
     constexpr uint64_t c_jovianTime = 2000;
 
-    const auto kPasser = bcos::executor_v1::opstack::OP_L2_TO_L1_MESSAGE_PASSER;
+    const auto c_passer = bcos::executor_v1::opstack::OP_L2_TO_L1_MESSAGE_PASSER;
     const auto kSender =
         evmc::from_hex<evmc::address>("6afa9580383e6627da926b6f6ed9ab2b9c8cc693").value();
     // PUSH1 1 (value) CALLDATACOPY(dest=0,offset=4,size=32) MSTORE(32,0) KECCAK256(offset=0,size=64)
@@ -1007,7 +1007,7 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
         co_await l1.setNonce("1");
         seedCanonicalL1FeeSlots(view);
         bcos::ledger::account::EVMAccount<ViewType> mp(
-            view, kPasser, bcos::ledger::account::AddressTableMode::Hex);
+            view, c_passer, bcos::ledger::account::AddressTableMode::Hex);
         co_await mp.create();
         co_await mp.setCode(passerCode, /*abi=*/"", passerCodeHash);
         co_await mp.setNonce("1");
@@ -1037,7 +1037,7 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     evmc::bytes32 slotKey{};
     std::copy_n(slotHash.data(), 32, slotKey.bytes);
     bcos::ledger::account::EVMAccount<ViewType> mp(
-        view, kPasser, bcos::ledger::account::AddressTableMode::Hex);
+        view, c_passer, bcos::ledger::account::AddressTableMode::Hex);
     const auto slotVal = bcos::task::syncWait(mp.storage(slotKey));
     BOOST_CHECK_EQUAL(slotVal.bytes[31], 0x01);
 
