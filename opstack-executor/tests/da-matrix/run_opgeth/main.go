@@ -175,6 +175,26 @@ func main() {
 		fmt.Fprintln(os.Stderr, "run_opgeth: grid must carry an 'envelopes' object and a 'cases' array")
 		os.Exit(1)
 	}
+	// A known_divergence tag must be registered (DIVERGENCES.md) — the field used to be
+	// parsed and never read, so a typo would silently exempt nothing while the registry
+	// claimed the row was registered. Keep in sync with compare_snapshots.py.
+	knownTags := map[string]bool{
+		"karst_alias": true, "l1_fee_saturation": true, "flz_zero_clamp": true,
+		"solidity_l1_uint32_overflow": true,
+	}
+	seenIDs := make(map[string]bool, len(g.Cases))
+	for _, c := range g.Cases {
+		if seenIDs[c.ID] {
+			fmt.Fprintf(os.Stderr, "run_opgeth: duplicate case id %q\n", c.ID)
+			os.Exit(1)
+		}
+		seenIDs[c.ID] = true
+		if c.KnownDivergence != nil && !knownTags[*c.KnownDivergence] {
+			fmt.Fprintf(os.Stderr, "run_opgeth: case %q carries unknown known_divergence %q (register it in DIVERGENCES.md)\n",
+				c.ID, *c.KnownDivergence)
+			os.Exit(1)
+		}
+	}
 
 	out := make([]outItem, 0, len(g.Cases))
 	for _, c := range g.Cases {

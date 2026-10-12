@@ -138,7 +138,8 @@ if(DA_MATRIX_PYTHON)
     add_test(NAME OpDaMatrixSnapshotCheck
         COMMAND ${DA_MATRIX_PYTHON}
             ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/compare_snapshots.py
-            ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden)
+            ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden
+            ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json)
 else()
     message(WARNING "python3 not found: OpDaMatrixSnapshotCheck (the four-source "
         "differential) will not be registered — only the fisco self-check runs.")

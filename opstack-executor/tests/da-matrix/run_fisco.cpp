@@ -63,6 +63,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -403,6 +404,37 @@ int main(int argc, char** argv)
                   << " missing-from-golden\n";
         std::cout << "run_fisco: --check " << checkEnd << ": compared " << compared << " cases, "
                   << mismatches << " mismatches\n";
+
+        // The reconciliation is bidirectional: a grid row missing from the golden is a
+        // hole (above); a golden row absent from the grid is a stale snapshot entry
+        // that would outlive the grid. The comparator iterates the fisco base, so an
+        // extra row in another end only becomes visible here.
+        std::size_t staleGolden = 0;
+        {
+            std::set<std::string> gridIds;
+            for (const auto& c : cases)
+            {
+                if (c.isObject())
+                {
+                    gridIds.insert(c.get("id", "").asString());
+                }
+            }
+            for (const auto& [id, _] : golden)
+            {
+                if (!gridIds.contains(id))
+                {
+                    ++staleGolden;
+                    std::cerr << "run_fisco: STALE-IN-GOLDEN " << id << " (not in the grid)\n";
+                }
+            }
+        }
+        if (staleGolden != 0)
+        {
+            std::cerr << "run_fisco: --check " << checkEnd << ": " << staleGolden
+                      << " golden row(s) absent from the grid — regenerate the snapshot "
+                         "or drop the rows\n";
+            return 1;
+        }
 
         // Empty-run guard: zero compared cases must not report green.
         if (compared == 0)

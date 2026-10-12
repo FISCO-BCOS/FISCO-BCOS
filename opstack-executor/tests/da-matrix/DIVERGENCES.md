@@ -8,11 +8,24 @@ authoritative companion to the `known_divergence` field on grid cases
 A divergence is a case where the four ends are **not expected to agree
 bit-for-bit**, either because one end deliberately chooses different semantics
 in undefined territory, or because the fork is not implemented the same way in
-every source. The Task 6 `--check` mode reads the grid's `known_divergence`
-field; a registered row is still computed and compared by the fisco end (its
-golden carries the row) — the exemption scopes the four-source comparator
-(compare_snapshots.py), which skips the matching cases. A case NOT in this
-registry is expected to agree exactly on every source.
+every source.
+
+Two consumers read the grid's `known_divergence` field, with different rules:
+
+- `run_fisco --check` (the fisco end) always computes AND compares a registered
+  row against its golden — the row's own computation is the headline assertion
+  and must never hide behind a registration.
+- `compare_snapshots.py` (the four-source comparator) splits the registry in
+  two: the tags that mark a genuine cross-end difference — `l1_fee_saturation`,
+  `flz_zero_clamp`, `solidity_l1_uint32_overflow` — are skipped and counted
+  (the skip is printed, never silent), while `karst_alias` stays COMPARED,
+  because its ends agree *by construction* and that agreement is the free
+  assertion the row carries.
+
+An unknown tag is fatal in both consumers (a typo must not silently exempt a
+case), and the snapshot id set must equal the grid's id set in every end (a
+stale or missing row fails). A case NOT in this registry is expected to agree
+exactly on every source.
 
 ## Registry
 
