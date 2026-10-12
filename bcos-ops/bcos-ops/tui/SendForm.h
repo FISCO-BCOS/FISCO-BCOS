@@ -132,4 +132,10 @@ SendRequest sendFormRequest(SendForm const& _form, SendContext const& _context);
 /// the confirmation rows (mode / to / method / params …) the same way the CLI prints them
 std::vector<std::pair<std::string, std::string>> sendConfirmRows(
     SendRequest const& _request, SendContext const& _context);
+/// the proposal detail's key map (gov page, ticket 16): `v` vote for, `x` vote against, `d`
+/// revoke open the confirmation layer of the committee preset for _proposalId; Enter in the
+/// layer submits (form.pending), Esc cancels. No key loaded → form.notice, no layer. Other
+/// keys → toNav
+SendAction govFormHandle(
+    SendForm& _form, SendContext const& _context, int64_t _proposalId, ftxui::Event _event);
 }  // namespace bcos::ops::tui
