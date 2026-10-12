@@ -571,6 +571,31 @@ void registerParentHeader(MLS& multiLayerStorage, bcos::protocol::BlockFactory& 
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
+// registerParentHeader with a caller-chosen Holocene extraData (the original fixes
+// {denominator 250, elasticity 6}); used by the pricing-dispatch boundary cases.
+void registerParentHeaderWithExtraData(MLS& multiLayerStorage,
+    bcos::protocol::BlockFactory& blockFactory, int64_t number, int64_t timestampMs,
+    std::string_view extraDataHex)
+{
+    auto header = blockFactory.blockHeaderFactory()->createBlockHeader();
+    header->setNumber(number);
+    header->setTimestamp(timestampMs);
+    header->setGasLimit(30'000'000);
+    header->setGasUsed(0);
+    header->setExtraData(bcos::fromHex(extraDataHex));
+    header->setBaseFee(bcos::u256(1'000'000'000));
+    bcos::bytes encoded;
+    header->encode(encoded);
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    bcos::storage::Entry entry;
+    entry.set(std::move(encoded));
+    bcos::task::syncWait(bcos::storage2::writeOne(view,
+        StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(number)},
+        std::move(entry)));
+    bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+}
+
 bcos::engine::NewPayloadRequest makeValidIsthmusNewPayload(
     bcos::protocol::BlockFactory& blockFactory, bcos::h256 const& parentHash,
     bcos::protocol::BlockNumber blockNumber)
@@ -2323,6 +2348,73 @@ BOOST_AUTO_TEST_CASE(preHolocenePricingRejectsZeroParameters)
     // denominatorCanyon is inert while Canyon is off — the guard must not fire on it.
     BOOST_CHECK_NO_THROW(
         (void)bad({.elasticity = 6, .denominator = 50, .denominatorCanyon = 0}, false));
+}
+
+// F15: the fork dispatch INSIDE the build path, pinned at both boundaries. The
+// dispatch (calcOpBaseFeeForParent, OpEngineService.h) has three inputs a flip can
+// silently change: the PARENT's Holocene activation selects the arm (Holocene+ reads
+// the parent's own extraData, pre-Holocene the chain's declared triple), and the
+// CHILD's Canyon activation selects the denominator. Same parent, same child, only
+// the schedule and the child timestamp move:
+//
+//   parent: number 0, ts 1'699'000'000s (internal ms 1'699'000'000'000)
+//           gasLimit 30M, gasUsed 0, baseFee 1e9, extraData {denominator 200, elasticity 10}
+//   child:  ts 1'700'000'000s; the declared/attr triple is all-zero, so the engine
+//           substitutes the legacy preset {elasticity 6, denominator 50, denominatorCanyon 250}
+//
+// Pre-Holocene arm (parent below holocene_time), elasticity 6 → target 5M, used 0:
+//   canyon-active child   -> decrease 1e9 * 5M/5M / 250 = 4e6  -> 996'000'000
+//   pre-canyon child      -> decrease 1e9 * 5M/5M / 50  = 2e7  -> 980'000'000
+// Holocene arm (parent at/after holocene_time), parent extraData elasticity 10 →
+// target 3M, used 0:
+//   decrease 1e9 * 3M/3M / 200 = 5e6                          -> 995'000'000
+BOOST_AUTO_TEST_CASE(pricingDispatchPinsHoloceneAndCanyonBoundaries)
+{
+    auto const build = [](bcos::ledger::OpForkSchedule const& schedule, int64_t childTsMs) {
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate, nullptr, schedule);
+        delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+        auto decoded = makeDecodableWeb3Tx(1);
+        auto attrs = makeOpPayloadAttributes();
+        attrs.timestamp = static_cast<uint64_t>(childTsMs);
+        attrs.minBaseFee = std::nullopt;
+        attrs.transactions = std::vector<std::string>{decoded.rawHex};
+        auto const hash =
+            bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+        registerVerifiedBlock(pair.storage, hash, 0);
+        // Parent at 1'699'000'000s with the Holocene-shaped extraData {den 200, elas 10}.
+        registerParentHeaderWithExtraData(
+            pair.storage, *pair.blockFactory, 0, 1'699'000'000'000, "00000000c80000000a");
+
+        auto built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+        BOOST_REQUIRE_EQUAL(static_cast<int>(built.payloadStatus.status),
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+        BOOST_REQUIRE(built.payloadId.has_value());
+        auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
+        BOOST_REQUIRE(payload);
+        return payload->executionPayload.baseFeePerGas;
+    };
+
+    // (a) pre-Holocene parent, Canyon-active child: denominatorCanyon 250.
+    bcos::ledger::OpForkSchedule canyonBeforeChild;
+    canyonBeforeChild.m_canyonTime = 1'699'800'000;
+    canyonBeforeChild.m_holoceneTime = 1'699'500'000;
+    BOOST_CHECK(build(canyonBeforeChild, 1'700'000'000'000) == bcos::u256(996'000'000));
+
+    // (b) same arm, child BEFORE canyon: denominator 50 — the child-side keying.
+    bcos::ledger::OpForkSchedule canyonAfterChild;
+    canyonAfterChild.m_canyonTime = 1'700'100'000;
+    canyonAfterChild.m_holoceneTime = 1'699'500'000;
+    BOOST_CHECK(build(canyonAfterChild, 1'700'000'000'000) == bcos::u256(980'000'000));
+
+    // (c) parent AT holocene_time: the Holocene arm reads the parent's own extraData.
+    bcos::ledger::OpForkSchedule holoceneAtParent;
+    holoceneAtParent.m_canyonTime = 1'699'800'000;
+    holoceneAtParent.m_holoceneTime = 1'699'000'000;
+    BOOST_CHECK(build(holoceneAtParent, 1'700'000'000'000) == bcos::u256(995'000'000));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
