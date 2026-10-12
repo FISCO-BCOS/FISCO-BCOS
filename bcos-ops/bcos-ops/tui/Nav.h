@@ -48,8 +48,12 @@ enum class DetailKind
 struct DetailRef
 {
     DetailKind kind = DetailKind::block;
-    int64_t number = -1;  // block height or proposal id
-    std::string hash;     // tx hash
+    // pushed by Nav as the selected row index; resolveDetailRefs (views/Detail.cpp) turns it into
+    // the block height (block) or the block height + hash (tx) so new rows arriving above do not
+    // move the page to another object
+    int64_t number = -1;  // block height or proposal id; row index while !resolved
+    std::string hash;     // tx hash (resolved) / block hash
+    bool resolved = false;
 };
 
 /// a list the cursor can move in: the renderer reports how many rows exist and fit

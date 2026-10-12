@@ -118,14 +118,16 @@ void Refresher::runOnce()
         explorer.capacity = m_capacity ? m_capacity() : c_explorerMinRows;
         if (status.blockNumber)
         {
-            explorerFetch(explorer, m_connection.call, m_connection.group, *status.blockNumber);
+            explorerFetch(
+                explorer, m_connection.call, m_connection.group, *status.blockNumber, &m_stop);
         }
         auto visible = m_visibleTxs ? m_visibleTxs() : std::make_pair(size_t(0), c_explorerMinRows);
-        explorerFetchStatus(
-            explorer, m_connection.call, m_connection.group, visible.first, visible.second);
+        explorerFetchStatus(explorer, m_connection.call, m_connection.group, visible.first,
+            visible.second, &m_stop);
         if (m_detailWants)
         {
-            explorerFetchWanted(explorer, m_connection.call, m_connection.group, m_detailWants());
+            explorerFetchWanted(
+                explorer, m_connection.call, m_connection.group, m_detailWants(), &m_stop);
         }
         std::lock_guard<std::mutex> lock(m_model.mutex);
         m_model.status = std::move(status);

@@ -159,5 +159,39 @@ BOOST_AUTO_TEST_CASE(mouseOnTheBottomBarSwitchesPages)
     BOOST_CHECK_EQUAL(tui::pageName(nav.page), "node");
 }
 
+BOOST_AUTO_TEST_CASE(ctrlCQuitsLikeQ)
+{
+    Nav nav;
+    BOOST_CHECK(tui::navHandle(nav, Event::CtrlC) == NavAction::quit);
+    nav.help = true;
+    BOOST_CHECK(tui::navHandle(nav, Event::CtrlC) == NavAction::quit);  // even over the help layer
+}
+
+BOOST_AUTO_TEST_CASE(homeCursorSurvivesTheDetailStackAndTheTxCursorStartsAtZero)
+{
+    Nav nav;
+    nav.blocks.count = 5;
+    nav.blocks.pageRows = 5;
+    nav.txs.count = 5;
+    tui::navHandle(nav, Event::ArrowDown);
+    tui::navHandle(nav, Event::ArrowDown);
+    BOOST_CHECK_EQUAL(nav.blocks.selected, 2U);
+    nav.detailTxs.selected = 3;  // left over from an earlier block detail
+    BOOST_CHECK(tui::navHandle(nav, Event::Return) == NavAction::redraw);  // block
+    BOOST_CHECK_EQUAL(nav.detailTxs.selected, 0U);
+    nav.detailTxs.count = 2;
+    tui::navHandle(nav, Event::ArrowDown);
+    BOOST_CHECK(tui::navHandle(nav, Event::Return) == NavAction::redraw);  // tx of that block
+    BOOST_REQUIRE_EQUAL(nav.stack.size(), 2U);
+    BOOST_CHECK(nav.stack[1].kind == DetailKind::tx);
+    BOOST_CHECK_EQUAL(nav.stack[1].number, 1);  // index inside the block until resolved
+    BOOST_CHECK(!nav.stack[1].resolved);
+    tui::navHandle(nav, Event::Escape);
+    tui::navHandle(nav, Event::Escape);
+    BOOST_CHECK(!nav.inDetail());
+    BOOST_CHECK_EQUAL(nav.blocks.selected, 2U);
+    BOOST_CHECK(tui::navHandle(nav, Event::Escape) == NavAction::none);  // empty stack: no-op
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::ops::test
