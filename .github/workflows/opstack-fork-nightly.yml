@@ -74,8 +74,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install pytest
-        run: python -m pip install pytest
+      - name: Install pytest + suite dependencies
+        # The genesis suites are NOT stdlib-only: build-allocs needs PyYAML and
+        # gen_trieroot_golden needs pycryptodome (module-scope imports — collection
+        # dies without them; a clean-venv run is the honest reproduction).
+        run: python -m pip install pytest pyyaml pycryptodome
       - name: Ensure zstd is present
         # The sweep needs the zstd CLI; a missing one must fail HERE (loudly) rather than
         # skip inside pytest. Runners normally ship it — pin it explicitly (review F3).

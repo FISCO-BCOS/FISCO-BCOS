@@ -31,9 +31,15 @@ _SPEC = importlib.util.spec_from_file_location(
 _FIXTURE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_FIXTURE)
 
-# keccak256 is re-exported by mpt_state_root (build-allocs.py has a hyphenated filename and
-# cannot be imported as a module).
-from mpt_state_root import compute_storage_root  # noqa: E402
+# Load by file path (same style as the fixture load above and test_gen_rollup_config.py):
+# tools/opstack-genesis/ is not a package, so a bare `from mpt_state_root import ...` only
+# works under pytest's default rootdir sys.path insertion and breaks under
+# --import-mode=importlib or any run from outside the directory.
+_MSR_SPEC = importlib.util.spec_from_file_location(
+    "mpt_state_root", str(_HERE / "mpt_state_root.py"))
+_MSR = importlib.util.module_from_spec(_MSR_SPEC)
+_MSR_SPEC.loader.exec_module(_MSR)
+compute_storage_root = _MSR.compute_storage_root
 
 EMPTY_TRIE = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 OMMERS = "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"

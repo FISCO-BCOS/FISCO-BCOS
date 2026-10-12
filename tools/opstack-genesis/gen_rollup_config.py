@@ -105,12 +105,9 @@ def build_rollup_config(args):
                 "gasLimit": args.gas_limit,
             },
         },
-        "block_time": args.block_time,
-        "max_sequencer_drift": args.max_sequencer_drift,
-        "seq_window_size": args.seq_window_size,
-        "channel_timeout": args.channel_timeout,
-        "l1_chain_id": args.l1_chain_id,
-        "l2_chain_id": args.l2_chain_id,
+        # Single-sourced from gen_official_genesis._ROLLUP_ARG_FIELDS (the validator's
+        # table, derived) — a hand-listed copy here is how the two producers drifted.
+        **{field: getattr(args, field) for field in _official_genesis._ROLLUP_ARG_FIELDS},
         **{key: 0 for key in FORK_TIME_KEYS},
         "batch_inbox_address": _require_hex(
             args.batch_inbox_address, 20, "batch_inbox_address"),

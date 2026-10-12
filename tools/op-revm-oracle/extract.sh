@@ -80,7 +80,10 @@ if [ -n "$P256_SRC" ]; then
   # admin-deleted republishes, mirror substitutions and local tampering are not
   # detectable without one) — with the hash recorded, a drift is at least visible.
   P256_SHA256="$(shasum -a 256 "$P256_SRC/secp256r1.rs" 2>/dev/null | awk '{print $1}')"
-  [ -n "$P256_SHA256" ] || P256_SHA256="(shasum unavailable)"
+  # Provenance fields never carry sentinels: an unreadable hash is a hard error, the
+  # same rule as the anchors below — a consumer comparing this field must never
+  # mistake a placeholder for a value.
+  [ -n "$P256_SHA256" ] || { echo "error: cannot sha256 $P256_SRC/secp256r1.rs (shasum unavailable?); cannot record p256verify_source_sha256" >&2; exit 1; }
 fi
 # The tracked oracle is the external judge for the Karst precompile table, so a missing
 # source must die, not silently pin p256verify_gas:0 (same rule as c2-e2e.sh's forge pin:

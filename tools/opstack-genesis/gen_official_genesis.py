@@ -437,6 +437,14 @@ _ROLLUP_REQUIRED_FIELDS = ["block_time", "max_sequencer_drift", "seq_window_size
                            "channel_timeout", "l1_chain_id", "l2_chain_id",
                            "batch_inbox_address", "deposit_contract_address",
                            "l1_system_config_address", "chain_op_config"]
+# The scalar (CLI-arg) half of the non-fork fields, derived — never re-listed — so
+# gen_rollup_config's emitter and this validator share one table: a field renamed in
+# one producer cannot drift past the other. The three addresses are emitted
+# separately there (with _require_hex) and chain_op_config is a nested object.
+# Emission-policy difference, on purpose: gen_rollup_config zero-fills every fork
+# key; gen_official_genesis omits unscheduled forks entirely.
+_ROLLUP_ARG_FIELDS = [field for field in _ROLLUP_REQUIRED_FIELDS
+                      if not field.endswith("_address") and field != "chain_op_config"]
 
 
 def _lower_hex(value):

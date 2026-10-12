@@ -101,6 +101,32 @@ def test_raw_storage_key_lane_accepts_hex_and_int():
     assert storage[200] == 2
 
 
+def test_raw_storage_negative_int_rejected():
+    # An unquoted negative (a YAML int) must not reach the emitter: word_hex would
+    # render it as a sign-prefixed "hex" word ("0x-000...01") in the INI and the
+    # alloc JSON. The string spelling "-1" was already rejected; this pins the
+    # int form on both lanes (key and value).
+    with pytest.raises(ValueError):
+        build_allocs.apply_raw_storage_overlay({}, {-1: "0x1"}, "L1Block")
+    with pytest.raises(ValueError):
+        build_allocs.apply_raw_storage_overlay({}, {"0x1": -1}, "L1Block")
+
+
+def test_chain_config_duplicate_yaml_key_rejected():
+    # The CLI parses the (hand-edited) chain config with the same duplicate-key
+    # rule as the op-deployer JSON loader: yaml.safe_load would silently keep the
+    # LAST value and drop the earlier, reviewed one.
+    import io
+
+    import yaml
+    text = "governance_owner:\n  x: 1\ngovernance_owner:\n  x: 2\n"
+    with pytest.raises(ValueError):
+        yaml.load(io.StringIO(text), Loader=build_allocs._DuplicateRejectingSafeLoader)
+    # The strict loader otherwise behaves exactly like SafeLoader.
+    assert yaml.load(io.StringIO("a: 1\nb: [2, 3]\n"),
+        Loader=build_allocs._DuplicateRejectingSafeLoader) == {"a": 1, "b": [2, 3]}
+
+
 def test_base_allocs_duplicate_json_key_is_refused(tmp_path):
     # json.load keeps the last value for a repeated key, so the address-level
     # duplicate guard never saw it; the object_pairs_hook surfaces it at parse time.

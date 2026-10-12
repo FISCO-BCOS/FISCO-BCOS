@@ -57,7 +57,10 @@ parse_allocs_ini = _mpt_state_root.parse_allocs_ini
 compute_state_root = _mpt_state_root.compute_state_root
 compute_storage_root = _mpt_state_root.compute_storage_root
 
-EMPTY_TRIE_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+# Derived from mpt_state_root (the canonical bytes form — this module already loads
+# it above) so the two root implementations cannot drift on the empty-trie value;
+# the fixture's spelling is the 0x-prefixed string the header JSON wants.
+EMPTY_TRIE_ROOT = "0x" + _mpt_state_root.EMPTY_TRIE_ROOT.hex()
 EMPTY_OMMERS_HASH = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
 # sha256 of empty input: the Prague empty-requests hash (EIP-7685).
 EMPTY_REQUESTS_HASH = "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

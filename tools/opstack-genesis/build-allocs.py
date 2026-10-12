@@ -252,7 +252,7 @@ def parse_amount(value, label):
     return amount
 
 
-def verify_base_provenance(path, expected_sha256):
+def verify_base_provenance(path, expected_sha256, allow_unpinned=False):
     """Pin the base alloc file to the frozen artifact by whole-file SHA-256.
 
     The op-deployer output carries no version metadata of its own, and the
@@ -260,13 +260,22 @@ def verify_base_provenance(path, expected_sha256):
     generated — so the strongest static pin available today is the SHA-256 of
     the whole file, recorded next to the frozen quintuple
     (bcos-l2-contracts/op-fork-pin.toml [karst_pin].base_allocs_sha256) and
-    mirrored into the chain config. When the chain config carries no
-    expected hash yet (pre-freeze iteration), warn loudly instead of failing.
+    mirrored into the chain config. An empty expected hash is a HARD ERROR unless
+    the caller explicitly passes allow_unpinned (pre-freeze iteration); the C2
+    harness rewrites this pin to the fresh artifact right before the check, so the
+    lane must never be able to proceed on an absent pin (review F40).
     """
     digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
     if not expected_sha256:
+        if not allow_unpinned:
+            raise ValueError(
+                f"{path}: base allocs provenance unpinned - set base_allocs_sha256 "
+                f"in the chain config once the artifact is frozen (sha256 of {path} "
+                f"= {digest}), or pass --allow-unpinned-base-allocs explicitly for "
+                f"pre-freeze iteration")
         sys.stderr.write(
-            f"WARNING: base allocs provenance unpinned - set base_allocs_sha256 "
+            f"WARNING: base allocs provenance explicitly unpinned "
+            f"(--allow-unpinned-base-allocs) - set base_allocs_sha256 "
             f"in the chain config once the artifact is frozen "
             f"(sha256 of {path} = {digest})\n")
         return digest
@@ -293,6 +302,26 @@ def _no_duplicate_keys(pairs):
             raise ValueError(f"duplicate JSON key {key!r}")
         out[key] = value
     return out
+
+
+class _DuplicateRejectingSafeLoader(yaml.SafeLoader):
+    """SafeLoader + the JSON guard's rule: the chain config is hand-edited, so a
+    repeated key is a mistake to surface, not to last-wins (yaml.safe_load would
+    silently drop the earlier, reviewed value)."""
+
+
+def _construct_strict_mapping(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise ValueError(f"duplicate YAML key {key!r}")
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_DuplicateRejectingSafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_strict_mapping)
 
 
 def load_base_allocs(path):
@@ -357,6 +386,14 @@ def config_word(value, label):
     values to carry an explicit 0x prefix instead.
     """
     if isinstance(value, int):
+        if value < 0:
+            # An unquoted negative lands here verbatim and would later render through
+            # word_hex as a sign-prefixed "hex" word ("0x-000...01") in the INI and the
+            # alloc JSON — reject it at the config boundary instead.
+            raise ValueError(
+                f"{label}: negative ints are not valid storage words (YAML parsed "
+                f"'{value}' from an unquoted negative decimal; write a 0x-prefixed "
+                f"hex value instead)")
         return value
     text = str(value).strip().lower()
     if not text.startswith("0x"):
@@ -779,11 +816,17 @@ def main(argv=None):
     parser.add_argument("--out-json",
                         help="also write the merged set as a geth-style alloc "
                              "JSON (feeds the op-reth oracle genesis)")
+    parser.add_argument("--allow-unpinned-base-allocs", action="store_true",
+                        help="explicitly permit an empty base_allocs_sha256 "
+                             "(pre-freeze iteration only). Default: an empty pin "
+                             "is a hard error — provenance must never silently "
+                             "degrade to self-consistency (review F40)")
     args = parser.parse_args(argv)
 
     with open(args.config) as handle:
-        config = yaml.safe_load(handle)
-    verify_base_provenance(args.base_allocs, config.get("base_allocs_sha256"))
+        config = yaml.load(handle, Loader=_DuplicateRejectingSafeLoader)
+    verify_base_provenance(args.base_allocs, config.get("base_allocs_sha256"),
+        allow_unpinned=args.allow_unpinned_base_allocs)
     base_accounts = load_base_allocs(args.base_allocs)
     allocs = build_allocs(config, args.contracts, base_accounts)
     ini = emit_ini(allocs)

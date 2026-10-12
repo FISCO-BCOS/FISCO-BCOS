@@ -68,13 +68,20 @@ def load(path, end):
     Duplicate ids are fatal: the dict would keep the last row and silently
     compare a case set that is smaller than the file's.
     """
-    with open(path) as f:
-        rows = json.load(f)
+    try:
+        with open(path) as f:
+            rows = json.load(f)
+    except json.JSONDecodeError as exc:
+        # Malformed input is exit code 2 (the documented contract), not a traceback
+        # with exit 1 — consumers distinguish input errors from mismatches.
+        print(f"[fatal] {end}: malformed JSON ({path}): {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
     out = {}
     for row in rows:
         cid = row["id"]
         if cid in out:
-            raise SystemExit(f"[fatal] {end}: duplicate case id {cid!r} in {path}")
+            print(f"[fatal] {end}: duplicate case id {cid!r} in {path}", file=sys.stderr)
+            raise SystemExit(2)
         out[cid] = (row["l1_cost"], row["operator_cost"])
     return out
 
@@ -116,9 +123,11 @@ def main() -> int:
         except FileNotFoundError as exc:
             # A missing snapshot must fail the comparison, not shrink the checked
             # set: deleting out_opgeth.json used to exit 0 while "comparing" two
-            # ends only (fail-open, see F14).
-            raise SystemExit(f"[fatal] {name}: snapshot missing ({path}) — the "
-                             "differential gate requires every committed end") from exc
+            # ends only (fail-open, see F14). Exit 2: a missing input is a malformed
+            # run, not a comparison mismatch (the documented exit-code contract).
+            print(f"[fatal] {name}: snapshot missing ({path}) — the differential "
+                  "gate requires every committed end", file=sys.stderr)
+            raise SystemExit(2) from exc
 
     # Every end is load-bearing now (the operator-fee authority lives in the
     # solidity end): an emptied file is a broken end, not a shrunk comparison.

@@ -26,6 +26,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <sstream>
 
 namespace
@@ -57,9 +58,9 @@ BOOST_AUTO_TEST_CASE(ManifestRecordsEveryFixture)
     // The manifest is TRACKED, so its absence means a stripped or hand-edited fixture
     // tree — fail loudly instead of silently disabling the only checksum verification
     // of these pinned fixtures.
-    BOOST_REQUIRE_MESSAGE(in.good(),
-        "osaka fixture manifest missing at " << manifestPath
-                                             << " — the fixture checksums cannot verify");
+    BOOST_REQUIRE_MESSAGE(in.good(), "osaka fixture manifest missing at "
+                                         << manifestPath
+                                         << " — the fixture checksums cannot verify");
     Json::Reader reader;
     Json::Value manifest;
     BOOST_REQUIRE_MESSAGE(reader.parse(in, manifest), "cannot parse manifest.json");
@@ -80,6 +81,26 @@ BOOST_AUTO_TEST_CASE(ManifestRecordsEveryFixture)
         ++checked;
     }
     BOOST_CHECK_MESSAGE(checked > 0, "manifest lists no fixtures");
+
+    // The reverse direction (review F29): a fixture binary present on disk but
+    // absent from manifest.json escapes the ONLY checksum verification these
+    // pinned fixtures have — the manifest loop above never looks at it. Sweep the
+    // directory so "recorded" means every fixture, not every entry.
+    std::set<std::string> recorded;
+    for (auto const& entry : manifest)
+    {
+        recorded.insert(entry["file"].asString());
+    }
+    for (auto const& entry : std::filesystem::directory_iterator(fixtureDir()))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".bin" &&
+            !recorded.contains(entry.path().filename().string()))
+        {
+            BOOST_CHECK_MESSAGE(
+                false, entry.path().filename().string()
+                           << ": fixture present on disk but absent from manifest.json");
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

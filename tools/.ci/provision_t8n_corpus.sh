@@ -50,5 +50,14 @@ if [[ -e "${DEST}" && ! -L "${DEST}" ]]; then
     exit 1
 fi
 ln -sfn "${CACHE}/opstack-executor/tests/t8n" "${DEST}"
+# Verify the linked layout before declaring success: a pin whose tree lacks the
+# corpus layout would hand every build a dangling link that only surfaces later,
+# as an opaque missing-corpus error far from the provisioning step that caused it.
+for sub in vectors golden/engine; do
+    [[ -d "${DEST}/${sub}" ]] || {
+        echo "error: ${DEST}/${sub} missing after linking pin ${PIN} — this pin's tree does not carry the t8n corpus layout" >&2
+        exit 1
+    }
+done
 printf '%s\n' "${PIN}" > "${PIN_FILE}"
 echo "linked ${DEST} -> ${CACHE}/opstack-executor/tests/t8n @ ${PIN}"

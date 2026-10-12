@@ -301,7 +301,7 @@ BOOST_AUTO_TEST_CASE(DAFootprintExceedsGasLimitRejected)
 // NOT pinned anywhere — an accepted residual gap on jovian_da_mix (needs a small-deposit
 // vector whose deposit fits at Σ); a '>=' regression would hide behind this comment.
 // clang-format off
-BOOST_AUTO_TEST_CASE(JovianDaFootprintGasLimitBoundary,
+BOOST_AUTO_TEST_CASE(JovianDaFootprintBelowBoundaryRejected,
     * boost::unit_test::label("fork-jovian")
     * boost::unit_test::label("fork-karst"))
 // clang-format on
