@@ -109,9 +109,25 @@ void Refresher::runOnce()
         }
         catch (std::exception const&)
         {}
+        // the explorer works on a copy outside the lock: up to 50 block fetches per round
+        ExplorerState explorer;
+        {
+            std::lock_guard<std::mutex> lock(m_model.mutex);
+            explorer = m_model.explorer;
+        }
+        explorer.capacity = m_capacity ? m_capacity() : c_explorerMinRows;
+        if (status.blockNumber)
+        {
+            explorerFetch(explorer, m_connection.call, m_connection.group, *status.blockNumber);
+        }
+        auto visible = m_visibleTxs ? m_visibleTxs() : std::make_pair(size_t(0), c_explorerMinRows);
+        explorerFetchStatus(
+            explorer, m_connection.call, m_connection.group, visible.first, visible.second);
         std::lock_guard<std::mutex> lock(m_model.mutex);
         m_model.status = std::move(status);
         m_model.checks = std::move(checks);
+        m_model.explorer = std::move(explorer);
+        m_model.authChain = m_model.status.authCheck.value_or(false);
         m_model.consensus = std::move(consensus);
         m_model.sync = std::move(sync);
         m_model.peers = std::move(peers);

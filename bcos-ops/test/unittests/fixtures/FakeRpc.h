@@ -89,6 +89,13 @@ public:
         auto prefix = _dataPrefix.starts_with("0x") ? _dataPrefix.substr(2) : _dataPrefix;
         m_callResults[prefix] = std::move(_result);
     }
+    /// result of _method when params[_index] (int or string) equals _key, e.g. getBlockByNumber
+    /// per height or getTransactionReceipt per hash
+    void setFor(
+        std::string const& _method, size_t _index, std::string const& _key, Json::Value _result)
+    {
+        m_byArg[_method][_index][_key] = std::move(_result);
+    }
     /// the node answers _method with a JSON-RPC error (a txpool refusal carries the
     /// TransactionStatus value as code)
     void fail(std::string const& _method, int _code, std::string _message)
@@ -125,6 +132,24 @@ public:
                 queued->second.pop_front();
                 return result;
             }
+            if (auto byArg = m_byArg.find(std::string(_method)); byArg != m_byArg.end())
+            {
+                for (auto const& [index, table] : byArg->second)
+                {
+                    if (_params.size() <= index)
+                    {
+                        continue;
+                    }
+                    auto key =
+                        _params[static_cast<Json::ArrayIndex>(index)].isString() ?
+                            _params[static_cast<Json::ArrayIndex>(index)].asString() :
+                            std::to_string(_params[static_cast<Json::ArrayIndex>(index)].asInt64());
+                    if (auto hit = table.find(key); hit != table.end())
+                    {
+                        return hit->second;
+                    }
+                }
+            }
             if (_method == "call" && _params.size() >= 4 && _params[3].isString())
             {
                 auto data = _params[3].asString();
@@ -160,6 +185,7 @@ private:
     std::map<std::string, std::pair<int, std::string>> m_failures;
     std::map<std::string, std::deque<Json::Value>> m_queues;
     std::map<std::string, Json::Value> m_callResults;
+    std::map<std::string, std::map<size_t, std::map<std::string, Json::Value>>> m_byArg;
     std::vector<std::pair<std::string, Json::Value>> m_calls;
 };
 }  // namespace bcos::ops::test

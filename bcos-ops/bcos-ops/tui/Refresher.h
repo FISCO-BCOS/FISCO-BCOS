@@ -40,6 +40,13 @@ public:
     void refreshNow();
     /// one collection pass (what the thread does each tick); public for tests
     void runOnce();
+    /// how many explorer rows to keep (terminal height); default 20
+    void setRowCapacity(std::function<size_t()> _capacity) { m_capacity = std::move(_capacity); }
+    /// which tx rows are on screen, so only their receipts are fetched; default the first 20
+    void setVisibleTxRange(std::function<std::pair<size_t, size_t>()> _range)
+    {
+        m_visibleTxs = std::move(_range);
+    }
 
 private:
     void loop();
@@ -49,6 +56,8 @@ private:
     Thresholds m_thresholds;
     Model& m_model;
     std::function<void()> m_onUpdate;
+    std::function<size_t()> m_capacity;
+    std::function<std::pair<size_t, size_t>()> m_visibleTxs;
     int m_intervalMs;
     std::thread m_thread;
     std::mutex m_wakeMutex;
