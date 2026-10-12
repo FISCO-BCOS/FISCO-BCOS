@@ -19,6 +19,7 @@
 // direct; ⑤⑥⑦ are policy/host-level direct.
 
 #include "support/DualRunHarness.h"
+#include "support/T8nCorpus.h"  // opstack_test::c_corpusParentHashHex (the corpus parent)
 
 #include <opstack-executor/OpEthCommitments.h>   // computeOpEthTransactionsRoot
 #include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
@@ -72,8 +73,7 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeForkHeader(
     h->setNumber(number);
     h->setTimestamp((0x3f2 + number) * 1000);  // ms (FISCO convention)
     h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = number - 1,
-        .blockHash =
-            bcos::h256{"0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"}});
+        .blockHash = bcos::h256{std::string(opstack_test::c_corpusParentHashHex)}});
     h->setCoinbase(bcos::Address{bcos::bytesConstRef{kCoinbase.bytes, sizeof(kCoinbase.bytes)}});
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});

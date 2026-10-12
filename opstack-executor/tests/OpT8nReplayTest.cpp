@@ -38,6 +38,7 @@
 // entry= or never-hit exemptions = FAILURE.
 
 #include "support/DualRunHarness.h"  // opstack_test::DualRunFixture / MLS / runExecutorPath
+#include "support/GoldenSample.h"    // w6test::t8nCorpusAvailable/Required (skip/require contract)
 #include "support/JsonAt.h"
 #include "support/SeedPreState.h"
 #include "support/T8nCorpus.h"
@@ -2044,6 +2045,19 @@ BOOST_AUTO_TEST_CASE(StructurallyUnrecoverablePredicateBoundaries)
 
 BOOST_AUTO_TEST_CASE(Vectors)
 {
+    // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when
+    // absent, fail when CI requires it — the same gate GoldenSampleTest and
+    // OpEthExecutorDualRunTest run. A bare checkout must not hard-fail the suite:
+    // FISCO_REQUIRE_T8N_CORPUS (CI) is what turns the skip into a failure.
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     // Order-independence: the B3 proof-of-run counter is per-run of this case,
     // not whatever a previously executed test case left behind.
     g_metaForkCellsChecked = 0;

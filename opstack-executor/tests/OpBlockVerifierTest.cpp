@@ -29,6 +29,7 @@
 #include <opstack-executor/OpForkSpec.h>         // opForkSpecAt
 
 #include "support/GenesisTrie.h"  // copyFlatRows + computeAndPersistParentTrie
+#include "support/T8nCorpus.h"    // opstack_test::c_corpusParentHashHex (single-homed)
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -195,8 +196,9 @@ void seedSysTables(MLS& mls)
 /// registers it as the seeded head's identity hash too: OpBlockVerifier's commit-time
 /// parent binding reads SYS_NUMBER_2_HASH[head], and production always carries that row
 /// (the ledger writes it on every commit) — a seeded head without it is a fixture gap.
-constexpr std::string_view c_corpusParentHashHex =
-    "0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74";
+/// Single-homed in support/T8nCorpus.h (shared with the three suites that assemble
+/// corpus-shaped headers); the local alias keeps the call sites below short.
+constexpr std::string_view c_corpusParentHashHex = opstack_test::c_corpusParentHashHex;
 
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeGenesisHeader(bcos::h256 stateRoot)
 {
@@ -554,10 +556,18 @@ BOOST_AUTO_TEST_CASE(JovianActivationUserTxForsakenOnVerifierLane)
 
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
         bcos::evm::OpConsensusError,
-        // Type match suffices (the file's own precedent at :598): both gate
-        // wordings translate to OpConsensusError inside verifyAndCommit — the
-        // pre-block scan and the execute-block Jovian shape check.
-        [](bcos::evm::OpConsensusError const&) { return true; });
+        // The SCHEDULE-GATE wording, not just the type: both gates translate to
+        // OpConsensusError inside verifyAndCommit (the pre-block activation scan and
+        // the execute-block Jovian shape check), so a type-only predicate cannot tell
+        // whether the verifier's parent-fetch wiring ran. "fork-activation" is the
+        // deposits-only activation gate's wording (OpEthBlockSteps.h); the shape
+        // check's wording ("in Jovian activation block", op-geth rollup_cost.go:574
+        // verbatim — the pair OpKarstActivationTest discriminates) must NOT match
+        // here.
+        [](bcos::evm::OpConsensusError const& e) {
+            auto const w = std::string_view{e.what()};
+            return w.find("fork-activation") != std::string_view::npos;
+        });
     // Nothing committed on the verifier under test: head stays at genesis.
     auto view = f.multiLayerStorage.fork();
     auto currentState = bcos::task::syncWait(bcos::storage2::readOne(

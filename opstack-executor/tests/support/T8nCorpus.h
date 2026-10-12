@@ -34,4 +34,14 @@ namespace opstack_test
 /// gate silently).
 inline constexpr std::array<std::string_view, 2> c_t8nCriticalStems{
     "ladder_1000_69292b10", "devnet_1875-2274_c38db356"};
+
+/// The corpus parent hash: the t8n corpus' genesis parent (env.parentHash of the
+/// corpus' first vector) — the fixture anchor every suite that assembles
+/// corpus-shaped headers/genesis announces (OpBlockVerifierTest, OpEthExecutorTest,
+/// OpEthForkMatrixTest, OpSchedulerTest). Single-homed here so a corpus regeneration
+/// that changes it breaks the build instead of silently forking per-suite literals.
+/// FixedBytes has no string_view constructor: construct via
+/// std::string(c_corpusParentHashHex).
+inline constexpr std::string_view c_corpusParentHashHex{
+    "0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"};
 }  // namespace opstack_test

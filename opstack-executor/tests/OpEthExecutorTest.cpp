@@ -19,6 +19,7 @@
 // through SchedulerSerialImpl) lives in OpEthExecutorDualRunTest.cpp.
 
 #include "support/DualRunHarness.h"
+#include "support/T8nCorpus.h"  // opstack_test::c_corpusParentHashHex (the corpus parent)
 
 #include <opstack-executor/OpEthExecutor.h>
 
@@ -47,9 +48,8 @@ static_assert(
 // createExecuteContext with it (an lvalue — the deleted rvalue overload must
 // not interfere).
 static_assert(requires(opeth::OpEthExecutor& executor, opstack_test::MutableStorage& storage,
-                  bcos::protocol::BlockHeader const& header,
-                  bcos::protocol::Transaction const& tx, bcos::ledger::LedgerConfig const& config,
-                  opeth::OpEthBlockContext const& ctx) {
+    bcos::protocol::BlockHeader const& header, bcos::protocol::Transaction const& tx,
+    bcos::ledger::LedgerConfig const& config, opeth::OpEthBlockContext const& ctx) {
     executor.createExecuteContext(storage, header, tx, 0, config, false, ctx);
 });
 
@@ -71,8 +71,7 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeExecutorHeader(
     h->setNumber(number);
     h->setTimestamp((0x3f2 + number) * 1000);  // ms (FISCO convention)
     h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = number - 1,
-        .blockHash =
-            bcos::h256{"0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"}});
+        .blockHash = bcos::h256{std::string(opstack_test::c_corpusParentHashHex)}});
     h->setCoinbase(bcos::Address{bcos::bytesConstRef{kCoinbase.bytes, sizeof(kCoinbase.bytes)}});
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});
@@ -203,9 +202,9 @@ BOOST_AUTO_TEST_CASE(SixArgBlockExecutionThrows)
     DualRunFixture f;
     auto const header = makeExecutorHeader(1, kHeaderBaseFee);
     auto const keyPair = fixedSenderKeyPair();
-    auto const env = signEip1559(*keyPair, 0, 100'000, bcos::u256(2'000'000'000),
-        bcos::u256(1'000'000), bcos::Address{kTransferTarget.bytes, sizeof(kTransferTarget.bytes)},
-        bcos::u256(1));
+    auto const env =
+        signEip1559(*keyPair, 0, 100'000, bcos::u256(2'000'000'000), bcos::u256(1'000'000),
+            bcos::Address{kTransferTarget.bytes, sizeof(kTransferTarget.bytes)}, bcos::u256(1));
     auto const tx = buildFiscoTx(env, f.hashImpl);
 
     auto view = f.multiLayerStorage.fork();
@@ -214,7 +213,7 @@ BOOST_AUTO_TEST_CASE(SixArgBlockExecutionThrows)
     opeth::OpEthExecutor executor{f.receiptFactory, opeth::OP_ECOTONE_SPEC};
     BOOST_CHECK_THROW(
         bcos::task::syncWait(executor.executeTransaction(view, *header, *tx, 0, ledgerConfig,
-                                 /*call=*/false)),
+            /*call=*/false)),
         bcos::evm::OpConsensusError);
 }
 

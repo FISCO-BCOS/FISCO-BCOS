@@ -50,9 +50,9 @@
 #include <boost/lexical_cast.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <mutex>
-#include <atomic>
 #include <optional>
 #include <set>
 #include <string>
@@ -234,8 +234,7 @@ private:
     {
         if (m_scheduler.isHoloceneActive(parentTimestampMs))
         {
-            return calcOpBaseFee(
-                parentHeader, m_scheduler.isJovianActive(parentTimestampMs));
+            return calcOpBaseFee(parentHeader, m_scheduler.isJovianActive(parentTimestampMs));
         }
         // The 2-arg calcOpBaseFee's corrupt-header guard, kept on the pre-Holocene arm too.
         if (!parentHeader.baseFee().has_value())

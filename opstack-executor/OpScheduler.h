@@ -759,9 +759,13 @@ private:
                     m_lastProbe->executedHeader->number(), number);
                 OP_SCHEDULER_LOG(INFO) << message;
                 m_lastProbe.reset();
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false};
+                // The probe and the adopt disagree on height — a sequencing mismatch
+                // the CL resolves by re-probing and retrying, the same recoverable
+                // family as the adopt twins below (never a -32603 internal fault).
+                auto probeError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message);
+                *probeError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(probeError), nullptr, false};
             }
 
             auto const lastExecuted = m_lastExecutedBlockNumber.load();
@@ -803,9 +807,13 @@ private:
                             m_pending->executedHeader->number());
                     OP_SCHEDULER_LOG(INFO) << message;
                     m_lastProbe.reset();
-                    co_return {
-                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                        nullptr, false};
+                    // A live pending blocks the adopt until it commits or is abandoned —
+                    // recoverable by retrying after the pending resolves, the same
+                    // SYNCING family as the twins above.
+                    auto pendingError =
+                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message);
+                    *pendingError << bcos::engine::OpSiblingReorgUnsupported{true};
+                    co_return {std::move(pendingError), nullptr, false};
                 }
             }
 
@@ -1057,9 +1065,9 @@ private:
                             transactions[i]->hash());
                     }
                 }
-                // Reject blob (0x03) and 0x7d type bytes.
-                else if (typeByte < 0xc0 && typeByte != 0x01 && typeByte != 0x02 &&
-                         typeByte != 0x04)
+                // Reject blob (0x03) and 0x7d type bytes (deposits were decoded above,
+                // so the deposit byte never reaches this branch).
+                else if (!isAdmissibleOpTxTypeByte(typeByte))
                 {
                     throw bcos::evm::OpConsensusError(
                         fmt::format("OpScheduler: unsupported tx type byte 0x{:02x}",

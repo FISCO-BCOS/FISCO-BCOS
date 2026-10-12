@@ -21,6 +21,7 @@
 #include <opstack-executor/OpSchedulerSeam.h>
 
 #include "support/GenesisTrie.h"  // computeMptStateDelta (genesis trie)
+#include "support/T8nCorpus.h"    // opstack_test::c_corpusParentHashHex (the corpus parent)
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -185,8 +186,7 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
     h->setNumber(1);
     h->setTimestamp(0x3f2 * 1000);  // 0x3f2 = 1010 s (OP seconds) → 1_010_000 ms
     h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 0,
-        .blockHash =
-            bcos::h256{"0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"}});
+        .blockHash = bcos::h256{std::string(opstack_test::c_corpusParentHashHex)}});
     h->setCoinbase(bcos::Address{"0x4200000000000000000000000000000000000011"});
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});

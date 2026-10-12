@@ -233,10 +233,7 @@ inline protocol::Transaction::Ptr wrapOpP2pEnvelope(
             bcos::evm::OpConsensusError("OpBlockVerifier: empty transaction envelope", txHash));
     }
     auto const typeByte = static_cast<uint8_t>(raw[0]);
-    constexpr uint8_t c_rlpListBase = 0xc0;                    // legacy RLP list prefix
-    constexpr uint8_t c_depositTypeByte = OP_DEPOSIT_TX_TYPE;  // OpEthDeposit.h
-    if (typeByte < c_rlpListBase && typeByte != 0x01 && typeByte != 0x02 && typeByte != 0x04 &&
-        typeByte != c_depositTypeByte)
+    if (!isAdmissibleOpTxTypeByte(typeByte))
     {
         // 0x03 (EIP-4844 blob) and 0x7d land here: not admissible on any OP fork.
         BOOST_THROW_EXCEPTION(bcos::evm::OpConsensusError(
@@ -731,7 +728,12 @@ private:
     // Serializes the commit section's [prepareMPTPruneRows -> merge -> onCommit] triple
     // against every other commit feeding the same observer (the L1 verifier keeps the same
     // mutex for the same reason). The sync loop commits strictly sequentially; the mutex
-    // keeps the contract independent of that caller property.
+    // keeps the contract independent of that caller property. NOTE (the scheduler's
+    // OpScheduler.h contract, stated here too): this std::unique_lock spans the co_awaits
+    // of the commit section — verifyAndCommit runs under task::syncWait, so the awaiting
+    // caller does not proceed until the section finishes. If a future awaitable resumes
+    // on another thread, the lock must be narrowed or replaced with a coroutine-aware
+    // lock.
     std::mutex m_commitMutex;
 };
 

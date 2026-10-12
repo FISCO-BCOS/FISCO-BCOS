@@ -961,6 +961,18 @@ BOOST_AUTO_TEST_SUITE(OpSchedulerGoldenReplay)
 
 BOOST_AUTO_TEST_CASE(Vectors)
 {
+    // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when
+    // absent, fail when CI requires it — the same gate GoldenSampleTest runs. A
+    // bare checkout must not hard-fail the suite.
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     const fs::path vectorsDir = OP_T8N_VECTORS_DIR;
     BOOST_REQUIRE_MESSAGE(fs::is_directory(vectorsDir), vectorsDir);
 

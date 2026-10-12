@@ -168,12 +168,6 @@ public:
     }
 
 private:
-    /// Single conversion point from internal milliseconds to the schedule's seconds.
-    [[nodiscard]] bcos::ledger::OpFork forkAt(int64_t internalTimestampMs) const noexcept
-    {
-        return bcos::executor_v1::opstack::opForkAt(m_forkSchedule, internalTimestampMs);
-    }
-
     bcos::ledger::OpForkSchedule m_forkSchedule;
     OpEthL1BlockInfo m_l1BlockInfo;
 };

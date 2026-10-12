@@ -24,8 +24,10 @@
 #include <bcos-utilities/Common.h>
 
 #include <cstddef>
+#include <memory>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -128,38 +130,6 @@ public:
         rekeyOccupantLocked(block.number, block.hash, occupantCanonical);
         m_blocks.emplace(block.hash, std::move(block));
         return true;
-    }
-
-    /// The height index's tie rule, shared by put()/re-liven and (for its off-lineage
-    /// fill) adoptCanonicalHead. A caller-vouched canonical import
-    /// (@p vouchedCanonical: the just-written block IS the canonical one) owns its
-    /// height outright; otherwise the height goes to the LOWEST hash among the LIVE
-    /// blocks at @p number (including @p hash itself) — order-independent by
-    /// construction, so the occupant cannot follow unordered_map iteration order or
-    /// RPC arrival order. adoptCanonicalHead re-arbitrates the whole index with
-    /// canonical lineage when the head is known (canonical beats off-lineage, ties
-    /// still by lowest hash).
-    void rekeyOccupantLocked(
-        bcos::protocol::BlockNumber number, bcos::h256 const& hash, bool vouchedCanonical)
-    {
-        if (vouchedCanonical)
-        {
-            m_byNumber.insert_or_assign(number, hash);
-            return;
-        }
-        auto best = hash;
-        for (auto const& [blockHash, block] : m_blocks)
-        {
-            if (blockHash == hash || block.number != number || block.detached)
-            {
-                continue;
-            }
-            if (blockHash < best)
-            {
-                best = blockHash;
-            }
-        }
-        m_byNumber.insert_or_assign(number, best);
     }
 
     /// The most recent import at @p number (nullopt when the height was never
@@ -340,6 +310,41 @@ public:
     }
 
 private:
+    /// The height index's tie rule, shared by put()/re-liven and (for its off-lineage
+    /// fill) adoptCanonicalHead. A caller-vouched canonical import
+    /// (@p vouchedCanonical: the just-written block IS the canonical one) owns its
+    /// height outright; otherwise the height goes to the LOWEST hash among the LIVE
+    /// blocks at @p number (including @p hash itself) — order-independent by
+    /// construction, so the occupant cannot follow unordered_map iteration order or
+    /// RPC arrival order. adoptCanonicalHead re-arbitrates the whole index with
+    /// canonical lineage when the head is known (canonical beats off-lineage, ties
+    /// still by lowest hash). PRIVATE on purpose: the body assumes the caller holds
+    /// m_mutex (the "Locked" suffix) — an external call would race the store by
+    /// construction, and the class's own put()/adoptCanonicalHead are the only
+    /// intended callers.
+    void rekeyOccupantLocked(
+        bcos::protocol::BlockNumber number, bcos::h256 const& hash, bool vouchedCanonical)
+    {
+        if (vouchedCanonical)
+        {
+            m_byNumber.insert_or_assign(number, hash);
+            return;
+        }
+        auto best = hash;
+        for (auto const& [blockHash, block] : m_blocks)
+        {
+            if (blockHash == hash || block.number != number || block.detached)
+            {
+                continue;
+            }
+            if (blockHash < best)
+            {
+                best = blockHash;
+            }
+        }
+        m_byNumber.insert_or_assign(number, best);
+    }
+
     /// Can ancestry of a block at @p candidateNumber be DECIDED by walking the new
     /// head's parent links? Parent numbers strictly decrease along a staged chain, so
     /// the walk decides once it passes the candidate's height (a staged block at or

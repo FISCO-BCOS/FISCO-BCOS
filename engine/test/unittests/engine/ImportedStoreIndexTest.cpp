@@ -230,6 +230,12 @@ BOOST_AUTO_TEST_CASE(BelowHeadOldBranchBlockDetachedWhenDecided)
     store.adoptCanonicalHead(102, hashOf('C'));
     BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('D'));  // the sibling, not A
     BOOST_CHECK(store.hasBlock(hashOf('A')));                // body stays for re-import
+    // The detach itself, not just its index side effect: the head walk (C→B→D) passed
+    // height 100 without finding A, so A's liveness was DECIDED false and the flag
+    // must be set — occupantAt(100)==D would hold even if the detach no-oped (the
+    // canonical-lineage pass writes D regardless; hasBlock is addressability only).
+    BOOST_REQUIRE(store.get(hashOf('A')).has_value());
+    BOOST_CHECK(store.get(hashOf('A'))->detached);
 }
 
 // put()'s descendant guard: a live same-height occupant WITH a live imported child
