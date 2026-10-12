@@ -239,6 +239,16 @@ BOOST_AUTO_TEST_CASE(proposalArgsGrammar)
     BOOST_CHECK_EQUAL(args[1], "1000");  // c_proposalInterval: blocks from now, no RPC
     BOOST_CHECK(std::ranges::none_of(
         rpc.calls(), [](auto const& call) { return call.first == "getBlockNumber"; }));
+    // CommitteeManager.sol proposalType 51: addFlag picks addObserver/addSealer, !addFlag setWeight
+    auto setWeightArgs = runner.proposalArgs(*findPreset("consensus", "set-weight"), {"ab", "3"});
+    BOOST_REQUIRE_EQUAL(setWeightArgs.size(), 4U);
+    BOOST_CHECK_EQUAL(setWeightArgs[1], "3");
+    BOOST_CHECK_EQUAL(setWeightArgs[2], "false");
+    BOOST_CHECK_EQUAL(
+        runner.proposalArgs(*findPreset("consensus", "add-sealer"), {"ab", "3"})[2], "true");
+    auto observerArgs = runner.proposalArgs(*findPreset("consensus", "add-observer"), {"ab"});
+    BOOST_CHECK_EQUAL(observerArgs[1], "0");
+    BOOST_CHECK_EQUAL(observerArgs[2], "true");
     runner.setRouting(Routing{.proposals = true, .interval = 0});
     BOOST_CHECK_THROW(runner.proposalArgs(*remove, {"abcd"}), OpsError);
     runner.setRouting(Routing{.proposals = true, .interval = -5});

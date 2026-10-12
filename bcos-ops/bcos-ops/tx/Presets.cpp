@@ -119,12 +119,15 @@ constexpr std::span<const ParamSpec> p_none;
 
 // clang-format off
 constexpr std::array c_presets{
-    // consensus: ConsensusPrecompiled.cpp; version ≥ 3.1 wants addSealer on an observer (-51104)
+    // consensus: ConsensusPrecompiled.cpp; version ≥ 3.1 wants addSealer on an observer (-51104).
+    // createSetConsensusWeightProposal(node, weight, addFlag, interval) executes (bcos-auth
+    // CommitteeManager.sol, proposalType 51): addFlag && weight == 0 → addObserver, addFlag →
+    // addSealer, !addFlag → setWeight
     Preset{"consensus", "add-sealer", "addSealer", c_consensus, "addSealer(string,uint256)", p_nodeWeight, "int32", Access::Committee, OPS_PROPOSAL(c_setWeightProposal, "$0,$1,true,$interval"), true},
     Preset{"consensus", "add-sealer-term", "addSealer", c_consensus, "addSealer(string,uint256,uint256)", p_nodeWeightTerm, "int32", Access::Committee, OPS_DIRECT, true},
     Preset{"consensus", "add-observer", "addObserver", c_consensus, "addObserver(string)", p_nodeId, "int32", Access::Committee, OPS_PROPOSAL(c_setWeightProposal, "$0,0,true,$interval"), true},
     Preset{"consensus", "remove", "removeNode", c_consensus, "remove(string)", p_nodeId, "int32", Access::Committee, OPS_PROPOSAL(c_rmNodeProposal, "$0,$interval"), true},
-    Preset{"consensus", "set-weight", "setConsensusWeight", c_consensus, "setWeight(string,uint256)", p_nodeWeight, "int32", Access::Committee, OPS_PROPOSAL(c_setWeightProposal, "$0,$1,true,$interval"), true},
+    Preset{"consensus", "set-weight", "setConsensusWeight", c_consensus, "setWeight(string,uint256)", p_nodeWeight, "int32", Access::Committee, OPS_PROPOSAL(c_setWeightProposal, "$0,$1,false,$interval"), true},
     Preset{"consensus", "set-term-weight", "", c_consensus, "setTermWeight(string,uint256)", p_nodeWeight, "int32", Access::Governor, OPS_DIRECT, true},
     Preset{"consensus", "sealers", "getSealerList", c_toRpc, "getSealerList", p_none, "", Access::Anyone, OPS_DIRECT, false},
     Preset{"consensus", "observers", "getObserverList", c_toRpc, "getObserverList", p_none, "", Access::Anyone, OPS_DIRECT, false},

@@ -192,6 +192,11 @@ int runWritePreset(Connection const& _connection, Args const& _args, std::ostrea
     runner.setRouting(routing);
     bool viaProposal = runner.routesThroughProposal(_preset);
     auto const* committeePreset = viaProposal ? PresetRunner::proposalPreset(_preset) : nullptr;
+    if (viaProposal && committeePreset == nullptr)
+    {
+        throw OpsError(
+            c_exitUsage, "no committee preset for " + std::string(_preset.proposal->signature));
+    }
     // the confirmation shows what is really sent: on the proposal path that is the committee
     // address with the proposal's arguments, not the precompiled call it stands in for
     if (!confirmWrite(_args, _out, viaProposal ? *committeePreset : _preset,

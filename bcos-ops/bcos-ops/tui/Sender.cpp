@@ -174,7 +174,12 @@ void Sender::start()
 
 void Sender::stop()
 {
-    m_stop = true;
+    {
+        // set under the queue mutex: the worker checks the predicate and goes to sleep while
+        // holding it, so a store outside the lock can land between the two and lose the wakeup
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_stop = true;
+    }
     m_wake.notify_all();
     if (m_thread.joinable())
     {
