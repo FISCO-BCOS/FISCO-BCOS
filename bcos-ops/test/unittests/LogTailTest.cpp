@@ -17,16 +17,16 @@ namespace bcos::ops::test
 {
 namespace
 {
-struct TempLogDir
+struct TempTailDir
 {
     std::filesystem::path dir;
-    TempLogDir()
+    TempTailDir()
     {
         dir = std::filesystem::temp_directory_path() /
               ("bcos_ops_logtail_" + std::to_string(::getpid()));
         std::filesystem::create_directories(dir);
     }
-    ~TempLogDir() { std::filesystem::remove_all(dir); }
+    ~TempTailDir() { std::filesystem::remove_all(dir); }
     void append(std::string const& _name, std::string const& _text)
     {
         std::ofstream out(dir / _name, std::ios::app);
@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_SUITE(LogTailTest)
 
 BOOST_AUTO_TEST_CASE(pollReturnsOnlyNewLines)
 {
-    TempLogDir temp;
+    TempTailDir temp;
     temp.append("log_2026101005.00.log",
         "info|2026-10-10 05:00:01.000000|x|[CONSENSUS][PBFT]CheckpointSent,index=1\n"
         "info|2026-10-10 05:00:02.000000|x|[TXPOOL]TxsFetched,count=1\n"
@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(pollReturnsOnlyNewLines)
 
 BOOST_AUTO_TEST_CASE(unfinishedLineWaitsForItsNewline)
 {
-    TempLogDir temp;
+    TempTailDir temp;
     temp.append("log_2026101005.00.log",
         "info|2026-10-10 05:00:01.000000|x|[CONSENSUS][PBFT]CheckpointSent,index=1\n"
         "info|2026-10-10 05:00:02.000000|x|[TXPOOL]Txs");
