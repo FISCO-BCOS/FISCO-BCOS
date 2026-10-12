@@ -22,7 +22,7 @@
  *        the uint8 form needs chain version >= 3.2).
  * @file AuthCmd.cpp
  */
-#include "BalanceCmd.h"
+#include "AuthCmd.h"
 #include "TxContext.h"
 #include "bcos-ops/Cli.h"
 #include "bcos-ops/Connect.h"
@@ -88,11 +88,7 @@ Json::Value authReadValue(Preset const& _preset, Json::Value const& _decoded)
 int runAuthRead(Connection const& _connection, Args const& _args, std::ostream& _out,
     Preset const& _preset, std::vector<std::string> const& _params)
 {
-    auto facts = chainFacts(_connection);
-    TxSender sender(_connection.call, _connection.group, facts.chainId, facts.sm,
-        makeAccount(facts.sm, std::nullopt));
-    PresetRunner runner(sender, facts.sm, _connection.call, _connection.group);
-    auto result = runner.run(_preset, _params);
+    auto result = readPreset(_connection, _preset, _params);
     auto value = authReadValue(_preset, result.decoded);
     if (wantJson(_args.flag("json")))
     {

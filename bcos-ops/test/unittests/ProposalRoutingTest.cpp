@@ -147,9 +147,9 @@ BOOST_AUTO_TEST_CASE(addObserverBecomesASetConsensusWeightProposal)
     BOOST_CHECK_EQUAL(json["directMethod"].asString(), "addObserver(string)");
     BOOST_REQUIRE_EQUAL(json["params"].size(), 4U);
     BOOST_CHECK_EQUAL(json["params"][0].asString(), c_routeNode);
-    BOOST_CHECK_EQUAL(json["params"][1].asInt(), 0);
+    BOOST_CHECK_EQUAL(json["params"][1].asString(), "0");
     BOOST_CHECK_EQUAL(json["params"][2].asBool(), true);
-    BOOST_CHECK_EQUAL(json["params"][3].asInt(), 1000);  // relative, no height lookup
+    BOOST_CHECK_EQUAL(json["params"][3].asString(), "1000");  // relative, no height lookup
     BOOST_CHECK_EQUAL(json["proposal"]["id"].asString(), "7");
     BOOST_CHECK_EQUAL(json["proposal"]["statusName"].asString(), "passed");
     BOOST_CHECK(json["proposal"]["executed"].asBool());
@@ -193,7 +193,7 @@ BOOST_AUTO_TEST_CASE(sysconfigSetUsesTheIntervalOption)
         json["method"].asString(), "createSetSysConfigProposal(string,string,uint256)");
     BOOST_CHECK_EQUAL(json["params"][0].asString(), "tx_count_limit");
     BOOST_CHECK_EQUAL(json["params"][1].asString(), "2000");
-    BOOST_CHECK_EQUAL(json["params"][2].asInt(), 50);
+    BOOST_CHECK_EQUAL(json["params"][2].asString(), "50");
     BOOST_CHECK_EQUAL(json["proposal"]["statusName"].asString(), "voting");
     BOOST_CHECK(!json["proposal"]["executed"].asBool());
     BOOST_CHECK(json["ok"].asBool());  // created and open is a success

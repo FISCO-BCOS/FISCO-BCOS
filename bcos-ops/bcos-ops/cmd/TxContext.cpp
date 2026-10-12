@@ -158,6 +158,16 @@ void printPresetResult(std::ostream& _out, PresetResult const& _result, bool _js
     printRows(_out, rows);
 }
 
+PresetResult readPreset(Connection const& _connection, Preset const& _preset,
+    std::vector<std::string> const& _params, std::string const& _to)
+{
+    auto facts = chainFacts(_connection);
+    TxSender sender(_connection.call, _connection.group, facts.chainId, facts.sm,
+        makeAccount(facts.sm, std::nullopt));
+    PresetRunner runner(sender, facts.sm, _connection.call, _connection.group);
+    return runner.run(_preset, _params, _to);
+}
+
 int runWritePreset(Connection const& _connection, Args const& _args, std::ostream& _out,
     Preset const& _preset, std::vector<std::string> const& _params, ResultHint const& _hint)
 {

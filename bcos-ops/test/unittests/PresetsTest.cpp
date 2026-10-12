@@ -159,7 +159,8 @@ BOOST_AUTO_TEST_CASE(bytesArgumentsBecomeSdkHex)
     BOOST_CHECK_EQUAL(
         encodePresetArgs(*set, {"tx_count_limit", "2000"}), R"(["tx_count_limit","2000"])");
     auto const* weight = findPreset("consensus", "set-weight");
-    BOOST_CHECK_EQUAL(encodePresetArgs(*weight, {"3a1f", "2"}), R"(["3a1f",2])");
+    BOOST_CHECK_EQUAL(encodePresetArgs(*weight, {"3a1f", "2"}),
+        R"(["3a1f","2"])");  // integers travel as digit strings
 }
 
 BOOST_AUTO_TEST_CASE(negativeCodesMapToNames)

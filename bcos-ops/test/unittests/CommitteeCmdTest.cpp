@@ -180,7 +180,7 @@ BOOST_AUTO_TEST_CASE(voteAndRevokeAreDirectWritesToTheManager)
     auto json = parseJson(out.str(), "vote");
     BOOST_CHECK_EQUAL(json["mode"].asString(), "direct");
     BOOST_CHECK_EQUAL(json["method"].asString(), "voteProposal(uint256,bool)");
-    BOOST_CHECK_EQUAL(json["params"][0].asInt(), 5);
+    BOOST_CHECK_EQUAL(json["params"][0].asString(), "5");
     BOOST_CHECK(json["params"][1].asBool());
     BOOST_CHECK(json["ok"].asBool());
     // the vote reports the proposal it touched (status read back from ProposalManager)
@@ -208,7 +208,7 @@ BOOST_AUTO_TEST_CASE(proposeGovernorReportsTheProposal)
     BOOST_CHECK_EQUAL(json["mode"].asString(), "proposal");
     BOOST_CHECK_EQUAL(
         json["method"].asString(), "createUpdateGovernorProposal(address,uint32,uint256)");
-    BOOST_CHECK_EQUAL(json["params"][2].asInt(), 7);
+    BOOST_CHECK_EQUAL(json["params"][2].asString(), "7");
     BOOST_CHECK_EQUAL(json["proposal"]["id"].asString(), "9");
     BOOST_CHECK_EQUAL(json["proposal"]["statusName"].asString(), "voting");
     BOOST_CHECK(json["ok"].asBool());
@@ -218,7 +218,7 @@ BOOST_AUTO_TEST_CASE(proposeGovernorReportsTheProposal)
     std::ostringstream dflt;
     runCommitteeOn(cmtConnection(rpc),
         cmtArgs({"propose-sysconfig", "tx_count_limit", "2000", "--yes", "--json"}), dflt);
-    BOOST_CHECK_EQUAL(parseJson(dflt.str(), "default")["params"][2].asInt(), 1000);
+    BOOST_CHECK_EQUAL(parseJson(dflt.str(), "default")["params"][2].asString(), "1000");
     // the only height lookups are the blockLimit of each sent transaction, none for the interval
     auto countOf = [&](std::string const& method) {
         return std::ranges::count_if(

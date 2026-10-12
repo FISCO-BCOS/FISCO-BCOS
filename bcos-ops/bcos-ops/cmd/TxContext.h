@@ -56,6 +56,10 @@ void printPresetResult(std::ostream& _out, PresetResult const& _result, bool _js
 /// run a write preset end to end: confirm, send, print, exit code. _hint, when set, turns the
 /// result into an operator hint printed after it (JSON: a `hint` member); "" prints nothing
 using ResultHint = std::function<std::string(PresetResult const&)>;
+/// runs a read preset (a `call`) through a random-key sender; _to overrides the preset's address
+/// for the committee contracts resolved at runtime
+PresetResult readPreset(Connection const& _connection, Preset const& _preset,
+    std::vector<std::string> const& _params, std::string const& _to = "");
 int runWritePreset(Connection const& _connection, Args const& _args, std::ostream& _out,
     Preset const& _preset, std::vector<std::string> const& _params, ResultHint const& _hint = {});
 }  // namespace bcos::ops

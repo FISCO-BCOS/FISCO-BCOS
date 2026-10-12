@@ -104,11 +104,30 @@ bool isBytesType(std::string_view _type)
     return _type.starts_with("bytes") && !_type.ends_with("]");
 }
 
+bool isIntegerType(std::string_view _type)
+{
+    return (_type.starts_with("uint") || _type.starts_with("int")) && !_type.ends_with("]");
+}
+
 Json::Value typedArg(ParamSpec const& _spec, std::string const& _arg)
 {
     if (isBytesType(_spec.type))
     {
         return toSdkBytes(_arg);
+    }
+    if (isIntegerType(_spec.type))
+    {
+        // jsoncpp parses a number beyond 64 bits as a double ("1e+21"), which the codec rejects;
+        // the codec's string branch (ContractABICodec.cpp UINT/INT: u256(str) / s256(str)) takes
+        // the digits verbatim, so integers always travel as decimal text. Hex is refused: the
+        // codec's isUnsigned() would reject "0x…" with a less helpful message.
+        auto digits = _arg.starts_with("-") ? std::string_view(_arg).substr(1) : _arg;
+        if (digits.empty() || digits.find_first_not_of("0123456789") != std::string::npos)
+        {
+            throw OpsError(c_exitUsage, std::string(_spec.name) + " (" + std::string(_spec.type) +
+                                            ") must be a decimal integer, got: " + _arg);
+        }
+        return _arg;
     }
     // argsToJsonArray decides number / bool / array vs string per value
     auto array = parseJson(argsToJsonArray({_arg}), "preset argument");
