@@ -267,19 +267,19 @@ BOOST_AUTO_TEST_CASE(NextOpBaseFeeByParentShape)
     };
     bytes const holocene{0x00, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};  // 250 / 6
     // target 5M, used 10M: + 1e9 * 5M / 5M / 250 = +4,000,000
-    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent(holocene, 10'000'000, true)), 1'004'000'000);
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent(holocene, 10'000'000, true), std::nullopt), 1'004'000'000);
     // Holocene params come from extraData: 8 / 2, target 15M, used 30M: + 1e9 / 8
     bytes const eightTwo{0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x02};
-    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent(eightTwo, 30'000'000, true)), 1'125'000'000);
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent(eightTwo, 30'000'000, true), std::nullopt), 1'125'000'000);
     // Jovian (17 bytes, 0x01): empty block lowers the fee to 996e6, the 2 gwei floor wins.
     bytes jovian{0x01, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};
     auto const floor = bytes{0x00, 0x00, 0x00, 0x00, 0x77, 0x35, 0x94, 0x00};  // 2e9
     jovian.insert(jovian.end(), floor.begin(), floor.end());
-    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent(jovian, 0, true)), 2'000'000'000);
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent(jovian, 0, true), std::nullopt), 2'000'000'000);
     // Pre-Holocene, Canyon child (parent has withdrawalsRoot): 250 / 6, same as the first case.
-    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent({}, 10'000'000, true)), 1'004'000'000);
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent({}, 10'000'000, true), std::nullopt), 1'004'000'000);
     // Pre-Canyon: denominator 50: + 1e9 * 5M / 5M / 50 = +20,000,000
-    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent({}, 10'000'000, false)), 1'020'000'000);
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent({}, 10'000'000, false), std::nullopt), 1'020'000'000);
 }
 
 // The declared-triple substitution: a chain that declares [op_eip1559] prices the
@@ -316,7 +316,7 @@ BOOST_AUTO_TEST_CASE(FeeHistoryShape)
     BOOST_CHECK_EQUAL(fees[0].asString(), "0x3e8");
     BOOST_CHECK_EQUAL(fees[2].asString(), "0x4b0");
     // 1200 + 1200 * 5M / 5M / 250 = 1204
-    BOOST_CHECK_EQUAL(fees[3].asString(), toQuantity(rpc::nextOpBaseFee(*header(19))));
+    BOOST_CHECK_EQUAL(fees[3].asString(), toQuantity(rpc::nextOpBaseFee(*header(19), std::nullopt)));
     BOOST_CHECK_EQUAL(fees[3].asString(), "0x4b4");
     BOOST_REQUIRE_EQUAL(result["gasUsedRatio"].size(), 3U);
     BOOST_CHECK_CLOSE(result["gasUsedRatio"][0].asDouble(), 0.5, 1e-9);
