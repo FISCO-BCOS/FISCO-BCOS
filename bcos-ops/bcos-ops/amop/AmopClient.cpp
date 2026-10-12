@@ -45,9 +45,16 @@ public:
                 message.topic = _topic;
                 message.from = _endpoint;
                 message.data.assign(_data.begin(), _data.end());
-                message.reply = [amop, _endpoint, _seq](bytesConstRef _reply) {
-                    amop->sendResponse(_endpoint, _seq, _reply);
-                };
+                // a broadcast arrives through the same callback with an empty seq; the node
+                // has no handler for a response to it (WsService warns on every one), so only
+                // request/response deliveries get a reply
+                if (!_seq.empty())
+                {
+                    message.reply = [amop, _endpoint, _seq](bytesConstRef _reply) {
+                        // asyncSendMessage only enqueues; safe from inside the io callback
+                        amop->sendResponse(_endpoint, _seq, _reply);
+                    };
+                }
                 _onMessage(std::move(message));
             });
     }
@@ -100,12 +107,6 @@ private:
 
 std::unique_ptr<AmopTransport> makeAmopTransport(Connection const& _connection)
 {
-    auto sdk = sdkOf(_connection);
-    if (!sdk)
-    {
-        throw OpsError(c_exitUsage, "amop needs the node's WebSocket RPC (source=" +
-                                        _connection.source + " has no AMOP channel)");
-    }
-    return std::make_unique<SdkAmopTransport>(std::move(sdk));
+    return std::make_unique<SdkAmopTransport>(sdkOf(_connection));
 }
 }  // namespace bcos::ops

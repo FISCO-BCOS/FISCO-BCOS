@@ -27,9 +27,9 @@
 
 namespace bcos::ops
 {
-/// _stop ends `sub --count 0` (SIGINT in the CLI, the test fake otherwise). Exit codes:
-/// 0 = N messages received / publish answered; 2 = deadline passed or the node refused the
-/// publish; 1 = usage.
+/// _stop (SIGINT in the CLI, the test fake otherwise) ends `sub`: exit 0 for `--count 0`,
+/// otherwise it counts as the deadline. Exit codes: 0 = N messages received / publish answered;
+/// 2 = deadline passed or interrupted before N, or the node refused the publish; 1 = usage.
 int runAmopOn(AmopTransport& _transport, Args const& _args, std::ostream& _out, std::ostream& _err,
     std::atomic<bool> const& _stop);
 }  // namespace bcos::ops

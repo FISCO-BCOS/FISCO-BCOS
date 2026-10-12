@@ -27,6 +27,7 @@
 #include <csignal>
 #include <deque>
 #include <mutex>
+#include <optional>
 #include <ostream>
 
 namespace bcos::ops
@@ -37,32 +38,110 @@ constexpr double c_amopDefaultWaitSeconds = 60;
 
 std::atomic<bool> g_amopStop{false};
 
-bool amopPrintable(bytes const& _data)
+/// text = printable: well-formed UTF-8 whose only control bytes are TAB and LF
+bool amopIsText(bytes const& _data)
 {
-    return std::ranges::all_of(_data, [](uint8_t _byte) {
-        return _byte == '\t' || _byte == '\n' || (_byte >= 0x20 && _byte < 0x7f) || _byte >= 0x80;
-    });
+    size_t i = 0;
+    while (i < _data.size())
+    {
+        uint8_t byte = _data[i];
+        if (byte < 0x80)
+        {
+            if ((byte < 0x20 && byte != '\t' && byte != '\n') || byte == 0x7f)
+            {
+                return false;
+            }
+            ++i;
+            continue;
+        }
+        size_t length = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc2 ? 2 : 0;
+        if (length == 0 || byte > 0xf4 || i + length > _data.size())
+        {
+            return false;  // continuation byte in lead position, overlong, or truncated
+        }
+        for (size_t k = 1; k < length; ++k)
+        {
+            if ((_data[i + k] & 0xc0) != 0x80)
+            {
+                return false;
+            }
+        }
+        i += length;
+    }
+    return true;
+}
+
+struct AmopRendered
+{
+    std::optional<std::string> text;  // nullopt when the payload is not text
+    std::string hex;                  // always 0x…
+};
+
+/// one rule for every payload the command prints: text when UTF-8, else only hex. The text
+/// path keeps TAB and LF (sanitizeForTerminal drops LF); _forTerminal renders LF as the two
+/// characters `\n` so a multi-line payload stays one output line
+AmopRendered amopRender(bytes const& _data, bool _forTerminal)
+{
+    AmopRendered rendered;
+    rendered.hex = "0x" + toHex(_data);
+    if (!amopIsText(_data))
+    {
+        return rendered;
+    }
+    std::string text;
+    text.reserve(_data.size());
+    for (uint8_t byte : _data)
+    {
+        if (byte == '\n' && _forTerminal)
+        {
+            text += "\\n";
+        }
+        else
+        {
+            text.push_back(static_cast<char>(byte));
+        }
+    }
+    rendered.text = text;
+    return rendered;
 }
 
 void amopPrintMessage(std::ostream& _out, AmopMessage const& _message, bool _json)
 {
-    std::string text(_message.data.begin(), _message.data.end());
+    auto rendered = amopRender(_message.data, !_json);
     if (_json)
     {
         Json::Value value;
         value["topic"] = _message.topic;
         value["from"] = _message.from;
-        value["data"] = amopPrintable(_message.data) ? Json::Value(sanitizeForTerminal(text)) :
-                                                       Json::Value(Json::nullValue);
-        value["hex"] = "0x" + toHex(_message.data);
+        value["data"] = rendered.text ? Json::Value(*rendered.text) : Json::Value(Json::nullValue);
+        value["hex"] = rendered.hex;
         Json::StreamWriterBuilder builder;
         builder["indentation"] = "";
         _out << Json::writeString(builder, value) << '\n' << std::flush;
         return;
     }
-    _out << (amopPrintable(_message.data) ? sanitizeForTerminal(text) : "0x" + toHex(_message.data))
-         << '\n'
-         << std::flush;
+    _out << rendered.text.value_or(rendered.hex) << '\n' << std::flush;
+}
+
+/// everything the io thread and the command thread share; owned by both through a shared_ptr so
+/// a delivery that lands after the loop returned (the SDK has no unsubscribe) finds `closed`
+/// instead of freed stack memory
+struct AmopSubState
+{
+    std::mutex mutex;
+    std::condition_variable arrived;
+    std::deque<AmopMessage> queue;
+    bool closed = false;
+};
+
+double amopWaitSeconds(Args const& _args, double _default)
+{
+    auto seconds = _args.numberOr<double>("wait", _default);
+    if (!(seconds > 0))
+    {
+        throw OpsError(c_exitUsage, "--wait must be a positive number of seconds");
+    }
+    return seconds;
 }
 
 int runAmopSub(AmopTransport& _transport, Args const& _args, std::ostream& _out, std::ostream& _err,
@@ -78,25 +157,32 @@ int runAmopSub(AmopTransport& _transport, Args const& _args, std::ostream& _out,
     {
         throw OpsError(c_exitUsage, "--count must be >= 0 (0 = until interrupted)");
     }
-    auto waitSeconds = _args.numberOr<double>("wait", c_amopDefaultWaitSeconds);
+    auto waitSeconds = amopWaitSeconds(_args, c_amopDefaultWaitSeconds);
     bool deadlineApplies = count > 0 || _args.option("wait").has_value();
     bool json = wantJson(_args.flag("json"));
 
-    std::mutex mutex;
-    std::condition_variable arrived;
-    std::deque<AmopMessage> queue;
-    _transport.subscribe(topic, [&](AmopMessage _message) {
+    auto state = std::make_shared<AmopSubState>();
+    _transport.subscribe(topic, [state](AmopMessage _message) {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        if (state->closed)
+        {
+            return;  // the command already returned; nobody reads or answers any more
+        }
         // the publisher waits for this reply; echo so `amop pub` sees a round trip
         if (_message.reply)
         {
             _message.reply(bytesConstRef(_message.data.data(), _message.data.size()));
         }
-        std::lock_guard<std::mutex> lock(mutex);
-        queue.push_back(std::move(_message));
-        arrived.notify_all();
+        state->queue.push_back(std::move(_message));
+        state->arrived.notify_all();
     });
     _err << "subscribed " << topic << '\n' << std::flush;
 
+    auto finish = [&](int _code) {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        state->closed = true;
+        return _code;
+    };
     auto deadline = std::chrono::steady_clock::now() +
                     std::chrono::milliseconds(static_cast<int64_t>(waitSeconds * 1000));
     int64_t received = 0;
@@ -104,10 +190,10 @@ int runAmopSub(AmopTransport& _transport, Args const& _args, std::ostream& _out,
     {
         std::deque<AmopMessage> batch;
         {
-            std::unique_lock<std::mutex> lock(mutex);
-            arrived.wait_for(
-                lock, std::chrono::milliseconds(200), [&]() { return !queue.empty(); });
-            batch.swap(queue);
+            std::unique_lock<std::mutex> lock(state->mutex);
+            state->arrived.wait_for(
+                lock, std::chrono::milliseconds(200), [&]() { return !state->queue.empty(); });
+            batch.swap(state->queue);
         }
         for (auto const& message : batch)
         {
@@ -115,18 +201,21 @@ int runAmopSub(AmopTransport& _transport, Args const& _args, std::ostream& _out,
             ++received;
             if (count > 0 && received >= count)
             {
-                return c_exitOk;
+                return finish(c_exitOk);
             }
         }
-        if (_stop.load())
+        bool stopped = _stop.load();
+        if (stopped && count == 0)
         {
-            return c_exitOk;
+            return finish(c_exitOk);
         }
-        if (deadlineApplies && std::chrono::steady_clock::now() >= deadline)
+        if (stopped || (deadlineApplies && std::chrono::steady_clock::now() >= deadline))
         {
-            _err << "timeout: received " << received << " of " << count << " messages on " << topic
-                 << '\n';
-            return c_exitChecksFailed;
+            // interrupted before N arrived counts as the deadline: a scripted
+            // `timeout -s INT … sub --count 1` must not report success with zero messages
+            _err << (stopped ? "interrupted" : "timeout") << ": received " << received << " of "
+                 << count << " messages on " << topic << '\n';
+            return finish(c_exitChecksFailed);
         }
     }
 }
@@ -139,7 +228,7 @@ int runAmopPub(AmopTransport& _transport, Args const& _args, std::ostream& _out,
     }
     auto const& topic = _args.positionals()[1];
     auto const& text = _args.positionals()[2];
-    auto waitMs = static_cast<int>(_args.numberOr<double>("wait", 10) * 1000);
+    auto waitMs = static_cast<int>(amopWaitSeconds(_args, 10) * 1000);
     bool json = wantJson(_args.flag("json"));
     auto result = _transport.publish(
         topic, bytesConstRef(reinterpret_cast<uint8_t const*>(text.data()), text.size()), waitMs);
@@ -160,24 +249,20 @@ int runAmopPub(AmopTransport& _transport, Args const& _args, std::ostream& _out,
         }
         return c_exitChecksFailed;
     }
-    std::string response(result.response.begin(), result.response.end());
+    auto rendered = amopRender(result.response, !json);
     if (json)
     {
         Json::Value value;
         value["ok"] = true;
         value["topic"] = topic;
-        value["response"] = amopPrintable(result.response) ?
-                                Json::Value(sanitizeForTerminal(response)) :
-                                Json::Value(Json::nullValue);
-        value["responseHex"] = "0x" + toHex(result.response);
+        value["response"] =
+            rendered.text ? Json::Value(*rendered.text) : Json::Value(Json::nullValue);
+        value["responseHex"] = rendered.hex;
         printJson(_out, value);
     }
     else
     {
-        _out << "response "
-             << (amopPrintable(result.response) ? sanitizeForTerminal(response) :
-                                                  "0x" + toHex(result.response))
-             << '\n';
+        _out << "response " << rendered.text.value_or(rendered.hex) << '\n';
     }
     return c_exitOk;
 }

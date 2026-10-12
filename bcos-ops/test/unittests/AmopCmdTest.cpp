@@ -22,8 +22,10 @@
 #include "bcos-ops/RpcCall.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <functional>
 #include <sstream>
 #include <thread>
+#include <vector>
 
 namespace bcos::ops::test
 {
@@ -43,6 +45,7 @@ public:
     std::vector<std::string> replies;  // what the subscriber echoed back
     std::string subscribedTopic;
     std::atomic<bool>* stopAfterDelivery = nullptr;
+    std::function<void(AmopMessage)> kept;  // the SDK keeps the callback for ever; so do we
     AmopPublishResult publishResult;
     std::string publishedTopic;
     std::string publishedData;
@@ -51,6 +54,7 @@ public:
     void subscribe(std::string const& _topic, std::function<void(AmopMessage)> _onMessage) override
     {
         subscribedTopic = _topic;
+        kept = _onMessage;
         for (auto const& text : deliver)
         {
             AmopMessage message;
@@ -148,6 +152,82 @@ BOOST_AUTO_TEST_CASE(subTimesOutWithExitTwoWhenFewerArrive)
     BOOST_CHECK_EQUAL(code, c_exitChecksFailed);
     BOOST_CHECK((dataLines(out.str()) == std::vector<std::string>{"only-one"}));
     BOOST_CHECK(err.str().find("timeout: received 1 of 2") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(stopBeforeCountIsReachedIsExitTwo)
+{
+    FakeAmop fake;
+    fake.deliver = {"only-one"};
+    std::atomic<bool> stop{false};
+    fake.stopAfterDelivery = &stop;  // SIGINT after the first of two expected messages
+    std::ostringstream out;
+    std::ostringstream err;
+    auto code = runAmopOn(fake, amopArgs({"sub", "t1", "--count", "2"}), out, err, stop);
+    BOOST_CHECK_EQUAL(code, c_exitChecksFailed);
+    BOOST_CHECK(err.str().find("interrupted: received 1 of 2") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(deliveryAfterTheLoopReturnedIsIgnored)
+{
+    FakeAmop fake;
+    fake.deliver = {"first"};
+    std::atomic<bool> stop{false};
+    std::ostringstream out;
+    std::ostringstream err;
+    BOOST_CHECK_EQUAL(
+        runAmopOn(fake, amopArgs({"sub", "t1", "--count", "1"}), out, err, stop), c_exitOk);
+    BOOST_REQUIRE_EQUAL(fake.replies.size(), 1U);
+    // the io thread hands over a second message once runAmopSub's frame is gone
+    AmopMessage late;
+    late.topic = "t1";
+    late.data = bytesOf("late");
+    late.reply = [&fake](bytesConstRef _reply) {
+        fake.replies.emplace_back(_reply.begin(), _reply.end());
+    };
+    fake.kept(std::move(late));
+    BOOST_CHECK_EQUAL(fake.replies.size(), 1U);  // neither answered nor printed
+    BOOST_CHECK((dataLines(out.str()) == std::vector<std::string>{"first"}));
+}
+
+BOOST_AUTO_TEST_CASE(waitMustBePositive)
+{
+    FakeAmop fake;
+    std::atomic<bool> stop{false};
+    std::ostringstream out;
+    std::ostringstream err;
+    for (auto const& wait : {"0", "-1", "-0.5"})
+    {
+        BOOST_CHECK_THROW(
+            runAmopOn(fake, amopArgs({"sub", "t1", "--wait", wait}), out, err, stop), OpsError);
+        BOOST_CHECK_THROW(
+            runAmopOn(fake, amopArgs({"pub", "t1", "m", "--wait", wait}), out, err, stop),
+            OpsError);
+    }
+    BOOST_CHECK(fake.subscribedTopic.empty());
+    BOOST_CHECK(fake.publishedTopic.empty());
+}
+
+BOOST_AUTO_TEST_CASE(binaryAndMultilinePayloadsRender)
+{
+    FakeAmop fake;
+    fake.deliver = {"a\nb", std::string("\xff\xfe", 2), "caf\xc3\xa9"};
+    std::atomic<bool> stop{false};
+    std::ostringstream out;
+    std::ostringstream err;
+    BOOST_CHECK_EQUAL(
+        runAmopOn(fake, amopArgs({"sub", "t1", "--count", "3"}), out, err, stop), c_exitOk);
+    std::vector<Json::Value> lines;
+    std::istringstream in(out.str());
+    std::string line;
+    while (std::getline(in, line))
+    {
+        lines.push_back(parseJson(line, "line"));
+    }
+    BOOST_REQUIRE_EQUAL(lines.size(), 3U);
+    BOOST_CHECK_EQUAL(lines[0]["data"].asString(), "a\nb");  // LF kept in JSON
+    BOOST_CHECK(lines[1]["data"].isNull());                  // not UTF-8: hex only
+    BOOST_CHECK_EQUAL(lines[1]["hex"].asString(), "0xfffe");
+    BOOST_CHECK_EQUAL(lines[2]["data"].asString(), "caf\xc3\xa9");
 }
 
 BOOST_AUTO_TEST_CASE(subCountZeroRunsUntilStopped)
