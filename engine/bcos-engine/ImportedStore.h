@@ -83,8 +83,17 @@ public:
     bool put(ImportedBlock block, bool occupantCanonical = false)
     {
         std::lock_guard lock(m_mutex);
-        if (m_blocks.contains(block.hash))
+        if (auto const it = m_blocks.find(block.hash); it != m_blocks.end())
         {
+            // Same-hash re-import re-livens a detached body (the contract above:
+            // "for a later re-FCU or re-import"): clear the flag and re-key the
+            // height so occupantAt/put's guard see it live again. A live block is
+            // an idempotent no-op.
+            if (it->second.detached)
+            {
+                it->second.detached = false;
+                m_byNumber.insert_or_assign(it->second.number, it->first);
+            }
             return true;
         }
         for (auto const& [hash, existing] : m_blocks)
