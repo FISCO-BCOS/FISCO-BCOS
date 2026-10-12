@@ -20,6 +20,7 @@
 #include "bcos-ops/OpsError.h"
 #include "fixtures/FakeRpc.h"
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <sstream>
 
 namespace bcos::ops::test
@@ -169,6 +170,23 @@ BOOST_AUTO_TEST_CASE(helpNamesConsoleCommands)
     BOOST_CHECK_EQUAL(runOps({"fisco-bcos", "sysconfig", "--help"}, out, err), c_exitOk);
     BOOST_CHECK(out.str().find("getSystemConfigByKey") != std::string::npos);
     BOOST_CHECK(out.str().find("setSystemConfigByKey") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(writeWithoutYesIsRefusedWhenStdinIsNotATerminal)
+{
+    // ctest / CI pipes stdin; a governance write must then be explicit about skipping the prompt
+    FakeRpc rpc;
+    auto connection = sysconfigConnection(rpc);
+    std::ostringstream out;
+    BOOST_CHECK_EXCEPTION(
+        runSysconfigOn(connection, sysArgs({"set", "tx_count_limit", "2000", "--json"}), out),
+        OpsError, [](OpsError const& e) {
+            return e.exitCode == c_exitUsage &&
+                   std::string(e.what()).find("--yes") != std::string::npos;
+        });
+    BOOST_CHECK(rpc.calls().empty() || std::ranges::none_of(rpc.calls(), [](auto const& c) {
+        return c.first == "sendTransaction";
+    }));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

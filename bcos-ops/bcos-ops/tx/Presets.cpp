@@ -147,7 +147,7 @@ constexpr std::array c_presets{
     Preset{"auth", "deploy-type", "getDeployAuth", c_authManager, "deployType()", p_none, "uint256", Access::Anyone, OPS_DIRECT, false},
     Preset{"auth", "has-deploy-auth", "checkDeployAuth", c_authManager, "hasDeployAuth(address)", p_addr, "bool", Access::Anyone, OPS_DIRECT, false},
     Preset{"auth", "check-method-auth", "checkMethodAuth", c_authManager, "checkMethodAuth(address,bytes4,address)", p_contractSelAddr, "bool", Access::Anyone, OPS_DIRECT, false},
-    Preset{"auth", "get-method-auth", "getMethodAuth", c_authManager, "getMethodAuth(address,bytes4)", p_contractSel, "uint8,address[],address[]", Access::Anyone, OPS_DIRECT, false},
+    Preset{"auth", "get-method-auth", "getMethodAuth", c_authManager, "getMethodAuth(address,bytes4)", p_contractSel, "uint8,string[],string[]", Access::Anyone, OPS_DIRECT, false},
     Preset{"auth", "contract-available", "contractAvailable", c_authManager, "contractAvailable(address)", p_contract, "bool", Access::Anyone, OPS_DIRECT, false},
     Preset{"auth", "reset-admin", "resetAdmin", c_authManager, "resetAdmin(address,address)", p_contractAdmin, "int32", Access::Committee, OPS_PROPOSAL(c_resetAdminProposal, "$0,$1,$interval"), true},
     Preset{"auth", "set-deploy-auth-type", "setDeployAuthType", c_authManager, "setDeployAuthType(uint8)", p_authType, "int32", Access::Committee, OPS_PROPOSAL(c_deployAuthTypeProposal, "$0,$interval"), true},

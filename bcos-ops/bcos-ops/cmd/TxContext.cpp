@@ -61,9 +61,15 @@ std::unique_ptr<TxSender> makeSender(
 bool confirmWrite(Args const& _args, std::ostream& _out, Preset const& _preset,
     std::string const& _to, std::vector<std::string> const& _params)
 {
-    if (_args.flag("yes") || ::isatty(STDIN_FILENO) == 0)
+    if (_args.flag("yes"))
     {
         return true;
+    }
+    if (::isatty(STDIN_FILENO) == 0)
+    {
+        throw OpsError(c_exitUsage, "stdin is not a terminal: pass --yes to run " +
+                                        std::string(_preset.group) + " " +
+                                        std::string(_preset.name) + " without confirmation");
     }
     std::string params;
     for (size_t i = 0; i < _params.size() && i < _preset.params.size(); ++i)

@@ -100,6 +100,13 @@ std::vector<std::string> featureNames()
     std::vector<std::string> names;
     for (auto key : bcos::ledger::Features::featureKeys())
     {
+        // featureKeys() walks the whole enum, including the reserved_removed_* placeholders
+        // (Features.h: retired bits whose names string2Flag still accepts); setValueByKey would
+        // write such a bit on chain for ever, so they are not offered
+        if (std::string_view(key).starts_with("reserved_"))
+        {
+            continue;
+        }
         names.emplace_back(key);
     }
     return names;
