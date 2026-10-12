@@ -6,10 +6,10 @@
 
 | 链 | 节点 | build_chain | 端口（`CI_PORT_BASE` 默认 `30300,20200,8545`） | 场景 |
 |---|---|---|---|---|
-| nonsm | 3 + 扩容 node3 | 默认 | p2p/rpc/web3 = base；扩容 +3/+3/+1 | 1 2 4 5 8 9 19 20 |
-| sm | 2 + 扩容 node2 | `-s` | base + 100 | 1 2 4 5 8 9 19 |
-| v1 | 2 + 扩容 node2 | genesis `executor version=1`，node0 开 web3 | base + 200 | 1 2 4 5 8 9（`web3_test.sh` 在 Java 阶段的 v1 链最后，不变） |
-| auth | 2 + 扩容 node2 | `-a <fisco-bcos account new>` | base + 300 | 1 2 4 5 8 9（5 与 8/9 的系统配置写走提案；5 断言 `--direct` 为 NO_AUTHORIZED） |
+| nonsm | 3 + 扩容 node3 | 默认 | p2p/rpc/web3 = base；扩容 +3/+3/+1 | 1 2 4 5 8 9 7 13 14 19 20 |
+| sm | 2 + 扩容 node2 | `-s` | base + 100 | 1 2 4 5 8 9 7 14 19（13 跳过：只有 3 个 sealer）|
+| v1 | 2 + 扩容 node2 | genesis `executor version=1`，node0 开 web3 | base + 200 | 1 2 4 5 8 9 7 14（13 跳过；`web3_test.sh` 在 Java 阶段的 v1 链最后，不变） |
+| auth | 2 + 扩容 node2 | `-a <fisco-bcos account new>` | base + 300 | 1 2 4 5 8 9 7 14（13 跳过；5、7、14 与 8/9 的治理写走提案；5 断言 `--direct` 为 NO_AUTHORIZED） |
 
 每条链一个后台子 shell，日志在 `logs/<chain>.log`；任一链失败，主脚本打印该链日志尾 200 行、每个节点的 error/warn 行与 nohup，退出 1。ops 命令通过 `--node-dir` 走 `node0/data/fisco-bcos.ipc`，与 RPC 端口的 TLS 无关（CI 链保持 `enable_ssl=true`）。
 
@@ -64,6 +64,9 @@ SM 链需要 `~/.fisco/tassl`；`jq` 必装；bash ≥ 4（`declare -A`、`${x,,
 | — | 旧 `ci_check_air.sh:402-427` console `addBalance <account> 200 ether`、`setSystemConfigByKey tx_gas_price 1` | web3 测试账户有余额、gas price 为 1 | `java_legacy_air.sh` web3 段的 `ops_with_retry balance enable / balance add / sysconfig set tx_gas_price 0x1` | 命令退出 0（三次重试） | 已切换；v1 链 |
 | console | `WelcomeInfoTest` 等 console 自身的单测 | console 启动/欢迎页 | 不替代 | — | console 自测，不在节点 CI 范围 |
 | java-sdk-demo | `java_sdk_demo_ci_test.sh check_all_contract:179-213` | console `deploy ContractTestAll`（SM 链换 ECRecoverSMTest）、区块 gasUsed ≠ 0、`addBalance <contract> 10000000`、`call ContractTestAll check` status 0；`contract_test` 在 `feature_dmc2serial` 开启后再跑一遍 | `scenario_9_contract_test_all` (`scenarios/contracts.sh`) | `tx deploy contracts/ContractTestAll/ContractTestAll[.sm].bin` status 0、部署块 gasUsed > 0、`balance add <contract> 10000000` ok、`tx send check` status 0 且 `logEntries` 非空（14 个子合约各发 Info 事件）、所在块 gasUsed > 0；`sysconfig set feature_dmc2serial 1` 后同样一轮 | 四链；deploy/check 用 `--timeout 180000`（check() 烧约 7e8 gas，auth 链 15 s 默认超时不够） |
+| java-sdk | `PrecompiledTest.test1ConsensusService:77` | addObserver / addSealer / removeNode 后 getSealerList / getObserverList 变化，错误码 | `scenario_7_consensus_membership` (`scenarios/topology.sh`) | 扩容节点：不在列表时 `add-sealer` → `SEALER_MUST_BE_OBSERVER_FIRST`(-51104)、坏 id → `INVALID_NODE_ID`(-51100)；`add-observer` → `consensus list` 为 observer → `add-sealer 1` → sealer 且 `tx smoke` 仍出块 → 对已是 sealer 的节点 `add-sealer 2` 为原地改权重（code 0，ConsensusPrecompiled.cpp addSealer）→ `remove` → 不在列表 → `add-observer` → `add-sealer` 回到 sealer | 四链；auth 链每步 `mode=proposal` 且 `executed=true`，负码取 `proposal.execCodeName` |
+| — | 新增 | — | `scenario_13_viewchange` (`scenarios/topology.sh`) | nonsm（3 sealer + 扩容 sealer = 4，停 1 个仍有 quorum 3）：`status` 全 ok → 由 `getConsensusStatus.leaderIndex` 找到 leader 节点目录并 `stop.sh` → 存活节点 `status` 轮询到 `leaderIndex` 变化且 `inTimeout=false`（本机实测 2 s；`consensus_stable fail` 的窗口短于 1 s 轮询，看到则打印、不断言）→ `log viewchange` 含 `reason=consensus_timeout`、`toView` 大于停前 view、`newLeader` 非空的一轮 → `tx smoke` 仍出块 → `start.sh` 后该节点 `status` 全 ok 且高度 ≥ 停前 | 2 节点链打印 `skip: needs 3 sealers…` 返回 0 |
+| — | 新增 | — | `scenario_14_sync` (`scenarios/topology.sh`) | 扩容节点先 `add-observer`（降为 observer，2 节点链停一个 sealer 会停链）→ `stop.sh` 并删 `data/`、`log/` → node0 上部署 HelloWorld + 19 笔 `set` → `start.sh` → 第一次能答的 `status`：`sync_caught_up` 为 `fail`（本机 0 s 时高度 14/58；追得太快时接受 ok/skipped 并打印）→ 轮询到 `sync_caught_up ok`、`sync.lag == 0`、高度 ≥ 发交易时的高度（本机 16 s） | 四链；节点结束时保持 observer |
 | java-sdk-demo | `check_all_dmc_transfer`（`RUN_DMC=true` 才跑，CI 从不开） | DMC 转账压测 | 不替代 | — | 性能用例，不在节点正确性 CI 范围 |
 | — | 新增（替代 console `get_account.sh` / `get_gm_account.sh`） | — | `scenario_19_account` (`scenarios/account.sh`) | `account new [--sm]` 两个文件存在；用它 `tx smoke` 成功；`tx get` 的 `from` 等于打印地址 | nonsm / sm |
 | — | 现有 `ops_tool_test` | — | `scenario_20_ops_status` (`scenarios/ops.sh`) | `tx smoke`、`status` 五项 ok、`log status` 来源为 log、除 `consensus_stable` 外无 `state=fail` 的 check、高度与 RPC 相差 ≤ 2、`tui --version-check` | nonsm；`log status` 退出 2 只能来自 `consensus_stable`（空闲链 viewchange，见下）；spec 里的「停节点前后 `log status`」与 `tui --snapshot-dir` 全页渲染待 TUI 改版（票 13）后补入 |
