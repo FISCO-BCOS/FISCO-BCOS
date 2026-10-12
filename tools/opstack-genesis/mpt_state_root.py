@@ -256,6 +256,7 @@ def parse_allocs_ini(path):
     allocs = []
     current = None
     current_storage = None
+    seen_scalar_keys = set()
     with open(path) as handle:
         for raw in handle:
             line = raw.strip()
@@ -282,9 +283,11 @@ def parse_allocs_ini(path):
                     current = {"address": address, "storage": []}
                     allocs.append(current)
                     current_storage = None
+                    seen_scalar_keys = set()
                 else:
                     current = None
                     current_storage = None
+                    seen_scalar_keys = set()
                 continue
             if current is None:
                 continue
@@ -303,6 +306,16 @@ def parse_allocs_ini(path):
                         "[alloc.N.storage] section — merge the entries into one line")
                 current_storage.append((key, value))
             else:
+                # Same strictness as the duplicate-slot guard below: a duplicated
+                # scalar silently overwrote (last-wins). seen_scalar_keys holds only
+                # keys set by BODY lines of this section — the section header seeds
+                # {"address", "storage"} itself, and the first body `address =` line
+                # legitimately refines the seeded placeholder.
+                if key in seen_scalar_keys:
+                    raise ValueError(
+                        f"{path}: duplicate key {key!r} inside one "
+                        "[alloc.N] section — merge the entries into one line")
+                seen_scalar_keys.add(key)
                 current[key] = value
     # The section-suffix guard above only sees the [alloc.<address>] layout; the
     # [alloc.N] + address= layout build-allocs emits carries the real address in a
