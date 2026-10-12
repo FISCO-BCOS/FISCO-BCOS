@@ -47,6 +47,11 @@ public:
     {
         m_visibleTxs = std::move(_range);
     }
+    /// which block / tx details the open detail pages need (fetched when not cached)
+    void setDetailWants(std::function<std::vector<DetailWant>()> _wants)
+    {
+        m_detailWants = std::move(_wants);
+    }
 
 private:
     void loop();
@@ -58,6 +63,7 @@ private:
     std::function<void()> m_onUpdate;
     std::function<size_t()> m_capacity;
     std::function<std::pair<size_t, size_t>()> m_visibleTxs;
+    std::function<std::vector<DetailWant>()> m_detailWants;
     int m_intervalMs;
     std::thread m_thread;
     std::mutex m_wakeMutex;

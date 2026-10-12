@@ -39,6 +39,8 @@ public:
     /// returns the decoded output as JSON text
     std::string decodeOutput(
         std::string const& _abi, std::string const& _method, bytes const& _output) const;
+    /// decodes a call's input (selector included) by the method signature; JSON array text
+    std::string decodeInputBySignature(std::string const& _signature, bytes const& _input) const;
 
 private:
     bool m_sm;

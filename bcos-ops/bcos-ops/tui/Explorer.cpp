@@ -185,6 +185,127 @@ void explorerFetchStatus(ExplorerState& _state, RpcCall const& _call, std::strin
     }
 }
 
+namespace
+{
+template <typename Key, typename Map>
+void explorerRemember(Map& _map, std::deque<Key>& _order, Key const& _key)
+{
+    if (std::find(_order.begin(), _order.end(), _key) == _order.end())
+    {
+        _order.push_back(_key);
+    }
+    while (_order.size() > c_explorerDetailCache)
+    {
+        _map.erase(_order.front());
+        _order.pop_front();
+    }
+}
+
+bool explorerStoreBlock(ExplorerState& _state, Json::Value _block)
+{
+    auto number = jsonInt64(_block["number"], -1);
+    if (number < 0)
+    {
+        return false;
+    }
+    _state.blockDetails[number] = std::move(_block);
+    explorerRemember(_state.blockDetails, _state.blockDetailOrder, number);
+    return true;
+}
+}  // namespace
+
+bool explorerFetchBlockDetail(
+    ExplorerState& _state, RpcCall const& _call, std::string const& _group, int64_t _number)
+{
+    auto params = explorerParams(_group);
+    params.append(Json::Int64(_number));
+    params.append(false);
+    params.append(false);
+    try
+    {
+        return explorerStoreBlock(_state, _call("getBlockByNumber", params));
+    }
+    catch (std::exception const&)
+    {
+        return false;
+    }
+}
+
+bool explorerFetchBlockDetailByHash(ExplorerState& _state, RpcCall const& _call,
+    std::string const& _group, std::string const& _hash)
+{
+    auto params = explorerParams(_group);
+    params.append(_hash);
+    params.append(false);
+    params.append(false);
+    try
+    {
+        return explorerStoreBlock(_state, _call("getBlockByHash", params));
+    }
+    catch (std::exception const&)
+    {
+        return false;
+    }
+}
+
+bool explorerFetchTxDetail(ExplorerState& _state, RpcCall const& _call, std::string const& _group,
+    std::string const& _hash)
+{
+    auto params = explorerParams(_group);
+    params.append(_hash);
+    params.append(false);
+    TxDetail detail;
+    try
+    {
+        detail.transaction = _call("getTransaction", params);
+        detail.receipt = _call("getTransactionReceipt", params);
+        detail.pending = !detail.receipt.isObject() || !detail.receipt.isMember("status");
+    }
+    catch (std::exception const&)
+    {
+        detail.pending = true;  // not on chain yet (or unreachable): shown as pending, retried
+    }
+    _state.txDetails[_hash] = std::move(detail);
+    explorerRemember(_state.txDetails, _state.txDetailOrder, _hash);
+    return !_state.txDetails[_hash].pending;
+}
+
+void explorerFetchWanted(ExplorerState& _state, RpcCall const& _call, std::string const& _group,
+    std::vector<DetailWant> const& _wants)
+{
+    for (auto const& want : _wants)
+    {
+        if (want.block)
+        {
+            if (want.number >= 0 && !_state.blockDetails.contains(want.number))
+            {
+                explorerFetchBlockDetail(_state, _call, _group, want.number);
+            }
+            else if (want.number < 0 && !want.hash.empty())
+            {
+                bool cached = std::any_of(
+                    _state.blockDetails.begin(), _state.blockDetails.end(), [&](auto const& entry) {
+                        return entry.second["hash"].asString() == want.hash;
+                    });
+                if (!cached)
+                {
+                    explorerFetchBlockDetailByHash(_state, _call, _group, want.hash);
+                }
+            }
+            continue;
+        }
+        if (want.hash.empty())
+        {
+            continue;
+        }
+        auto it = _state.txDetails.find(want.hash);
+        if (it == _state.txDetails.end() || it->second.pending)
+        {
+            explorerFetchTxDetail(_state, _call, _group, want.hash);
+        }
+    }
+}
+
 std::optional<int64_t> lastBlockAgeMs(ExplorerState const& _state, int64_t _nowMs)
 {
     if (_state.blocks.empty() || _state.blocks.front().timestampMs <= 0)
