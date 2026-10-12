@@ -10,21 +10,22 @@
 // 2. ConsensusRejectionClassifiedAsOpConsensusRejected: 0x03 type byte → OpConsensusRejected.
 // 3. classifyException: OpConsensusError→OpConsensusRejected / OpStorageError→OpStorageFault /
 // other→UnknownError.
-#include <opstack-executor/OpCommon.h>        // OpConsensusError / OpStorageError
-#include <opstack-executor/OpEthBlockSteps.h>  // preBlockOpEthSteps / finalizeOpEthBlockResult
+#include <opstack-executor/OpCommon.h>          // OpConsensusError / OpStorageError
+#include <opstack-executor/OpEthBlockSteps.h>   // preBlockOpEthSteps / finalizeOpEthBlockResult
 #include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult
-#include <opstack-executor/OpEthDeposit.h>      // DepositTx / decodeOpDepositEnvelope / OP_DEPOSIT_TX_TYPE
-#include <opstack-executor/OpEthExecutor.h>     // OpEthExecutor / OpEthBlockContext
+#include <opstack-executor/OpEthDeposit.h>  // DepositTx / decodeOpDepositEnvelope / OP_DEPOSIT_TX_TYPE
+#include <opstack-executor/OpEthExecutor.h>      // OpEthExecutor / OpEthBlockContext
 #include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
-#include <opstack-executor/OpForkSpec.h>        // opForkSpecAt / opForkTimestampSec
+#include <opstack-executor/OpForkSpec.h>         // opForkSpecAt / opForkTimestampSec
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 
+#include "support/GenesisTrie.h"  // computeMptStateDelta (genesis trie)
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/engine/Errors.h>
-#include <bcos-framework/ledger/EVMAccount.h>   // ethLaneAccountTableName (corrupt-row seeding)
+#include <bcos-framework/ledger/EVMAccount.h>       // ethLaneAccountTableName (corrupt-row seeding)
 #include <bcos-framework/ledger/FeaturesStorage.h>  // writeToStorage (feature_raw_address seeding)
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -33,12 +34,11 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-ledger/Ledger.h>  // real bcos::ledger::Ledger for the commit hook
+#include <bcos-ledger/Ledger.h>         // real bcos::ledger::Ledger for the commit hook
 #include <bcos-ledger/LedgerMethods.h>  // getBlockData (probe's parent-root lookup)
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-ledger/mpt/MPTBuilder.h>           // buildAndCollect (①a incremental cross-check)
+#include <bcos-ledger/mpt/MPTBuilder.h>  // buildAndCollect (①a incremental cross-check)
 #include <bcos-ledger/mpt/StateRoots.h>
-#include "support/GenesisTrie.h"           // computeMptStateDelta (genesis trie)
 #include <bcos-storage/KeyPrefixes.h>             // mptNodeStateKey (corrupt-root seeding)
 #include <bcos-table/src/LegacyStorageWrapper.h>  // LegacyStorageWrapper<BackendMemStorage>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -80,7 +80,7 @@ namespace
 
 constexpr uint64_t c_chainId = 0x2105;  // 8453 — the FISCO OP chain id (vector eip1559 chainId)
 const bcos::Address c_sender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
-                                                                            // sender
+                                                                             // sender
 
 // Corpus isthmus_transfer_basic.json: block.transactions[1]._op_raw (op-geth-signed eip1559
 // envelope).
@@ -208,8 +208,8 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
 
 /// Back-fill the announced header's commitment fields from the execution probe result
 /// (finishExecute writes the same batch of fields, so verify compares equal).
-void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
-    opeth::OpEthExecuteBlockResult const& result)
+void fillAnnouncedHeader(
+    bcos::protocol::BlockHeader::Ptr const& header, opeth::OpEthExecuteBlockResult const& result)
 {
     header->setStateRoot(result.stateRoot);
     header->setTxsRoot(result.txRoot);
@@ -542,8 +542,8 @@ bcos::ledger::mpt::TrieBuildResult collectAccountStorageTrie(
         bcos::bytes leaf;
         bcos::codec::rlp::encode(
             leaf, trimmedBigEndian(bcos::bytesConstRef{value.bytes, sizeof(value.bytes)}));
-        entries[bcos::crypto::keccak256Hash(
-            bcos::bytesConstRef{key.bytes, sizeof(key.bytes)})] = std::move(leaf);
+        entries[bcos::crypto::keccak256Hash(bcos::bytesConstRef{key.bytes, sizeof(key.bytes)})] =
+            std::move(leaf);
     }
     return bcos::ledger::mpt::computeTrieRoot(entries);
 }
@@ -624,9 +624,9 @@ opeth::OpEthExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& view,
                                        -> bcos::protocol::Transaction const& { return *ptr; });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         view, executor, header, transactionsRefs, execLedgerConfig, ctx));
-    auto result = bcos::task::syncWait(
-        opeth::finalizeOpEthBlockResult(view, header, execLedgerConfig, spec, sharedError,
-            std::move(receipts), rawTxBytes, ctx.cumulativeGasUsed, hashErr,
+    auto result =
+        bcos::task::syncWait(opeth::finalizeOpEthBlockResult(view, header, execLedgerConfig, spec,
+            sharedError, std::move(receipts), rawTxBytes, ctx.cumulativeGasUsed, hashErr,
             /*skipStateRootBuild=*/incrementalRoot && header.number() > 0));
     if (incrementalRoot && header.number() > 0)
     {
@@ -733,8 +733,7 @@ void driveOpBlock(Fixture& f, std::shared_ptr<bcostars::protocol::BlockHeaderImp
 {
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
-    opeth::OpEthExecuteBlockResult result =
-        runExecutionProbe(f, viewA, *header, rawTxBytes);
+    opeth::OpEthExecuteBlockResult result = runExecutionProbe(f, viewA, *header, rawTxBytes);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, result);
 
@@ -869,8 +868,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     // SchedulerSerialImpl → finalizeOpBlockResult), so the full executeBlock's verify passes.
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
-    opeth::OpEthExecuteBlockResult resultA =
-        runExecutionProbe(f, viewA, *header, rawTxBytes);
+    opeth::OpEthExecuteBlockResult resultA = runExecutionProbe(f, viewA, *header, rawTxBytes);
     BOOST_REQUIRE_EQUAL(resultA.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, resultA);
 
@@ -1449,8 +1447,8 @@ BOOST_AUTO_TEST_CASE(CallUnfundedSenderSucceedsViaFakeBalance)
     {
         bcos::protocol::TransactionReceipt::Ptr got;
         bcos::Error::Ptr err;
-        f.scheduler->call(makeCall(),
-            [&](bcos::Error::Ptr e, bcos::protocol::TransactionReceipt::Ptr r) {
+        f.scheduler->call(
+            makeCall(), [&](bcos::Error::Ptr e, bcos::protocol::TransactionReceipt::Ptr r) {
                 err = std::move(e);
                 got = std::move(r);
             });
@@ -1487,9 +1485,9 @@ BOOST_AUTO_TEST_CASE(CallWithoutPricingIsFlooredToBaseFee)
             err = std::move(e);
             got = std::move(r);
         });
-    BOOST_REQUIRE_MESSAGE(err == nullptr,
-        "pricing-less eth_call must be floored to baseFee, not rejected, got: "
-            << (err ? err->errorMessage() : ""));
+    BOOST_REQUIRE_MESSAGE(
+        err == nullptr, "pricing-less eth_call must be floored to baseFee, not rejected, got: "
+                            << (err ? err->errorMessage() : ""));
     BOOST_REQUIRE(got != nullptr);
     BOOST_CHECK_EQUAL(got->status(), 0);
     const auto egp = bcos::u256(std::string(got->effectiveGasPrice()));
@@ -1540,9 +1538,9 @@ BOOST_AUTO_TEST_CASE(ClassifyExceptionMapping)
         std::make_exception_ptr(bcos::evm::engine::OpStorageError{"ledger bridge poison"}));
     BOOST_CHECK_EQUAL(storage, bcos::scheduler::SchedulerError::OpStorageFault);
 
-    // mpt read-path faults (escaped the executor's storage-error poison ladder) are storage faults too:
-    // a missing referenced node / an undecodable persisted node both mean the trie rows
-    // under the pinned root are unreadable, never a generic UnknownError.
+    // mpt read-path faults (escaped the executor's storage-error poison ladder) are storage faults
+    // too: a missing referenced node / an undecodable persisted node both mean the trie rows under
+    // the pinned root are unreadable, never a generic UnknownError.
     auto missingNode = f.scheduler->classifyException(
         std::make_exception_ptr(bcos::ledger::mpt::MPTInvariantViolation{}));
     BOOST_CHECK_EQUAL(missingNode, bcos::scheduler::SchedulerError::OpStorageFault);
@@ -1633,8 +1631,8 @@ BOOST_AUTO_TEST_CASE(StorageReadFaultRejectsBlockAsStorageFault)
 }
 
 // a storage fault under the TX SENDER surfaces at the VALIDATION stage (m_prepare's
-// opValidate reads the sender account; the storage guard swallows the fault into the shared slot and
-// returns a default, so validation fails as an insufficient-funds-style OpConsensusError). The
+// opValidate reads the sender account; the storage guard swallows the fault into the shared slot
+// and returns a default, so validation fails as an insufficient-funds-style OpConsensusError). The
 // execute() catch ladder must reclassify that as OpStorageError — the same treatment coCallOnView
 // already gives every exception type on the eth_call path — not report the announced payload
 // INVALID on a local disk fault.
@@ -1856,7 +1854,8 @@ bcos::ledger::LedgerConfig commitL1BlockSlotsAsHead(
         }
         bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
     }
-    auto header = makeCallGenesisHeader(opstack_test::computeAndPersistParentTrie(f.multiLayerStorage));
+    auto header =
+        makeCallGenesisHeader(opstack_test::computeAndPersistParentTrie(f.multiLayerStorage));
     header->setNumber(number);
     header->setTimestamp((1000 + number) * 1000);  // whole seconds in ms, fork at ~1000 s
     seedCallGenesis(f.multiLayerStorage, header);
@@ -2124,8 +2123,8 @@ BOOST_AUTO_TEST_CASE(CallAtBlockMissingTrieNodesIsInvalidStatus)
 }
 
 /// The poison tripwire behind M5: root row persisted (M5 passes) but INNER nodes missing —
-/// the first trie walk past the root throws inside the executor's storage read path, the catch ladder swallows
-/// it into poison, and coCallAtBlock's poison checks must turn that into a loud
+/// the first trie walk past the root throws inside the executor's storage read path, the catch
+/// ladder swallows it into poison, and coCallAtBlock's poison checks must turn that into a loud
 /// OpStorageFault, never a status-ok receipt built on zero-value reads. Two genesis accounts
 /// guarantee the root is a branch/extension whose children are exactly the missing rows.
 BOOST_AUTO_TEST_CASE(CallAtBlockInnerNodeMissingIsStorageFault)
@@ -2510,7 +2509,8 @@ BOOST_AUTO_TEST_CASE(finalizeOpBlockResultNormalizesReceiptIndices)
         dep.data = {};
         return opeth::encodeOpEthDepositEnvelope(dep);
     };
-    auto const l1 = opeth::encodeOpEthDepositEnvelope(makeDeposit());  // L1 attributes, emits no log
+    auto const l1 =
+        opeth::encodeOpEthDepositEnvelope(makeDeposit());  // L1 attributes, emits no log
     auto const log1 =
         makeLogDeposit(0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1_bytes32);
     auto const log2 =
@@ -2582,8 +2582,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
 
     // mint>0 deposit: exercises the mint-balance write shape.
     auto mintDep = makeDeposit();
-    mintDep.sourceHash =
-        0x1111111111111111111111111111111111111111111111111111111111111111_bytes32;
+    mintDep.sourceHash = 0x1111111111111111111111111111111111111111111111111111111111111111_bytes32;
     mintDep.mint = bcos::u256{0xdeaf};
     bcos::bytes mintEnv = opeth::encodeOpEthDepositEnvelope(mintDep);
 
@@ -2624,9 +2623,9 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
         // success.)
         BOOST_REQUIRE_EQUAL(result.receipts.size(), rawTxBytes.size());
         for (auto const& r : result.receipts)
-            BOOST_REQUIRE_MESSAGE(r->status() == 0,
-                "block " << number << " probe tx reverted (status " << r->status()
-                         << ") — the root comparison would be vacuous");
+            BOOST_REQUIRE_MESSAGE(
+                r->status() == 0, "block " << number << " probe tx reverted (status " << r->status()
+                                           << ") — the root comparison would be vacuous");
 
         bcos::ledger::mpt::MPTDeltaLayer delta;
         try
@@ -2762,8 +2761,7 @@ BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
             },
             {}},
         {"blobGasUsed",
-            [](bcostars::protocol::BlockHeaderImpl& h) { h.setBlobGasUsed(bcos::u256{7}); },
-            {}},
+            [](bcostars::protocol::BlockHeaderImpl& h) { h.setBlobGasUsed(bcos::u256{7}); }, {}},
     };
 
     std::vector<bcos::bytes> const rawTxBytes{opeth::encodeOpEthDepositEnvelope(makeDeposit())};
@@ -3119,8 +3117,7 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
 
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
-    opeth::OpEthExecuteBlockResult resultA =
-        runExecutionProbe(f, viewA, *header, {depEnv});
+    opeth::OpEthExecuteBlockResult resultA = runExecutionProbe(f, viewA, *header, {depEnv});
     BOOST_REQUIRE_EQUAL(resultA.receipts.size(), 1U);
     fillAnnouncedHeader(header, resultA);
 

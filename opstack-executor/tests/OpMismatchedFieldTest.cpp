@@ -1,7 +1,20 @@
-// FISCO BCOS
-// SPDX-License-Identifier: Apache-2.0
-/// @file OpMismatchedFieldTest.cpp
-/// @brief Field-level mismatch detection between announced and executed OP headers.
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpMismatchedFieldTest.cpp
+ * @brief Field-level mismatch detection between announced and executed OP headers. */
 
 // Unit tests for the OP commitments comparison pure function (OpEthCommitments.h): 8 fields,
 // comparison order (first mismatch wins), the "transactionsRoot" literal, and the optional
@@ -101,14 +114,15 @@ BOOST_AUTO_TEST_CASE(FirstMismatchWinsMidField)
 {
     C c = match();
     C a = match();
-    a.gasUsed = bcos::u256(1);                               // field 5 differs
-    a.txRoot.data()[0] = 0x01;                               // field 6 also differs
+    a.gasUsed = bcos::u256(1);                                    // field 5 differs
+    a.txRoot.data()[0] = 0x01;                                    // field 6 also differs
     BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c, a), "gasUsed");  // mid-field order pinned
 }
 
 BOOST_AUTO_TEST_CASE(BlobGasUsedPresenceAsymmetryIsMismatch)
 {
-    // Deliberate strict semantic (OpEthCommitments.h opEthMismatchedFieldOf): presence asymmetry between
+    // Deliberate strict semantic (OpEthCommitments.h opEthMismatchedFieldOf): presence
+    // asymmetry between
     // computed and announced is REPORTED as a mismatch — fork-config divergence between the peers
     // must be loud, never silently passed. (The real pre-Jovian path — seal leaves blobGasUsed
     // nullopt while the payload always carries 0 — is normalized upstream of the comparison: the

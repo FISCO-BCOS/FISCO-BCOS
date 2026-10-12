@@ -1,11 +1,26 @@
-// FISCO BCOS
-// SPDX-License-Identifier: Apache-2.0
-/// @file OpBlockInjectorTest.cpp
-/// @brief Block-injection paths of the OP scheduler: payload assembly, envelope checks and commit ordering.
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpBlockInjectorTest.cpp
+ * @brief Block-injection paths of the OP scheduler: payload assembly, envelope checks and commit
+ *         ordering. */
 
 // OpBlockInjectorTest — drives the shared block-execution path (preBlockOpEthSteps →
 // SchedulerSerialImpl(serial=true) → finalizeOpEthBlockResult) over a plain MutableStorage
-// fixture (the path is Storage templates, so no MLS is needed). A minimal "L1 attributes deposit + eip1559" block verifies:
+// fixture (the path is Storage templates, so no MLS is needed). A minimal "L1 attributes
+// deposit + eip1559" block verifies:
 //   (1) the system-call BlockInfo's gas_limit == header.gasLimit (buildOpEthBlockInfo,
 //       trivially true);
 //   (2) receipt count == tx count;
@@ -21,9 +36,9 @@
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
@@ -176,8 +191,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
 
     // System-call BlockInfo gas_limit == header.gasLimit (buildOpEthBlockInfo,
     // trivially true here).
-    const auto sysBlk = opstack_test::opeth::buildOpEthBlockInfo(
-        *header, opstack_test::opeth::OP_ISTHMUS_SPEC);
+    const auto sysBlk =
+        opstack_test::opeth::buildOpEthBlockInfo(*header, opstack_test::opeth::OP_ISTHMUS_SPEC);
     BOOST_CHECK_EQUAL(sysBlk.gas_limit, c_headerGasLimit);
     BOOST_CHECK_EQUAL(sysBlk.gas_limit,
         static_cast<int64_t>(detail::narrowU256ToU64(header->gasLimit(), "test")));
@@ -219,8 +234,8 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
     opeth::OpEthExecutor executor{receiptFactory, opeth::OP_ISTHMUS_SPEC, sharedError};
     BOOST_CHECK_THROW(
         bcos::task::syncWait(opeth::preBlockOpEthSteps(view, *header, opeth::OP_ISTHMUS_SPEC,
-                                 rawTxBytes, deposits, executor.vm(), sharedError, hashes, hashErr,
-                                 daFootprintGasScalar, /*noUserTxActivationBlock=*/false)),
+            rawTxBytes, deposits, executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar,
+            /*noUserTxActivationBlock=*/false)),
         std::runtime_error);
 }
 
@@ -232,7 +247,6 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
 /// block they accept) has no CI signal.
 BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
 {
-
     opstack_test::DualRunFixture fixture;
     auto view = fixture.multiLayerStorage.fork();
     view.newMutable();
@@ -280,7 +294,6 @@ BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
 /// deposits[0].data) out of the way.
 BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
 {
-
     opstack_test::DualRunFixture fixture;
     auto view = fixture.multiLayerStorage.fork();
     view.newMutable();

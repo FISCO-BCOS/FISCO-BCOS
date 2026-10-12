@@ -35,14 +35,14 @@
 #include "support/OpEngineE2eFixture.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <opstack-executor/OpRollupCost.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <opstack-executor/OpEthBlockExecute.h>
 #include <opstack-executor/OpCommon.h>
+#include <opstack-executor/OpEthBlockExecute.h>
+#include <opstack-executor/OpRollupCost.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 // EngineHelper.h's parseNewPayloadRequest declaration references
 // bcos::protocol::TransactionFactory&, but EngineHelper.h does not declare that type
@@ -62,13 +62,13 @@
 #include <boost/test/unit_test.hpp>
 
 // D-4: TestState pattern (following OpTransitionTest.cpp)
-#include <opstack-executor/OpFeeParams.h>
 #include <bcos-framework/ledger/OpForkSchedule.h>
 #include <evmone/evmone.h>
+#include <opstack-executor/OpFeeParams.h>
 
 #include <algorithm>
-#include <memory>
 #include <cstdio>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -301,7 +301,9 @@ BOOST_AUTO_TEST_CASE(DAFootprintExceedsGasLimitRejected)
 // NOT pinned anywhere — an accepted residual gap on jovian_da_mix (needs a small-deposit
 // vector whose deposit fits at Σ); a '>=' regression would hide behind this comment.
 // clang-format off
-BOOST_AUTO_TEST_CASE(JovianDaFootprintGasLimitBoundary, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+BOOST_AUTO_TEST_CASE(JovianDaFootprintGasLimitBoundary,
+    * boost::unit_test::label("fork-jovian")
+    * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
     // The F-A2 equality gate fixes the header blobGasUsed at the local Σ (593,600 for
@@ -326,7 +328,8 @@ BOOST_AUTO_TEST_CASE(JovianDaFootprintGasLimitBoundary, * boost::unit_test::labe
 // the deposit declares gas=1M > Σ, so at gasLimit==Σ the deposit-fit gate rejects first
 // ("op deposit: block gas limit reached"); pinning that edge needs a small-deposit corpus
 // vector (same weight class as the golden-corpus work).
-BOOST_AUTO_TEST_CASE(JovianDaFootprintBelowGasLimitAccepted, * boost::unit_test::label("fork-jovian"))
+BOOST_AUTO_TEST_CASE(
+    JovianDaFootprintBelowGasLimitAccepted, *boost::unit_test::label("fork-jovian"))
 {
     auto const local = localDaFootprintOfGoldenVector();
     // Above the 1M deposit gas as well as Σ, so the deposit-fit gate passes too.
@@ -401,11 +404,10 @@ BOOST_AUTO_TEST_CASE(SnapshotFreezeFillsOpTxSnapshot)
 
     OpTxSnapshot snapshot;
     eth::EthCallParams callParams{};
-    OpPolicy policy(spec, F, block, evmc::bytes_view{env.data(), env.size()}, *tx, callParams,
-        snapshot);
+    OpPolicy policy(
+        spec, F, block, evmc::bytes_view{env.data(), env.size()}, *tx, callParams, snapshot);
 
-    const auto maxCost = policy.additionalMaxCost(
-        *tx, block, EVMC_SHANGHAI, callParams);
+    const auto maxCost = policy.additionalMaxCost(*tx, block, EVMC_SHANGHAI, callParams);
     BOOST_CHECK(maxCost > 0);
 
     // The frozen-fee invariant: everything the transition consumes came from F.
