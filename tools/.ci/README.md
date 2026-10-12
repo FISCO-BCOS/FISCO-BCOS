@@ -6,12 +6,12 @@
 
 | 链 | 节点 | build_chain | 端口（`CI_PORT_BASE` 默认 `30300,20200,8545`） | 场景 |
 |---|---|---|---|---|
-| nonsm | 3 + 扩容 node3 | 默认 | p2p/rpc/web3 = base；扩容 +3/+3/+1 | 1 2 4 5 8 9 7 13 14 10 11 15 16 19 20 17 |
-| sm | 2 + 扩容 node2 | `-s` | base + 100 | 1 2 4 5 8 9 7 14 10 11 15 16 19 17（13 跳过：只有 3 个 sealer）|
-| v1 | 2 + 扩容 node2 | genesis `executor version=1`，node0 开 web3 | base + 200 | 1 2 4 5 8 9 7 14 10 11 15 16 17（13 跳过；`web3_test.sh` 在 Java 阶段的 v1 链最后，不变） |
-| auth | 2 + 扩容 node2 | `-a <fisco-bcos account new>` | base + 300 | 1 2 4 5 8 9 7 14 10 11 15 16 17（13 跳过；5、7、14、17 与 8/9 的治理写走提案；5 断言 `--direct` 为 NO_AUTHORIZED；15 不改 tx_gas_limit） |
+| nonsm | 3 + 扩容 node3 | 默认 | p2p/rpc/web3 = base；扩容 +3/+3/+1 | 1 2 4 5 8 9 7 13 14 10 11 15 16 12 19 20 17 |
+| sm | 2 + 扩容 node2 | `-s` | base + 100 | 1 2 4 5 8 9 7 14 10 11 15 16 12 19 17（13 跳过：只有 3 个 sealer）|
+| v1 | 2 + 扩容 node2 | genesis `executor version=1`，node0 开 web3 | base + 200 | 1 2 4 5 8 9 7 14 10 11 15 16 12 17（13 跳过；`web3_test.sh` 在 Java 阶段的 v1 链最后，不变） |
+| auth | 2 + 扩容 node2 | `-a <fisco-bcos account new>` | base + 300 | 1 2 4 5 8 9 7 14 10 11 15 16 12 18 17（13 跳过；5、7、14、17、18 与 8/9 的治理写走提案；5 断言 `--direct` 为 NO_AUTHORIZED；15 不改 tx_gas_limit；18 结束时把投票比例还原成 0/0） |
 
-每条链一个后台子 shell，日志在 `logs/<chain>.log`；任一链失败，主脚本打印该链日志尾 200 行、每个节点的 error/warn 行与 nohup，退出 1。ops 命令通过 `--node-dir` 走 `node0/data/fisco-bcos.ipc`，与 RPC 端口的 TLS 无关（CI 链保持 `enable_ssl=true`）。
+每条链一个后台子 shell，日志在 `logs/<chain>.log`；任一链失败，主脚本打印该链日志尾 200 行、每个节点的 error/warn 行与 nohup，退出 1。ops 命令通过 `--node-dir` 走 `node0/data/fisco-bcos.ipc`，与 RPC 端口的 TLS 无关；只有 AMOP（场景 12）走 WebSocket RPC，所以 `build_chain_for` 把每条链 node0 的 `[rpc] enable_ssl` 改成 false（其他节点保持 TLS）。
 
 ## java-sdk 套件为何仍串行跑在默认端口
 
@@ -80,10 +80,12 @@ SM 链需要 `~/.fisco/tassl`；`jq` 必装；bash ≥ 4（`declare -A`、`${x,,
 | — | 新增 | — | `scenario_16_revert` (`scenarios/contracts2.sh`) | `Reverter.ok()` status 0 → `fail()` status 16、output 以 `Error(string)` 选择子开头（keccak 链 `0x08c379a0`，SM 链 `0xc703cb12`：sm3 版 solc 连选择子也用 sm3）、解出的原因为 "reverted on purpose"、`tx get` 回执同形 → `failNoReason()` status 16、output `0x` → `counter` 仍为 1 | 四链；`tx send --json` 的回执 `message` 为空、原因由脚本从 output 解码（预设命令走 `revertReason()`，`tx` 命令还没有） |
 | — | 新增 | — | `scenario_17_features` (`scenarios/features.sh`) | `sysconfig features` 列出全部 flag → 对每个未开启、未废弃的 flag 逐个 `sysconfig enable-features`（依赖先开；auth 链每个 key 一个提案）→ 读回：报 ok 的全为 enabled、仍关闭的只剩被拒绝的、被拒绝的必须在该链的 `features_known_refusals` 里 | 四链，各链最后一个场景（全开后链行为改变） |
 | java-sdk-demo | `check_all_dmc_transfer`（`RUN_DMC=true` 才跑，CI 从不开） | DMC 转账压测 | 不替代 | — | 性能用例，不在节点正确性 CI 范围 |
+| java-sdk | `AmopTest`（subscribe / publish / unsubscribe） | 订阅后能收到发布的消息，取消订阅后发布报错 | `scenario_12_amop` (`scenarios/amop.sh`) | 后台 `amop sub <topic> --count 1 --wait 30`，等 stderr 的 `subscribed <topic>`，`amop pub <topic> <msg>` 返回 `ok=true` 且 `response` 为订阅方回显的同一消息；sub 退出 0 且输出 `{"topic","data"}` 为该消息；无订阅者的 topic `pub` 退出 2、`error.code == 3001`（`CommonError::NotFoundPeerByTopicSendMsg`）；订阅方退出后再 `pub` 同样 3001 | 四链；node0 的 `[rpc] enable_ssl=false` |
+| — | 新增（CI 从未起过 auth 链） | — | `scenario_18_auth_governance` (`scenarios/governance.sh`) | `committee info` 单 governor（`-a` 账户）、比例 0/0 → `auth set-deploy-auth-type 1` 自动提案并执行、`auth deploy-type` 读 1 → `account new` 的账户 `tx smoke` 退出 2 `reason=auth_denied`、`has-deploy-auth` false → `auth open-deploy-auth` 提案执行 → `has-deploy-auth` true、同账户 smoke 成功、`get-admin` 为该账户 → 扩容节点（场景 14 后为 observer）`consensus add-sealer` 走提案执行、`consensus list` 为 sealer → `propose-governor <acct2> 1` 执行、`committee info` 两个 governor → `propose-rate 100 100` 执行 → `propose-sysconfig tx_count_limit 2500` 为 `voting`、`executed=false` → acct2 `vote <id> true` 后 `passed`、`executed=true`、`sysconfig get` 读 2500 → `proposals --last 5` 含该提案 passed → `propose-rate 0 0` + 第二票还原比例 | auth 链；放在 17 之前、19/20 不跑 auth |
 | — | 新增（替代 console `get_account.sh` / `get_gm_account.sh`） | — | `scenario_19_account` (`scenarios/account.sh`) | `account new [--sm]` 两个文件存在；用它 `tx smoke` 成功；`tx get` 的 `from` 等于打印地址 | nonsm / sm |
 | — | 现有 `ops_tool_test` | — | `scenario_20_ops_status` (`scenarios/ops.sh`) | `tx smoke`、`status` 五项 ok、`log status` 来源为 log、除 `consensus_stable` 外无 `state=fail` 的 check、高度与 RPC 相差 ≤ 2、`tui --version-check` | nonsm；`log status` 退出 2 只能来自 `consensus_stable`（空闲链 viewchange，见下）；spec 里的「停节点前后 `log status`」与 `tui --snapshot-dir` 全页渲染待 TUI 改版（票 13）后补入 |
 
-场景 7/10/11/12/13/14/15/16/17/18 与 Java 退场的第二期见后续票（spec §5.4.1、§5.4.4）。SDK 自测用例（`HashCalculatorTest`、`AssembleTransactionWithRemoteSignProcessorTest`、`ContractTest.testV2Contract`、`EventDecodeTest` / `TransactionDecoderServiceTest` 的纯解码部分、`WelcomeInfoTest`）不替代，第二期补入本表。
+18 组场景全部落地；Java 退场的第二期（删 java-sdk 与 JDK）见 spec §5.4.4。SDK 自测用例（`HashCalculatorTest`、`AssembleTransactionWithRemoteSignProcessorTest`、`ContractTest.testV2Contract`、`EventDecodeTest` / `TransactionDecoderServiceTest` 的纯解码部分、`WelcomeInfoTest`）不替代，见上表。
 
 ## 跑本套件时发现的节点侧问题（未修，记录）
 
