@@ -4,17 +4,9 @@
 #             turned on through `sysconfig enable-features` (dependencies first; a committee
 #             proposal per key on the auth chain) and read back as enabled. Runs last on
 #             each chain: with everything on the chain behaves differently (rPBFT, sharding,
-#             the EVM forks) and nothing after it would be comparable. A flag a chain refuses
-#             is a failure unless it is in that chain's known list below. New scenario.
+#             the EVM forks) and nothing after it would be comparable. One call, so the
+#             dependency order of featureEnableOrder is exercised. New scenario.
 # @ file    : features.sh
-
-# features_known_refusals <chain>: flags this chain's executor refuses, one per line
-features_known_refusals()
-{
-    case "${1}" in
-        *) echo "" ;;
-    esac
-}
 
 scenario_17_features()
 {
@@ -28,30 +20,30 @@ scenario_17_features()
     listing=$(ops "${node_dir}" sysconfig features) || return 1
     assert_jq "${listing}" 'length > 50 and all(.[]; has("name") and has("enabled"))' "sysconfig features lists the flags" || return 1
     pending=$(jq -r '.[] | select(.enabled == false and .deprecated != true) | .name' <<<"${listing}")
-    local known
-    known=$(features_known_refusals "${chain}")
-    local flag result enabled=() refused=() unexpected=()
-    [[ -n "${pending}" ]] || echo "scenario 17: every flag is already on"
-    for flag in ${pending}; do
-        if result=$(ops "${node_dir}" sysconfig enable-features "${flag}" --yes --account "${governor}" --timeout 60000 2>/dev/null); then
-            enabled+=("${flag}")
-        else
-            refused+=("${flag}")
-            echo "scenario 17: ${flag} refused on ${chain}: $(head -c 300 <<<"${result}")"
-            /usr/bin/grep -qx "${flag}" <<<"${known}" || unexpected+=("${flag}")
-        fi
-    done
+    if [[ -n "${pending}" ]]; then
+        # one call with every off flag: featureEnableOrder puts each flag's prerequisites first
+        # (already-on ones become "skipped" steps) and the run stops at the first refusal
+        local result
+        # shellcheck disable=SC2086
+        result=$(ops "${node_dir}" sysconfig enable-features ${pending} --yes --account "${governor}" --timeout 60000) || {
+            scenario_fail "enable-features refused on ${chain}: $(head -c 600 <<<"${result}")"; return 1; }
+        assert_jq "${result}" '.ok == true and all(.steps[]; .action == "enabled" or .action == "skipped")' \
+            "every step enabled or already on" || return 1
+        # the two dependency edges Features::validate enforces, wherever both ends are steps
+        assert_jq "${result}" '[.steps[].name] as $s
+            | [["feature_balance","feature_balance_precompiled"],["feature_balance_precompiled","feature_balance_policy1"]]
+            | all(.[]; (($s | index(.[1])) == null) or ((($s | index(.[0])) // 1e9) < ($s | index(.[1]))))' \
+            "prerequisites come before the flags that need them" || return 1
+    else
+        echo "scenario 17: every flag is already on"
+    fi
     listing=$(ops "${node_dir}" sysconfig features) || return 1
-    local flag_json
-    flag_json=$( (( ${#enabled[@]} )) && printf '%s\n' "${enabled[@]}" | jq -R . | jq -s . || echo '[]')
-    assert_jq "${listing}" 'map(select(.name as $n | '"${flag_json}"' | index($n)) | .enabled) | all' "every flag that reported ok reads back enabled" || return 1
-    assert_jq "${listing}" '[.[] | select(.enabled == false and .deprecated != true) | .name] | length == '"${#refused[@]}" "only the refused flags stay off" || return 1
-    (( ${#unexpected[@]} == 0 )) || { scenario_fail "flags refused on ${chain} that are not in features_known_refusals: ${unexpected[*]}"; return 1; }
+    assert_jq "${listing}" '[.[] | select(.enabled == false and .deprecated != true)] | length == 0' "every flag reads back enabled" || return 1
     # a read-back of "1" also passes on a chain that stopped sealing after the last flag: prove
-    # it still executes and commits
+    # it still executes and commits (runs whether or not anything was left to enable)
     local smoke
     # signed by the governor (the account that is allowed everything on every chain)
     smoke=$(ops "${node_dir}" tx smoke --timeout 60000 --account "${governor}") || return 1
     assert_jq "${smoke}" '.ok == true' "the chain still seals with every flag on" || return 1
-    echo "scenario 17 ok: ${#enabled[@]} flags enabled on ${chain}${refused[*]:+, refused (known): ${refused[*]}}"
+    echo "scenario 17 ok: $(wc -w <<<"${pending}" | tr -d ' ') flags enabled on ${chain} in one ordered call"
 }
