@@ -126,10 +126,55 @@ BOOST_AUTO_TEST_CASE(EthLaneWithAllocsParsed)
 
 BOOST_AUTO_TEST_CASE(EthLaneRejectsEmptyAllocs)
 {
+    // executor.version >= 2 WITHOUT the EL declaration ([ethereum] mode=el) still
+    // requires a non-empty [alloc.*] section — the L2/OP lanes carry the
+    // SystemConfig predeploy's feature_flags slot in the allocs.
     auto cfg = makeNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(std::string(kAllocsEthBase))),
         bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, "requires a non-empty [alloc.*] section");
+        });
+}
+
+BOOST_AUTO_TEST_CASE(ELModeAllowsEmptyAllocs)
+{
+    // The L1 EL lane ([ethereum] mode=el) exempts the non-empty-alloc invariant:
+    // an empty-alloc genesis publishes the canonical empty-trie root as its
+    // stateRoot (hive smoke/genesis, several EEST fixtures).
+    constexpr auto kELDeclarations =
+        "[web3]\nchain_id=1\n"
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n";
+    auto cfg = makeNodeConfig();
+    cfg->loadGenesisConfig(
+        parseIni(std::string(kAllocsEthBase) + kELDeclarations + kAllocsEthHeader));
+    BOOST_CHECK(cfg->genesisConfig().m_allocs.empty());
+    BOOST_CHECK(cfg->genesisConfig().m_ethereumELMode);
+}
+
+BOOST_AUTO_TEST_CASE(ELModeOnOpLaneRejected)
+{
+    // mode=el is bound to the L1 EL lane: executor.version=3 (the OP lane) must
+    // declare mode=opstack-el instead. Accepting mode=el here would waive the
+    // non-empty-alloc invariant for a chain whose SystemConfig predeploy's
+    // feature_flags slot travels in the allocs.
+    constexpr auto kELDeclarations =
+        "[web3]\nchain_id=1\n"
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n";
+    std::string opLaneBase = std::string(kAllocsEthBase);
+    auto pos = opLaneBase.find("version=2\n");
+    BOOST_REQUIRE(pos != std::string::npos);
+    opLaneBase.replace(pos, 10, "version=3\n");
+    auto cfg = makeNodeConfig();
+    BOOST_CHECK_EXCEPTION(
+        cfg->loadGenesisConfig(parseIni(opLaneBase + kELDeclarations + kAllocsEthHeader)),
+        bcos::tool::InvalidConfig, [](auto const& e) {
+            return bcos::test::errinfoContains(e, "mode=el requires executor.version=2");
         });
 }
 
