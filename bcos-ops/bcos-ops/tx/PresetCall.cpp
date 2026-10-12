@@ -300,9 +300,13 @@ Json::Value PresetResult::toJson() const
 
 std::string revertReason(std::string const& _outputHex, bool _sm)
 {
-    constexpr std::string_view c_errorSelector = "08c379a0";  // Error(string)
+    // Error(string): keccak256 selector 08c379a0, sm3 selector c703cb12 (SM chains hash the
+    // signature with sm3)
+    constexpr std::string_view c_errorSelector = "08c379a0";
+    constexpr std::string_view c_smErrorSelector = "c703cb12";
     auto hex = _outputHex.starts_with("0x") ? _outputHex.substr(2) : _outputHex;
-    if (!hex.starts_with(c_errorSelector) || hex.size() < c_errorSelector.size() + 128)
+    if ((!hex.starts_with(c_errorSelector) && !hex.starts_with(c_smErrorSelector)) ||
+        hex.size() < c_errorSelector.size() + 128)
     {
         return "";
     }

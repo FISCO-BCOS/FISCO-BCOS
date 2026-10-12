@@ -164,5 +164,30 @@ BOOST_AUTO_TEST_CASE(rawHexIsNormalizedTheSameWayEverywhere)
     BOOST_CHECK_EQUAL(rpc.calls().back().second[2].asString(), "abcd");
 }
 
+BOOST_AUTO_TEST_CASE(failedReceiptMessageComesFromTheRevertReason)
+{
+    // Error("boom"): selector, offset 0x20, length 4, "boom"
+    std::string const output =
+        "0x08c379a0"
+        "0000000000000000000000000000000000000000000000000000000000000020"
+        "0000000000000000000000000000000000000000000000000000000000000004"
+        "626f6f6d00000000000000000000000000000000000000000000000000000000";
+    auto reverted = rawReceipt("", output);
+    reverted["status"] = 16;
+    reverted["message"] = "";
+    FakeRpc rpc;
+    rpc.set("sendTransaction", reverted);
+    std::ostringstream out;
+    BOOST_CHECK_EQUAL(runTxOn(rawConnection(rpc), rawArgs({"raw", "0xdeadbeef", "--json"}), out),
+        c_exitChecksFailed);
+    BOOST_CHECK_EQUAL(parseJson(out.str(), "raw")["message"].asString(), "boom");
+    // tx get fills it the same way
+    rpc.set("getTransaction", Json::Value(Json::objectValue));
+    rpc.set("getTransactionReceipt", reverted);
+    std::ostringstream got;
+    runTxOn(rawConnection(rpc), rawArgs({"get", "0x9c", "--json"}), got);
+    BOOST_CHECK_EQUAL(parseJson(got.str(), "get")["receipt"]["message"].asString(), "boom");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::ops::test

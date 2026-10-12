@@ -353,6 +353,9 @@ BOOST_AUTO_TEST_CASE(revertReasonIgnoresOutputsThatAreNotAnErrorString)
     BOOST_CHECK_EQUAL(revertReason(badOffset, false), "");
     BOOST_CHECK_EQUAL(
         revertReason("0x08c379a0" + balOutput("string", R"(["boom"])").substr(2), false), "boom");
+    // SM chains hash Error(string) with sm3: selector c703cb12
+    BOOST_CHECK_EQUAL(
+        revertReason("0xc703cb12" + balOutput("string", R"(["boom"])").substr(2), true), "boom");
 }
 
 BOOST_AUTO_TEST_CASE(amountsBeyond64BitsReachTheCodecAsDigits)
