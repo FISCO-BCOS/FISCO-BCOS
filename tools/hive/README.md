@@ -117,15 +117,19 @@ The entrypoint:
   scope.
 - **No GraphQL**: `ethereum/graphql` is out of scope.
 - **No Clique/PoW**: `HIVE_CLIQUE_*` are ignored.
-- **Pre-London chains are not representable**: the EL fork schedule
-  (`[fork_timestamps]`) models London and later only, so fixtures whose chain
-  starts before London — including the current `ethereum/rpc-compat` fixture
-  chain (londonBlock=27, TTD>0, merge at block 36) — cannot be imported yet.
-  `--genesis2ini` rejects `terminalTotalDifficulty > 0` loudly for now, and
-  likewise refuses a genesis with no `baseFeePerGas` whose `config.londonBlock`
-  is absent or non-zero (error starts with `no baseFeePerGas and
-  config.londonBlock is absent or non-zero`): the emitted fork ladder activates
-  London at genesis, so such an artifact would be self-contradictory.
+- **Pre-London chains are not representable for block import**: the EL fork
+  schedule (`[fork_timestamps]`) models London and later only, so fixtures
+  whose chain starts before London — including the current
+  `ethereum/rpc-compat` fixture chain (londonBlock=27, TTD>0, merge at block
+  36) — cannot be imported yet. `--genesis2ini` rejects
+  `terminalTotalDifficulty > 0` loudly, and likewise refuses a genesis with no
+  `baseFeePerGas` whose `config.londonBlock` is present and non-zero (a
+  mid-chain London activation the timestamp ladder cannot express). A genesis
+  with NO `londonBlock` at all, however, is geth's "London never activates":
+  `--genesis2ini` emits it faithfully as a pre-London-shaped header plus a
+  never-activating fork ladder (every `*_time` = UINT64_MAX), so the smoke
+  genesis fixtures are served byte-exactly — only executing pre-London blocks
+  is unsupported (the EVM revision floor is London).
 - ~~**Empty alloc**~~ (fixed): `NodeConfig::validateL2Invariants` now exempts the
   L1 EL lane (`[ethereum] mode=el`) from the non-empty-alloc invariant — an
   empty-alloc genesis publishes the canonical empty-trie root as its stateRoot

@@ -671,16 +671,26 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // (e.g. Prague on a Cancun chain makes the verifier demand requestsHash
         // that Cancun-era blocks do not carry).
         uint64_t const kNever = std::numeric_limits<uint64_t>::max();
-        // The emitted ladder hardcodes london_time=0 (EL mode runs London+ from
-        // genesis regardless of the JSON), but geth activates London BLOCK-based:
-        // Genesis.ToBlock consults g.Config.IsLondon(0), i.e. config.londonBlock
-        // must be present and 0. A genesis whose config lacks londonBlock (the
-        // smoke/genesis fixtures carry an empty config) mints a header WITHOUT
-        // baseFee in geth, so the baseFee default below must key off the JSON,
-        // not off the emitted ladder.
+        // The emitted ladder activates London from genesis (london_time=0) unless
+        // the chain is pre-London forever (below), but geth activates London
+        // BLOCK-based: Genesis.ToBlock consults g.Config.IsLondon(0), i.e.
+        // config.londonBlock must be present and 0. A genesis whose config lacks
+        // londonBlock (the smoke/genesis fixtures carry an empty config) mints a
+        // header WITHOUT baseFee in geth, so the baseFee default below must key
+        // off the JSON, not off the emitted ladder.
         auto const londonBlock = jsonQuantity(config, "londonBlock");
         bool const londonAtGenesis = londonBlock && *londonBlock == 0;
-        uint64_t const parisTime = 0;  // TTD == 0: PoS from genesis
+        // geth reads an ABSENT config.londonBlock as "London never activates": a
+        // genesis without baseFeePerGas then stays pre-London forever. The faithful
+        // representation is a pre-London-shaped header (baseFee left unset below)
+        // plus a ladder in which no fork ever activates — NOT the self-contradictory
+        // london_time=0 + baseFee-less header, whose block 1 import would be
+        // rejected either way. The EL lane still cannot EXECUTE pre-London blocks
+        // (the EVM revision floor is London), but the genesis is served
+        // byte-exactly, which is what the hive smoke/genesis suite checks.
+        bool const preLondonForever =
+            !jsonQuantity(root, "baseFeePerGas") && !londonAtGenesis && !londonBlock;
+        uint64_t const parisTime = preLondonForever ? kNever : 0;  // 0: TTD == 0, PoS from genesis
         bool forkNeverSeen = false;
         auto forkTime = [&](char const* jsonKey) -> uint64_t {
             auto value = jsonQuantity(config, jsonKey);
@@ -714,6 +724,24 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         auto osakaTime = jsonQuantity(config, "osakaTime");
         auto bpo1Time = jsonQuantity(config, "bpo1Time");
         auto bpo2Time = jsonQuantity(config, "bpo2Time");
+        if (preLondonForever &&
+            (shanghaiTime != kNever || cancunTime != kNever || pragueTime != kNever ||
+                osakaTime || bpo1Time || bpo2Time))
+        {
+            // geth's checkConfigForkOrder rejects a timestamp fork without London;
+            // mirror that instead of emitting a chain that is pre-London and
+            // post-Shanghai at the same time.
+            throw std::runtime_error(
+                "config schedules a post-London fork time while config.londonBlock is "
+                "absent (geth rejects a timestamp fork without London)");
+        }
+        if (preLondonForever)
+        {
+            warnings.push_back(
+                "no baseFeePerGas and no config.londonBlock: emitting a pre-London "
+                "schedule (no fork ever activates); the EL lane serves the genesis "
+                "byte-exactly but cannot execute pre-London blocks");
+        }
 
         // --- allocs: normalized once, used for both the trie and the INI ---
         ledger::GenesisConfig genesis;
@@ -823,21 +851,21 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             // pre-London" (the same constant the validator uses).
             baseFee = h.baseFee = protocol::kInitialBaseFee;
         }
-        else
+        else if (!preLondonForever)
         {
-            // geth leaves baseFee nil here, but the emitted ladder hardcodes
-            // london_time=0 below — the artifact would contradict itself: block 1
-            // is rejected whether it carries a base fee ("parent is pre-London")
-            // or not ("missing baseFeePerGas"). Refuse up front, same shape as
-            // the terminalTotalDifficulty > 0 rejection, instead of emitting an
-            // unusable config.genesis (real pre-London support is the tracked
-            // follow-up).
+            // londonBlock present and non-zero: London activates mid-chain, which
+            // the timestamp ladder cannot express — and geth leaves baseFee nil
+            // here, so the emitted header would contradict any ladder we could
+            // emit. Refuse up front, same shape as the terminalTotalDifficulty > 0
+            // rejection (real pre-London support is the tracked follow-up).
             throw std::runtime_error(
-                "no baseFeePerGas and config.londonBlock is absent or non-zero: "
-                "pre-London genesis schedules are not supported (the emitted fork "
-                "ladder activates London at genesis, so the header must carry a "
-                "base fee)");
+                "no baseFeePerGas and config.londonBlock is non-zero: a mid-chain "
+                "London activation is not representable (the emitted fork ladder "
+                "is timestamp-based and activates London at genesis, so the header "
+                "must carry a base fee)");
         }
+        // else preLondonForever: geth leaves baseFee nil, and the ladder below
+        // keeps every fork inactive, so the header shape and the schedule agree.
         // consume-generated genesis files name it "withdrawalsRoot" (the fixture
         // header field); accept the geth-config-style "withdrawalsHash" too.
         auto const* withdrawalsKey = root.isMember("withdrawalsRoot") ? "withdrawalsRoot" :
@@ -929,7 +957,7 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         {
             ini << "    ; WARNING: " << warning << "\n";
         }
-        ini << "    london_time=0\n"
+        ini << "    london_time=" << (preLondonForever ? kNever : 0) << "\n"
             << "    paris_time=" << parisTime << "\n"
             << "    merge_block=0\n"
             << "    shanghai_time=" << shanghaiTime << "\n"
