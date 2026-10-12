@@ -4,8 +4,9 @@
 #             two transactions back and check the receipts. Replaces console
 #             ConsoleClientTest.clientWithParamsTest (96-117), java-sdk
 #             BcosSDKTest.testHelloWorldInSolidity and the AssembleTransactionProcessorTest
-#             HelloWorld cases. Deploy/send/call with an external ABI file arrive with the
-#             vendored contracts (scenario 9/10).
+#             HelloWorld cases, then deploys the vendored HelloWorld (tools/.ci/contracts)
+#             with its ABI file: `tx deploy` / `tx send set` / `tx call get` (console deploy /
+#             call with a .sol).
 # @ file    : hello.sh
 
 scenario_2_hello()
@@ -31,5 +32,15 @@ scenario_2_hello()
     local setTx
     setTx=$(ops "${node_dir}" tx get "$(jq_get "${smoke}" '.steps[1].txHash')") || return 1
     assert_jq "${setTx}" '.transaction.to | ascii_downcase == "'"${contract,,}"'"' "set goes to the deployed contract" || return 1
-    echo "scenario 2 ok: HelloWorld at ${contract} on ${chain}"
+    # the external-ABI path: deploy from the vendored bin/abi, send set, call get
+    local abi deploy deployed sent got
+    abi=$(contract_abi HelloWorld) || return 1
+    deploy=$(ops "${node_dir}" tx deploy "$(contract_bin HelloWorld "${chain}")" --abi "${abi}") || { echo "${deploy}"; return 1; }
+    assert_jq "${deploy}" '.status == 0 and (.contractAddress | test("^0x[0-9a-fA-F]{40}$"))' "tx deploy HelloWorld from the vendored bin" || return 1
+    deployed=$(jq_get "${deploy}" '.contractAddress')
+    sent=$(ops "${node_dir}" tx send "${deployed}" --abi "${abi}" set "native ci ${chain}") || { echo "${sent}"; return 1; }
+    assert_jq "${sent}" '.status == 0' "tx send set" || return 1
+    got=$(ops "${node_dir}" tx call "${deployed}" --abi "${abi}" get) || { echo "${got}"; return 1; }
+    assert_jq "${got}" '.status == 0 and (.decoded | tostring | test("native ci '"${chain}"'"))' "tx call get decodes the set value" || return 1
+    echo "scenario 2 ok: HelloWorld at ${contract} (smoke) and ${deployed} (vendored abi) on ${chain}"
 }
