@@ -30,8 +30,8 @@ class Sdk;
 
 namespace bcos::ops
 {
-/// the SDK behind a Connection made by makeWsRpcCall (AMOP lives there); nullptr for any other
-/// Connection (local socket, test fakes)
+/// the SDK behind a Connection made by makeWsRpcCall (AMOP lives there); throws OpsError{1} for
+/// any other Connection (local socket, test fakes)
 std::shared_ptr<bcos::cppsdk::Sdk> sdkOf(Connection const& _connection);
 
 /// Raw TCP probe: sends a minimal TLS ClientHello and looks at the first reply byte. 0x16

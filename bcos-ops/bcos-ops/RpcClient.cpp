@@ -199,12 +199,12 @@ bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs)
 
 std::shared_ptr<bcos::cppsdk::Sdk> sdkOf(Connection const& _connection)
 {
-    if (_connection.source != "rpc" || !_connection.keepAlive)
+    if (!_connection.sdk)
     {
-        return nullptr;
+        throw OpsError(c_exitUsage, "amop needs the node's WebSocket RPC (source=" +
+                                        _connection.source + " has no AMOP channel)");
     }
-    // source=="rpc" connections are only ever built here, with a WsTransport as keepAlive
-    return std::static_pointer_cast<WsTransport>(_connection.keepAlive)->sdk;
+    return _connection.sdk;
 }
 
 Connection makeWsRpcCall(
@@ -244,6 +244,7 @@ Connection makeWsRpcCall(
     connection.source = "rpc";
     connection.endpoint = endpoint;
     connection.keepAlive = transport;
+    connection.sdk = transport->sdk;
     connection.call = [transport, _requestTimeoutMs](
                           std::string_view _method, Json::Value const& _params) -> Json::Value {
         auto id = transport->nextId.fetch_add(1);

@@ -27,6 +27,11 @@
 #include <string>
 #include <string_view>
 
+namespace bcos::cppsdk
+{
+class Sdk;
+}
+
 namespace bcos::ops
 {
 /// returns the `result` member; throws OpsError{1} on transport error or a JSON-RPC `error`
@@ -39,7 +44,8 @@ struct Connection
     std::string group;
     std::string endpoint;
     std::optional<NodeDir> nodeDir;
-    std::shared_ptr<void> keepAlive;  // owns the transport
+    std::shared_ptr<void> keepAlive;         // owns the transport
+    std::shared_ptr<bcos::cppsdk::Sdk> sdk;  // set by makeWsRpcCall only (AMOP lives there)
 };
 
 std::string buildJsonRpcRequest(std::string_view _method, Json::Value const& _params, int64_t _id);
