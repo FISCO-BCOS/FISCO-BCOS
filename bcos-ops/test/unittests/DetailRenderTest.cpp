@@ -226,5 +226,33 @@ BOOST_AUTO_TEST_CASE(blockDetailShowsLoadingUntilTheBlockIsCached)
     BOOST_CHECK(text.find("row no longer loaded") != std::string::npos);
 }
 
+BOOST_AUTO_TEST_CASE(nonceShowsTheNumberOnBothLanes)
+{
+    // FISCO lane: hex of the decimal text; Ethereum lane: hex of a 0x-quantity text, or a bare
+    // quantity from a web3-shaped object
+    std::vector<std::pair<std::string, std::string>> const cases = {
+        {"0x3135", "15"}, {"0x307831", "1"}, {"0x1", "1"}};
+    for (auto const& [nonce, shown] : cases)
+    {
+        FakeRpc rpc;
+        scriptChain(rpc, 128, 2);
+        auto hash = fakeHash(127 * 100 + 1, 't');
+        auto tx = fakeTransaction(hash, "0xf505");
+        tx["nonce"] = nonce;
+        rpc.setFor("getTransaction", 2, hash, tx);
+        rpc.setFor("getTransactionReceipt", 2, hash, fakeReceipt(hash, 0, 127));
+        tui::Model model;
+        detailFill(rpc, model, {{true, 127, ""}, {false, -1, hash}});
+        tui::Nav nav;
+        nav.stack.push_back({.kind = tui::DetailKind::block, .number = 1});
+        nav.stack.push_back({.kind = tui::DetailKind::tx, .number = 1});
+        tui::Frame frame{.width = 80, .height = 24, .nowMs = c_detailNow};
+        auto text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
+        BOOST_CHECK_MESSAGE(text.find("nonce       " + shown + " ") != std::string::npos ||
+                                text.find("nonce       " + shown + "\n") != std::string::npos,
+            nonce << " should show as " << shown);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::ops::test

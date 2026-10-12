@@ -25,6 +25,7 @@
 #include "bcos-ops/tx/PresetCall.h"
 #include "bcos-ops/tx/Presets.h"
 #include <bcos-utilities/DataConvertUtility.h>
+#include <boost/multiprecision/cpp_int.hpp>
 #include <algorithm>
 
 namespace bcos::ops::tui
@@ -81,7 +82,21 @@ std::string detailParentHash(Json::Value const& _block)
     return "-";
 }
 
-/// the node hex-encodes the nonce's decimal digits (toHex(transaction.nonce())); show the number
+/// a 0x-quantity (any length) as a decimal string; "" when _hex is not one
+std::string detailQuantity(std::string const& _hex)
+{
+    if (!_hex.starts_with("0x") || _hex.size() == 2 ||
+        _hex.find_first_not_of("0123456789abcdefABCDEF", 2) != std::string::npos)
+    {
+        return {};
+    }
+    return boost::multiprecision::cpp_int(_hex).str();
+}
+
+/// getTransaction returns toHex(transaction.nonce()) (JsonRpcImpl_2_0.cpp:216): the hex of the
+/// nonce's text. A FISCO-lane nonce is decimal text ("123" → 0x313233); an Ethereum-lane nonce is
+/// already a quantity text ("0x1" → 0x307831). Decode the text; digits are the number, a 0x text
+/// is converted, and a field that is itself a quantity (web3-shaped) is converted directly.
 std::string detailNonce(Json::Value const& _nonce)
 {
     if (!_nonce.isString())
@@ -90,22 +105,35 @@ std::string detailNonce(Json::Value const& _nonce)
     }
     auto hex = _nonce.asString();
     auto body = hex.starts_with("0x") ? hex.substr(2) : hex;
-    if (body.empty() || body.size() % 2 != 0 ||
-        body.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
+    if (!body.empty() && body.size() % 2 == 0 &&
+        body.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos)
     {
-        return hex;
-    }
-    std::string digits;
-    for (size_t i = 0; i < body.size(); i += 2)
-    {
-        auto byte = static_cast<char>(std::stoi(body.substr(i, 2), nullptr, 16));
-        if (byte < '0' || byte > '9')
+        std::string decoded;
+        bool printable = true;
+        for (size_t i = 0; i < body.size() && printable; i += 2)
         {
-            return hex;  // not a decimal text: keep the node's form
+            auto byte = static_cast<char>(std::stoi(body.substr(i, 2), nullptr, 16));
+            printable = byte >= 0x21 && byte <= 0x7e;
+            decoded += byte;
         }
-        digits += byte;
+        if (printable && !decoded.empty() &&
+            decoded.find_first_not_of("0123456789") == std::string::npos)
+        {
+            return decoded;
+        }
+        if (printable)
+        {
+            if (auto quantity = detailQuantity(decoded); !quantity.empty())
+            {
+                return quantity;
+            }
+        }
     }
-    return digits;
+    if (auto quantity = detailQuantity(hex); !quantity.empty())
+    {
+        return quantity;
+    }
+    return detailText(_nonce);
 }
 
 /// the tx hash at _index of a cached block (the node returns objects or hash strings)
@@ -170,32 +198,35 @@ Element detailField(std::string const& _label, std::string const& _value, int _l
         {text(_label) | dim | size(WIDTH, EQUAL, _labelWidth), text(sanitizeForTerminal(_value))});
 }
 
-Element renderBlockDetail(Model const& _model, Nav& _nav, Frame const& _frame, DetailRef const& _ref)
+Element renderBlockDetail(
+    Model const& _model, Nav& _nav, Frame const& _frame, DetailRef const& _ref)
 {
     auto const& explorer = _model.explorer;
     auto cached = explorer.blockDetails.find(_ref.number);
     // const: operator[] on a mutable Json::Value would turn the null placeholder into an object
     // and hide the loading state
-    Json::Value const block = cached == explorer.blockDetails.end() ? Json::Value() : cached->second;
+    Json::Value const block =
+        cached == explorer.blockDetails.end() ? Json::Value() : cached->second;
     auto row = std::find_if(explorer.blocks.begin(), explorer.blocks.end(),
         [&](BlockRow const& r) { return r.number == _ref.number; });
     auto field = [&](char const* key) { return detailText(block[key]); };
-    std::string hash = block.isMember("hash") ? block["hash"].asString() :
+    std::string hash = block.isMember("hash")       ? block["hash"].asString() :
                        row != explorer.blocks.end() ? row->hash :
                                                       _ref.hash;
-    int64_t timestamp = block.isMember("timestamp") ? block["timestamp"].asInt64() :
+    int64_t timestamp = block.isMember("timestamp")  ? block["timestamp"].asInt64() :
                         row != explorer.blocks.end() ? row->timestampMs :
                                                        0;
-    std::string sealer = block.isMember("sealer") ? field("sealer") :
+    std::string sealer = block.isMember("sealer")     ? field("sealer") :
                          row != explorer.blocks.end() ? row->sealer :
                                                         "-";
     auto signatures = block["signatureList"].isArray() ? block["signatureList"].size() : 0U;
     Elements left = {detailField("number", std::to_string(_ref.number)),
-        detailField("hash", hash, 6), detailField("parentHash", block.isNull() ? "-" : detailParentHash(block)),
-        detailField("timestamp", clockText(timestamp) + "  " +
-                                     (timestamp > 0 ? ageText(std::max<int64_t>(
-                                                          0, _frame.nowMs - timestamp)) + " ago" :
-                                                      "-")),
+        detailField("hash", hash, 6),
+        detailField("parentHash", block.isNull() ? "-" : detailParentHash(block)),
+        detailField("timestamp",
+            clockText(timestamp) + "  " +
+                (timestamp > 0 ? ageText(std::max<int64_t>(0, _frame.nowMs - timestamp)) + " ago" :
+                                 "-")),
         detailField("sealer", sealer)};
     Elements right = {detailField("gasUsed", field("gasUsed")),
         detailField("txsRoot", abridged(field("txsRoot"), 8)),
@@ -211,9 +242,9 @@ Element renderBlockDetail(Model const& _model, Nav& _nav, Frame const& _frame, D
 
     auto rows = detailBlockTxs(explorer, _ref.number);
     std::deque<TxRow> list(rows.begin(), rows.end());
-    int listHeight = std::max(4, _frame.height - static_cast<int>(left.size()) -
-                                     (_frame.width >= 100 ? 0 : static_cast<int>(right.size())) -
-                                     3);
+    int listHeight =
+        std::max(4, _frame.height - static_cast<int>(left.size()) -
+                        (_frame.width >= 100 ? 0 : static_cast<int>(right.size())) - 3);
     std::vector<ListColumn> columns = {
         {"hash", 11, 0}, {"from", 9, 3}, {"to", 9, 4}, {"status", 6, 1}};
     auto fit = fitListColumns(columns, _frame.width - 2);
@@ -249,8 +280,11 @@ Element renderTxDetail(Model const& _model, Frame const& _frame, DetailRef const
     auto cached = explorer.txDetails.find(_ref.hash);
     bool loaded = cached != explorer.txDetails.end();
     Json::Value tx = loaded ? cached->second.transaction : Json::Value();
-    Json::Value receipt = loaded && !cached->second.pending ? cached->second.receipt : Json::Value();
-    auto field = [&](Json::Value const& object, char const* key) { return detailText(object[key]); };
+    Json::Value receipt =
+        loaded && !cached->second.pending ? cached->second.receipt : Json::Value();
+    auto field = [&](Json::Value const& object, char const* key) {
+        return detailText(object[key]);
+    };
     std::string input = tx.get("input", "").asString();
     Elements left = {detailField("hash", _ref.hash, 6), detailField("from", field(tx, "from")),
         detailField("to", tx.get("to", "").asString().empty() ? "create" : field(tx, "to")),
@@ -259,8 +293,8 @@ Element renderTxDetail(Model const& _model, Frame const& _frame, DetailRef const
                                                                      field(tx, "blockNumber")),
         detailField("blockLimit", field(tx, "blockLimit")),
         detailField("input", tx.isMember("input") ? detailHexSummary(input) : "-"),
-        detailField("abi", tx.isMember("abi") ? std::to_string(tx["abi"].asString().size()) + " chars" :
-                                                "-")};
+        detailField("abi",
+            tx.isMember("abi") ? std::to_string(tx["abi"].asString().size()) + " chars" : "-")};
     auto preset = _model.sentPresets.find(_ref.hash);
     if (preset != _model.sentPresets.end() && preset->second != nullptr && !input.empty())
     {
@@ -293,8 +327,8 @@ Element renderTxDetail(Model const& _model, Frame const& _frame, DetailRef const
     {
         int status = receipt.get("status", -1).asInt();
         auto statusText = std::to_string(status) + " " + txStatusWord(status);
-        right.push_back(
-            detailField("status", statusText) | (status == 0 ? color(Color::Green) : color(Color::Red)));
+        right.push_back(detailField("status", statusText) |
+                        (status == 0 ? color(Color::Green) : color(Color::Red)));
         right.push_back(detailField("gasUsed", field(receipt, "gasUsed")));
         auto contract = receipt.get("contractAddress", "").asString();
         right.push_back(detailField("contract", contract.empty() ? "-" : contract));
@@ -355,9 +389,8 @@ void resolveDetailRefs(Nav& _nav, ExplorerState const& _explorer)
         {
             auto parent = _nav.stack[i - 1].number;
             auto cached = _explorer.blockDetails.find(parent);
-            std::string hash = cached == _explorer.blockDetails.end() ?
-                                   "" :
-                                   detailTxHashIn(cached->second, index);
+            std::string hash =
+                cached == _explorer.blockDetails.end() ? "" : detailTxHashIn(cached->second, index);
             if (hash.empty())
             {
                 auto rows = detailRowsOf(_explorer, parent);
@@ -417,8 +450,7 @@ Element renderDetail(Model const& _model, Nav& _nav, Frame const& _frame, SendFo
     {
         _nav.detailTxs.count = 0;
         return window(text(ref.kind == DetailKind::block ? " block " : " tx "),
-            text("row no longer loaded; Esc") | dim,
-            LIGHT);
+            text("row no longer loaded; Esc") | dim, LIGHT);
     }
     if (ref.kind == DetailKind::block)
     {

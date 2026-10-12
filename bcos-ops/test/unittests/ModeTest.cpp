@@ -313,6 +313,12 @@ BOOST_AUTO_TEST_CASE(txpoolContentFlattensPendingThenQueued)
         renderText(tui::renderTxpool(model, tui::Frame{.width = 100, .height = 20}), 100, 20);
     BOOST_CHECK(text.find("pending 3") != std::string::npos);
     BOOST_CHECK(text.find("queued 1") != std::string::npos);
+    // getPendingTxSize leaves the web3 mempool out: not shown next to txpool_content's counts
+    model.status.pendingTxSize = 0;
+    auto withFiscoCount =
+        renderText(tui::renderTxpool(model, tui::Frame{.width = 100, .height = 20}), 100, 20);
+    BOOST_CHECK(withFiscoCount.find("getPendingTxSize") == std::string::npos);
+    BOOST_CHECK(withFiscoCount.find("pending 3") != std::string::npos);
     // a failing call keeps the page and shows the error
     RpcCall broken = [](std::string_view, Json::Value const&) -> Json::Value {
         throw OpsRpcError("txpool_content", -32601, "not on the OP lane");
