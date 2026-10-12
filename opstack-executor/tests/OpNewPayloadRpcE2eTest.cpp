@@ -575,7 +575,7 @@ void runInvalidVector(std::string const& id)
         // Committed-tip sibling reorg (two-pour VALID vectors) requires SYS_REORG_UNDO /
         // scheduler sibling execution — parked until ReorgUndo lands (OpScheduler.h:550).
         return;
-#if 0  // Re-enable when SYS_REORG_UNDO / committed-tip sibling reorg lands.
+#ifdef FISCO_REORG_E2E  // Re-enable when SYS_REORG_UNDO / committed-tip sibling reorg lands.
        // S-DRV-6/7 stage 1: the sibling is a genuinely valid alternative block — op-geth
        // answers "VALID (side chain)" and so must this engine now (the pre-rollback
        // engine answered -32603, the parked capability refusal). The VALID commit also
@@ -1112,7 +1112,9 @@ BOOST_AUTO_TEST_CASE(InvalidUnsupportedForkVersion3)
 // S-DRV-6/7 stage 1: the reorg sibling of the committed canonical tip EXECUTES on the
 // rebuilt parent base (undo-journal pre-writes) and is accepted on its merits — op-geth's
 // "VALID (side chain)" — replacing the pre-rollback -32603 capability refusal.
-BOOST_AUTO_TEST_CASE(SiblingForkAcceptedAfterCanonicalCommit)
+// Renamed from SiblingForkAcceptedAfterCanonicalCommit (the name promised the parked
+// sibling-acceptance leg; the body answers the S5 dichotomy today — see the banner above).
+BOOST_AUTO_TEST_CASE(SiblingForkCanonicalPourValid_SiblingSideChainDichotomy)
 {
     runInvalidVector("inline_invalid_siblingFork");
 }
@@ -2364,10 +2366,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceSafeBelowHeadIsValid)
 // ── S-DRV-6/7 stage 1: one-level tip rollback (reorg sibling acceptance) ──
 //
 // The corpus's chain_fork vectors carry a canonical block and a same-parent same-height
-// sibling; these cases pin the full rollback lifecycle: sibling execution on the rebuilt
-// parent base (undo-journal pre-writes), the canonical-slot switch, the FCU retract onto
-// the reorged head, the sequencer rebuild-on-parent, the uncommitted-pending replacement
-// (case U), and the two honest refusals (no undo journal / non-canonical retract head).
+// sibling. TODAY only the canonical half runs: the canonical pour asserts VALID, and the
+// sibling answers the S5 side-chain dichotomy (VALID or SYNCING — see runInvalidVector).
+// The full rollback lifecycle — sibling execution on the rebuilt parent base (undo-journal
+// pre-writes), the canonical-slot switch, the FCU retract onto the reorged head, the
+// sequencer rebuild-on-parent, the uncommitted-pending replacement (case U), and the two
+// honest refusals (no undo journal / non-canonical retract head) — is PARKED behind the
+// FISCO_REORG_E2E gate until SYS_REORG_UNDO lands: the bodies below are compile-checked
+// only when a build defines that macro, and the coverage matrix refuses to count their
+// VALID cells while parked.
 namespace
 {
 bcos::engine::NewPayloadRequest forkPayloadRequestOf(w6test::InvalidSample const& sample)
@@ -2383,7 +2390,7 @@ w6test::InvalidSample forkVectorSample(std::string const& stem)
     return sample;
 }
 
-#if 0  // Used only by committed-tip sibling reorg cases (parked until SYS_REORG_UNDO).
+#ifdef FISCO_REORG_E2E  // Used only by committed-tip sibling reorg cases (parked until SYS_REORG_UNDO).
 w6test::InvalidSample forkCanonicalSampleOf(w6test::InvalidSample const& sample)
 {
     w6test::InvalidSample canonical;
@@ -2409,7 +2416,7 @@ bcos::h256 canonicalHashAtHeight(MLS& multiLayerStorage, int64_t height)
 // canonical slot switches, total_transaction_count compensates (2 canonical + 2 sibling
 // txs must total 2, not 4), and the confirming FCU onto the sibling head — the retract
 // that was -38002 before stage 1 — is VALID.
-#if 0  // Re-enable when SYS_REORG_UNDO / committed-tip sibling reorg lands.
+#ifdef FISCO_REORG_E2E  // Re-enable when SYS_REORG_UNDO / committed-tip sibling reorg lands.
 BOOST_AUTO_TEST_CASE(ReorgSiblingRetractsForkchoiceHead)
 {
     auto sample = forkVectorSample("invalid_isthmus_chain_3_fork");
@@ -2515,7 +2522,7 @@ BOOST_AUTO_TEST_CASE(ReorgParentHeadWithoutAttrsStillSwallowed)
 // attributes; the build produces the sibling at the tip's own height on the rolled-back
 // base, the self newPayload commits it (overwriting the height), and the follow-up FCU
 // advances tracking to the new tip.
-#if 0  // Re-enable when SYS_REORG_UNDO / committed-tip sibling reorg lands.
+#ifdef FISCO_REORG_E2E  // Re-enable when SYS_REORG_UNDO / committed-tip sibling reorg lands.
 BOOST_AUTO_TEST_CASE(ReorgRebuildOnParentBuildsSibling)
 {
     auto [fixture, canonicalHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2616,7 +2623,7 @@ BOOST_AUTO_TEST_CASE(ReorgCaseUReplacesUncommittedPending)
 // Honest refusal: a tip committed before the undo journal existed (or pruned away) has no
 // execution base for its sibling — the delegate refuses, and the engine surfaces the
 // capability limit as -32603 (OpExecutionInternalError), not a wrong consensus verdict.
-#if 0  // Re-enable when SYS_REORG_UNDO / ReorgUndo lands (tip-reorg follow-up).
+#ifdef FISCO_REORG_E2E  // Re-enable when SYS_REORG_UNDO / ReorgUndo lands (tip-reorg follow-up).
 BOOST_AUTO_TEST_CASE(ReorgSiblingWithoutUndoJournalRefused)
 {
     auto sample = forkVectorSample("invalid_jovian_chain_3_fork");
