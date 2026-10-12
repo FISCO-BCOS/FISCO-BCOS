@@ -9,8 +9,10 @@ A divergence is a case where the four ends are **not expected to agree
 bit-for-bit**, either because one end deliberately chooses different semantics
 in undefined territory, or because the fork is not implemented the same way in
 every source. The Task 6 `--check` mode reads the grid's `known_divergence`
-field, skips the matching cases, and counts them; a case NOT in this registry is
-expected to agree exactly on every source.
+field; a registered row is still computed and compared by the fisco end (its
+golden carries the row) — the exemption scopes the four-source comparator
+(compare_snapshots.py), which skips the matching cases. A case NOT in this
+registry is expected to agree exactly on every source.
 
 ## Registry
 

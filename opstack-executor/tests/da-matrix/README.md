@@ -9,7 +9,8 @@ bit-for-bit and committed under `golden/`.
 This directory lives in the TESTS domain (CI `TESTS=ON`); the FISCO runner is
 built as the `opstack-da-matrix-runner` executable and the differential gate
 executes in ctest (`OpDaMatrixCheck`: `run_fisco --check fisco --golden golden/`,
-known_divergence rows skipped+counted). `compare_snapshots.py` additionally
+known_divergence rows still computed and compared — the fisco golden carries
+them, so the exemption scopes only the four-source comparator). `compare_snapshots.py` additionally
 cross-compares the committed snapshots and FAILS on a missing end.
 
 ## Layout

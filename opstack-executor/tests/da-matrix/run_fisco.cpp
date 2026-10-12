@@ -350,7 +350,7 @@ int main(int argc, char** argv)
             golden[id] = {g.get("l1_cost", "").asString(), g.get("operator_cost", "").asString()};
         }
 
-        std::size_t compared = 0, skippedKnown = 0, skippedMissing = 0, mismatches = 0;
+        std::size_t compared = 0, skippedMissing = 0, mismatches = 0;
         for (const auto& c : cases)
         {
             // S14: the isObject guard lives in computeCase, which runs only AFTER this
@@ -398,8 +398,8 @@ int main(int argc, char** argv)
         }
 
         // Skipped-row counts go to stderr (CI visibility); summary to stdout.
-        std::cerr << "run_fisco: --check " << checkEnd << ": skipped " << skippedKnown
-                  << " known_divergence, " << skippedMissing << " missing-from-golden\n";
+        std::cerr << "run_fisco: --check " << checkEnd << ": skipped "
+                  << skippedMissing << " missing-from-golden\n";
         std::cout << "run_fisco: --check " << checkEnd << ": compared " << compared << " cases, "
                   << mismatches << " mismatches\n";
 
