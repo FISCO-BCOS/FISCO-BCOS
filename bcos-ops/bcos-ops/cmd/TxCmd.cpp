@@ -16,14 +16,13 @@
  * @brief `fisco-bcos tx smoke|deploy|call|send|get`
  * @file TxCmd.cpp
  */
+#include "TxContext.h"
 #include "bcos-ops/Args.h"
 #include "bcos-ops/Cli.h"
 #include "bcos-ops/Connect.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/Output.h"
-#include "bcos-ops/collect/GroupFacts.h"
 #include "bcos-ops/tx/Abi.h"
-#include "bcos-ops/tx/Account.h"
 #include "bcos-ops/tx/Smoke.h"
 #include "bcos-ops/tx/TxSender.h"
 #include <bcos-utilities/DataConvertUtility.h>
@@ -45,45 +44,6 @@ std::string readFile(std::string const& _path, std::string_view _what)
     std::stringstream buffer;
     buffer << in.rdbuf();
     return buffer.str();
-}
-
-struct ChainFacts
-{
-    std::string chainId;
-    bool sm = false;
-};
-
-/// chain id / crypto type from getGroupInfo, the node dir when the RPC is unavailable
-ChainFacts chainFacts(Connection const& _connection)
-{
-    ChainFacts facts;
-    if (_connection.nodeDir)
-    {
-        facts.chainId = _connection.nodeDir->chainId;
-        facts.sm = _connection.nodeDir->smCrypto;
-    }
-    try
-    {
-        auto group = groupFacts(_connection.call, _connection.group, std::nullopt);
-        facts.chainId = group.chainId;
-        facts.sm = group.smCrypto.value_or(facts.sm);
-    }
-    catch (std::exception const&)
-    {
-        if (facts.chainId.empty())
-        {
-            throw;
-        }
-    }
-    return facts;
-}
-
-std::unique_ptr<TxSender> makeSender(
-    Connection const& _connection, ChainFacts const& _facts, Args const& _args)
-{
-    auto account = makeAccount(_facts.sm, _args.option("account"));
-    return std::make_unique<TxSender>(
-        _connection.call, _connection.group, _facts.chainId, _facts.sm, std::move(account));
 }
 
 void printReceipt(std::ostream& _out, Receipt const& _receipt, bool _json)
