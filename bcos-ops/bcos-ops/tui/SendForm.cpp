@@ -18,8 +18,10 @@
 #include "SendForm.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/cmd/TxContext.h"
+#include "bcos-ops/tx/FeatureFlags.h"
 #include "bcos-ops/tx/PresetCall.h"
 #include <algorithm>
+#include <cctype>
 
 namespace bcos::ops::tui
 {
@@ -341,9 +343,8 @@ std::vector<std::pair<std::string, std::string>> sendConfirmRows(
     case Kind::preset:
     {
         auto const& preset = *_request.preset;
-        Routing routing;
-        routing.proposals = _context.proposals;
-        bool viaProposal = preset.write && preset.proposal && routing.proposals;
+        auto const& routing = _request.routing;  // the decision the worker will send
+        bool viaProposal = PresetRunner::routesThroughProposal(routing, preset);
         auto const* committee = viaProposal ? PresetRunner::proposalPreset(preset) : nullptr;
         if (viaProposal && committee != nullptr)
         {
@@ -381,14 +382,32 @@ std::vector<std::pair<std::string, std::string>> sendConfirmRows(
         break;
     case Kind::enableFeatures:
     {
-        std::string params;
-        for (size_t i = 0; i < _request.features.size(); ++i)
+        // the steps the CLI's enable-features shows: dependency order with the flags it adds
+        std::vector<std::string> order;
+        try
         {
-            params += (i == 0 ? "" : ", ") + _request.features[i];
+            order = featureEnableOrder(_request.features);
         }
-        rows = {{"mode", _context.proposals ? "proposal" : "direct"},
-            {"to", "0x0000000000000000000000000000000000001000"},
-            {"method", "setValueByKey(string,string)"}, {"params", params}};
+        catch (OpsError const&)
+        {
+            order = _request.features;
+        }
+        std::string params;
+        for (size_t i = 0; i < order.size(); ++i)
+        {
+            params += (i == 0 ? "" : ", ") + order[i] + "=1";
+        }
+        auto const* preset = findPreset("sysconfig", "set");
+        bool viaProposal = PresetRunner::routesThroughProposal(_request.routing, *preset);
+        auto const* committee = viaProposal ? PresetRunner::proposalPreset(*preset) : nullptr;
+        rows = {{"mode", viaProposal ? "proposal" : "direct"}, {"to", std::string(preset->to)},
+            {"method", std::string(preset->signature)},
+            {"params", std::to_string(order.size()) + " step(s): " + params}};
+        if (committee != nullptr)
+        {
+            rows.emplace_back("note", std::string(committee->signature) + " stands in for " +
+                                          std::string(preset->signature) + ", one per flag");
+        }
         break;
     }
     case Kind::loadKey:
@@ -564,6 +583,14 @@ SendAction sendFormHandle(SendForm& _form, SendContext const& _context, ftxui::E
                     _form.notice = "a request is still running";
                     return SendAction::redraw;
                 }
+                // the layer shows direct | proposal; it must know, not guess
+                if (SendRequest::mayRouteThroughProposal(request.kind, request.preset) &&
+                    !_context.routingKnown)
+                {
+                    _form.notice = "routing unknown: reload the key";
+                    return SendAction::redraw;
+                }
+                request.routing.proposals = _context.proposals;
                 _form.pending = request;
                 _form.confirmRows = sendConfirmRows(request, _context);
                 _form.confirm = true;
@@ -624,6 +651,7 @@ SendAction govFormHandle(
     SendRequest request;
     request.kind = SendRequest::Kind::preset;
     request.openTxDetail = false;  // the proposal page stays; its rows refresh next round
+    request.routing.proposals = _context.proposals;  // vote/revoke have no proposal form
     if (key == 'd')
     {
         request.preset = findPreset("committee", "revoke");
@@ -639,5 +667,31 @@ SendAction govFormHandle(
     _form.confirm = true;
     _form.notice.clear();
     return SendAction::redraw;
+}
+bool sendEntryNeedsKey(SendEntry const& _entry)
+{
+    SendRequest probe;
+    switch (_entry.kind)
+    {
+    case SendEntryKind::group:
+        return false;
+    case SendEntryKind::helloDeploy:
+        probe.kind = SendRequest::Kind::helloDeploy;
+        break;
+    case SendEntryKind::preset:
+        probe.kind = SendRequest::Kind::preset;
+        probe.preset = _entry.preset;
+        break;
+    case SendEntryKind::features:
+        probe.kind = SendRequest::Kind::enableFeatures;
+        break;
+    case SendEntryKind::raw:
+        probe.kind = SendRequest::Kind::raw;
+        break;
+    case SendEntryKind::custom:
+        probe.kind = SendRequest::Kind::custom;
+        break;
+    }
+    return probe.needsKey();
 }
 }  // namespace bcos::ops::tui

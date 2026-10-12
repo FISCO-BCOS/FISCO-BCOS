@@ -19,6 +19,7 @@
  */
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/cmd/TxCmd.h"
+#include "bcos-ops/tx/TxSender.h"
 #include "fixtures/FakeRpc.h"
 #include <bcos-protocol/bcos-protocol/TransactionStatus.h>
 #include <boost/test/unit_test.hpp>
@@ -144,6 +145,23 @@ BOOST_AUTO_TEST_CASE(getProofPassesTrueToBothQueries)
     std::ostringstream noProof;
     runTxOn(rawConnection(rpc), rawArgs({"get", "0x9c"}), noProof);
     BOOST_CHECK_EQUAL(rpc.calls().back().second[3].asBool(), false);
+}
+
+BOOST_AUTO_TEST_CASE(rawHexIsNormalizedTheSameWayEverywhere)
+{
+    // a multi-line paste (the TUI's raw box) and the CLI share normalizeRawTxHex
+    BOOST_CHECK_EQUAL(normalizeRawTxHex("0xAB\ncd \r\n ef\t"), "ABcdef");
+    BOOST_CHECK_EQUAL(normalizeRawTxHex("  0X10  "), "10");
+    BOOST_CHECK_THROW(normalizeRawTxHex("0xabc"), OpsError);  // odd length
+    BOOST_CHECK_THROW(normalizeRawTxHex("zz"), OpsError);     // not hex
+    BOOST_CHECK_THROW(normalizeRawTxHex("  \n "), OpsError);  // nothing left
+    auto path = (std::filesystem::temp_directory_path() / "txraw-multiline.hex").string();
+    std::ofstream(path) << "0xab\ncd\n";
+    FakeRpc rpc;
+    rpc.set("sendTransaction", rawReceipt());
+    std::ostringstream out;
+    runTxOn(rawConnection(rpc), rawArgs({"raw", "@" + path}), out);
+    BOOST_CHECK_EQUAL(rpc.calls().back().second[2].asString(), "abcd");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

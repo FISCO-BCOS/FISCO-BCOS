@@ -92,6 +92,12 @@ private:
     bcos::crypto::KeyPairInterface::UniquePtr m_keyPair;
 };
 
+/// the signed transaction text an operator pasted or a file holds → bare lowercase-insensitive
+/// hex: whitespace (incl. newlines of a multi-line input) dropped, `0x` stripped, even length
+/// and hex digits only; OpsError{1} "raw transaction is not hex" otherwise. The CLI's `tx raw`
+/// and the TUI's raw entry share it.
+std::string normalizeRawTxHex(std::string const& _text);
+
 /// getTransaction + getTransactionReceipt merged: {"transaction": ..., "receipt": ...};
 /// _proof asks the node for txProof / receiptProof
 Json::Value fetchTransaction(

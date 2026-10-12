@@ -20,6 +20,7 @@
  */
 #include "Pages.h"
 #include "bcos-ops/Output.h"
+#include <algorithm>
 
 namespace bcos::ops::tui
 {
@@ -109,7 +110,7 @@ Element sendButton(SendForm const& _form, SendContext const& _context, bool _foc
     {
         label = " call ";
     }
-    bool needsKey = !(entry && entry->kind == SendEntryKind::preset && !entry->preset->write);
+    bool needsKey = entry != nullptr && sendEntryNeedsKey(*entry);
     if (needsKey && !_context.hasKey)
     {
         auto button = text("[" + label + "]") | dim;

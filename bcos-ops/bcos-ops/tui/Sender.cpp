@@ -25,6 +25,8 @@
 #include "bcos-ops/tx/HelloWorld.h"
 #include "bcos-ops/tx/PresetCall.h"
 #include <bcos-utilities/DataConvertUtility.h>
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <sstream>
 
@@ -62,6 +64,16 @@ bool SendRequest::needsKey() const
     default:
         return true;
     }
+}
+
+bool SendRequest::mayRouteThroughProposal(Kind _kind, Preset const* _preset)
+{
+    if (_kind == Kind::enableFeatures)
+    {
+        return true;  // every flag is a setValueByKey, a proposal on auth chains
+    }
+    return _kind == Kind::preset && _preset != nullptr && _preset->write &&
+           _preset->proposal.has_value();
 }
 
 std::string sendOutcomeLine(PresetResult const& _result)
@@ -118,7 +130,18 @@ std::string sendOutcomeLine(PresetResult const& _result)
 
 Sender::Sender(Connection _connection, Model& _model, std::function<void()> _onUpdate)
   : m_connection(std::move(_connection)), m_model(_model), m_onUpdate(std::move(_onUpdate))
-{}
+{
+    // every RPC of a request refuses to start once stop() was asked (same as the refresher),
+    // so a quit waits for the call in flight and nothing after it
+    auto inner = m_connection.call;
+    m_connection.call = [this, inner](std::string_view _method, Json::Value const& _params) {
+        if (m_stop)
+        {
+            throw OpsError(c_exitUsage, "send stopped");
+        }
+        return inner(_method, _params);
+    };
+}
 
 Sender::~Sender()
 {
@@ -156,11 +179,6 @@ void Sender::submit(SendRequest _request)
         m_model.send.busy = true;
     }
     m_wake.notify_all();
-}
-
-std::string Sender::keyAddress() const
-{
-    return m_keyAddress;
 }
 
 void Sender::loop()
@@ -258,6 +276,12 @@ void Sender::execute(SendRequest const& _request)
         outcome.ok = false;
         outcome.line = std::string("error: ") + sanitizeForTerminal(e.what());
     }
+    catch (...)
+    {
+        // a non-std exception escaping the worker would terminate with the terminal in raw mode
+        outcome.ok = false;
+        outcome.line = "error: unknown exception";
+    }
     publish(std::move(outcome));
 }
 
@@ -274,7 +298,6 @@ SendOutcome Sender::run(SendRequest const& _request)
         auto address = accountAddress(chain.sm, *keyPair);
         m_sender = std::make_unique<TxSender>(
             m_connection.call, m_connection.group, chain.chainId, chain.sm, std::move(keyPair));
-        m_keyAddress = address;
         m_hasKey = true;
         {
             std::lock_guard<std::mutex> lock(m_model.mutex);
@@ -326,12 +349,7 @@ SendOutcome Sender::run(SendRequest const& _request)
         auto const& preset = *_request.preset;
         auto& tx = sender(preset.write);
         PresetRunner runner(tx, facts().sm, m_connection.call, m_connection.group);
-        Routing routing;
-        if (preset.proposal)
-        {
-            routing.proposals = proposals();
-        }
-        runner.setRouting(routing);
+        runner.setRouting(_request.routing);  // what the confirmation layer showed, verbatim
         auto result = runner.run(preset, _request.params, _request.to);
         outcome.ok = result.ok;
         outcome.txHash = result.receipt.txHash;
@@ -375,8 +393,8 @@ SendOutcome Sender::run(SendRequest const& _request)
     case Kind::raw:
     {
         auto& tx = sender(true);
-        auto hex =
-            _request.raw.starts_with("@") ? senderReadFile(_request.raw.substr(1)) : _request.raw;
+        auto hex = normalizeRawTxHex(
+            _request.raw.starts_with("@") ? senderReadFile(_request.raw.substr(1)) : _request.raw);
         auto receipt = tx.sendRaw(hex);
         outcome.txHash = receipt.txHash;
         outcome.ok = receipt.ok();
@@ -389,9 +407,7 @@ SendOutcome Sender::run(SendRequest const& _request)
     {
         auto& tx = sender(true);
         PresetRunner runner(tx, facts().sm, m_connection.call, m_connection.group);
-        Routing routing;
-        routing.proposals = proposals();
-        runner.setRouting(routing);
+        runner.setRouting(_request.routing);
         auto steps =
             enableFeatures(m_connection.call, m_connection.group, runner, _request.features);
         size_t enabled = 0;

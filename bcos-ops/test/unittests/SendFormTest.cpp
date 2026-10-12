@@ -20,6 +20,7 @@
  */
 #include "bcos-ops/tui/SendForm.h"
 #include "bcos-ops/OpsError.h"
+#include "bcos-ops/tx/Presets.h"
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::ops::test
@@ -127,6 +128,7 @@ BOOST_AUTO_TEST_CASE(sendButtonNeedsAKeyThenOpensTheConfirmationLayer)
     BOOST_CHECK(!form.confirm);
     BOOST_CHECK_EQUAL(form.notice, "load a key first");
     context.hasKey = true;
+    context.routingKnown = true;  // the key load answered direct | proposal
     BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::redraw);
     BOOST_REQUIRE(form.confirm);
     BOOST_REQUIRE_EQUAL(form.confirmRows.size(), 4U);
@@ -251,6 +253,61 @@ BOOST_AUTO_TEST_CASE(featuresRawAndCustomBuildTheirRequests)
     request = tui::sendFormRequest(form, context);
     BOOST_CHECK_EQUAL(request.to, "0xc02d");
     BOOST_CHECK(request.preset != nullptr && request.preset->name == "set");
+}
+
+BOOST_AUTO_TEST_CASE(theLayerNeedsTheRoutingAndFreezesItIntoTheRequest)
+{
+    auto form = sendFormOnAddSealer();
+    tui::SendContext context;
+    context.hasKey = true;
+    context.routingKnown = false;
+    form.fields[0] = "3a1f00";
+    form.fields[1] = "1";
+    form.focus = form.buttonFocus();
+    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::redraw);
+    BOOST_CHECK(!form.confirm);
+    BOOST_CHECK(form.notice.find("routing unknown") != std::string::npos);
+    // known and proposals: the layer says proposal and the request carries exactly that
+    context.routingKnown = true;
+    context.proposals = true;
+    BOOST_CHECK(tui::sendFormHandle(form, context, Event::Return) == SendAction::redraw);
+    BOOST_REQUIRE(form.confirm);
+    BOOST_CHECK(form.pending.routing.proposals);
+    BOOST_CHECK_EQUAL(form.confirmRows[0].second, "proposal");
+    tui::sendFormHandle(form, context, Event::Escape);
+    // known and direct
+    context.proposals = false;
+    tui::sendFormHandle(form, context, Event::Return);
+    BOOST_REQUIRE(form.confirm);
+    BOOST_CHECK(!form.pending.routing.proposals);
+    BOOST_CHECK_EQUAL(form.confirmRows[0].second, "direct");
+    // a read preset never needs the routing
+    tui::sendFormHandle(form, context, Event::Escape);
+    tui::SendRequest read;
+    read.kind = tui::SendRequest::Kind::preset;
+    read.preset = findPreset("consensus", "list-sealers");
+    BOOST_CHECK(!tui::SendRequest::mayRouteThroughProposal(read.kind, read.preset) ||
+                read.preset == nullptr);
+    BOOST_CHECK(
+        tui::SendRequest::mayRouteThroughProposal(tui::SendRequest::Kind::enableFeatures, nullptr));
+}
+
+BOOST_AUTO_TEST_CASE(featuresConfirmationShowsTheDependencyOrder)
+{
+    tui::SendRequest request;
+    request.kind = tui::SendRequest::Kind::enableFeatures;
+    request.features = {"feature_balance_precompiled"};
+    tui::SendContext context;
+    auto rows = tui::sendConfirmRows(request, context);
+    BOOST_CHECK_EQUAL(rows[0].second, "direct");
+    BOOST_CHECK_EQUAL(rows[1].second, "0x0000000000000000000000000000000000001000");
+    BOOST_CHECK_EQUAL(rows[2].second, "setValueByKey(string,string)");
+    BOOST_CHECK(
+        rows[3].second.starts_with("2 step(s): feature_balance=1, feature_balance_precompiled=1"));
+    request.routing.proposals = true;
+    rows = tui::sendConfirmRows(request, context);
+    BOOST_CHECK_EQUAL(rows[0].second, "proposal");
+    BOOST_CHECK(rows.back().second.find("createSetSysConfigProposal") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

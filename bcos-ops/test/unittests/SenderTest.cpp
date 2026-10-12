@@ -24,12 +24,14 @@
 #include "bcos-ops/tx/Abi.h"
 #include "bcos-ops/tx/Presets.h"
 #include "fixtures/FakeRpc.h"
+#include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <thread>
 
 namespace bcos::ops::test
@@ -243,6 +245,7 @@ BOOST_AUTO_TEST_CASE(proposalOutcomeCarriesIdAndStatus)
     request.kind = tui::SendRequest::Kind::preset;
     request.preset = findPreset("consensus", "add-observer");
     request.params = {"3a1f00"};
+    request.routing.proposals = model.send.proposals;  // what the confirmation layer showed
     sender.execute(request);
     BOOST_CHECK(model.send.last.ok);
     BOOST_CHECK_EQUAL(model.send.last.proposalId, "7");
@@ -280,6 +283,79 @@ BOOST_AUTO_TEST_CASE(workerThreadRunsQueuedRequestsAndStops)
     BOOST_CHECK(!model.send.features.empty());
     BOOST_CHECK(!model.send.busy);
     sender.stop();  // idempotent
+}
+
+BOOST_AUTO_TEST_CASE(theRequestsRoutingIsSentVerbatim)
+{
+    // the chain says auth, the request says direct (what the layer showed): direct is sent
+    FakeRpc rpc;
+    Json::Value authOn;
+    authOn["value"] = "1";
+    authOn["blockNumber"] = 2;
+    rpc.set("getSystemConfigByKey", authOn);
+    rpc.set("sendTransaction", senderReceipt(senderOutput("int32", "[0]")));
+    tui::Model model;
+    tui::Sender sender(senderConnection(rpc), model, nullptr);
+    sender.execute(senderLoadKey());
+    BOOST_CHECK(model.send.proposals);
+    tui::SendRequest request;
+    request.kind = tui::SendRequest::Kind::preset;
+    request.preset = findPreset("consensus", "add-observer");
+    request.params = {"3a1f00"};
+    request.routing.proposals = false;
+    sender.execute(request);
+    BOOST_CHECK(model.send.last.ok);
+    BOOST_CHECK(model.send.last.proposalId.empty());
+    bool sentDirect = false;
+    for (auto const& [method, params] : rpc.calls())
+    {
+        if (method == "sendTransaction")
+        {
+            bcos::cppsdk::utilities::TransactionBuilder builder;
+            auto tx = builder.decodeTransaction(fromHex(params[2].asString()));
+            sentDirect = tx->data.to == "0x0000000000000000000000000000000000001003";
+        }
+    }
+    BOOST_CHECK(sentDirect);
+    // no second routing question was asked on the way
+    size_t configReads = 0;
+    for (auto const& [method, params] : rpc.calls())
+    {
+        configReads += method == "getSystemConfigByKey" ? 1 : 0;
+    }
+    BOOST_CHECK_EQUAL(configReads, 1U);  // the key load only
+}
+
+BOOST_AUTO_TEST_CASE(stopInsideAnEnableFeaturesRequestEndsIt)
+{
+    FakeRpc rpc;
+    tui::Model model;
+    // the fake counts the calls that reach it and asks the sender to stop on the second
+    size_t reached = 0;
+    bool armed = false;  // only the enableFeatures request trips the stop
+    std::function<void()> stopHook;
+    Connection connection = senderConnection(rpc);
+    auto inner = connection.call;
+    connection.call = [&](std::string_view _method, Json::Value const& _params) {
+        ++reached;
+        if (armed && reached == 2)
+        {
+            stopHook();
+        }
+        return inner(_method, _params);
+    };
+    tui::Sender sender(connection, model, nullptr);
+    stopHook = [&]() { sender.stop(); };
+    sender.execute(senderLoadKey());  // reads the chain facts and the routing first
+    reached = 0;
+    armed = true;
+    tui::SendRequest request;
+    request.kind = tui::SendRequest::Kind::enableFeatures;
+    request.features = {"feature_balance", "feature_balance_precompiled"};
+    sender.execute(request);
+    BOOST_CHECK_EQUAL(reached, 2U);  // the call in flight finished; no third RPC started
+    BOOST_CHECK(!model.send.last.ok);
+    BOOST_CHECK(model.send.last.line.find("send stopped") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

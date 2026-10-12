@@ -231,7 +231,8 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
     auto redraw = [&screen]() { screen.PostEvent(ftxui::Event::Custom); };
     // the send page's worker owns the signing key; --key (or --account) loads it before the loop.
     // It gets its own connection: the local socket serves one request at a time, and a send
-    // must not queue behind a refresh round of up to 50 block fetches
+    // must not queue behind a refresh round of up to 50 block fetches. Its calls check the stop
+    // flag like the refresher's
     tui::Sender sender(connect(connectOptionsFrom(_args)), model, redraw);
     if (auto key = _args.option("key"); key || _args.option("account"))
     {
@@ -350,6 +351,23 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         context.busy = model.send.busy;
         return context;
     };
+    // FTXUI drains the whole event queue before it draws, so the Input a key lands in must be
+    // chosen when the key arrives, not at the next render (Tab + a character in one batch)
+    auto syncSendSelector = [&]() {
+        auto focused = form.inputId();
+        if (focused.empty())
+        {
+            return;
+        }
+        auto component = sendInputFor(focused);
+        for (size_t i = 0; i < sendChildren.size(); ++i)
+        {
+            if (sendChildren[i] == component)
+            {
+                sendSelector = static_cast<int>(i);
+            }
+        }
+    };
     uint64_t seenOutcome = 0;
     auto root = Renderer(inputs, [&]() {
         std::lock_guard<std::mutex> lock(model.mutex);
@@ -363,7 +381,6 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
             .filterInput = editingFilter ? filterInput->Render() : nullptr};
         if (onSend)
         {
-            auto focused = form.inputId();
             for (auto const& spec : form.fieldSpecs())
             {
                 if (auto component = sendInputFor(spec.id))
@@ -372,17 +389,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
                 }
             }
             frame.inputs["key"] = sendInputs["key"]->Render();
-            if (!focused.empty())
-            {
-                auto component = sendInputFor(focused);
-                for (size_t i = 0; i < sendChildren.size(); ++i)
-                {
-                    if (sendChildren[i] == component)
-                    {
-                        sendSelector = static_cast<int>(i);
-                    }
-                }
-            }
+            syncSendSelector();
         }
         auto element = tui::renderFrame(model, nav, frame, filter, &form);
         visibleTxFrom = nav.txs.firstVisible();
@@ -450,6 +457,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
             switch (sendAction)
             {
             case tui::SendAction::passToInput:
+                syncSendSelector();
                 return false;
             case tui::SendAction::redraw:
             case tui::SendAction::none:
@@ -498,8 +506,8 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         case tui::NavAction::quit:
             // stop every worker before Exit(): ScreenInteractive drops its event sender inside
             // Exit, and a redraw posted after that from another thread is a use-after-free. The
-            // worker checks the stop flag between requests, so the wait is at most one
-            // in-flight request (the request timeout).
+            // refresher and the sender check the stop flag before every RPC, so the wait is at
+            // most the one call in flight (the request timeout).
             stopWorkers();
             screen.Exit();
             return true;
