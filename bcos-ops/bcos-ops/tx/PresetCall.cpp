@@ -232,12 +232,52 @@ int64_t proposalInterval(Routing const& _routing)
     return *_routing.interval;
 }
 
+/// CommitteeManager.sol:384-445: the proposalType byte as the console names it
+std::string proposalTypeName(int _type)
+{
+    switch (_type)
+    {
+    case 11:
+        return "governor";
+    case 12:
+        return "rate";
+    case 13:
+        return "voteComputer";
+    case 21:
+        return "deployAuthType";
+    case 22:
+        return "deployAuth";
+    case 31:
+        return "resetAdmin";
+    case 41:
+        return "sysConfig";
+    case 51:
+        return "consensusWeight";
+    case 52:
+        return "rmNode";
+    default:
+        return "type" + std::to_string(_type);
+    }
+}
+
 Json::Value proposalInfoJson(Json::Value const& _fields)
 {
     Json::Value value;
     value["resourceId"] = _fields.get(0U, "");
     value["proposer"] = _fields.get(1U, "");
     value["proposalType"] = _fields.get(2U, "");
+    {
+        // the decoder hands uint8 back as a decimal string; the name is what operators read
+        auto const& type = value["proposalType"];
+        int code = -1;
+        try
+        {
+            code = type.isString() ? std::stoi(type.asString()) : type.asInt();
+        }
+        catch (std::exception const&)
+        {}
+        value["proposalTypeName"] = code >= 0 ? proposalTypeName(code) : std::string("-");
+    }
     value["expiresAtBlock"] = _fields.get(3U, "");  // block.number + interval at creation
     value["status"] = _fields.get(4U, "");
     value["agreeVoters"] = _fields.get(5U, Json::Value(Json::arrayValue));

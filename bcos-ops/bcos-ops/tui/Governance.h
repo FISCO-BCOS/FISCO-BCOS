@@ -82,8 +82,6 @@ struct GovernanceWants
 
 constexpr size_t c_governanceMaxRows = 50;
 
-/// CommitteeManager.sol:384-445: the proposalType byte as the console names it
-std::string proposalTypeName(int _type);
 ProposalRow proposalRowFrom(ProposalOutcome const& _outcome);
 /// committee info, the newest min(_wants.rows, 50) proposals and the details of _wants.ids;
 /// _stop (when given) is checked between RPC calls and the fetch ends early. A failure leaves

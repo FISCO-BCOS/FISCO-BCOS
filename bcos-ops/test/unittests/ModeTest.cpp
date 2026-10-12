@@ -21,6 +21,7 @@
  */
 #include "bcos-ops/Mode.h"
 #include "bcos-ops/Checks.h"
+#include "bcos-ops/Connect.h"
 #include "bcos-ops/HttpRpc.h"
 #include "bcos-ops/NodeDir.h"
 #include "bcos-ops/OpsError.h"
@@ -41,6 +42,7 @@
 #include <boost/asio/streambuf.hpp>
 #include <boost/asio/write.hpp>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -57,6 +59,84 @@ Connection modeConnection(FakeRpc& _rpc, std::string _mode)
     connection.source = "rpc";
     connection.group = "group0";
     connection.mode = std::move(_mode);
+    return connection;
+}
+
+/// a web3 stand-in on 127.0.0.1: answers each POST with _respond(method), one connection per
+/// request, until _requests have been served
+struct ScriptedWeb3
+{
+    boost::asio::io_context ioc;
+    boost::asio::ip::tcp::acceptor acceptor{ioc, {boost::asio::ip::make_address("127.0.0.1"), 0}};
+    std::thread thread;
+    std::string endpoint() const
+    {
+        return "127.0.0.1:" + std::to_string(acceptor.local_endpoint().port());
+    }
+    void serve(int _requests, std::function<std::string(std::string const&)> _respond)
+    {
+        thread = std::thread([this, _requests, respond = std::move(_respond)]() {
+            namespace asio = boost::asio;
+            for (int i = 0; i < _requests; ++i)
+            {
+                asio::ip::tcp::socket socket(ioc);
+                boost::system::error_code ec;
+                acceptor.accept(socket, ec);
+                if (ec || stopping)
+                {
+                    return;
+                }
+                asio::streambuf buffer;
+                asio::read_until(socket, buffer, "\r\n\r\n", ec);
+                std::string head(
+                    asio::buffers_begin(buffer.data()), asio::buffers_end(buffer.data()));
+                auto lengthPos = head.find("Content-Length: ");
+                size_t length =
+                    lengthPos == std::string::npos ? 0 : std::stoul(head.substr(lengthPos + 16));
+                auto bodyStart = head.find("\r\n\r\n") + 4;
+                while (!ec && head.size() - bodyStart < length)
+                {
+                    char chunk[256];
+                    auto n = socket.read_some(asio::buffer(chunk), ec);
+                    head.append(chunk, n);
+                }
+                auto request = head.substr(bodyStart);
+                auto methodPos = request.find(R"("method":")");
+                auto method = methodPos == std::string::npos ?
+                                  std::string() :
+                                  request.substr(methodPos + 10,
+                                      request.find('"', methodPos + 10) - methodPos - 10);
+                auto body = respond(method);
+                std::string response =
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " +
+                    std::to_string(body.size()) + "\r\n\r\n" + body;
+                asio::write(socket, asio::buffer(response), ec);
+            }
+        });
+    }
+    std::atomic<bool> stopping{false};
+    ~ScriptedWeb3()
+    {
+        // a blocking accept is not woken by close() on every platform: connect once instead
+        stopping = true;
+        if (thread.joinable())
+        {
+            boost::asio::io_context wake;
+            boost::asio::ip::tcp::socket poke(wake);
+            boost::system::error_code ignored;
+            poke.connect(acceptor.local_endpoint(), ignored);
+            thread.join();
+        }
+        boost::system::error_code ignored;
+        acceptor.close(ignored);
+    }
+};
+
+Connection elRawConnection(FakeRpc& _rpc, std::string const& _web3)
+{
+    auto connection = modeConnection(_rpc, "el");
+    connection.web3Endpoint = _web3;
+    connection.requestTimeoutMs = 3000;
     return connection;
 }
 
@@ -229,7 +309,8 @@ BOOST_AUTO_TEST_CASE(txpoolContentFlattensPendingThenQueued)
     tui::Model model;
     model.mode = "opstack-el";
     model.txpool = state;
-    auto text = renderText(tui::renderTxpool(model), 100, 20);
+    auto text =
+        renderText(tui::renderTxpool(model, tui::Frame{.width = 100, .height = 20}), 100, 20);
     BOOST_CHECK(text.find("pending 3") != std::string::npos);
     BOOST_CHECK(text.find("queued 1") != std::string::npos);
     // a failing call keeps the page and shows the error
@@ -361,6 +442,188 @@ BOOST_AUTO_TEST_CASE(explorerDropsRowsWhenTheParentDoesNotMatch)
     Json::Value block;
     block["parentInfo"][0]["blockHash"] = "0xAB";
     BOOST_CHECK_EQUAL(tui::blockParentHash(block), "0xAB");
+}
+
+BOOST_AUTO_TEST_CASE(explorerFindsADeepForkPointInOneRound)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 10, 1);
+    tui::ExplorerState state;
+    state.capacity = 20;
+    tui::explorerFetch(state, rpc.call(), "group0", 10, nullptr);
+    BOOST_REQUIRE_EQUAL(state.blocks.front().number, 10);
+    // 8, 9 and 10 were replaced; 7 is still the common ancestor
+    for (int64_t n = 8; n <= 10; ++n)
+    {
+        auto replaced = fakeBlock(n, 1);
+        replaced["hash"] = fakeHash(1000 + n);
+        rpc.setFor("getBlockByNumber", 2, std::to_string(n), replaced);
+    }
+    auto eleven = fakeBlock(11, 1);
+    eleven["parentHash"] = fakeHash(1010);
+    rpc.setFor("getBlockByNumber", 2, "11", eleven);
+    tui::explorerFetch(state, rpc.call(), "group0", 11, nullptr);
+    BOOST_CHECK_EQUAL(state.reorgs, 1);
+    BOOST_CHECK_EQUAL(state.blocks.front().number, 7);
+    BOOST_CHECK_EQUAL(state.lastFetchedHeight, 7);
+    BOOST_CHECK(std::none_of(state.txs.begin(), state.txs.end(),
+        [](tui::TxRow const& t) { return t.blockNumber >= 8; }));
+}
+
+BOOST_AUTO_TEST_CASE(explorerNeverForksOnARowWithoutAHash)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 10, 1);
+    tui::ExplorerState state;
+    state.capacity = 20;
+    tui::explorerFetch(state, rpc.call(), "group0", 10, nullptr);
+    state.blocks.front().hash.clear();  // a node that returned no hash for 10
+    auto eleven = fakeBlock(11, 1);
+    eleven["parentHash"] = fakeHash(4242);
+    rpc.setFor("getBlockByNumber", 2, "11", eleven);
+    tui::explorerFetch(state, rpc.call(), "group0", 11, nullptr);
+    BOOST_CHECK_EQUAL(state.reorgs, 0);
+    BOOST_CHECK_EQUAL(state.blocks.front().number, 11);
+}
+
+
+BOOST_AUTO_TEST_CASE(modeFlagWinsThenNodeDirThenUnknown)
+{
+    ConnectOptions options;
+    NodeDir node;
+    node.ethereumMode = "opstack-el";
+    BOOST_CHECK_EQUAL(connectionMode(options, &node), "opstack-el");
+    options.mode = "none";
+    BOOST_CHECK_EQUAL(connectionMode(options, &node), "none");  // --mode wins
+    BOOST_CHECK_EQUAL(connectionMode(options, nullptr), "none");
+    options.mode.reset();
+    BOOST_CHECK_EQUAL(connectionMode(options, nullptr), "unknown");  // bare --rpc
+    node.ethereumMode = "pbft";
+    BOOST_CHECK_EXCEPTION(connectionMode(options, &node), OpsError, [](OpsError const& e) {
+        return std::string(e.what()).find("config.ini [ethereum] mode") != std::string::npos;
+    });
+    options.mode = "pbft";
+    BOOST_CHECK_EXCEPTION(connectionMode(options, nullptr), OpsError, [](OpsError const& e) {
+        return std::string(e.what()).find("--mode expects") != std::string::npos;
+    });
+}
+
+BOOST_AUTO_TEST_CASE(unknownModeNeverSendsGetConsensusStatus)
+{
+    FakeRpc rpc;
+    auto status = collectFromRpc(rpc.call(), "group0", "rpc", {}, "unknown");
+    for (auto const& call : rpc.calls())
+    {
+        BOOST_CHECK_NE(call.first, "getConsensusStatus");
+    }
+    auto checks = evaluate(status, Thresholds{}, 0);
+    for (auto const& check : checks)
+    {
+        if (check.name == "consensus_stable" || check.name == "quorum_connected")
+        {
+            BOOST_CHECK_EQUAL(check.state, "skipped");
+            BOOST_CHECK_EQUAL(check.detail, "pass --mode none to read PBFT");
+        }
+    }
+    FakeRpc pbft;
+    collectFromRpc(pbft.call(), "group0", "rpc", {}, "none");
+    BOOST_CHECK(std::ranges::any_of(
+        pbft.calls(), [](auto const& c) { return c.first == "getConsensusStatus"; }));
+}
+
+BOOST_AUTO_TEST_CASE(elStallLimitHasAThirtySecondFloor)
+{
+    NodeStatus status;
+    status.mode = "el";
+    status.latestTimestamp = 0;
+    status.consensusTimeoutMs = 3000;
+    status.pendingTxSize = 5;
+    auto ageOk = evaluate(status, Thresholds{}, 20000);  // 20 s: one slow L1 block, not a stall
+    BOOST_CHECK_EQUAL(ageOk[0].state, "ok");
+    auto stalled = evaluate(status, Thresholds{}, 31000);
+    BOOST_CHECK_EQUAL(stalled[0].state, "fail");
+    status.mode = "none";
+    BOOST_CHECK_EQUAL(evaluate(status, Thresholds{}, 7000)[0].state, "fail");  // 2 x 3 s
+}
+
+BOOST_AUTO_TEST_CASE(elRawExitCodesForAReceiptAndForPending)
+{
+    FakeRpc rpc;
+    {
+        ScriptedWeb3 web3;
+        web3.serve(2, [](std::string const& _method) -> std::string {
+            if (_method == "eth_sendRawTransaction")
+            {
+                return R"({"jsonrpc":"2.0","id":1,"result":"0xaa"})";
+            }
+            return R"({"jsonrpc":"2.0","id":2,"result":{"transactionHash":"0xaa","status":"0x1","blockNumber":"0x5","gasUsed":"0x5208","logs":[]}})";
+        });
+        std::ostringstream out;
+        auto code = runTxOn(elRawConnection(rpc, web3.endpoint()),
+            Args({"raw", "0xf8ab", "--wait", "5", "--json"}, {"json"}), out);
+        BOOST_CHECK_EQUAL(code, c_exitOk);
+    }
+    {
+        ScriptedWeb3 web3;
+        web3.serve(20, [](std::string const& _method) -> std::string {
+            if (_method == "eth_sendRawTransaction")
+            {
+                return R"({"jsonrpc":"2.0","id":1,"result":"0xbb"})";
+            }
+            return R"({"jsonrpc":"2.0","id":2,"result":null})";
+        });
+        std::ostringstream out;
+        auto code = runTxOn(elRawConnection(rpc, web3.endpoint()),
+            Args({"raw", "0xf8ab", "--wait", "1", "--json"}, {"json"}), out);
+        BOOST_CHECK_EQUAL(code, c_exitPending);
+        auto json = parseJson(out.str(), "pending receipt");
+        BOOST_CHECK(json["pending"].asBool());
+    }
+    std::ostringstream out;
+    BOOST_CHECK_THROW(runTxOn(elRawConnection(rpc, "127.0.0.1:1"),
+                          Args({"raw", "0xf8ab", "--wait", "0"}, {"json"}), out),
+        OpsError);
+    BOOST_CHECK_THROW(runTxOn(elRawConnection(rpc, "127.0.0.1:1"),
+                          Args({"raw", "0xf8ab", "--wait", "4000"}, {"json"}), out),
+        OpsError);
+}
+
+BOOST_AUTO_TEST_CASE(httpCallTimesOutWhenTheServerNeverAnswersAndReportsHttpErrors)
+{
+    namespace asio = boost::asio;
+    asio::io_context ioc;
+    asio::ip::tcp::acceptor acceptor(ioc, {asio::ip::make_address("127.0.0.1"), 0});
+    auto port = acceptor.local_endpoint().port();
+    asio::ip::tcp::socket held(ioc);
+    std::thread server([&]() { acceptor.accept(held); });  // accepts, never answers
+    auto call = makeHttpRpcCall("127.0.0.1:" + std::to_string(port), 300);
+    Json::Value params(Json::arrayValue);
+    auto started = std::chrono::steady_clock::now();
+    BOOST_CHECK_EXCEPTION(call("eth_blockNumber", params), OpsError, [](OpsError const& e) {
+        return std::string(e.what()).find("no answer within 300 ms") != std::string::npos;
+    });
+    BOOST_CHECK(std::chrono::steady_clock::now() - started < std::chrono::seconds(3));
+    server.join();
+
+    ScriptedWeb3 web3;
+    web3.thread = std::thread([&web3]() {
+        namespace asio = boost::asio;
+        asio::ip::tcp::socket socket(web3.ioc);
+        boost::system::error_code ec;
+        web3.acceptor.accept(socket, ec);
+        asio::streambuf buffer;
+        asio::read_until(socket, buffer, "\r\n\r\n", ec);
+        std::string body = "payload \x1b[2J too large";
+        std::string response =
+            "HTTP/1.1 413 Payload Too Large\r\nContent-Length: " + std::to_string(body.size()) +
+            "\r\n\r\n" + body;
+        asio::write(socket, asio::buffer(response), ec);
+    });
+    auto refused = makeHttpRpcCall(web3.endpoint(), 3000);
+    BOOST_CHECK_EXCEPTION(refused("eth_blockNumber", params), OpsError, [](OpsError const& e) {
+        std::string what = e.what();
+        return what.find("HTTP 413") != std::string::npos && what.find('\x1b') == std::string::npos;
+    });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -136,7 +136,7 @@ Sender::Sender(Connection _connection, Model& _model, std::function<void()> _onU
 {
     if (m_connection.web3Endpoint)
     {
-        auto web3 = makeHttpRpcCall(*m_connection.web3Endpoint, c_defaultRequestTimeoutMs);
+        auto web3 = makeHttpRpcCall(*m_connection.web3Endpoint, m_connection.requestTimeoutMs);
         m_web3 = [this, web3](std::string_view _method, Json::Value const& _params) {
             if (m_stop)
             {

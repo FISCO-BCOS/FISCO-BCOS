@@ -63,6 +63,9 @@ struct ProposalOutcome
 /// `committee proposals`
 Json::Value proposalInfoJson(Json::Value const& _fields);
 std::string proposalStatusName(int _status);
+/// CommitteeManager.sol:384-445: the proposalType byte as the console names it (one mapping
+/// for the CLI and the TUI)
+std::string proposalTypeName(int _type);
 
 struct PresetResult
 {

@@ -47,5 +47,9 @@ ConnectOptions connectOptionsFrom(Args const& _args);
 void retainTransport(std::shared_ptr<void> _transport);
 /// parses "host:port"; throws OpsError{1} on a malformed value
 std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint);
+/// --mode wins, then the node dir's [ethereum].mode; a bare --rpc is "unknown" (Mode.h): the
+/// endpoint cannot tell, and getConsensusStatus would stop an EL node. Throws OpsError{1} on
+/// a value other than none / el / opstack-el, naming where it came from
+std::string connectionMode(ConnectOptions const& _options, NodeDir const* _node);
 Connection connect(ConnectOptions const& _options);
 }  // namespace bcos::ops

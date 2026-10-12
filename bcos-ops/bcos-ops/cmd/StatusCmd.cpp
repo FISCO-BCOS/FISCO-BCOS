@@ -112,6 +112,10 @@ void renderStatus(
     {
         rows.emplace_back("consensus", "none: mode " + _status.mode + " runs no PBFT");
     }
+    else if (!readsPbft(_status.mode))
+    {
+        rows.emplace_back("consensus", "not read: mode unknown, pass --mode none to read PBFT");
+    }
     else
     {
         rows.emplace_back("consensus",
@@ -199,7 +203,12 @@ void registerStatusCommand()
     registerCommand(
         "status", Command{"print the node status snapshot and run the health checks",
                       "[--node-dir <dir> | --rpc <host:port>] [--mode none|el|opstack-el] [--json] "
-                      "[--stall-factor 2] [--max-lag 10] [--timeout 15000]",
+                      "[--stall-factor 2] [--max-lag 10] [--timeout 15000]\n\n"
+                      "PBFT state (getConsensusStatus) is read only in mode none: the call makes "
+                      "el / opstack-el nodes exit, so a bare --rpc (mode unknown) skips "
+                      "consensus_stable and quorum_connected until --mode none is given. "
+                      "`attach getConsensusStatus` is not gated; op_engine_rpc and single-node "
+                      "non-PBFT setups are not recognised as EL",
                       {}, runStatus});
 }
 }  // namespace bcos::ops

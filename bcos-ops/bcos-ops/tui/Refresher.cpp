@@ -48,7 +48,9 @@ Refresher::Refresher(Connection _connection, LocalFallbacks _fallbacks, Threshol
     {
         // a plain HTTP POST per call (the SDK transport cannot speak to the web3 port), and
         // stop-aware like every other refresher RPC
-        auto inner = makeHttpRpcCall(*m_connection.web3Endpoint, 5000);
+        // the refresh period is 2 s: never wait longer than 5 s, nor longer than --timeout
+        auto inner = makeHttpRpcCall(
+            *m_connection.web3Endpoint, std::min(5000, m_connection.requestTimeoutMs));
         m_web3 = [this, inner](std::string_view _method, Json::Value const& _params) {
             if (m_stop)
             {
@@ -128,7 +130,7 @@ void Refresher::runOnce()
         Json::Value consensus;
         Json::Value sync;
         Json::Value peers;
-        if (!isElMode(m_connection.mode))  // EL modes: no PBFT, and the call stops el nodes
+        if (readsPbft(m_connection.mode))  // EL / unknown modes: the call stops el nodes
         {
             try
             {

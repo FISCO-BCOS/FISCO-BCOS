@@ -25,6 +25,9 @@
 
 namespace bcos::ops
 {
+/// height_advancing floor when no PBFT drives the blocks (EL / unknown modes): 30 s
+constexpr int64_t c_elStallFloorMs = 30000;
+
 struct Thresholds
 {
     double stallFactor =

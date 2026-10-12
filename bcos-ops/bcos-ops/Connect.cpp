@@ -82,13 +82,26 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     return {host, static_cast<uint16_t>(port)};
 }
 
+std::string connectionMode(ConnectOptions const& _options, NodeDir const* _node)
+{
+    if (_options.mode)
+    {
+        return checkedMode(*_options.mode, "--mode");
+    }
+    if (_node != nullptr)
+    {
+        return checkedMode(_node->ethereumMode, "config.ini [ethereum] mode");
+    }
+    return std::string(c_modeUnknown);
+}
+
 namespace
 {
-/// mode and web3 endpoint: the flags win, then the node dir, then none / no web3
+/// mode and web3 endpoint (connectionMode), and the request timeout every later call honours
 Connection withMode(Connection _connection, ConnectOptions const& _options, NodeDir const* _node)
 {
-    _connection.mode =
-        checkedMode(_options.mode.value_or(_node != nullptr ? _node->ethereumMode : "none"));
+    _connection.requestTimeoutMs = _options.requestTimeoutMs;
+    _connection.mode = connectionMode(_options, _node);
     if (_options.web3)
     {
         auto [host, port] = parseHostPort(*_options.web3);

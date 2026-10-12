@@ -68,33 +68,6 @@ void govCheckStop(std::atomic<bool> const* _stop)
 }
 }  // namespace
 
-std::string proposalTypeName(int _type)
-{
-    switch (_type)
-    {
-    case 11:
-        return "governor";
-    case 12:
-        return "rate";
-    case 13:
-        return "voteComputer";
-    case 21:
-        return "deployAuthType";
-    case 22:
-        return "deployAuth";
-    case 31:
-        return "resetAdmin";
-    case 41:
-        return "sysConfig";
-    case 51:
-        return "consensusWeight";
-    case 52:
-        return "rmNode";
-    default:
-        return "type" + std::to_string(_type);
-    }
-}
-
 ProposalRow proposalRowFrom(ProposalOutcome const& _outcome)
 {
     ProposalRow row;

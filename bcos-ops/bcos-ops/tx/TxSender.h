@@ -39,6 +39,7 @@ struct Receipt
     std::string message;
     int64_t blockNumber = -1;
     std::string gasUsed;
+    bool pending = false;  // accepted, no receipt yet (EL tx raw past its --wait)
     bool ok() const { return status == 0; }
     static Receipt fromJson(Json::Value const& _json);
 };

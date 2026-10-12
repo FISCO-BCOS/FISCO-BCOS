@@ -63,9 +63,10 @@ Element homeBand(Model const& _model, Frame const& _frame)
     auto const& s = _model.status;
     auto summary = homeCheckSummary(_model);
     auto summaryColor = summary.find("FAIL") != std::string::npos ? Color::Red : Color::Green;
-    if (isElMode(_model.mode))
+    if (!readsPbft(_model.mode))
     {
-        // no PBFT: the EL sync state instead of view / leader / quorum
+        // no PBFT read (EL modes, or a bare --rpc whose mode is unknown): the sync state
+        // instead of view / leader / quorum
         auto line1 = hbox({text(" height ") | dim, text(homeShow(s.blockNumber)),
             text("  peers ") | dim, text(homeShow(s.peerCount)), text("  syncing ") | dim,
             text(s.isSyncing ? (*s.isSyncing ? "yes" : "no") : "-"), text("  highest ") | dim,

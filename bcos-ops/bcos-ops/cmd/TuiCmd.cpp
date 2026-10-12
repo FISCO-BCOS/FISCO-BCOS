@@ -144,6 +144,10 @@ int snapshotPages(
         context.hasKey = true;
         form.pending = tui::sendFormRequest(form, context);
         form.confirmRows = tui::sendConfirmRows(form.pending, context);
+        // the interactive page opens this layer only with a key loaded; the headless render
+        // has none, so it says so instead of pretending one is there
+        form.confirmRows.insert(
+            form.confirmRows.begin(), {"key", "(snapshot: a loaded key is assumed)"});
         form.confirm = true;
     };
     std::vector<Shot> shots = {
@@ -512,7 +516,17 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
             }
         }
         auto depthBefore = nav.stack.size();
+        auto pageBefore = nav.page;
         auto action = tui::navHandle(nav, event);
+        if (nav.page == tui::Page::gov && pageBefore != tui::Page::gov && nav.stack.empty())
+        {
+            // the gov page is fetched only while shown: ask for it now, not on the next tick
+            {
+                std::lock_guard<std::mutex> wantsLock(wantsMutex);
+                govWants = tui::governanceWants(nav);
+            }
+            refresher.refreshNow();
+        }
         if (nav.stack.size() > depthBefore)
         {
             // a detail page opened: resolve now and fetch its data without waiting for the tick
@@ -570,7 +584,11 @@ void registerTuiCommand()
             "[--mode none|el|opstack-el] [--web3 host:port] "
             "(auth chains add page 6 gov: committee, proposals, vote; EL modes turn page 2 into "
             "the txpool and the send page into raw only) "
-            "[--snapshot-dir <dir> [--filter <text>]]",
+            "[--snapshot-dir <dir> [--filter <text>]]\n\n"
+            "PBFT state is read only in mode none (getConsensusStatus makes el / opstack-el "
+            "nodes exit): with a bare --rpc pass --mode none to see view / leader / quorum. "
+            "`attach getConsensusStatus` is not gated; op_engine_rpc and single-node non-PBFT "
+            "setups are not recognised as EL",
             {"version-check"}, runTui});
 }
 }  // namespace bcos::ops
