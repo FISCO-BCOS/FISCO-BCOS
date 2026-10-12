@@ -25,7 +25,13 @@
 #include <atomic>
 #include <condition_variable>
 #include <functional>
+#include <memory>
 #include <thread>
+
+namespace bcos::ops
+{
+struct CommitteeReader;
+}
 
 namespace bcos::ops::tui
 {
@@ -52,6 +58,11 @@ public:
     {
         m_detailWants = std::move(_wants);
     }
+    /// the gov page's list size and open proposal ids (auth chains; fetched every round)
+    void setGovernanceWants(std::function<GovernanceWants()> _wants)
+    {
+        m_governanceWants = std::move(_wants);
+    }
 
 private:
     void loop();
@@ -64,6 +75,8 @@ private:
     std::function<size_t()> m_capacity;
     std::function<std::pair<size_t, size_t>()> m_visibleTxs;
     std::function<std::vector<DetailWant>()> m_detailWants;
+    std::function<GovernanceWants()> m_governanceWants;
+    std::unique_ptr<CommitteeReader> m_committee;  // built on the worker when first needed
     int m_intervalMs;
     std::thread m_thread;
     std::mutex m_wakeMutex;

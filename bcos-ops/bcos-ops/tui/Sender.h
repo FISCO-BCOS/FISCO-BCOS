@@ -60,6 +60,7 @@ struct SendRequest
     std::string value;  // decimal wei; empty = none
     std::string raw;
     std::vector<std::string> features;
+    bool openTxDetail = true;  // open the produced tx in a detail page (gov votes stay put)
     bool needsKey() const;
 };
 

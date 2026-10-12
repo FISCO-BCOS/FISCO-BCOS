@@ -17,7 +17,9 @@
  */
 #include "Refresher.h"
 #include "bcos-ops/OpsError.h"
+#include "bcos-ops/cmd/CommitteeCmd.h"
 #include <chrono>
+#include <optional>
 
 namespace bcos::ops::tui
 {
@@ -146,7 +148,29 @@ void Refresher::runOnce()
             explorerFetchWanted(
                 explorer, m_connection.call, m_connection.group, m_detailWants(), &m_stop);
         }
+        // the gov page (auth chains): committee + proposals through the CLI's reader, built
+        // once on this thread; a copy is updated outside the lock like the explorer
+        std::optional<GovernanceState> governance;
+        if (status.authCheck.value_or(false) && !m_stop)
+        {
+            if (!m_committee)
+            {
+                Connection stopAware = m_connection;
+                stopAware.call = call;
+                m_committee = std::make_unique<CommitteeReader>(stopAware);
+            }
+            {
+                std::lock_guard<std::mutex> lock(m_model.mutex);
+                governance = m_model.governance;
+            }
+            governanceFetch(*governance, *m_committee,
+                m_governanceWants ? m_governanceWants() : GovernanceWants{}, &m_stop);
+        }
         std::lock_guard<std::mutex> lock(m_model.mutex);
+        if (governance)
+        {
+            m_model.governance = std::move(*governance);
+        }
         m_model.status = std::move(status);
         m_model.checks = std::move(checks);
         m_model.explorer = std::move(explorer);

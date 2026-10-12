@@ -23,6 +23,7 @@
 #include "bcos-ops/NodeStatus.h"
 #include "bcos-ops/log/LogParser.h"
 #include "bcos-ops/tui/Explorer.h"
+#include "bcos-ops/tui/Governance.h"
 #include "bcos-ops/tx/FeatureFlags.h"
 #include <json/json.h>
 #include <deque>
@@ -49,6 +50,7 @@ struct SendOutcome
     std::string txHash;
     std::string proposalId;
     std::string proposalStatus;
+    bool openTx = true;  // the UI opens the tx detail (false for a vote from the gov page)
 };
 
 struct SendState
@@ -74,9 +76,10 @@ struct Model
     std::string source;
     std::string error;  // last refresh failure; empty after a success
     ExplorerState explorer;
-    bool authChain = false;     // getGroupInfo isAuthCheck: the gov page exists
-    std::string mode = "none";  // [ethereum].mode: none / el / opstack-el (ticket 17)
-    std::string keyAddress;     // loaded signing key, shown in the top bar (ticket 15)
+    GovernanceState governance;  // auth chains: the gov page (ticket 16)
+    bool authChain = false;      // getGroupInfo isAuthCheck: the gov page exists
+    std::string mode = "none";   // [ethereum].mode: none / el / opstack-el (ticket 17)
+    std::string keyAddress;      // loaded signing key, shown in the top bar (ticket 15)
     // txHash → the preset it was sent with, so the tx detail can decode its input (ticket 15
     // fills it; the table rows live for the whole process)
     std::map<std::string, Preset const*> sentPresets;

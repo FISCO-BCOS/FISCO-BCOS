@@ -67,33 +67,6 @@ constexpr std::array c_committeeWrites{
     CommitteeWrite{"revoke", "revoke", 1, false, "committee revoke <id>"},
 };
 
-/// a runner over a read-only (random key) sender for the view calls
-struct CommitteeReader
-{
-    ChainFacts facts;
-    std::unique_ptr<TxSender> sender;
-    PresetRunner runner;
-    explicit CommitteeReader(Connection const& _connection)
-      : facts(chainFacts(_connection)),
-        sender(std::make_unique<TxSender>(_connection.call, _connection.group, facts.chainId,
-            facts.sm, makeAccount(facts.sm, std::nullopt))),
-        runner(*sender, facts.sm, _connection.call, _connection.group)
-    {}
-    /// first decoded output of a committee read preset, or throws with the preset name
-    Json::Value read(
-        std::string_view _name, std::vector<std::string> const& _args, std::string const& _to = "")
-    {
-        auto result = runner.run(*findPreset("committee", _name), _args, _to);
-        if (!result.ok || !result.decoded.isArray())
-        {
-            throw OpsError(c_exitChecksFailed,
-                "committee " + std::string(_name) + " failed: status " +
-                    std::to_string(result.receipt.status) + " " + result.receipt.message);
-        }
-        return result.decoded;
-    }
-};
-
 std::string committeeStringOf(Json::Value const& _value)
 {
     return _value.isString() ? _value.asString() : _value.toStyledString();
@@ -237,6 +210,26 @@ int runCommittee(Args const& _args, std::ostream& _out, std::ostream& _err)
     return runCommitteeOn(connect(connectOptionsFrom(_args)), _args, _out);
 }
 }  // namespace
+
+CommitteeReader::CommitteeReader(Connection const& _connection)
+  : facts(chainFacts(_connection)),
+    sender(std::make_unique<TxSender>(_connection.call, _connection.group, facts.chainId, facts.sm,
+        makeAccount(facts.sm, std::nullopt))),
+    runner(*sender, facts.sm, _connection.call, _connection.group)
+{}
+
+Json::Value CommitteeReader::read(
+    std::string_view _name, std::vector<std::string> const& _args, std::string const& _to)
+{
+    auto result = runner.run(*findPreset("committee", _name), _args, _to);
+    if (!result.ok || !result.decoded.isArray())
+    {
+        throw OpsError(c_exitChecksFailed, "committee " + std::string(_name) + " failed: status " +
+                                               std::to_string(result.receipt.status) + " " +
+                                               result.receipt.message);
+    }
+    return result.decoded;
+}
 
 int runCommitteeOn(Connection const& _connection, Args const& _args, std::ostream& _out)
 {

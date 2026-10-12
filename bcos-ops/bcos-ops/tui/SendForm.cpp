@@ -579,4 +579,65 @@ SendAction sendFormHandle(SendForm& _form, SendContext const& _context, ftxui::E
     }
     return SendAction::toNav;
 }
+SendAction govFormHandle(
+    SendForm& _form, SendContext const& _context, int64_t _proposalId, ftxui::Event _event)
+{
+    using ftxui::Event;
+    if (_event == Event::CtrlC)
+    {
+        return SendAction::toNav;
+    }
+    if (_form.confirm)
+    {
+        if (_event == Event::Return)
+        {
+            _form.confirm = false;
+            return SendAction::submit;
+        }
+        if (_event == Event::Escape)
+        {
+            _form.confirm = false;
+            _form.notice = "cancelled";
+            return SendAction::redraw;
+        }
+        return SendAction::none;
+    }
+    if (!_event.is_character() || _event.character().size() != 1)
+    {
+        return SendAction::toNav;
+    }
+    char key = _event.character()[0];
+    if (key != 'v' && key != 'x' && key != 'd')
+    {
+        return SendAction::toNav;
+    }
+    if (!_context.hasKey)
+    {
+        _form.notice = "load a key first (tui --key <file>, or the send page's key file)";
+        return SendAction::redraw;
+    }
+    if (_context.busy)
+    {
+        _form.notice = "a request is still running";
+        return SendAction::redraw;
+    }
+    SendRequest request;
+    request.kind = SendRequest::Kind::preset;
+    request.openTxDetail = false;  // the proposal page stays; its rows refresh next round
+    if (key == 'd')
+    {
+        request.preset = findPreset("committee", "revoke");
+        request.params = {std::to_string(_proposalId)};
+    }
+    else
+    {
+        request.preset = findPreset("committee", "vote");
+        request.params = {std::to_string(_proposalId), key == 'v' ? "true" : "false"};
+    }
+    _form.pending = request;
+    _form.confirmRows = sendConfirmRows(request, _context);
+    _form.confirm = true;
+    _form.notice.clear();
+    return SendAction::redraw;
+}
 }  // namespace bcos::ops::tui

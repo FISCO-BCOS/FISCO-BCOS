@@ -251,6 +251,7 @@ void Sender::execute(SendRequest const& _request)
     try
     {
         outcome = run(_request);
+        outcome.openTx = _request.openTxDetail;
     }
     catch (std::exception const& e)
     {
