@@ -30,7 +30,7 @@ namespace bcos::ops
 {
 namespace
 {
-int runGet(Connection const& _connection, Args const& _args, std::ostream& _out)
+int runSysconfigGet(Connection const& _connection, Args const& _args, std::ostream& _out)
 {
     if (_args.positionals().size() < 2)
     {
@@ -150,7 +150,7 @@ int runSysconfigOn(Connection const& _connection, Args const& _args, std::ostrea
     auto const& sub = _args.positionals().empty() ? "" : _args.positionals()[0];
     if (sub == "get")
     {
-        return runGet(_connection, _args, _out);
+        return runSysconfigGet(_connection, _args, _out);
     }
     if (sub == "set")
     {

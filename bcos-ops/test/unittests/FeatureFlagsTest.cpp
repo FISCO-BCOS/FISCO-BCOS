@@ -77,9 +77,13 @@ BOOST_AUTO_TEST_CASE(namesComeFromTheLedgerEnum)
     BOOST_CHECK(names.size() > 50);
     BOOST_CHECK(featureIndexOf(names, "feature_balance") < names.size());
     BOOST_CHECK(featureIndexOf(names, "bugfix_revert") < names.size());
-    BOOST_CHECK_EQUAL(
-        featureIndexOf(names, "feature_l2_ethereum_compat"), names.size());  // reserved
-    BOOST_CHECK_EQUAL(featureIndexOf(names, "feature_op_jovian"), names.size());
+    // reserved placeholders are in Features::featureKeys() but must not be offered
+    BOOST_CHECK_EQUAL(featureIndexOf(names, "reserved_removed_op_jovian"), names.size());
+    BOOST_CHECK_EQUAL(featureIndexOf(names, "reserved_removed_l2_ethereum_compat"), names.size());
+    for (auto const& name : names)
+    {
+        BOOST_CHECK(name.starts_with("feature_") || name.starts_with("bugfix_"));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(enableOrderPutsDependenciesFirst)
