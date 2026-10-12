@@ -634,10 +634,19 @@ void runInvalidVector(std::string const& id)
                                   static_cast<int>(bcos::engine::PayloadValidationStatus::Valid);
             auto const syncing = static_cast<int>(importStatus.status) ==
                                  static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing);
+            // F9: key the accepted set to the DECLARED verdict instead of a bare
+            // either/or — the corpus's fisco.classification for these vectors is the
+            // S5 capability refusal (-32603), whose engine answer is the dichotomy
+            // below. Any third status (a bare Invalid, an InternalError surfaced as a
+            // status) is a different defect riding the vector and must fail the case.
             BOOST_CHECK_MESSAGE(imported || syncing,
                 id << ": side-chain fork expected VALID or SYNCING, got "
                    << static_cast<int>(importStatus.status)
                    << (importStatus.validationError ? " : " + *importStatus.validationError : ""));
+            if (!imported && !syncing)
+            {
+                return;
+            }
             if (imported)
             {
                 // Post-cutover equivalent of the old service.hasImportedBlock probe: a
@@ -645,6 +654,20 @@ void runInvalidVector(std::string const& id)
                 // readable back from the ledger plane (SYS_HASH_2_NUMBER).
                 auto probeView = fixture->multiLayerStorage.fork();
                 BOOST_CHECK(bcos::task::syncWait(
+                    bcos::ledger::getBlockNumber(probeView, request.executionPayload.blockHash,
+                        bcos::ledger::fromStorage))
+                                .has_value());
+            }
+            else
+            {
+                // SYNCING arm must be a recoverable hold, not a rejection: the payload
+                // is not committed and the hash is not yet readable (probe stays
+                // negative), and the validation error channel stays empty — an error
+                // message alongside SYNCING would mean a rejection masquerading as a
+                // hold.
+                BOOST_CHECK(!importStatus.validationError.has_value());
+                auto probeView = fixture->multiLayerStorage.fork();
+                BOOST_CHECK(!bcos::task::syncWait(
                     bcos::ledger::getBlockNumber(probeView, request.executionPayload.blockHash,
                         bcos::ledger::fromStorage))
                                 .has_value());
