@@ -42,19 +42,45 @@ std::string encodePresetArgs(Preset const& _preset, std::vector<std::string> con
 /// `0x12345678` → `hex://12345678` (also accepts the already converted form)
 std::string toSdkBytes(std::string const& _hexValue);
 
+/// ProposalManager.sol:19 — status of a proposal; `executed` means the committee ran the
+/// governance call inside the vote that passed it, `execCode` is that call's int32 result from
+/// the execResult(int256) event (0 ok, else a precompiled code such as -51104)
+struct ProposalOutcome
+{
+    std::string id;
+    int status = 0;  // 0 none 1 voting 2 passed 3 denied 4 revoked 5 outdated
+    std::string statusName;
+    bool executed = false;
+    std::optional<int32_t> execCode;
+    std::string execCodeName;
+    Json::Value info;  // getProposalInfo decoded: resource/proposer/type/interval/status/voters
+    Json::Value toJson() const;
+};
+std::string proposalStatusName(int _status);
+
 struct PresetResult
 {
-    std::string mode = "direct";  // direct | proposal (ticket 04 fills the latter)
+    std::string mode = "direct";  // direct | proposal (routed through CommitteeManager)
     std::string to;
     std::string method;
     Json::Value params{Json::arrayValue};
+    std::string directMethod;  // the precompiled signature a proposal stands in for
     Receipt receipt;
     Json::Value decoded;  // output decoded through the preset's ABI fragment (null when none)
     std::optional<int32_t> code;  // int32 code from the output when the preset returns one
     std::string codeName;
+    std::optional<ProposalOutcome> proposal;
     bool ok = false;  // receipt status 0 and (when the preset returns a code) code == 0
     int exitCode() const;
     Json::Value toJson() const;
+};
+
+/// how write presets with a ProposalSpec are routed (spec §5.1.4)
+struct Routing
+{
+    bool proposals = false;  // chainUsesProposals(): committee-only writes become proposals
+    bool direct = false;     // --direct: call the precompiled even on an auth chain
+    std::optional<int64_t> interval;  // --interval; default current height + 1000 blocks
 };
 
 /// decodes a receipt (or a call result) of _preset
@@ -64,16 +90,40 @@ PresetResult decodePresetResult(Preset const& _preset, Receipt const& _receipt, 
 class PresetRunner
 {
 public:
-    PresetRunner(Sender& _sender, bool _sm) : m_sender(_sender), m_sm(_sm) {}
+    /// _call / _group are only needed for the proposal path (default blockNumberInterval)
+    PresetRunner(Sender& _sender, bool _sm, RpcCall _call = {}, std::string _group = "")
+      : m_sender(_sender), m_sm(_sm), m_call(std::move(_call)), m_group(std::move(_group))
+    {}
+    void setRouting(Routing _routing) { m_routing = _routing; }
+    Routing const& routing() const { return m_routing; }
+    /// true when run() will send a CommitteeManager proposal instead of _preset's call
+    bool routesThroughProposal(Preset const& _preset) const;
+    /// the committee preset that stands in for _preset on an auth chain (nullptr when none)
+    static Preset const* proposalPreset(Preset const& _preset);
+    /// _preset.proposal->args expanded: `$N` → _args[N], `$interval` → the routing interval or
+    /// current height + 1000, literals kept
+    std::vector<std::string> proposalArgs(
+        Preset const& _preset, std::vector<std::string> const& _args) const;
     /// _to overrides the preset's `to` (sentinels, HelloWorld address); write presets are sent,
-    /// read presets are called
+    /// read presets are called. A committee-only write on an auth chain becomes the proposal
+    /// and the result carries the proposal id, status and execution code.
     PresetResult run(
         Preset const& _preset, std::vector<std::string> const& _args, std::string const& _to = "");
     /// the encoded call data, for the confirmation layer and tests
     bytes encode(Preset const& _preset, std::vector<std::string> const& _args) const;
+    /// reads status / info / execution code of proposal _id (CommitteeManager → ProposalManager)
+    ProposalOutcome proposalOutcome(std::string const& _id, Receipt const& _createReceipt);
 
 private:
+    PresetResult runCall(
+        Preset const& _preset, std::vector<std::string> const& _args, std::string const& _to);
+    std::string proposalManagerAddress();
+
     Sender& m_sender;
     bool m_sm;
+    RpcCall m_call;
+    std::string m_group;
+    Routing m_routing;
+    std::string m_proposalMgr;  // cached _proposalMgr()
 };
 }  // namespace bcos::ops

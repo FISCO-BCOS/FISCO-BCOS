@@ -19,6 +19,8 @@
 #include "Abi.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/RpcCall.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <map>
 
@@ -62,6 +64,8 @@ std::map<int32_t, std::string> const c_codeNames = {
     {-51906, "INVALID_NON_EXIST_AUTHORIZATION"},
     {-51907, "INVALID_REVOKE_LAST_AUTHORIZATION"},
 };
+
+constexpr int64_t c_defaultProposalInterval = 1000;  // spec §5.1.4: current height + 1000
 
 /// the SDK renders integer outputs as decimal strings ("-51104"); accept numbers too
 std::optional<int32_t> codeOf(Json::Value const& _value)
@@ -162,6 +166,43 @@ int PresetResult::exitCode() const
     return ok ? c_exitOk : c_exitChecksFailed;
 }
 
+std::string proposalStatusName(int _status)
+{
+    switch (_status)  // ProposalManager.sol:19
+    {
+    case 0:
+        return "none";
+    case 1:
+        return "voting";
+    case 2:
+        return "passed";
+    case 3:
+        return "denied";
+    case 4:
+        return "revoked";
+    case 5:
+        return "outdated";
+    default:
+        return "unknown";
+    }
+}
+
+Json::Value ProposalOutcome::toJson() const
+{
+    Json::Value value;
+    value["id"] = id;
+    value["status"] = status;
+    value["statusName"] = statusName;
+    value["executed"] = executed;
+    if (execCode)
+    {
+        value["execCode"] = *execCode;
+        value["execCodeName"] = execCodeName;
+    }
+    value["info"] = info;
+    return value;
+}
+
 Json::Value PresetResult::toJson() const
 {
     Json::Value value;
@@ -169,6 +210,14 @@ Json::Value PresetResult::toJson() const
     value["to"] = to;
     value["method"] = method;
     value["params"] = params;
+    if (!directMethod.empty())
+    {
+        value["directMethod"] = directMethod;
+    }
+    if (proposal)
+    {
+        value["proposal"] = proposal->toJson();
+    }
     value["ok"] = ok;
     value["status"] = receipt.status;
     if (!receipt.txHash.empty())
@@ -224,7 +273,7 @@ bytes PresetRunner::encode(Preset const& _preset, std::vector<std::string> const
         std::string(_preset.signature), encodePresetArgs(_preset, _args));
 }
 
-PresetResult PresetRunner::run(
+PresetResult PresetRunner::runCall(
     Preset const& _preset, std::vector<std::string> const& _args, std::string const& _to)
 {
     auto to = _to.empty() ? std::string(_preset.to) : _to;
@@ -236,13 +285,190 @@ PresetResult PresetRunner::run(
     }
     auto params = parseJson(encodePresetArgs(_preset, _args), "preset params");
     auto data = encode(_preset, _args);
-    // ticket 04: an auth chain routes write presets with a ProposalSpec through the committee
-    // here and reports mode = "proposal"
     auto receipt =
         _preset.write ? m_sender.send(to, std::move(data), "") : m_sender.call(to, std::move(data));
     auto result = decodePresetResult(_preset, receipt, m_sm);
     result.to = to;
     result.params = params;
+    return result;
+}
+
+bool PresetRunner::routesThroughProposal(Preset const& _preset) const
+{
+    return _preset.write && _preset.proposal.has_value() && m_routing.proposals &&
+           !m_routing.direct;
+}
+
+Preset const* PresetRunner::proposalPreset(Preset const& _preset)
+{
+    if (!_preset.proposal)
+    {
+        return nullptr;
+    }
+    for (auto const* candidate : presetsOf("committee"))
+    {
+        if (candidate->signature == _preset.proposal->signature)
+        {
+            return candidate;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<std::string> PresetRunner::proposalArgs(
+    Preset const& _preset, std::vector<std::string> const& _args) const
+{
+    if (!_preset.proposal)
+    {
+        throw OpsError(c_exitUsage, std::string(_preset.name) + " has no proposal form");
+    }
+    std::vector<std::string> out;
+    std::string const grammar(_preset.proposal->args);
+    size_t start = 0;
+    while (start <= grammar.size())
+    {
+        auto end = grammar.find(',', start);
+        auto token =
+            grammar.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (token == "$interval")
+        {
+            int64_t interval = 0;
+            if (m_routing.interval)
+            {
+                interval = *m_routing.interval;
+            }
+            else
+            {
+                if (!m_call)
+                {
+                    throw OpsError(c_exitUsage, "proposal interval needs --interval or an RPC");
+                }
+                Json::Value params(Json::arrayValue);
+                params.append(m_group);
+                params.append("");
+                interval = m_call("getBlockNumber", params).asInt64() + c_defaultProposalInterval;
+            }
+            out.push_back(std::to_string(interval));
+        }
+        else if (token.size() > 1 && token[0] == '$')
+        {
+            auto index = static_cast<size_t>(std::stoul(token.substr(1)));
+            if (index >= _args.size())
+            {
+                throw OpsError(c_exitUsage, "proposal argument " + token + " out of range");
+            }
+            out.push_back(_args[index]);
+        }
+        else
+        {
+            out.push_back(token);
+        }
+        if (end == std::string::npos)
+        {
+            break;
+        }
+        start = end + 1;
+    }
+    return out;
+}
+
+std::string PresetRunner::proposalManagerAddress()
+{
+    if (m_proposalMgr.empty())
+    {
+        auto const* row = findPreset("committee", "proposal-mgr-address");
+        auto result = runCall(*row, {}, "");
+        if (!result.ok || !result.decoded.isArray() || result.decoded.empty())
+        {
+            throw OpsError(c_exitUsage, "CommitteeManager._proposalMgr() failed: status " +
+                                            std::to_string(result.receipt.status));
+        }
+        m_proposalMgr = result.decoded[0].asString();
+    }
+    return m_proposalMgr;
+}
+
+ProposalOutcome PresetRunner::proposalOutcome(std::string const& _id, Receipt const& _createReceipt)
+{
+    ProposalOutcome outcome;
+    outcome.id = _id;
+    auto manager = proposalManagerAddress();
+    auto status = runCall(*findPreset("committee", "proposal-status"), {_id}, manager);
+    if (status.ok && status.decoded.isArray() && !status.decoded.empty())
+    {
+        outcome.status = codeOf(status.decoded[0]).value_or(0);
+    }
+    outcome.statusName = proposalStatusName(outcome.status);
+    outcome.executed = outcome.status == 2;
+    auto info = runCall(*findPreset("committee", "proposal"), {_id}, manager);
+    if (info.ok && info.decoded.isArray())
+    {
+        Json::Value const& fields = info.decoded;
+        outcome.info["resourceId"] = fields.get(0U, "");
+        outcome.info["proposer"] = fields.get(1U, "");
+        outcome.info["proposalType"] = fields.get(2U, "");
+        outcome.info["blockNumberInterval"] = fields.get(3U, "");
+        outcome.info["status"] = fields.get(4U, "");
+        outcome.info["agreeVoters"] = fields.get(5U, Json::Value(Json::arrayValue));
+        outcome.info["againstVoters"] = fields.get(6U, Json::Value(Json::arrayValue));
+    }
+    // CommitteeManager.voteProposal emits execResult(int256) with the precompiled's return
+    // code when the vote passes; it is the only place that code surfaces (the receipt is ok)
+    std::string signature = "execResult(int256)";
+    auto topicHash = m_sm ? bcos::crypto::SM3().hash(bytesConstRef(signature)) :
+                            bcos::crypto::Keccak256().hash(bytesConstRef(signature));
+    auto topic = topicHash.hexPrefixed();
+    for (auto const& entry : _createReceipt.raw["logEntries"])
+    {
+        auto topics = entry["topics"];
+        if (!topics.isArray() || topics.empty() || topics[0].asString() != topic)
+        {
+            continue;
+        }
+        auto data = entry["data"].asString();
+        if (data.size() >= 8)
+        {
+            auto low = static_cast<uint32_t>(std::stoul(data.substr(data.size() - 8), nullptr, 16));
+            outcome.execCode = static_cast<int32_t>(low);
+            outcome.execCodeName =
+                *outcome.execCode == 0 ? "SUCCESS" : precompiledCodeName(*outcome.execCode);
+        }
+    }
+    return outcome;
+}
+
+PresetResult PresetRunner::run(
+    Preset const& _preset, std::vector<std::string> const& _args, std::string const& _to)
+{
+    if (routesThroughProposal(_preset))
+    {
+        auto const* committeePreset = proposalPreset(_preset);
+        if (committeePreset == nullptr)
+        {
+            throw OpsError(
+                c_exitUsage, "no committee preset for " + std::string(_preset.proposal->signature));
+        }
+        auto result = runCall(*committeePreset, proposalArgs(_preset, _args), "");
+        result.mode = "proposal";
+        result.directMethod = std::string(_preset.signature);
+        if (result.ok && result.decoded.isArray() && !result.decoded.empty())
+        {
+            result.proposal = proposalOutcome(result.decoded[0].asString(), result.receipt);
+            result.ok = (result.proposal->status == 1 || result.proposal->status == 2) &&
+                        (!result.proposal->execCode || *result.proposal->execCode == 0);
+        }
+        return result;
+    }
+    auto result = runCall(_preset, _args, _to);
+    // a `committee propose-*` call creates a proposal too: report its id and status the same way
+    if (_preset.write && _preset.group == "committee" && _preset.signature.starts_with("create") &&
+        result.ok && result.decoded.isArray() && !result.decoded.empty())
+    {
+        result.mode = "proposal";
+        result.proposal = proposalOutcome(result.decoded[0].asString(), result.receipt);
+        result.ok = (result.proposal->status == 1 || result.proposal->status == 2) &&
+                    (!result.proposal->execCode || *result.proposal->execCode == 0);
+    }
     return result;
 }
 }  // namespace bcos::ops
