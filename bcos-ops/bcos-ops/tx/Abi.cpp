@@ -17,10 +17,12 @@
  */
 #include "Abi.h"
 #include "bcos-ops/OpsError.h"
+#include "bcos-ops/RpcCall.h"
 #include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
 #include <bcos-cpp-sdk/utilities/abi/ContractABITypeCodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 
 namespace bcos::ops
@@ -63,6 +65,29 @@ auto guarded(std::string_view _what, F&& _f)
 bytes Abi::encodeConstructor(
     std::string const& _abi, std::string const& _bin, std::string const& _jsonParams) const
 {
+    // solc leaves the implicit constructor out of the ABI; the SDK's encodeConstructor then
+    // fails on getMethod("constructor"). Such a contract deploys with its bytecode alone.
+    bool hasConstructor = false;
+    auto abi = parseJson(_abi, "abi");
+    for (auto const& entry : abi)
+    {
+        if (entry.isObject() && entry.get("type", "").asString() == "constructor")
+        {
+            hasConstructor = true;
+            break;
+        }
+    }
+    if (!hasConstructor)
+    {
+        auto params = parseJson(_jsonParams.empty() ? "[]" : _jsonParams, "constructor params");
+        if (!params.empty())
+        {
+            throw OpsError(c_exitUsage, "ABI has no constructor: cannot encode " +
+                                            std::to_string(params.size()) +
+                                            " constructor argument(s)");
+        }
+        return guarded("decode bytecode", [&]() { return fromHex(_bin); });
+    }
     return guarded("encode constructor",
         [&]() { return makeCodec(m_sm).encodeConstructor(_abi, _bin, _jsonParams); });
 }
