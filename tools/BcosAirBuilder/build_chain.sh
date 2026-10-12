@@ -2449,65 +2449,56 @@ check_auth_account()
   fi
 }
 
+# the fisco-bcos binary that generates the admin account: -e <path>, the binary directory of a
+# pro/max build, or one on PATH
+find_fisco_bcos_for_account()
+{
+  if [[ -n "${binary_path}" && -f "${binary_path}" && -x "${binary_path}" ]]; then
+      echo "${binary_path}"
+      return 0
+  fi
+  if [[ -n "${binary_path}" && -d "${binary_path}" && -x "${binary_path}/fisco-bcos" ]]; then
+      echo "${binary_path}/fisco-bcos"
+      return 0
+  fi
+  if command -v fisco-bcos >/dev/null 2>&1; then
+      command -v fisco-bcos
+      return 0
+  fi
+  return 1
+}
+
+# the admin account comes from `fisco-bcos account new` (console's accounts/ layout:
+# <0xaddr>.pem + <0xaddr>.public.pem); nothing is downloaded any more
 generate_auth_account()
 {
-  local account_script="get_account.sh"
+  local account_dir="accounts"
+  local sm_flag=""
   if ${sm_mode}; then
-    account_script="get_gm_account.sh"
+    account_dir="accounts_gm"
+    sm_flag="--sm"
   fi
-  if [ ! -f "${HOME}/.fisco/${account_script}" ];then
-        local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/${account_script}"
-        local github_link="https://github.com/FISCO-BCOS/console/raw/master/tools/${account_script}"
-        # the binary can obtained from the cos
-        if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
-            # try cdn_link
-            LOG_INFO "Downloading ${account_script} from ${Download_Link}..."
-            curl -#LO "${Download_Link}"
-        else
-            LOG_INFO "Downloading ${account_script} from ${github_link}..."
-            curl -#LO "${github_link}"
-        fi
-        chmod u+x ${account_script}
-        mv ${account_script} "${HOME}/.fisco/"
-  fi
-  # NOTE: this account-script patch block is duplicated in
-  # tools/.ci/ci_check_pro.sh's generate_auth_account (build_chain.sh is a
-  # standalone release asset, so the logic cannot be factored into a shared
-  # helper); any change here must be mirrored there.
-  # The console get_*_account.sh scripts probe the arch with the non-portable
-  # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04);
-  # rewrite those probes to `uname -m` and fail loudly if any probe survives
-  sed -i.bak "s/\$(uname -p)/\$(uname -m)/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
-  # The script downloads tassl from gitee, which is flaky from CI runners
-  # (transient "Connection reset by peer"); add retries to its curl calls.
-  # --retry-all-errors requires curl >= 7.71 (2020-06); this script also runs on
-  # older operator hosts whose curl would abort on the unknown option, so probe
-  # for support first and fall back to plain --retry
-  local curl_retry_opts="--retry 5 --retry-delay 3"
-  if curl --help all 2>/dev/null | grep -q -- "--retry-all-errors"; then
-    curl_retry_opts="--retry 5 --retry-all-errors"
-  fi
-  sed -i.bak "s/curl -#LO/curl -#L ${curl_retry_opts} -O/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
-  if grep -qF "\$(uname -p)" "${HOME}/.fisco/${account_script}"; then
-      LOG_FATAL "${HOME}/.fisco/${account_script} still contains a non-portable \`uname -p\` arch probe; please update or patch the script manually"
-  fi
-  auth_admin_account=$(bash ${HOME}/.fisco/${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
-  # fail fast: a broken account script run (e.g. its tassl download failed)
-  # yields an empty/garbage address; deploying with it surfaces only minutes
-  # later as an obscure expand-node timeout
-  if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
-      LOG_FATAL "Failed to generate a valid auth admin account (got '${auth_admin_account}'); check the ${account_script} output above (e.g. tassl download failure)"
-  fi
-  LOG_INFO "Admin account: ${auth_admin_account}"
+  local account_target
   if [[ ${chain_version} == "air" ]];then
-      mv accounts* "${ca_dir}"
+      account_target="${ca_dir}/${account_dir}"
   else
-      mv accounts* "${BcosBuilder_path}/${chain_version}"
+      account_target="${BcosBuilder_path}/${chain_version}/${account_dir}"
   fi
-  if [ "$?" -ne "0" ]; then
-      LOG_INFO "Admin account generate failed, please check ${HOME}/.fisco/${account_script}."
-      exit 1
+  local fisco_bcos_bin
+  if ! fisco_bcos_bin=$(find_fisco_bcos_for_account); then
+      LOG_FATAL "fisco-bcos binary not found; the auth admin account is generated with 'fisco-bcos account new', pass -e <fisco-bcos> or -a <admin address>"
   fi
+  local account_json
+  if ! account_json=$("${fisco_bcos_bin}" account new ${sm_flag} --out "${account_target}" --json 2>&1); then
+      LOG_FATAL "'${fisco_bcos_bin} account new' failed: ${account_json}"
+  fi
+  auth_admin_account=$(echo "${account_json}" | grep '"address"' | sed -E 's/.*"address"[^"]*"([^"]*)".*/\1/')
+  # fail fast: an empty/garbage address surfaces only minutes later as an obscure
+  # expand-node timeout
+  if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+      LOG_FATAL "Failed to generate a valid auth admin account (got '${auth_admin_account}') from: ${account_json}"
+  fi
+  LOG_INFO "Admin account: ${auth_admin_account} (key pair in ${account_target})"
 }
 
 modify_node_ca_setting(){
