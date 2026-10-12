@@ -20,6 +20,7 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/protocol/Transaction.h>  // isDepositTransaction's parameter type
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
