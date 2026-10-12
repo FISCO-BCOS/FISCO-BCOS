@@ -20,10 +20,20 @@
 
 #include "RpcCall.h"
 #include <cstdint>
+#include <memory>
 #include <string>
+
+namespace bcos::cppsdk
+{
+class Sdk;
+}
 
 namespace bcos::ops
 {
+/// the SDK behind a Connection made by makeWsRpcCall (AMOP lives there); nullptr for any other
+/// Connection (local socket, test fakes)
+std::shared_ptr<bcos::cppsdk::Sdk> sdkOf(Connection const& _connection);
+
 /// Raw TCP probe: sends a minimal TLS ClientHello and looks at the first reply byte. 0x16
 /// (ServerHello) or 0x15 (alert) means the port speaks TLS; no reply or an HTTP reply means it
 /// does not. _host must be an IP literal (see resolveHost). Throws OpsError{1} when TCP connect

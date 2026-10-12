@@ -197,6 +197,16 @@ bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs)
     return first == c_tlsAlert || first == c_tlsHandshake;
 }
 
+std::shared_ptr<bcos::cppsdk::Sdk> sdkOf(Connection const& _connection)
+{
+    if (_connection.source != "rpc" || !_connection.keepAlive)
+    {
+        return nullptr;
+    }
+    // source=="rpc" connections are only ever built here, with a WsTransport as keepAlive
+    return std::static_pointer_cast<WsTransport>(_connection.keepAlive)->sdk;
+}
+
 Connection makeWsRpcCall(
     std::string const& _hostOrName, uint16_t _port, int _connectTimeoutMs, int _requestTimeoutMs)
 {
