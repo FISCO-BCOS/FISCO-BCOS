@@ -39,8 +39,8 @@ struct Thresholds
 struct Check
 {
     std::string name;
-    std::string state;  // "ok" | "fail" | "skipped" | "info" (reported, never a verdict)
-    std::string detail;
+    std::string state;  // "ok" | "fail" | "skipped"
+    std::string detail{};
     Json::Value values{Json::objectValue};
     bool ok() const { return state == "ok"; }
     bool failed() const { return state == "fail"; }

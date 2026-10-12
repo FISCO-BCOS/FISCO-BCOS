@@ -89,7 +89,7 @@ struct Routing
 {
     bool proposals = false;  // chainUsesProposals(): committee-only writes become proposals
     bool direct = false;     // --direct: call the precompiled even on an auth chain
-    std::optional<int64_t> interval;  // --interval: blocks from now; default c_proposalInterval
+    std::optional<int64_t> interval{};  // --interval: blocks from now; default c_proposalInterval
 };
 
 /// blockNumberInterval of a proposal is a count of blocks from the creating block:
