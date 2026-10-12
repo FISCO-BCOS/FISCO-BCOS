@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-# Copyright (c) FISCO-BCOS, Apache-2.0
+# Copyright (c) 2026 FISCO BCOS.
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Merge FISCO's predeploy overlay onto op-deployer terminal allocs.
 
 The op-deployer-generated Karst terminal alloc JSON is the ONLY source for
@@ -267,6 +279,22 @@ def verify_base_provenance(path, expected_sha256):
     return digest
 
 
+def _no_duplicate_keys(pairs):
+    """object_pairs_hook: raise on an exact duplicate key.
+
+    json.load silently keeps the last value for a repeated key, so the
+    duplicate-account guard below never sees it (it only catches distinct
+    spellings of the same address). Genesis inputs are hand-edited, so a
+    repeated key is a mistake to surface, not to last-wins.
+    """
+    out = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        out[key] = value
+    return out
+
+
 def load_base_allocs(path):
     """Load the op-deployer terminal alloc JSON: {address: account} keyed by int.
 
@@ -276,7 +304,7 @@ def load_base_allocs(path):
     carrying it forward could only create a FISCO/op-reth divergence.
     """
     with open(path) as handle:
-        data = json.load(handle)
+        data = json.load(handle, object_pairs_hook=_no_duplicate_keys)
     for wrapper in ("alloc", "accounts"):
         if isinstance(data, dict) and isinstance(data.get(wrapper), dict):
             data = data[wrapper]
@@ -501,14 +529,15 @@ def apply_raw_storage_overlay(storage, raw_storage, name):
     artifact tree.
     """
     for slot, value in raw_storage.items():
-        key = word_int(slot)
+        # The strict-prefix rule applies to the KEY too: a quoted decimal like "100"
+        # would silently re-read as hex (256) under word_int and root a different
+        # genesis slot. Unquoted decimal keys arrive as ints and pass through.
+        key = config_word(slot, f"{name}.storage[{slot}] slot key")
         if key in storage:
             raise ValueError(
                 f"{name}: raw storage slot {slot} collides with a computed slot "
                 "(OZ owner/initialized, EIP-1967, system_config or validators) — "
                 "override the guarded value in the config instead")
-        # Same strict-prefix rule as the other consensus config words: a quoted
-        # decimal like "100" must not be silently re-read as hex.
         storage[key] = config_word(value, f"{name}.storage[{slot}]")
 
 

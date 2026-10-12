@@ -29,23 +29,32 @@ CONST="$OP_REVM_REPO/$OP_REVM_SUBDIR/src/constants.rs"
 [ -f "$SPEC" ] || { echo "missing $SPEC" >&2; exit 1; }
 [ -f "$CONST" ] || { echo "missing $CONST" >&2; exit 1; }
 
-grab() { # grab <const-name> <file>
-  grep -oE "$1: usize = [0-9_]+" "$2" | head -1 | grep -oE '[0-9_]+$' | tr -d '_'
+grab() { # grab <const-name> <file>; a missing anchor is a hard error, never a default
+  local value
+  value="$(grep -oE "$1: usize = [0-9_]+" "$2" 2>/dev/null | head -1 | grep -oE '[0-9_]+$' | tr -d '_' || true)"
+  [ -n "$value" ] || { echo "error: $1 not found in $2; cannot derive its value (no default)" >&2; exit 1; }
+  printf '%s\n' "$value"
 }
 
 grab_u64() { # same shape, for the u64 constants in constants.rs
-  grep -oE "$1: u64 = [0-9_]+" "$2" | head -1 | grep -oE '[0-9_]+$' | tr -d '_'
+  local value
+  value="$(grep -oE "$1: u64 = [0-9_]+" "$2" 2>/dev/null | head -1 | grep -oE '[0-9_]+$' | tr -d '_' || true)"
+  [ -n "$value" ] || { echo "error: $1 not found in $2; cannot derive its value (no default)" >&2; exit 1; }
+  printf '%s\n' "$value"
 }
 
 KARST_BN254="$(grab KARST_MAX_INPUT_SIZE "$PRE")"
 JOV_G1="$(grab JOVIAN_G1_MSM_MAX_INPUT_SIZE "$PRE")"
 JOV_G2="$(grab JOVIAN_G2_MSM_MAX_INPUT_SIZE "$PRE")"
 JOV_PAIR="$(grab JOVIAN_PAIRING_MAX_INPUT_SIZE "$PRE")"
-KARST_ETH_SPEC="$(grep -oE 'Self::KARST \| Self::INTEROP => SpecId::[A-Z]+' "$SPEC" | grep -oE '[A-Z]+$')"
+KARST_ETH_SPEC="$(grep -oE 'Self::KARST \| Self::INTEROP => SpecId::[A-Z]+' "$SPEC" | grep -oE '[A-Z]+$' || true)"
+[ -n "$KARST_ETH_SPEC" ] || { echo "error: KARST/INTEROP spec mapping not found in $SPEC; cannot derive karst_eth_spec (no default)" >&2; exit 1; }
 # Holocene / Jovian per-value anchors (WI-E5/E6): the ETH spec each fork runs with, plus the
 # two numbers the operator-fee formula is built from (Isthmus'/1e6 decimal, Jovian's x100).
-HOLOCENE_ETH_SPEC="$(grep -oE 'Self::ECOTONE \| Self::FJORD \| Self::GRANITE \| Self::HOLOCENE => SpecId::[A-Z]+' "$SPEC" | grep -oE '[A-Z]+$')"
-JOVIAN_ETH_SPEC="$(grep -oE 'Self::ISTHMUS \| Self::JOVIAN => SpecId::[A-Z]+' "$SPEC" | grep -oE '[A-Z]+$')"
+HOLOCENE_ETH_SPEC="$(grep -oE 'Self::ECOTONE \| Self::FJORD \| Self::GRANITE \| Self::HOLOCENE => SpecId::[A-Z]+' "$SPEC" | grep -oE '[A-Z]+$' || true)"
+[ -n "$HOLOCENE_ETH_SPEC" ] || { echo "error: ECOTONE..HOLOCENE spec mapping not found in $SPEC; cannot derive holocene_eth_spec (no default)" >&2; exit 1; }
+JOVIAN_ETH_SPEC="$(grep -oE 'Self::ISTHMUS \| Self::JOVIAN => SpecId::[A-Z]+' "$SPEC" | grep -oE '[A-Z]+$' || true)"
+[ -n "$JOVIAN_ETH_SPEC" ] || { echo "error: ISTHMUS/JOVIAN spec mapping not found in $SPEC; cannot derive jovian_eth_spec (no default)" >&2; exit 1; }
 OPERATOR_FEE_DECIMAL="$(grab_u64 OPERATOR_FEE_SCALAR_DECIMAL "$CONST")"
 OPERATOR_FEE_JOVIAN_MULT="$(grab_u64 OPERATOR_FEE_JOVIAN_MULTIPLIER "$CONST")"
 # P256Verify gas for Karst: Karst activates Osaka, so the OSAKA constant is the one the
@@ -53,7 +62,8 @@ OPERATOR_FEE_JOVIAN_MULT="$(grab_u64 OPERATOR_FEE_JOVIAN_MULTIPLIER "$CONST")"
 # P256VERIFY_BASE_GAS_FEE_OSAKA=6900; grabbing "the number next to P256VERIFY" instead
 # matched P256VERIFY_ADDRESS=256, which is the precompile ADDRESS, not a gas).
 LOCK="$OP_REVM_REPO/rust/Cargo.lock"
-REVM_PRECOMPILE_VER="$(grep -A1 '^name = "revm-precompile"' "$LOCK" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+REVM_PRECOMPILE_VER="$(grep -A1 '^name = "revm-precompile"' "$LOCK" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+[ -n "$REVM_PRECOMPILE_VER" ] || { echo "error: revm-precompile version not found in $LOCK; cannot locate the p256 anchor (no default)" >&2; exit 1; }
 P256_SRC="$(ls -d "${CARGO_HOME:-$HOME/.cargo}"/registry/src/*/revm-precompile-"$REVM_PRECOMPILE_VER"/src 2>/dev/null | head -1)"
 P256_GAS=""
 P256_SHA256=""
@@ -88,13 +98,13 @@ cat > "$OUT" <<EOF
   "karst_eth_spec": "$KARST_ETH_SPEC",
   "holocene_eth_spec": "$HOLOCENE_ETH_SPEC",
   "jovian_eth_spec": "$JOVIAN_ETH_SPEC",
-  "operator_fee_scalar_decimal": ${OPERATOR_FEE_DECIMAL:-0},
-  "operator_fee_jovian_multiplier": ${OPERATOR_FEE_JOVIAN_MULT:-0},
+  "operator_fee_scalar_decimal": ${OPERATOR_FEE_DECIMAL},
+  "operator_fee_jovian_multiplier": ${OPERATOR_FEE_JOVIAN_MULT},
   "bn254_pairing_max_input_size": $KARST_BN254,
   "bls_g1_msm_max_input_size": $JOV_G1,
   "bls_g2_msm_max_input_size": $JOV_G2,
   "bls_pairing_max_input_size": $JOV_PAIR,
-  "p256verify_gas": ${P256_GAS:-0},
+  "p256verify_gas": ${P256_GAS},
   "p256verify_source_sha256": "$P256_SHA256",
   "revm_precompile_version": "$REVM_PRECOMPILE_VER"
 }

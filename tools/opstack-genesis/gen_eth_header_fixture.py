@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-# Copyright (c) FISCO-BCOS, Apache-2.0
+# Copyright (c) 2026 FISCO BCOS.
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Reference keccak256(rlp(header)) for the B0 eth-genesis-header C++ tests.
 
 Independent of the C++ RLP encoder (bcos-rlp-protocol): a minimal RLP encoder
@@ -182,15 +194,8 @@ def to_toml_section(fields):
     """
     encoded = encode_header(fields)
     digest = keccak256(encoded)
-    order = [
-        "parent_hash", "sha3_uncles", "miner", "state_root", "transactions_root",
-        "receipts_root", "logs_bloom", "difficulty", "number", "gas_limit", "gas_used",
-        "timestamp", "extra_data", "mix_hash", "nonce", "base_fee_per_gas",
-        "withdrawals_root", "blob_gas_used", "excess_blob_gas", "parent_beacon_block_root",
-        "requests_hash",
-    ]
     lines = ["[eth_genesis_header]"]
-    for key in order:
+    for key in HEADER_FIELD_ORDER:
         lines.append(f"{key}={fields[key]}")
     lines.append(f"hash=0x{digest.hex()}")
     return "\n".join(lines) + "\n"

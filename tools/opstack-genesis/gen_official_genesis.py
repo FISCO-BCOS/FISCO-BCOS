@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-# Copyright (c) FISCO-BCOS, Apache-2.0
+# Copyright (c) 2026 FISCO BCOS.
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Offline generator: superchain-configs.zip -> FISCO config.genesis fragment
 ([eth_genesis_header] + [alloc.N] + [op_fork_schedule] + [op_fork_timestamps]) and op-node
 rollup.json.
@@ -605,7 +617,15 @@ def main(argv=None):
     parser.add_argument("--chain-id", type=int, default=None,
                         help="cross-check the toml chain_id")
     args = parser.parse_args(argv)
-    extra = {name: timestamp for name, timestamp in args.extra_fork}
+    # Duplicate --extra-fork names are a mistake to surface, not silently collapse:
+    # the dict comprehension this replaced kept the last one with no diagnostic.
+    extra = {}
+    for name, timestamp in args.extra_fork:
+        if name in extra:
+            print(f"error: duplicate --extra-fork {name} "
+                  f"(got {extra[name]} and {timestamp})", file=sys.stderr)
+            return 1
+        extra[name] = timestamp
     try:
         result = generate(args.zip, args.chain, extra_forks=extra,
                           l1_chain_id=args.l1_chain_id, expect_chain_id=args.chain_id)

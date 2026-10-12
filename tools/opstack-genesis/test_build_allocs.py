@@ -1,3 +1,16 @@
+# Copyright (c) 2026 FISCO BCOS.
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """build-allocs SystemConfig feature_flags guard: keyed on the role NAME, not an address.
 
 The guard refuses a SystemConfig predeploy whose system_config lacks feature_flags —
@@ -67,6 +80,33 @@ def test_raw_storage_noncolliding_slot_passes_and_stores():
 
 
 def test_raw_storage_quoted_decimal_is_strict_prefix():
-    # A quoted "100" is a strict-prefix error, not silently re-read as hex.
+    # A quoted "100" is a strict-prefix error, not silently re-read as hex — on the
+    # VALUE lane and on the KEY lane alike (a quoted key would root slot 0x100=256
+    # instead of the 100 the config meant).
     with pytest.raises(ValueError):
         build_allocs.apply_raw_storage_overlay({}, {"0x1": "100"}, "L1Block")
+    with pytest.raises(ValueError):
+        build_allocs.apply_raw_storage_overlay({}, {"100": "0x1"}, "L1Block")
+    with pytest.raises(ValueError):
+        build_allocs.apply_raw_storage_overlay({}, {"-1": "0x1"}, "L1Block")
+
+
+def test_raw_storage_key_lane_accepts_hex_and_int():
+    # The strict rule does not break the two legitimate spellings: an explicit 0x key
+    # and an unquoted decimal key (YAML parses the latter into an int).
+    storage = {}
+    build_allocs.apply_raw_storage_overlay(storage, {"0x64": "0x1"}, "L1Block")
+    assert storage[100] == 1
+    build_allocs.apply_raw_storage_overlay(storage, {200: "0x2"}, "L1Block")
+    assert storage[200] == 2
+
+
+def test_base_allocs_duplicate_json_key_is_refused(tmp_path):
+    # json.load keeps the last value for a repeated key, so the address-level
+    # duplicate guard never saw it; the object_pairs_hook surfaces it at parse time.
+    path = tmp_path / "allocs.json"
+    path.write_text(
+        '{"0x00000000000000000000000000000000000000ab": {"balance": "0x1"},'
+        ' "0x00000000000000000000000000000000000000ab": {"balance": "0x2"}}')
+    with pytest.raises(ValueError, match="duplicate JSON key"):
+        build_allocs.load_base_allocs(str(path))
