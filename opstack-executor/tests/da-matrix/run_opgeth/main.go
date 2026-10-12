@@ -41,18 +41,24 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// defaultGrid is the shared grid location, resolved relative to this runner's
-// directory so the harness works on any checkout. Override with --grid.
+// defaultGrid is the shared grid location, relative to run_opgeth/. Override with --grid.
 const defaultGrid = "../da_matrix.json"
 
-// resolveDefaultGrid anchors the relative default to the runner binary's directory
-// (../da_matrix.json from run_opgeth/), independent of the caller's CWD.
+// resolveDefaultGrid prefers the CWD-relative grid (the documented invocation is
+// `cd run_opgeth && go run .`), then falls back to the runner binary's directory —
+// `go run .` executes a temp-dir binary, so the exe anchor alone can never find the
+// grid under the documented flow; it only serves a binary built in place.
 func resolveDefaultGrid() string {
-	exe, err := os.Executable()
-	if err != nil {
+	if _, err := os.Stat(defaultGrid); err == nil {
 		return defaultGrid
 	}
-	return filepath.Join(filepath.Dir(exe), defaultGrid)
+	if exe, err := os.Executable(); err == nil {
+		anchored := filepath.Join(filepath.Dir(exe), defaultGrid)
+		if _, err := os.Stat(anchored); err == nil {
+			return anchored
+		}
+	}
+	return defaultGrid
 }
 
 // l1BlockAddr is the L1Block contract whose storage holds the L1 gas
@@ -125,8 +131,8 @@ func cfgFor(fork string) *params.ChainConfig {
 	case "jovian":
 		off(&cfg.KarstTime)
 	case "karst":
-		// JovianTime deliberately stays 0 (see doc comment). Setting KarstTime
-		// to 0 is a no-op for the cost functions but keeps the tag explicit.
+		// JovianTime deliberately stays 0 (see doc comment); KarstTime keeps its
+		// zero default here — the case exists to name the tag, not to set a field.
 	default:
 		fmt.Fprintf(os.Stderr, "run_opgeth: unknown fork %q\n", fork)
 		os.Exit(2)

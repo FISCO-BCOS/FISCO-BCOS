@@ -42,9 +42,10 @@
 // committed golden snapshot golden/out_<end>.json, recomputes the FISCO values
 // per grid case and compares VALUE-LEVEL (parsed JSON strings, not raw file
 // text — the fisco golden is jsoncpp-serialized "id" : while the Go/Rust ends
-// emit "id":). known_divergence rows (DIVERGENCES.md) and rows absent from the
-// golden are skipped and counted; zero compared cases is a FAILURE (empty-run
-// guard), and any mismatch exits non-zero.
+// emit "id":). known_divergence rows (DIVERGENCES.md) are still computed AND
+// compared here — the registration exempts only the four-source comparator;
+// rows absent from the golden are holes counted as mismatches. Zero compared
+// cases is a FAILURE (empty-run guard), and any mismatch exits non-zero.
 
 #include <opstack-executor/OpFeeParams.h>
 #include <opstack-executor/OpForkSpec.h>
@@ -307,8 +308,9 @@ int main(int argc, char** argv)
 
     // --check mode: value-level comparison against the committed golden snapshot.
     // Compares parsed JSON string values (not raw file text — the fisco golden is
-    // jsoncpp-serialized, the Go/Rust ends are not). known_divergence rows are skipped+counted;
-    // rows absent from the golden are mismatches (M23).
+    // jsoncpp-serialized, the Go/Rust ends are not). known_divergence rows are still
+    // computed and compared (their registration exempts the cross-end comparator only);
+    // rows absent from the golden are holes counted as mismatches (M23).
     if (checkMode)
     {
         // The committed layout is per-end: <goldenDir>/<end>/out_<end>.json.
@@ -355,8 +357,8 @@ int main(int argc, char** argv)
         std::size_t compared = 0, skippedMissing = 0, mismatches = 0;
         for (const auto& c : cases)
         {
-            // S14: the isObject guard lives in computeCase, which runs only AFTER this
-            // loop indexes c["known_divergence"] — indexing a non-object const
+            // S14: the isObject guard lives in computeCase, which runs only AFTER
+            // this loop touches the case rows — indexing a non-object const
             // Json::Value is a jsoncpp assert/UB, violating this TU's never-throw
             // contract. Gate the row shape first (same wording as the golden loop).
             if (!c.isObject())
@@ -399,9 +401,11 @@ int main(int argc, char** argv)
             }
         }
 
-        // Skipped-row counts go to stderr (CI visibility); summary to stdout.
-        std::cerr << "run_fisco: --check " << checkEnd << ": skipped " << skippedMissing
-                  << " missing-from-golden\n";
+        // Hole counts go to stderr (CI visibility); summary to stdout. skippedMissing
+        // counts MISSING-FROM-GOLDEN rows, each already counted as a mismatch above —
+        // the name is the counter's, not a skip verdict.
+        std::cerr << "run_fisco: --check " << checkEnd << ": " << skippedMissing
+                  << " missing-from-golden holes (counted as mismatches)\n";
         std::cout << "run_fisco: --check " << checkEnd << ": compared " << compared << " cases, "
                   << mismatches << " mismatches\n";
 

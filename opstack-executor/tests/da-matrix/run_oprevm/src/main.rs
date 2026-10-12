@@ -44,9 +44,10 @@ use std::env;
 use std::fs;
 use std::process;
 
-// Relative to the runner binary's directory (../da_matrix.json from run_oprevm/);
-// resolve at runtime so the harness works on any checkout. Override with --grid.
-const DEFAULT_GRID: &str = "../da_matrix.json";
+// Relative to the runner binary's directory: cargo puts the binary in
+// target/release/, so the grid two levels up (../../da_matrix.json from the binary)
+// is the one checked in beside run_oprevm/. Override with --grid.
+const DEFAULT_GRID: &str = "../../da_matrix.json";
 const DEFAULT_OUT: &str = "out_oprevm.json";
 
 /// "0x"-prefixed or bare lowercase/uppercase hex -> bytes; None on malformed input.

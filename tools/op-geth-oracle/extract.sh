@@ -13,8 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # Regenerate bcos-evm/test/opstack/op_geth_oracle.json from the pinned op-geth checkout.
-# The values here are judged by op-geth's own testdata, not by this repo's implementation.
-# (E4 will extend this contract with the EIP-2537 BLS vectors from the same source.)
+# The values are extracted from op-geth's own testdata at that commit (never hand-copied).
+# Disclosure: this file is a REVISION PIN — the CI pin gate (tools/.ci/check-ci-pins.sh)
+# reads source.commit only, and no in-repo test reads the values below today. They are
+# the regeneration reference a bn256 parity test may judge against later; E4 may extend
+# this contract with the EIP-2537 BLS vectors from the same source.
 set -euo pipefail
 OP_GETH_REPO="${OP_GETH_REPO:-}"
 [ -n "$OP_GETH_REPO" ] || { echo "OP_GETH_REPO is required (path to the pinned op-geth checkout; no machine default)" >&2; exit 1; }

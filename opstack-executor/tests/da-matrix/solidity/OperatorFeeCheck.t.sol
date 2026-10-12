@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: MIT
+// FISCO-BCOS da-matrix fixture (Task 5). This file runs INSIDE the external
+// contracts-bedrock checkout (see ../README.md), so bedrock's MIT SPDX governs it —
+// unlike the FISCO Apache headers carried by the rest of this repo's new files.
 pragma solidity ^0.8.15;
 
 // OperatorFeeCheck — Solidity authoritative end of the FISCO opstack da-matrix

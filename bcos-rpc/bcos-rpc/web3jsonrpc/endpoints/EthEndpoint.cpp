@@ -2238,4 +2238,3 @@ bcos::rpc::EthEndpoint::EthEndpoint(
     m_filterSystem(std::move(filterSystem)),
     m_syncTransaction(syncTransaction)
 {}
-

@@ -45,11 +45,16 @@ Usage: compare_snapshots.py [golden_dir] [da_matrix.json]
 import json
 import sys
 
-# The registry in DIVERGENCES.md. Keep in sync with that file.
+# The registry in DIVERGENCES.md. Keep in sync with that file. The two
+# da_footprint_* tags are registered-but-never-triggered rows the registry tells
+# future grid cases to carry — they must be known here, or following the
+# registry aborts the gate with an unknown-tag error.
 SKIPPED_DIVERGENCES = {
     "l1_fee_saturation",
     "flz_zero_clamp",
     "solidity_l1_uint32_overflow",
+    "da_footprint_overflow",
+    "da_footprint_176b_activation_shape",
 }
 # Registered but compared: the ends agree by construction, and the agreement is
 # the (weak but free) assertion the row carries.

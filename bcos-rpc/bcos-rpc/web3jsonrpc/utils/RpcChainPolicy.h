@@ -72,9 +72,12 @@ inline bool isOpStackLane(int executorVersion)
 /// a valid instant, so feeding `block ? ts : 0` here read "unknown" as "pre-Karst" and
 /// let an explicit gas up to the block cap slip the clamp on a Karst chain — the exact
 /// lie this gate exists to prevent). Eth: a nullopt revision (no evmc_revision row for
-/// the target block yet), which must clamp for the same reason. Over-clamping a
-/// pre-Karst/pre-Osaka estimate when its header/revision cannot be read is recoverable
-/// (retry with a smaller gas); an unclamped over-cap estimate is not, so unknown clamps.
+/// the target block yet), which must clamp for the same reason. Clamping an unknown
+/// input can fail an admissible estimate closed: a transaction needing between 2^24 and
+/// the block limit gets a budget capped below its requirement, and no smaller-gas retry
+/// recovers a larger requirement. That spurious cap is the chosen failure direction —
+/// it is loud and diagnosable, whereas NOT clamping an unknown input on an EIP-7825
+/// chain would mis-size the budget silently, so unknown clamps.
 [[nodiscard]] inline bool eip7825InForceAt(bcos::ledger::LedgerConfig const& ledgerConfig,
     bcos::protocol::BlockNumber targetBlock, std::optional<uint64_t> targetTimestampSeconds)
 {
