@@ -121,7 +121,8 @@ jobs:
           just --version
 
       # kona-host / kona-client (rust/kona) are built with cargo for the native replay
-      # verification leg. KONA_VERIFY=1 is the default.
+      # verification leg. KONA_VERIFY follows CONTEST unless set explicitly, so a dispatch with
+      # contest=0 runs the smoke leg and skips the replay (and its [kona-verify] PASS guard).
       - name: Set up Rust (kona build)
         uses: dtolnay/rust-toolchain@stable
 

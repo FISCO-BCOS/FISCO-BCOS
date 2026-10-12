@@ -101,8 +101,7 @@ std::string resolveBlockTagString(const Json::Value& tag)
             // EIP-1898 blockHash must be a 32-byte hash: the 66-char "0x" + 64 hex form. A
             // shorter/other form (e.g. "latest") must not fall through to the tag parser and
             // silently resolve the wrong block.
-            if (hash.isString() && hash.asString().size() == 66 && hash.asString()[0] == '0' &&
-                (hash.asString()[1] == 'x' || hash.asString()[1] == 'X'))
+            if (hash.isString() && isBlockHashString(hash.asString()))
             {
                 return hash.asString();
             }
@@ -1004,8 +1003,8 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
             if (account->codeHash != bcos::ledger::mpt::emptyCodeHash())
             {
                 auto const stateStorage = ledger->getStateStorage();
-                if (auto const codeBytes = co_await readCodeByHash(*stateStorage, account->codeHash);
-                    codeBytes.has_value())
+                auto const codeBytes = co_await readCodeByHash(*stateStorage, account->codeHash);
+                if (codeBytes.has_value())
                 {
                     code = std::move(*codeBytes);
                 }
@@ -2084,7 +2083,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     // error) and let getBlockNumber distinguish "not found" from a storage fault.
     protocol::BlockNumber blockNumber = 0;
     protocol::BlockNumber head = 0;
-    if (blockTag.size() == 66 && blockTag[0] == '0' && (blockTag[1] == 'x' || blockTag[1] == 'X'))
+    if (isBlockHashString(blockTag))
     {
         bcos::crypto::HashType hash;
         try

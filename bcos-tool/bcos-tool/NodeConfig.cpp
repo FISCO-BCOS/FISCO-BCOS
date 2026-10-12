@@ -1180,6 +1180,10 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; unless enabled here: it serves the fault-proof preimage oracle (kona-host), not general
         ; clients. This key scopes the namespace to THIS web3 listener only; the op-engine (8551)
         ; listener has its own [op_engine_rpc] enable_debug_api.
+        ; Enabling it also REQUIRES storage.mpt_prune_window=-1 (archive): the namespace reads
+        ; MPT preimages with no retention guarantee, so a pruned block still inside a dispute
+        ; game's challenge window would answer an indistinguishable -32000. The node refuses to
+        ; boot otherwise, and archive mode means MPT disk growth is unbounded — size for it.
         ; enable_debug_api=false
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
@@ -1273,6 +1277,8 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; enable_miner_api=false
         ; scopes the geth debug namespace to THIS listener only (default off); [web3_rpc]
         ; enable_debug_api scopes it to the web3 listener. Neither key reaches the other port.
+        ; Enabling it on either port requires storage.mpt_prune_window=-1 (archive), for the
+        ; same reason as [web3_rpc] enable_debug_api above.
         ; enable_debug_api=false
     */
     const auto config = parseEngineRpcSection(_pt, "op_engine_rpc", "conf/op-engine/jwt.hex");

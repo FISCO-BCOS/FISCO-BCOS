@@ -79,6 +79,32 @@ public:
         return header;
     }
 
+    /// An Ethereum-lane header (the [eth_genesis_header] shape) whose stored hash IS
+    /// keccak256(rlp) — the header RawHeaderServesEthGenesisHeader publishes, and the base for
+    /// the guard's negative control (which mutates a field after calculateHash).
+    bcos::protocol::BlockHeader::Ptr makeEthLaneHeader()
+    {
+        protocol::EthBlockHeaderData data;
+        data.uncleHash = protocol::c_emptyOmmersHash;
+        data.stateRoot = h256(1U);
+        data.txsRoot = mpt::emptyRootHash();
+        data.receiptsRoot = mpt::emptyRootHash();
+        data.gasLimit = 30'000'000;
+        data.timestamp = 1'700'000'000;
+        data.extraData = bytes{0x00, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};
+        data.baseFee = 1'000'000'000;
+        data.withdrawalsHash = mpt::emptyRootHash();
+        data.blobGasUsed = 0;
+        data.excessBlobGas = 0;
+        data.parentBeaconRoot = h256{};
+        bytes rlp;
+        codec::rlp::encode(rlp, data);
+        auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        protocol::EthBlockHeader::toTarsHeader(header, bcos::ref(rlp));
+        header->calculateHash(*cryptoSuite->hashImpl());
+        return header;
+    }
+
     /// A one-account trie in m_mptNodes; returns its root (which is also a stored node key).
     bcos::h256 buildTrie()
     {
@@ -325,25 +351,9 @@ BOOST_AUTO_TEST_CASE(NonOpLaneIsMethodNotFound)
 BOOST_AUTO_TEST_CASE(RawHeaderServesEthGenesisHeader)
 {
     setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
-    protocol::EthBlockHeaderData data;
-    data.uncleHash = protocol::c_emptyOmmersHash;
-    data.stateRoot = h256(1U);
-    data.txsRoot = mpt::emptyRootHash();
-    data.receiptsRoot = mpt::emptyRootHash();
-    data.gasLimit = 30'000'000;
-    data.timestamp = 1'700'000'000;
-    data.extraData = bytes{0x00, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};
-    data.baseFee = 1'000'000'000;
-    data.withdrawalsHash = mpt::emptyRootHash();
-    data.blobGasUsed = 0;
-    data.excessBlobGas = 0;
-    data.parentBeaconRoot = h256{};
-    bytes rlp;
-    codec::rlp::encode(rlp, data);
-    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-    protocol::EthBlockHeader::toTarsHeader(header, bcos::ref(rlp));
-    header->calculateHash(*cryptoSuite->hashImpl());
+    auto const header = makeEthLaneHeader();
     BOOST_REQUIRE(!bcos::protocol::isOpEthereumBlock(*header));  // the case that was refused
+    auto const rlp = protocol::EthBlockHeader::encodeHeader(*header);
     m_ledger->ledgerData().front()->setBlockHeader(header);
     auto const genesisHash = m_ledger->ledgerData().front()->blockHeader()->hash();
     m_ledger->indexBlockHash(genesisHash, 0);
@@ -358,6 +368,72 @@ BOOST_AUTO_TEST_CASE(RawHeaderServesEthGenesisHeader)
     BOOST_CHECK(raw == rlp);
     BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bcos::ref(raw)).hexPrefixed(), published);
     BOOST_CHECK(resultBytes(call1("debug_getRawHeader", published)) == rlp);
+}
+
+// The guard's negative control: a header whose stored hash is NOT keccak256 of its RLP must be
+// refused. Mutating a field AFTER calculateHash reproduces exactly that — an Eth-lane header
+// the bridge can still encode, but whose bytes no longer hash back to the published hash — so
+// this is the branch that turns red if the `canonicalBlockHash != keccak256(encoded)` check is
+// ever removed.
+BOOST_AUTO_TEST_CASE(RawHeaderRefusesHeaderWhoseHashIsNotItsRlpHash)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    auto const header = makeEthLaneHeader();
+    BOOST_REQUIRE(!bcos::protocol::isOpEthereumBlock(*header));
+    // Change a field AND stamp a stored hash that is not keccak256 of the resulting RLP — the
+    // negative half of the guard's invariant. (The tars setters clear dataHash, so the wrong
+    // hash has to be re-stamped explicitly; an empty one would just make hash() throw.)
+    header->setStateRoot(h256(0xdeadU));
+    header->setRLPHash(h256(0xc0ffeeU));
+    m_ledger->ledgerData().front()->setBlockHeader(header);
+
+    auto const resp = call1("debug_getRawHeader", "0x0");
+    BOOST_REQUIRE_MESSAGE(resp.isMember("error"), printJson(resp));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InternalError);
+    BOOST_CHECK(
+        resp["error"]["message"].asString().find("has no Ethereum header") != std::string::npos);
+    BOOST_TEST(!resp.isMember("result"));
+}
+
+// The guard's positive twin: a pre-Canyon OP header (Bedrock-Delta — NON_ETH + baseFee, no
+// withdrawalsRoot, so isOpEthereumBlock is false and canonicalBlockHash takes the stored-hash
+// branch) whose stored hash IS keccak256(rlp) is SERVED. The previous re-spelled predicate
+// refused this shape; the invariant-based guard admits it, which is the fix's claimed benefit.
+BOOST_AUTO_TEST_CASE(RawHeaderServesPreCanyonOpHeader)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    auto header = m_ledger->ledgerData().back()->blockHeader();
+    header->setTimestamp(1'700'000'000'000);
+    header->setBaseFee(7);
+    BOOST_REQUIRE(!bcos::protocol::isOpEthereumBlock(*header));  // pre-Canyon: no withdrawalsRoot
+    header->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*header));
+
+    auto const served = resultBytes(call1("debug_getRawHeader", "latest"));
+    BOOST_TEST(bcos::protocol::canonicalBlockHash(*header).hexPrefixed() ==
+               header->hash().hexPrefixed());
+    BOOST_TEST(bcos::crypto::keccak256Hash(bcos::ref(served)).hexPrefixed() ==
+               header->hash().hexPrefixed());
+}
+
+// debug_getRawHeader mirrors geth's DebugAPI.GetRawHeader, which accepts only a block number or
+// a hash. The safe/finalized/pending tags are refused before resolution: answering them through
+// the shared tag resolver would return the unsafe tip and contradict eth_getBlockByNumber on
+// the same node (which fails closed on the engine lane when the forkchoice tracker is unset).
+BOOST_AUTO_TEST_CASE(RawHeaderRefusesSafeFinalizedPendingTags)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    makeLatestOpHeader();  // a resolvable head, so a refusal is the refusal and not "not found"
+    for (auto const* tag : {"safe", "finalized", "pending"})
+    {
+        auto const resp = call1("debug_getRawHeader", tag);
+        BOOST_REQUIRE_MESSAGE(resp.isMember("error"), std::string(tag) + ": " + printJson(resp));
+        BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InvalidParams);
+        BOOST_CHECK_EQUAL(resp["error"]["message"].asString(),
+            "debug_getRawHeader accepts only a block number or hash");
+        BOOST_TEST(!resp.isMember("result"));
+    }
+    // "latest" is not refused — the refusal is tag-specific, not a blanket rejection.
+    BOOST_TEST(resultBytes(call1("debug_getRawHeader", "latest")).size() > 0);
 }
 
 // kona-host asks eth_getProof for accounts a block creates: under a complete trie the absent

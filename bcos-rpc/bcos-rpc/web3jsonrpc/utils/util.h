@@ -100,6 +100,16 @@ void buildJsonErrorWithData(
 
 bcos::bytes toBytesResponse(Json::Value const& jResp);
 
+/// True when @p s is a block hash in the web3 wire form: the 66-character "0x" + 64 hex shape.
+/// Every block-parameter site needs this one decision — "treat this string as a block hash, not
+/// as a quantity or a tag" — and the sites must not drift apart on what a block hash is: the
+/// caller here is deciding which block to serve a fault-proof preimage for (DebugEndpoint's
+/// debug_getRawHeader) or to prove against (eth_getProof). One definition, not three copies.
+[[nodiscard]] inline bool isBlockHashString(std::string_view s)
+{
+    return s.size() == 66 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X');
+}
+
 /// Read a contract's code bytes by its content address (codeHash) from the state storage. This
 /// is the ONE home for the content-addressed code read, shared by eth_getCode (historical path)
 /// and debug_dbGet (preimage path): both serve the same blob, and the lifecycle precondition —

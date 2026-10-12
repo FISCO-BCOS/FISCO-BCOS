@@ -683,7 +683,8 @@ jobs:
           just --version
 
       # kona-host / kona-client (rust/kona) are built with cargo for the native replay
-      # verification leg. KONA_VERIFY=1 is the default.
+      # verification leg. KONA_VERIFY follows CONTEST (1 here, so the replay runs) unless set
+      # explicitly.
       - name: Set up Rust (kona build)
         uses: dtolnay/rust-toolchain@stable
 
@@ -757,8 +758,9 @@ jobs:
 
       - name: Run C2 ephemeral e2e
         # SKIP_KONA_BUILD=1: kona-host/kona-client were already built by the Build OP stack
-        # binaries step (this mirrors c2-e2e.yml's full-run twin). KONA_VERIFY defaults to 1,
-        # so the native replay verification runs against the contest leg's dispute game.
+        # binaries step (this mirrors c2-e2e.yml's full-run twin). KONA_VERIFY follows CONTEST
+        # (hard-set to "1" for this job), so the native replay verification runs against the
+        # contest leg's dispute game.
         run: SKIP_OP_BUILD=1 SKIP_KONA_BUILD=1 bash tools/.ci/c2-e2e.sh
         env:
           REPO_ROOT: ${{ github.workspace }}

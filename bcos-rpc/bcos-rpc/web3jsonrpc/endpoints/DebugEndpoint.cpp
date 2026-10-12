@@ -138,7 +138,7 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
 
     protocol::BlockNumber blockNumber = 0;
     protocol::BlockNumber head = 0;
-    if (blockTag.size() == 66 && blockTag[0] == '0' && (blockTag[1] == 'x' || blockTag[1] == 'X'))
+    if (isBlockHashString(blockTag))
     {
         bcos::crypto::HashType hash;
         try
