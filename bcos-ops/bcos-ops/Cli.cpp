@@ -44,6 +44,7 @@ std::map<std::string, Command>& commandTable()
         registerSysconfigCommand();
         registerStatusCommand();
         registerTxCommand();
+        registerBlockCommand();
         registerAttachCommands();
         registerLogCommand();
         registerTuiCommand();

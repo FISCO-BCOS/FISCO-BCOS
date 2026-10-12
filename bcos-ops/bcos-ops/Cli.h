@@ -51,6 +51,7 @@ void registerConsensusCommand();  // cmd/ConsensusCmd.cpp
 void registerSysconfigCommand();  // cmd/SysconfigCmd.cpp
 void registerStatusCommand();     // cmd/StatusCmd.cpp
 void registerTxCommand();         // cmd/TxCmd.cpp
+void registerBlockCommand();      // cmd/BlockCmd.cpp
 void registerAttachCommands();    // cmd/AttachCmd.cpp: attach, log-level
 void registerLogCommand();        // cmd/LogCmd.cpp
 void registerTuiCommand();        // cmd/TuiCmd.cpp
