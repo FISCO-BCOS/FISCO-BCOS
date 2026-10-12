@@ -39,6 +39,8 @@ namespace bcos::ops
 {
 namespace
 {
+int runTxDispatch(Connection const& _connection, Args const& _args, std::ostream& _out);
+
 std::string readFile(std::string const& _path, std::string_view _what)
 {
     std::ifstream in(_path);
@@ -91,8 +93,8 @@ SendOptions sendOptionsFrom(Args const& _args)
     return options;
 }
 
-/// the node refused the transaction before execution (no receipt): print the JSON-RPC error
-/// in a jq-friendly shape and exit 2 (the chain answered; the transaction was not admitted)
+}  // namespace
+
 int printRpcRefusal(std::ostream& _out, OpsRpcError const& _error, bool _json)
 {
     if (_json)
@@ -110,6 +112,8 @@ int printRpcRefusal(std::ostream& _out, OpsRpcError const& _error, bool _json)
     return c_exitChecksFailed;
 }
 
+namespace
+{
 void printReceipt(std::ostream& _out, Receipt const& _receipt, bool _json)
 {
     if (_json)
@@ -204,7 +208,8 @@ int32_t linkContract(TxSender& _sender, bool _sm, std::string const& _path,
     auto outputHex = receipt.output.starts_with("0x") ? receipt.output.substr(2) : receipt.output;
     if (outputHex.size() < 64)
     {
-        return 0;
+        throw OpsError(
+            c_exitChecksFailed, "link " + _path + " returned no code: " + receipt.output);
     }
     return static_cast<int32_t>(std::stoul(outputHex.substr(56, 8), nullptr, 16));
 }
@@ -240,35 +245,45 @@ int runDeploy(Connection const& _connection, Args const& _args, std::ostream& _o
     std::vector<std::string> ctorArgs(positionals.begin() + 1, positionals.end());
     auto data = abi.encodeConstructor(abiText, bin, argsToJsonArray(ctorArgs));
     bool json = wantJson(_args.flag("json"));
-    Receipt receipt;
-    try
-    {
-        receipt = sender->send("", std::move(data), abiText, sendOptionsFrom(_args));
-    }
-    catch (OpsRpcError const& e)
-    {
-        return printRpcRefusal(_out, e, json);
-    }
+    auto receipt = sender->send("", std::move(data), abiText, sendOptionsFrom(_args));
+    // the contract is on chain once the deploy receipt is ok: a failing link must not hide
+    // the address, so every link outcome lands in the receipt and the receipt is printed
+    bool linked = false;
+    std::string linkFailure;
     if (receipt.ok() && link)
     {
-        auto code = linkContract(*sender, facts.sm, *link, receipt.contractAddress, abiText);
         receipt.raw["link"] = *link;
-        receipt.raw["linkCode"] = code;
-        if (code != 0)
+        try
         {
-            receipt.raw["linkCodeName"] = precompiledCodeName(code);
+            auto code = linkContract(*sender, facts.sm, *link, receipt.contractAddress, abiText);
+            receipt.raw["linkCode"] = code;
+            linked = code == 0;
+            if (!linked)
+            {
+                receipt.raw["linkCodeName"] = precompiledCodeName(code);
+                linkFailure = "code " + std::to_string(code) + " " + precompiledCodeName(code);
+            }
+        }
+        catch (OpsRpcError const& e)
+        {
+            receipt.raw["linkError"] =
+                e.method + " code=" + std::to_string(e.code) + " " + e.message;
+            linkFailure = receipt.raw["linkError"].asString();
+        }
+        catch (OpsError const& e)
+        {
+            receipt.raw["linkError"] = e.what();
+            linkFailure = e.what();
         }
     }
     printReceipt(_out, receipt, json);
     if (!json && link)
     {
-        printRows(
-            _out, {{"link", *link + (receipt.raw["linkCode"].asInt() == 0 ?
-                                            "" :
-                                            " FAILED " + receipt.raw["linkCodeName"].asString())}});
+        printRows(_out, {{"link", !receipt.ok() ? *link + " SKIPPED (deploy failed)" :
+                                  linked        ? *link :
+                                                  *link + " FAILED " + linkFailure}});
     }
-    return receipt.ok() && receipt.raw.get("linkCode", 0).asInt() == 0 ? c_exitOk :
-                                                                         c_exitChecksFailed;
+    return receipt.ok() && (!link || linked) ? c_exitOk : c_exitChecksFailed;
 }
 
 int runRaw(Connection const& _connection, Args const& _args, std::ostream& _out)
@@ -290,16 +305,9 @@ int runRaw(Connection const& _connection, Args const& _args, std::ostream& _out)
     auto facts = chainFacts(_connection);
     auto sender = makeSender(_connection, facts, _args);
     bool json = wantJson(_args.flag("json"));
-    try
-    {
-        auto receipt = sender->sendRaw(hex);
-        printReceipt(_out, receipt, json);
-        return receipt.ok() ? c_exitOk : c_exitChecksFailed;
-    }
-    catch (OpsRpcError const& e)
-    {
-        return printRpcRefusal(_out, e, json);
-    }
+    auto receipt = sender->sendRaw(hex);
+    printReceipt(_out, receipt, json);
+    return receipt.ok() ? c_exitOk : c_exitChecksFailed;
 }
 
 enum class TxMode
@@ -355,16 +363,9 @@ int runCallOrSend(
     }
     if (send)
     {
-        try
-        {
-            auto receipt = sender->send(address, std::move(data), "", sendOptionsFrom(_args));
-            printReceipt(_out, receipt, json);
-            return receipt.ok() ? c_exitOk : c_exitChecksFailed;
-        }
-        catch (OpsRpcError const& e)
-        {
-            return printRpcRefusal(_out, e, json);
-        }
+        auto receipt = sender->send(address, std::move(data), "", sendOptionsFrom(_args));
+        printReceipt(_out, receipt, json);
+        return receipt.ok() ? c_exitOk : c_exitChecksFailed;
     }
     auto receipt = sender->call(address, std::move(data));
     std::string decoded;
@@ -395,7 +396,7 @@ int runCallOrSend(
     return receipt.ok() ? c_exitOk : c_exitChecksFailed;
 }
 
-int runGet(Connection const& _connection, Args const& _args, std::ostream& _out)
+int runTxGet(Connection const& _connection, Args const& _args, std::ostream& _out)
 {
     if (_args.positionals().empty())
     {
@@ -452,6 +453,20 @@ int runTx(Args const& _args, std::ostream& _out, std::ostream& _err)
 
 int runTxOn(Connection const& _connection, Args const& _args, std::ostream& _out)
 {
+    try
+    {
+        return runTxDispatch(_connection, _args, _out);
+    }
+    catch (OpsRpcError const& e)
+    {
+        return printRpcRefusal(_out, e, wantJson(_args.flag("json")));
+    }
+}
+
+namespace
+{
+int runTxDispatch(Connection const& _connection, Args const& _args, std::ostream& _out)
+{
     if (_args.positionals().empty())
     {
         throw OpsError(c_exitUsage, "usage: tx smoke|deploy|call|send|sign|raw|get ...");
@@ -486,10 +501,11 @@ int runTxOn(Connection const& _connection, Args const& _args, std::ostream& _out
     }
     if (sub == "get")
     {
-        return runGet(_connection, subArgs, _out);
+        return runTxGet(_connection, subArgs, _out);
     }
     throw OpsError(c_exitUsage, "unknown tx subcommand: " + sub);
 }
+}  // namespace
 
 void registerTxCommand()
 {

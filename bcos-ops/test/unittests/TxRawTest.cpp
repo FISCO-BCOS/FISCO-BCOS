@@ -20,6 +20,7 @@
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/cmd/TxCmd.h"
 #include "fixtures/FakeRpc.h"
+#include <bcos-protocol/bcos-protocol/TransactionStatus.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <fstream>
@@ -103,7 +104,8 @@ BOOST_AUTO_TEST_CASE(rawRejectsNonHexAndMissingFile)
 BOOST_AUTO_TEST_CASE(rawRefusalExits2)
 {
     FakeRpc rpc;
-    rpc.fail("sendTransaction", c_statusTxPoolIsFull, "TxPoolIsFull");
+    rpc.fail("sendTransaction", static_cast<int>(bcos::protocol::TransactionStatus::TxPoolIsFull),
+        "TxPoolIsFull");
     std::ostringstream out;
     auto code = runTxOn(rawConnection(rpc), rawArgs({"raw", "0x01", "--json"}), out);
     BOOST_CHECK_EQUAL(code, c_exitChecksFailed);
