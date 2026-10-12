@@ -232,4 +232,85 @@ BOOST_AUTO_TEST_CASE(BelowHeadOldBranchBlockDetachedWhenDecided)
     BOOST_CHECK(store.hasBlock(hashOf('A')));                // body stays for re-import
 }
 
+// put()'s descendant guard: a live same-height occupant WITH a live imported child
+// refuses an unvouched overwrite (the child would be orphaned onto a foreign parent);
+// the caller's canonical voucher is the one bypass.
+BOOST_AUTO_TEST_CASE(DescendantConflictRefusesUnvouchedOverwrite)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 0)));
+    BOOST_CHECK(store.put(block('B', 'A', 1)));
+    BOOST_CHECK(store.put(block('C', 'B', 2)));
+    // D at B's height, unvouched: B is live and C (a live child of B) guards it.
+    BOOST_CHECK(!store.put(block('D', 'A', 1)));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('B'));
+    // The canonical voucher (the caller decided B is canonical) is the documented bypass.
+    BOOST_CHECK(store.put(block('D', 'A', 1), /*occupantCanonical=*/true));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('D'));
+}
+
+// A same-hash re-import re-livens a detached body and re-keys its height through the
+// shared arbitration (the fix for the re-liven being an unchecked last-wins assign).
+BOOST_AUTO_TEST_CASE(SameHashReimportRelivensAndRekeys)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 0)));
+    BOOST_CHECK(store.put(block('B', 'A', 1)));
+    BOOST_CHECK(store.put(block('C', 'B', 2)));
+    BOOST_CHECK(store.put(block('D', 'A', 1), /*occupantCanonical=*/true));
+    store.adoptCanonicalHead(1, hashOf('D'));
+    BOOST_CHECK(!store.occupantAt(2).has_value());  // C detached, height 2 vacated
+
+    // Re-import C itself: the same-hash path re-livens the body and re-keys height 2.
+    BOOST_CHECK(store.put(block('C', 'B', 2)));
+    BOOST_REQUIRE(store.get(hashOf('C')).has_value());
+    BOOST_CHECK(!store.get(hashOf('C'))->detached);
+    BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('C'));
+}
+
+// Without a voucher the same-height occupant is arbitrated by the LOWEST hash, so the
+// answer is identical whichever sibling arrived first (the shared rule's tie half).
+BOOST_AUTO_TEST_CASE(UnvouchedSameHeightTieIsOrderIndependent)
+{
+    auto const expected = hashOf('X') < hashOf('Y') ? hashOf('X') : hashOf('Y');
+    for (bool flipOrder : {false, true})
+    {
+        bcos::engine::ImportedStore store;
+        BOOST_CHECK(store.put(block('A', 0, 0)));
+        // Neither sibling has imported children, so both imports are allowed unvouched.
+        if (!flipOrder)
+        {
+            BOOST_CHECK(store.put(block('X', 'A', 1)));
+            BOOST_CHECK(store.put(block('Y', 'A', 1)));
+        }
+        else
+        {
+            BOOST_CHECK(store.put(block('Y', 'A', 1)));
+            BOOST_CHECK(store.put(block('X', 'A', 1)));
+        }
+        BOOST_CHECK_EQUAL(*store.occupantAt(1), expected);
+    }
+}
+
+// A head whose body was never staged (a ledger-committed head, or a restart) cannot
+// make the ancestry walk decide anything, so the below-head pass falls back to the
+// number rule (detach) instead of leaving every old occupant live (SYNCING forever);
+// and the bodyless head is never indexed.
+BOOST_AUTO_TEST_CASE(AdoptWithUnstagedHeadDetachesBelowAndSkipsIndex)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 1)));
+    BOOST_CHECK(store.put(block('B', 'A', 2)));
+
+    store.adoptCanonicalHead(2, hashOf('Z'));  // Z was never put()
+    BOOST_CHECK(!store.hasBlock(hashOf('Z')));
+    BOOST_CHECK(!store.occupantAt(2).has_value());  // bodyless head is not indexed
+    BOOST_CHECK(!store.occupantAt(1).has_value());  // A detached by the number rule
+    BOOST_REQUIRE(store.get(hashOf('A')).has_value());
+    BOOST_CHECK(store.get(hashOf('A'))->detached);
+    // Re-importing the real block at 2 is legal again (A is detached, not guarding).
+    BOOST_CHECK(store.put(block('B', 'A', 2)));
+    BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('B'));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

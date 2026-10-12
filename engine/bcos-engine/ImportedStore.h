@@ -92,7 +92,10 @@ public:
             if (it->second.detached)
             {
                 it->second.detached = false;
-                m_byNumber.insert_or_assign(it->second.number, it->first);
+                // The caller's voucher describes the OCCUPANT, not this re-livened
+                // block, so the re-key arbitrates (lowest hash among live) rather than
+                // handing the height to whichever copy arrived last.
+                rekeyOccupantLocked(it->second.number, it->first, /*vouchedCanonical=*/false);
             }
             return true;
         }
@@ -116,16 +119,47 @@ public:
                 }
             }
         }
-        // insert_or_assign, NOT emplace: an allowed same-height coexistence (detached
-        // or canonical occupant above) must re-key the index to the block just
-        // imported — emplace kept the FIRST importer, so put's occupancy notion
-        // (every same-height non-detached block) and occupantAt's (first importer)
-        // were two predicates over one state, and a child of the second sibling saw
-        // occupantAt(parentHeight) name a block the engine no longer considers the
-        // occupant (the N3 "SYNCING forever" shape, between the import and the FCU).
-        m_byNumber.insert_or_assign(block.number, block.hash);
+        // Re-key through the store-wide arbitration (not emplace, not a bare
+        // last-arrival assign): emplace kept the FIRST importer, and insert_or_assign
+        // kept the LAST one — either way put's occupancy depended on import order
+        // while adoptCanonicalHead arbitrated deterministically (canonical lineage,
+        // then lowest hash). rekeyOccupantLocked applies the tie half of that rule, so
+        // both writers answer the same heights the same way.
+        rekeyOccupantLocked(block.number, block.hash, occupantCanonical);
         m_blocks.emplace(block.hash, std::move(block));
         return true;
+    }
+
+    /// The height index's tie rule, shared by put()/re-liven and (for its off-lineage
+    /// fill) adoptCanonicalHead. A caller-vouched canonical import
+    /// (@p vouchedCanonical: the just-written block IS the canonical one) owns its
+    /// height outright; otherwise the height goes to the LOWEST hash among the LIVE
+    /// blocks at @p number (including @p hash itself) — order-independent by
+    /// construction, so the occupant cannot follow unordered_map iteration order or
+    /// RPC arrival order. adoptCanonicalHead re-arbitrates the whole index with
+    /// canonical lineage when the head is known (canonical beats off-lineage, ties
+    /// still by lowest hash).
+    void rekeyOccupantLocked(
+        bcos::protocol::BlockNumber number, bcos::h256 const& hash, bool vouchedCanonical)
+    {
+        if (vouchedCanonical)
+        {
+            m_byNumber.insert_or_assign(number, hash);
+            return;
+        }
+        auto best = hash;
+        for (auto const& [blockHash, block] : m_blocks)
+        {
+            if (blockHash == hash || block.number != number || block.detached)
+            {
+                continue;
+            }
+            if (blockHash < best)
+            {
+                best = blockHash;
+            }
+        }
+        m_byNumber.insert_or_assign(number, best);
     }
 
     /// The most recent import at @p number (nullopt when the height was never
@@ -182,6 +216,10 @@ public:
         // ancestors, and leaving them live kept old-branch occupants indexed at
         // heights the new chain occupies, the same SYNCING-forever shape (review N3)
         // one FCU later. Detached bodies stay hash-addressable for re-import.
+        // Whether the HEAD's body is staged at all — read before the loop: the loop
+        // below re-livens the head itself, and unordered iteration may visit the
+        // below-head blocks first, so the per-block flag cannot be trusted here.
+        bool const headStaged = m_blocks.contains(hash);
         for (auto& [blockHash, block] : m_blocks)
         {
             if (blockHash == hash)
@@ -193,6 +231,18 @@ public:
             {
                 block.detached = !descendsFrom(blockHash, hash);
             }
+            else if (!headStaged)
+            {
+                // The head itself is not staged (a ledger-committed head, or after a
+                // restart): the walk's first step is the hole, so nothing would ever
+                // detach and the descendant guard would keep firing (the
+                // SYNCING-forever shape this pass exists to close). With no staged
+                // links to the head, no below-head stored block can be shown to be its
+                // ancestor — fall back to the number rule and detach. Bodies stay
+                // hash-addressable, and a later re-FCU/re-import re-livens whatever
+                // turns out to be canonical (reversible by construction).
+                block.detached = true;
+            }
             else
             {
                 // Below the new head: detach only when ancestry is DECIDED — the walk
@@ -200,8 +250,8 @@ public:
                 // sparse or cyclic staged range leaves the question open, and falsely
                 // detaching a live canonical ancestor re-opens the SYNCING-forever
                 // shape this fix closes (review N3/R1).
-                block.detached = ancestryDecidableFromHead(hash, block.number) &&
-                                 !descendsFrom(hash, blockHash);
+                block.detached =
+                    ancestryDecidableFromHead(hash, block.number) && !descendsFrom(hash, blockHash);
             }
         }
         // Heights above the new head have no canonical occupant; below/at it, a
@@ -246,7 +296,14 @@ public:
                 it->second = blockHash;
             }
         }
-        m_byNumber[number] = hash;
+        // Index the head only when the store actually has its body: a never-put head
+        // (ledger-committed, or after a restart) would otherwise be named by
+        // m_byNumber while hasBlock denies it — occupantAt would answer a block the
+        // store cannot serve.
+        if (headStaged)
+        {
+            m_byNumber[number] = hash;
+        }
     }
 
     /// Memory bounding (review P2): drop the materialized post-state flats of blocks
