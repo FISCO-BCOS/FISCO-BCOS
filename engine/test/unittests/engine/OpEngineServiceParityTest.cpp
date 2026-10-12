@@ -33,6 +33,7 @@
 #include "engine/bcos-engine/EngineTracker.h"
 #include "engine/bcos-engine/OpEngineService.inl"
 
+#include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
 #include "support/GoldenSample.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -83,30 +84,13 @@
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
+
+using opstack_test::TrivialCheckpointStorage;
 namespace memory_storage = bcos::storage2::memory_storage;
 
 namespace op_engine_parity_test
 {
 
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;

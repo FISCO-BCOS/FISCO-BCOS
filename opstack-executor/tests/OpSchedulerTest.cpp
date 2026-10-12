@@ -20,8 +20,9 @@
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 
-#include "support/GenesisTrie.h"  // computeMptStateDelta (genesis trie)
-#include "support/T8nCorpus.h"    // opstack_test::c_corpusParentHashHex (the corpus parent)
+#include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
+#include "support/GenesisTrie.h"           // computeMptStateDelta (genesis trie)
+#include "support/T8nCorpus.h"  // opstack_test::c_corpusParentHashHex (the corpus parent)
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -73,6 +74,8 @@ using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 using evmc::literals::operator""_address;
 using evmc::literals::operator""_bytes32;
+
+using opstack_test::TrivialCheckpointStorage;
 namespace memory_storage = bcos::storage2::memory_storage;
 namespace opeth = bcos::executor_v1::opstack;
 
@@ -92,29 +95,7 @@ constexpr const char* c_eip1559EnvelopeHex =
 
 // Minimal CheckpointStorage stub (same as the source-branch fixture: do not cross-include other
 // modules' test-private headers).
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
 
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const& /*unused*/) &
-    {
-        std::abort();  // this fixture never needs a historical checkpoint.
-    }
-    void createCheckpoint(Storage& /*unused*/, CheckpointName const& /*unused*/) {}
-    void deleteCheckpoint(CheckpointName const& /*unused*/) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;

@@ -426,9 +426,18 @@ public:
         // 1b. Parent identity: the height guard proves number continuity, not that this
         //     block descends from the head it is about to commit on top of. The download
         //     side (HeaderChain) validates the parentHash chain against its own anchor;
-        //     this commit-time re-bind closes the window between that validation and the
-        //     commit (a reorg while the block waited, or a caller that assembled the
-        //     block outside the chain walk). Genesis has no parent row to bind.
+        //     this ENTRY-time re-bind (review F5: the earlier "commit-time" wording
+        //     overstated it — the read happens here, before execution; nothing re-reads
+        //     the head under the commit lock) closes the window between that validation
+        //     and the execute/merge below, and a reorg that lands DURING the execution
+        //     window is not caught here. That residual window is empty in production by
+        //     construction: the verifier lane runs only in opstack-el self-sync mode,
+        //     which is mutually exclusive with the engine-driven mode that owns
+        //     OpScheduler (NodeConfig: the sync client REPLACES the engine-API driver,
+        //     and Initializer builds no EngineService in this mode), so there is exactly
+        //     one commit writer per node. If a future mode ever runs both lanes against
+        //     one GlobalStateStorage, re-read the head hash under m_commitMutex right
+        //     before mergeBackStorage. Genesis has no parent row to bind.
         if (number > 0)
         {
             auto const headHash =

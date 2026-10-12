@@ -48,6 +48,7 @@
 // (accountTableName(addr) prefix == apps/).
 
 #include "support/DualRunHarness.h"
+#include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
 #include "support/GoldenSample.h"
 #include "support/JsonAt.h"  // DualRunFixture + runExecutorPath (pre-Canyon arm)
 #include "support/SeedPreState.h"
@@ -100,6 +101,8 @@
 #include <string_view>
 #include <vector>
 
+
+using opstack_test::TrivialCheckpointStorage;
 namespace fs = std::filesystem;
 using JsonValue = Json::Value;
 
@@ -131,25 +134,7 @@ inline Json::Value jParse(std::istream& input)
 
 
 // ── Fixture (mirrored from OpNewPayloadRpcE2eTest.cpp:48-167) ──────────────────────────
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
+
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;

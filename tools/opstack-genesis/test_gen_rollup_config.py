@@ -68,11 +68,26 @@ def test_all_fork_times_zero_through_karst():
     for key in gen.FORK_TIME_KEYS:
         assert config[key] == 0, key
     assert "karst_time" in gen.FORK_TIME_KEYS
-    # The key set is single-sourced from gen_official_genesis._ROLLUP_FORK_KEYS: the
-    # CL-only rungs must be present (they were once silently dropped by a hand-listed
-    # mirror), and the op-node order puts interop last.
+    # The key set is single-sourced from gen_official_genesis._ROLLUP_FORK_KEYS — but
+    # the assertion must be able to FAIL, so the expectation is a LITERAL (review F41:
+    # the previous `== [same comprehension]` was tautological — a mutation inside the
+    # shared table passed it silently; the CL-only rungs were once dropped by a
+    # hand-listed mirror, and the op-node order puts interop last). Updating this list
+    # is the deliberate act a genuine rung addition requires.
     assert gen.FORK_TIME_KEYS == [
-        f"{fork}_time" for fork in gen._official_genesis._ROLLUP_FORK_KEYS]
+        "regolith_time",
+        "canyon_time",
+        "delta_time",
+        "ecotone_time",
+        "fjord_time",
+        "granite_time",
+        "holocene_time",
+        "pectra_blob_schedule_time",  # CL-only: after holocene, at its op-node position
+        "isthmus_time",
+        "jovian_time",
+        "karst_time",
+        "interop_time",  # op-node order: interop last
+    ]
     for cl_only in ("delta_time", "pectra_blob_schedule_time", "interop_time"):
         assert cl_only in gen.FORK_TIME_KEYS, cl_only
     assert gen.FORK_TIME_KEYS[-1] == "interop_time"

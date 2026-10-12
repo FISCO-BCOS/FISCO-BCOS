@@ -25,6 +25,8 @@
 // own synthesizeL1AttributesEnvelope(l2Ts, parentTs) already reproduces the
 // Isthmus/Jovian layout rule, so the old test-only override is gone.
 
+#include "GenesisTrie.h"                   // copyFlatRows + computeAndPersistParentTrie
+#include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -34,10 +36,9 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
-#include <bcos-ledger/mpt/Constants.h>     // emptyRootHash
-#include <bcos-ledger/mpt/HashBuilder.h>   // flushTrieNodes
-#include <bcos-ledger/mpt/StateRoots.h>    // computeMptStateDelta
-#include "GenesisTrie.h"  // copyFlatRows + computeAndPersistParentTrie
+#include <bcos-ledger/mpt/Constants.h>    // emptyRootHash
+#include <bcos-ledger/mpt/HashBuilder.h>  // flushTrieNodes
+#include <bcos-ledger/mpt/StateRoots.h>   // computeMptStateDelta
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-table/src/LegacyStorageWrapper.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -58,6 +59,8 @@
 #include <string>
 #include <vector>
 
+
+using opstack_test::TrivialCheckpointStorage;
 namespace opstack_e2e
 {
 
@@ -65,25 +68,6 @@ using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
 
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
@@ -319,9 +303,8 @@ inline bcos::protocol::BlockHeader::Ptr productionHeaderOf(
     auto const& payload = request.executionPayload;
     auto envelopes = rawEnvelopesFromPayload(payload);
     const auto transactionsRoot = EngineOpScheduler::computeTxRoot(envelopes);
-    return bcos::engine::engine_common::op::rebuildOpEthHeader(
-        blockFactory->blockHeaderFactory(), payload, transactionsRoot,
-        request.parentBeaconBlockRoot.value_or(bcos::h256{}));
+    return bcos::engine::engine_common::op::rebuildOpEthHeader(blockFactory->blockHeaderFactory(),
+        payload, transactionsRoot, request.parentBeaconBlockRoot.value_or(bcos::h256{}));
 }
 
 
@@ -341,9 +324,7 @@ struct OpE2eFixture
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> opDelegate;
     OpEngine service;
 
-    explicit OpE2eFixture(bool jovian)
-      : OpE2eFixture(scheduleFor(jovian))
-    {}
+    explicit OpE2eFixture(bool jovian) : OpE2eFixture(scheduleFor(jovian)) {}
 
     /// Explicit schedule: lets a case pin a historical fork window (e.g. Regolith) while the
     /// engine, the seam and the real OpScheduler delegate all share it.
@@ -359,8 +340,7 @@ struct OpE2eFixture
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
-            hashImpl, c_chainId, schedule, blockFactory, multiLayerStorage, ledger,
-            ioServicePool)),
+            hashImpl, c_chainId, schedule, blockFactory, multiLayerStorage, ledger, ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate, nullptr,
             /*allowSynthesizedL1Attributes=*/true, eip1559)
