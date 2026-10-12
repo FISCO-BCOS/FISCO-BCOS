@@ -127,6 +127,11 @@ Json::Value typedArg(ParamSpec const& _spec, std::string const& _arg)
             throw OpsError(c_exitUsage, std::string(_spec.name) + " (" + std::string(_spec.type) +
                                             ") must be a decimal integer, got: " + _arg);
         }
+        if (_arg.starts_with("-") && _spec.type.starts_with("uint"))
+        {
+            throw OpsError(c_exitUsage, std::string(_spec.name) + " (" + std::string(_spec.type) +
+                                            ") cannot be negative, got: " + _arg);
+        }
         return _arg;
     }
     // argsToJsonArray decides number / bool / array vs string per value
@@ -397,6 +402,12 @@ Preset const* PresetRunner::proposalPreset(Preset const& _preset)
 std::vector<std::string> PresetRunner::proposalArgs(
     Preset const& _preset, std::vector<std::string> const& _args) const
 {
+    return proposalArgsFor(_preset, _args, m_routing);
+}
+
+std::vector<std::string> proposalArgsFor(
+    Preset const& _preset, std::vector<std::string> const& _args, Routing const& _routing)
+{
     if (!_preset.proposal)
     {
         throw OpsError(c_exitUsage, std::string(_preset.name) + " has no proposal form");
@@ -411,7 +422,7 @@ std::vector<std::string> PresetRunner::proposalArgs(
             grammar.substr(start, end == std::string::npos ? std::string::npos : end - start);
         if (token == "$interval")
         {
-            out.push_back(std::to_string(proposalInterval(m_routing)));
+            out.push_back(std::to_string(proposalInterval(_routing)));
         }
         else if (token.size() > 1 && token[0] == '$')
         {

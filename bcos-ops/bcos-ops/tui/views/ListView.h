@@ -62,7 +62,7 @@ inline std::vector<ListColumn> fitListColumns(std::vector<ListColumn> _all, int 
 
 inline Element listCell(std::string const& _text, int _width)
 {
-    return text(_text) | size(WIDTH, EQUAL, _width);
+    return ftxui::text(_text) | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, _width);
 }
 
 inline Element listRow(std::vector<std::pair<ListColumn const*, std::string>> const& _cells)
@@ -72,11 +72,11 @@ inline Element listRow(std::vector<std::pair<ListColumn const*, std::string>> co
     {
         if (i > 0)
         {
-            cells.push_back(text(" "));
+            cells.push_back(ftxui::text(" "));
         }
         cells.push_back(listCell(_cells[i].second, _cells[i].first->width));
     }
-    return hbox(std::move(cells));
+    return ftxui::hbox(std::move(cells));
 }
 
 template <typename Row>
@@ -100,7 +100,7 @@ Element renderListView(std::string const& _title, std::vector<ListColumn> const&
     {
         header.emplace_back(&column, column.name);
     }
-    lines.push_back(listRow(header) | dim);
+    lines.push_back(listRow(header) | ftxui::dim);
     auto first = _list.firstVisible();
     size_t drawn = 0;
     for (size_t i = first; i < _rows.size() && drawn < _list.pageRows; ++i, ++drawn)
@@ -113,24 +113,24 @@ Element renderListView(std::string const& _title, std::vector<ListColumn> const&
         auto line = listRow(cells);
         if (i == _list.selected)
         {
-            line = _focused ? line | inverted : line | bold;
+            line = _focused ? line | ftxui::inverted : line | ftxui::bold;
         }
         lines.push_back(line);
         if (_gapAfter(_rows[i]))
         {
-            lines.push_back(text(" ~ older rows skipped ~") | dim);
+            lines.push_back(ftxui::text(" ~ older rows skipped ~") | ftxui::dim);
         }
     }
     if (_rows.empty())
     {
-        lines.push_back(text("waiting for the first refresh") | dim);
+        lines.push_back(ftxui::text("waiting for the first refresh") | ftxui::dim);
     }
-    auto title = text(_title);
+    auto title = ftxui::text(_title);
     if (_focused)
     {
-        title = title | bold;
+        title = title | ftxui::bold;
     }
-    return window(title, vbox(std::move(lines)), LIGHT);
+    return ftxui::window(title, ftxui::vbox(std::move(lines)), ftxui::LIGHT);
 }
 
 }  // namespace bcos::ops::tui

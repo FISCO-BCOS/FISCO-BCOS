@@ -172,7 +172,9 @@ Element renderBlockDetail(Model const& _model, Nav& _nav, Frame const& _frame, D
 {
     auto const& explorer = _model.explorer;
     auto cached = explorer.blockDetails.find(_ref.number);
-    Json::Value block = cached == explorer.blockDetails.end() ? Json::Value() : cached->second;
+    // const: operator[] on a mutable Json::Value would turn the null placeholder into an object
+    // and hide the loading state
+    Json::Value const block = cached == explorer.blockDetails.end() ? Json::Value() : cached->second;
     auto row = std::find_if(explorer.blocks.begin(), explorer.blocks.end(),
         [&](BlockRow const& r) { return r.number == _ref.number; });
     auto field = [&](char const* key) { return detailText(block[key]); };
@@ -410,7 +412,7 @@ Element renderDetail(Model const& _model, Nav& _nav, Frame const& _frame)
     {
         _nav.detailTxs.count = 0;
         return window(text(ref.kind == DetailKind::block ? " block " : " tx "),
-            text(ref.kind == DetailKind::block ? "row no longer loaded; Esc" : "loading…") | dim,
+            text("row no longer loaded; Esc") | dim,
             LIGHT);
     }
     if (ref.kind == DetailKind::block)

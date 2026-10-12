@@ -16,6 +16,7 @@
  * @file Refresher.cpp
  */
 #include "Refresher.h"
+#include "bcos-ops/OpsError.h"
 #include <chrono>
 
 namespace bcos::ops::tui
@@ -82,8 +83,20 @@ void Refresher::runOnce()
 {
     try
     {
-        auto status =
-            collectFromRpc(m_connection.call, m_connection.group, m_connection.source, m_fallbacks);
+        // every phase goes through a call that refuses to start once stop() was asked, so a
+        // quit waits for the request in flight and nothing after it
+        RpcCall call = [this](std::string_view _method, Json::Value const& _params) {
+            if (m_stop)
+            {
+                throw OpsError(c_exitUsage, "refresh stopped");
+            }
+            return m_connection.call(_method, _params);
+        };
+        auto status = collectFromRpc(call, m_connection.group, m_connection.source, m_fallbacks);
+        if (m_stop)
+        {
+            return;
+        }
         auto checks = evaluate(status, m_thresholds, nowMs());
         Json::Value params(Json::arrayValue);
         params.append(m_connection.group);
@@ -93,22 +106,26 @@ void Refresher::runOnce()
         Json::Value peers;
         try
         {
-            consensus = m_connection.call("getConsensusStatus", params);
+            consensus = call("getConsensusStatus", params);
         }
         catch (std::exception const&)
         {}
         try
         {
-            sync = m_connection.call("getSyncStatus", params);
+            sync = call("getSyncStatus", params);
         }
         catch (std::exception const&)
         {}
         try
         {
-            peers = m_connection.call("getPeers", Json::Value(Json::arrayValue));
+            peers = call("getPeers", Json::Value(Json::arrayValue));
         }
         catch (std::exception const&)
         {}
+        if (m_stop)
+        {
+            return;
+        }
         // the explorer works on a copy outside the lock: up to 50 block fetches per round
         ExplorerState explorer;
         {
