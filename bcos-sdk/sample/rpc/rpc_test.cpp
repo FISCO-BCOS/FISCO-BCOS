@@ -33,10 +33,11 @@
 void usage(void)
 {
     printf("Desc: rpc methods call test\n");
-    printf("Usage: rpc <host> <port> <ssl type> <group_id>\n");
+    printf("Usage: rpc <host> <port> <ssl type> <group_id> [thread_count] [loop_count]\n");
     printf("Example:\n");
     printf("   ./rpc 127.0.0.1 20200 ssl group0\n");
-    printf("   ./rpc 127.0.0.1 20200 sm_ssl group0\n");
+    printf("   ./rpc 127.0.0.1 20200 sm_ssl group0 50\n");
+    printf("   ./rpc 127.0.0.1 20200 sm_ssl group0 50 1000\n");
     exit(0);
 }
 struct bcos_sdk_c_endpoint
@@ -66,6 +67,8 @@ struct bcos_sdk_c_config
     int disable_ssl;
     // ssl or sm_ssl
     std::string ssl_type;
+    // group id
+    std::string group;
     // cert config items is the content of the cert or the path of the cert file
     int is_cert_path;
     // ssl connection cert, effective with ssl_type is 'ssl'
@@ -106,9 +109,10 @@ static std::shared_ptr<bcos::boostssl::ws::WsConfig> initWsConfig(
     }
     return wsConfig;
 }
-void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg)
+void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg, long long loop_count)
 {
-    while (1)
+    long long iter = 0;
+    while (loop_count <= 0 || iter++ < loop_count)
     {
         auto factory = std::make_shared<bcos::cppsdk::SdkFactory>();
         auto wsConfig = initWsConfig(arg);
@@ -116,14 +120,14 @@ void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg)
         sdk->start();
         auto rpc = sdk->jsonRpc();
         rpc->getBlockNumber(
-            "group0", "", [](bcos::Error::Ptr error, std::shared_ptr<bcos::bytes> resp) {});
+            arg->group, "", [](bcos::Error::Ptr error, std::shared_ptr<bcos::bytes> resp) {});
         usleep(100);
         sdk->stop();
         sdk.reset(nullptr);
     }
 }
 std::shared_ptr<bcos_sdk_c_config> bcos_sdk_create_config(
-    int sm_ssl, std::string host, uint16_t port)
+    int sm_ssl, std::string host, uint16_t port, std::string group)
 {
     // create c-sdk config object
     auto config = std::make_shared<bcos_sdk_c_config>();
@@ -144,10 +148,10 @@ std::shared_ptr<bcos_sdk_c_config> bcos_sdk_create_config(
     config->peers.push_back(ep);
     config->peers_count = 1;
     // --- set connected peers ---------
-    config->disable_ssl = 1;
     config->send_rpc_request_to_highest_block_node = 1;
     // set ssl type
     config->ssl_type = sm_ssl ? "sm_ssl" : "ssl";
+    config->group = group;
     // --- set ssl cert ---------
     // cert config items is the path of file ,not the content
     config->is_cert_path = 1;
@@ -167,27 +171,44 @@ int main(int argc, char** argv)
     int port = atoi(argv[2]);
     const char* type = argv[3];
     const char* group = argv[4];
+    int threadCount = (argc > 5) ? atoi(argv[5]) : 100;
+    if (threadCount <= 0)
+    {
+        threadCount = 100;
+    }
+    // optional loop_count: <= 0 or invalid means infinite loop (backward compatible)
+    long long loopCount = -1;
+    if (argc > 6)
+    {
+        loopCount = atoll(argv[6]);
+        if (loopCount <= 0)
+        {
+            printf(" \t # loopCount invalid (%lld), fallback to infinite loop\n", loopCount);
+            loopCount = -1;
+        }
+    }
     printf(" [RPC] params ===>>>> \n");
     printf(" \t # host: %s\n", host);
     printf(" \t # port: %d\n", port);
     printf(" \t # type: %s\n", type);
     printf(" \t # group: %s\n", group);
+    printf(" \t # threadCount: %d\n", threadCount);
+    printf(" \t # loopCount: %lld (<=0 means infinite)\n", loopCount);
     int is_sm_ssl = 1;
     char const* pos = strstr(type, "sm_ssl");
     if (pos == NULL)
     {
         is_sm_ssl = 0;
     }
-    auto config = bcos_sdk_create_config(is_sm_ssl, (char*)host, port);
-    config->disable_ssl = 1;
+    auto config = bcos_sdk_create_config(is_sm_ssl, (char*)host, port, group);
     // check success or not
-    std::thread threads[100];
+    std::vector<std::thread> threads(threadCount);
     int rc;
     long t;
-    for (t = 0; t < 100; t++)
+    for (t = 0; t < threadCount; t++)
     {
         printf("In main: creating thread %ld\n", t);
-        threads[t] = std::thread(thread_function, config);
+        threads[t] = std::thread(thread_function, config, loopCount);
         //        rc = pthread_create(&threads[t], NULL, thread_function);
         //        if (rc)
         //        {
@@ -195,7 +216,7 @@ int main(int argc, char** argv)
         //            exit(-1);
         //        }
     }
-    for (t = 0; t < 100; t++)
+    for (t = 0; t < threadCount; t++)
     {
         threads[t].join();
     }

@@ -25,6 +25,8 @@
 #include <bcos-cpp-sdk/SdkFactory.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <atomic>
+#include <csignal>
 #include <boost/core/ignore_unused.hpp>
 #include <cstddef>
 #include <cstdlib>
@@ -39,6 +41,9 @@ using namespace bcos::boostssl;
 using namespace bcos;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
+
+static std::atomic<bool> g_running{true};
+static void onSignal(int) { g_running.store(false); }
 
 void usage()
 {
@@ -78,11 +83,18 @@ int main(int argc, char** argv)
                       << LOG_KV("blockNumber", _blockNumber) << std::endl;
         });
 
-    while (true)
+    std::signal(SIGINT, onSignal);
+    std::signal(SIGTERM, onSignal);
+    std::cout << LOG_DESC(" [BlockNotifier] signal handler ready, press Ctrl+C to exit ")
+              << std::endl;
+
+    while (g_running.load())
     {
         std::cout << LOG_DESC(" Main thread running ") << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
     }
 
+    std::cout << LOG_DESC(" [BlockNotifier] stopping sdk and exiting ... ") << std::endl;
+    sdk->stop();
     return EXIT_SUCCESS;
 }

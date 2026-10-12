@@ -40,9 +40,11 @@ using namespace bcos;
 void usage()
 {
     std::cerr << "Desc: publish amop message by command params\n";
-    std::cerr << "Usage: publish <config> <topic> <message>\n"
+    std::cerr << "Usage: publish <config> <topic> <message> [count]\n"
               << "Example:\n"
-              << "    ./publish ./config_sample.ini topic HelloWorld\n";
+              << "    ./publish ./config_sample.ini topic HelloWorld\n"
+              << "    ./publish ./config_sample.ini topic HelloWorld 10\n"
+              << "Note: count <= 0 or omitted means infinite loop\n";
     std::exit(0);
 }
 
@@ -57,6 +59,18 @@ int main(int argc, char** argv)
     std::string topic = argv[2];
     std::string msg = argv[3];
 
+    long long count = -1;
+    if (argc > 4)
+    {
+        count = atoll(argv[4]);
+        if (count <= 0)
+        {
+            count = -1;
+        }
+    }
+    std::cout << LOG_DESC(" [AMOP][Publish] count: ") << LOG_KV("count", count)
+              << LOG_KV("mode", count < 0 ? "infinite" : "finite") << std::endl;
+
     std::cout << LOG_DESC(" [AMOP][Publish]] params ===>>>> ") << LOG_KV("\n\t # config", config)
               << LOG_KV("\n\t # topic", topic) << LOG_KV("\n\t # message", msg) << std::endl;
 
@@ -68,7 +82,8 @@ int main(int argc, char** argv)
 
     std::cout << LOG_DESC(" [AMOP][Publish] start sdk ... ") << std::endl;
 
-    while (true)
+    long long sent = 0;
+    while (count < 0 || sent < count)
     {
         std::cout << LOG_DESC(" publish message ===>>>> ") << LOG_KV("topic", topic)
                   << LOG_KV("message", msg) << std::endl;
@@ -101,7 +116,10 @@ int main(int argc, char** argv)
                 }
             });
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        sent++;
     }
 
+    std::cout << LOG_DESC(" [AMOP][Publish] finished, stopping sdk ... ") << std::endl;
+    sdk->stop();
     return EXIT_SUCCESS;
 }

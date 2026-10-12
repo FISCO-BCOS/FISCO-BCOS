@@ -31,9 +31,11 @@ using namespace bcos::tool;
 
 void usage()
 {
-    std::cerr << "Usage: echo-server-sample <listenIP> <listenPort> <ssl>\n"
+    std::cerr << "Usage: echo-server-sample [configPath]\n"
+              << "Note: configPath defaults to config.ini\n"
               << "Example:\n"
-              << "./echo-server-sample\n";
+              << "./echo-server-sample\n"
+              << "./echo-server-sample ./my_config.ini\n";
     std::exit(0);
 }
 
@@ -41,8 +43,9 @@ int main(int argc, char** argv)
 {
     g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    std::string configFilePath = (argc > 1) ? argv[1] : "config.ini";
+    std::cout << "[EchoServer] config loaded: " << configFilePath << std::endl;
     auto nodeConfig = std::make_shared<NodeConfig>();
-    std::string configFilePath = "config.ini";
     nodeConfig->loadConfig(configFilePath);
 
     auto logInitializer = std::make_shared<BoostLogInitializer>();
@@ -55,6 +58,7 @@ int main(int argc, char** argv)
     auto service = std::dynamic_pointer_cast<Service>(gateway->p2pInterface());
 
     gateway->start();
+    std::cout << "[EchoServer] gateway started, listening for connections" << std::endl;
 
 
     service->registerHandlerByMsgType(
@@ -69,6 +73,8 @@ int main(int argc, char** argv)
             BCOS_LOG(INFO) << LOG_DESC("sendResponse") << LOG_KV("timeCost", (utcTime() - startT))
                            << LOG_KV("msgSize", (_msg->payload()->size()));
         });
+    std::cout << "[EchoServer] handler registered for message type 999" << std::endl;
+    std::cout << "[EchoServer] server ready" << std::endl;
     while (true)
     {
         // TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_BADGE(" [Main] ===>>>> ");
