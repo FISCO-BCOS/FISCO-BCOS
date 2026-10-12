@@ -53,13 +53,13 @@ using JsonValue = Json::Value;
 
 namespace
 {
-const std::set<std::string> kForks = {
+const std::set<std::string> c_forks = {
     "ecotone", "fjord", "granite", "holocene", "isthmus", "jovian", "karst"};
-const std::set<std::string> kDivergences = {
+const std::set<std::string> c_divergences = {
     "l1_fee_saturation", "flz_zero_clamp", "karst_alias"};
-const std::set<std::string> kClassPrefixes = {
+const std::set<std::string> c_classPrefixes = {
     "baseline", "blob", "max", "missing", "overflow", "pre_isthmus", "switch"};
-const std::vector<std::string> kRequiredSlots = {"1", "3", "7", "8"};
+const std::vector<std::string> c_requiredSlots = {"1", "3", "7", "8"};
 
 Json::Value loadGrid()
 {
@@ -121,38 +121,40 @@ BOOST_AUTO_TEST_CASE(GridMeetsSchemaAndCoversSevenClasses)
         // 2. slots: exactly {1,3,7,8}, each exactly 32-byte hex.
         const Json::Value& slots = c["slots"];
         BOOST_REQUIRE_MESSAGE(slots.isObject(), "case '" << id << "' slots must be an object");
-        for (const auto& slot : kRequiredSlots)
+        for (const auto& slot : c_requiredSlots)
         {
-            BOOST_REQUIRE_MESSAGE(slots.isMember(slot), "case '" << id << "' missing slot '" << slot << "'");
+            BOOST_REQUIRE_MESSAGE(
+                slots.isMember(slot), "case '" << id << "' missing slot '" << slot << "'");
             const std::string v = slots[slot].asString();
             BOOST_REQUIRE_MESSAGE(
-                is32ByteHex(v), "case '" << id << "' slot '" << slot << "' must be exactly 32-byte hex, got: " << v);
+                is32ByteHex(v), "case '" << id << "' slot '" << slot
+                                         << "' must be exactly 32-byte hex, got: " << v);
         }
 
         // 3. fork enum.
         const std::string fork = c["fork"].asString();
         BOOST_REQUIRE_MESSAGE(
-            kForks.count(fork) == 1, "case '" << id << "' fork '" << fork << "' not in fork enum");
+            c_forks.count(fork) == 1, "case '" << id << "' fork '" << fork << "' not in fork enum");
 
         // 4. envelope_ref ∈ registry; registry value must be valid hex.
         const std::string envRef = c["envelope_ref"].asString();
-        BOOST_REQUIRE_MESSAGE(
-            envelopes.isMember(envRef), "case '" << id << "' envelope_ref '" << envRef << "' not in envelopes registry");
+        BOOST_REQUIRE_MESSAGE(envelopes.isMember(envRef),
+            "case '" << id << "' envelope_ref '" << envRef << "' not in envelopes registry");
         const auto envBytes = evmc::from_hex(envelopes[envRef].asString());
-        BOOST_REQUIRE_MESSAGE(
-            envBytes.has_value(), "case '" << id << "' envelope '" << envRef << "' is not valid hex");
+        BOOST_REQUIRE_MESSAGE(envBytes.has_value(),
+            "case '" << id << "' envelope '" << envRef << "' is not valid hex");
 
         // 5. known_divergence enum (null treated as absent).
         if (c.isMember("known_divergence") && !c["known_divergence"].isNull())
         {
             const std::string kd = c["known_divergence"].asString();
-            BOOST_REQUIRE_MESSAGE(kDivergences.count(kd) == 1,
+            BOOST_REQUIRE_MESSAGE(c_divergences.count(kd) == 1,
                 "case '" << id << "' known_divergence '" << kd << "' not in divergence enum");
         }
 
         // 6. id must carry one of the 7 class prefixes.
         bool classed = false;
-        for (const auto& p : kClassPrefixes)
+        for (const auto& p : c_classPrefixes)
         {
             if (id.rfind(p, 0) == 0)
             {
@@ -162,13 +164,15 @@ BOOST_AUTO_TEST_CASE(GridMeetsSchemaAndCoversSevenClasses)
             }
         }
         BOOST_REQUIRE_MESSAGE(
-            classed, "case '" << id << "' id must start with one of the 7 class prefixes (baseline/max/overflow/pre_isthmus/missing/switch/blob)");
+            classed, "case '" << id
+                              << "' id must start with one of the 7 class prefixes "
+                                 "(baseline/max/overflow/pre_isthmus/missing/switch/blob)");
 
         // 7. 0-byte envelope without flz_zero_clamp is a schema violation.
         if (envBytes->size() == 0)
         {
-            const bool flzClamped =
-                c.isMember("known_divergence") && c["known_divergence"].asString() == "flz_zero_clamp";
+            const bool flzClamped = c.isMember("known_divergence") &&
+                                    c["known_divergence"].asString() == "flz_zero_clamp";
             BOOST_REQUIRE_MESSAGE(flzClamped,
                 "case '" << id << "' references 0-byte envelope '" << envRef
                          << "' without known_divergence=flz_zero_clamp");
@@ -176,7 +180,7 @@ BOOST_AUTO_TEST_CASE(GridMeetsSchemaAndCoversSevenClasses)
     }
 
     // 6. every class present at least once.
-    for (const auto& p : kClassPrefixes)
+    for (const auto& p : c_classPrefixes)
         BOOST_REQUIRE_MESSAGE(seenClasses.count(p) == 1,
             "grid missing class: no case with id prefix '" << p << "'");
 }

@@ -66,7 +66,7 @@ endif()
 add_executable(opstack-executor-block-tests
     TestMain.cpp
     OpDaMatrixSchemaTest.cpp
-    OpDualPathEquivalenceTest.cpp
+    OpSchedulerGoldenReplayTest.cpp
     OpGoldenCorpusProvenanceTest.cpp
     OpKarstActivationTest.cpp
     OpKarstReleaseGateTest.cpp

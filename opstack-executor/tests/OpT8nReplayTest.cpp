@@ -37,10 +37,11 @@
 // DIVERGENCES.md ALLOWLIST tuples (a:PENDING-FIX / c:SIGNED-OFF); dangling
 // entry= or never-hit exemptions = FAILURE.
 
+#include "support/DualRunHarness.h"  // opstack_test::DualRunFixture / MLS / runExecutorPath
+#include "support/SeedPreState.h"
+#include <bcos-codec/rlp/RLPEncode.h>  // variadic list-wrap encode (the 7702 signing message)
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include "support/SeedPreState.h"
-#include "support/DualRunHarness.h"  // opstack_test::DualRunFixture / MLS / runExecutorPath
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <cxxabi.h>
@@ -48,8 +49,9 @@
 #include <fmt/format.h>
 #include <json/json.h>
 #include <opstack-executor/OpEthBlockExecute.h>
-#include <opstack-executor/OpForkSpec.h>
 #include <opstack-executor/OpEthExecutor.h>
+#include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
+#include <opstack-executor/OpForkSpec.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <array>
@@ -62,8 +64,6 @@
 #include <set>
 #include <sstream>
 #include <string>
-#include <bcos-codec/rlp/RLPEncode.h>  // variadic list-wrap encode (the 7702 signing message)
-#include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -427,7 +427,8 @@ public:
         }
         // Mirrors the DIVERGENCES.md "machine format" section verbatim.
         static const std::regex linePattern(
-            R"(<!--\s*ALLOWLIST\s+vectorId=(\S+)\s+field=(\S+)\s+entry=(\S+)\s+attribution=(\S+)\s+status=(\S+)\s+want=(\S+)\s+got=(\S+)\s*-->)");
+            R"(<!--\s*ALLOWLIST\s+vectorId=(\S+)\s+field=(\S+)\s+entry=(\S+)\s+attribution=(\S+))"
+            R"(\s+status=(\S+)\s+want=(\S+)\s+got=(\S+)\s*-->)");
         static const std::regex headingPattern(R"(^##\s+(\S+))");
         std::string line;
         std::set<std::string> headings;
@@ -442,7 +443,7 @@ public:
                     m[7].str()};
                 e.exempt = (e.attribution == "a" && e.status == "PENDING-FIX") ||
                            (e.attribution == "c" && e.status == "SIGNED-OFF");
-                // FINDING-dual-* entries belong to OpDualPathEquivalenceTest's own ledger
+                // FINDING-dual-* entries belong to OpSchedulerGoldenReplayTest's own ledger
                 // instance (A-vs-B harness); this suite's finish() stale-check must not see them.
                 if (e.entryId.rfind("FINDING-dual-", 0) != 0)
                     ledger.m_entries.push_back(std::move(e));
@@ -577,14 +578,13 @@ std::optional<evmc::address> replayRecoverAuthority(const state::Authorization& 
     // shape evmone's rlp::encode(uint256) produced (all-zero encodes as the empty string).
     bcos::bytes msg{bcos::byte{0x05}};
     auto const chainIdBe = intx::be::store<evmc::bytes32>(auth.chain_id);
-    auto const* const chainIdFirst = std::find_if(std::begin(chainIdBe.bytes),
-        std::end(chainIdBe.bytes), [](uint8_t b) { return b != 0; });
+    auto const* const chainIdFirst = std::find_if(
+        std::begin(chainIdBe.bytes), std::end(chainIdBe.bytes), [](uint8_t b) { return b != 0; });
     bcos::codec::rlp::encode(msg,
         bcos::bytesConstRef{reinterpret_cast<const uint8_t*>(chainIdFirst),
             static_cast<size_t>(chainIdBe.bytes + 32 - chainIdFirst)},
         bcos::bytesConstRef{auth.addr.bytes, sizeof(auth.addr.bytes)}, auth.nonce);
-    const auto h =
-        bcos::crypto::keccak256Hash(bcos::bytesConstRef{msg.data(), msg.size()});
+    const auto h = bcos::crypto::keccak256Hash(bcos::bytesConstRef{msg.data(), msg.size()});
     const auto r = intx::be::store<evmc::bytes32>(auth.r);
     const auto s = intx::be::store<evmc::bytes32>(auth.s);
     return evmmax::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.data(), 32},
@@ -1109,8 +1109,8 @@ bcos::task::Task<void> fillTestStateFromStorageInto(StorageT& storage, test::Tes
 /// Read back the current state. The addrs parameter is kept for the callers'
 /// shape but the scan is whole-plane (the retired visitAccounts semantics).
 template <class StorageT>
-void fillTestStateFromStorage(StorageT& storage, test::TestState& ts,
-    const std::set<evmc::address>& addrs)
+void fillTestStateFromStorage(
+    StorageT& storage, test::TestState& ts, const std::set<evmc::address>& addrs)
 {
     (void)addrs;  // whole-plane scan: the reverse-existence check needs accounts in NO set
     bcos::task::syncWait(fillTestStateFromStorageInto(storage, ts));
@@ -1245,7 +1245,7 @@ std::set<std::string> expectedMetaFields(const MetaExpectation& in)
     // Non-deposit: the passthrough trio is unconditional (FIELDMAP §5.1:
     // L1GasUsed 恒发射 on every non-deposit receipt; FISCO Task 4 补算, FIXED 非豁免).
     fields.insert({"l1_gas_price", "l1_gas_used", "l1_fee"});
-    if (in.cfg.has_legacy_l1_formula)  // Bedrock..Delta overhead/scalar formula (OpForkSpec)
+    if (in.cfg.has_legacy_l1_formula)    // Bedrock..Delta overhead/scalar formula (OpForkSpec)
         fields.insert("l1_fee_scalar");  // raw Bedrock slot-6 scalar (DIVERGENCES.md S4 row)
     else
         // Steady-state assumption: an Ecotone block with dead L1 slots also takes the
@@ -1391,8 +1391,7 @@ std::size_t g_metaForkCellsChecked = 0;
 /// storage / ts (chain block i>0). touchedAddrs/touchedSlots are per-block.
 void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     opstack_test::DualRunFixture& fixture, opstack_test::MLS::ViewType& view,
-    evmone::test::TestState& ts, const JsonValue* pre,
-    bool wantPostState, DivergenceLedger& ledger,
+    evmone::test::TestState& ts, const JsonValue* pre, bool wantPostState, DivergenceLedger& ledger,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     bcos::crypto::Hash::Ptr const& hashImpl, bcos::IOServicePool::Ptr const& ioServicePool)
 {
@@ -1780,7 +1779,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     {
         const auto& post = jAt(blk, "postState");
         std::set<evmc::address> postAddrs;
-        static const test::TestAccount kZeroAccount{};
+        static const test::TestAccount c_zeroAccount{};
         for (const auto& addrStr : post.getMemberNames())
         {
             const auto& acc = post[addrStr];
@@ -1789,10 +1788,10 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
             const auto ap = "postState." + hexAddr(addr);
 
             const auto it = ts.find(addr);
-            const test::TestAccount& got = it != ts.end() ? it->second : kZeroAccount;
+            const test::TestAccount& got = it != ts.end() ? it->second : c_zeroAccount;
 
-            ctx.checkField(ap + ".balance", hexU256(parseU256(jAt(acc, "balance"))),
-                hexU256Bcos(got.balance));
+            ctx.checkField(
+                ap + ".balance", hexU256(parseU256(jAt(acc, "balance"))), hexU256Bcos(got.balance));
             ctx.checkField(ap + ".nonce",
                 hexU64(acc.isMember("nonce") ? test::from_json<uint64_t>(jAt(acc, "nonce")) : 0),
                 hexU64(got.nonce));
@@ -2045,12 +2044,12 @@ BOOST_AUTO_TEST_CASE(StructurallyUnrecoverablePredicateBoundaries)
     };
     const intx::uint256 one{1};
     BOOST_CHECK(!structurallyUnrecoverable(mk(0, one, one)));
-    BOOST_CHECK(!structurallyUnrecoverable(mk(1, one, c_secpHalfN)));       // s == N/2 is legal
+    BOOST_CHECK(!structurallyUnrecoverable(mk(1, one, c_secpHalfN)));      // s == N/2 is legal
     BOOST_CHECK(structurallyUnrecoverable(mk(2, one, one)));               // v > 1
-    BOOST_CHECK(structurallyUnrecoverable(mk(0, one, c_secpHalfN + 1)));    // s > N/2
+    BOOST_CHECK(structurallyUnrecoverable(mk(0, one, c_secpHalfN + 1)));   // s > N/2
     BOOST_CHECK(structurallyUnrecoverable(mk(0, intx::uint256{0}, one)));  // r == 0
     BOOST_CHECK(!structurallyUnrecoverable(mk(0, c_secpN - 1, one)));
-    BOOST_CHECK(structurallyUnrecoverable(mk(0, c_secpN, one)));            // r >= N
+    BOOST_CHECK(structurallyUnrecoverable(mk(0, c_secpN, one)));           // r >= N
     BOOST_CHECK(structurallyUnrecoverable(mk(0, one, intx::uint256{0})));  // s == 0
 }
 

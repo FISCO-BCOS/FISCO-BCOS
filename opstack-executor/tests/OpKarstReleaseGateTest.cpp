@@ -1,7 +1,21 @@
-// FISCO BCOS
-// SPDX-License-Identifier: Apache-2.0
-/// @file OpKarstReleaseGateTest.cpp
-/// @brief Release-gate pins for the Karst fork surface (revision and the EIP-7825 deposit exemption).
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpKarstReleaseGateTest.cpp
+ * @brief Release-gate pins for the Karst fork surface (revision and the EIP-7825 deposit
+ *         exemption). */
 
 // OpKarstReleaseGateSuite — Karst cannot ship as a Jovian alias: Osaka + EIP-7825
 // exemption. The production parse accepts any known fork as the timestamp-0
@@ -18,7 +32,7 @@ using bcos::ledger::InvalidOpForkSchedule;
 
 BOOST_AUTO_TEST_SUITE(OpKarstReleaseGateSuite)
 
-BOOST_AUTO_TEST_CASE(KarstConfigIsOsakaWithDepositExemption)
+BOOST_AUTO_TEST_CASE(KarstConfigIsOsaka)
 {
     const auto& spec = op::OP_KARST_SPEC;
     BOOST_CHECK_EQUAL(spec.rev, EVMC_OSAKA);
@@ -46,12 +60,10 @@ BOOST_AUTO_TEST_CASE(ParseRejectsSkippedForkBeforeKarst)
         std::ignore = bcos::ledger::foldOpForkShorthand(300, 1), InvalidOpForkSchedule);
     // holocene -> karst skips isthmus: rejected by the general contiguity rule (the
     // canonical text, validated by validateScheduleRecords on parse).
-    BOOST_CHECK_THROW(
-        std::ignore = bcos::ledger::parseOpForkSchedule("0:holocene,100:karst"),
+    BOOST_CHECK_THROW(std::ignore = bcos::ledger::parseOpForkSchedule("0:holocene,100:karst"),
         InvalidOpForkSchedule);
     // the adjacent chain stays legal
-    BOOST_CHECK_NO_THROW(
-        std::ignore = bcos::ledger::parseOpForkSchedule("0:isthmus,100:karst"));
+    BOOST_CHECK_NO_THROW(std::ignore = bcos::ledger::parseOpForkSchedule("0:isthmus,100:karst"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

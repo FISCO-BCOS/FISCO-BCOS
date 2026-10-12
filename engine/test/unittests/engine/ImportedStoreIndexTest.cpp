@@ -17,9 +17,9 @@
  * @brief Height-index and liveness invariants of the staged import plane's store.
  */
 
+#include "engine/bcos-engine/ImportedStore.h"
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
-#include "engine/bcos-engine/ImportedStore.h"
 
 namespace
 {
@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(SwitchAwayAndBackReindexesLiveOccupant)
 
 // R1: a parent cycle (A.parent=Q, Q.parent=A) below a sparsely-linked head makes
 // the ancestry walk UNDECIDABLE, same as a sparse store — the store must not detach.
-// descendsFromWalkable's guard exhaustion once answered true (fail-open), letting the
+// descendsFrom's guard exhaustion once answered true (fail-open), letting the
 // below-head pass detach a block whose liveness it could not decide; the walk now
 // returns false on exhaustion, mirroring descendsFrom.
 BOOST_AUTO_TEST_CASE(CyclicParentWalkKeepsUndecidableAncestor)

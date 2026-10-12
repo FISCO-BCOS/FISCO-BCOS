@@ -57,7 +57,7 @@ using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
 namespace opeth = bcos::executor_v1::opstack;
 
-// The FISCO OP chain id — the same constant OpSchedulerTest's kChainId pins and the t8n corpus
+// The FISCO OP chain id — the same constant OpSchedulerTest's c_chainId pins and the t8n corpus
 // envelopes embed (8453 = 0x2105).
 inline constexpr uint64_t c_opChainId = 0x2105;
 

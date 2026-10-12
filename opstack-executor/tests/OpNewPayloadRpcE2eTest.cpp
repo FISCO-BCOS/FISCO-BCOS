@@ -576,10 +576,10 @@ void runInvalidVector(std::string const& id)
         // scheduler sibling execution — parked until ReorgUndo lands (OpScheduler.h:550).
         return;
 #ifdef FISCO_REORG_E2E  // Re-enable when SYS_REORG_UNDO / committed-tip sibling reorg lands.
-       // S-DRV-6/7 stage 1: the sibling is a genuinely valid alternative block — op-geth
-       // answers "VALID (side chain)" and so must this engine now (the pre-rollback
-       // engine answered -32603, the parked capability refusal). The VALID commit also
-       // switches the height's canonical slot: SYS_NUMBER_2_HASH must name the sibling.
+        // S-DRV-6/7 stage 1: the sibling is a genuinely valid alternative block — op-geth
+        // answers "VALID (side chain)" and so must this engine now (the pre-rollback
+        // engine answered -32603, the parked capability refusal). The VALID commit also
+        // switches the height's canonical slot: SYS_NUMBER_2_HASH must name the sibling.
         auto params = w6test::makeInvalidParamsJson(sample);
         auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
         auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
@@ -621,12 +621,11 @@ void runInvalidVector(std::string const& id)
         {
             // Discriminating message: this is the newPayload version gate, not any of
             // the other UnsupportedFork producers (no-revision / V2/V3 attrs gates).
-            BOOST_CHECK_EXCEPTION(bcos::task::syncWait(fixture->service.newPayload(
-                                      request, version)),
-                bcos::engine::UnsupportedFork,
-                [](bcos::engine::UnsupportedFork const& e) {
-                    return std::string(e.what())
-                               .find("Isthmus+ payloads require engine_newPayloadV4") !=
+            BOOST_CHECK_EXCEPTION(
+                bcos::task::syncWait(fixture->service.newPayload(request, version)),
+                bcos::engine::UnsupportedFork, [](bcos::engine::UnsupportedFork const& e) {
+                    return std::string(e.what()).find(
+                               "Isthmus+ payloads require engine_newPayloadV4") !=
                            std::string::npos;
                 });
         }
@@ -662,8 +661,8 @@ void runInvalidVector(std::string const& id)
                 // readable back from the ledger plane (SYS_HASH_2_NUMBER).
                 auto probeView = fixture->multiLayerStorage.fork();
                 BOOST_CHECK(bcos::task::syncWait(
-                    bcos::ledger::getBlockNumber(probeView, request.executionPayload.blockHash,
-                        bcos::ledger::fromStorage))
+                    bcos::ledger::getBlockNumber(
+                        probeView, request.executionPayload.blockHash, bcos::ledger::fromStorage))
                                 .has_value());
             }
             else
@@ -676,9 +675,9 @@ void runInvalidVector(std::string const& id)
                 BOOST_CHECK(!importStatus.validationError.has_value());
                 auto probeView = fixture->multiLayerStorage.fork();
                 BOOST_CHECK(!bcos::task::syncWait(
-                    bcos::ledger::getBlockNumber(probeView, request.executionPayload.blockHash,
-                        bcos::ledger::fromStorage))
-                                .has_value());
+                    bcos::ledger::getBlockNumber(
+                        probeView, request.executionPayload.blockHash, bcos::ledger::fromStorage))
+                                 .has_value());
             }
         }
         return;
@@ -761,8 +760,8 @@ void runInvalidVector(std::string const& id)
         // the malformed payload first. The rejection must be InvalidParams —
         // any other code here is a different defect, not this vector's shape.
         BOOST_CHECK_MESSAGE(e.code() == bcos::rpc::JsonRpcError::InvalidParams,
-            id << ": RPC-layer rejection must be InvalidParams (-32602), got code "
-               << e.code() << ": " << e.msg());
+            id << ": RPC-layer rejection must be InvalidParams (-32602), got code " << e.code()
+               << ": " << e.msg());
     }
 }
 
@@ -1264,7 +1263,7 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
             staticItems.count(n), "coverage: static item " << n << " has no vector");
     // Required: full set of validation_error_contains target strings (corrupt fields / static faces
     // / invalid-tx messages)
-    static const char* kRequiredErrors[] = {
+    static const char* c_requiredErrors[] = {
         "stateRoot",
         "gasUsed",
         "receiptsRoot",
@@ -1291,7 +1290,7 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         "empty authorization list",
         "unsupported tx type byte 0x03",
     };
-    for (auto const* s : kRequiredErrors)
+    for (auto const* s : c_requiredErrors)
         BOOST_CHECK_MESSAGE(
             errStrings.count(s), "coverage: validation_error_contains '" << s << "' has no vector");
 }
@@ -1367,8 +1366,7 @@ bcos::ledger::OpForkSchedule isthmusOnlySchedule()
 /// pair 50/6): the same role registerRegolithGenesis plays, for the Isthmus window.
 void registerIsthmusGenesis(OpE2eFixture& fixture, bcos::h256 const& hash)
 {
-    registerRegolithGenesis(
-        fixture, hash, bcos::fromHex("0x000000003200000006"));
+    registerRegolithGenesis(fixture, hash, bcos::fromHex("0x000000003200000006"));
 }
 
 bcos::engine::PayloadAttributes regolithAttrs(std::uint64_t tsMillis, bool noTxPool)
@@ -1418,9 +1416,8 @@ BOOST_AUTO_TEST_CASE(PreIsthmusBuildRejectedAtTheEngineBaseline)
     BOOST_CHECK(built.payloadStatus.validationError.has_value());
     if (built.payloadStatus.validationError)
     {
-        BOOST_CHECK_MESSAGE(
-            built.payloadStatus.validationError->find("requires an Isthmus+ block time") !=
-                std::string::npos,
+        BOOST_CHECK_MESSAGE(built.payloadStatus.validationError->find(
+                                "requires an Isthmus+ block time") != std::string::npos,
             "the baseline rejection must name the Isthmus+ gate, got: "
                 << *built.payloadStatus.validationError);
     }
@@ -1484,13 +1481,12 @@ BOOST_AUTO_TEST_CASE(PreCanyonEngineBuildRejectedAtBaselineGate)
     // The engine-layer assertion reduces to the baseline gate.
     auto const genesis = regolithGenesisHash();
     auto fixture = std::make_unique<OpE2eFixture>(regolithOnlySchedule(),
-        bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 8,
-            .denominatorCanyon = 250});
+        bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 8, .denominatorCanyon = 250});
     registerRegolithGenesis(*fixture, genesis);
     auto attrs = regolithAttrs(1'000, true);
-    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
-        bcos::engine::ForkchoiceState{genesis, genesis, genesis}, &attrs,
-        static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    auto built = bcos::task::syncWait(
+        fixture->service.updateForkchoice(bcos::engine::ForkchoiceState{genesis, genesis, genesis},
+            &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
     BOOST_CHECK(built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Invalid);
     BOOST_REQUIRE(built.payloadStatus.validationError.has_value());
     BOOST_CHECK(built.payloadStatus.validationError->find("requires an Isthmus+ block time") !=
@@ -1816,13 +1812,12 @@ BOOST_AUTO_TEST_CASE(PreHoloceneParentExtraDataIsInertForPricing)
     // declaredEip1559TripleDrivesPreHolocenePricing.
     auto const genesis = regolithGenesisHash();
     auto fixture = std::make_unique<OpE2eFixture>(regolithOnlySchedule(),
-        bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 8,
-            .denominatorCanyon = 250});
+        bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 8, .denominatorCanyon = 250});
     registerRegolithGenesis(*fixture, genesis, bcos::fromHex("0x00000000fa00000006"));
     auto attrs = regolithAttrs(1'000, true);
-    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
-        bcos::engine::ForkchoiceState{genesis, genesis, genesis}, &attrs,
-        static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    auto built = bcos::task::syncWait(
+        fixture->service.updateForkchoice(bcos::engine::ForkchoiceState{genesis, genesis, genesis},
+            &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
     BOOST_CHECK(built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Invalid);
     BOOST_REQUIRE(built.payloadStatus.validationError.has_value());
     BOOST_CHECK(built.payloadStatus.validationError->find("requires an Isthmus+ block time") !=
@@ -1840,15 +1835,15 @@ BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
 
     auto const genesis = regolithGenesisHash();
     auto schedule = [] {
-    bcos::ledger::OpForkSchedule schedule;
-    schedule.m_regolithTime = 0;
-    schedule.m_canyonTime = 0;
-    schedule.m_ecotoneTime = 0;
-    schedule.m_fjordTime = 0;
-    schedule.m_graniteTime = 0;
-    schedule.m_holoceneTime = 0;
-    return schedule;
-}();
+        bcos::ledger::OpForkSchedule schedule;
+        schedule.m_regolithTime = 0;
+        schedule.m_canyonTime = 0;
+        schedule.m_ecotoneTime = 0;
+        schedule.m_fjordTime = 0;
+        schedule.m_graniteTime = 0;
+        schedule.m_holoceneTime = 0;
+        return schedule;
+    }();
     auto fixture = std::make_unique<OpE2eFixture>(schedule, chainTriple);
     registerRegolithGenesis(*fixture, genesis, holoceneShaped);
 
@@ -1909,15 +1904,15 @@ BOOST_AUTO_TEST_CASE(ZeroAttributeParamsSubstituteTheDeclaredPair)
 
     auto const genesis = regolithGenesisHash();
     auto schedule = [] {
-    bcos::ledger::OpForkSchedule schedule;
-    schedule.m_regolithTime = 0;
-    schedule.m_canyonTime = 0;
-    schedule.m_ecotoneTime = 0;
-    schedule.m_fjordTime = 0;
-    schedule.m_graniteTime = 0;
-    schedule.m_holoceneTime = 0;
-    return schedule;
-}();
+        bcos::ledger::OpForkSchedule schedule;
+        schedule.m_regolithTime = 0;
+        schedule.m_canyonTime = 0;
+        schedule.m_ecotoneTime = 0;
+        schedule.m_fjordTime = 0;
+        schedule.m_graniteTime = 0;
+        schedule.m_holoceneTime = 0;
+        return schedule;
+    }();
     auto fixture = std::make_unique<OpE2eFixture>(schedule, declared);
     registerRegolithGenesis(*fixture, genesis, holoceneShaped);
 
@@ -1975,15 +1970,15 @@ BOOST_AUTO_TEST_CASE(ZeroAttributeParamsOnAnUndeclaredNodeUseThePreset)
 
     auto const genesis = regolithGenesisHash();
     auto schedule = [] {
-    bcos::ledger::OpForkSchedule schedule;
-    schedule.m_regolithTime = 0;
-    schedule.m_canyonTime = 0;
-    schedule.m_ecotoneTime = 0;
-    schedule.m_fjordTime = 0;
-    schedule.m_graniteTime = 0;
-    schedule.m_holoceneTime = 0;
-    return schedule;
-}();
+        bcos::ledger::OpForkSchedule schedule;
+        schedule.m_regolithTime = 0;
+        schedule.m_canyonTime = 0;
+        schedule.m_ecotoneTime = 0;
+        schedule.m_fjordTime = 0;
+        schedule.m_graniteTime = 0;
+        schedule.m_holoceneTime = 0;
+        return schedule;
+    }();
     auto fixture = std::make_unique<OpE2eFixture>(schedule);  // no [op_eip1559] declaration
     registerRegolithGenesis(*fixture, genesis, holoceneShaped);
 
@@ -2044,15 +2039,15 @@ BOOST_AUTO_TEST_CASE(NonZeroAttributeParamsAreEchoedOverTheDeclaration)
 
     auto const genesis = regolithGenesisHash();
     auto schedule = [] {
-    bcos::ledger::OpForkSchedule schedule;
-    schedule.m_regolithTime = 0;
-    schedule.m_canyonTime = 0;
-    schedule.m_ecotoneTime = 0;
-    schedule.m_fjordTime = 0;
-    schedule.m_graniteTime = 0;
-    schedule.m_holoceneTime = 0;
-    return schedule;
-}();
+        bcos::ledger::OpForkSchedule schedule;
+        schedule.m_regolithTime = 0;
+        schedule.m_canyonTime = 0;
+        schedule.m_ecotoneTime = 0;
+        schedule.m_fjordTime = 0;
+        schedule.m_graniteTime = 0;
+        schedule.m_holoceneTime = 0;
+        return schedule;
+    }();
     auto fixture = std::make_unique<OpE2eFixture>(schedule, declared);
     registerRegolithGenesis(*fixture, genesis, holoceneShaped);
 
@@ -2286,11 +2281,10 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttributesVersionGate)
         bcos::task::syncWait(fixture->service.updateForkchoice(
             bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
             /*version=*/2)),
-        bcos::engine::UnsupportedFork,
-        [](bcos::engine::UnsupportedFork const& e) {
-            return std::string(e.what())
-                       .find("Isthmus+ payload building requires "
-                             "engine_forkchoiceUpdatedV3") != std::string::npos;
+        bcos::engine::UnsupportedFork, [](bcos::engine::UnsupportedFork const& e) {
+            return std::string(e.what()).find(
+                       "Isthmus+ payload building requires "
+                       "engine_forkchoiceUpdatedV3") != std::string::npos;
         });
 }
 
@@ -2429,7 +2423,8 @@ w6test::InvalidSample forkVectorSample(std::string const& stem)
     return sample;
 }
 
-#ifdef FISCO_REORG_E2E  // Used only by committed-tip sibling reorg cases (parked until SYS_REORG_UNDO).
+// Used only by committed-tip sibling reorg cases (parked until SYS_REORG_UNDO).
+#ifdef FISCO_REORG_E2E
 w6test::InvalidSample forkCanonicalSampleOf(w6test::InvalidSample const& sample)
 {
     w6test::InvalidSample canonical;
