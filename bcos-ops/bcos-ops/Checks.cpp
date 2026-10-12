@@ -16,8 +16,7 @@
  * @file Checks.cpp
  */
 #include "Checks.h"
-#include <algorithm>
-#include <limits>
+#include "Mode.h"
 
 namespace bcos::ops
 {
@@ -61,8 +60,12 @@ std::vector<Check> evaluate(
         checks.push_back(std::move(check));
     }
 
-    // 2. consensus_stable
-    if (!_status.inTimeout)
+    // 2. consensus_stable (EL modes: no PBFT, blocks come from the EL sync / the CL)
+    if (isElMode(_status.mode))
+    {
+        checks.push_back(skipped("consensus_stable", "el mode"));
+    }
+    else if (!_status.inTimeout)
     {
         checks.push_back(skipped("consensus_stable", "inTimeout unknown"));
     }
@@ -107,7 +110,11 @@ std::vector<Check> evaluate(
     }
 
     // 4. quorum_connected
-    if (_status.isConsensusNode && !*_status.isConsensusNode)
+    if (isElMode(_status.mode))
+    {
+        checks.push_back(skipped("quorum_connected", "el mode"));
+    }
+    else if (_status.isConsensusNode && !*_status.isConsensusNode)
     {
         checks.push_back(skipped("quorum_connected", "not a consensus node"));
     }

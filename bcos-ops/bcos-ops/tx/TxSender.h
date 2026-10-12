@@ -22,6 +22,7 @@
 #include "bcos-ops/RpcCall.h"
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <json/json.h>
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
@@ -97,6 +98,15 @@ private:
 /// and hex digits only; OpsError{1} "raw transaction is not hex" otherwise. The CLI's `tx raw`
 /// and the TUI's raw entry share it.
 std::string normalizeRawTxHex(std::string const& _text);
+
+/// an eth_getTransactionReceipt result as a Receipt: status 0 when the receipt says 0x1 (the
+/// FISCO convention the rest of the tool reads), 1 otherwise; quantities decoded from hex
+Receipt receiptFromEth(Json::Value const& _json);
+/// EL modes: eth_sendRawTransaction(0x<hex>) on the web3 listener, then eth_getTransactionReceipt
+/// every _pollMs until a receipt or _waitMs elapsed (or *_stop). Without a receipt the result has
+/// status -1, the tx hash and message "pending"; a refusal throws OpsRpcError
+Receipt sendRawEth(RpcCall const& _web3, std::string const& _hex, int _waitMs, int _pollMs = 500,
+    std::atomic<bool> const* _stop = nullptr);
 
 /// getTransaction + getTransactionReceipt merged: {"transaction": ..., "receipt": ...};
 /// _proof asks the node for txProof / receiptProof
