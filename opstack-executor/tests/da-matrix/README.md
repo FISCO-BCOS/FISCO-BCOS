@@ -82,7 +82,7 @@ checkout silently changes the expected output.
 
 | Source | Local checkout | Pinned commit / version |
 |---|---|---|
-| op-revm | `<optimism monorepo>/rust/op-revm` | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (version 20.0.0) |
+| op-revm | `<optimism monorepo>/rust/op-revm` | goldens generated at `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (version 20.0.0). NOTE: `tools/.ci/check-ci-pins.sh` enforces `5f90f749caea14398554afb75062f7111b1fc554` as the audit-revision for the op-revm oracle — the two pins serve different ends (golden generation vs oracle provenance) and must be reconciled before regenerating either; `Cargo.lock` is committed so a checkout at the generation rev rebuilds the exact dependency tree |
 | contracts-bedrock | `<optimism monorepo>/packages/contracts-bedrock` | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (same optimism monorepo) |
 | op-geth | — (build-tagged) | v1.101702.2 (already recorded above) |
 

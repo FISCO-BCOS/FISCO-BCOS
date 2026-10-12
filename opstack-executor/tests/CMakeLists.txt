@@ -128,6 +128,22 @@ add_test(NAME OpDaMatrixCheck
         --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
         --check fisco --golden ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden)
 
+# The four-source differential: the committed snapshots (fisco/opgeth/oprevm/solidity)
+# compared per grid case on {id, l1_cost, operator_cost}. The fisco end above is a
+# self-check (the runner recomputes its own output against its own golden); this gate
+# is what actually detects FISCO drifting from op-geth/op-revm/solidity. Fails closed
+# on a missing end (compare_snapshots.py refuses to shrink the checked set).
+find_program(DA_MATRIX_PYTHON python3)
+if(DA_MATRIX_PYTHON)
+    add_test(NAME OpDaMatrixSnapshotCheck
+        COMMAND ${DA_MATRIX_PYTHON}
+            ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/compare_snapshots.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden)
+else()
+    message(WARNING "python3 not found: OpDaMatrixSnapshotCheck (the four-source "
+        "differential) will not be registered — only the fisco self-check runs.")
+endif()
+
 # Runtime suite (OpstackExecutorTest.cpp) stays with the web3-model decoupling follow-up.
 # Scheduler execute/commit/call coverage is opstack-executor-scheduler-tests below.
 
