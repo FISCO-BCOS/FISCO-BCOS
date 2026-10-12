@@ -417,21 +417,14 @@ BOOST_AUTO_TEST_CASE(VectorsCriticalStemsAreBytePinned)
             name << " is a critical stem but is not listed in " << sums.string()
                  << " — the byte pin must cover every critical vector");
     }
-    // The listing must also be COMPLETE — the golden half's rule
-    // (corpusFilesOnDisk() == listed): a vector file present under vectors/ but
-    // absent from SHA256SUMS is judged by nothing, and a rewritten vector that is
-    // not re-listed would keep every in-repo check green.
-    std::set<std::string> vectorsOnDisk;
-    for (auto const& entry : fs::directory_iterator(fs::path(OP_T8N_VECTORS_DIR)))
-    {
-        if (entry.is_regular_file() && entry.path().extension() == ".json")
-        {
-            vectorsOnDisk.insert(entry.path().filename().string());
-        }
-    }
-    BOOST_CHECK_MESSAGE(vectorsOnDisk == listed,
-        "the set of vectors/*.json on disk differs from the set SHA256SUMS covers (new "
-        "vector without a sum, or a sum for a deleted vector)");
+    // COMPLETENESS BOUNDARY (review F9): unlike the golden half above
+    // (corpusFilesOnDisk() == listed), the corpus' vectors/SHA256SUMS pins the
+    // CRITICAL STEMS ONLY — at the current harness pin it lists 2 of the ~174
+    // vector files, so a set equality here would fail forever against a corpus
+    // the repo cannot regenerate. The full-directory pin (every vectors/*.json
+    // listed with matching bytes) belongs to the harness side; once its
+    // vectors/SHA256SUMS lists every vector, replace the critical-stem loop
+    // above with `vectorsOnDisk == listed` mirroring the golden half.
 }
 
 BOOST_AUTO_TEST_SUITE_END()

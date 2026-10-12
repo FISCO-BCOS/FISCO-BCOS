@@ -542,7 +542,35 @@ BOOST_AUTO_TEST_CASE(JovianActivationUserTxForsakenOnVerifierLane)
     VerifierFixture probeFixture{probeSchedule};
     probeFixture.prepareGenesis();
 
-    auto const rawTxs = corpusTxs();  // deposit + eip1559 user tx
+    // Blind-spot arrangement, on purpose. The lane has three early rules: the FIRST
+    // envelope must be the L1-attributes-seeding deposit ("no deposit transaction to
+    // seed the block"), the op-gettish JOVIAN SHAPE check inspects only the LAST
+    // envelope (OpEthBlockExecute.h: "unexpected non-deposit transactions in Jovian
+    // activation block"), and only then the schedule-driven activation scan runs
+    // (OpEthBlockSteps.h: "...fork-activation block..."). With the corpus order
+    // [deposit, user] the shape rule rejects first; with [user, deposit] there is no
+    // attrs seed — neither reaches the schedule gate this case exists to pin. Hiding
+    // the user tx between two deposits (the exact blind spot the scan restores) is
+    // the only arrangement in which the "fork-activation" wording below can fire and
+    // the case proves the verifier's parent-fetch wiring.
+    auto const txs = corpusTxs();  // {attrs deposit (isthmus shape), eip1559 user tx}
+    // The attrs deposit must carry the JOVIAN data shape: under the crossing schedule
+    // the pre-block DA-footprint checks (OpEthBlockExecute.h) inspect the attrs
+    // envelope BEFORE the activation scan, and an isthmus-shaped (empty-data) attrs
+    // deposit dies at "L1 attributes transaction data too short for DA footprint gas
+    // scalar" instead of reaching the gate (the idiom is depositWithJovianAttrs() in
+    // OpKarstActivationTest; the pre-Jovian probe ignores the data shape).
+    auto attrs = makeDeposit();
+    attrs.data.assign(opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN, bcos::byte{0});
+    std::memcpy(attrs.data.data(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.data(),
+        opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.size());
+    auto trailingDeposit = makeDeposit();
+    trailingDeposit.sourceHash =
+        0x1111111111111111111111111111111111111111111111111111111111111111_bytes32;
+    trailingDeposit.to =
+        0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001_address;  // back to the depositor: no-op
+    std::vector<bcos::bytes> const rawTxs{opeth::encodeOpEthDepositEnvelope(attrs), txs[1],
+        opeth::encodeOpEthDepositEnvelope(trailingDeposit)};
     auto data = makeEthHeaderBase(/*number=*/1, /*timestampSec=*/2000, /*isthmusShape=*/true);
     auto commitments = probeCommitments(probeFixture, data, rawTxs);
     fillCommitments(data, commitments);
@@ -554,20 +582,13 @@ BOOST_AUTO_TEST_CASE(JovianActivationUserTxForsakenOnVerifierLane)
     f.prepareGenesis();
     auto const block = makeSyncBlock(data, rawTxs);
 
+    std::string thrownWhat;
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
-        bcos::evm::OpConsensusError,
-        // The SCHEDULE-GATE wording, not just the type: both gates translate to
-        // OpConsensusError inside verifyAndCommit (the pre-block activation scan and
-        // the execute-block Jovian shape check), so a type-only predicate cannot tell
-        // whether the verifier's parent-fetch wiring ran. "fork-activation" is the
-        // deposits-only activation gate's wording (OpEthBlockSteps.h); the shape
-        // check's wording ("in Jovian activation block", op-geth rollup_cost.go:574
-        // verbatim — the pair OpKarstActivationTest discriminates) must NOT match
-        // here.
-        [](bcos::evm::OpConsensusError const& e) {
-            auto const w = std::string_view{e.what()};
-            return w.find("fork-activation") != std::string_view::npos;
+        bcos::evm::OpConsensusError, [&](bcos::evm::OpConsensusError const& e) {
+            thrownWhat = e.what();
+            return std::string_view{e.what()}.find("fork-activation") != std::string_view::npos;
         });
+    BOOST_TEST_MESSAGE("JovianActivation gate message: " << thrownWhat);
     // Nothing committed on the verifier under test: head stays at genesis.
     auto view = f.multiLayerStorage.fork();
     auto currentState = bcos::task::syncWait(bcos::storage2::readOne(
