@@ -175,7 +175,7 @@ constexpr std::array c_presets{
     Preset{"committee", "proposal-mgr-address", "", c_committeeManager, "_proposalMgr()", p_none, "address", Access::Anyone, OPS_DIRECT, false},
     // ProposalManager / Committee: addresses read from CommitteeManager each time; the tuple
     // outputs of getProposalInfo* come with the pinned bcos-auth ABI (AuthAbi.h, ticket 04)
-    Preset{"committee", "proposal", "getProposalInfo", c_toProposalMgr, "getProposalInfo(uint256)", p_proposalId, "", Access::Anyone, OPS_DIRECT, false},
+    Preset{"committee", "proposal", "getProposalInfo", c_toProposalMgr, "getProposalInfo(uint256)", p_proposalId, "address,address,uint8,uint256,uint8,address[],address[]", Access::Anyone, OPS_DIRECT, false},
     Preset{"committee", "proposals", "getProposalInfo", c_toProposalMgr, "getProposalInfoList(uint256,uint256)", p_range, "", Access::Anyone, OPS_DIRECT, false},
     Preset{"committee", "proposal-status", "", c_toProposalMgr, "getProposalStatus(uint256)", p_proposalId, "uint8", Access::Anyone, OPS_DIRECT, false},
     Preset{"committee", "proposal-count", "", c_toProposalMgr, "_proposalCount()", p_none, "uint256", Access::Anyone, OPS_DIRECT, false},
