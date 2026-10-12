@@ -162,9 +162,12 @@ scenario_11_payable()
     # value on a non-payable method reverts and moves nothing
     local refused
     refused=$(ops_expect_exit 2 "${node_dir}" tx send "${contract}" --abi "${abi}" inc "unpaid" --value 5 --account "${payer_pem}") || return 1
-    assert_jq "${refused}" '.status != 0' "inc with value reverts" || return 1
+    # solc's CALLVALUE guard is a bare revert: 16 = TransactionStatus::RevertInstruction
+    assert_jq "${refused}" '.status == 16' "inc with value reverts with 16" || return 1
     balance=$(ops "${node_dir}" balance get "${contract}") || return 1
-    assert_jq "${balance}" '.value == "15"' "the refused value stayed with the payer" || return 1
+    assert_jq "${balance}" '.value == "15"' "the contract did not receive the refused value" || return 1
+    balance=$(ops "${node_dir}" balance get "${payer}") || return 1
+    assert_jq "${balance}" '.value == "985"' "the refused value stayed with the payer" || return 1
     echo "scenario 11 ok: Payable at ${contract} holds 15 on ${chain}"
 }
 

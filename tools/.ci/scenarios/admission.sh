@@ -44,6 +44,9 @@ txpool_full_probe()
     extra=$(chain_node_dir "${chain}" "$(chain_node_count "${chain}")")
     [[ -f "${extra}/config.ini" ]] || { scenario_fail "no expanded node at ${extra}"; return 1; }
     bash "${extra}/stop.sh" >/dev/null 2>&1
+    # a rerun on kept nodes (CI_KEEP_NODES) after a failure in this probe must not overwrite the
+    # good backup with the limit=1 copy
+    [[ -f "${extra}/config.ini.scenario15" ]] && mv "${extra}/config.ini.scenario15" "${extra}/config.ini"
     cp "${extra}/config.ini" "${extra}/config.ini.scenario15"
     sed -i.bak 's/^\([[:space:]]*\)limit=[0-9]*/\1limit=1/' "${extra}/config.ini" && rm -f "${extra}/config.ini.bak"
     /usr/bin/grep -q '^[[:space:]]*limit=1$' "${extra}/config.ini" || { scenario_fail "could not set [txpool] limit=1 in ${extra}/config.ini"; return 1; }
@@ -122,7 +125,9 @@ scenario_15_admission()
         heavy=$(ops_expect_exit 2 "${node_dir}" tx deploy "$(cat "$(contract_bin ComplexSol "${chain}")")${c_complex_ctor_args}" --abi "${ctor_abi}") || return 1
         local over_status
         over_status=$(jq_get "${heavy}" '.status')
-        assert_jq "${heavy}" '.status != 0 and (.gasUsed | tonumber) <= 100000' "a creation over the gas limit fails (status ${over_status})" || return 1
+        # 12 = TransactionStatus::OutOfGas (bcos-protocol/bcos-protocol/TransactionStatus.h:38):
+        # the creation runs out of the 100000 the limit allows; observed on every chain
+        assert_jq "${heavy}" '.status == 12 and (.gasUsed | tonumber) <= 100000' "a creation over the gas limit fails with 12 OutOfGas (got ${over_status})" || return 1
         sent=$(ops "${node_dir}" tx send "${contract}" --abi "${abi}" ok) || { echo "${sent}"; return 1; }
         assert_jq "${sent}" '.status == 0 and (.gasUsed | tonumber) < 100000' "a call under the limit still runs" || return 1
         restored=$(ops "${node_dir}" sysconfig set tx_gas_limit "${current}" --yes --account "${governor}") || { echo "${restored}"; return 1; }

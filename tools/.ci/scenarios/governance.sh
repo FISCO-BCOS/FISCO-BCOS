@@ -4,8 +4,8 @@
 #             deploy admission switched to the whitelist through an automatic proposal, a new
 #             account refused and then admitted, a consensus change through a proposal, a
 #             second governor, the vote rates raised so a proposal waits for both votes, and
-#             the proposal list. Ends with the rates back at 0/0 so the scenarios after it
-#             keep auto-executing. New (CI never ran an auth chain before).
+#             the proposal list. Ends with the rates back at 0/0 and deploy admission open
+#             again so the scenarios after it keep auto-executing and deploying. New (CI never ran an auth chain before).
 # @ file    : governance.sh
 
 # gov_write <node_dir> <pem> <args...>: a write through the preset table that must go out as
@@ -138,5 +138,9 @@ scenario_18_auth_governance()
     fi
     info=$(ops "${node_dir}" committee info) || return 1
     assert_jq "${info}" '(.participatesRate | tostring) == "0" and (.winRate | tostring) == "0"' "rates restored to 0/0" || return 1
+    # and deploy admission back to open (type 0): the whitelist admits only accounts opened
+    # explicitly, not even the -a admin, and scenario 17's closing smoke deploys
+    result=$(gov_write "${node_dir}" "${admin}" auth set-deploy-auth-type 0) || return 1
+    assert_jq "${result}" '.ok == true and .proposal.executed == true' "set-deploy-auth-type 0 proposal executed" || return 1
     echo "scenario 18 ok: deploy whitelist, admission, consensus proposal, second governor, two-vote proposal ${proposal_id} on ${chain}"
 }
