@@ -257,7 +257,8 @@ run_chain()
     node0=$(chain_node_dir "${chain}" 0)
     # the ops commands talk to node0 over its unix socket (--node-dir), so the RPC port's
     # TLS setting does not matter
-    local -a scenarios=(scenario_1_rpc_shape scenario_2_hello scenario_4_block_tx scenario_5_sysconfig)
+    local -a scenarios=(scenario_1_rpc_shape scenario_2_hello scenario_4_block_tx scenario_5_sysconfig
+        scenario_8_balance scenario_9_contract_test_all)
     [[ "${chain}" == "nonsm" || "${chain}" == "sm" ]] && scenarios+=(scenario_19_account)
     [[ "${chain}" == "nonsm" ]] && scenarios+=(scenario_20_ops_status)
     local scenario number
