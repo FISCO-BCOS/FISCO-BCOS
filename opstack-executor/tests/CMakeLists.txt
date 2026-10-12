@@ -18,6 +18,7 @@ add_executable(opstack-executor-tests
     SmokeCompileTest.cpp
     OpSchedulerPolicyTest.cpp
     support/SeedPreStateTest.cpp
+    OsakaFixtureManifestTest.cpp
     OpSchedulerSeamSmokeTest.cpp
     OpRollupCostGoldenTest.cpp
     OpL1DataCostTest.cpp
