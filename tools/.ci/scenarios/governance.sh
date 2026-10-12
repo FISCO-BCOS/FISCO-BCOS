@@ -5,7 +5,8 @@
 #             account refused and then admitted, a consensus change through a proposal, a
 #             second governor, the vote rates raised so a proposal waits for both votes, and
 #             the proposal list. Ends with the rates back at 0/0 and deploy admission open
-#             again so the scenarios after it keep auto-executing and deploying. New (CI never ran an auth chain before).
+#             again so the scenarios after it keep auto-executing and deploying.
+#             New (CI never ran an auth chain before).
 # @ file    : governance.sh
 
 # gov_write <node_dir> <pem> <args...>: a write through the preset table that must go out as
@@ -55,7 +56,7 @@ scenario_18_auth_governance()
         "set-deploy-auth-type proposal executed" || return 1
     local deploy_type
     deploy_type=$(ops "${node_dir}" auth deploy-type) || return 1
-    assert_jq "${deploy_type}" '(.decoded | tostring) | test("1")' "deploy-type reads 1 (whitelist)" || return 1
+    assert_jq "${deploy_type}" '(.decoded | if type == "array" then .[0] else . end | tostring) == "1"' "deploy-type reads 1 (whitelist)" || return 1
 
     # a fresh account cannot deploy, then is admitted
     local acct_dir="${node_dir}/../../scenario18-accounts"
@@ -69,11 +70,11 @@ scenario_18_auth_governance()
     assert_jq "${smoke}" '.ok == false and .reason == "auth_denied"' "new account's deploy is refused (auth_denied)" || return 1
     local has_auth
     has_auth=$(ops "${node_dir}" auth has-deploy-auth "${acct_addr}") || return 1
-    assert_jq "${has_auth}" '(.decoded | tostring) | test("false")' "has-deploy-auth false before open" || return 1
+    assert_jq "${has_auth}" '(.decoded | if type == "array" then .[0] else . end | tostring) == "false"' "has-deploy-auth false before open" || return 1
     result=$(gov_write "${node_dir}" "${admin}" auth open-deploy-auth "${acct_addr}") || return 1
     assert_jq "${result}" '.ok == true and .proposal.executed == true' "open-deploy-auth proposal executed" || return 1
     has_auth=$(ops "${node_dir}" auth has-deploy-auth "${acct_addr}") || return 1
-    assert_jq "${has_auth}" '(.decoded | tostring) | test("true")' "has-deploy-auth true after open" || return 1
+    assert_jq "${has_auth}" '(.decoded | if type == "array" then .[0] else . end | tostring) == "true"' "has-deploy-auth true after open" || return 1
     smoke=$(ops "${node_dir}" tx smoke --timeout 60000 --account "${acct}") || return 1
     assert_jq "${smoke}" '.ok == true' "admitted account deploys HelloWorld" || return 1
     local contract

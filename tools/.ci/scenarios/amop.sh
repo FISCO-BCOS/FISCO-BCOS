@@ -8,7 +8,9 @@
 # @ file    : amop.sh
 
 # amop_wait_subscribed <stderr file> <topic> <seconds>: `amop sub` prints "subscribed <topic>"
-# once the node acknowledged the topic
+# right after the SDK's subscribe() returns (AmopCmd.cpp); the SDK's updateTopicsToRemote only
+# queues the topic message and does not wait for the node, so the line means "sent", not
+# "acknowledged" — the publish loop below absorbs the gap
 amop_wait_subscribed()
 {
     local waited=0
@@ -38,16 +40,16 @@ scenario_12_amop()
         rm -rf "${work}"
         return 1
     fi
-    # the node registers the topic before it answers the subscriber, so one publish is enough;
-    # a 3001 (NotFoundPeerByTopicSendMsg) on the first try is retried once
+    # the subscription may not have reached the node yet when "subscribed" is printed: a 3001
+    # (NotFoundPeerByTopicSendMsg) is retried up to 5 times, 1 s apart
     local published attempt rc
-    for attempt in 1 2; do
+    for attempt in 1 2 3 4 5; do
         published=$(ops "${node_dir}" amop pub "${topic}" "${message}" --wait 10) && rc=0 || rc=$?
         if (( rc == 0 )); then
             break
         fi
-        if (( attempt == 1 )) && jq -e '.error.code == 3001' >/dev/null 2>&1 <<<"${published}"; then
-            echo "scenario 12: first publish saw 3001, retrying once"
+        if (( attempt < 5 )) && jq -e '.error.code == 3001' >/dev/null 2>&1 <<<"${published}"; then
+            echo "scenario 12: publish attempt ${attempt} saw 3001, retrying"
             sleep 1
             continue
         fi
@@ -71,7 +73,9 @@ scenario_12_amop()
     local refused
     refused=$(ops_expect_exit 2 "${node_dir}" amop pub "${topic}-nobody" x --wait 5) || { rm -rf "${work}"; return 1; }
     assert_jq "${refused}" '.error.code == 3001' "amop pub without subscriber is refused with 3001" || { rm -rf "${work}"; return 1; }
-    # the subscriber exited after its one message (unsubscribe): the first topic is gone too
+    # the subscriber exited after its one message (unsubscribe): the first topic is gone too.
+    # This relies on the node's onClientDisconnect (bcos-gateway libamop AMOPClient.cpp:423)
+    # dropping the topic before the next `amop pub` process connects; locally that always held
     refused=$(ops_expect_exit 2 "${node_dir}" amop pub "${topic}" "again" --wait 5) || { rm -rf "${work}"; return 1; }
     assert_jq "${refused}" '.error.code == 3001' "amop pub after the subscriber left is refused" || { rm -rf "${work}"; return 1; }
     rm -rf "${work}"
