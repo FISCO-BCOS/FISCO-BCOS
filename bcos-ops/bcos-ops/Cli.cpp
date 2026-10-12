@@ -37,6 +37,7 @@ std::map<std::string, Command>& commandTable()
     // the register functions write through registerCommand → rawTable(), so this one-time
     // initializer never re-enters commandTable()
     static bool const registered = []() {
+        registerAccountCommand();
         registerStatusCommand();
         registerTxCommand();
         registerAttachCommands();

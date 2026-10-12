@@ -17,6 +17,7 @@
  */
 #include "Views.h"
 #include "bcos-ops/Output.h"
+#include "bcos-ops/tui/LogTail.h"
 #include <chrono>
 #include <ftxui/dom/table.hpp>
 
