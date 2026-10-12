@@ -1,0 +1,158 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @brief account files: pem and hex private keys load to the same address, `account new`
+ *        writes files that load back, bad inputs are refused
+ * @file AccountTest.cpp
+ */
+#include "bcos-ops/tx/Account.h"
+#include "bcos-ops/Cli.h"
+#include "bcos-ops/OpsError.h"
+#include "bcos-ops/RpcCall.h"
+#include <bcos-utilities/DataConvertUtility.h>
+#include <unistd.h>
+#include <boost/test/unit_test.hpp>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+
+namespace bcos::ops::test
+{
+namespace
+{
+struct TempDir
+{
+    std::filesystem::path dir;
+    TempDir()
+    {
+        dir = std::filesystem::temp_directory_path() /
+              ("bcos_ops_account_" + std::to_string(::getpid()));
+        std::filesystem::remove_all(dir);
+        std::filesystem::create_directories(dir);
+    }
+    ~TempDir() { std::filesystem::remove_all(dir); }
+    std::string write(std::string const& _name, std::string const& _content)
+    {
+        auto path = (dir / _name).string();
+        std::ofstream out(path);
+        out << _content;
+        return path;
+    }
+};
+
+std::string hexOf(bcos::crypto::KeyPairInterface& _keyPair)
+{
+    return toHex(_keyPair.secretKey()->data());
+}
+}  // namespace
+
+BOOST_AUTO_TEST_SUITE(AccountTest)
+
+BOOST_AUTO_TEST_CASE(generatedPemLoadsBackToTheSameAddress)
+{
+    for (bool sm : {false, true})
+    {
+        TempDir temp;
+        auto keyPair = makeAccount(sm, std::nullopt);
+        auto address = accountAddress(sm, *keyPair);
+        BOOST_CHECK_EQUAL(address.size(), 42U);
+        BOOST_CHECK(address.starts_with("0x"));
+        auto files = writePemKeyPair((temp.dir / "accounts").string(), sm, *keyPair);
+        BOOST_CHECK_EQUAL(
+            files.privateKeyFile, (temp.dir / "accounts" / (address + ".pem")).string());
+        BOOST_CHECK_EQUAL(
+            files.publicKeyFile, (temp.dir / "accounts" / (address + ".public.pem")).string());
+        BOOST_CHECK(std::filesystem::exists(files.privateKeyFile));
+        BOOST_CHECK(std::filesystem::exists(files.publicKeyFile));
+        auto perms = std::filesystem::status(files.privateKeyFile).permissions();
+        BOOST_CHECK(
+            (perms & (std::filesystem::perms::group_all | std::filesystem::perms::others_all)) ==
+            std::filesystem::perms::none);
+        std::ifstream pem(files.privateKeyFile);
+        std::string firstLine;
+        std::getline(pem, firstLine);
+        BOOST_CHECK_EQUAL(firstLine, "-----BEGIN EC PRIVATE KEY-----");
+        auto loaded = makeAccount(sm, files.privateKeyFile);
+        BOOST_CHECK_EQUAL(accountAddress(sm, *loaded), address);
+        BOOST_CHECK_EQUAL(hexOf(*loaded), hexOf(*keyPair));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(hexAndPemGiveTheSameAddress)
+{
+    for (bool sm : {false, true})
+    {
+        TempDir temp;
+        auto keyPair = makeAccount(sm, std::nullopt);
+        auto address = accountAddress(sm, *keyPair);
+        auto hex = hexOf(*keyPair);
+        BOOST_REQUIRE_EQUAL(hex.size(), 64U);
+        auto plain = makeAccount(sm, temp.write("plain.key", hex));
+        auto prefixed = makeAccount(sm, temp.write("prefixed.key", "0x" + hex + "\n"));
+        auto padded = makeAccount(sm, temp.write("padded.key", "  " + hex + "\r\n"));
+        BOOST_CHECK_EQUAL(accountAddress(sm, *plain), address);
+        BOOST_CHECK_EQUAL(accountAddress(sm, *prefixed), address);
+        BOOST_CHECK_EQUAL(accountAddress(sm, *padded), address);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(badInputsAreRefused)
+{
+    TempDir temp;
+    auto keyPair = makeAccount(false, std::nullopt);
+    auto hex = hexOf(*keyPair);
+    BOOST_CHECK_THROW(makeAccount(false, temp.write("short.key", hex.substr(1))), OpsError);
+    BOOST_CHECK_THROW(makeAccount(false, temp.write("nonhex.key", "zz" + hex.substr(2))), OpsError);
+    BOOST_CHECK_THROW(makeAccount(false, temp.write("empty.key", "\n")), OpsError);
+    BOOST_CHECK_THROW(makeAccount(false, temp.write("garbage.pem",
+                                             "-----BEGIN EC PRIVATE KEY-----\nnotbase64\n"
+                                             "-----END EC PRIVATE KEY-----\n")),
+        OpsError);
+    BOOST_CHECK_THROW(makeAccount(false, (temp.dir / "missing.pem").string()), OpsError);
+    BOOST_CHECK_THROW(loadPemPrivateKey(temp.write("hex-as-pem.key", hex)), OpsError);
+}
+
+BOOST_AUTO_TEST_CASE(accountNewCommandWritesBothFiles)
+{
+    for (bool sm : {false, true})
+    {
+        TempDir temp;
+        auto outDir = (temp.dir / "accounts").string();
+        std::ostringstream out;
+        std::ostringstream err;
+        std::vector<std::string> argv = {"fisco-bcos", "account", "new", "--out", outDir, "--json"};
+        if (sm)
+        {
+            argv.push_back("--sm");
+        }
+        BOOST_REQUIRE_EQUAL(runOps(argv, out, err), c_exitOk);
+        auto json = parseJson(out.str(), "account new");
+        auto address = json["address"].asString();
+        BOOST_CHECK_EQUAL(address.size(), 42U);
+        BOOST_CHECK_EQUAL(json["sm"].asBool(), sm);
+        BOOST_CHECK(std::filesystem::exists(json["privateKeyFile"].asString()));
+        BOOST_CHECK(std::filesystem::exists(json["publicKeyFile"].asString()));
+        BOOST_CHECK_EQUAL(json["privateKeyFile"].asString(), outDir + "/" + address + ".pem");
+        auto loaded = makeAccount(sm, json["privateKeyFile"].asString());
+        BOOST_CHECK_EQUAL(accountAddress(sm, *loaded), address);
+    }
+    std::ostringstream out;
+    std::ostringstream err;
+    BOOST_CHECK_EQUAL(runOps({"fisco-bcos", "account", "list"}, out, err), c_exitUsage);
+    BOOST_CHECK(err.str().find("usage: account new") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+}  // namespace bcos::ops::test

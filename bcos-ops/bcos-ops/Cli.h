@@ -46,6 +46,7 @@ struct Command
 /// be linked into fisco-bcos)
 std::map<std::string, Command>& commandTable();
 void registerCommand(std::string _name, Command _command);
+void registerAccountCommand();  // cmd/AccountCmd.cpp
 void registerStatusCommand();   // cmd/StatusCmd.cpp
 void registerTxCommand();       // cmd/TxCmd.cpp
 void registerAttachCommands();  // cmd/AttachCmd.cpp: attach, log-level

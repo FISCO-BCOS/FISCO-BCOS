@@ -26,7 +26,22 @@ namespace bcos::ops
 {
 /// reads an unencrypted EC private key pem (the format build_chain / get_account produce)
 bytes loadPemPrivateKey(std::string const& _path);
-/// random when _pemPath is empty; Secp256k1 or SM2 by _sm
+/// a private key file: PEM when the content starts with "-----BEGIN", otherwise 64 hex
+/// characters with an optional 0x prefix (surrounding whitespace ignored). Throws OpsError{1}.
+bytes loadPrivateKey(std::string const& _path);
+/// random when _keyPath is empty; Secp256k1 or SM2 by _sm; _keyPath as loadPrivateKey
 bcos::crypto::KeyPairInterface::UniquePtr makeAccount(
-    bool _sm, std::optional<std::string> const& _pemPath);
+    bool _sm, std::optional<std::string> const& _keyPath);
+/// 0x-prefixed address: Keccak256 of the public key for secp256k1, SM3 for SM2
+std::string accountAddress(bool _sm, bcos::crypto::KeyPairInterface& _keyPair);
+
+struct PemKeyPairFiles
+{
+    std::string privateKeyFile;  // <dir>/<0xaddr>.pem
+    std::string publicKeyFile;   // <dir>/<0xaddr>.public.pem
+};
+/// writes the key pair in console's accounts/ layout (unencrypted EC private key pem + public
+/// key pem, named by the address); creates _dir when missing. Throws OpsError{1} on I/O failure.
+PemKeyPairFiles writePemKeyPair(
+    std::string const& _dir, bool _sm, bcos::crypto::KeyPairInterface& _keyPair);
 }  // namespace bcos::ops
