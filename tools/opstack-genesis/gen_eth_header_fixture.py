@@ -37,7 +37,13 @@ _build_allocs = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_build_allocs)
 keccak256 = _build_allocs.keccak256
 
-from mpt_state_root import parse_allocs_ini, compute_state_root, compute_storage_root
+_MSR_SPEC = importlib.util.spec_from_file_location(
+    "mpt_state_root", str(Path(__file__).parent / "mpt_state_root.py"))
+_mpt_state_root = importlib.util.module_from_spec(_MSR_SPEC)
+_MSR_SPEC.loader.exec_module(_mpt_state_root)
+parse_allocs_ini = _mpt_state_root.parse_allocs_ini
+compute_state_root = _mpt_state_root.compute_state_root
+compute_storage_root = _mpt_state_root.compute_storage_root
 
 EMPTY_TRIE_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 EMPTY_OMMERS_HASH = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"

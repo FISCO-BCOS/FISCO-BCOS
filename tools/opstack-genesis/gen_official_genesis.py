@@ -144,9 +144,19 @@ def _hex_default(genesis, key, default, zero_is_absent=False):
     value = genesis.get(key)
     if value is None:
         return default
-    if zero_is_absent and value in ("0x0", "0x00", "0", 0):
+    if zero_is_absent and _reads_as_zero(value):
         return default
     return value
+
+
+def _reads_as_zero(value):
+    """True for any zero spelling op-geth's uint64 decode reads as 0: int 0, or a
+    hex/decimal string whose value is 0 ('0', '0x0', '0x00', '0x00000000'...).
+    Non-numeric strings are not zero forms (they surface unchanged, as before)."""
+    try:
+        return int(value, 16) == 0 if isinstance(value, str) else int(value) == 0
+    except (ValueError, TypeError):
+        return False
 
 
 def build_header_fields(genesis, ts0, state_root, present):
