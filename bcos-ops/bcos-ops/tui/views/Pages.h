@@ -24,8 +24,10 @@
 
 #include "bcos-ops/tui/Model.h"
 #include "bcos-ops/tui/Nav.h"
+#include "bcos-ops/tui/SendForm.h"
 #include <cstdint>
 #include <ftxui/dom/elements.hpp>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -37,6 +39,9 @@ struct Frame
     int height = 24;
     int64_t nowMs = 0;           // for "2s ago"; the caller passes the wall clock
     ftxui::Element filterInput;  // the log page's filter box (an Input when interactive)
+    // the send page's Input components by field id ("key", "to", "sig", "value", "raw",
+    // "p0".."p7"); a missing id renders the plain value (snapshots, tests)
+    std::map<std::string, ftxui::Element> inputs;
 };
 
 ftxui::Element renderTopBar(Model const& _model);
@@ -51,7 +56,11 @@ ftxui::Element renderNode(Model const& _model);
 ftxui::Element renderLog(Model const& _model, std::string const& _filter);
 ftxui::Element renderLogPage(
     Model const& _model, Nav const& _nav, Frame const& _frame, std::string const& _filter);
-ftxui::Element renderSend(Model const& _model);
+/// preset tree on the left, the selected entry's form on the right, the last outcome below;
+/// updates _form.tree / featureList page rows and counts
+ftxui::Element renderSend(Model const& _model, SendForm& _form, Frame const& _frame);
+/// the confirmation layer: mode / to / method / params and the Enter / Esc hint
+ftxui::Element renderSendConfirm(SendForm const& _form);
 ftxui::Element renderHelp(Model const& _model);
 /// maps the row indexes Nav pushed into stable keys (block height, tx hash) using the explorer
 /// rows and the cached block details; a tx opened from a block whose detail is not loaded yet
@@ -65,8 +74,8 @@ ftxui::Element renderDetail(Model const& _model, Nav& _nav, Frame const& _frame)
 /// `Error(string)` revert reason of a receipt output, or empty
 std::string detailRevertReason(std::string const& _outputHex);
 /// top bar + page (or detail) + bottom bar, with the help layer over it when open
-ftxui::Element renderFrame(
-    Model const& _model, Nav& _nav, Frame const& _frame, std::string const& _filter);
+ftxui::Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame,
+    std::string const& _filter, SendForm* _form = nullptr);
 
 // helpers shared by the pages (also used by the tests)
 std::string ageText(int64_t _ms);
