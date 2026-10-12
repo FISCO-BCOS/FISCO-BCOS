@@ -834,7 +834,10 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // empty defaults (the node's header-version detection keys off field
         // presence, so an active fork's fields must be emitted consistently).
         auto forkActiveAtGenesis = [&](uint64_t forkTime) {
-            return forkTime != kNever && timestamp >= u256(forkTime);
+            // timestamp is range-checked above (<= int64 max / 1000), and the
+            // shared predicate maps forkTime 0 -> active and UINT64_MAX (kNever)
+            // -> inactive, exactly the two cases this call site distinguishes.
+            return bcos::protocol::isForkActive(forkTime, static_cast<int64_t>(timestamp));
         };
         std::optional<u256> baseFee, blobGasUsed, excessBlobGas;
         std::optional<crypto::HashType> withdrawalsHash, beaconRoot, requestsHash;
