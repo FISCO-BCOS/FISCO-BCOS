@@ -330,11 +330,14 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     header->setExtraData(payload.extraData);
     header->setPrevRandao(payload.prevRandao);
     header->setBaseFee(payload.baseFeePerGas);
-    // Fork-optional fields are stamped only when the payload carries them: a pre-Canyon
-    // (Regolith) build has no withdrawalsRoot/blob pair, and a bare .value() on the
-    // absent optional escapes as std::bad_optional_access — the Regolith-window e2e
-    // build path hit exactly this. Isthmus+ payloads always carry the trio, so the
-    // golden-pinned 21-field form is unchanged.
+    // Fork-optional fields are stamped only when the payload carries them: a pre-Isthmus
+    // (Regolith..Holocene) build has no withdrawalsRoot, and a bare .value() on the absent
+    // optional escapes as std::bad_optional_access — the Regolith-window e2e build path hit
+    // exactly this. The blob pair, by contrast, is wire-mandatory on the OP path (the
+    // request validator above requires it present and zero), so those two guards are
+    // belt-and-braces rather than fork-gated: they stay so this helper is safe for any
+    // caller, not only the validated import/build paths. Isthmus+ payloads always carry
+    // the trio, so the golden-pinned 21-field form is unchanged.
     if (payload.withdrawalsRoot.has_value())
     {
         header->setWithdrawalsRoot(*payload.withdrawalsRoot);
