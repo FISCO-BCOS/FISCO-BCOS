@@ -97,7 +97,7 @@ bool confirmWrite(Args const& _args, std::ostream& _out, Preset const& _preset,
         {"method", std::string(_preset.signature)}, {"params", params}};
     if (!_proposalMethod.empty())
     {
-        rows.emplace_back("proposal", _proposalMethod);
+        rows.emplace_back("note", _proposalMethod);
     }
     printRows(_out, rows);
     _out << "proceed? [y/N] " << std::flush;
@@ -168,9 +168,13 @@ int runWritePreset(Connection const& _connection, Args const& _args, std::ostrea
     runner.setRouting(routing);
     bool viaProposal = runner.routesThroughProposal(_preset);
     auto const* committeePreset = viaProposal ? PresetRunner::proposalPreset(_preset) : nullptr;
-    if (!confirmWrite(_args, _out, _preset, std::string(_preset.to), _params,
+    // the confirmation shows what is really sent: on the proposal path that is the committee
+    // address with the proposal's arguments, not the precompiled call it stands in for
+    if (!confirmWrite(_args, _out, viaProposal ? *committeePreset : _preset,
+            std::string(viaProposal ? committeePreset->to : _preset.to),
+            viaProposal ? runner.proposalArgs(_preset, _params) : _params,
             viaProposal ? "proposal" : "direct",
-            committeePreset != nullptr ? std::string(committeePreset->signature) : ""))
+            viaProposal ? "stands in for " + std::string(_preset.signature) : ""))
     {
         _out << "aborted\n";
         return c_exitUsage;

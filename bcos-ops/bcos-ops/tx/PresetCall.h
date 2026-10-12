@@ -53,9 +53,14 @@ struct ProposalOutcome
     bool executed = false;
     std::optional<int32_t> execCode;
     std::string execCodeName;
-    Json::Value info;  // getProposalInfo decoded: resource/proposer/type/interval/status/voters
+    Json::Value info;  // getProposalInfo decoded: resource/proposer/type/expiresAtBlock/status/
+                       // voters (the absolute block the proposal expires at)
     Json::Value toJson() const;
 };
+/// getProposalInfo's decoded tuple → the info object above (resourceId, proposer,
+/// proposalType, expiresAtBlock, status, agreeVoters, againstVoters); shared by the runner and
+/// `committee proposals`
+Json::Value proposalInfoJson(Json::Value const& _fields);
 std::string proposalStatusName(int _status);
 
 struct PresetResult
@@ -80,8 +85,17 @@ struct Routing
 {
     bool proposals = false;  // chainUsesProposals(): committee-only writes become proposals
     bool direct = false;     // --direct: call the precompiled even on an auth chain
-    std::optional<int64_t> interval;  // --interval; default current height + 1000 blocks
+    std::optional<int64_t> interval;  // --interval: blocks from now; default c_proposalInterval
 };
+
+/// blockNumberInterval of a proposal is a count of blocks from the creating block:
+/// ProposalManager.sol:102 stores `block.number + blockNumberInterval` and :63 expires the
+/// proposal once `block.number` passes that sum. 1000 blocks keeps a multi-governor vote open
+/// for a while without an RPC round trip.
+constexpr int64_t c_proposalInterval = 1000;
+/// the interval a proposal is created with: _routing.interval when given (must be >= 1,
+/// OpsError{1} otherwise), else c_proposalInterval. The one place that rule lives.
+int64_t proposalInterval(Routing const& _routing);
 
 /// the reason of a solidity-style revert: output `Error(string)` (selector 0x08c379a0) decoded;
 /// "" when the output is not one (BalancePrecompiled and reverted contracts fail this way,
@@ -96,7 +110,7 @@ PresetResult decodePresetResult(Preset const& _preset, Receipt const& _receipt, 
 class PresetRunner
 {
 public:
-    /// _call / _group are only needed for the proposal path (default blockNumberInterval)
+    /// _call / _group are only needed for the proposal path (ProposalManager lookups)
     PresetRunner(Sender& _sender, bool _sm, RpcCall _call = {}, std::string _group = "")
       : m_sender(_sender), m_sm(_sm), m_call(std::move(_call)), m_group(std::move(_group))
     {}
@@ -106,8 +120,8 @@ public:
     bool routesThroughProposal(Preset const& _preset) const;
     /// the committee preset that stands in for _preset on an auth chain (nullptr when none)
     static Preset const* proposalPreset(Preset const& _preset);
-    /// _preset.proposal->args expanded: `$N` → _args[N], `$interval` → the routing interval or
-    /// current height + 1000, literals kept
+    /// _preset.proposal->args expanded: `$N` → _args[N], `$interval` → proposalInterval(),
+    /// literals kept
     std::vector<std::string> proposalArgs(
         Preset const& _preset, std::vector<std::string> const& _args) const;
     /// _to overrides the preset's `to` (sentinels, HelloWorld address); write presets are sent,

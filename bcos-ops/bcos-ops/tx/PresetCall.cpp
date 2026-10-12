@@ -71,7 +71,6 @@ std::map<int32_t, std::string> const c_codeNames = {
     {-51907, "INVALID_REVOKE_LAST_AUTHORIZATION"},
 };
 
-constexpr int64_t c_defaultProposalInterval = 1000;  // spec §5.1.4: current height + 1000
 
 /// the SDK renders integer outputs as decimal strings ("-51104"); accept numbers too
 std::optional<int32_t> codeOf(Json::Value const& _value)
@@ -191,6 +190,35 @@ std::string proposalStatusName(int _status)
     default:
         return "unknown";
     }
+}
+
+int64_t proposalInterval(Routing const& _routing)
+{
+    if (!_routing.interval)
+    {
+        return c_proposalInterval;
+    }
+    if (*_routing.interval < 1)
+    {
+        // the contract adds it to block.number; 0 expires at the creating block and a negative
+        // value wraps through u256 into a huge number
+        throw OpsError(c_exitUsage,
+            "--interval must be >= 1 (blocks from now), got " + std::to_string(*_routing.interval));
+    }
+    return *_routing.interval;
+}
+
+Json::Value proposalInfoJson(Json::Value const& _fields)
+{
+    Json::Value value;
+    value["resourceId"] = _fields.get(0U, "");
+    value["proposer"] = _fields.get(1U, "");
+    value["proposalType"] = _fields.get(2U, "");
+    value["expiresAtBlock"] = _fields.get(3U, "");  // block.number + interval at creation
+    value["status"] = _fields.get(4U, "");
+    value["agreeVoters"] = _fields.get(5U, Json::Value(Json::arrayValue));
+    value["againstVoters"] = _fields.get(6U, Json::Value(Json::arrayValue));
+    return value;
 }
 
 Json::Value ProposalOutcome::toJson() const
@@ -364,23 +392,7 @@ std::vector<std::string> PresetRunner::proposalArgs(
             grammar.substr(start, end == std::string::npos ? std::string::npos : end - start);
         if (token == "$interval")
         {
-            int64_t interval = 0;
-            if (m_routing.interval)
-            {
-                interval = *m_routing.interval;
-            }
-            else
-            {
-                if (!m_call)
-                {
-                    throw OpsError(c_exitUsage, "proposal interval needs --interval or an RPC");
-                }
-                Json::Value params(Json::arrayValue);
-                params.append(m_group);
-                params.append("");
-                interval = m_call("getBlockNumber", params).asInt64() + c_defaultProposalInterval;
-            }
-            out.push_back(std::to_string(interval));
+            out.push_back(std::to_string(proposalInterval(m_routing)));
         }
         else if (token.size() > 1 && token[0] == '$')
         {
@@ -412,8 +424,14 @@ std::string PresetRunner::proposalManagerAddress()
         auto result = runCall(*row, {}, "");
         if (!result.ok || !result.decoded.isArray() || result.decoded.empty())
         {
+            // TransactionStatus::CallAddressError (19): nothing deployed at 0x…10001, which is
+            // what a chain without auth (no AuthInitializer genesis step) looks like
+            std::string hint =
+                result.receipt.status == 19 ?
+                    " (no committee at " + std::string(row->to) + ": not an auth chain?)" :
+                    "";
             throw OpsError(c_exitUsage, "CommitteeManager._proposalMgr() failed: status " +
-                                            std::to_string(result.receipt.status));
+                                            std::to_string(result.receipt.status) + hint);
         }
         m_proposalMgr = result.decoded[0].asString();
     }
@@ -435,14 +453,7 @@ ProposalOutcome PresetRunner::proposalOutcome(std::string const& _id, Receipt co
     auto info = runCall(*findPreset("committee", "proposal"), {_id}, manager);
     if (info.ok && info.decoded.isArray())
     {
-        Json::Value const& fields = info.decoded;
-        outcome.info["resourceId"] = fields.get(0U, "");
-        outcome.info["proposer"] = fields.get(1U, "");
-        outcome.info["proposalType"] = fields.get(2U, "");
-        outcome.info["blockNumberInterval"] = fields.get(3U, "");
-        outcome.info["status"] = fields.get(4U, "");
-        outcome.info["agreeVoters"] = fields.get(5U, Json::Value(Json::arrayValue));
-        outcome.info["againstVoters"] = fields.get(6U, Json::Value(Json::arrayValue));
+        outcome.info = proposalInfoJson(info.decoded);
     }
     // CommitteeManager.voteProposal emits execResult(int256) with the precompiled's return
     // code when the vote passes; it is the only place that code surfaces (the receipt is ok)

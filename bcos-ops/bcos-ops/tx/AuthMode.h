@@ -27,7 +27,8 @@
 
 namespace bcos::ops
 {
-/// one getSystemConfigByKey; a JSON-RPC error (the key was never set) falls back to _nodeDir
+/// one getSystemConfigByKey; only error 3008 (no row: genesis before 3.3) falls back to _nodeDir,
+/// other RPC errors propagate
 bool chainUsesProposals(
     RpcCall const& _call, std::string const& _group, std::optional<NodeDir> const& _nodeDir);
 /// per-command cache of chainUsesProposals for the Connection

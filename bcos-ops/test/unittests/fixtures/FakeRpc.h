@@ -66,8 +66,9 @@ public:
         groupList["groupList"] = Json::Value(Json::arrayValue);
         groupList["groupList"].append("group0");
         m_results["getGroupList"] = groupList;
-        // a fresh chain has never stored auth_check_status / feature flags: the node answers
-        // getSystemConfigByKey with LedgerError::GetStorageError (Ledger.cpp)
+        // a key that was never stored (feature flags; auth_check_status only on a chain whose
+        // genesis predates 3.3, Ledger.cpp:2220-2226 writes it since) answers
+        // getSystemConfigByKey with LedgerError::GetStorageError 3008
         m_failures["getSystemConfigByKey"] = {3008, "getSystemConfig failed for empty entry"};
     }
 
