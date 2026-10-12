@@ -22,6 +22,7 @@
 
 #include "bcos-ops/RpcCall.h"
 #include <json/json.h>
+#include <atomic>
 #include <cstdint>
 #include <deque>
 #include <map>
@@ -91,14 +92,19 @@ size_t explorerCapacity(int _terminalRows);
 BlockRow blockRowFromJson(Json::Value const& _block);
 /// block order preserved (first tx of the block first)
 std::vector<TxRow> txRowsFromBlock(Json::Value const& _block);
-/// fetches (lastFetchedHeight, _height] with getBlockByNumber [group,"",n,false,false]; the
-/// first call back-fills _state.capacity blocks; at most 50 per call (older ones are skipped and
-/// the oldest fetched row carries gapBelow); a failing RPC keeps what was fetched so far
-void explorerFetch(
-    ExplorerState& _state, RpcCall const& _call, std::string const& _group, int64_t _height);
-/// getTransactionReceipt for the rows [_first, _first + _count) that have no status yet
+/// fetches (lastFetchedHeight, _height] with getBlockByNumber [group,"",n,false,false]; at most
+/// 50 blocks per call: when more are new the oldest fetched row carries gapBelow; the rows the
+/// first open could not fetch within the budget are back-filled on later calls (newest first,
+/// until capacity) as long as the list has no gap. A height below lastFetchedHeight (restart
+/// from a snapshot, reorg) clears the rows and starts over. A failing RPC keeps what was
+/// fetched so far. _stop (the refresher's flag) is checked before every RPC.
+void explorerFetch(ExplorerState& _state, RpcCall const& _call, std::string const& _group,
+    int64_t _height, std::atomic<bool> const* _stop = nullptr);
+/// getTransactionReceipt for the rows [_first, _first + _count) that have no status yet; a
+/// JSON-RPC error on one hash (receipt not written yet) moves on to the next row, a transport
+/// error stops the pass
 void explorerFetchStatus(ExplorerState& _state, RpcCall const& _call, std::string const& _group,
-    size_t _first, size_t _count);
+    size_t _first, size_t _count, std::atomic<bool> const* _stop = nullptr);
 /// getBlockByNumber / getBlockByHash [group,"",x,false,false] into blockDetails; false when
 /// the RPC fails (nothing cached, retried on the next round)
 bool explorerFetchBlockDetail(
@@ -111,7 +117,7 @@ bool explorerFetchTxDetail(ExplorerState& _state, RpcCall const& _call, std::str
     std::string const& _hash);
 /// fetches every want that is not cached yet (or still pending)
 void explorerFetchWanted(ExplorerState& _state, RpcCall const& _call, std::string const& _group,
-    std::vector<DetailWant> const& _wants);
+    std::vector<DetailWant> const& _wants, std::atomic<bool> const* _stop = nullptr);
 std::optional<int64_t> lastBlockAgeMs(ExplorerState const& _state, int64_t _nowMs);
 /// mean interval over the newest min(_lastN + 1, blocks) rows; gaps are averaged across
 std::optional<int64_t> avgIntervalMs(ExplorerState const& _state, size_t _lastN = 20);

@@ -62,6 +62,7 @@ NavAction navOpen(Nav& _nav)
             ref.kind = DetailKind::block;
             ref.number =
                 static_cast<int64_t>(_nav.blocks.selected);  // row index; resolved by the renderer
+            _nav.detailTxs.selected = 0;
         }
         else
         {
@@ -177,6 +178,10 @@ NavAction navHandle(Nav& _nav, ftxui::Event _event)
             }
         }
         return NavAction::none;
+    }
+    if (_event == Event::CtrlC)
+    {
+        return NavAction::quit;  // the terminal's interrupt: no layer may swallow it
     }
     if (_nav.help)
     {

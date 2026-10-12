@@ -244,6 +244,64 @@ BOOST_AUTO_TEST_CASE(detailCacheIsBounded)
     BOOST_CHECK(state.blockDetails.contains(17));
 }
 
+BOOST_AUTO_TEST_CASE(stopFlagEndsAFetchBeforeTheNextRpc)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 40, 1);
+    tui::ExplorerState state;
+    state.capacity = 20;
+    std::atomic<bool> stop{true};
+    tui::explorerFetch(state, rpc.call(), "group0", 40, &stop);
+    BOOST_CHECK(state.blocks.empty());
+    BOOST_CHECK_EQUAL(rpc.calls().size(), 0U);
+    stop = false;
+    tui::explorerFetch(state, rpc.call(), "group0", 40, &stop);
+    BOOST_CHECK_EQUAL(state.blocks.size(), 20U);
+    stop = true;
+    auto before = rpc.calls().size();
+    tui::explorerFetchStatus(state, rpc.call(), "group0", 0, 5, &stop);
+    BOOST_CHECK_EQUAL(rpc.calls().size(), before);
+}
+
+BOOST_AUTO_TEST_CASE(aLowerHeightStartsOverAndOlderRowsBackFillLater)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 120, 0);
+    tui::ExplorerState state;
+    state.capacity = 80;
+    tui::explorerFetch(state, rpc.call(), "group0", 120);  // first open: 50 of 80 wanted
+    BOOST_CHECK_EQUAL(state.blocks.size(), 50U);
+    BOOST_CHECK_EQUAL(state.blocks.back().number, 71);
+    tui::explorerFetch(state, rpc.call(), "group0", 120);  // nothing new: back-fills 30 more
+    BOOST_CHECK_EQUAL(state.blocks.size(), 80U);
+    BOOST_CHECK_EQUAL(state.blocks.back().number, 41);
+    BOOST_CHECK_EQUAL(state.blocks.front().number, 120);
+    for (size_t i = 1; i < state.blocks.size(); ++i)
+    {
+        BOOST_CHECK_EQUAL(state.blocks[i - 1].number, state.blocks[i].number + 1);
+    }
+    tui::explorerFetch(state, rpc.call(), "group0", 10);  // restarted from a snapshot: reset
+    BOOST_CHECK_EQUAL(state.blocks.front().number, 10);
+    BOOST_CHECK_EQUAL(state.blocks.size(), 11U);
+    BOOST_CHECK_EQUAL(state.lastFetchedHeight, 10);
+}
+
+BOOST_AUTO_TEST_CASE(aMissingReceiptDoesNotBlockTheNextRows)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 2, 2);
+    tui::ExplorerState state;
+    state.capacity = 20;
+    tui::explorerFetch(state, rpc.call(), "group0", 2);
+    BOOST_REQUIRE_EQUAL(state.txs.size(), 6U);
+    rpc.fail("getTransactionReceipt", 3006, "not found");  // the default answer: JSON-RPC error
+    rpc.setFor("getTransactionReceipt", 2, state.txs[1].hash, fakeReceipt(state.txs[1].hash, 0, 2));
+    tui::explorerFetchStatus(state, rpc.call(), "group0", 0, 3);
+    BOOST_CHECK_EQUAL(state.txs[0].status, -1);
+    BOOST_CHECK_EQUAL(state.txs[1].status, 0);  // reached although the first one failed
+    BOOST_CHECK_EQUAL(state.txs[2].status, -1);
+}
+
 BOOST_AUTO_TEST_CASE(refresherFillsTheExplorerAndAuthFlag)
 {
     FakeRpc rpc;
