@@ -97,6 +97,12 @@ constexpr int64_t c_proposalInterval = 1000;
 /// OpsError{1} otherwise), else c_proposalInterval. The one place that rule lives.
 int64_t proposalInterval(Routing const& _routing);
 
+/// _preset.proposal->args expanded against _args with the interval of _routing: `$N` →
+/// _args[N], `$interval` → proposalInterval(_routing), literals kept. The runner and the TUI's
+/// confirmation layer share it.
+std::vector<std::string> proposalArgsFor(
+    Preset const& _preset, std::vector<std::string> const& _args, Routing const& _routing);
+
 /// the reason of a solidity-style revert: output `Error(string)` (selector 0x08c379a0) decoded;
 /// "" when the output is not one (BalancePrecompiled and reverted contracts fail this way,
 /// the receipt's message stays empty)
