@@ -35,4 +35,21 @@ struct OpsError : public std::runtime_error
     {}
     int exitCode;
 };
+
+/// a JSON-RPC `error` member: the node refused the request (a txpool admission rejection carries
+/// the protocol::TransactionStatus value as `code`). Exit code 1 like every other OpsError so
+/// callers that do not care keep their behaviour; tx commands catch it to print the code.
+struct OpsRpcError : public OpsError
+{
+    OpsRpcError(std::string _method, int _code, std::string _message)
+      : OpsError(
+            c_exitUsage, _method + " failed: code=" + std::to_string(_code) + " msg=" + _message),
+        method(std::move(_method)),
+        code(_code),
+        message(std::move(_message))
+    {}
+    std::string method;
+    int code;
+    std::string message;
+};
 }  // namespace bcos::ops

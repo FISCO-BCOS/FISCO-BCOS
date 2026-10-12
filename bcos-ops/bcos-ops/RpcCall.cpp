@@ -51,9 +51,8 @@ Json::Value parseJsonRpcResponse(std::string_view _body, std::string_view _metho
     if (response.isMember("error") && !response["error"].isNull())
     {
         auto const& error = response["error"];
-        throw OpsError(c_exitUsage,
-            std::string(_method) + " failed: code=" + std::to_string(error.get("code", 0).asInt()) +
-                " msg=" + error.get("message", "").asString());
+        throw OpsRpcError(std::string(_method), error.get("code", 0).asInt(),
+            error.get("message", "").asString());
     }
     return response["result"];
 }
