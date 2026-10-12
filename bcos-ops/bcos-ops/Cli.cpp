@@ -38,6 +38,8 @@ std::map<std::string, Command>& commandTable()
     // initializer never re-enters commandTable()
     static bool const registered = []() {
         registerAccountCommand();
+        registerConsensusCommand();
+        registerSysconfigCommand();
         registerStatusCommand();
         registerTxCommand();
         registerAttachCommands();
