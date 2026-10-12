@@ -26,6 +26,8 @@
 
 namespace bcos::test
 {
+// ccache warm-cache probe: this comment only touches a low-impact test fixture header so a
+// re-push exercises a near-full cache hit (only this header's users recompile).
 /// A pool whose submitTransaction always throws the Error it was built with, so a case about what
 /// an RPC face does with a throwing pool takes microseconds instead of the pool's own timing. The
 /// code is the point of the parameter: submitTransaction answers a refusal and a fault with the

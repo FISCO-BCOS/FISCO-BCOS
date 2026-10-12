@@ -159,6 +159,9 @@ jobs:
         run: |
           cd build
           cmake --build .
+      - name: ccache stats
+        if: matrix.os != 'windows-2025'
+        run: ccache --show-stats
       - name: Test
         if: matrix.os != 'windows-2025'
         run: |
@@ -402,6 +405,8 @@ jobs:
         run: |
           cd build
           cmake --build . --parallel 3
+      - name: ccache stats
+        run: ccache --show-stats
       - name: Run tests
         run: |
           cd build
@@ -555,6 +560,8 @@ jobs:
         run: |
           cd build
           cmake --build .
+      - name: ccache stats
+        run: ccache --show-stats
       - name: Run L2 unit suites
         run: |
           cd build

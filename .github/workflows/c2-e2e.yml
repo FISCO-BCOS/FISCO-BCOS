@@ -160,6 +160,9 @@ jobs:
       - name: Build fisco-bcos
         run: cmake --build build --target fisco-bcos
 
+      - name: ccache stats
+        run: ccache --show-stats
+
       - name: Fetch pinned Solidity deps
         run: bash tools/.ci/fetch-l2-contract-deps.sh
 
