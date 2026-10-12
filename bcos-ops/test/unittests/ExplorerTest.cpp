@@ -187,6 +187,63 @@ BOOST_AUTO_TEST_CASE(receiptStatusIsFetchedLazilyForVisibleRows)
     BOOST_CHECK_EQUAL(state.txs[7].status, 0);
 }
 
+BOOST_AUTO_TEST_CASE(detailsAreFetchedOnDemandAndCached)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 5, 2);
+    rpc.setFor("getBlockByHash", 2, fakeHash(4), fakeBlock(4, 2));
+    tui::ExplorerState state;
+    BOOST_CHECK(tui::explorerFetchBlockDetail(state, rpc.call(), "group0", 3));
+    BOOST_REQUIRE(state.blockDetails.contains(3));
+    BOOST_CHECK_EQUAL(state.blockDetails[3]["transactions"].size(), 2U);
+    BOOST_CHECK(tui::explorerFetchBlockDetailByHash(state, rpc.call(), "group0", fakeHash(4)));
+    BOOST_CHECK(state.blockDetails.contains(4));
+    rpc.remove("getBlockByNumber");  // drop the fixture's default header: unknown heights fail
+    BOOST_CHECK(!tui::explorerFetchBlockDetail(state, rpc.call(), "group0", 99));  // no block
+    BOOST_CHECK(!state.blockDetails.contains(99));
+    // the flag order of the detail call: full transactions, not hashes
+    auto const& last = rpc.calls().back();
+    BOOST_CHECK_EQUAL(last.first, "getBlockByNumber");
+    BOOST_CHECK_EQUAL(last.second[3].asBool(), false);
+    BOOST_CHECK_EQUAL(last.second[4].asBool(), false);
+
+    auto hash = fakeHash(301, 't');
+    Json::Value tx;
+    tx["hash"] = hash;
+    tx["from"] = "0x3f12";
+    rpc.setFor("getTransaction", 2, hash, tx);
+    BOOST_CHECK(!tui::explorerFetchTxDetail(state, rpc.call(), "group0", hash));  // no receipt
+    BOOST_REQUIRE(state.txDetails.contains(hash));
+    BOOST_CHECK(state.txDetails[hash].pending);
+    rpc.setFor("getTransactionReceipt", 2, hash, fakeReceipt(hash, 0, 3));
+    auto before = rpc.calls().size();
+    tui::explorerFetchWanted(state, rpc.call(), "group0", {{false, -1, hash}});  // pending: again
+    BOOST_CHECK(rpc.calls().size() > before);
+    BOOST_CHECK(!state.txDetails[hash].pending);
+    BOOST_CHECK_EQUAL(state.txDetails[hash].receipt["status"].asInt(), 0);
+    before = rpc.calls().size();
+    tui::explorerFetchWanted(
+        state, rpc.call(), "group0", {{false, -1, hash}, {true, 3, ""}});  // cached: no calls
+    BOOST_CHECK_EQUAL(rpc.calls().size(), before);
+    tui::explorerFetchWanted(state, rpc.call(), "group0", {{true, -1, fakeHash(4)}});
+    BOOST_CHECK_EQUAL(rpc.calls().size(), before);  // by hash, already cached under 4
+}
+
+BOOST_AUTO_TEST_CASE(detailCacheIsBounded)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 100, 0);
+    tui::ExplorerState state;
+    for (int64_t n = 0; n <= 80; ++n)
+    {
+        tui::explorerFetchBlockDetail(state, rpc.call(), "group0", n);
+    }
+    BOOST_CHECK_EQUAL(state.blockDetails.size(), tui::c_explorerDetailCache);
+    BOOST_CHECK(!state.blockDetails.contains(0));
+    BOOST_CHECK(state.blockDetails.contains(80));
+    BOOST_CHECK(state.blockDetails.contains(17));
+}
+
 BOOST_AUTO_TEST_CASE(refresherFillsTheExplorerAndAuthFlag)
 {
     FakeRpc rpc;

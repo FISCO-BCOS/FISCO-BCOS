@@ -24,6 +24,7 @@
 #include <json/json.h>
 #include <cstdint>
 #include <deque>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -49,17 +50,41 @@ struct TxRow
     int64_t blockNumber = -1;
 };
 
+/// getTransaction + getTransactionReceipt of one hash; pending while the node has no receipt
+/// yet (a tx this session just sent), re-fetched each round until it lands
+struct TxDetail
+{
+    Json::Value transaction;
+    Json::Value receipt;
+    bool pending = false;
+};
+
+/// what the detail pages currently show, so the refresher fetches exactly those
+struct DetailWant
+{
+    bool block = true;    // false: a transaction
+    int64_t number = -1;  // block number
+    std::string hash;     // tx hash, or the block hash when number < 0
+};
+
 struct ExplorerState
 {
     std::deque<BlockRow> blocks;  // newest first
     std::deque<TxRow> txs;        // newest first
     int64_t lastFetchedHeight = -1;
     size_t capacity = 20;
+    // on-demand detail cache, bounded to c_explorerDetailCache entries each (oldest fetched
+    // dropped first; the *Order deques remember the insertion order)
+    std::map<int64_t, Json::Value> blockDetails;  // full block with transactions, by number
+    std::map<std::string, TxDetail> txDetails;    // by 0x hash
+    std::deque<int64_t> blockDetailOrder;
+    std::deque<std::string> txDetailOrder;
 };
 
 constexpr size_t c_explorerMinRows = 20;
 constexpr size_t c_explorerMaxRows = 200;
 constexpr int64_t c_explorerMaxFetchPerRound = 50;
+constexpr size_t c_explorerDetailCache = 64;
 
 /// max(terminal rows, 20) capped at 200
 size_t explorerCapacity(int _terminalRows);
@@ -74,6 +99,19 @@ void explorerFetch(
 /// getTransactionReceipt for the rows [_first, _first + _count) that have no status yet
 void explorerFetchStatus(ExplorerState& _state, RpcCall const& _call, std::string const& _group,
     size_t _first, size_t _count);
+/// getBlockByNumber / getBlockByHash [group,"",x,false,false] into blockDetails; false when
+/// the RPC fails (nothing cached, retried on the next round)
+bool explorerFetchBlockDetail(
+    ExplorerState& _state, RpcCall const& _call, std::string const& _group, int64_t _number);
+bool explorerFetchBlockDetailByHash(ExplorerState& _state, RpcCall const& _call,
+    std::string const& _group, std::string const& _hash);
+/// getTransaction + getTransactionReceipt into txDetails; a missing receipt or a failing RPC
+/// stores a pending entry (the view shows "pending") that is fetched again next round
+bool explorerFetchTxDetail(ExplorerState& _state, RpcCall const& _call, std::string const& _group,
+    std::string const& _hash);
+/// fetches every want that is not cached yet (or still pending)
+void explorerFetchWanted(ExplorerState& _state, RpcCall const& _call, std::string const& _group,
+    std::vector<DetailWant> const& _wants);
 std::optional<int64_t> lastBlockAgeMs(ExplorerState const& _state, int64_t _nowMs);
 /// mean interval over the newest min(_lastN + 1, blocks) rows; gaps are averaged across
 std::optional<int64_t> avgIntervalMs(ExplorerState const& _state, size_t _lastN = 20);

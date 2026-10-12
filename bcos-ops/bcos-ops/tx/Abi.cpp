@@ -88,6 +88,12 @@ std::string Abi::decodeOutput(
         [&]() { return makeCodec(m_sm).decodeMethodOutput(_abi, _method, _output); });
 }
 
+std::string Abi::decodeInputBySignature(std::string const& _signature, bytes const& _input) const
+{
+    return guarded("decode input of " + _signature,
+        [&]() { return makeCodec(m_sm).decodeMethodInputByMethodSig(_signature, _input); });
+}
+
 std::string argsToJsonArray(std::vector<std::string> const& _args)
 {
     Json::Value array(Json::arrayValue);

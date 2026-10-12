@@ -123,6 +123,10 @@ void Refresher::runOnce()
         auto visible = m_visibleTxs ? m_visibleTxs() : std::make_pair(size_t(0), c_explorerMinRows);
         explorerFetchStatus(
             explorer, m_connection.call, m_connection.group, visible.first, visible.second);
+        if (m_detailWants)
+        {
+            explorerFetchWanted(explorer, m_connection.call, m_connection.group, m_detailWants());
+        }
         std::lock_guard<std::mutex> lock(m_model.mutex);
         m_model.status = std::move(status);
         m_model.checks = std::move(checks);
