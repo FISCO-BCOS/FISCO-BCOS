@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <ftxui/dom/elements.hpp>
 #include <string>
+#include <vector>
 
 namespace bcos::ops::tui
 {
@@ -52,10 +53,17 @@ ftxui::Element renderLogPage(
     Model const& _model, Nav const& _nav, Frame const& _frame, std::string const& _filter);
 ftxui::Element renderSend(Model const& _model);
 ftxui::Element renderHelp(Model const& _model);
-/// the top of the detail stack (block / tx / proposal); the row index in DetailRef is resolved
-/// against the explorer rows. Ticket 14 fills the bodies; this draws the header and keeps
-/// _nav.detailTxs sized to the block's transactions
+/// maps the row indexes Nav pushed into stable keys (block height, tx hash) using the explorer
+/// rows and the cached block details; a tx opened from a block whose detail is not loaded yet
+/// stays unresolved until the next render
+void resolveDetailRefs(Nav& _nav, ExplorerState const& _explorer);
+/// the block / tx details the open stack needs from the refresher
+std::vector<DetailWant> detailWants(Nav const& _nav);
+/// the top of the detail stack (block / tx / proposal) full screen; keeps _nav.detailTxs sized
+/// to the block's transactions
 ftxui::Element renderDetail(Model const& _model, Nav& _nav, Frame const& _frame);
+/// `Error(string)` revert reason of a receipt output, or empty
+std::string detailRevertReason(std::string const& _outputHex);
 /// top bar + page (or detail) + bottom bar, with the help layer over it when open
 ftxui::Element renderFrame(
     Model const& _model, Nav& _nav, Frame const& _frame, std::string const& _filter);
