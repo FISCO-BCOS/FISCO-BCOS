@@ -1,9 +1,11 @@
 #!/bin/bash
 # "Copyright [2026] <fisco-bcos>"
-# @ function: the console / java-sdk / java-sdk-demo integration suites on fresh chains at
-#             the default ports (their configs hard-code 127.0.0.1:20200), run after the
-#             native scenarios by ci_check_air.sh while both coexist; deleted with the second
-#             phase of the native suite (spec 2026-10-12 §5.4.4).
+# @ function: the java-sdk integration suite on fresh chains at the default ports (its config
+#             hard-codes 127.0.0.1:20200), run after the native scenarios by ci_check_air.sh
+#             while both coexist, plus the web3 (Hardhat) suite on the executor-v1 chain. The
+#             console and java-sdk-demo suites were replaced by the native scenarios
+#             1/2/4/5/8/9 (tools/.ci/README.md); this script goes with the second phase of
+#             the native suite (spec 2026-10-12 §5.4.4).
 # @ file    : java_legacy_air.sh
 ci_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 console_branch="master"
@@ -13,9 +15,8 @@ current_path=`pwd`
 node_list="node0"
 expanded_node="node3"
 check_web3_test="false"
-# 导出环境变量给子脚本使用：SKIP_BUILD=跳过下载构建，RUN_DMC=运行DMC转账测试
+# 导出环境变量给子脚本使用：SKIP_BUILD=跳过下载构建
 export SKIP_BUILD="false"
-export RUN_DMC="false"
 LOG_ERROR() {
     local content=${1}
     echo -e "\033[31m ${content}\033[0m"
@@ -194,38 +195,11 @@ clear_node()
     fi
 }
 
-# 预构建所有测试依赖（console/java-sdk/java-sdk-demo），只需执行一次
+# 预构建 java-sdk，只需执行一次
 prebuild_deps()
 {
     cd ${current_path}
-    LOG_INFO "======== Prebuilding test dependencies (one-time) ========"
-
-    # 预构建 console
-    LOG_INFO "Prebuilding console..."
-    if [ ! -d "console/.git" ]; then
-        rm -rf console
-        git clone --depth 1 https://github.com/FISCO-BCOS/console.git
-        cd console
-        if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
-            git checkout origin/${console_branch}
-        fi
-    else
-        cd console
-        git fetch --all --depth 1 || { LOG_ERROR "git fetch failed for console"; exit 1; }
-        git reset --hard
-        rm -rf build log
-        if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
-            git checkout origin/${console_branch}
-        else
-            git checkout origin/master
-        fi
-    fi
-    bash gradlew build -x test 2>&1 | tail -3
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then
-        LOG_ERROR "gradlew build failed for console"
-        exit 1
-    fi
-    cd ${current_path}
+    LOG_INFO "======== Prebuilding java-sdk (one-time) ========"
 
     # 预构建 java-sdk
     LOG_INFO "Prebuilding java-sdk..."
@@ -254,33 +228,6 @@ prebuild_deps()
     fi
     cd ${current_path}
 
-    # 预构建 java-sdk-demo
-    LOG_INFO "Prebuilding java-sdk-demo..."
-    if [ ! -d "java-sdk-demo/.git" ]; then
-        rm -rf java-sdk-demo
-        git clone --depth 1 https://github.com/FISCO-BCOS/java-sdk-demo.git
-        cd java-sdk-demo
-        if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
-            git checkout origin/${console_branch}
-        fi
-    else
-        cd java-sdk-demo
-        git fetch --all --depth 1 || { LOG_ERROR "git fetch failed for java-sdk-demo"; exit 1; }
-        git reset --hard
-        rm -rf build log
-        if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
-            git checkout origin/${console_branch}
-        else
-            git checkout origin/master
-        fi
-    fi
-    bash gradlew build -x test 2>&1 | tail -3
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then
-        LOG_ERROR "gradlew build failed for java-sdk-demo"
-        exit 1
-    fi
-    cd ${current_path}
-
     export SKIP_BUILD="true"
     LOG_INFO "======== Prebuild dependencies done, SKIP_BUILD=true ========"
 }
@@ -298,17 +245,9 @@ prebuild_deps
 
 # ============ 阶段2：non-sm 测试（含扩容）============
 LOG_INFO "======== check non-sm case ========"
-export RUN_DMC="false"
 init ""
 expand_node ""
 check_consensus
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} != "0" ]]; then
-    echo "console_integrationTest error"
-    exit 1
-fi
-LOG_INFO "console_integrationTest success"
-
 bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "java_sdk_integrationTest error"
@@ -316,29 +255,14 @@ if [[ ${?} != "0" ]]; then
 fi
 LOG_INFO "java_sdk_integrationTest success"
 
-# java-sdk-demo 依赖 console 构建产物，串行执行
-bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} != "0" ]]; then
-    echo "java_sdk_demo_ci_test error"
-    exit 1
-fi
-LOG_INFO "java_sdk_demo_ci_test success"
 LOG_INFO "======== check non-sm success ========"
 clear_node
 
-# ============ 阶段3：sm 国密测试（扩容、不跑DMC）============
+# ============ 阶段3：sm 国密测试（扩容）============
 LOG_INFO "======== check sm case ========"
-export RUN_DMC="false"
 init "-s"
 expand_node "-s"
 check_consensus
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} != "0" ]]; then
-    echo "console_integrationTest error"
-    exit 1
-fi
-LOG_INFO "console_integrationTest success"
-
 bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "java_sdk_integrationTest error"
@@ -346,28 +270,14 @@ if [[ ${?} != "0" ]]; then
 fi
 LOG_INFO "java_sdk_integrationTest success"
 
-bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} != "0" ]]; then
-    echo "java_sdk_demo_ci_test error"
-    exit 1
-fi
-LOG_INFO "java_sdk_demo_ci_test success"
 LOG_INFO "======== check sm case success ========"
 clear_node
 
 # ============ 阶段4：baseline 测试（executor v1）============
 LOG_INFO "======== check baseline cases ========"
-export RUN_DMC="false"
 init_baseline ""
 expand_node ""
 check_consensus
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} != "0" ]]; then
-    echo "console_integrationTest error"
-    exit 1
-fi
-LOG_INFO "console_integrationTest success"
-
 bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "java_sdk_integrationTest error"
@@ -375,43 +285,36 @@ if [[ ${?} != "0" ]]; then
 fi
 LOG_INFO "java_sdk_integrationTest success"
 
-bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
-if [[ ${?} != "0" ]]; then
-    echo "java_sdk_demo_ci_test error"
-    exit 1
-fi
-LOG_INFO "java_sdk_demo_ci_test success"
 
 if [[ ${check_web3_test} == "true" ]]; then
     LOG_INFO "======== check web3 test ========"
-    cp ${current_path}/nodes/127.0.0.1/sdk/* ${current_path}/console/dist/conf/
-    rm -rf ${current_path}/console/dist/account/ecdsa/*
-    cp ${current_path}/nodes/ca/accounts/* ${current_path}/console/dist/account/ecdsa/
-    cd "${current_path}/console/dist/"
-    account=$(bash console.sh listAccount | grep "current account" | awk -F '(' '{print $1}')
-    # Console RPC calls can time out on overloaded runners ("waiting for message
-    # response timed out", code -4008). Retry each setup call and fail fast,
-    # otherwise the web3 suite surfaces the skipped tx_gas_price=1 setting as a
-    # cryptic gasPrice assertion failure minutes later.
-    console_with_retry() {
+    # the hardhat suite signs with the admin account build_chain generated into nodes/ca/accounts
+    # (the console used the same pem through its account dir); fund it and set tx_gas_price
+    # with the node's own subcommands over node0's unix socket (console addBalance /
+    # setSystemConfigByKey before, with retries against -4008 timeouts)
+    web3_node="${current_path}/nodes/127.0.0.1/node0"
+    web3_pem=$(ls ${current_path}/nodes/ca/accounts/0x*.pem | grep -v public | head -n 1)
+    web3_account=$(basename "${web3_pem}" .pem)
+    ops_with_retry() {
         local output attempt rc
         for attempt in 1 2 3; do
-            # check the exit code too: console.sh can fail without printing a
-            # recognizable error marker (e.g. java launcher errors)
-            output=$(bash console.sh "$@" 2>&1) && rc=0 || rc=$?
-            if [[ ${rc} -eq 0 && "${output}" != *'"code":-'* && "${output}" != *"timed out"* ]]; then
+            output=$("${fisco_bcos_path}" "$@" --node-dir "${web3_node}" --yes --json 2>&1) && rc=0 || rc=$?
+            if [[ ${rc} -eq 0 ]]; then
                 return 0
             fi
-            LOG_WARN "console.sh $* attempt ${attempt} failed (rc=${rc}), retrying in 10s..."
+            LOG_WARN "fisco-bcos $* attempt ${attempt} failed (rc=${rc}): ${output}; retrying in 10s..."
             sleep 10
         done
-        LOG_ERROR "console.sh $* failed after 3 attempts: ${output}"
+        LOG_ERROR "fisco-bcos $* failed after 3 attempts: ${output}"
         exit 1
     }
-    console_with_retry addBalance "${account}" 200 ether
-    console_with_retry setSystemConfigByKey tx_gas_price 1
+    ops_with_retry balance enable --account "${web3_pem}"
+    # 200 ether, the console's `addBalance <account> 200 ether`
+    # quoted: the ops argument parser reads a bare 21-digit number as a JSON double (2e+20)
+    ops_with_retry balance add "${web3_account}" '"200000000000000000000"' --account "${web3_pem}"
+    ops_with_retry sysconfig set tx_gas_price 0x1 --account "${web3_pem}"
     cd ${current_path}
-    bash ${current_path}/.ci/web3_test.sh "${current_path}/console/dist/account/ecdsa/${account}.pem"
+    bash ${current_path}/.ci/web3_test.sh "${web3_pem}"
     if [[ ${?} == "0" ]]; then
         LOG_INFO "web3 test success"
     else

@@ -1,6 +1,6 @@
 # Air 集成测试：原生场景与 Java 用例对照
 
-`ci_check_air.sh` 用分支自己的 `fisco-bcos` 二进制起四条链并行跑 `scenarios/*.sh` 里的原生场景（ops 子命令 + `jq` 断言），再按 `RUN_JAVA` 跑一轮 `java_legacy_air.sh`（console / java-sdk / java-sdk-demo，沿用旧流程）。两期之后 Java 套件删除（spec `docs/superpowers/specs/2026-10-12-ops-explorer-tui-governance-native-ci.md` §5.4.4）。
+`ci_check_air.sh` 用分支自己的 `fisco-bcos` 二进制起四条链并行跑 `scenarios/*.sh` 里的原生场景（ops 子命令 + `jq` 断言），再按 `RUN_JAVA` 跑一轮 `java_legacy_air.sh`（只剩 java-sdk 与 v1 链上的 web3/Hardhat 套件，沿用旧流程）。第一期已删除 console 与 java-sdk-demo 的 clone/构建/测试脚本（`console_ci_test.sh`、`java_sdk_demo_ci_test.sh`）；第二期删除 java-sdk 与 JDK（spec `docs/superpowers/specs/2026-10-12-ops-explorer-tui-governance-native-ci.md` §5.4.4）。`ci_check_pro.sh` / `ci_check_baseline.sh` 仍引用已删的 `console_ci_test.sh`，但 workflow 不再调用它们，第二期一并删除。
 
 ## 四条链
 
@@ -13,9 +13,9 @@
 
 每条链一个后台子 shell，日志在 `logs/<chain>.log`；任一链失败，主脚本打印该链日志尾 200 行、每个节点的 error/warn 行与 nohup，退出 1。ops 命令通过 `--node-dir` 走 `node0/data/fisco-bcos.ipc`，与 RPC 端口的 TLS 无关（CI 链保持 `enable_ssl=true`）。
 
-## Java 套件为何仍串行跑在默认端口
+## java-sdk 套件为何仍串行跑在默认端口
 
-`console_ci_test.sh` / `java_sdk_ci_test.sh` / `java_sdk_demo_ci_test.sh` 把 `nodes/127.0.0.1/sdk` 的证书拷进各自配置，并把 `peers` 固定成 `127.0.0.1:20200`（`console_ci_test.sh:72`、`java_sdk_ci_test.sh:86`、`java_sdk_demo_ci_test.sh:124/163`）。它们没有端口参数，所以 Java 阶段不能并行跑在四条链上：原生阶段清链后，`java_legacy_air.sh` 按旧脚本原样在 20200 上依次起 nonsm / sm / v1 三条链跑 Java 用例。这段在第二期随 Java 退场一起删除。
+`java_sdk_ci_test.sh` 把 `nodes/127.0.0.1/sdk` 的证书拷进配置，并把 `peers` 固定成 `127.0.0.1:20200`（`java_sdk_ci_test.sh:86`）。它没有端口参数，所以不能并行跑在四条链上：原生阶段清链后，`java_legacy_air.sh` 在 20200 上依次起 nonsm / sm / v1 三条链跑 java-sdk 用例；v1 链最后跑 `web3_test.sh`，它签名用 build_chain 生成的 `nodes/ca/accounts` 管理员 pem，充值（200 ether）与 `tx_gas_price 0x1` 改由 `balance enable` / `balance add` / `sysconfig set` 经 node0 的 socket 完成（过去是 console `addBalance` / `setSystemConfigByKey`）。这段在第二期随 java-sdk 退场一起删除。
 
 ## 本机运行
 
@@ -61,7 +61,8 @@ SM 链需要 `~/.fisco/tassl`；`jq` 必装；bash ≥ 4（`declare -A`、`${x,,
 | console | `ConsoleClientTest.clientWithParamsTest:211-215` | getSystemConfigByKey tx_gas_limit ≥ 0 | `scenario_5_sysconfig` (`scenarios/sysconfig.sh`) | `sysconfig set` 后 `get` 读回值与 `enableNumber` | 四链 |
 | java-sdk | `PrecompiledTest.test3SystemConfigService:160-195` | setValueByKey tx_count_limit / tx_gas_limit(当前值+1) 后读回 | `scenario_5_sysconfig` | 同上；auth 链 `--direct` 为 `NO_AUTHORIZED` 退出 2，提案路径 `mode=proposal`、`statusName=passed`、`executed=true` | auth 链不改 tx_gas_limit，见下 |
 | java-sdk-demo | `java_sdk_demo_ci_test.sh contract_test:227-254` | console `setSystemConfigByKey feature_balance 1`、`feature_balance_precompiled 1`、`addBalance <account> 10000000000` | `scenario_8_balance` (`scenarios/balance.sh`) | `balance enable` 后 `sysconfig features` 两个 flag 为 true；`balance add 1000` → `get` 1000 → `transfer 300` → 700（治理账户 ≥ 300）→ `sub 200` → 500；`list-caller` 含治理账户；非 caller 的 `add` 退出 2、status ≠ 0 | 四链；治理账户 = auth 链的 `-a` 账户 / 其他链 build_chain 生成的 `ca/accounts` 管理员（创世 `auth_admin_account`，开启 feature 时登记为 caller）；auth 链两次写走提案 |
-| — | 旧 `ci_check_air.sh:402-427` console `addBalance <account> 200 ether` 充值 | web3 测试账户有余额 | `scenario_8_balance` + `java_legacy_air.sh` 的 web3 段 | 同上 | 第二期删除 Java 段时充值改由 `balance add` 完成 |
+| — | 旧 `ci_check_air.sh:402-427` console `addBalance <account> 200 ether`、`setSystemConfigByKey tx_gas_price 1` | web3 测试账户有余额、gas price 为 1 | `java_legacy_air.sh` web3 段的 `ops_with_retry balance enable / balance add / sysconfig set tx_gas_price 0x1` | 命令退出 0（三次重试） | 已切换；v1 链 |
+| console | `WelcomeInfoTest` 等 console 自身的单测 | console 启动/欢迎页 | 不替代 | — | console 自测，不在节点 CI 范围 |
 | java-sdk-demo | `java_sdk_demo_ci_test.sh check_all_contract:179-213` | console `deploy ContractTestAll`（SM 链换 ECRecoverSMTest）、区块 gasUsed ≠ 0、`addBalance <contract> 10000000`、`call ContractTestAll check` status 0；`contract_test` 在 `feature_dmc2serial` 开启后再跑一遍 | `scenario_9_contract_test_all` (`scenarios/contracts.sh`) | `tx deploy contracts/ContractTestAll/ContractTestAll[.sm].bin` status 0、部署块 gasUsed > 0、`balance add <contract> 10000000` ok、`tx send check` status 0 且 `logEntries` 非空（14 个子合约各发 Info 事件）、所在块 gasUsed > 0；`sysconfig set feature_dmc2serial 1` 后同样一轮 | 四链；deploy/check 用 `--timeout 180000`（check() 烧约 7e8 gas，auth 链 15 s 默认超时不够） |
 | java-sdk-demo | `check_all_dmc_transfer`（`RUN_DMC=true` 才跑，CI 从不开） | DMC 转账压测 | 不替代 | — | 性能用例，不在节点正确性 CI 范围 |
 | — | 新增（替代 console `get_account.sh` / `get_gm_account.sh`） | — | `scenario_19_account` (`scenarios/account.sh`) | `account new [--sm]` 两个文件存在；用它 `tx smoke` 成功；`tx get` 的 `from` 等于打印地址 | nonsm / sm |
