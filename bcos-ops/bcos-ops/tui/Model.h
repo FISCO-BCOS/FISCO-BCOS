@@ -22,6 +22,7 @@
 #include "bcos-ops/Checks.h"
 #include "bcos-ops/NodeStatus.h"
 #include "bcos-ops/log/LogParser.h"
+#include "bcos-ops/tui/Explorer.h"
 #include "bcos-ops/tx/Smoke.h"
 #include <json/json.h>
 #include <deque>
@@ -43,6 +44,10 @@ struct Model
     std::deque<Event> logTail;
     std::string source;
     std::string error;  // last refresh failure; empty after a success
+    ExplorerState explorer;
+    bool authChain = false;     // getGroupInfo isAuthCheck: the gov page exists
+    std::string mode = "none";  // [ethereum].mode: none / el / opstack-el (ticket 17)
+    std::string keyAddress;     // loaded signing key, shown in the top bar (ticket 15)
     int64_t lastRefreshMs = 0;
     int refreshInSeconds = 0;
     // smoke
