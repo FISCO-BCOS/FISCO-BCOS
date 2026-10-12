@@ -76,7 +76,7 @@ Element renderNode(Model const& _model)
     {
         for (auto& cell : row)
         {
-            cell += "  ";
+            cell = sanitizeForTerminal(cell) + "  ";  // version / chainId come from the node
         }
     }
     Table identityTable(identity);
@@ -96,7 +96,7 @@ Element renderNode(Model const& _model)
     {
         for (auto& cell : row)
         {
-            cell += "  ";
+            cell = sanitizeForTerminal(cell) + "  ";  // peer ids and hashes come from the node
         }
     }
     Table peerTable(peers);

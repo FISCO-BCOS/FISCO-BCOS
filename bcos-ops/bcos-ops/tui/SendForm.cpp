@@ -392,17 +392,34 @@ std::vector<std::pair<std::string, std::string>> sendConfirmRows(
         {
             order = _request.features;
         }
+        // flags the page already read as on are skipped by enableFeatures; they are not steps
         std::string params;
-        for (size_t i = 0; i < order.size(); ++i)
+        size_t steps = 0;
+        std::string skipped;
+        for (auto const& name : order)
         {
-            params += (i == 0 ? "" : ", ") + order[i] + "=1";
+            auto state = std::find_if(_context.features.begin(), _context.features.end(),
+                [&](FeatureState const& f) { return f.name == name; });
+            if (state != _context.features.end() && state->enabled)
+            {
+                skipped += (skipped.empty() ? "" : ", ") + name;
+                continue;
+            }
+            params += (steps++ == 0 ? "" : ", ") + name + "=1";
         }
         auto const* preset = findPreset("sysconfig", "set");
         bool viaProposal = PresetRunner::routesThroughProposal(_request.routing, *preset);
         auto const* committee = viaProposal ? PresetRunner::proposalPreset(*preset) : nullptr;
-        rows = {{"mode", viaProposal ? "proposal" : "direct"}, {"to", std::string(preset->to)},
-            {"method", std::string(preset->signature)},
-            {"params", std::to_string(order.size()) + " step(s): " + params}};
+        // what is sent: one createSetSysConfigProposal per flag to the committee in proposal
+        // mode, one setValueByKey per flag to 0x…1000 otherwise
+        auto const* sent = committee != nullptr ? committee : preset;
+        rows = {{"mode", viaProposal ? "proposal" : "direct"}, {"to", std::string(sent->to)},
+            {"method", std::string(sent->signature)},
+            {"params", std::to_string(steps) + " step(s): " + params}};
+        if (!skipped.empty())
+        {
+            rows.emplace_back("already on", skipped);
+        }
         if (committee != nullptr)
         {
             rows.emplace_back("note", std::string(committee->signature) + " stands in for " +
@@ -646,6 +663,12 @@ SendAction govFormHandle(
     if (_context.busy)
     {
         _form.notice = "a request is still running";
+        return SendAction::redraw;
+    }
+    if (_context.proposalStatus != 1)
+    {
+        _form.notice = "proposal is not voting (" + proposalStatusName(_context.proposalStatus) +
+                       "): nothing to vote on or revoke";
         return SendAction::redraw;
     }
     SendRequest request;

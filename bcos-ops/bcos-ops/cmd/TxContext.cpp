@@ -154,6 +154,10 @@ void printPresetResult(std::ostream& _out, PresetResult const& _result, bool _js
     {
         auto const& proposal = *_result.proposal;
         rows.emplace_back("proposal", proposal.id + " " + proposal.statusName);
+        if (!proposal.error.empty())
+        {
+            rows.emplace_back("proposal error", proposal.error);
+        }
         rows.emplace_back("executed", proposal.executed ? "yes" : "no");
         if (proposal.execCode)
         {

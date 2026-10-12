@@ -74,6 +74,7 @@ struct SendContext
     bool featuresLoaded = false;
     std::vector<FeatureState> features;
     bool busy = false;
+    int proposalStatus = 1;  // the open proposal's status (gov detail); 1 = voting
 };
 
 struct SendForm

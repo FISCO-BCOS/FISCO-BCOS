@@ -258,6 +258,10 @@ Json::Value ProposalOutcome::toJson() const
         value["execCodeName"] = execCodeName;
     }
     value["info"] = info;
+    if (!error.empty())
+    {
+        value["error"] = error;
+    }
     return value;
 }
 
@@ -485,13 +489,24 @@ ProposalOutcome PresetRunner::proposalOutcome(std::string const& _id, Receipt co
     if (status.ok && status.decoded.isArray() && !status.decoded.empty())
     {
         outcome.status = codeOf(status.decoded[0]).value_or(0);
+        outcome.statusName = proposalStatusName(outcome.status);
     }
-    outcome.statusName = proposalStatusName(outcome.status);
+    else
+    {
+        outcome.statusName = "unknown";
+        outcome.error = "getProposalStatus(" + _id + ") failed: status " +
+                        std::to_string(status.receipt.status) + " " + status.receipt.message;
+    }
     outcome.executed = outcome.status == 2;
     auto info = runCall(*findPreset("committee", "proposal"), {_id}, manager);
     if (info.ok && info.decoded.isArray())
     {
         outcome.info = proposalInfoJson(info.decoded);
+    }
+    else if (outcome.error.empty())
+    {
+        outcome.error = "getProposalInfo(" + _id + ") failed: status " +
+                        std::to_string(info.receipt.status) + " " + info.receipt.message;
     }
     // CommitteeManager.voteProposal emits execResult(int256) with the precompiled's return
     // code when the vote passes; it is the only place that code surfaces (the receipt is ok)

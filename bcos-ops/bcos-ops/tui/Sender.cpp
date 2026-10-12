@@ -72,8 +72,8 @@ bool SendRequest::mayRouteThroughProposal(Kind _kind, Preset const* _preset)
     {
         return true;  // every flag is a setValueByKey, a proposal on auth chains
     }
-    return _kind == Kind::preset && _preset != nullptr && _preset->write &&
-           _preset->proposal.has_value();
+    return _kind == Kind::preset && _preset != nullptr &&
+           PresetRunner::routesThroughProposal(Routing{.proposals = true}, *_preset);
 }
 
 std::string sendOutcomeLine(PresetResult const& _result)
@@ -281,6 +281,16 @@ void Sender::execute(SendRequest const& _request)
         // a non-std exception escaping the worker would terminate with the terminal in raw mode
         outcome.ok = false;
         outcome.line = "error: unknown exception";
+    }
+    outcome.openTx = _request.openTxDetail;
+    // a vote / revoke (from the gov page) names its proposal even when it failed, so the
+    // proposal page shows the result only on the proposal it was about
+    if (outcome.proposalId.empty() && _request.kind == SendRequest::Kind::preset &&
+        _request.preset != nullptr && _request.preset->group == "committee" &&
+        (_request.preset->name == "vote" || _request.preset->name == "revoke") &&
+        !_request.params.empty())
+    {
+        outcome.proposalId = _request.params[0];
     }
     publish(std::move(outcome));
 }

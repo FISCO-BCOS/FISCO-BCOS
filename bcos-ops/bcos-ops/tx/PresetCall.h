@@ -53,8 +53,9 @@ struct ProposalOutcome
     bool executed = false;
     std::optional<int32_t> execCode;
     std::string execCodeName;
-    Json::Value info;  // getProposalInfo decoded: resource/proposer/type/expiresAtBlock/status/
-                       // voters (the absolute block the proposal expires at)
+    Json::Value info;   // getProposalInfo decoded: resource/proposer/type/expiresAtBlock/status/
+                        // voters (the absolute block the proposal expires at)
+    std::string error;  // getProposalStatus / getProposalInfo failed: status and info unknown
     Json::Value toJson() const;
 };
 /// getProposalInfo's decoded tuple → the info object above (resourceId, proposer,

@@ -13,7 +13,6 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the browser rows of the home page: recent blocks and the transactions flattened out of
  * @brief the gov page's data: committee rates and governors, the newest proposals and the
  *        details of the ones open on screen, read through the same CommitteeReader the CLI
  *        uses. Plain rows the renderers show; fetched by the refresher on auth chains only.
@@ -78,6 +77,7 @@ struct GovernanceWants
 {
     size_t rows = 20;
     std::vector<int64_t> ids;
+    bool shown = true;  // page 6 or a proposal detail is open: only then the refresher reads it
 };
 
 constexpr size_t c_governanceMaxRows = 50;

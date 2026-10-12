@@ -43,7 +43,8 @@ Element renderLog(Model const& _model, std::string const& _filter)
         auto rest = namePos == std::string::npos ? std::string() :
                                                    event.raw.substr(namePos + event.name.size());
         auto line = hbox(
-            {text(event.timestamp.size() > 11 ? event.timestamp.substr(11, 12) : event.timestamp) |
+            {text(sanitizeForTerminal(
+                 event.timestamp.size() > 11 ? event.timestamp.substr(11, 12) : event.timestamp)) |
                     dim,
                 text(" " + sanitizeForTerminal(badges)) | dim,
                 text(sanitizeForTerminal(event.name)) | bold, text(sanitizeForTerminal(rest))});

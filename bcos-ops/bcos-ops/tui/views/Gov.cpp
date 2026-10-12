@@ -13,7 +13,6 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the browser rows of the home page: recent blocks and the transactions flattened out of
  * @brief the gov page (auth chains): committee rates and governors, the newest proposals, and
  *        the proposal detail with the vote / revoke hints. Everything shown comes from
  *        Model.governance; the keys live in govFormHandle (SendForm.cpp).
@@ -183,7 +182,7 @@ Element renderProposalDetail(
         lines.push_back(text(sanitizeForTerminal(_form->notice)) | color(Color::Yellow));
     }
     auto const& last = _model.send.last;
-    if (last.seq != 0 && !last.line.empty())
+    if (last.seq != 0 && !last.line.empty() && last.proposalId == std::to_string(_ref.number))
     {
         lines.push_back(
             hbox({text(last.ok ? "ok " : "FAIL ") | color(last.ok ? Color::Green : Color::Red),
@@ -218,11 +217,16 @@ GovernanceWants governanceWants(Nav const& _nav)
 {
     GovernanceWants wants;
     wants.rows = std::max<size_t>(_nav.proposals.pageRows, 1);
+    wants.shown = !_nav.inDetail() && _nav.page == Page::gov;
     for (auto const& ref : _nav.stack)
     {
-        if (ref.kind == DetailKind::proposal && ref.resolved)
+        if (ref.kind == DetailKind::proposal)
         {
-            wants.ids.push_back(ref.number);
+            wants.shown = true;
+            if (ref.resolved)
+            {
+                wants.ids.push_back(ref.number);
+            }
         }
     }
     return wants;

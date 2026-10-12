@@ -118,6 +118,7 @@ BOOST_AUTO_TEST_CASE(detailShowsVotesHintsAndNotice)
     model.send.last.seq = 1;
     model.send.last.ok = false;
     model.send.last.line = "error: boom \x1b[2J";
+    model.send.last.proposalId = "1";
     tui::Frame frame{.width = 80, .height = 24, .nowMs = 0};
     auto raw = renderRaw(tui::renderProposalDetail(model, frame, ref, &form), 80, 24);
     auto text = stripAnsi(raw);
@@ -134,6 +135,10 @@ BOOST_AUTO_TEST_CASE(detailShowsVotesHintsAndNotice)
     BOOST_CHECK(text.find("boom") != std::string::npos);
     BOOST_CHECK(raw.find("\x1b[2J") == std::string::npos);  // control bytes never reach the
                                                             // terminal
+    // the last result belongs to another proposal: not shown here
+    model.send.last.proposalId = "2";
+    auto other = renderText(tui::renderProposalDetail(model, frame, ref, &form), 80, 24);
+    BOOST_CHECK(other.find("boom") == std::string::npos);
     // an id not loaded yet
     tui::DetailRef pending{.kind = tui::DetailKind::proposal, .number = 9, .resolved = true};
     auto loading = renderText(tui::renderProposalDetail(model, frame, pending, nullptr), 80, 24);
@@ -157,6 +162,7 @@ BOOST_AUTO_TEST_CASE(refsResolveToProposalIdsAndWantsListThem)
     BOOST_CHECK(nav.stack.back().resolved);
     BOOST_CHECK_EQUAL(nav.stack.back().number, 2);
     auto wants = tui::governanceWants(nav);
+    BOOST_CHECK(wants.shown);  // a proposal detail is open
     BOOST_CHECK_EQUAL(wants.rows, 7U);
     BOOST_REQUIRE_EQUAL(wants.ids.size(), 1U);
     BOOST_CHECK_EQUAL(wants.ids[0], 2);
@@ -172,6 +178,17 @@ BOOST_AUTO_TEST_CASE(refsResolveToProposalIdsAndWantsListThem)
     BOOST_CHECK(tui::navHandle(nav, ftxui::Event::Escape) == tui::NavAction::redraw);
     BOOST_CHECK(!nav.inDetail());
     BOOST_CHECK_EQUAL(nav.proposals.selected, 1U);
+}
+
+BOOST_AUTO_TEST_CASE(governanceIsWantedOnlyWhereItIsShown)
+{
+    tui::Nav nav;
+    nav.authChain = true;
+    BOOST_CHECK(!tui::governanceWants(nav).shown);  // home
+    nav.page = tui::Page::gov;
+    BOOST_CHECK(tui::governanceWants(nav).shown);
+    nav.stack.push_back({.kind = tui::DetailKind::block, .number = 5, .resolved = true});
+    BOOST_CHECK(!tui::governanceWants(nav).shown);  // a block detail over the gov page
 }
 
 BOOST_AUTO_TEST_SUITE_END()
