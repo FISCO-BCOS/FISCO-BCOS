@@ -13,7 +13,9 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief `fisco-bcos tui`: five views, 2 s refresh, 1 s log tail, keys 1-5 / r / q
+ * @brief `fisco-bcos tui`: assembles the model, the refresher and log-tail threads, the Nav key
+ *        map and the page renderers into one FTXUI loop. --snapshot-dir renders every page
+ *        headlessly; --version-check only proves the library links.
  * @file TuiCmd.cpp
  */
 #include "bcos-ops/Args.h"
@@ -21,16 +23,15 @@
 #include "bcos-ops/Connect.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/cmd/StatusCmd.h"
-#include "bcos-ops/collect/GroupFacts.h"
 #include "bcos-ops/collect/RpcCollector.h"
+#include "bcos-ops/tui/Explorer.h"
 #include "bcos-ops/tui/LogTail.h"
 #include "bcos-ops/tui/Model.h"
+#include "bcos-ops/tui/Nav.h"
 #include "bcos-ops/tui/Refresher.h"
-#include "bcos-ops/tui/views/Views.h"
-#include "bcos-ops/tx/Account.h"
-#include "bcos-ops/tx/Smoke.h"
-#include "bcos-ops/tx/TxSender.h"
+#include "bcos-ops/tui/views/Pages.h"
 #include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <ftxui/component/component.hpp>
@@ -46,10 +47,14 @@ namespace
 {
 using namespace ftxui;  // bcos::ops::Event clashes with ftxui::Event, which is always qualified
 
-/// --snapshot-dir: render the five views once from live data into <dir>/<n>-<view>.txt (80x24),
-/// for documentation and CI where no terminal is attached
-int snapshotViews(
-    Connection const& _connection, Args const& _args, std::string const& _dir, std::ostream& _out)
+int64_t tuiNowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+
+LocalFallbacks tuiFallbacks(Connection const& _connection)
 {
     LocalFallbacks fallbacks;
     if (_connection.nodeDir)
@@ -57,52 +62,68 @@ int snapshotViews(
         fallbacks.txpoolLimit = static_cast<int64_t>(_connection.nodeDir->txpoolLimit);
         fallbacks.consensusTimeoutMs = _connection.nodeDir->consensusTimeoutMs;
     }
+    return fallbacks;
+}
+
+void tuiAppendLog(tui::Model& _model, std::vector<bcos::ops::Event> _events)
+{
+    std::lock_guard<std::mutex> lock(_model.mutex);
+    for (auto& event : _events)
+    {
+        _model.logTail.push_back(std::move(event));
+    }
+    while (_model.logTail.size() > 500)
+    {
+        _model.logTail.pop_front();
+    }
+}
+
+/// --snapshot-dir: every page from live data into <dir>/<n>-<page>.txt (home at 80x24 and
+/// 120x40, the others at 80x24) for documentation and CI where no terminal is attached
+int snapshotPages(
+    Connection const& _connection, Args const& _args, std::string const& _dir, std::ostream& _out)
+{
     tui::Model model;
-    tui::Refresher refresher(_connection, fallbacks, thresholdsFrom(_args), model, nullptr, 100000);
+    tui::Refresher refresher(
+        _connection, tuiFallbacks(_connection), thresholdsFrom(_args), model, nullptr, 100000);
+    refresher.setRowCapacity([]() { return tui::explorerCapacity(40); });
+    refresher.setVisibleTxRange([]() { return std::make_pair(size_t(0), size_t(40)); });
     refresher.runOnce();
     if (_connection.nodeDir)
     {
         tui::LogTail tail(_connection.nodeDir->logDir());
-        auto events = tail.poll();
-        std::lock_guard<std::mutex> lock(model.mutex);
-        for (auto& event : events)
-        {
-            model.logTail.push_back(std::move(event));
-        }
-        while (model.logTail.size() > 500)
-        {
-            model.logTail.pop_front();
-        }
+        tuiAppendLog(model, tail.poll());
     }
     std::filesystem::create_directories(_dir);
     std::string filter = _args.optionOr("filter", "");
-    std::vector<std::pair<std::string, std::function<Element()>>> views = {
-        {"overview", [&]() { return tui::renderOverview(model); }},
-        {"consensus", [&]() { return tui::renderConsensus(model); }},
-        {"sync", [&]() { return tui::renderSync(model); }},
-        {"tx",
-            [&]() {
-                return vbox({text(" tx "), text(" [ run smoke ] "), separator(),
-                           tui::renderTx(model)}) |
-                       border;
-            }},
-        {"log",
-            [&]() {
-                return vbox({text(" log  filter> " + filter), separator(),
-                           tui::renderLog(model, filter)}) |
-                       border;
-            }},
+    struct Shot
+    {
+        std::string name;
+        int width;
+        int height;
+        std::function<void(tui::Nav&)> setup;
+    };
+    std::vector<Shot> shots = {
+        {"home", 80, 24, [](tui::Nav&) {}},
+        {"home-wide", 120, 40, [](tui::Nav&) {}},
+        {"consensus", 80, 24, [](tui::Nav& nav) { nav.page = tui::Page::consensus; }},
+        {"node", 80, 24, [](tui::Nav& nav) { nav.page = tui::Page::node; }},
+        {"log", 80, 24, [](tui::Nav& nav) { nav.page = tui::Page::log; }},
+        {"help", 80, 24, [](tui::Nav& nav) { nav.help = true; }},
     };
     int index = 1;
-    for (auto const& [name, render] : views)
+    for (auto const& shot : shots)
     {
-        auto screen =
-            ftxui::Screen::Create(ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(24));
-        std::lock_guard<std::mutex> lock(model.mutex);
-        auto footer =
-            text(" 1 overview  2 consensus  3 sync  4 tx  5 log  r refresh  q quit ") | dim;
-        ftxui::Render(screen, vbox({tui::renderTopBar(model), render() | flex, footer}));
-        auto path = _dir + "/" + std::to_string(index++) + "-" + name + ".txt";
+        tui::Nav nav;
+        shot.setup(nav);
+        auto screen = ftxui::Screen::Create(
+            ftxui::Dimension::Fixed(shot.width), ftxui::Dimension::Fixed(shot.height));
+        {
+            std::lock_guard<std::mutex> lock(model.mutex);
+            tui::Frame frame{shot.width, shot.height, tuiNowMs(), nullptr};
+            ftxui::Render(screen, tui::renderFrame(model, nav, frame, filter));
+        }
+        auto path = _dir + "/" + std::to_string(index++) + "-" + shot.name + ".txt";
         std::ofstream out(path);
         out << screen.ToString();
         _out << path << '\n';
@@ -119,22 +140,24 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         _out << "ftxui linked; tui available\n";
         return c_exitOk;
     }
-    auto options = connectOptionsFrom(_args);
-    auto connection = connect(options);
+    auto connection = connect(connectOptionsFrom(_args));
     if (auto snapshotDir = _args.option("snapshot-dir"))
     {
-        return snapshotViews(connection, _args, *snapshotDir, _out);
-    }
-    LocalFallbacks fallbacks;
-    if (connection.nodeDir)
-    {
-        fallbacks.txpoolLimit = static_cast<int64_t>(connection.nodeDir->txpoolLimit);
-        fallbacks.consensusTimeoutMs = connection.nodeDir->consensusTimeoutMs;
+        return snapshotPages(connection, _args, *snapshotDir, _out);
     }
     tui::Model model;
+    tui::Nav nav;
     auto screen = ScreenInteractive::Fullscreen();
     auto redraw = [&screen]() { screen.PostEvent(ftxui::Event::Custom); };
-    tui::Refresher refresher(connection, fallbacks, thresholdsFrom(_args), model, redraw, 2000);
+    // the refresher thread reads these; the UI thread writes them while rendering
+    std::atomic<int> terminalRows{24};
+    std::atomic<size_t> visibleTxFrom{0};
+    std::atomic<size_t> visibleTxCount{20};
+    tui::Refresher refresher(
+        connection, tuiFallbacks(connection), thresholdsFrom(_args), model, redraw, 2000);
+    refresher.setRowCapacity([&]() { return tui::explorerCapacity(terminalRows.load()); });
+    refresher.setVisibleTxRange(
+        [&]() { return std::make_pair(visibleTxFrom.load(), visibleTxCount.load()); });
 
     // log tail thread: 1 s
     std::atomic<bool> stopTail{false};
@@ -148,15 +171,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
                 auto events = tail.poll();
                 if (!events.empty())
                 {
-                    std::lock_guard<std::mutex> lock(model.mutex);
-                    for (auto& event : events)
-                    {
-                        model.logTail.push_back(std::move(event));
-                    }
-                    while (model.logTail.size() > 500)
-                    {
-                        model.logTail.pop_front();
-                    }
+                    tuiAppendLog(model, std::move(events));
                     redraw();
                 }
                 for (int i = 0; i < 10 && !stopTail; ++i)
@@ -166,48 +181,6 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
             }
         });
     }
-
-    // smoke on a worker thread; the button is disabled while it runs
-    std::thread smokeThread;
-    auto startSmoke = [&]() {
-        {
-            std::lock_guard<std::mutex> lock(model.mutex);
-            if (model.smokeRunning)
-            {
-                return;
-            }
-            model.smokeRunning = true;
-            model.smokeError.clear();
-            model.smoke.reset();
-        }
-        if (smokeThread.joinable())
-        {
-            smokeThread.join();
-        }
-        smokeThread = std::thread([&]() {
-            try
-            {
-                auto facts = groupFacts(connection.call, connection.group, std::nullopt);
-                bool sm = facts.smCrypto.value_or(false);
-                TxSender sender(connection.call, connection.group, facts.chainId, sm,
-                    makeAccount(sm, _args.option("account")));
-                auto result = runSmoke(sender, facts.smCrypto.value_or(false));
-                std::lock_guard<std::mutex> lock(model.mutex);
-                model.smoke = std::move(result);
-            }
-            catch (std::exception const& e)
-            {
-                std::lock_guard<std::mutex> lock(model.mutex);
-                model.smokeError = e.what();
-            }
-            {
-                std::lock_guard<std::mutex> lock(model.mutex);
-                model.smokeRunning = false;
-            }
-            redraw();
-        });
-    };
-
     auto stopWorkers = [&]() {
         refresher.stop();
         stopTail = true;
@@ -215,83 +188,60 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         {
             tailThread.join();
         }
-        if (smokeThread.joinable())
-        {
-            smokeThread.join();
-        }
     };
 
-    int selected = 0;
     std::string filter;
-    auto overview = Renderer([&model]() {
+    auto filterInput = Input(&filter, "event name or channel (e.g. ViewChange, TXPOOL)");
+    auto root = Renderer(filterInput, [&]() {
         std::lock_guard<std::mutex> lock(model.mutex);
-        return tui::renderOverview(model);
-    });
-    auto consensus = Renderer([&model]() {
-        std::lock_guard<std::mutex> lock(model.mutex);
-        return tui::renderConsensus(model);
-    });
-    auto sync = Renderer([&model]() {
-        std::lock_guard<std::mutex> lock(model.mutex);
-        return tui::renderSync(model);
-    });
-    auto txView = tui::makeTxView(model, startSmoke);
-    auto logView = tui::makeLogView(model, filter);
-    auto tabs = Container::Tab({overview, consensus, sync, txView, logView}, &selected);
-
-    auto root = Renderer(tabs, [&]() {
-        Element top;
-        {
-            std::lock_guard<std::mutex> lock(model.mutex);
-            top = tui::renderTopBar(model);
-        }
-        auto footer =
-            hbox({text(" 1 overview  2 consensus  3 sync  4 tx  5 log  r refresh  q quit ") | dim});
-        return vbox({top, tabs->Render() | flex, footer});
+        terminalRows = screen.dimy();
+        bool editingFilter = !nav.inDetail() && nav.page == tui::Page::log && nav.focus == 1;
+        tui::Frame frame{screen.dimx(), screen.dimy(), tuiNowMs(),
+            editingFilter ? filterInput->Render() : nullptr};
+        auto element = tui::renderFrame(model, nav, frame, filter);
+        visibleTxFrom = nav.txs.firstVisible();
+        visibleTxCount = nav.txs.pageRows;
+        return element;
     });
     root = CatchEvent(root, [&](ftxui::Event event) {
-        // the log view's input box owns plain characters while selected; keep the hotkeys on
-        // the other views and always honour Escape/q from anywhere but the input
-        if (selected == 4 && event.is_character() && event.character() != "\x1b")
+        bool editingFilter = !nav.inDetail() && nav.page == tui::Page::log && nav.focus == 1;
+        if (editingFilter && event.is_character())
         {
-            return false;
+            return false;  // the filter box owns plain characters; Tab/Esc still reach Nav
         }
-        if (event == ftxui::Event::Character('q') || event == ftxui::Event::Escape)
+        switch (tui::navHandle(nav, event))
         {
+        case tui::NavAction::quit:
             // stop every worker before Exit(): ScreenInteractive drops its event sender inside
             // Exit, and a redraw posted after that from another thread is a use-after-free. The
             // refresher stop may wait for one in-flight RPC (at most the request timeout).
             stopWorkers();
             screen.Exit();
             return true;
-        }
-        if (event == ftxui::Event::Character('r'))
-        {
+        case tui::NavAction::refresh:
             refresher.refreshNow();
             return true;
-        }
-        if (event.is_character() && event.character().size() == 1 && event.character()[0] >= '1' &&
-            event.character()[0] <= '5')
-        {
-            selected = event.character()[0] - '1';
+        case tui::NavAction::redraw:
             return true;
+        case tui::NavAction::none:
+            return false;
         }
         return false;
     });
 
     refresher.start();
     screen.Loop(root);
-    stopWorkers();  // no-op after a q/Escape exit; covers Loop ending for any other reason
+    stopWorkers();  // no-op after a q exit; covers Loop ending for any other reason
     return c_exitOk;
 }
 }  // namespace
 
 void registerTuiCommand()
 {
-    registerCommand(
-        "tui", Command{"interactive panel: overview, consensus, sync/p2p, tx smoke, log tail",
-                   "[--node-dir <dir> | --rpc <host:port>] [--account <pem>] [--version-check] "
-                   "[--snapshot-dir <dir> [--filter <text>]]",
-                   {"version-check"}, runTui});
+    registerCommand("tui",
+        Command{"browser-style panel: recent blocks and txs, consensus, send, log tail, node",
+            "[--node-dir <dir> | --rpc <host:port>] [--version-check] "
+            "[--snapshot-dir <dir> [--filter <text>]]",
+            {"version-check"}, runTui});
 }
 }  // namespace bcos::ops

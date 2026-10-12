@@ -23,7 +23,6 @@
 #include "bcos-ops/NodeStatus.h"
 #include "bcos-ops/log/LogParser.h"
 #include "bcos-ops/tui/Explorer.h"
-#include "bcos-ops/tx/Smoke.h"
 #include <json/json.h>
 #include <deque>
 #include <mutex>
@@ -50,9 +49,5 @@ struct Model
     std::string keyAddress;     // loaded signing key, shown in the top bar (ticket 15)
     int64_t lastRefreshMs = 0;
     int refreshInSeconds = 0;
-    // smoke
-    bool smokeRunning = false;
-    std::optional<SmokeResult> smoke;
-    std::string smokeError;
 };
 }  // namespace bcos::ops::tui
