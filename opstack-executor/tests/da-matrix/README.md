@@ -82,7 +82,7 @@ checkout silently changes the expected output.
 
 | Source | Local checkout | Pinned commit / version |
 |---|---|---|
-| op-revm | `<optimism monorepo>/rust/op-revm` | goldens generated at `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (version 20.0.0). NOTE: `tools/.ci/check-ci-pins.sh` enforces `5f90f749caea14398554afb75062f7111b1fc554` as the audit-revision for the op-revm oracle — the two pins serve different ends (golden generation vs oracle provenance) and must be reconciled before regenerating either; `Cargo.lock` is committed so a checkout at the generation rev rebuilds the exact dependency tree |
+| op-revm | `<optimism monorepo>/rust/op-revm` | goldens generated at `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd`; the enforced pin (`tools/.ci/check-ci-pins.sh` Axis 2, `extract.sh`'s `OP_REVM_PIN`) is `5f90f749caea14398554afb75062f7111b1fc554`. **Reconciled:** `rust/` is byte-identical between the two revisions (`git diff da197e45 5f90f749 -- rust/` is empty), so the goldens stand unchanged at the enforced pin and `run_oprevm`'s `Cargo.toml` depends on it directly; `Cargo.lock` is committed so the dependency tree is exact |
 | contracts-bedrock | `<optimism monorepo>/packages/contracts-bedrock` | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (same optimism monorepo) |
 | op-geth | — (build-tagged) | v1.101702.2 (already recorded above) |
 
@@ -96,10 +96,9 @@ git -C <optimism monorepo>/packages/contracts-bedrock rev-parse HEAD
 
 Both must print `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd`.
 
-> **Known pin divergence (tracked):** these goldens were generated from the optimism
-> monorepo at `da197e45…`, while the enforced op-revm oracle pin (check-ci-pins.sh) is
-> `5f90f749…`. Regenerating the goldens at the enforced pin is the closure; until then
-> treat this table's provenance as da197e45.
+> **Pin reconciliation (closed):** the goldens were generated at `da197e45…` while the
+> enforced op-revm oracle pin is `5f90f749…`; `rust/` is byte-identical at the two
+> revisions, so no regeneration is pending — the enforced pin IS the goldens' tree.
 
 ## known_divergence
 
