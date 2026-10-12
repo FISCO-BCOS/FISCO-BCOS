@@ -273,9 +273,12 @@ run_chain()
     # TLS setting does not matter
     local -a scenarios=(scenario_1_rpc_shape scenario_2_hello scenario_4_block_tx scenario_5_sysconfig
         scenario_8_balance scenario_9_contract_test_all scenario_7_consensus_membership
-        scenario_13_viewchange scenario_14_sync)
+        scenario_13_viewchange scenario_14_sync scenario_10_complex_abi scenario_11_payable
+        scenario_15_admission scenario_16_revert)
     [[ "${chain}" == "nonsm" || "${chain}" == "sm" ]] && scenarios+=(scenario_19_account)
     [[ "${chain}" == "nonsm" ]] && scenarios+=(scenario_20_ops_status)
+    # 17 turns every remaining flag on and so goes last on every chain
+    scenarios+=(scenario_17_features)
     local scenario number
     for scenario in "${scenarios[@]}"; do
         "${scenario}" "${chain}" "${node0}" || { LOG_ERROR "chain ${chain}: ${scenario} failed"; return 1; }
