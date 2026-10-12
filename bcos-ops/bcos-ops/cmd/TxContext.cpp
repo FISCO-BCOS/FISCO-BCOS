@@ -159,7 +159,7 @@ void printPresetResult(std::ostream& _out, PresetResult const& _result, bool _js
 }
 
 int runWritePreset(Connection const& _connection, Args const& _args, std::ostream& _out,
-    Preset const& _preset, std::vector<std::string> const& _params)
+    Preset const& _preset, std::vector<std::string> const& _params, ResultHint const& _hint)
 {
     auto routing = routingFor(_connection, _args, _preset);
     auto facts = chainFacts(_connection);
@@ -176,7 +176,24 @@ int runWritePreset(Connection const& _connection, Args const& _args, std::ostrea
         return c_exitUsage;
     }
     auto result = runner.run(_preset, _params);
-    printPresetResult(_out, result, wantJson(_args.flag("json")));
+    auto hint = _hint ? _hint(result) : std::string();
+    if (wantJson(_args.flag("json")))
+    {
+        auto json = result.toJson();
+        if (!hint.empty())
+        {
+            json["hint"] = hint;
+        }
+        printJson(_out, json);
+    }
+    else
+    {
+        printPresetResult(_out, result, false);
+        if (!hint.empty())
+        {
+            _out << hint << '\n';
+        }
+    }
     return result.exitCode();
 }
 }  // namespace bcos::ops

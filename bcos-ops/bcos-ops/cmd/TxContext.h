@@ -24,6 +24,7 @@
 #include "bcos-ops/RpcCall.h"
 #include "bcos-ops/tx/PresetCall.h"
 #include "bcos-ops/tx/TxSender.h"
+#include <functional>
 #include <iosfwd>
 #include <memory>
 #include <string>
@@ -52,7 +53,9 @@ bool confirmWrite(Args const& _args, std::ostream& _out, Preset const& _preset,
 Routing routingFor(Connection const& _connection, Args const& _args, Preset const& _preset);
 /// shared rendering of a PresetResult: JSON (toJson) or the table rows
 void printPresetResult(std::ostream& _out, PresetResult const& _result, bool _json);
-/// run a write preset end to end: confirm, send, print, exit code
+/// run a write preset end to end: confirm, send, print, exit code. _hint, when set, turns the
+/// result into an operator hint printed after it (JSON: a `hint` member); "" prints nothing
+using ResultHint = std::function<std::string(PresetResult const&)>;
 int runWritePreset(Connection const& _connection, Args const& _args, std::ostream& _out,
-    Preset const& _preset, std::vector<std::string> const& _params);
+    Preset const& _preset, std::vector<std::string> const& _params, ResultHint const& _hint = {});
 }  // namespace bcos::ops

@@ -23,10 +23,16 @@
 #include "bcos-ops/Args.h"
 #include "bcos-ops/RpcCall.h"
 #include <iosfwd>
+#include <string>
+#include <vector>
 
 namespace bcos::ops
 {
 /// _args.positionals()[0] is the sub-subcommand; returns the process exit code
 int runSysconfigOn(Connection const& _connection, Args const& _args, std::ostream& _out);
 int runConsensusOn(Connection const& _connection, Args const& _args, std::ostream& _out);
+/// `sysconfig enable-features` over an open Connection: _requested in dependency order,
+/// proposals on an auth chain; _hint is printed last when non-empty (balance enable)
+int runEnableFeaturesOn(Connection const& _connection, Args const& _args, std::ostream& _out,
+    std::vector<std::string> const& _requested, std::string const& _hint);
 }  // namespace bcos::ops

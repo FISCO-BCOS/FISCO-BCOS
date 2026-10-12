@@ -48,6 +48,8 @@ std::map<std::string, Command>& commandTable();
 void registerCommand(std::string _name, Command _command);
 void registerAccountCommand();    // cmd/AccountCmd.cpp
 void registerAmopCommand();       // cmd/AmopCmd.cpp
+void registerAuthCommand();       // cmd/AuthCmd.cpp
+void registerBalanceCommand();    // cmd/BalanceCmd.cpp
 void registerConsensusCommand();  // cmd/ConsensusCmd.cpp
 void registerSysconfigCommand();  // cmd/SysconfigCmd.cpp
 void registerStatusCommand();     // cmd/StatusCmd.cpp
