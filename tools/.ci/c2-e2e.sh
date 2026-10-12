@@ -31,7 +31,11 @@ CONTEST="${CONTEST:-1}"
 XDM="${XDM:-0}"
 # Kona fault-proof verification (native replay, no cannon): 1 = build kona-host +
 # kona-client and run the native state-transition check against FISCO's claimed output.
-KONA_VERIFY="${KONA_VERIFY:-1}"
+# The default FOLLOWS CONTEST: kona replays a dispute game's root claim, so it is only
+# meaningful when CONTEST=1 created one. An explicit KONA_VERIFY still wins — the
+# contradiction guard below then fires for an explicit KONA_VERIFY=1 CONTEST=0, which is
+# the combination it was written for.
+KONA_VERIFY="${KONA_VERIFY:-$CONTEST}"
 SKIP_KONA_BUILD="${SKIP_KONA_BUILD:-0}"
 
 log() { echo "[c2-e2e] $*"; }

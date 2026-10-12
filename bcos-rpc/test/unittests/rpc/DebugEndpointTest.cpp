@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(DbGetUnknownStateNodeReturnsError)
 
 // debug_dbGet on a key that is neither the 33-byte "c"+codeHash form nor a bare 32-byte hash
 // answers -32000 "not found" (the key shape only picks which store to try first).
-BOOST_AUTO_TEST_CASE(DbGetInvalidKeyLengthReturnsInvalidParams)
+BOOST_AUTO_TEST_CASE(DbGetInvalidKeyLengthReturnsNotFoundError)
 {
     auto resp = call("debug_dbGet", [&] {
         Json::Value p(Json::arrayValue);
@@ -228,7 +228,7 @@ BOOST_AUTO_TEST_CASE(DbGetInvalidKeyLengthReturnsInvalidParams)
 
 // debug_dbGet on a 33-byte key whose leading byte is not 'c' answers -32000 "not found" — it is
 // not the code-key form, and its length is not a bare 32-byte hash either.
-BOOST_AUTO_TEST_CASE(DbGetNonCPrefixKeyReturnsInvalidParams)
+BOOST_AUTO_TEST_CASE(DbGetNonCPrefixKeyReturnsNotFoundError)
 {
     // 33 bytes = 66 hex chars, leading byte 0xdd (not 0x63 == 'c').
     std::string key = "0xdd" + std::string(64, '0');
@@ -294,12 +294,14 @@ BOOST_AUTO_TEST_CASE(GetRawHeaderEthHeaderHappyPath)
 }
 
 // debug_getRawHeader on a FISCO-native header answers -32603 — the native header has no
-// Ethereum RLP (its published hash is not keccak of an RLP header), so serving it would hand
-// kona-host bytes that do not hash to the published hash.
+// Ethereum RLP (its millisecond timestamp fails the EthBlockHeader bridge, or its published
+// hash is not keccak of an RLP header), so serving it would hand kona-host bytes that do not
+// hash to the published hash.
 BOOST_AUTO_TEST_CASE(GetRawHeaderNativeHeaderEncodeFailure)
 {
-    // The FakeLedger default headers are FISCO-native (EthBlockVersion::NON_ETH). Capture the
-    // latest hash first: the lookup resolves, then the OP/Ethereum-header guard refuses it.
+    // The FakeLedger default headers are FISCO-native (EthBlockVersion::NON_ETH) with a
+    // millisecond timestamp, which the EthBlockHeader bridge rejects. Capture the latest hash
+    // first: the lookup resolves, then the encode fails.
     auto const latestHash = m_ledger->ledgerData().back()->blockHeader()->hash();
     auto resp = call("debug_getRawHeader", [&] {
         Json::Value p(Json::arrayValue);
@@ -309,7 +311,7 @@ BOOST_AUTO_TEST_CASE(GetRawHeaderNativeHeaderEncodeFailure)
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32603);
     BOOST_CHECK(
-        resp["error"]["message"].asString().find("has no Ethereum header") != std::string::npos);
+        resp["error"]["message"].asString().find("Header RLP encode failed") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

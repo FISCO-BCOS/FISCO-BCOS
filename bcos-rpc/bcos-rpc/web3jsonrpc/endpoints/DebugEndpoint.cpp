@@ -25,6 +25,7 @@
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/LedgerMethods.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
@@ -122,6 +123,19 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
     auto const blockTag = toView(request[0U]);
     auto const ledger = m_nodeService->ledger();
 
+    // debug_getRawHeader mirrors geth's DebugAPI.GetRawHeader, which accepts only a block
+    // number or a hash. The safe/finalized/pending tags are refused: resolving them here via
+    // the shared tag resolver with the static depth (default 0) would answer the unsafe tip,
+    // contradicting eth_getBlockByNumber on the same node (which fails closed on the engine
+    // lane when the forkchoice tracker is unset). On the fault-proof data plane one node must
+    // not answer two different blocks for the same tag.
+    if (blockTag == bcos::rpc::SafeBlock || blockTag == bcos::rpc::FinalizedBlock ||
+        blockTag == bcos::rpc::PendingBlock)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "debug_getRawHeader accepts only a block number or hash"));
+    }
+
     protocol::BlockNumber blockNumber = 0;
     protocol::BlockNumber head = 0;
     if (blockTag.size() == 66 && blockTag[0] == '0' && (blockTag[1] == 'x' || blockTag[1] == 'X'))
@@ -171,18 +185,29 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
     auto const& header = *headerPtr;
-    // The published hash (canonicalBlockHash) is keccak256 of this RLP for an OP header and for
-    // an Ethereum-versioned one, whose stored hash is that RLP hash (calculateRLPHash) — the
-    // rollup genesis from [eth_genesis_header] is the latter. A native FISCO header's hash is
-    // not, so serving it would hand the host bytes that do not hash to the published hash.
-    if (!protocol::isOpEthereumBlock(header) &&
-        header.ethBlockVersion() == protocol::EthBlockVersion::NON_ETH) [[unlikely]]
+    // The preimage-oracle contract is byte-exact: the served RLP must hash back to the block's
+    // published hash (canonicalBlockHash). Rather than re-spell the lane discriminator (which
+    // over-refuses pre-Canyon OP headers and under-checks Eth-lane headers), verify the exact
+    // invariant this endpoint needs and consult the owning module: serve iff the canonical hash
+    // equals keccak256 of the encoded header. This closes both directions at once.
+    bcos::bytes encoded;
+    try
+    {
+        encoded = protocol::EthBlockHeader::encodeHeader(header);
+    }
+    catch (std::exception const& e)
+    {
+        // A header whose fields cannot be RLP-encoded (a native FISCO header with a
+        // sub-second timestamp, or an incomplete fork-field set) has no Ethereum RLP to serve.
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InternalError, std::string("Header RLP encode failed: ") + e.what()));
+    }
+    if (protocol::canonicalBlockHash(header) != bcos::crypto::keccak256Hash(bcos::ref(encoded)))
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
             InternalError, "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
     }
-    Json::Value result =
-        toHexStringWithPrefix(protocol::EthBlockHeader::encodeHeader(header));
+    Json::Value result = toHexStringWithPrefix(encoded);
     buildJsonContent(result, response);
     co_return;
 }

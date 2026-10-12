@@ -95,9 +95,19 @@ std::string resolveBlockTagString(const Json::Value& tag)
     }
     if (tag.isObject())
     {
-        if (tag.isMember("blockHash") && tag["blockHash"].isString())
+        if (tag.isMember("blockHash"))
         {
-            return tag["blockHash"].asString();
+            auto const& hash = tag["blockHash"];
+            // EIP-1898 blockHash must be a 32-byte hash: the 66-char "0x" + 64 hex form. A
+            // shorter/other form (e.g. "latest") must not fall through to the tag parser and
+            // silently resolve the wrong block.
+            if (hash.isString() && hash.asString().size() == 66 && hash.asString()[0] == '0' &&
+                (hash.asString()[1] == 'x' || hash.asString()[1] == 'X'))
+            {
+                return hash.asString();
+            }
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Unsupported EIP-1898 block parameter"));
         }
         if (tag.isMember("blockNumber"))
         {
@@ -106,7 +116,10 @@ std::string resolveBlockTagString(const Json::Value& tag)
             {
                 return number.asString();
             }
-            if (number.isIntegral())
+            // isUInt64 (not isIntegral): a negative integral blockNumber must answer
+            // InvalidParams here rather than wrap around in asUInt64() and surface as a
+            // catch-all -32603 later.
+            if (number.isUInt64())
             {
                 return fmt::format("0x{:x}", number.asUInt64());
             }
@@ -114,7 +127,10 @@ std::string resolveBlockTagString(const Json::Value& tag)
         BOOST_THROW_EXCEPTION(
             JsonRpcException(InvalidParams, "Unsupported EIP-1898 block parameter"));
     }
-    return {};
+    // A block parameter that is neither a string nor an object (null, bare number, bool, array,
+    // or a two-element params array whose [2] reads as null) must fail as InvalidParams — never
+    // return an empty string, which getBlockNumberByTag silently reads as "latest".
+    BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Unsupported block parameter"));
 }
 }  // namespace
 

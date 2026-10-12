@@ -20,11 +20,11 @@ Env aliases: L1_RPC (anvil url), L1_DEBUG_PROXY_PORT.
 import argparse
 import json
 import os
-import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import requests
 import rlp
+from eth_hash.auto import keccak
 
 
 def hx(x):
@@ -139,15 +139,36 @@ class L1Proxy:
         params = payload.get("params", [])
 
         if method == "debug_getRawHeader":
-            block = self.rpc("eth_getBlockByHash", [params[0], False])["result"]
+            if not params:
+                return {"jsonrpc": "2.0", "id": payload.get("id"),
+                        "error": {"code": -32602, "message": "Missing block hash"}}
+            resp = self.rpc("eth_getBlockByHash", [params[0], False])
+            if "error" in resp:
+                return resp
+            block = resp.get("result")
             if block is None:
                 return {"jsonrpc": "2.0", "id": payload.get("id"),
                         "error": {"code": -32602, "message": "Block not found"}}
+            encoded = encode_header(block)
+            # The docstring's byte-exact invariant: keccak(rlp(header)) must equal the hash the
+            # caller keyed the request with. A mismatch means anvil's field shape (or a fork
+            # schedule) drifted, and serving those bytes would hand kona-host a preimage that
+            # does not hash to its key — an opaque derive failure far from its cause.
+            if keccak(encoded) != hx(block["hash"]):
+                return {"jsonrpc": "2.0", "id": payload.get("id"),
+                        "error": {"code": -32603,
+                                  "message": "Header RLP keccak mismatch for " + block["hash"]}}
             return {"jsonrpc": "2.0", "id": payload.get("id"),
-                    "result": "0x" + encode_header(block).hex()}
+                    "result": "0x" + encoded.hex()}
 
         if method == "debug_getRawReceipts":
-            receipts = self.rpc("eth_getBlockReceipts", [params[0]])["result"]
+            if not params:
+                return {"jsonrpc": "2.0", "id": payload.get("id"),
+                        "error": {"code": -32602, "message": "Missing block hash"}}
+            resp = self.rpc("eth_getBlockReceipts", [params[0]])
+            if "error" in resp:
+                return resp
+            receipts = resp.get("result")
             if receipts is None:
                 return {"jsonrpc": "2.0", "id": payload.get("id"),
                         "error": {"code": -32602, "message": "Block not found"}}

@@ -35,6 +35,7 @@ import sys
 import tempfile
 import threading
 import urllib.request
+from contextlib import ExitStack
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from eth_hash.auto import keccak
@@ -230,66 +231,72 @@ def main():
     # never actually used to derive a slot on a calldata chain, but it must parse.
     l1_genesis = rpc(L1, "eth_getBlockByNumber", ["0x0", False])
     l1_genesis_time = int(l1_genesis["timestamp"], 16)
-    beacon_url, beacon_server = start_beacon_mock(l1_genesis_time)
 
-    # C2's L1 is anvil, which lacks geth's debug_getRawHeader / debug_getRawReceipts
-    # that kona-host's L1BlockHeader / L1Receipts hints require. Front anvil with the
-    # debug proxy so kona-host can read raw L1 headers and receipts.
-    proxy_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "l1_debug_proxy.py")
-    proxy_proc = subprocess.Popen(
-        [sys.executable, proxy_script, "--l1", L1, "--port", "0"],
-        stdout=subprocess.PIPE, text=True)
-    port_line = proxy_proc.stdout.readline().strip()
-    if not port_line.startswith("PORT="):
-        raise SystemExit(f"l1_debug_proxy failed to report its port: {port_line!r}")
-    l1_node = f"http://127.0.0.1:{port_line[len('PORT='):]}"
-    print(f"[kona-verify] l1 debug proxy at {l1_node} -> {L1}")
+    # Everything that allocates an OS resource (the beacon mock server thread, the L1 debug
+    # proxy subprocess) is registered on an ExitStack opened BEFORE the first one starts, so
+    # teardown runs on every path — success, a non-zero replay, a timeout, or an early failure
+    # in write_l1_config / the port handshake — instead of leaking until the CI VM recycles.
+    with ExitStack() as stack:
+        beacon_url, beacon_server = start_beacon_mock(l1_genesis_time)
+        stack.callback(beacon_server.shutdown)
 
-    with tempfile.TemporaryDirectory(prefix="kona-verify.") as tmp:
-        l1_cfg = os.path.join(tmp, "l1_chain_config.json")
-        write_l1_config(l1_cfg)
+        # C2's L1 is anvil, which lacks geth's debug_getRawHeader / debug_getRawReceipts
+        # that kona-host's L1BlockHeader / L1Receipts hints require. Front anvil with the
+        # debug proxy so kona-host can read raw L1 headers and receipts.
+        proxy_script = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "l1_debug_proxy.py")
+        proxy_proc = subprocess.Popen(
+            [sys.executable, proxy_script, "--l1", L1, "--port", "0"],
+            stdout=subprocess.PIPE, text=True)
+        # terminate() then wait(): reap the child so no zombie lingers and the port/process
+        # are released deterministically.
+        stack.callback(lambda: (proxy_proc.terminate(), proxy_proc.wait()))
+        port_line = proxy_proc.stdout.readline().strip()
+        if not port_line.startswith("PORT="):
+            raise SystemExit(f"l1_debug_proxy failed to report its port: {port_line!r}")
+        l1_node = f"http://127.0.0.1:{port_line[len('PORT='):]}"
+        print(f"[kona-verify] l1 debug proxy at {l1_node} -> {L1}")
 
-        cmd = [
-            KONA_HOST, "single",
-            "--l1-head", l1_head,
-            "--l2-head", agreed_head,
-            "--l2-output-root", agreed_output,
-            "--l2-claim", root_claim,
-            "--l2-block-number", str(l2_block),
-            "--l1-node-address", l1_node,
-            "--l2-node-address", L2,
-            "--l1-beacon-address", beacon_url,
-            "--rollup-config-path", ROLLUP,
-            "--l1-config-path", l1_cfg,
-            "--native",
-        ]
-        print(f"[kona-verify] running: {KONA_HOST} single --native "
-              f"(l2 #{l2_block}, claim {root_claim[:18]}…, beacon {beacon_url})")
-        env = dict(os.environ)
-        # Keep the derive driver's retry loop visible at warn/error level (the default
-        # info level already surfaces "Failed to prefetch hint" and pipeline warnings,
-        # which is enough to diagnose a stall without flooding gigabytes of trace logs).
-        env.setdefault(
-            "RUST_LOG",
-            "kona_derive=info,single_hint_handler=info,host_backend=info,l1_traversal=info")
-        # Native replay finishes in seconds; a hint-prefetch stall or derive retry loop can
-        # hang forever, so bound it well above the normal case (900s) and treat a timeout as
-        # a verification failure rather than letting the CI job-level timeout (45min) kill it.
-        # The finally block guarantees the beacon mock and the L1 debug proxy are torn down on
-        # every path (success, non-zero, or timeout) instead of leaking until CI VM recycle.
-        try:
-            result = subprocess.run(cmd, env=env, timeout=900)
-        except subprocess.TimeoutExpired:
-            print("[kona-verify] FAIL: kona-host did not finish within 900s "
-                  "(hint-prefetch stall or derive retry loop)")
-            return 1
-        finally:
-            beacon_server.shutdown()
-            proxy_proc.terminate()
-        if result.returncode != 0:
-            print("[kona-verify] FAIL: kona's independent derivation did not "
-                  "reproduce FISCO's claimed output root")
-            return 1
+        with tempfile.TemporaryDirectory(prefix="kona-verify.") as tmp:
+            l1_cfg = os.path.join(tmp, "l1_chain_config.json")
+            write_l1_config(l1_cfg)
+
+            cmd = [
+                KONA_HOST, "single",
+                "--l1-head", l1_head,
+                "--l2-head", agreed_head,
+                "--l2-output-root", agreed_output,
+                "--l2-claim", root_claim,
+                "--l2-block-number", str(l2_block),
+                "--l1-node-address", l1_node,
+                "--l2-node-address", L2,
+                "--l1-beacon-address", beacon_url,
+                "--rollup-config-path", ROLLUP,
+                "--l1-config-path", l1_cfg,
+                "--native",
+            ]
+            print(f"[kona-verify] running: {KONA_HOST} single --native "
+                  f"(l2 #{l2_block}, claim {root_claim[:18]}…, beacon {beacon_url})")
+            env = dict(os.environ)
+            # Keep the derive driver's retry loop visible at warn/error level (the default
+            # info level already surfaces "Failed to prefetch hint" and pipeline warnings,
+            # which is enough to diagnose a stall without flooding gigabytes of trace logs).
+            env.setdefault(
+                "RUST_LOG",
+                "kona_derive=info,single_hint_handler=info,host_backend=info,l1_traversal=info")
+            # Native replay finishes in seconds; a hint-prefetch stall or derive retry loop can
+            # hang forever, so bound it well above the normal case (900s) and treat a timeout as
+            # a verification failure rather than letting the CI job-level timeout (45min) kill it.
+            try:
+                result = subprocess.run(cmd, env=env, timeout=900)
+            except subprocess.TimeoutExpired:
+                print("[kona-verify] FAIL: kona-host did not finish within 900s "
+                      "(hint-prefetch stall or derive retry loop)")
+                return 1
+            if result.returncode != 0:
+                print("[kona-verify] FAIL: kona's independent derivation did not "
+                      "reproduce FISCO's claimed output root")
+                return 1
 
     print("[kona-verify] PASS: kona (revm) reproduced FISCO's output root "
           f"at L2 #{l2_block}")

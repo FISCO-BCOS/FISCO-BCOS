@@ -805,6 +805,22 @@ void NodeConfig::validateELModeInvariants() const
                 std::to_string(m_ethereumReorgWindow) +
                 "): an EL rollback target's trie nodes would already be pruned"));
     }
+    // The challenger data plane (debug_dbGet, gated by enable_debug_api on either listener)
+    // reads MPT preimages straight out of the node store with no retention guarantee: a block
+    // still inside a dispute game's challenge window can have its trie nodes pruned, and
+    // kona-host then receives an indistinguishable -32000 "not found" (debug_dbGet is keyed by
+    // content hash, not by block, so it cannot produce eth_getProof's "State pruned" diagnostic).
+    // The dispute window is a chain/contract parameter, not a node config, so the enforceable
+    // invariant is the archive one: a node serving preimages must not bound MPT disk growth.
+    if ((m_enableDebugApi || m_enableOpEngineDebugApi) && m_mptPruneWindow != -1)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "enable_debug_api requires storage.mpt_prune_window = -1 "
+                                  "(archive): the challenger data plane reads MPT preimages with "
+                                  "no retention guarantee, and a pruned block still inside a "
+                                  "dispute game's challenge window would answer -32000 \"not "
+                                  "found\" indistinguishable from an unknown hash"));
+    }
     // Same two-way binding for opstack-el: the per-node mode must be backed by the
     // chain-level declaration (which validateL2Invariants binds to the OP lane, the
     // fork schedule and the L2 genesis shape), and an opstack-el-declaring genesis
