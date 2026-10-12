@@ -28,6 +28,8 @@
 #include <iosfwd>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace bcos::ops
 {
@@ -45,6 +47,11 @@ std::unique_ptr<TxSender> makeSender(
 /// prints `mode / to / method / params` (and the proposal method standing in for the direct
 /// call) and asks `proceed? [y/N]` on an interactive stdin without --yes; returns false when the
 /// operator declined. A non-interactive stdin without --yes is a usage error.
+/// the rows the confirmation shows (mode / to / method / params [/ note]); the CLI prompt and
+/// the TUI's confirmation layer render the same text
+std::vector<std::pair<std::string, std::string>> confirmRows(Preset const& _preset,
+    std::string const& _to, std::vector<std::string> const& _params, std::string const& _mode,
+    std::string const& _proposalMethod = "");
 bool confirmWrite(Args const& _args, std::ostream& _out, Preset const& _preset,
     std::string const& _to, std::vector<std::string> const& _params,
     std::string const& _mode = "direct", std::string const& _proposalMethod = "");

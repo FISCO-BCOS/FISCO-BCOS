@@ -74,6 +74,26 @@ Routing routingFor(Connection const& _connection, Args const& _args, Preset cons
     return routing;
 }
 
+std::vector<std::pair<std::string, std::string>> confirmRows(Preset const& _preset,
+    std::string const& _to, std::vector<std::string> const& _params, std::string const& _mode,
+    std::string const& _proposalMethod)
+{
+    std::string params;
+    for (size_t i = 0; i < _params.size(); ++i)
+    {
+        auto name = i < _preset.params.size() ? std::string(_preset.params[i].name) :
+                                                "arg" + std::to_string(i);
+        params += (i == 0 ? "" : ", ") + name + "=" + _params[i];
+    }
+    std::vector<std::pair<std::string, std::string>> rows = {{"mode", _mode}, {"to", _to},
+        {"method", std::string(_preset.signature)}, {"params", params}};
+    if (!_proposalMethod.empty())
+    {
+        rows.emplace_back("note", _proposalMethod);
+    }
+    return rows;
+}
+
 bool confirmWrite(Args const& _args, std::ostream& _out, Preset const& _preset,
     std::string const& _to, std::vector<std::string> const& _params, std::string const& _mode,
     std::string const& _proposalMethod)
@@ -88,18 +108,7 @@ bool confirmWrite(Args const& _args, std::ostream& _out, Preset const& _preset,
                                         std::string(_preset.group) + " " +
                                         std::string(_preset.name) + " without confirmation");
     }
-    std::string params;
-    for (size_t i = 0; i < _params.size() && i < _preset.params.size(); ++i)
-    {
-        params += (i == 0 ? "" : ", ") + std::string(_preset.params[i].name) + "=" + _params[i];
-    }
-    std::vector<std::pair<std::string, std::string>> rows = {{"mode", _mode}, {"to", _to},
-        {"method", std::string(_preset.signature)}, {"params", params}};
-    if (!_proposalMethod.empty())
-    {
-        rows.emplace_back("note", _proposalMethod);
-    }
-    printRows(_out, rows);
+    printRows(_out, confirmRows(_preset, _to, _params, _mode, _proposalMethod));
     _out << "proceed? [y/N] " << std::flush;
     std::string answer;
     std::getline(std::cin, answer);

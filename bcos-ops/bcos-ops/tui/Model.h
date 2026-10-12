@@ -23,6 +23,7 @@
 #include "bcos-ops/NodeStatus.h"
 #include "bcos-ops/log/LogParser.h"
 #include "bcos-ops/tui/Explorer.h"
+#include "bcos-ops/tx/FeatureFlags.h"
 #include <json/json.h>
 #include <deque>
 #include <map>
@@ -38,6 +39,29 @@ struct Preset;
 
 namespace bcos::ops::tui
 {
+/// what the send page's worker (Sender) published last; seq grows with every outcome so the
+/// UI thread can notice a new one and open the transaction it produced
+struct SendOutcome
+{
+    uint64_t seq = 0;
+    bool ok = false;
+    std::string line;  // one line for the page's bottom row
+    std::string txHash;
+    std::string proposalId;
+    std::string proposalStatus;
+};
+
+struct SendState
+{
+    bool busy = false;
+    bool routingKnown = false;  // proposals below is meaningful
+    bool proposals = false;     // committee-only writes become CommitteeManager proposals
+    std::string helloAddress;   // the HelloWorld this session deployed last
+    SendOutcome last;
+    bool featuresLoaded = false;
+    std::vector<FeatureState> features;  // read on demand for the features entry
+};
+
 struct Model
 {
     std::mutex mutex;
@@ -56,6 +80,7 @@ struct Model
     // txHash → the preset it was sent with, so the tx detail can decode its input (ticket 15
     // fills it; the table rows live for the whole process)
     std::map<std::string, Preset const*> sentPresets;
+    SendState send;
     int64_t lastRefreshMs = 0;
     int refreshInSeconds = 0;
 };
