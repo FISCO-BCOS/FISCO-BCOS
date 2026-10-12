@@ -490,6 +490,28 @@ def checked_bytecode(artifact, name):
     return code
 
 
+def apply_raw_storage_overlay(storage, raw_storage, name):
+    """Fold the predeploy's raw [storage] overlay onto the computed guarded slots.
+
+    The overlay runs LAST, so before the collision check it silently overwrote the
+    OZ owner/initialized, EIP-1967 admin/implementation, system_config and
+    validator slots the two-authority guards above had just validated (the
+    account-collision path raises; the slot path must too). Extracted from
+    build_proxied_allocs so the rejection is unit-testable without a forge
+    artifact tree.
+    """
+    for slot, value in raw_storage.items():
+        key = word_int(slot)
+        if key in storage:
+            raise ValueError(
+                f"{name}: raw storage slot {slot} collides with a computed slot "
+                "(OZ owner/initialized, EIP-1967, system_config or validators) — "
+                "override the guarded value in the config instead")
+        # Same strict-prefix rule as the other consensus config words: a quoted
+        # decimal like "100" must not be silently re-read as hex.
+        storage[key] = config_word(value, f"{name}.storage[{slot}]")
+
+
 def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
     """Two allocs for a self-written proxied predeploy: proxy + implementation.
 
@@ -600,20 +622,7 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
     }
     storage.update(system_config_entry_storage(system_config))
     storage.update(validator_storage(predeploy.get("validators", []), name))
-    for slot, value in (predeploy.get("storage") or {}).items():
-        key = word_int(slot)
-        if key in storage:
-            # The raw overlay runs LAST; before this check it silently overwrote the
-            # OZ owner/initialized, EIP-1967 admin/implementation, system_config and
-            # validator slots the two-authority guards above had just validated (the
-            # account-collision path raises; the slot path must too).
-            raise ValueError(
-                f"{name}: raw storage slot {slot} collides with a computed slot "
-                "(OZ owner/initialized, EIP-1967, system_config or validators) — "
-                "override the guarded value in the config instead")
-        # Same strict-prefix rule as the other consensus config words: a quoted
-        # decimal like "100" must not be silently re-read as hex.
-        storage[key] = config_word(value, f"{name}.storage[{slot}]")
+    apply_raw_storage_overlay(storage, predeploy.get("storage") or {}, name)
 
     proxy_alloc = {
         "address": normalize_hex(predeploy["address"]),
