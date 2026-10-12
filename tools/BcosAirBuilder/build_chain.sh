@@ -2384,8 +2384,60 @@ find_fisco_bcos_for_account()
   return 1
 }
 
-# the admin account comes from `fisco-bcos account new` (console's accounts/ layout:
-# <0xaddr>.pem + <0xaddr>.public.pem); nothing is downloaded any more
+# Released binaries before 3.18 (build_chain's default download, v3.16.0) and their docker images
+# have no `account new` and exit 0 on unknown arguments, so the probe reads the help text.
+fisco_bcos_has_account_new()
+{
+  "$@" account --help 2>&1 | grep -q 'account new'
+}
+
+# Pre-3.18 path, kept only for binaries without `account new`: console's get_account.sh /
+# get_gm_account.sh. The node needs a valid admin address on every chain from
+# compatibility_version 3.3.0 even with auth off (bcos-tool NodeConfig.cpp
+# executor.auth_admin_account check), and build_chain has no keccak tool to derive one locally.
+generate_auth_account_with_console_script()
+{
+  local account_script="get_account.sh"
+  if ${sm_mode}; then
+    account_script="get_gm_account.sh"
+  fi
+  if [ ! -f "${HOME}/.fisco/${account_script}" ];then
+        local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/${account_script}"
+        local github_link="https://github.com/FISCO-BCOS/console/raw/master/tools/${account_script}"
+        if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
+            LOG_INFO "Downloading ${account_script} from ${Download_Link}..."
+            curl -#LO "${Download_Link}"
+        else
+            LOG_INFO "Downloading ${account_script} from ${github_link}..."
+            curl -#LO "${github_link}"
+        fi
+        chmod u+x ${account_script}
+        mv ${account_script} "${HOME}/.fisco/"
+  fi
+  # the console scripts probe the arch with the non-portable `uname -p` ("unknown" on newer
+  # coreutils) and download tassl without retries; patch both
+  sed -i.bak "s/\$(uname -p)/\$(uname -m)/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
+  local curl_retry_opts="--retry 5 --retry-delay 3"
+  if curl --help all 2>/dev/null | grep -q -- "--retry-all-errors"; then
+    curl_retry_opts="--retry 5 --retry-all-errors"
+  fi
+  sed -i.bak "s/curl -#LO/curl -#L ${curl_retry_opts} -O/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
+  auth_admin_account=$(bash ${HOME}/.fisco/${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+      LOG_FATAL "Failed to generate a valid admin account (got '${auth_admin_account}'); check the ${account_script} output above (e.g. tassl download failure)"
+  fi
+  if [[ ${chain_version} == "air" ]];then
+      mv accounts* "${ca_dir}" || LOG_FATAL "moving the generated account into ${ca_dir} failed"
+  else
+      mv accounts* "${BcosBuilder_path}/${chain_version}" || LOG_FATAL "moving the generated account failed"
+  fi
+  LOG_INFO "Admin account: ${auth_admin_account}"
+}
+
+# The admin account comes from `fisco-bcos account new` (console's accounts/ layout:
+# <0xaddr>.pem + <0xaddr>.public.pem). Only reached without -a, i.e. on a non-auth chain (-a is
+# what turns auth on and always carries the address), so a binary without `account new` falls
+# back to the console script with a warning instead of failing the whole build.
 generate_auth_account()
 {
   local account_dir="accounts"
@@ -2405,6 +2457,11 @@ generate_auth_account()
       # docker mode downloads no binary: the image's own fisco-bcos generates the account
       mkdir -p "${account_target}"
       local docker_tag="${compatibility_version}"
+      if ! fisco_bcos_has_account_new docker run --rm "fiscoorg/fiscobcos:${docker_tag}"; then
+          LOG_WARN "fiscoorg/fiscobcos:${docker_tag} has no 'account new'; generating the admin account with console's script (pass -a <address> to skip)"
+          generate_auth_account_with_console_script
+          return
+      fi
       if ! account_json=$(docker run --rm -v "$(cd "${account_target}" && pwd)":/data -w /data "fiscoorg/fiscobcos:${docker_tag}" account new ${sm_flag} --out /data --json 2>&1); then
           LOG_FATAL "'docker run fiscoorg/fiscobcos:${docker_tag} account new' failed: ${account_json}"
       fi
@@ -2412,6 +2469,11 @@ generate_auth_account()
       local fisco_bcos_bin
       if ! fisco_bcos_bin=$(find_fisco_bcos_for_account); then
           LOG_FATAL "fisco-bcos binary not found; the auth admin account is generated with 'fisco-bcos account new', pass -e <fisco-bcos> or -a <admin address>"
+      fi
+      if ! fisco_bcos_has_account_new "${fisco_bcos_bin}"; then
+          LOG_WARN "${fisco_bcos_bin} has no 'account new' (released before 3.18); generating the admin account with console's script (pass -a <address> to skip)"
+          generate_auth_account_with_console_script
+          return
       fi
       if ! account_json=$("${fisco_bcos_bin}" account new ${sm_flag} --out "${account_target}" --json 2>&1); then
           LOG_FATAL "'${fisco_bcos_bin} account new' failed: ${account_json}"
