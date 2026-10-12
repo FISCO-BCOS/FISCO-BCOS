@@ -83,7 +83,13 @@ struct Routing
     std::optional<int64_t> interval;  // --interval; default current height + 1000 blocks
 };
 
-/// decodes a receipt (or a call result) of _preset
+/// the reason of a solidity-style revert: output `Error(string)` (selector 0x08c379a0) decoded;
+/// "" when the output is not one (BalancePrecompiled and reverted contracts fail this way,
+/// the receipt's message stays empty)
+std::string revertReason(std::string const& _outputHex, bool _sm);
+
+/// decodes a receipt (or a call result) of _preset; a failed receipt without a message takes
+/// its revert reason as message
 PresetResult decodePresetResult(Preset const& _preset, Receipt const& _receipt, bool _sm);
 
 /// the one place that decides direct vs proposal (ticket 04) and runs the call

@@ -246,12 +246,38 @@ Json::Value PresetResult::toJson() const
     return value;
 }
 
+std::string revertReason(std::string const& _outputHex, bool _sm)
+{
+    constexpr std::string_view c_errorSelector = "08c379a0";  // Error(string)
+    auto hex = _outputHex.starts_with("0x") ? _outputHex.substr(2) : _outputHex;
+    if (!hex.starts_with(c_errorSelector) || hex.size() < c_errorSelector.size() + 128)
+    {
+        return "";
+    }
+    try
+    {
+        auto decoded = Abi(_sm).decodeOutput(
+            R"([{"name":"Error","type":"function","inputs":[],"outputs":[{"name":"","type":"string"}]}])",
+            "Error", fromHex(hex.substr(c_errorSelector.size())));
+        auto value = parseJson(decoded, "revert reason");
+        return value.isArray() && !value.empty() && value[0].isString() ? value[0].asString() : "";
+    }
+    catch (std::exception const&)
+    {
+        return "";
+    }
+}
+
 PresetResult decodePresetResult(Preset const& _preset, Receipt const& _receipt, bool _sm)
 {
     PresetResult result;
     result.to = std::string(_preset.to);
     result.method = std::string(_preset.signature);
     result.receipt = _receipt;
+    if (!_receipt.ok() && result.receipt.message.empty())
+    {
+        result.receipt.message = revertReason(_receipt.output, _sm);
+    }
     result.decoded = Json::Value(Json::nullValue);
     auto abi = _preset.outputsAbi();
     auto outputHex =

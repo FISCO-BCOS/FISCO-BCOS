@@ -22,6 +22,7 @@
 #include "bcos-ops/Cli.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/tx/Abi.h"
+#include "bcos-ops/tx/PresetCall.h"
 #include "fixtures/FakeRpc.h"
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -186,6 +187,17 @@ BOOST_AUTO_TEST_CASE(revertedReceiptFailsWithTheMessage)
     BOOST_CHECK_EQUAL(json["status"].asInt(), 15);
     BOOST_CHECK_EQUAL(json["message"].asString(), "only caller can addBalance");
     BOOST_CHECK(json["hint"].isNull());
+    // the node leaves the message empty and puts the reason in the output as Error(string)
+    FakeRpc reverted;
+    reverted.set("sendTransaction",
+        balReceipt(15, "0x08c379a0" + balOutput("string", "[\"Permission denied\"]").substr(2)));
+    std::ostringstream err;
+    BOOST_CHECK_EQUAL(runBalanceOn(balConnection(reverted),
+                          balArgs({"sub", c_balAccount, "1", "--yes", "--json"}), err),
+        c_exitChecksFailed);
+    BOOST_CHECK_EQUAL(parseJson(err.str(), "sub")["message"].asString(), "Permission denied");
+    BOOST_CHECK_EQUAL(revertReason("0x", false), "");
+    BOOST_CHECK_EQUAL(revertReason("0x08c379a0", false), "");
 }
 
 BOOST_AUTO_TEST_CASE(unregisteredPrecompiledHintsAtEnable)
