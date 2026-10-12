@@ -17,8 +17,9 @@
  *        four committee-only writes that become CommitteeManager proposals on an auth chain
  *        (--direct forces the precompiled call, which answers -50000 to an EOA); six
  *        contract-admin writes that are always direct. `set-contract-status` picks the
- *        (address,bool) overload for true/false and (address,uint8) for 0/1/2
- *        (AuthManagerPrecompiled.cpp:41-42, the uint8 form needs chain version >= 3.2).
+ *        (address,bool isFreeze) overload for true/false (true freezes) and (address,uint8)
+ *        for 0 normal / 1 frozen / 2 abolished (AuthManagerPrecompiled.cpp:41-42, :354-366;
+ *        the uint8 form needs chain version >= 3.2).
  * @file AuthCmd.cpp
  */
 #include "BalanceCmd.h"
@@ -61,7 +62,9 @@ constexpr std::array c_authSubs{
         "auth open-method-auth <contract> <selector> <account>"},
     AuthSub{"close-method-auth", "close-method-auth", 3,
         "auth close-method-auth <contract> <selector> <account>"},
-    AuthSub{"set-contract-status", "", 2, "auth set-contract-status <contract> <true|false|0|1|2>"},
+    AuthSub{"set-contract-status", "", 2,
+        "auth set-contract-status <contract> <true (freeze)|false (unfreeze)|0 normal|1 frozen|2 "
+        "abolished>"},
 };
 
 /// get-method-auth answers (type, whitelist, blacklist); every other read a single value
@@ -121,8 +124,8 @@ Preset const* contractStatusPreset(std::string const& _status)
         return findPreset("auth", "set-contract-status");
     }
     throw OpsError(c_exitUsage,
-        "auth set-contract-status: status must be true|false (available) or 0|1|2 (normal, "
-        "frozen, abolished), got " +
+        "auth set-contract-status: status must be true (freeze) | false (unfreeze) or 0|1|2 "
+        "(normal, frozen, abolished), got " +
             _status);
 }
 
@@ -176,7 +179,8 @@ void registerAuthCommand()
                 "(closeDeployAuth) | set-method-auth-type <contract> <sel> <type> (setMethodAuth) "
                 "| open-method-auth <contract> <sel> <acct> (openMethodAuth) | close-method-auth "
                 "<contract> <sel> <acct> (closeMethodAuth) | set-contract-status <contract> "
-                "<true|false|0|1|2> (freezeContract / unfreezeContract / abolishContract). The "
+                "<true|false|0|1|2> (true = freezeContract, false = unfreezeContract, 2 = "
+                "abolishContract). The "
                 "four committee writes become proposals on an auth chain; the method/status "
                 "writes need the contract admin as --account",
             "get-admin <contract> | deploy-type | has-deploy-auth <acct> | check-method-auth "

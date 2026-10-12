@@ -77,8 +77,8 @@ constexpr std::array p_authType{ParamSpec{"type", "uint8", "0 none, 1 white list
 constexpr std::array p_contractSelType{ParamSpec{"contract", "address", ""},
     ParamSpec{"selector", "bytes4", c_hintSelector},
     ParamSpec{"type", "uint8", "0 none, 1 white list, 2 black list"}};
-constexpr std::array p_contractBool{
-    ParamSpec{"contract", "address", ""}, ParamSpec{"available", "bool", "false freezes"}};
+constexpr std::array p_contractBool{ParamSpec{"contract", "address", ""},
+    ParamSpec{"freeze", "bool", "true freezes, false unfreezes (AuthManagerPrecompiled isFreeze)"}};
 constexpr std::array p_contractStatus{ParamSpec{"contract", "address", ""},
     ParamSpec{"status", "uint8", "0 normal, 1 frozen, 2 abolished"}};
 constexpr std::array p_governor{ParamSpec{"account", "address", ""},
@@ -90,8 +90,9 @@ constexpr std::array p_deployType{ParamSpec{"type", "uint8", "0 none, 1 white li
     ParamSpec{"interval", "uint256", c_hintInterval}};
 constexpr std::array p_modifyDeploy{ParamSpec{"account", "address", ""},
     ParamSpec{"open", "bool", ""}, ParamSpec{"interval", "uint256", c_hintInterval}};
-constexpr std::array p_resetAdmin{ParamSpec{"contract", "address", ""},
-    ParamSpec{"admin", "address", ""}, ParamSpec{"interval", "uint256", c_hintInterval}};
+// CommitteeManager.sol:228: createResetAdminProposal(newAdmin, contractAddr, interval)
+constexpr std::array p_resetAdmin{ParamSpec{"newAdmin", "address", ""},
+    ParamSpec{"contract", "address", ""}, ParamSpec{"interval", "uint256", c_hintInterval}};
 constexpr std::array p_rmNode{
     ParamSpec{"nodeId", "string", c_hintNodeId}, ParamSpec{"interval", "uint256", c_hintInterval}};
 constexpr std::array p_consWeight{ParamSpec{"nodeId", "string", c_hintNodeId},
@@ -149,7 +150,7 @@ constexpr std::array c_presets{
     Preset{"auth", "check-method-auth", "checkMethodAuth", c_authManager, "checkMethodAuth(address,bytes4,address)", p_contractSelAddr, "bool", Access::Anyone, OPS_DIRECT, false},
     Preset{"auth", "get-method-auth", "getMethodAuth", c_authManager, "getMethodAuth(address,bytes4)", p_contractSel, "uint8,string[],string[]", Access::Anyone, OPS_DIRECT, false},
     Preset{"auth", "contract-available", "contractAvailable", c_authManager, "contractAvailable(address)", p_contract, "bool", Access::Anyone, OPS_DIRECT, false},
-    Preset{"auth", "reset-admin", "resetAdmin", c_authManager, "resetAdmin(address,address)", p_contractAdmin, "int32", Access::Committee, OPS_PROPOSAL(c_resetAdminProposal, "$0,$1,$interval"), true},
+    Preset{"auth", "reset-admin", "resetAdmin", c_authManager, "resetAdmin(address,address)", p_contractAdmin, "int32", Access::Committee, OPS_PROPOSAL(c_resetAdminProposal, "$1,$0,$interval"), true},
     Preset{"auth", "set-deploy-auth-type", "setDeployAuthType", c_authManager, "setDeployAuthType(uint8)", p_authType, "int32", Access::Committee, OPS_PROPOSAL(c_deployAuthTypeProposal, "$0,$interval"), true},
     Preset{"auth", "open-deploy-auth", "openDeployAuth", c_authManager, "openDeployAuth(address)", p_addr, "int32", Access::Committee, OPS_PROPOSAL(c_modifyDeployAuthProposal, "$0,true,$interval"), true},
     Preset{"auth", "close-deploy-auth", "closeDeployAuth", c_authManager, "closeDeployAuth(address)", p_addr, "int32", Access::Committee, OPS_PROPOSAL(c_modifyDeployAuthProposal, "$0,false,$interval"), true},

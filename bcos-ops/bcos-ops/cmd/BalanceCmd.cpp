@@ -59,14 +59,19 @@ constexpr std::array c_balanceSubs{
     BalanceSub{"list-caller", 0, "balance list-caller"},
 };
 
-// bcos::protocol::TransactionStatus::CallAddressError (bcos-protocol/TransactionStatus.h:45):
-// bcos-ops does not link bcos-protocol, same as Smoke.cpp
+// bcos::protocol::TransactionStatus::CallAddressError (bcos-protocol/TransactionStatus.h:45);
+// bcos-ops does not link bcos-protocol, same as Smoke.cpp. A 3.18 node reports the missing
+// precompiled as status 16 RevertInstruction with message "Call address error." instead
+// (TransactionExecutive.cpp callPrecompiled → CallAddressError exception), so both are checked.
 constexpr int32_t c_statusCallAddressError = 19;
+constexpr std::string_view c_callAddressErrorMessage = "Call address error";
 
 /// a reverted call to an address no precompiled answers means the flag is off
 bool balancePrecompiledMissing(Receipt const& _receipt)
 {
-    return _receipt.status == c_statusCallAddressError;
+    return _receipt.status == c_statusCallAddressError ||
+           (!_receipt.ok() &&
+               _receipt.message.find(c_callAddressErrorMessage) != std::string::npos);
 }
 
 /// read presets (get, list-caller) through a random-key sender; the single decoded value is
