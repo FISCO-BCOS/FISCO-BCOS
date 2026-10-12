@@ -15,7 +15,8 @@
 
  *
  * @file run_fisco.cpp
- * @brief da-matrix runner: computes the OP fee grid and, in --check mode, compares it against the committed golden snapshots. */
+ * @brief da-matrix runner: computes the OP fee grid and, in --check mode, compares it
+ * against the committed golden snapshots. */
 
 // run_fisco.cpp — Task 3: FISCO DA/operator-fee matrix runner.
 //
@@ -398,8 +399,8 @@ int main(int argc, char** argv)
         }
 
         // Skipped-row counts go to stderr (CI visibility); summary to stdout.
-        std::cerr << "run_fisco: --check " << checkEnd << ": skipped "
-                  << skippedMissing << " missing-from-golden\n";
+        std::cerr << "run_fisco: --check " << checkEnd << ": skipped " << skippedMissing
+                  << " missing-from-golden\n";
         std::cout << "run_fisco: --check " << checkEnd << ": compared " << compared << " cases, "
                   << mismatches << " mismatches\n";
 
