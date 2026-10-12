@@ -176,6 +176,9 @@ BOOST_AUTO_TEST_CASE(voteAndRevokeAreDirectWritesToTheManager)
     BOOST_CHECK_EQUAL(json["params"][0].asInt(), 5);
     BOOST_CHECK(json["params"][1].asBool());
     BOOST_CHECK(json["ok"].asBool());
+    // the vote reports the proposal it touched (status read back from ProposalManager)
+    BOOST_CHECK_EQUAL(json["proposal"]["id"].asString(), "5");
+    BOOST_CHECK_EQUAL(json["proposal"]["statusName"].asString(), "voting");
     auto tx = cmtSentTx(rpc);
     BOOST_CHECK_EQUAL(tx->data.to, c_cmtManager);
     BOOST_CHECK_EQUAL(
