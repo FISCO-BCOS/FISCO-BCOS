@@ -619,8 +619,16 @@ void runInvalidVector(std::string const& id)
         }
         if (classification == "-38005")
         {
-            BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.newPayload(request, version)),
-                bcos::engine::UnsupportedFork);
+            // Discriminating message: this is the newPayload version gate, not any of
+            // the other UnsupportedFork producers (no-revision / V2/V3 attrs gates).
+            BOOST_CHECK_EXCEPTION(bcos::task::syncWait(fixture->service.newPayload(
+                                      request, version)),
+                bcos::engine::UnsupportedFork,
+                [](bcos::engine::UnsupportedFork const& e) {
+                    return std::string(e.what())
+                               .find("Isthmus+ payloads require engine_newPayloadV4") !=
+                           std::string::npos;
+                });
         }
         else if (classification == "-32603")
         {
@@ -2272,10 +2280,18 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttributesVersionGate)
     attrs.timestamp = 2'000'000'000'000;
     attrs.prevRandao = bcos::crypto::HashType{};
     attrs.suggestedFeeRecipient = bcos::Address{};
-    BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.updateForkchoice(
-                          bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
-                          /*version=*/2)),
-        bcos::engine::UnsupportedFork);
+    // Discriminating message: the FCU-with-attrs version gate (Isthmus+ building
+    // requires V3/V4), not the payload-attributes shape gates that share the type.
+    BOOST_CHECK_EXCEPTION(
+        bcos::task::syncWait(fixture->service.updateForkchoice(
+            bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
+            /*version=*/2)),
+        bcos::engine::UnsupportedFork,
+        [](bcos::engine::UnsupportedFork const& e) {
+            return std::string(e.what())
+                       .find("Isthmus+ payload building requires "
+                             "engine_forkchoiceUpdatedV3") != std::string::npos;
+        });
 }
 
 // ④ finalized > head -> InvalidForkchoiceState (-38002 monotonicity; mirrors updateForkchoice

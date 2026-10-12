@@ -167,8 +167,8 @@ BOOST_AUTO_TEST_CASE(RenderersReproduceTheGoldenValues)
         }
         if (goldenReceipt.isMember("depositReceiptVersion"))
         {
-            version =
-                bcos::u256(goldenReceipt["depositReceiptVersion"].asString()).convert_to<uint64_t>();
+            version = bcos::u256(goldenReceipt["depositReceiptVersion"].asString())
+                          .convert_to<uint64_t>();
         }
         auto receipt = receiptWithDepositMeta(nonce, version);
         bcos::rpc::fillDepositReceiptFields(result, *receipt);
@@ -181,8 +181,9 @@ BOOST_AUTO_TEST_CASE(RenderersReproduceTheGoldenValues)
                 stem << ": " << key << " rendered " << result[key].asString() << " != golden "
                      << goldenTx[key].asString());
         }
-        BOOST_CHECK_MESSAGE(lowerHex(result["from"].asString()) == lowerHex(goldenTx["from"].asString()),
-            stem << ": from mismatch");
+        auto const fromMatches = lowerHex(result["from"].asString()) ==
+                                lowerHex(goldenTx["from"].asString());
+        BOOST_CHECK_MESSAGE(fromMatches, stem << ": from mismatch");
         if (goldenTx["to"].isNull())
         {
             BOOST_CHECK_MESSAGE(result["to"].isNull(), stem << ": to must be null");
