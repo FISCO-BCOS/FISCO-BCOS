@@ -122,7 +122,9 @@ Element renderBottomBar(Model const& _model, Nav& _nav, int _width)
     std::string keys;
     if (_width >= 100)
     {
-        keys = _nav.inDetail() ? "  Esc back  j k select  Enter open  ? help  q quit" :
+        bool proposal = _nav.inDetail() && _nav.stack.back().kind == DetailKind::proposal;
+        keys = proposal        ? "  Esc back  v for  x against  d revoke  ? help  q quit" :
+               _nav.inDetail() ? "  Esc back  j k select  Enter open  ? help  q quit" :
                                  "  Tab focus  j k select  Enter open  ? help  q quit";
     }
     else
@@ -142,6 +144,7 @@ Element renderHelp(Model const& _model)
         text("j k   or arrows: select a row;  PgUp PgDn: a page of rows"),
         text("Enter open the selected block / tx / proposal;  Esc: back"),
         text("send  Tab: tree / key file / fields / button;  Enter on [ send ] confirms"),
+        text("gov   Enter opens a proposal;  v vote for, x vote against, d revoke (confirmed)"),
         text("r     refresh now;  q: quit;  ?: this help"),
         text(""),
         text("any key closes this layer") | dim,
@@ -173,7 +176,8 @@ Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::st
     if (_nav.inDetail())
     {
         resolveDetailRefs(_nav, _model.explorer);
-        page = renderDetail(_model, _nav, body);
+        resolveProposalRefs(_nav, _model.governance);
+        page = renderDetail(_model, _nav, body, _form);
     }
     else
     {
@@ -198,15 +202,15 @@ Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::st
             page = renderNode(_model);
             break;
         case Page::gov:
-            page =
-                window(text(" gov "), text("governance page arrives with ticket 16") | dim, LIGHT);
+            page = renderGov(_model, _nav, body);
             break;
         }
     }
     _nav.barRow = _frame.height - 1;
     auto frame =
         vbox({renderTopBar(_model), page | flex, renderBottomBar(_model, _nav, _frame.width)});
-    if (_form && _form->confirm && !_nav.inDetail() && _nav.page == Page::send)
+    bool onProposal = _nav.inDetail() && _nav.stack.back().kind == DetailKind::proposal;
+    if (_form && _form->confirm && ((!_nav.inDetail() && _nav.page == Page::send) || onProposal))
     {
         frame = dbox({frame, renderSendConfirm(*_form) | clear_under | center});
     }

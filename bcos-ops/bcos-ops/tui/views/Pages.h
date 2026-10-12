@@ -62,6 +62,17 @@ ftxui::Element renderSend(Model const& _model, SendForm& _form, Frame const& _fr
 /// the confirmation layer: mode / to / method / params and the Enter / Esc hint
 ftxui::Element renderSendConfirm(SendForm const& _form);
 ftxui::Element renderHelp(Model const& _model);
+/// committee rates + governors above, the newest proposals below (auth chains; otherwise a
+/// one-line note); updates _nav.proposals
+ftxui::Element renderGov(Model const& _model, Nav& _nav, Frame const& _frame);
+/// one proposal full screen with the v / x / d hints; _form (when given) supplies the notice
+/// line of the key map and the last outcome comes from _model.send
+ftxui::Element renderProposalDetail(
+    Model const& _model, Frame const& _frame, DetailRef const& _ref, SendForm const* _form);
+/// maps a proposal ref pushed as a row index to its proposal id (resolved); keeps resolved ones
+void resolveProposalRefs(Nav& _nav, GovernanceState const& _governance);
+/// the list size and open proposal ids the refresher fetches for the gov page
+GovernanceWants governanceWants(Nav const& _nav);
 /// maps the row indexes Nav pushed into stable keys (block height, tx hash) using the explorer
 /// rows and the cached block details; a tx opened from a block whose detail is not loaded yet
 /// stays unresolved until the next render
@@ -70,7 +81,8 @@ void resolveDetailRefs(Nav& _nav, ExplorerState const& _explorer);
 std::vector<DetailWant> detailWants(Nav const& _nav);
 /// the top of the detail stack (block / tx / proposal) full screen; keeps _nav.detailTxs sized
 /// to the block's transactions
-ftxui::Element renderDetail(Model const& _model, Nav& _nav, Frame const& _frame);
+ftxui::Element renderDetail(
+    Model const& _model, Nav& _nav, Frame const& _frame, SendForm const* _form = nullptr);
 /// `Error(string)` revert reason of a receipt output, or empty
 std::string detailRevertReason(std::string const& _outputHex);
 /// top bar + page (or detail) + bottom bar, with the help layer over it when open
