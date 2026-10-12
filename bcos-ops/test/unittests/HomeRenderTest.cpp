@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(narrowTerminalStacksTheListsAndDropsColumns)
     tui::Model model;
     homeFill(rpc, model);
     tui::Nav nav;
-    tui::Frame frame{80, 24, c_homeNow, nullptr};
+    tui::Frame frame{.width = 80, .height = 24, .nowMs = c_homeNow};
     auto text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     // top bar
     BOOST_CHECK(text.find("fisco-bcos tui") != std::string::npos);
@@ -103,7 +103,7 @@ BOOST_AUTO_TEST_CASE(narrowTerminalStacksTheListsAndDropsColumns)
     BOOST_CHECK(nav.blocks.pageRows >= 5 && nav.blocks.pageRows <= 8);
     // 36 columns (34 inside the border): time goes first on the block side, to and from on
     // the tx side; height/hash/txs/age and hash/status/height stay
-    tui::Frame narrow{36, 24, c_homeNow, nullptr};
+    tui::Frame narrow{.width = 36, .height = 24, .nowMs = c_homeNow};
     auto small = renderText(tui::renderFrame(model, nav, narrow, ""), 36, 24);
     BOOST_CHECK(small.find("height  hash        txs  age") != std::string::npos);
     BOOST_CHECK(small.find("time") == std::string::npos);
@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(wideTerminalPutsTheListsSideBySide)
     tui::Nav nav;
     nav.focus = 1;
     nav.txs.selected = 1;
-    tui::Frame frame{120, 40, c_homeNow, nullptr};
+    tui::Frame frame{.width = 120, .height = 40, .nowMs = c_homeNow};
     auto raw = renderRaw(tui::renderFrame(model, nav, frame, ""), 120, 40);
     auto text = stripAnsi(raw);
     auto blocksPos = text.find(" blocks ");
@@ -156,7 +156,7 @@ BOOST_AUTO_TEST_CASE(gapAndFailuresAreMarked)
     homeFill(rpc, model, 200);
     model.explorer.txs[0].status = 16;
     tui::Nav nav;
-    tui::Frame frame{120, 60, c_homeNow + 80000, nullptr};
+    tui::Frame frame{.width = 120, .height = 60, .nowMs = c_homeNow + 80000};
     auto text = renderText(tui::renderFrame(model, nav, frame, ""), 120, 60);
     BOOST_CHECK(text.find("older rows skipped") != std::string::npos);
     auto row159 = lineWith(text, "159     ");
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE(detailAndHelpLayersRenderOverThePage)
     tui::Model model;
     homeFill(rpc, model);
     tui::Nav nav;
-    tui::Frame frame{80, 24, c_homeNow, nullptr};
+    tui::Frame frame{.width = 80, .height = 24, .nowMs = c_homeNow};
     renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);  // sizes the lists
     tui::navHandle(nav, ftxui::Event::ArrowDown);
     tui::navHandle(nav, ftxui::Event::Return);
@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE(logPageFiltersLinesAndShowsTheFilter)
         *parseLine("info|2026-10-10 05:00:04.000000|x|[TXPOOL]TxsRemoved,number=2"));
     tui::Nav nav;
     nav.page = tui::Page::log;
-    tui::Frame frame{80, 24, c_homeNow, nullptr};
+    tui::Frame frame{.width = 80, .height = 24, .nowMs = c_homeNow};
     auto all = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     BOOST_CHECK(all.find("ViewChangeTriggered") != std::string::npos);
     BOOST_CHECK(all.find("TxsRemoved") != std::string::npos);
@@ -224,7 +224,7 @@ BOOST_AUTO_TEST_CASE(errorBannerAndAuthChainBar)
     model.error = "connect refused";
     model.authChain = true;
     tui::Nav nav;
-    tui::Frame frame{80, 24, c_homeNow, nullptr};
+    tui::Frame frame{.width = 80, .height = 24, .nowMs = c_homeNow};
     auto text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     BOOST_CHECK(text.find("connect refused") != std::string::npos);
     BOOST_CHECK(text.find("6 gov") != std::string::npos);
@@ -248,7 +248,7 @@ BOOST_AUTO_TEST_CASE(everyPageRendersAtTinySizesWithoutThrowing)
             tui::Nav nav;
             nav.authChain = true;
             tui::navHandle(nav, ftxui::Event::Character(static_cast<char>('0' + key)));
-            tui::Frame frame{size.first, size.second, c_homeNow, nullptr};
+            tui::Frame frame{.width = size.first, .height = size.second, .nowMs = c_homeNow};
             BOOST_CHECK_NO_THROW(
                 renderText(tui::renderFrame(model, nav, frame, ""), size.first, size.second));
             nav.help = true;
@@ -257,7 +257,7 @@ BOOST_AUTO_TEST_CASE(everyPageRendersAtTinySizesWithoutThrowing)
         }
         tui::Nav detail;
         detail.stack.push_back({.kind = tui::DetailKind::block, .number = 0});
-        tui::Frame frame{size.first, size.second, c_homeNow, nullptr};
+        tui::Frame frame{.width = size.first, .height = size.second, .nowMs = c_homeNow};
         BOOST_CHECK_NO_THROW(
             renderText(tui::renderFrame(model, detail, frame, ""), size.first, size.second));
         detail.stack.push_back({.kind = tui::DetailKind::tx, .number = 0});

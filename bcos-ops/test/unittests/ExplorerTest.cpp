@@ -263,6 +263,64 @@ BOOST_AUTO_TEST_CASE(stopFlagEndsAFetchBeforeTheNextRpc)
     BOOST_CHECK_EQUAL(rpc.calls().size(), before);
 }
 
+BOOST_AUTO_TEST_CASE(stopRaisedInsideAFetchEndsItAfterThatRequest)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 40, 1);
+    tui::ExplorerState state;
+    state.capacity = 20;
+    std::atomic<bool> stop{false};
+    size_t blockCalls = 0;
+    RpcCall call = [&](std::string_view _method, Json::Value const& _params) {
+        auto result = rpc.call()(_method, _params);
+        if (_method == "getBlockByNumber" && ++blockCalls == 3)
+        {
+            stop = true;  // q pressed while the third block is in flight
+        }
+        return result;
+    };
+    tui::explorerFetch(state, call, "group0", 40, &stop);
+    BOOST_CHECK_EQUAL(blockCalls, 3U);
+    size_t total = 0;
+    for (auto const& [method, params] : rpc.calls())
+    {
+        total += method == "getBlockByNumber" ? 1 : 0;
+    }
+    BOOST_CHECK_EQUAL(total, 3U);
+    // the detail fetches honour it too
+    stop = true;
+    auto before = rpc.calls().size();
+    tui::explorerFetchWanted(state, rpc.call(), "group0",
+        {tui::DetailWant{.block = true, .number = 40, .hash = ""}}, &stop);
+    BOOST_CHECK_EQUAL(rpc.calls().size(), before);
+    BOOST_CHECK(state.blockDetails.empty());
+}
+
+BOOST_AUTO_TEST_CASE(refresherStopsBetweenRequestsOfTheStatusPhase)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 40, 1);
+    tui::Model model;
+    Connection connection;
+    connection.source = "rpc";
+    connection.group = "group0";
+    tui::Refresher* refresherPtr = nullptr;
+    size_t calls = 0;
+    connection.call = [&](std::string_view _method, Json::Value const& _params) {
+        ++calls;
+        if (calls == 1 && refresherPtr != nullptr)
+        {
+            refresherPtr->stop();  // no thread started: only raises the flag
+        }
+        return rpc.call()(_method, _params);
+    };
+    tui::Refresher refresher(connection, LocalFallbacks{}, Thresholds{}, model, nullptr, 100000);
+    refresherPtr = &refresher;
+    refresher.runOnce();
+    BOOST_CHECK_EQUAL(calls, 1U);  // nothing after the request that saw the stop
+    BOOST_CHECK(model.explorer.blocks.empty());
+}
+
 BOOST_AUTO_TEST_CASE(aLowerHeightStartsOverAndOlderRowsBackFillLater)
 {
     FakeRpc rpc;

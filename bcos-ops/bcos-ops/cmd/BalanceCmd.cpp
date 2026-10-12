@@ -62,8 +62,9 @@ constexpr std::array c_balanceSubs{
 // bcos::protocol::TransactionStatus::CallAddressError (bcos-protocol/TransactionStatus.h:45);
 // bcos-ops does not link bcos-protocol, same as Smoke.cpp. A 3.18 node reports the missing
 // precompiled as status 16 RevertInstruction whose output is Error("Call address error.")
-// (HostContext.h:626 puts the text into the revert output; the receipt carries no message), and
-// decodePresetResult fills `message` from that output through revertReason(), so both are checked.
+// (TransactionExecutive.cpp:1248 writes the text into the revert output; the receipt carries no
+// message), and decodePresetResult fills `message` from that output through revertReason(), so both
+// are checked.
 constexpr int32_t c_statusCallAddressError = 19;
 constexpr std::string_view c_callAddressErrorMessage = "Call address error";
 

@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(blockDetailShowsHeaderFieldsAndItsTransactions)
     BOOST_REQUIRE(model.explorer.blockDetails.contains(127));
     tui::Nav nav;
     nav.stack.push_back({.kind = tui::DetailKind::block, .number = 1});  // second row = 127
-    tui::Frame frame{80, 24, c_detailNow, nullptr};
+    tui::Frame frame{.width = 80, .height = 24, .nowMs = c_detailNow};
     auto text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     BOOST_CHECK(nav.stack[0].resolved);
     BOOST_CHECK_EQUAL(nav.stack[0].number, 127);
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(blockDetailShowsHeaderFieldsAndItsTransactions)
     auto later = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     BOOST_CHECK(later.find(" block 127 ") != std::string::npos);
     // wide terminal: both columns on one row
-    tui::Frame wide{120, 40, c_detailNow, nullptr};
+    tui::Frame wide{.width = 120, .height = 40, .nowMs = c_detailNow};
     auto wideText = renderText(tui::renderFrame(model, nav, wide, ""), 120, 40);
     BOOST_CHECK(lineWith(wideText, "number").find("gasUsed") != std::string::npos);
 }
@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(txOpenedFromABlockResolvesThroughTheCachedBlock)
     tui::Nav nav;
     nav.stack.push_back({.kind = tui::DetailKind::block, .number = 1});
     nav.stack.push_back({.kind = tui::DetailKind::tx, .number = 1});  // second tx of block 127
-    tui::Frame frame{80, 24, c_detailNow, nullptr};
+    tui::Frame frame{.width = 80, .height = 24, .nowMs = c_detailNow};
     auto text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     BOOST_REQUIRE(nav.stack[1].resolved);
     BOOST_CHECK_EQUAL(nav.stack[1].hash, hash);
@@ -164,7 +164,7 @@ BOOST_AUTO_TEST_CASE(failedTxShowsTheDecodedRevertReasonInRed)
     tui::Nav nav;
     nav.focus = 1;
     nav.stack.push_back({.kind = tui::DetailKind::tx, .number = 0});  // newest tx row
-    tui::Frame frame{80, 24, c_detailNow, nullptr};
+    tui::Frame frame{.width = 80, .height = 24, .nowMs = c_detailNow};
     auto raw = renderRaw(tui::renderFrame(model, nav, frame, ""), 80, 24);
     auto text = stripAnsi(raw);
     BOOST_CHECK(text.find("status      16 FAIL") != std::string::npos);
@@ -187,7 +187,7 @@ BOOST_AUTO_TEST_CASE(pendingAndUnloadedStatesAreShown)
     detailFill(rpc, model);
     tui::Nav nav;
     nav.stack.push_back({.kind = tui::DetailKind::tx, .hash = "0xabc", .resolved = true});
-    tui::Frame frame{80, 24, c_detailNow, nullptr};
+    tui::Frame frame{.width = 80, .height = 24, .nowMs = c_detailNow};
     auto text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     BOOST_CHECK(text.find("loading transaction") != std::string::npos);
     model.explorer.txDetails["0xabc"] = tui::TxDetail{Json::Value(), Json::Value(), true};
@@ -204,6 +204,26 @@ BOOST_AUTO_TEST_CASE(pendingAndUnloadedStatesAreShown)
     text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     BOOST_CHECK(text.find("method      set(string)") != std::string::npos);
     BOOST_CHECK(text.find("params      [\"hi\"]") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(blockDetailShowsLoadingUntilTheBlockIsCached)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 128, 1);
+    tui::Model model;
+    detailFill(rpc, model);
+    model.explorer.blockDetails.clear();  // the refresher has not answered the want yet
+    tui::Nav nav;
+    nav.stack.push_back({.kind = tui::DetailKind::block, .number = 128, .resolved = true});
+    tui::Frame frame{.width = 80, .height = 24, .nowMs = c_detailNow};
+    auto text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
+    BOOST_CHECK(text.find("loading block detail") != std::string::npos);
+    BOOST_CHECK(text.find("signatures  0") == std::string::npos);
+    // an out-of-range tx row says so instead of loading for ever
+    nav.stack.clear();
+    nav.stack.push_back({.kind = tui::DetailKind::tx, .number = 99});
+    text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
+    BOOST_CHECK(text.find("row no longer loaded") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
