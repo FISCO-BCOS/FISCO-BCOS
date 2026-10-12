@@ -526,6 +526,19 @@ BOOST_AUTO_TEST_CASE(UnsupportedObjectBlockTagReturnsInvalidParams)
     auto respBoolNumber = send(boolNumber);
     BOOST_REQUIRE(respBoolNumber.isMember("error"));
     BOOST_CHECK_EQUAL(respBoolNumber["error"]["code"].asInt(), -32602);
+
+    // An explicit EMPTY string is the same wrong-block read as a missing parameter: the shared
+    // resolver answers (latest, true) for an empty tag, so both string arms must reject it
+    // rather than let eth_getProof silently prove against the tip.
+    auto respEmptyString = send(Json::Value(""));
+    BOOST_REQUIRE(respEmptyString.isMember("error"));
+    BOOST_CHECK_EQUAL(respEmptyString["error"]["code"].asInt(), -32602);
+
+    Json::Value emptyBlockNumber(Json::objectValue);
+    emptyBlockNumber["blockNumber"] = "";
+    auto respEmptyBlockNumber = send(emptyBlockNumber);
+    BOOST_REQUIRE(respEmptyBlockNumber.isMember("error"));
+    BOOST_CHECK_EQUAL(respEmptyBlockNumber["error"]["code"].asInt(), -32602);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

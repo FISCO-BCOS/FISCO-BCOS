@@ -123,17 +123,18 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
     auto const blockTag = toView(request[0U]);
     auto const ledger = m_nodeService->ledger();
 
-    // debug_getRawHeader mirrors geth's DebugAPI.GetRawHeader, which accepts only a block
-    // number or a hash. The safe/finalized/pending tags are refused: resolving them here via
-    // the shared tag resolver with the static depth (default 0) would answer the unsafe tip,
+    // debug_getRawHeader refuses the safe/finalized/pending tags: resolving them here via the
+    // shared tag resolver with the static depth (default 0) would answer the unsafe tip,
     // contradicting eth_getBlockByNumber on the same node (which fails closed on the engine
-    // lane when the forkchoice tracker is unset). On the fault-proof data plane one node must
-    // not answer two different blocks for the same tag.
+    // lane when the forkchoice tracker is unset). A block number, a hash, and the latest /
+    // earliest tags are accepted, through the same resolver eth_getBlockByNumber uses — on the
+    // fault-proof data plane one node must not answer two different blocks for the same tag.
     if (blockTag == bcos::rpc::SafeBlock || blockTag == bcos::rpc::FinalizedBlock ||
         blockTag == bcos::rpc::PendingBlock)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "debug_getRawHeader accepts only a block number or hash"));
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            "debug_getRawHeader does not accept the safe/finalized/pending tags; use a block "
+            "number, a block hash, latest or earliest"));
     }
 
     protocol::BlockNumber blockNumber = 0;

@@ -149,15 +149,24 @@ class L1Proxy:
             if block is None:
                 return {"jsonrpc": "2.0", "id": payload.get("id"),
                         "error": {"code": -32602, "message": "Block not found"}}
-            encoded = encode_header(block)
-            # The docstring's byte-exact invariant: keccak(rlp(header)) must equal the hash the
-            # caller keyed the request with. A mismatch means anvil's field shape (or a fork
-            # schedule) drifted, and serving those bytes would hand kona-host a preimage that
-            # does not hash to its key — an opaque derive failure far from its cause.
-            if keccak(encoded) != hx(block["hash"]):
+            # encode_header/hx index anvil's fields by name and parse hex, so a malformed or
+            # reshaped upstream block (missing/!hex field) raises KeyError/ValueError inside the
+            # handler thread and drops the connection mid-response. Map the whole class to a
+            # -32603 answer instead of crashing the thread.
+            try:
+                encoded = encode_header(block)
+                # The docstring's byte-exact invariant: keccak(rlp(header)) must equal the hash
+                # the block was fetched by. A mismatch means anvil's field shape (or a fork
+                # schedule) drifted, and serving those bytes would hand kona-host a preimage
+                # that does not hash to its key — an opaque derive failure far from its cause.
+                if keccak(encoded) != hx(block["hash"]):
+                    return {"jsonrpc": "2.0", "id": payload.get("id"),
+                            "error": {"code": -32603,
+                                      "message": "Header RLP keccak mismatch for " + block["hash"]}}
+            except (KeyError, TypeError, ValueError) as exc:
                 return {"jsonrpc": "2.0", "id": payload.get("id"),
                         "error": {"code": -32603,
-                                  "message": "Header RLP keccak mismatch for " + block["hash"]}}
+                                  "message": "Malformed L1 header from upstream: " + str(exc)}}
             return {"jsonrpc": "2.0", "id": payload.get("id"),
                     "result": "0x" + encoded.hex()}
 
@@ -172,8 +181,14 @@ class L1Proxy:
             if receipts is None:
                 return {"jsonrpc": "2.0", "id": payload.get("id"),
                         "error": {"code": -32602, "message": "Block not found"}}
-            return {"jsonrpc": "2.0", "id": payload.get("id"),
-                    "result": ["0x" + encode_receipt(r).hex() for r in receipts]}
+            # Same KeyError/ValueError class as the header branch above.
+            try:
+                encoded_receipts = ["0x" + encode_receipt(r).hex() for r in receipts]
+            except (KeyError, TypeError, ValueError) as exc:
+                return {"jsonrpc": "2.0", "id": payload.get("id"),
+                        "error": {"code": -32603,
+                                  "message": "Malformed L1 receipt from upstream: " + str(exc)}}
+            return {"jsonrpc": "2.0", "id": payload.get("id"), "result": encoded_receipts}
 
         # Everything else: transparent passthrough.
         return self.forward(payload)

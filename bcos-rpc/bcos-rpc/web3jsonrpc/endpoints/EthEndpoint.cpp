@@ -91,7 +91,14 @@ std::string resolveBlockTagString(const Json::Value& tag)
 {
     if (tag.isString())
     {
-        return tag.asString();
+        // An explicit empty string is the same wrong-block read as a missing parameter: the
+        // shared getBlockNumberByTag resolver answers (latest, true) for an empty tag, which
+        // this helper's contract forbids.
+        if (!tag.asString().empty())
+        {
+            return tag.asString();
+        }
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Unsupported block parameter"));
     }
     if (tag.isObject())
     {
@@ -111,7 +118,7 @@ std::string resolveBlockTagString(const Json::Value& tag)
         if (tag.isMember("blockNumber"))
         {
             auto const& number = tag["blockNumber"];
-            if (number.isString())
+            if (number.isString() && !number.asString().empty())
             {
                 return number.asString();
             }

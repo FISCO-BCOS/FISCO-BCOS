@@ -368,6 +368,9 @@ BOOST_AUTO_TEST_CASE(RawHeaderServesEthGenesisHeader)
     BOOST_CHECK(raw == rlp);
     BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bcos::ref(raw)).hexPrefixed(), published);
     BOOST_CHECK(resultBytes(call1("debug_getRawHeader", published)) == rlp);
+    // The earliest tag resolves to block 0 too (the same block eth_getBlockByNumber(0)
+    // publishes), and is served — the tag refusal above is scoped to safe/finalized/pending.
+    BOOST_CHECK(resultBytes(call1("debug_getRawHeader", "earliest")) == rlp);
 }
 
 // The guard's negative control: a header whose stored hash is NOT keccak256 of its RLP must be
@@ -415,10 +418,10 @@ BOOST_AUTO_TEST_CASE(RawHeaderServesPreCanyonOpHeader)
                header->hash().hexPrefixed());
 }
 
-// debug_getRawHeader mirrors geth's DebugAPI.GetRawHeader, which accepts only a block number or
-// a hash. The safe/finalized/pending tags are refused before resolution: answering them through
-// the shared tag resolver would return the unsafe tip and contradict eth_getBlockByNumber on
-// the same node (which fails closed on the engine lane when the forkchoice tracker is unset).
+// debug_getRawHeader refuses the safe/finalized/pending tags before resolution: answering them
+// through the shared tag resolver would return the unsafe tip and contradict
+// eth_getBlockByNumber on the same node (which fails closed on the engine lane when the
+// forkchoice tracker is unset). A number, a hash, latest and earliest are accepted.
 BOOST_AUTO_TEST_CASE(RawHeaderRefusesSafeFinalizedPendingTags)
 {
     setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
@@ -429,10 +432,11 @@ BOOST_AUTO_TEST_CASE(RawHeaderRefusesSafeFinalizedPendingTags)
         BOOST_REQUIRE_MESSAGE(resp.isMember("error"), std::string(tag) + ": " + printJson(resp));
         BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InvalidParams);
         BOOST_CHECK_EQUAL(resp["error"]["message"].asString(),
-            "debug_getRawHeader accepts only a block number or hash");
+            "debug_getRawHeader does not accept the safe/finalized/pending tags; use a block "
+            "number, a block hash, latest or earliest");
         BOOST_TEST(!resp.isMember("result"));
     }
-    // "latest" is not refused — the refusal is tag-specific, not a blanket rejection.
+    // latest is NOT refused — the refusal is tag-specific, not a blanket rejection.
     BOOST_TEST(resultBytes(call1("debug_getRawHeader", "latest")).size() > 0);
 }
 
