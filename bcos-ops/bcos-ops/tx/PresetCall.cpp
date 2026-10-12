@@ -469,6 +469,14 @@ PresetResult PresetRunner::run(
         result.ok = (result.proposal->status == 1 || result.proposal->status == 2) &&
                     (!result.proposal->execCode || *result.proposal->execCode == 0);
     }
+    // vote / revoke: the vote that passes a proposal executes it, so report where it stands
+    // and the executed call's code (a passed add-sealer can still fail inside the precompiled)
+    if (_preset.write && _preset.group == "committee" &&
+        (_preset.name == "vote" || _preset.name == "revoke") && result.ok && !_args.empty())
+    {
+        result.proposal = proposalOutcome(_args[0], result.receipt);
+        result.ok = !result.proposal->execCode || *result.proposal->execCode == 0;
+    }
     return result;
 }
 }  // namespace bcos::ops
