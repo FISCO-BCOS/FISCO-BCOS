@@ -38,7 +38,9 @@
 // entry= or never-hit exemptions = FAILURE.
 
 #include "support/DualRunHarness.h"  // opstack_test::DualRunFixture / MLS / runExecutorPath
+#include "support/JsonAt.h"
 #include "support/SeedPreState.h"
+#include "support/T8nCorpus.h"
 #include <bcos-codec/rlp/RLPEncode.h>  // variadic list-wrap encode (the 7702 signing message)
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -72,22 +74,9 @@ namespace fs = std::filesystem;
 using JsonValue = Json::Value;
 
 // ── jsoncpp .at() equivalent ────────────────────────────────────────────────
-// nlohmann's .at(key) throws on a missing member; jsoncpp's operator[] silently
-// fabricates a null. Every required-field access in this replayer goes through
-// jAt so a missing field is a named failure, never a silent null read.
-//
-// key is `const char*` (not `const std::string&`) deliberately: a string literal
-// argument would materialize a temporary std::string, and GCC-14's -Wdangling-reference
-// flags any reference-returning call that receives a class-type temporary — even though
-// the returned reference aliases `v`, never `key` (false positive). A `const char*`
-// argument creates no temporary, so the warning cannot fire. Callers with a std::string
-// key pass .c_str() (jAt(post, authAddr)).
-inline const Json::Value& jAt(const Json::Value& v, const char* key)
-{
-    if (!v.isMember(key))
-        throw std::invalid_argument(std::string("missing required field: ") + key);
-    return v[key];
-}
+// The ONE throwing copy lives in support/JsonAt.h (shared with
+// OpSchedulerGoldenReplayTest); this alias keeps every call site unqualified.
+using opstack_test::jAt;
 
 // jsoncpp Reader-based parse (nlohmann Json::parse equivalent; string and stream).
 inline Json::Value jParse(const std::string& input)
@@ -2181,14 +2170,21 @@ BOOST_AUTO_TEST_CASE(Vectors)
     // Caveat (review finding, P2): this guard proves a critical stem was
     // dispatched through the replay loop, not that its differential comparison
     // ran — a vector rewritten into an executor-reject shape would still satisfy
-    // it. Byte drift is pinned by the corpus' vectors/SHA256SUMS; treat any edit
-    // to a critical vector as gate-affecting.
-    static constexpr std::array<const char*, 2> c_criticalStems{
-        "ladder_1000_69292b10", "devnet_1875-2274_c38db356"};
-    for (const auto* stem : c_criticalStems)
+    // it. Byte drift is pinned by the corpus' vectors/SHA256SUMS, which
+    // OpGoldenCorpusProvenanceTest::VectorsCriticalStemsAreBytePinned verifies
+    // (listed == critical stems, per-file sha256 matched); treat any edit to a
+    // critical vector as gate-affecting. NOTE the corpus lives in the pinned
+    // op-stack-e2e-tests checkout (b82691ac), not in this tree: the six sample
+    // files deleted when the corpus moved were regenerated under the same stems,
+    // so the bytes these assertions track are the corpus' own.
+    // The stems themselves live in support/T8nCorpus.h (single source; the provenance
+    // test asserts the same pair is listed in the corpus' vectors/SHA256SUMS).
+    static constexpr auto c_criticalStems = opstack_test::c_t8nCriticalStems;
+    for (auto const stem : c_criticalStems)
     {
-        BOOST_REQUIRE_MESSAGE(
-            replayedStems.contains(stem), "critical vector missing from replay: " << stem);
+        // std::set<std::string> has no heterogeneous lookup before C++26: materialize.
+        BOOST_REQUIRE_MESSAGE(replayedStems.contains(std::string(stem)),
+            "critical vector missing from replay: " << stem);
     }
 
     // 22 = 8 *_deposit_only (1 receipt each) + 7 *_transfer_basic (2 receipts each); bump

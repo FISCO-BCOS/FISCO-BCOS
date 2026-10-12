@@ -39,6 +39,7 @@
 //       rewrites): ties the corpus those goldens extend to a specific op-geth
 //       checkout, machine-readably, instead of to README prose.
 
+#include "support/T8nCorpus.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -193,6 +194,11 @@ std::set<std::string> getPayloadFilesOnDisk()
 
 /// jsoncpp's operator[] fabricates nulls; every required provenance field goes
 /// through this so a missing member is a named failure, never a silent pass.
+/// Deliberately the SOFT variant, distinct from support/JsonAt.h's throwing jAt: this
+/// sweep walks every corpus file and must record all missing fields in one pass, while
+/// the throwing copy (the suite-local reads) fails fast on the first.
+/// (Three near-identical copies of the throwing variant once drifted across the t8n
+/// suites; this file's different contract is the only one that survives on purpose.)
 Json::Value const& jAt(Json::Value const& doc, char const* key, std::string const& who)
 {
     static Json::Value const nullValue;
@@ -350,4 +356,67 @@ BOOST_AUTO_TEST_CASE(GetPayloadEnvelopeCorpusIsPinned,
     BOOST_CHECK_MESSAGE(onDisk == listed,
         "the set of getpayload envelopes on disk differs from the set SHA256SUMS covers");
 }
+// F16/F17: the vectors/ contract. The corpus' vectors/SHA256SUMS lists the CRITICAL
+// stems with their bytes; nothing read it before, so a vector body rewrite kept every
+// in-repo check green while the replay gate judged a self-produced oracle. Verify the
+// listed set covers every critical stem and each file's bytes match the listing.
+BOOST_AUTO_TEST_CASE(VectorsCriticalStemsAreBytePinned)
+{
+    auto const sums = fs::path(OP_T8N_VECTORS_DIR) / "SHA256SUMS";
+    if (!fs::exists(sums))
+    {
+#ifdef FISCO_REQUIRE_T8N_CORPUS
+        BOOST_FAIL("CI requires the corpus' vectors/SHA256SUMS at "
+                   << sums.string() << " — regenerate the corpus or bump the pin");
+#else
+        BOOST_TEST_MESSAGE("vectors/SHA256SUMS absent (no corpus checkout); skipping");
+        return;
+#endif
+    }
+    std::ifstream in(sums);
+    BOOST_REQUIRE_MESSAGE(in.is_open(), "cannot open " << sums.string());
+    std::vector<ChecksumEntry> entries;
+    std::string line;
+    while (std::getline(in, line))
+    {
+        if (line.empty() || line[0] == '#')
+        {
+            continue;
+        }
+        auto const separator = line.find("  ");
+        BOOST_CHECK_MESSAGE(separator == 64U, "malformed vectors/SHA256SUMS line: " << line);
+        if (separator == std::string::npos)
+        {
+            continue;
+        }
+        entries.push_back({line.substr(0, separator), line.substr(separator + 2)});
+    }
+    std::set<std::string> listed;
+    for (auto const& entry : entries)
+    {
+        BOOST_TEST_INFO_SCOPE(entry.relativePath);
+        listed.insert(entry.relativePath);
+        auto const path = fs::path(OP_T8N_VECTORS_DIR) / entry.relativePath;
+        BOOST_CHECK_MESSAGE(fs::exists(path),
+            "listed in vectors/SHA256SUMS but missing on disk: " << entry.relativePath);
+        if (!fs::exists(path))
+        {
+            continue;
+        }
+        BOOST_CHECK_MESSAGE(sha256HexOfFile(path) == entry.sha256Hex,
+            entry.relativePath << ": vector bytes changed since the pinned generation. A "
+                                  "genuine regeneration must come from pinned op-geth "
+                                  "(e8800cff) and refresh this listing in the same change.");
+    }
+    // The listing must cover every critical stem, or the byte pin silently stopped
+    // covering what the replay gate weighs.
+    for (auto const stem : opstack_test::c_t8nCriticalStems)
+    {
+        auto const name = std::string(stem) + ".json";
+        BOOST_CHECK_MESSAGE(listed.contains(name),
+            name << " is a critical stem but is not listed in " << sums.string()
+                 << " — the byte pin must cover every critical vector");
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

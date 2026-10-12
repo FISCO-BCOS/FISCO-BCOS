@@ -1243,11 +1243,17 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
             lvh.insert(fisco["latest_valid_hash"].isNull() ? "null" :
                                                              fisco["latest_valid_hash"].asString());
     }
-    // Required: classification (all states the runner actually asserts). VALID (the
-    // committed-tip sibling-reorg shape) is parked until SYS_REORG_UNDO/ReorgUndo lands —
-    // it is NOT counted above and NOT required here; restore both when the sibling
-    // assertions compile in. -32603 remains the DEEPER-fork refusal but has no corpus
-    // vector yet.
+    // Required: classification (all states the runner actually asserts).
+    //
+    // ACCEPTED RISK (review F38; owner = the op-engine stack, not this suite):
+    //   1. VALID (the committed-tip sibling-reorg shape) is parked until
+    //      SYS_REORG_UNDO / ReorgUndo lands (runInvalidVector returns before the sibling
+    //      assertions). It is NOT counted above and NOT required here; restore BOTH when
+    //      the sibling assertions compile in — the declared field must never satisfy a
+    //      coverage gate without an executed assertion.
+    //   2. -32603 (the DEEPER-fork refusal) remains uncovered: no corpus vector exists
+    //      yet. Tracked with the corpus growth work (the same place Karst/Granite rungs
+    //      are tracked); add the vector rather than relaxing this list.
     for (auto const* c : {"INVALID", "SYNCING", "-38005"})
         BOOST_CHECK_MESSAGE(
             classifications.count(c), "coverage: classification '" << c << "' has no vector");

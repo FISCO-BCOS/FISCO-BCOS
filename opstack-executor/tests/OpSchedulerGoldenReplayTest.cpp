@@ -47,8 +47,9 @@
 // has_storage scan (same-block create pre-triage) + /sys tripwire derived-table prefix assertion
 // (accountTableName(addr) prefix == apps/).
 
-#include "support/DualRunHarness.h"  // DualRunFixture + runExecutorPath (pre-Canyon arm)
+#include "support/DualRunHarness.h"
 #include "support/GoldenSample.h"
+#include "support/JsonAt.h"  // DualRunFixture + runExecutorPath (pre-Canyon arm)
 #include "support/SeedPreState.h"
 
 #include "support/GenesisTrie.h"  // copyFlatRows + computeAndPersistParentTrie
@@ -116,12 +117,8 @@ namespace detail = bcos::evm::engine::detail;
 // reference-returning call that receives a class-type temporary — even though the returned
 // reference aliases `v`, never `key` (false positive). A `const char*` argument creates no
 // temporary, so the warning cannot fire.
-inline const Json::Value& jAt(const Json::Value& v, const char* key)
-{
-    if (!v.isMember(key))
-        throw std::invalid_argument(std::string("missing required field: ") + key);
-    return v[key];
-}
+// The ONE throwing copy lives in support/JsonAt.h (shared with OpT8nReplayTest).
+using opstack_test::jAt;
 
 inline Json::Value jParse(std::istream& input)
 {
