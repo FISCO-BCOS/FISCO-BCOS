@@ -20,17 +20,20 @@ scenario_fail()
 }
 
 # ops <node_dir> <args...>: run one ops subcommand against a node directory in JSON mode,
-# stdout = the JSON document; the exit code is the command's
+# stdout = the JSON document (stderr is kept apart so jq never sees a warning line, and is
+# shown only when the command fails); the exit code is the command's
 ops()
 {
     local node_dir="${1}"
     shift
-    local output rc
-    output=$("${fisco_bcos_path}" "$@" --node-dir "${node_dir}" --json 2>&1) && rc=0 || rc=$?
+    local output rc errfile
+    errfile=$(mktemp)
+    output=$("${fisco_bcos_path}" "$@" --node-dir "${node_dir}" --json 2>"${errfile}") && rc=0 || rc=$?
     echo "${output}"
     if (( rc != 0 )); then
-        echo -e "\033[31m[scenario] fisco-bcos $* exited ${rc}: $(head -c 800 <<<"${output}")\033[0m" >&2
+        echo -e "\033[31m[scenario] fisco-bcos $* exited ${rc}: $(head -c 800 <<<"${output}") $(head -c 400 "${errfile}")\033[0m" >&2
     fi
+    rm -f "${errfile}"
     return "${rc}"
 }
 
@@ -41,13 +44,16 @@ ops_expect_exit()
     local expected="${1}"
     local node_dir="${2}"
     shift 2
-    local output rc
-    output=$("${fisco_bcos_path}" "$@" --node-dir "${node_dir}" --json 2>&1) && rc=0 || rc=$?
+    local output rc errfile
+    errfile=$(mktemp)
+    output=$("${fisco_bcos_path}" "$@" --node-dir "${node_dir}" --json 2>"${errfile}") && rc=0 || rc=$?
     echo "${output}"
     if [[ "${rc}" != "${expected}" ]]; then
-        scenario_fail "fisco-bcos $* exited ${rc}, expected ${expected}: ${output}"
+        scenario_fail "fisco-bcos $* exited ${rc}, expected ${expected}: ${output} $(head -c 400 "${errfile}")"
+        rm -f "${errfile}"
         return 1
     fi
+    rm -f "${errfile}"
 }
 
 # assert_jq <json-text> <jq filter that must be truthy> <description>

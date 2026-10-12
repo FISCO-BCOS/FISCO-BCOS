@@ -35,7 +35,7 @@ bash /path/to/FISCO-BCOS/tools/.ci/ci_check_air.sh release-3.18.0 false
 | `CI_KEEP_NODES` | `true` 跑完不清链、节点继续运行（本机调试） |
 | `CI_FAIL_SCENARIO` | 在场景 n 之后注入失败，验证失败报告路径（本机调试） |
 
-SM 链需要 `~/.fisco/tassl`；`jq` 必装。清链只杀本工作目录 `nodes/` 下启动的进程，不会碰同机的其他链。
+SM 链需要 `~/.fisco/tassl`；`jq` 必装；bash ≥ 4（`declare -A`、`${x,,}`，macOS 自带的 3.2 不行，用 Homebrew bash）。四条链的 build_chain 串行执行（并发会在 tassl 下载/安装与 `/tmp/secp256k1.param` 上互相踩），之后并行启动。清链先停 `nodes/127.0.0.1/stop_all.sh`（workflow 前一步 `rpcapi_ci_prepare.sh` 留下的四个节点占着 30300/20200），再只杀本工作目录 `nodes/` 下启动的进程，不会碰同机的其他链。
 
 ## 合约产物 `contracts/`
 
@@ -65,12 +65,12 @@ SM 链需要 `~/.fisco/tassl`；`jq` 必装。清链只杀本工作目录 `nodes
 | java-sdk-demo | `java_sdk_demo_ci_test.sh check_all_contract:179-213` | console `deploy ContractTestAll`（SM 链换 ECRecoverSMTest）、区块 gasUsed ≠ 0、`addBalance <contract> 10000000`、`call ContractTestAll check` status 0；`contract_test` 在 `feature_dmc2serial` 开启后再跑一遍 | `scenario_9_contract_test_all` (`scenarios/contracts.sh`) | `tx deploy contracts/ContractTestAll/ContractTestAll[.sm].bin` status 0、部署块 gasUsed > 0、`balance add <contract> 10000000` ok、`tx send check` status 0 且 `logEntries` 非空（14 个子合约各发 Info 事件）、所在块 gasUsed > 0；`sysconfig set feature_dmc2serial 1` 后同样一轮 | 四链；deploy/check 用 `--timeout 180000`（check() 烧约 7e8 gas，auth 链 15 s 默认超时不够） |
 | java-sdk-demo | `check_all_dmc_transfer`（`RUN_DMC=true` 才跑，CI 从不开） | DMC 转账压测 | 不替代 | — | 性能用例，不在节点正确性 CI 范围 |
 | — | 新增（替代 console `get_account.sh` / `get_gm_account.sh`） | — | `scenario_19_account` (`scenarios/account.sh`) | `account new [--sm]` 两个文件存在；用它 `tx smoke` 成功；`tx get` 的 `from` 等于打印地址 | nonsm / sm |
-| — | 现有 `ops_tool_test` | — | `scenario_20_ops_status` (`scenarios/ops.sh`) | `tx smoke`、`status` 五项 ok、`log status` 来源为 log 且高度与 RPC 相差 ≤ 2、`tui --version-check` | nonsm；`log status` 退出码 2（四项 check 为 skipped），只断言内容 |
+| — | 现有 `ops_tool_test` | — | `scenario_20_ops_status` (`scenarios/ops.sh`) | `tx smoke`、`status` 五项 ok、`log status` 来源为 log、除 `consensus_stable` 外无 `state=fail` 的 check、高度与 RPC 相差 ≤ 2、`tui --version-check` | nonsm；`log status` 退出 2 只能来自 `consensus_stable`（空闲链 viewchange，见下）；spec 里的「停节点前后 `log status`」与 `tui --snapshot-dir` 全页渲染待 TUI 改版（票 13）后补入 |
 
 场景 7/10/11/12/13/14/15/16/17/18 与 Java 退场的第二期见后续票（spec §5.4.1、§5.4.4）。SDK 自测用例（`HashCalculatorTest`、`AssembleTransactionWithRemoteSignProcessorTest`、`ContractTest.testV2Contract`、`EventDecodeTest` / `TransactionDecoderServiceTest` 的纯解码部分、`WelcomeInfoTest`）不替代，第二期补入本表。
 
 ## 跑本套件时发现的节点侧问题（未修，记录）
 
 1. **auth 链经提案改 `tx_gas_limit` 后所有 EVM `call` 返回 status 12 "Execution out of gas."**：`sysconfig set tx_gas_limit 3000000001`（以及 2999999999、3300000000）走 `createSetSysConfigProposal` 执行成功、`getSystemConfigByKey` 读回新值，之后 `call` HelloWorld `get()` 与 CommitteeManager `_proposalMgr()` 都失败，异常抛自 `transaction-executor/bcos-transaction-executor/vm/HostContext.h:843`（`consumeTransferGas`：`ref.gas < BALANCE_TRANSFER_GAS`），交易（`tx smoke`）仍正常；非 auth 链直接 `setValueByKey` 同样的值不复现。场景 5 在 auth 链上因此只改 `tx_count_limit`。
-2. **空闲链每隔几秒触发 consensus_timeout 的 viewchange**（`ViewChangeTriggered,reason=consensus_timeout` → `NewViewReached`），`log status` 的 `consensus_stable` 若恰好读在两行之间为 fail；场景 20 不从日志断言它（memory：主干 #5643 的 freshTimer 修复不在本分支）。
+2. **空闲链每隔几秒触发 consensus_timeout 的 viewchange**（`ViewChangeTriggered,reason=consensus_timeout` → `NewViewReached`），`log status` 的 `consensus_stable` 若恰好读在两行之间为 fail、命令退出 2；场景 20 只允许这一项 fail（主干 #5643 的 freshTimer 修复不在本分支）。
 3. 四条链同时启动时 `start.sh` 的 4 秒就绪检查会打印 `Exceed waiting time`；在节点初始化中途 stop/start 会让 PBFT 停在 `ViewChangeRejected,reason=committed_conflict`。脚本改为轮询进程与 RPC 就绪，不再中途重启。
