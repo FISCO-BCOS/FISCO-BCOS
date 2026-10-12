@@ -32,7 +32,6 @@ namespace bcos::ops
 {
 namespace
 {
-constexpr int64_t c_committeeDefaultInterval = 1000;
 constexpr size_t c_committeeDefaultLast = 10;
 
 struct CommitteeWrite
@@ -40,7 +39,7 @@ struct CommitteeWrite
     std::string_view sub;
     std::string_view preset;
     size_t positionals;
-    bool interval;  // appends --interval (default height + 1000) as the last argument
+    bool interval;  // appends the proposal interval (blocks from now) as the last argument
     std::string_view usage;
 };
 
@@ -136,22 +135,17 @@ int runCommitteeInfo(Connection const& _connection, Args const& _args, std::ostr
     return c_exitOk;
 }
 
+/// one proposal as the list shows it: getProposalInfo through the shared mapping, status as
+/// a number plus its name
 Json::Value proposalJson(
     CommitteeReader& _reader, std::string const& _manager, std::string const& _id)
 {
-    auto fields = _reader.read("proposal", {_id}, _manager);
-    auto status = fields.get(4U, "0");
+    auto value = proposalInfoJson(_reader.read("proposal", {_id}, _manager));
+    auto status = value["status"];
     int statusCode = status.isIntegral() ? status.asInt() : std::stoi(committeeStringOf(status));
-    Json::Value value;
     value["id"] = _id;
-    value["resourceId"] = fields.get(0U, "");
-    value["proposer"] = fields.get(1U, "");
-    value["proposalType"] = fields.get(2U, "");
-    value["blockNumberInterval"] = fields.get(3U, "");
     value["status"] = statusCode;
     value["statusName"] = proposalStatusName(statusCode);
-    value["agreeVoters"] = fields.get(5U, Json::Value(Json::arrayValue));
-    value["againstVoters"] = fields.get(6U, Json::Value(Json::arrayValue));
     return value;
 }
 
@@ -199,8 +193,15 @@ int runCommitteeProposal(Connection const& _connection, Args const& _args, std::
         throw OpsError(c_exitUsage, "usage: committee proposal <id>");
     }
     CommitteeReader reader(_connection);
-    auto manager = reader.read("proposal-mgr-address", {})[0].asString();
-    auto proposal = proposalJson(reader, manager, _args.positionals()[1]);
+    // the detail is the same ProposalOutcome a write reports (status, info, executed, execCode)
+    // read for an existing id; there is no creating receipt, so execCode stays absent
+    auto proposal = reader.runner.proposalOutcome(_args.positionals()[1], Receipt{}).toJson();
+    // same flat shape as the `proposals` rows: the info fields at the top level
+    for (auto const& name : proposal["info"].getMemberNames())
+    {
+        proposal[name] = proposal["info"][name];
+    }
+    proposal.removeMember("info");
     if (wantJson(_args.flag("json")))
     {
         printJson(_out, proposal);
@@ -209,9 +210,10 @@ int runCommitteeProposal(Connection const& _connection, Args const& _args, std::
     std::vector<std::pair<std::string, std::string>> rows = {{"id", proposal["id"].asString()},
         {"type", committeeStringOf(proposal["proposalType"])},
         {"status", proposal["statusName"].asString()},
+        {"executed", proposal["executed"].asBool() ? "yes" : "no"},
         {"proposer", committeeStringOf(proposal["proposer"])},
         {"resource", committeeStringOf(proposal["resourceId"])},
-        {"blockNumberInterval", committeeStringOf(proposal["blockNumberInterval"])}};
+        {"expiresAtBlock", committeeStringOf(proposal["expiresAtBlock"])}};
     for (auto const& voter : proposal["agreeVoters"])
     {
         rows.emplace_back("agree", committeeStringOf(voter));
@@ -264,25 +266,13 @@ int runCommitteeOn(Connection const& _connection, Args const& _args, std::ostrea
         }
         std::vector<std::string> params(
             positionals.begin() + 1, positionals.begin() + 1 + spec.positionals);
+        auto const* preset = findPreset("committee", spec.preset);
         if (spec.interval)
         {
-            int64_t interval = 0;
-            if (_args.option("interval"))
-            {
-                interval = _args.numberOr<int64_t>("interval", 0);
-            }
-            else
-            {
-                Json::Value heightParams(Json::arrayValue);
-                heightParams.append(_connection.group);
-                heightParams.append("");
-                interval = _connection.call("getBlockNumber", heightParams).asInt64() +
-                           c_committeeDefaultInterval;
-            }
-            params.push_back(std::to_string(interval));
+            params.push_back(
+                std::to_string(proposalInterval(routingFor(_connection, _args, *preset))));
         }
-        return runWritePreset(
-            _connection, _args, _out, *findPreset("committee", spec.preset), params);
+        return runWritePreset(_connection, _args, _out, *preset, params);
     }
     throw OpsError(c_exitUsage, "unknown committee subcommand: " + sub);
 }
@@ -305,7 +295,8 @@ void registerCommitteeCommand()
             "propose-deploy-auth <acct> <true|false> | propose-reset-admin <newAdmin> <contract> | "
             "propose-rm-node <nodeId> | propose-weight <nodeId> <weight> <add> | "
             "propose-sysconfig <key> <value> | propose-vote-computer <addr> | vote <id> "
-            "<true|false> | revoke <id>   [--interval <blocks>] [--account <key-file>] [--yes] "
+            "<true|false> | revoke <id>   [--interval <blocks from now, default 1000>] [--account "
+            "<key-file>] [--yes] "
             "[--node-dir <dir> | --rpc <host:port>] [--json]",
             {"yes", "direct"}, runCommittee});
 }

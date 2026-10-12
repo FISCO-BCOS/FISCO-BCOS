@@ -104,8 +104,6 @@ constexpr std::array p_voteComputer{
     ParamSpec{"computer", "address", ""}, ParamSpec{"interval", "uint256", c_hintInterval}};
 constexpr std::array p_proposalId{ParamSpec{"proposalId", "uint256", ""}};
 constexpr std::array p_vote{ParamSpec{"proposalId", "uint256", ""}, ParamSpec{"agree", "bool", ""}};
-constexpr std::array p_range{
-    ParamSpec{"from", "uint256", "first proposal id"}, ParamSpec{"to", "uint256", "last id"}};
 constexpr std::array p_text{ParamSpec{"value", "string", ""}};
 constexpr std::span<const ParamSpec> p_none;
 
@@ -177,7 +175,6 @@ constexpr std::array c_presets{
     // ProposalManager / Committee: addresses read from CommitteeManager each time; the tuple
     // outputs of getProposalInfo* come with the pinned bcos-auth ABI (AuthAbi.h, ticket 04)
     Preset{"committee", "proposal", "getProposalInfo", c_toProposalMgr, "getProposalInfo(uint256)", p_proposalId, "address,address,uint8,uint256,uint8,address[],address[]", Access::Anyone, OPS_DIRECT, false},
-    Preset{"committee", "proposals", "getProposalInfo", c_toProposalMgr, "getProposalInfoList(uint256,uint256)", p_range, "", Access::Anyone, OPS_DIRECT, false},
     Preset{"committee", "proposal-status", "", c_toProposalMgr, "getProposalStatus(uint256)", p_proposalId, "uint8", Access::Anyone, OPS_DIRECT, false},
     Preset{"committee", "proposal-count", "", c_toProposalMgr, "_proposalCount()", p_none, "uint256", Access::Anyone, OPS_DIRECT, false},
     Preset{"committee", "info", "getCommitteeInfo", c_toCommittee, "getCommitteeInfo()", p_none, "uint8,uint8,address[],uint32[]", Access::Anyone, OPS_DIRECT, false},

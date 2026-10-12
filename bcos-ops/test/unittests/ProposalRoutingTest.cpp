@@ -27,6 +27,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <sstream>
 
 namespace bcos::ops::test
@@ -148,7 +149,7 @@ BOOST_AUTO_TEST_CASE(addObserverBecomesASetConsensusWeightProposal)
     BOOST_CHECK_EQUAL(json["params"][0].asString(), c_routeNode);
     BOOST_CHECK_EQUAL(json["params"][1].asInt(), 0);
     BOOST_CHECK_EQUAL(json["params"][2].asBool(), true);
-    BOOST_CHECK_EQUAL(json["params"][3].asInt(), 128 + 1000);  // FakeRpc height + default
+    BOOST_CHECK_EQUAL(json["params"][3].asInt(), 1000);  // relative, no height lookup
     BOOST_CHECK_EQUAL(json["proposal"]["id"].asString(), "7");
     BOOST_CHECK_EQUAL(json["proposal"]["statusName"].asString(), "passed");
     BOOST_CHECK(json["proposal"]["executed"].asBool());
@@ -235,7 +236,13 @@ BOOST_AUTO_TEST_CASE(proposalArgsGrammar)
     auto args = runner.proposalArgs(*remove, {"abcd"});
     BOOST_REQUIRE_EQUAL(args.size(), 2U);
     BOOST_CHECK_EQUAL(args[0], "abcd");
-    BOOST_CHECK_EQUAL(args[1], "1128");
+    BOOST_CHECK_EQUAL(args[1], "1000");  // c_proposalInterval: blocks from now, no RPC
+    BOOST_CHECK(std::ranges::none_of(
+        rpc.calls(), [](auto const& call) { return call.first == "getBlockNumber"; }));
+    runner.setRouting(Routing{.proposals = true, .interval = 0});
+    BOOST_CHECK_THROW(runner.proposalArgs(*remove, {"abcd"}), OpsError);
+    runner.setRouting(Routing{.proposals = true, .interval = -5});
+    BOOST_CHECK_THROW(runner.proposalArgs(*remove, {"abcd"}), OpsError);
     runner.setRouting(Routing{.proposals = true, .interval = 9});
     auto closeArgs = runner.proposalArgs(*findPreset("auth", "close-deploy-auth"), {"0xab"});
     BOOST_REQUIRE_EQUAL(closeArgs.size(), 3U);

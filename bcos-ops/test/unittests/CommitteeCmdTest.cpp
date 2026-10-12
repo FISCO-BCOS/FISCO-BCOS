@@ -22,6 +22,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <sstream>
 
 namespace bcos::ops::test
@@ -159,7 +160,13 @@ BOOST_AUTO_TEST_CASE(proposalsListsTheLastN)
     BOOST_CHECK_EQUAL(json["proposals"][1]["agreeVoters"].size(), 1U);
     std::ostringstream one;
     runCommitteeOn(cmtConnection(rpc), cmtArgs({"proposal", "3", "--json"}), one);
-    BOOST_CHECK_EQUAL(parseJson(one.str(), "proposal")["proposer"].asString(), c_cmtGovernor);
+    auto detail = parseJson(one.str(), "proposal");
+    BOOST_CHECK_EQUAL(detail["proposer"].asString(), c_cmtGovernor);
+    // the detail is the same outcome a write reports: expiry block, executed flag, status name
+    BOOST_CHECK_EQUAL(detail["expiresAtBlock"].asString(), "1128");  // uint256 decodes as text
+    BOOST_CHECK_EQUAL(detail["statusName"].asString(), "voting");
+    BOOST_CHECK(!detail["executed"].asBool());
+    BOOST_CHECK(!detail.isMember("blockNumberInterval"));
 }
 
 BOOST_AUTO_TEST_CASE(voteAndRevokeAreDirectWritesToTheManager)
@@ -205,12 +212,30 @@ BOOST_AUTO_TEST_CASE(proposeGovernorReportsTheProposal)
     BOOST_CHECK_EQUAL(json["proposal"]["id"].asString(), "9");
     BOOST_CHECK_EQUAL(json["proposal"]["statusName"].asString(), "voting");
     BOOST_CHECK(json["ok"].asBool());
-    // without --interval the default is the chain height + 1000
+    // without --interval the default is 1000 blocks from now (ProposalManager.sol:102 adds the
+    // interval to block.number), fetched from no RPC
     rpc.queue("sendTransaction", cmtReceipt(cmtOutput("uint256", "[10]")));
     std::ostringstream dflt;
     runCommitteeOn(cmtConnection(rpc),
         cmtArgs({"propose-sysconfig", "tx_count_limit", "2000", "--yes", "--json"}), dflt);
-    BOOST_CHECK_EQUAL(parseJson(dflt.str(), "default")["params"][2].asInt(), 1128);
+    BOOST_CHECK_EQUAL(parseJson(dflt.str(), "default")["params"][2].asInt(), 1000);
+    // the only height lookups are the blockLimit of each sent transaction, none for the interval
+    auto countOf = [&](std::string const& method) {
+        return std::ranges::count_if(
+            rpc.calls(), [&](auto const& call) { return call.first == method; });
+    };
+    BOOST_CHECK_EQUAL(countOf("getBlockNumber"), countOf("sendTransaction"));
+    std::ostringstream err;
+    BOOST_CHECK_THROW(runCommitteeOn(cmtConnection(rpc),
+                          cmtArgs({"propose-sysconfig", "tx_count_limit", "2000", "--interval", "0",
+                              "--yes", "--json"}),
+                          err),
+        OpsError);
+    BOOST_CHECK_THROW(runCommitteeOn(cmtConnection(rpc),
+                          cmtArgs({"propose-sysconfig", "tx_count_limit", "2000", "--interval",
+                              "-5", "--yes", "--json"}),
+                          err),
+        OpsError);
 }
 
 BOOST_AUTO_TEST_CASE(usageErrors)

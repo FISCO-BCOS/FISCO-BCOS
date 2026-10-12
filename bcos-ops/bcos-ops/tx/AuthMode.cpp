@@ -36,9 +36,16 @@ bool chainUsesProposals(
             return value != "0";
         }
     }
-    catch (OpsRpcError const&)
+    catch (OpsRpcError const& e)
     {
-        // never set (LedgerError::GetStorageError 3008 on a fresh chain): genesis decides
+        // Ledger.cpp:2220-2226 stores auth_check_status at genesis for compatibility versions
+        // >= 3.3, so only a chain whose genesis predates 3.3 has no row: LedgerError
+        // GetStorageError (3008). Then the node dir's genesis decides. Any other RPC error
+        // (timeout, closed socket) is a real failure and must not read as "direct calls".
+        if (e.code != 3008)
+        {
+            throw;
+        }
     }
     return _nodeDir ? _nodeDir->authCheck : false;
 }

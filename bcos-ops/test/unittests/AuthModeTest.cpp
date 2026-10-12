@@ -71,6 +71,10 @@ BOOST_AUTO_TEST_CASE(transportFailureIsNotSwallowed)
     down.set("getSystemConfigByKey", Json::Value());  // cleared failure, then no result at all
     down.remove("getSystemConfigByKey");
     BOOST_CHECK_THROW(chainUsesProposals(down.call(), "group0", std::nullopt), OpsError);
+    // any JSON-RPC error other than 3008 (no row) is not "the key was never set"
+    FakeRpc timeout;
+    timeout.fail("getSystemConfigByKey", -32603, "request timed out");
+    BOOST_CHECK_THROW(chainUsesProposals(timeout.call(), "group0", genesisAuth(true)), OpsError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

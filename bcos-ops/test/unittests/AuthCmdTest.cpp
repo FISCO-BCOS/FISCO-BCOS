@@ -245,7 +245,7 @@ BOOST_AUTO_TEST_CASE(committeeWritesBecomeProposalsOnAnAuthChain)
         BOOST_CHECK_EQUAL(json["directMethod"].asString(), c.direct);
         BOOST_CHECK_EQUAL(json["proposal"]["id"].asString(), "9");
         BOOST_CHECK_EQUAL(json["proposal"]["statusName"].asString(), "passed");
-        BOOST_CHECK_EQUAL(json["params"][json["params"].size() - 1].asInt(), 128 + 1000);
+        BOOST_CHECK_EQUAL(json["params"][json["params"].size() - 1].asInt(), 1000);  // relative
         if (c.argv[0] == "open-deploy-auth")
         {
             BOOST_CHECK_EQUAL(json["params"][1].asBool(), true);
