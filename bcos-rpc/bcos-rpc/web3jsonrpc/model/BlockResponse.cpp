@@ -1,4 +1,5 @@
 #include "BlockResponse.h"
+#include "DepositTransaction.h"
 #include "Log.h"
 
 #include <bcos-framework/protocol/Protocol.h>
@@ -168,17 +169,24 @@ void bcos::rpc::combineBlockResponse(
 
     if (fullTxs)
     {
+        // op-geth parity (pinned e8800cff, internal/ethapi/api.go): the full-block
+        // path IS receipt-filled for deposit txs — newRPCTransactionFromBlockIndex
+        // feeds depositTxReceipt into newRPCTransaction, which fills nonce from
+        // receipt.DepositNonce and emits depositReceiptVersion when set. The block
+        // call sites fetch RECEIPTS alongside TRANSACTIONS, so the receipt is in
+        // scope here; fillDepositReceiptFields is a no-op for non-deposit receipts.
+        // ranges::any_view is not const-iterable (FeeHistory.cpp keeps the same
+        // non-const local); copy the view once and index it positionally.
+        auto receipts = block.receipts();
         Json::Value txList = Json::arrayValue;
         for (auto [index, tx] : ::ranges::views::enumerate(block.transactions()))
         {
             Json::Value txJson = Json::objectValue;
-            // Receipt-less rendering, matching op-geth's newRPCTransaction without a
-            // receipt: a deposit tx renders with nonce "0x0" and no
-            // depositReceiptVersion HERE — both live in the receipt and are filled only
-            // by the receipt overload (TransactionResponse.cpp) that every
-            // eth_getTransaction* caller with a receipt goes through. Accepted risk:
-            // block-context deposit shape is receipt-less on both implementations.
             combineTxResponse(txJson, *tx, index, blockNumber, blockHash);
+            if (index < receipts.size())
+            {
+                fillDepositReceiptFields(txJson, *receipts[index]);
+            }
             txList.append(txJson);
         }
         result["transactions"] = std::move(txList);
