@@ -56,18 +56,19 @@ ZERO_HASH = "0x" + "00" * 32
 DEFAULT_SCALAR = "0x01" + "00" * 31
 
 # All OP fork activation times, oldest first. Post-Karst genesis => all zero.
-# DERIVED, not re-listed: the EL rungs come from gen_official_genesis.EL_FORKS (the
-# ladder pinned to the C++ c_opForkLadder by test_gen_official_genesis), with the
-# CL-only delta rung at its op-node position — a rung added to EL_FORKS lands here
-# automatically instead of being silently omitted from rollup.json. karst_time is the
-# FISCO post-Karst fork; it is not an upstream op-node fork. See the module docstring
-# for the pinned-op-node decode caveat (DisallowUnknownFields).
+# DERIVED, not re-listed: the key set is exactly gen_official_genesis's
+# _ROLLUP_FORK_KEYS (the EL rungs plus the CL-only rungs at their op-node positions:
+# delta after canyon, pectra_blob_schedule after holocene, interop last) — a rung
+# added to that table lands here automatically instead of being silently omitted
+# from rollup.json. The mirrored half of this list (the CL-only keys) was once
+# re-listed by hand and dropped pectra_blob_schedule/interop; keep it single-sourced.
+# karst_time is the FISCO post-Karst fork; it is not an upstream op-node fork. See
+# the module docstring for the pinned-op-node decode caveat (DisallowUnknownFields).
 _OFFICIAL_GENESIS_SPEC = importlib.util.spec_from_file_location(
     "gen_official_genesis", str(Path(__file__).parent / "gen_official_genesis.py"))
 _official_genesis = importlib.util.module_from_spec(_OFFICIAL_GENESIS_SPEC)
 _OFFICIAL_GENESIS_SPEC.loader.exec_module(_official_genesis)
-FORK_TIME_KEYS = ["regolith_time", "canyon_time", "delta_time"] + [
-    f"{fork}_time" for fork in _official_genesis.EL_FORKS[2:]]
+FORK_TIME_KEYS = [f"{fork}_time" for fork in _official_genesis._ROLLUP_FORK_KEYS]
 
 
 class RollupConfigError(ValueError):
