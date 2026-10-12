@@ -286,9 +286,9 @@ bcos::bytes makeDepositEnvelope(bcos::bytes data, uint64_t gas = 1000000)
 }
 
 /// FISCO Transaction from a raw envelope (opEnvelopeToTars + full-envelope override; pattern
-/// OpBlockInjectorTest.cpp buildFiscoTxFromEnvelope). The refactored per-tx loop re-derives
+/// OpBlockInjectorTest.cpp buildOpEnvelopeTx). The refactored per-tx loop re-derives
 /// deposits from the Transaction objects, so a 0x7e index must carry the real deposit tx.
-bcos::protocol::Transaction::Ptr buildFiscoTxFromEnvelope(
+bcos::protocol::Transaction::Ptr buildOpEnvelopeTx(
     bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
 {
     auto txHash = hashImpl->hash(env);
@@ -337,7 +337,7 @@ opstack_test::opeth::OpEthExecuteBlockResult runOpBlock(ViewT& view,
     transactions.reserve(rawTxs.size());
     for (auto const& env : rawTxs)
     {
-        transactions.push_back(buildFiscoTxFromEnvelope(env, ctx.hashImpl));
+        transactions.push_back(buildOpEnvelopeTx(env, ctx.hashImpl));
     }
     const auto spec = jovianActive ? opstack_test::opeth::OP_JOVIAN_SPEC :
                                      opstack_test::opeth::OP_ISTHMUS_SPEC;

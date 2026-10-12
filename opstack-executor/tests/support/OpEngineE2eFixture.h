@@ -324,18 +324,6 @@ inline bcos::protocol::BlockHeader::Ptr productionHeaderOf(
         request.parentBeaconBlockRoot.value_or(bcos::h256{}));
 }
 
-inline bcos::protocol::Transaction::Ptr buildFiscoTxFromEnvelope(
-    bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
-{
-    auto txHash = hashImpl->hash(env);
-    auto tarsTx =
-        bcos::engine::engine_common::op::opEnvelopeToTars(env, txHash, /*allowDeposit=*/true);
-    if (!tarsTx)
-        return nullptr;
-    tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
-    return std::make_shared<bcostars::protocol::TransactionImpl>(
-        [tarsBody = std::move(*tarsTx)]() mutable { return &tarsBody; });
-}
 
 struct OpE2eFixture
 {
