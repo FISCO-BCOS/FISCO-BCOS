@@ -33,6 +33,18 @@ namespace bcos::rpc
 /// EIP-2718 type byte of an OP Stack deposit transaction.
 inline constexpr uint8_t c_depositTxType = 0x7e;
 
+/// True when @p tx's envelope carries the OP deposit type byte. This is the ONE
+/// definition of the deposit gate both renderers apply before touching deposit
+/// fields (TransactionResponse's receipt overload and BlockResponse's full-tx
+/// path): fillDepositReceiptFields overwrites `nonce` for any receipt carrying
+/// deposit_nonce, so an ungated call would stamp a misaligned receipt's deposit
+/// nonce over a non-deposit transaction's account nonce.
+[[nodiscard]] inline bool isDepositTransaction(bcos::protocol::Transaction const& tx)
+{
+    auto const extraBytes = tx.extraTransactionBytes();
+    return !extraBytes.empty() && extraBytes[0] == c_depositTxType;
+}
+
 /// Decoded form of an OP Stack deposit transaction (0x7E). Field set and semantics follow
 /// op-geth core/types.DepositTx and the executor-side DepositTx in
 /// opstack-executor/OpEthDeposit.h. This is the wire-decoding twin used by the

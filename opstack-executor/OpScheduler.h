@@ -1077,21 +1077,13 @@ private:
             // Fork-activation gate input: the parent header's timestamp. Fetched here only
             // when the gate can fire (Jovian+ block with a parent); pre-Jovian blocks keep
             // their failure ordering (the MPT step below reads it for number > 0).
-            // getBlockData throws NotFoundBlockHeader for a number with no committed
-            // header — translate to the fail-closed storage fault.
+            // fetchCommittedHeaderOrNull translates NotFoundBlockHeader to nullptr; the
+            // nullptr is then reported as the fail-closed storage fault.
             bcos::protocol::BlockHeader::Ptr parentHeader;
             if (spec.has_da_footprint && header.number() > 0)
             {
-                try
-                {
-                    auto parentBlock = co_await ledger::getBlockData(
-                        view, header.number() - 1, ledger::HEADER, *m_blockFactory);
-                    parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
-                }
-                catch (bcos::ledger::NotFoundBlockHeader const&)
-                {
-                    parentHeader = nullptr;
-                }
+                parentHeader =
+                    co_await fetchCommittedHeaderOrNull(view, header.number() - 1, *m_blockFactory);
                 if (!parentHeader)
                 {
                     throw bcos::evm::engine::OpStorageError(fmt::format(
@@ -1148,23 +1140,14 @@ private:
             if (incrementalRoot)
             {
                 bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
-                // getBlockData throws NotFoundBlockHeader for a number with no committed
-                // header — translate it to the fail-closed storage fault: the incremental
-                // build cannot run without the parent's state root. Jovian+ blocks already
-                // fetched the header for the activation gate above; pre-Jovian ones read
-                // it here (their only consumer).
+                // fetchCommittedHeaderOrNull's nullptr becomes the fail-closed storage
+                // fault: the incremental build cannot run without the parent's state root.
+                // Jovian+ blocks already fetched the header for the activation gate above;
+                // pre-Jovian ones read it here (their only consumer).
                 if (!parentHeader)
                 {
-                    try
-                    {
-                        auto parentBlock = co_await ledger::getBlockData(
-                            view, header.number() - 1, ledger::HEADER, *m_blockFactory);
-                        parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
-                    }
-                    catch (bcos::ledger::NotFoundBlockHeader const&)
-                    {
-                        parentHeader = nullptr;
-                    }
+                    parentHeader = co_await fetchCommittedHeaderOrNull(
+                        view, header.number() - 1, *m_blockFactory);
                     if (!parentHeader)
                     {
                         throw bcos::evm::engine::OpStorageError(fmt::format(

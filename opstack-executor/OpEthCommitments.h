@@ -91,6 +91,16 @@ struct OpEthExecuteBlockResult
     bcos::h256 txRoot;
 };
 
+/// The fork a block with internal (millisecond) timestamp @p internalTimestampMs runs
+/// under — the ONE resolution every fork predicate below shares (OpSchedulerSeam's
+/// members forward here instead of re-deriving it; the two families had silently
+/// duplicated the comparison until they were consolidated).
+[[nodiscard]] inline bcos::ledger::OpFork opForkAt(
+    const OpForkSchedule& schedule, int64_t internalTimestampMs) noexcept
+{
+    return bcos::ledger::resolveOpFork(schedule, opForkTimestampSec(internalTimestampMs));
+}
+
 /// Jovian semantics or later for a block whose internal (millisecond)
 /// timestamp is @p internalTimestampMs — blobGasUsed is the DA footprint, the
 /// operator fee uses the ×100 formula and extraData is the 17-byte Jovian
@@ -102,8 +112,7 @@ struct OpEthExecuteBlockResult
 [[nodiscard]] inline bool isOpEthJovianActive(
     const OpForkSchedule& schedule, int64_t internalTimestampMs) noexcept
 {
-    return bcos::ledger::resolveOpFork(schedule, opForkTimestampSec(internalTimestampMs)) >=
-           OpFork::Jovian;
+    return opForkAt(schedule, internalTimestampMs) >= OpFork::Jovian;
 }
 
 /// Karst semantics for a block whose internal (millisecond) timestamp is
@@ -113,8 +122,36 @@ struct OpEthExecuteBlockResult
 [[nodiscard]] inline bool isOpEthKarstActive(
     const OpForkSchedule& schedule, int64_t internalTimestampMs) noexcept
 {
-    return bcos::ledger::resolveOpFork(schedule, opForkTimestampSec(internalTimestampMs)) >=
-           OpFork::Karst;
+    return opForkAt(schedule, internalTimestampMs) >= OpFork::Karst;
+}
+
+/// Isthmus baseline: the OP lane's Engine-API build/import surface only serves
+/// Isthmus+ headers (the shape canonicalBlockHash recognizes OP blocks by). The
+/// OP-lane Isthmus fallback in resolveOpFork makes unset-isthmus_time chains Isthmus
+/// everywhere; this is false only on an explicit pre-Isthmus ladder.
+[[nodiscard]] inline bool isOpEthIsthmusActive(
+    const OpForkSchedule& schedule, int64_t internalTimestampMs) noexcept
+{
+    return opForkAt(schedule, internalTimestampMs) >= OpFork::Isthmus;
+}
+
+/// Canyon semantics for a block whose internal (millisecond) timestamp is
+/// @p internalTimestampMs: the pre-Holocene 1559 denominator switches to the Canyon
+/// value here (op-geth IsOptimismCanyon), which the engine's base-fee clock needs.
+[[nodiscard]] inline bool isOpEthCanyonActive(
+    const OpForkSchedule& schedule, int64_t internalTimestampMs) noexcept
+{
+    return opForkAt(schedule, internalTimestampMs) >= OpFork::Canyon;
+}
+
+/// Holocene semantics for a block whose internal (millisecond) timestamp is
+/// @p internalTimestampMs: the 1559 params move from chain config to the parent's
+/// extraData here (op-geth DecodeOptimismExtraData), which is why the engine's base-fee
+/// clock gates on it.
+[[nodiscard]] inline bool isOpEthHoloceneActive(
+    const OpForkSchedule& schedule, int64_t internalTimestampMs) noexcept
+{
+    return opForkAt(schedule, internalTimestampMs) >= OpFork::Holocene;
 }
 
 /// transactionsRoot over raw EIP-2718 envelopes (trie key = rlp(index), value

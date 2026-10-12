@@ -31,6 +31,7 @@
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/protocol/TransactionReceiptNormalize.h>
 #include <bcos-framework/storage2/RollbackableStorage.h>
+#include <bcos-ledger/LedgerMethods.h>   // getBlockData (parent-header fetch)
 #include <bcos-ledger/mpt/Constants.h>   // emptyRootHash
 #include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateRoot
 #include <bcos-task/Task.h>
@@ -57,6 +58,27 @@
 namespace bcos::executor_v1::opstack
 {
 namespace eth = bcos::executor_v1::eth;
+
+/// Fetch the committed header at @p number (the ledger's HEADER view), translating the
+/// framework's NotFoundBlockHeader into nullptr so each caller keeps its own fail-closed
+/// message for a missing parent (OpScheduler's activation gate and incremental-root
+/// guard, OpBlockVerifier's activation gate). The ONE implementation of a fetch the
+/// three call sites used to copy; nullptr means a missing row or a header-less block.
+template <class ViewType>
+[[nodiscard]] bcos::task::Task<bcos::protocol::BlockHeader::Ptr> fetchCommittedHeaderOrNull(
+    ViewType& view, bcos::protocol::BlockNumber number, bcos::protocol::BlockFactory& blockFactory)
+{
+    try
+    {
+        auto block =
+            co_await bcos::ledger::getBlockData(view, number, bcos::ledger::HEADER, blockFactory);
+        co_return block ? block->blockHeader() : nullptr;
+    }
+    catch (bcos::ledger::NotFoundBlockHeader const&)
+    {
+        co_return nullptr;
+    }
+}
 
 /// Adapt the per-block OpRecentBlockHashes into the new layer's BlockHashLookup
 /// function. The second (currentHeight) parameter is unused: OpRecentBlockHashes

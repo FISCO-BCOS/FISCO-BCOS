@@ -6,8 +6,8 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
-#include <bcos-utilities/Bloom.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#include <bcos-utilities/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
 
@@ -174,7 +174,7 @@ void bcos::rpc::combineBlockResponse(
         // feeds depositTxReceipt into newRPCTransaction, which fills nonce from
         // receipt.DepositNonce and emits depositReceiptVersion when set. The block
         // call sites fetch RECEIPTS alongside TRANSACTIONS, so the receipt is in
-        // scope here; fillDepositReceiptFields is a no-op for non-deposit receipts.
+        // scope here.
         // ranges::any_view is not const-iterable (FeeHistory.cpp keeps the same
         // non-const local); copy the view once and index it positionally.
         auto receipts = block.receipts();
@@ -183,7 +183,13 @@ void bcos::rpc::combineBlockResponse(
         {
             Json::Value txJson = Json::objectValue;
             combineTxResponse(txJson, *tx, index, blockNumber, blockHash);
-            if (index < receipts.size())
+            // Same deposit gate as TransactionResponse's receipt overload — the fill
+            // overwrites `nonce` for ANY receipt carrying deposit_nonce, so pairing it
+            // with an arbitrary transaction positionally would stamp a deposit nonce
+            // over that transaction's account nonce. Gated, the fill is exact for the
+            // deposit rows and a no-op elsewhere; a short receipt list simply skips
+            // the tail (the row then renders as the receipt-less shape).
+            if (isDepositTransaction(*tx) && index < receipts.size())
             {
                 fillDepositReceiptFields(txJson, *receipts[index]);
             }

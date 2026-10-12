@@ -17,7 +17,7 @@
 #include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError
 #include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult / opEthCommitmentsOf / opEthMismatchedFieldOf
 #include <opstack-executor/OpEthL1Attributes.h>  // OpEthL1BlockInfo / synthesizeOpEthL1AttributesEnvelope
-#include <opstack-executor/OpForkSpec.h>  // OpFork / opForkTimestampSec
+#include <opstack-executor/OpForkSpec.h>         // OpFork / opForkTimestampSec
 #include <cstdint>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
@@ -87,7 +87,9 @@ public:
     /// payload attributes on the child (derive/l1_block_info.go, derive/attributes.go).
     [[nodiscard]] bool isJovianActive(int64_t internalTimestampMs) const noexcept
     {
-        return forkAt(internalTimestampMs) >= bcos::ledger::OpFork::Jovian;
+        // Forward to the single predicate family (OpEthCommitments.h); the seam does not
+        // re-derive the comparison.
+        return bcos::executor_v1::opstack::isOpEthJovianActive(m_forkSchedule, internalTimestampMs);
     }
 
     /// Karst semantics for a block whose internal (millisecond) timestamp is
@@ -95,7 +97,7 @@ public:
     /// the engine's getPayload method-version gate (V5 is Karst-only, V4 is pre-Karst).
     [[nodiscard]] bool isKarstActive(int64_t internalTimestampMs) const noexcept
     {
-        return forkAt(internalTimestampMs) >= bcos::ledger::OpFork::Karst;
+        return bcos::executor_v1::opstack::isOpEthKarstActive(m_forkSchedule, internalTimestampMs);
     }
 
     /// Isthmus baseline: the OP lane's Engine-API build/import surface only serves
@@ -104,7 +106,8 @@ public:
     /// everywhere; this is false only on an explicit pre-Isthmus ladder.
     [[nodiscard]] bool isIsthmusActive(int64_t internalTimestampMs) const noexcept
     {
-        return forkAt(internalTimestampMs) >= bcos::ledger::OpFork::Isthmus;
+        return bcos::executor_v1::opstack::isOpEthIsthmusActive(
+            m_forkSchedule, internalTimestampMs);
     }
 
     /// Canyon semantics for a block whose internal (millisecond) timestamp is
@@ -112,7 +115,7 @@ public:
     /// value here (op-geth IsOptimismCanyon), which the engine's base-fee clock needs.
     [[nodiscard]] bool isCanyonActive(int64_t internalTimestampMs) const noexcept
     {
-        return forkAt(internalTimestampMs) >= bcos::ledger::OpFork::Canyon;
+        return bcos::executor_v1::opstack::isOpEthCanyonActive(m_forkSchedule, internalTimestampMs);
     }
 
     /// Holocene semantics for a block whose internal (millisecond) timestamp is
@@ -121,7 +124,8 @@ public:
     /// clock gates on it.
     [[nodiscard]] bool isHoloceneActive(int64_t internalTimestampMs) const noexcept
     {
-        return forkAt(internalTimestampMs) >= bcos::ledger::OpFork::Holocene;
+        return bcos::executor_v1::opstack::isOpEthHoloceneActive(
+            m_forkSchedule, internalTimestampMs);
     }
 
     /// Synthesize the L1-attributes deposit envelope from the configured L1 info.
@@ -167,8 +171,7 @@ private:
     /// Single conversion point from internal milliseconds to the schedule's seconds.
     [[nodiscard]] bcos::ledger::OpFork forkAt(int64_t internalTimestampMs) const noexcept
     {
-        return bcos::ledger::resolveOpFork(m_forkSchedule,
-            bcos::executor_v1::opstack::opForkTimestampSec(internalTimestampMs));
+        return bcos::executor_v1::opstack::opForkAt(m_forkSchedule, internalTimestampMs);
     }
 
     bcos::ledger::OpForkSchedule m_forkSchedule;

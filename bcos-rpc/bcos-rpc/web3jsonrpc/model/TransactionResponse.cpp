@@ -12,8 +12,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     // depositNonce and emits depositReceiptVersion when the receipt carries one — the
     // deposit branch below has no receipt in scope, so the fill happens here (the
     // overload every eth_getTransaction* caller with a receipt goes through).
-    if (auto extraBytes = tx.extraTransactionBytes();
-        !extraBytes.empty() && extraBytes[0] == c_depositTxType)
+    if (isDepositTransaction(tx))
     {
         fillDepositReceiptFields(result, receipt);
     }
@@ -54,8 +53,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     // the geth-shaped deposit fields (sourceHash/mint/isSystemTx, zero nonce/gasPrice and
     // zero v/r/s — deposits are unsigned) come from decoding it. Return early: the
     // signature-derived fields below have no deposit semantics.
-    if (auto extraBytes = tx.extraTransactionBytes();
-        !extraBytes.empty() && extraBytes[0] == c_depositTxType)
+    if (isDepositTransaction(tx))
     {
         DepositTransaction deposit;
         auto rawCursor = bcos::bytesRef(const_cast<byte*>(extraBytes.data()), extraBytes.size());

@@ -426,6 +426,32 @@ public:
                     number, currentNumber)});
         }
 
+        // 1b. Parent identity: the height guard proves number continuity, not that this
+        //     block descends from the head it is about to commit on top of. The download
+        //     side (HeaderChain) validates the parentHash chain against its own anchor;
+        //     this commit-time re-bind closes the window between that validation and the
+        //     commit (a reorg while the block waited, or a caller that assembled the
+        //     block outside the chain walk). Genesis has no parent row to bind.
+        if (number > 0)
+        {
+            auto const headHash =
+                co_await ledger::getBlockHash(view, currentNumber, ledger::fromStorage);
+            if (!headHash.has_value())
+            {
+                BOOST_THROW_EXCEPTION(OpStaleOrOutOfOrderBlock{fmt::format(
+                    "OpBlockVerifier: ledger head {} has no hash row — cannot bind block {}'s "
+                    "parent",
+                    currentNumber, number)});
+            }
+            if (*headHash != ethHeader.parentInfo.blockHash)
+            {
+                BOOST_THROW_EXCEPTION(OpStaleOrOutOfOrderBlock{fmt::format(
+                    "OpBlockVerifier: block {} announces parent {} but the ledger head at {} is "
+                    "{} — refusing to execute against a foreign parent",
+                    number, ethHeader.parentInfo.blockHash.hex(), currentNumber, headHash->hex())});
+            }
+        }
+
         // 2. Fork resolution: the p2p header timestamp is SECONDS (EthBlockHeaderData keeps
         //    the Ethereum RLP domain); op-node keys forks on the L2 block's own timestamp, so
         //    no unit conversion is needed here — the internal millisecond conversion happens
@@ -508,9 +534,10 @@ public:
             std::optional<OpRecentBlockHashes<ViewType>> hashes;
             // Fork-activation gate input: the parent header's timestamp, read only when
             // the gate can fire (Jovian+). The parent is the committed head this view
-            // forked from (step 1's height guard), so the row exists; getBlockData throws
-            // NotFoundBlockHeader for a number with no committed header — mirror
-            // OpScheduler's translation to the fail-closed storage fault (this
+            // forked from — step 1's height guard fixes the number and step 1b binds its
+            // hash to the announced parentHash — so the row exists; the shared
+            // fetchCommittedHeaderOrNull (OpEthBlockSteps.h) turns a missing row into
+            // nullptr, which is reported as the fail-closed storage fault (this
             // function's documented taxonomy lists OpStorageError, not the framework
             // exception, and the sync loop classifies OpStorageError as transient).
             // The p2p child timestamp is already seconds; the stored parent header
@@ -520,18 +547,8 @@ public:
             // otherwise fetch parent -1 and answer a storage fault for block 0.
             if (spec.has_da_footprint && number > 0)
             {
-                bcos::protocol::BlockHeader::Ptr parentHeader;
-                try
-                {
-                    auto parentBlock = co_await ledger::getBlockData(view,
-                        static_cast<bcos::protocol::BlockNumber>(number) - 1, ledger::HEADER,
-                        *m_blockFactory);
-                    parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
-                }
-                catch (bcos::ledger::NotFoundBlockHeader const&)
-                {
-                    parentHeader = nullptr;
-                }
+                auto parentHeader = co_await fetchCommittedHeaderOrNull(
+                    view, static_cast<bcos::protocol::BlockNumber>(number) - 1, *m_blockFactory);
                 if (!parentHeader)
                 {
                     throw bcos::evm::engine::OpStorageError(
