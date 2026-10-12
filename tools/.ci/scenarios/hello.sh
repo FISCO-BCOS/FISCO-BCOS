@@ -15,7 +15,7 @@ scenario_2_hello()
     local node_dir="${2}"
     scenario_banner 2 hello "console clientWithParamsTest:96-117, java-sdk BcosSDKTest.testHelloWorldInSolidity, AssembleTransactionProcessorTest HelloWorld"
     local smoke
-    smoke=$(ops "${node_dir}" tx smoke) || { echo "${smoke}"; return 1; }
+    smoke=$(ops "${node_dir}" tx smoke --timeout 60000) || { echo "${smoke}"; return 1; }
     assert_jq "${smoke}" '.ok == true' "tx smoke ok" || return 1
     assert_jq "${smoke}" '.steps | length == 3' "three smoke steps" || return 1
     assert_jq "${smoke}" '.steps[2].detail | test("Hello, FISCO BCOS")' "get returns the set value" || return 1

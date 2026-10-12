@@ -4,6 +4,8 @@
 // Commit: 65e9cbd95f67253e5e5c2737437545478582e2f3
 // License: Apache-2.0 (the source repository's LICENSE)
 // Regenerate the .bin/.sm.bin/.abi beside it with tools/.ci/contracts/regenerate.sh
+// The SPDX line below is the upstream file's own text, kept verbatim; the repository
+// licence above governs.
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.6.0 <0.8.12;
 

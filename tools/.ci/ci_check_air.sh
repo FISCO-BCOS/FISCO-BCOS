@@ -5,9 +5,10 @@
 #             expanded by one node) and run the native scenarios from tools/.ci/scenarios/
 #             with the fisco-bcos ops subcommands; every chain logs to logs/<chain>.log and
 #             the first failure prints that chain's log tail and node error/warn lines.
-#             Phase 2 (legacy, RUN_JAVA=true): tools/.ci/java_legacy_air.sh runs the console /
-#             java-sdk / java-sdk-demo suites exactly as before on fresh chains at the default
-#             ports; it goes away with the native suite's second phase (spec 2026-10-12 §5.4.4).
+#             Phase 2 (legacy, RUN_JAVA=true): tools/.ci/java_legacy_air.sh runs the java-sdk
+#             suite (its config hard-codes 127.0.0.1:20200) and the web3 Hardhat suite on fresh
+#             chains at the default ports; console and java-sdk-demo are already replaced, and
+#             the script goes away with the native suite's second phase (spec 2026-10-12 §5.4.4).
 #             Local run: FISCO_BCOS_BIN=<binary> CI_PORT_BASE=31300,21200,9545 RUN_JAVA=false \
 #                        bash tools/.ci/ci_check_air.sh <branch> <web3:true|false>
 #             from an empty working directory; see tools/.ci/README.md.
@@ -283,6 +284,7 @@ run_chain()
             return 1
         fi
     done
+    contract_abi_cleanup
     [[ "${CI_KEEP_NODES}" == "true" ]] || stop_chain_processes "${chain}"
     LOG_INFO "chain ${chain}: all native scenarios passed in $((SECONDS - started))s"
 }
@@ -299,6 +301,7 @@ LOG_INFO "======== native scenarios: build ${chains[*]} (serial), then run in pa
 for chain in "${chains[@]}"; do
     build_chain_for "${chain}" > "${current_path}/logs/${chain}.log" 2>&1 || {
         print_chain_failure "${chain}"
+        [[ "${CI_KEEP_NODES}" == "true" ]] || clear_node
         LOG_ERROR "======== build_chain for ${chain} FAILED ========"
         exit 1
     }
@@ -332,6 +335,6 @@ done
 LOG_INFO "======== native scenarios success ========"
 
 if [[ "${RUN_JAVA}" == "true" ]]; then
-    LOG_INFO "======== legacy console / java-sdk / java-sdk-demo suites ========"
+    LOG_INFO "======== legacy java-sdk suite + web3 (java_legacy_air.sh) ========"
     bash "${ci_dir}/java_legacy_air.sh" "${console_branch}" "${check_web3_test}" || exit 1
 fi
