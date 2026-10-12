@@ -47,5 +47,11 @@ scenario_17_features()
     assert_jq "${listing}" 'map(select(.name as $n | '"${flag_json}"' | index($n)) | .enabled) | all' "every flag that reported ok reads back enabled" || return 1
     assert_jq "${listing}" '[.[] | select(.enabled == false and .deprecated != true) | .name] | length == '"${#refused[@]}" "only the refused flags stay off" || return 1
     (( ${#unexpected[@]} == 0 )) || { scenario_fail "flags refused on ${chain} that are not in features_known_refusals: ${unexpected[*]}"; return 1; }
+    # a read-back of "1" also passes on a chain that stopped sealing after the last flag: prove
+    # it still executes and commits
+    local smoke
+    # signed by the governor (the account that is allowed everything on every chain)
+    smoke=$(ops "${node_dir}" tx smoke --timeout 60000 --account "${governor}") || return 1
+    assert_jq "${smoke}" '.ok == true' "the chain still seals with every flag on" || return 1
     echo "scenario 17 ok: ${#enabled[@]} flags enabled on ${chain}${refused[*]:+, refused (known): ${refused[*]}}"
 }
