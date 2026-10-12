@@ -108,6 +108,11 @@ int main(int argc, const char* argv[])
     options.OptimizeLevelStyleCompaction();
     options.create_if_missing = false;
     rocksdb::Status s = rocksdb::DB::Open(options, storagePath, &db);
+    if (!s.ok())
+    {
+        cout << "open rocksdb failed: " << s.ToString() << endl;
+        return 1;
+    }
 
     std::string configPath("./config.ini");
     if (params.count("config"))
@@ -142,7 +147,10 @@ int main(int argc, const char* argv[])
         nodeConfig->loadGenesisConfig(genesisFilePath);
 
     bcos::security::StorageEncryptInterface::Ptr dataEncryption = nullptr;
-    dataEncryption = std::make_shared<bcos::security::BcosKmsDataEncryption>(nodeConfig);
+    if (nodeConfig->storageSecurityEnable())
+    {
+        dataEncryption = std::make_shared<bcos::security::BcosKmsDataEncryption>(nodeConfig);
+    }
 
     auto adapter =
         std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), dataEncryption);
@@ -209,11 +217,16 @@ int main(int argc, const char* argv[])
         row = std::move(entry);
     });
 
+    if (!row)
+    {
+        cerr << "entry not found: table=" << tableName << ", key=" << key << endl;
+        return 1;
+    }
     auto view = row->get();
     std::string hexData;
     hexData.reserve(view.size() * 2);
     boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(hexData));
-    cout << " [" << hex << "] ";
+    cout << " [key=" << key << "] [value=" << hexData << "] ";
 
     cout << " [status=" << row->status() << "]";
     return 0;

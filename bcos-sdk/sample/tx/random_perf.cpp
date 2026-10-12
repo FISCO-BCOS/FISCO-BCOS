@@ -24,7 +24,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <chrono>
+#include <iostream>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 void usage()
@@ -43,12 +45,30 @@ int main(int argc, char** argv)
         usage();
     }
 
-    long long count = std::stoul(argv[1]);
+    long long count = 0;
+    try
+    {
+        size_t parsedLength = 0;
+        count = std::stoll(argv[1], &parsedLength);
+        if (parsedLength != std::string(argv[1]).size() || count <= 0)
+        {
+            throw std::invalid_argument("count out of range");
+        }
+    }
+    catch (std::exception const& e)
+    {
+        std::cerr << "Error: count must be a positive integer: " << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
 
     printf("[Random Gen Test] ===>>>> count: %lld\n", count);
 
     long long i = 0;
     long long _10Per = count / 10;
+    if (_10Per == 0)
+    {
+        _10Per = 1;
+    }
 
     auto transactionBuilder = std::make_shared<bcos::cppsdk::utilities::TransactionBuilder>();
 
@@ -73,7 +93,7 @@ int main(int argc, char** argv)
     printf(
         " [Random Gen Test] total count: %lld, total elapsed(ms): %lld, "
         "count/s: %lld \n",
-        count, elapsedMS, 1000 * count / elapsedMS);
+        count, elapsedMS, (elapsedMS > 0) ? (1000 * count / elapsedMS) : 0);
 
     return 0;
 }

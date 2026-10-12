@@ -26,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
+#include <csignal>
 #include <memory>
 #include <set>
 #include <string>
@@ -35,6 +36,13 @@ using namespace bcos::cppsdk;
 using namespace bcos::boostssl;
 using namespace bcos;
 //------------------------------------------------------------------------------
+
+volatile std::sig_atomic_t g_running = 1;
+
+void signalHandler(int)
+{
+    g_running = 0;
+}
 
 void usage()
 {
@@ -71,6 +79,9 @@ int main(int argc, char** argv)
     sdk->start();
 
     std::cout << LOG_DESC(" [AMOP][Subscribe] start sdk ... ") << std::endl;
+
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
     sdk->amop()->setSubCallback(
         [&sdk](Error::Ptr _error, const std::string& _endPoint, const std::string& _seq,
             bytesConstRef _data, std::shared_ptr<bcos::boostssl::ws::WsSession> _session) {
@@ -91,11 +102,14 @@ int main(int argc, char** argv)
         });
     sdk->amop()->subscribe(topicList);
 
-    while (true)
+    while (g_running)
     {
         std::cout << LOG_DESC(" Main thread running ") << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
     }
+
+    sdk->stop();
+    std::cout << LOG_DESC(" [AMOP][Subscribe] exited gracefully.") << std::endl;
 
     return EXIT_SUCCESS;
 }
