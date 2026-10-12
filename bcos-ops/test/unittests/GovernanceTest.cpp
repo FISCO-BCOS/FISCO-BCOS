@@ -24,6 +24,7 @@
 #include "bcos-ops/cmd/CommitteeCmd.h"
 #include "bcos-ops/tui/SendForm.h"
 #include "bcos-ops/tx/Abi.h"
+#include "bcos-ops/tx/PresetCall.h"
 #include "fixtures/FakeRpc.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -108,11 +109,11 @@ BOOST_AUTO_TEST_SUITE(GovernanceTest)
 
 BOOST_AUTO_TEST_CASE(typeNamesFollowCommitteeManager)
 {
-    BOOST_CHECK_EQUAL(tui::proposalTypeName(11), "governor");
-    BOOST_CHECK_EQUAL(tui::proposalTypeName(41), "sysConfig");
-    BOOST_CHECK_EQUAL(tui::proposalTypeName(51), "consensusWeight");
-    BOOST_CHECK_EQUAL(tui::proposalTypeName(52), "rmNode");
-    BOOST_CHECK_EQUAL(tui::proposalTypeName(7), "type7");
+    BOOST_CHECK_EQUAL(proposalTypeName(11), "governor");
+    BOOST_CHECK_EQUAL(proposalTypeName(41), "sysConfig");
+    BOOST_CHECK_EQUAL(proposalTypeName(51), "consensusWeight");
+    BOOST_CHECK_EQUAL(proposalTypeName(52), "rmNode");
+    BOOST_CHECK_EQUAL(proposalTypeName(7), "type7");
 }
 
 BOOST_AUTO_TEST_CASE(fetchReadsTheCommitteeAndTheNewestRows)

@@ -82,9 +82,10 @@ Element renderTopBar(Model const& _model)
     auto source = _model.source.empty() ? "connecting" : _model.source;
     std::string mode = _model.mode.empty() || _model.mode == "none" ? "pbft" : _model.mode;
     auto key = _model.keyAddress.empty() ? "none" : abridged(_model.keyAddress, 4);
-    auto left = hbox({text(" fisco-bcos tui ") | bold, text(" node " + node),
-        text("  source " + source), text("  mode " + mode),
-        text("  refresh " + std::to_string(_model.refreshInSeconds) + "s ")});
+    // short labels so node, source, mode and key fit 80 columns ("opstack-el" is the longest
+    // mode); the refresh period is the least important and goes last
+    auto left = hbox({text(" tui ") | bold, text(" node " + node), text("  src " + source),
+        text("  mode " + mode), text("  " + std::to_string(_model.refreshInSeconds) + "s ")});
     if (!_model.error.empty())
     {
         // the failure replaces the status words: it is what the operator must read first
@@ -193,7 +194,9 @@ Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::st
             page = renderHome(_model, _nav, body);
             break;
         case Page::consensus:
-            page = isElMode(_model.mode) ? renderTxpool(_model) : renderConsensus(_model);
+            page = isElMode(_model.mode)  ? renderTxpool(_model, body) :
+                   readsPbft(_model.mode) ? renderConsensus(_model) :
+                                            renderPbftUnknown(_model);
             break;
         case Page::send:
         {

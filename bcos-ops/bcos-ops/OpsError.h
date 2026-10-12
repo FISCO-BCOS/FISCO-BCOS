@@ -23,10 +23,14 @@
 
 namespace bcos::ops
 {
-/// 0: normal; 1: usage or connection error; 2: node reachable but a check failed / auth denied
+/// 0: normal; 1: usage or connection error; 2: node reachable but a check failed / auth denied;
+/// 3: accepted but still pending (EL tx raw past --wait)
 constexpr int c_exitOk = 0;
 constexpr int c_exitUsage = 1;
 constexpr int c_exitChecksFailed = 2;
+/// 3: the transaction was accepted but no receipt arrived within --wait (EL tx raw); it may
+/// still be included later
+constexpr int c_exitPending = 3;
 
 struct OpsError : public std::runtime_error
 {

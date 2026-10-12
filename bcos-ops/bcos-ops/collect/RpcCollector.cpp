@@ -101,11 +101,11 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
     status.mode = _mode;
     auto const consensusFields = {"nodeID", "isConsensusNode", "view", "leaderIndex", "changeCycle",
         "inTimeout", "consensusNodesNum", "connectedGroupNodes", "minRequiredQuorum"};
-    if (isElMode(_mode))
+    if (!readsPbft(_mode))
     {
         for (auto const* field : consensusFields)
         {
-            status.missing(field, "el mode: no PBFT (getConsensusStatus not sent)");
+            status.missing(field, noPbftReason(_mode) + ": getConsensusStatus not sent");
         }
     }
     else

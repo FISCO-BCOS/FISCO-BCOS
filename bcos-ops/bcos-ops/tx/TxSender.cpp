@@ -275,7 +275,9 @@ Receipt sendRawEth(RpcCall const& _web3, std::string const& _hex, int _waitMs, i
             pending.txHash = hash;
             pending.status = -1;
             pending.message = "pending";
+            pending.pending = true;
             pending.raw["transactionHash"] = hash;
+            pending.raw["pending"] = true;
             pending.raw["status"] = Json::nullValue;
             pending.raw["message"] =
                 "pending: no receipt within " + std::to_string(_waitMs / 1000) + "s";

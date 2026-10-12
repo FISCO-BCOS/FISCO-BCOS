@@ -58,9 +58,9 @@ BOOST_AUTO_TEST_CASE(narrowTerminalStacksTheListsAndDropsColumns)
     tui::Frame frame{.width = 80, .height = 24, .nowMs = c_homeNow};
     auto text = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     // top bar
-    BOOST_CHECK(text.find("fisco-bcos tui") != std::string::npos);
+    BOOST_CHECK(text.find(" tui ") != std::string::npos);
     BOOST_CHECK(text.find("node 3a1f00") != std::string::npos);
-    BOOST_CHECK(text.find("source rpc") != std::string::npos);
+    BOOST_CHECK(text.find("src rpc") != std::string::npos);
     BOOST_CHECK(text.find("mode pbft") != std::string::npos);
     BOOST_CHECK(text.find("key none") != std::string::npos);
     // status band
@@ -194,7 +194,20 @@ BOOST_AUTO_TEST_CASE(detailAndHelpLayersRenderOverThePage)
     auto help = renderText(tui::renderFrame(model, nav, frame, ""), 80, 24);
     BOOST_CHECK(help.find(" help ") != std::string::npos);
     BOOST_CHECK(help.find("Tab   next focus area") != std::string::npos);
-    BOOST_CHECK(help.find("fisco-bcos tui") != std::string::npos);  // the page stays underneath
+    BOOST_CHECK(help.find("src rpc") != std::string::npos);  // the page stays underneath
+}
+
+BOOST_AUTO_TEST_CASE(topBarFitsEightyColumnsInTheLongestMode)
+{
+    tui::Model model;
+    model.source = "attach";
+    model.mode = "opstack-el";
+    model.keyAddress = "0x3f1200000000000000000000000000000000009a";
+    model.refreshInSeconds = 2;
+    auto text = renderText(tui::renderTopBar(model), 80, 1);
+    BOOST_CHECK(text.find("src attach") != std::string::npos);
+    BOOST_CHECK(text.find("mode opstack-el") != std::string::npos);
+    BOOST_CHECK(text.find("key 3f12") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(logPageFiltersLinesAndShowsTheFilter)

@@ -19,6 +19,7 @@
 #include "HttpRpc.h"
 #include "bcos-ops/Connect.h"
 #include "bcos-ops/OpsError.h"
+#include "bcos-ops/Output.h"
 #include <boost/asio/connect.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -30,6 +31,14 @@
 
 namespace bcos::ops
 {
+namespace
+{
+/// a busy pool's txpool_content is the largest answer this client reads; beast's default
+/// response cap (8 MB) would turn it into a transport error
+constexpr uint64_t c_httpRpcBodyLimit = 64ULL * 1024 * 1024;
+constexpr size_t c_httpRpcErrorExcerpt = 200;
+}  // namespace
+
 RpcCall makeHttpRpcCall(std::string _host, uint16_t _port, int _timeoutMs)
 {
     auto nextId = std::make_shared<std::atomic<int64_t>>(1);
@@ -39,53 +48,80 @@ RpcCall makeHttpRpcCall(std::string _host, uint16_t _port, int _timeoutMs)
         namespace http = beast::http;
         using tcp = boost::asio::ip::tcp;
         auto where = host + ":" + std::to_string(_port);
+        auto fail = [&](std::string const& _why) {
+            return OpsError(
+                c_exitUsage, std::string(_method) + " to web3 " + where + " failed: " + _why);
+        };
         http::request<http::string_body> request{http::verb::post, "/", 11};
         request.set(http::field::host, where);
         request.set(http::field::content_type, "application/json");
         request.body() = buildJsonRpcRequest(_method, _params, nextId->fetch_add(1));
         request.prepare_payload();
-        http::response<http::string_body> response;
+        http::response_parser<http::string_body> parser;
+        parser.body_limit(c_httpRpcBodyLimit);
         beast::flat_buffer buffer;
         beast::error_code result;
-        // the tcp_stream deadline only bounds asynchronous operations, so the exchange runs as
-        // one async chain on a private io_context
+        bool done = false;
+        // one async chain on a private io_context, run for at most _timeoutMs: the deadline
+        // covers the name resolution as well as connect / write / read
         boost::asio::io_context ioc;
         tcp::resolver resolver(ioc);
         beast::tcp_stream stream(ioc);
-        try
-        {
-            auto endpoints = resolver.resolve(host, std::to_string(_port));
-            stream.expires_after(std::chrono::milliseconds(_timeoutMs));
-            stream.async_connect(endpoints, [&](beast::error_code _ec, tcp::endpoint const&) {
-                if (_ec)
+        resolver.async_resolve(host, std::to_string(_port),
+            [&](beast::error_code _resolved, tcp::resolver::results_type _endpoints) {
+                if (_resolved)
                 {
-                    result = _ec;
+                    result = _resolved;
+                    done = true;
                     return;
                 }
-                http::async_write(stream, request, [&](beast::error_code _written, size_t) {
-                    if (_written)
+                stream.async_connect(_endpoints, [&](beast::error_code _ec, tcp::endpoint const&) {
+                    if (_ec)
                     {
-                        result = _written;
+                        result = _ec;
+                        done = true;
                         return;
                     }
-                    http::async_read(stream, buffer, response,
-                        [&](beast::error_code _read, size_t) { result = _read; });
+                    http::async_write(stream, request, [&](beast::error_code _written, size_t) {
+                        if (_written)
+                        {
+                            result = _written;
+                            done = true;
+                            return;
+                        }
+                        http::async_read(
+                            stream, buffer, parser, [&](beast::error_code _read, size_t) {
+                                result = _read;
+                                done = true;
+                            });
+                    });
                 });
             });
-            ioc.run();
-        }
-        catch (std::exception const& e)
+        ioc.run_for(std::chrono::milliseconds(_timeoutMs));
+        if (!done)
         {
-            throw OpsError(
-                c_exitUsage, std::string(_method) + " to web3 " + where + " failed: " + e.what());
+            // cancel what is in flight and let the handlers (they capture this frame) finish
+            resolver.cancel();
+            beast::error_code ignored;
+            stream.socket().close(ignored);
+            ioc.restart();
+            ioc.run();
+            throw fail("no answer within " + std::to_string(_timeoutMs) + " ms");
         }
         if (result)
         {
-            throw OpsError(c_exitUsage,
-                std::string(_method) + " to web3 " + where + " failed: " + result.message());
+            throw fail(result.message());
         }
         beast::error_code ignored;
         stream.socket().shutdown(tcp::socket::shutdown_both, ignored);
+        auto const& response = parser.get();
+        auto status = response.result_int();
+        if (status < 200 || status >= 300)
+        {
+            // the body is the server's text: it reaches stderr / the TUI, so strip control bytes
+            auto excerpt = sanitizeForTerminal(response.body().substr(0, c_httpRpcErrorExcerpt));
+            throw fail("HTTP " + std::to_string(status) + ": " + excerpt);
+        }
         return parseJsonRpcResponse(response.body(), _method);
     };
 }

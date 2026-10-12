@@ -124,8 +124,8 @@ Json::Value proposalJson(
 
 void printProposalRow(std::ostream& _out, Json::Value const& _proposal)
 {
-    _out << std::left << std::setw(6) << _proposal["id"].asString() << std::setw(6)
-         << committeeStringOf(_proposal["proposalType"]) << std::setw(10)
+    _out << std::left << std::setw(6) << _proposal["id"].asString() << std::setw(16)
+         << _proposal["proposalTypeName"].asString() << std::setw(10)
          << _proposal["statusName"].asString() << std::setw(44)
          << committeeStringOf(_proposal["proposer"]) << "agree " << _proposal["agreeVoters"].size()
          << "  against " << _proposal["againstVoters"].size() << '\n';
@@ -181,7 +181,8 @@ int runCommitteeProposal(Connection const& _connection, Args const& _args, std::
         return c_exitOk;
     }
     std::vector<std::pair<std::string, std::string>> rows = {{"id", proposal["id"].asString()},
-        {"type", committeeStringOf(proposal["proposalType"])},
+        {"type", proposal["proposalTypeName"].asString() + " (" +
+                     committeeStringOf(proposal["proposalType"]) + ")"},
         {"status", proposal["statusName"].asString()},
         {"executed", proposal["executed"].asBool() ? "yes" : "no"},
         {"proposer", committeeStringOf(proposal["proposer"])},

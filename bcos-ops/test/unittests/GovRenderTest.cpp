@@ -22,6 +22,7 @@
 #include "bcos-ops/tui/Nav.h"
 #include "bcos-ops/tui/SendForm.h"
 #include "bcos-ops/tui/views/Pages.h"
+#include "bcos-ops/tx/PresetCall.h"
 #include "fixtures/Render.h"
 #include <boost/test/unit_test.hpp>
 
@@ -34,7 +35,7 @@ tui::ProposalRow govRow(int64_t _id, int _status, int _type)
     tui::ProposalRow row;
     row.id = _id;
     row.type = _type;
-    row.typeName = tui::proposalTypeName(_type);
+    row.typeName = proposalTypeName(_type);
     row.status = _status;
     row.statusName = _status == 1 ? "voting" : _status == 2 ? "passed" : "denied";
     row.proposer = "0x3f12000000000000000000000000000000009a00";

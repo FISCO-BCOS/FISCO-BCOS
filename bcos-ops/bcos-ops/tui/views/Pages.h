@@ -52,7 +52,9 @@ ftxui::Element renderBottomBar(Model const& _model, Nav& _nav, int _width);
 ftxui::Element renderHome(Model const& _model, Nav& _nav, Frame const& _frame);
 ftxui::Element renderConsensus(Model const& _model);
 /// page 2 in the EL modes (el / opstack-el): pool rows or the pending count with the reason
-ftxui::Element renderTxpool(Model const& _model);
+ftxui::Element renderTxpool(Model const& _model, Frame const& _frame);
+/// page 2 when the mode is unknown (bare --rpc): why PBFT state is not read
+ftxui::Element renderPbftUnknown(Model const& _model);
 /// page 2's label: "txpool" in the EL modes, "consensus" otherwise
 std::string pageLabel(Model const& _model, Page _page);
 /// identity, sync/peers table, p2p count and the checks with their detail

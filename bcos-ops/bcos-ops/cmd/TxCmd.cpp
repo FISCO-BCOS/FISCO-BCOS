@@ -43,6 +43,9 @@ namespace bcos::ops
 {
 namespace
 {
+/// tx raw --wait upper bound (EL receipt polling)
+constexpr double c_maxRawWaitSeconds = 3600;
+
 int runTxDispatch(Connection const& _connection, Args const& _args, std::ostream& _out);
 
 std::string readFile(std::string const& _path, std::string_view _what)
@@ -143,8 +146,9 @@ void printReceipt(std::ostream& _out, Receipt const& _given, bool _json)
     }
     std::vector<std::pair<std::string, std::string>> rows;
     rows.emplace_back("txHash", _receipt.txHash);
-    rows.emplace_back(
-        "status", std::to_string(_receipt.status) + (_receipt.ok() ? " ok" : " FAILED"));
+    rows.emplace_back("status",
+        _receipt.pending ? std::string("pending") :
+                           std::to_string(_receipt.status) + (_receipt.ok() ? " ok" : " FAILED"));
     if (!_receipt.contractAddress.empty())
     {
         rows.emplace_back("contract", _receipt.contractAddress);
@@ -322,10 +326,20 @@ int runRaw(Connection const& _connection, Args const& _args, std::ostream& _out)
                                             ": tx raw goes to eth_sendRawTransaction; enable "
                                             "[web3_rpc] or pass --web3 host:port");
         }
-        auto web3 = makeHttpRpcCall(*_connection.web3Endpoint, c_defaultRequestTimeoutMs);
-        auto waitMs = static_cast<int>(_args.numberOr<double>("wait", 60) * 1000);
-        auto receipt = sendRawEth(web3, hex, waitMs);
+        auto web3 = makeHttpRpcCall(*_connection.web3Endpoint, _connection.requestTimeoutMs);
+        auto waitSeconds = _args.numberOr<double>("wait", 60);
+        if (!(waitSeconds > 0) || waitSeconds > c_maxRawWaitSeconds)
+        {
+            throw OpsError(c_exitUsage, "--wait expects seconds in (0, " +
+                                            std::to_string(static_cast<int>(c_maxRawWaitSeconds)) +
+                                            "]");
+        }
+        auto receipt = sendRawEth(web3, hex, static_cast<int>(waitSeconds * 1000));
         printReceipt(_out, receipt, wantJson(_args.flag("json")));
+        if (receipt.pending)
+        {
+            return c_exitPending;
+        }
         return receipt.ok() ? c_exitOk : c_exitChecksFailed;
     }
     auto facts = chainFacts(_connection);
@@ -551,7 +565,8 @@ void registerTxCommand()
             "<fn> "
             "[args..] (sign only, prints the raw hex) | raw <hex|@file> (console: sendTransaction "
             "with a signed tx; EL modes: eth_sendRawTransaction on the web3 listener, receipt "
-            "polled up to --wait 60 s) | get <hash> [--proof]   [--account <pem|hex-key>] "
+            "polled up to --wait 60 s, exit 3 while still pending) | get <hash> [--proof]   "
+            "[--account <pem|hex-key>] "
             "[--mode none|el|opstack-el] [--web3 host:port] [--node-dir "
             "<dir> | --rpc <host:port>] [--json]",
             {"proof"}, runTx});

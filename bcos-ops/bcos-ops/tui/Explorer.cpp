@@ -161,23 +161,48 @@ bool explorerFetchOne(ExplorerState& _state, RpcCall const& _call, std::string c
     {
         row.number = _number;
     }
-    // EL modes reorg: a new head whose parent is not the row below it replaced that row's
-    // block. Drop the rows from the fork point and let the next round refetch from there.
+    // reorg (EL modes have them): a new head whose parent is not the row below it replaced
+    // that row's block. Walk the rows down in this round until the node's block at a row's
+    // height has the row's hash again (bounded by the rows held), drop everything above that
+    // fork point and let the next round refetch from it. A row without a hash cannot be
+    // compared and is never treated as a fork.
     auto parent = blockParentHash(block);
     if (_front && !parent.empty() && !_state.blocks.empty() &&
-        _state.blocks.front().number == _number - 1 &&
+        !_state.blocks.front().hash.empty() && _state.blocks.front().number == _number - 1 &&
         !explorerSameHash(_state.blocks.front().hash, parent))
     {
-        auto forkPoint = _number - 1;
-        while (!_state.blocks.empty() && _state.blocks.front().number >= forkPoint)
-        {
+        auto dropTop = [&_state]() {
+            auto height = _state.blocks.front().number;
             _state.blocks.pop_front();
-        }
-        while (!_state.txs.empty() && _state.txs.front().blockNumber >= forkPoint)
+            while (!_state.txs.empty() && _state.txs.front().blockNumber >= height)
+            {
+                _state.txs.pop_front();
+            }
+        };
+        dropTop();  // the row under the new head is known to be replaced
+        while (!_state.blocks.empty() && !_state.blocks.front().hash.empty() &&
+               !explorerStopped(_stop))
         {
-            _state.txs.pop_front();
+            auto ancestor = explorerParams(_group);
+            ancestor.append(Json::Int64(_state.blocks.front().number));
+            ancestor.append(true);  // header only
+            ancestor.append(true);
+            std::string nodeHash;
+            try
+            {
+                nodeHash = blockRowFromJson(_call("getBlockByNumber", ancestor)).hash;
+            }
+            catch (std::exception const&)
+            {
+                break;  // unknown: keep the row, the next round compares again
+            }
+            if (explorerSameHash(_state.blocks.front().hash, nodeHash))
+            {
+                break;
+            }
+            dropTop();
         }
-        _state.lastFetchedHeight = forkPoint - 1;
+        _state.lastFetchedHeight = _state.blocks.empty() ? -1 : _state.blocks.front().number;
         ++_state.reorgs;
         return false;
     }

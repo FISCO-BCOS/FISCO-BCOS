@@ -17,6 +17,7 @@
  */
 #include "Checks.h"
 #include "Mode.h"
+#include <algorithm>
 
 namespace bcos::ops
 {
@@ -45,12 +46,14 @@ std::vector<Check> evaluate(
     }
     else
     {
-        // the timestamp and the timeout come from the RPC peer: clamp both before the int64
-        // arithmetic so an extreme value cannot overflow it
-        auto ageMs = _nowMs - std::clamp<int64_t>(*_status.latestTimestamp, 0, _nowMs);
-        auto limit = _thresholds.stallFactor * static_cast<double>(*_status.consensusTimeoutMs);
-        auto limitMs = limit >= 9.2e18 ? std::numeric_limits<int64_t>::max() :
-                                         static_cast<int64_t>(std::max(limit, 0.0));
+        auto ageMs = _nowMs - *_status.latestTimestamp;
+        auto limitMs = static_cast<int64_t>(_thresholds.stallFactor * *_status.consensusTimeoutMs);
+        if (!readsPbft(_status.mode))
+        {
+            // no PBFT timer drives the blocks: an L1 EL seals every ~12 s and an OP sequencer
+            // follows its CL, so the PBFT-derived limit (2 x 3 s) would flag a healthy node
+            limitMs = std::max<int64_t>(limitMs, c_elStallFloorMs);
+        }
         bool fail = ageMs > limitMs && *_status.pendingTxSize > 0;
         auto check = verdict("height_advancing", fail,
             fail ? "pending txs but no block for " + std::to_string(ageMs) + "ms" : "");
@@ -61,9 +64,9 @@ std::vector<Check> evaluate(
     }
 
     // 2. consensus_stable (EL modes: no PBFT, blocks come from the EL sync / the CL)
-    if (isElMode(_status.mode))
+    if (!readsPbft(_status.mode))
     {
-        checks.push_back(skipped("consensus_stable", "el mode"));
+        checks.push_back(skipped("consensus_stable", noPbftReason(_status.mode)));
     }
     else if (!_status.inTimeout)
     {
@@ -110,9 +113,9 @@ std::vector<Check> evaluate(
     }
 
     // 4. quorum_connected
-    if (isElMode(_status.mode))
+    if (!readsPbft(_status.mode))
     {
-        checks.push_back(skipped("quorum_connected", "el mode"));
+        checks.push_back(skipped("quorum_connected", noPbftReason(_status.mode)));
     }
     else if (_status.isConsensusNode && !*_status.isConsensusNode)
     {
