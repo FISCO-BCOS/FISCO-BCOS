@@ -16,6 +16,7 @@
  * @brief `fisco-bcos tx smoke|deploy|call|send|get`
  * @file TxCmd.cpp
  */
+#include "TxCmd.h"
 #include "TxContext.h"
 #include "bcos-ops/Args.h"
 #include "bcos-ops/Cli.h"
@@ -25,7 +26,10 @@
 #include "bcos-ops/tx/Abi.h"
 #include "bcos-ops/tx/Smoke.h"
 #include "bcos-ops/tx/TxSender.h"
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iomanip>
 #include <ostream>
@@ -45,6 +49,65 @@ std::string readFile(std::string const& _path, std::string_view _what)
     std::stringstream buffer;
     buffer << in.rdbuf();
     return buffer.str();
+}
+
+std::string trimmed(std::string _text)
+{
+    while (!_text.empty() && std::isspace(static_cast<unsigned char>(_text.back())) != 0)
+    {
+        _text.pop_back();
+    }
+    size_t start = 0;
+    while (start < _text.size() && std::isspace(static_cast<unsigned char>(_text[start])) != 0)
+    {
+        ++start;
+    }
+    return _text.substr(start);
+}
+
+/// a positional that is a readable file is read, `@path` forces the file form
+std::string hexOrFile(std::string const& _value, std::string_view _what)
+{
+    if (_value.starts_with("@"))
+    {
+        return trimmed(readFile(_value.substr(1), _what));
+    }
+    if (std::ifstream(_value).good())
+    {
+        return trimmed(readFile(_value, _what));
+    }
+    return trimmed(_value);
+}
+
+SendOptions sendOptionsFrom(Args const& _args)
+{
+    SendOptions options;
+    options.value = _args.optionOr("value", "");
+    options.nonce = _args.optionOr("nonce", "");
+    if (_args.option("block-limit"))
+    {
+        options.blockLimit = _args.numberOr<int64_t>("block-limit", 0);
+    }
+    return options;
+}
+
+/// the node refused the transaction before execution (no receipt): print the JSON-RPC error
+/// in a jq-friendly shape and exit 2 (the chain answered; the transaction was not admitted)
+int printRpcRefusal(std::ostream& _out, OpsRpcError const& _error, bool _json)
+{
+    if (_json)
+    {
+        Json::Value value;
+        value["error"]["code"] = _error.code;
+        value["error"]["message"] = _error.message;
+        value["error"]["method"] = _error.method;
+        printJson(_out, value);
+    }
+    else
+    {
+        _out << "rejected: code=" << _error.code << " msg=" << _error.message << '\n';
+    }
+    return c_exitChecksFailed;
 }
 
 void printReceipt(std::ostream& _out, Receipt const& _receipt, bool _json)
@@ -98,49 +161,167 @@ int runSmokeCmd(Connection const& _connection, Args const& _args, std::ostream& 
     return result.exitCode();
 }
 
+/// `/apps/<name>/<version>` → (name, version); throws on any other shape
+std::pair<std::string, std::string> splitLinkPath(std::string const& _path)
+{
+    constexpr std::string_view c_prefix = "/apps/";
+    auto slash = _path.find('/', c_prefix.size());
+    if (!_path.starts_with(c_prefix) || slash == std::string::npos || slash == c_prefix.size() ||
+        slash + 1 >= _path.size() || _path.find('/', slash + 1) != std::string::npos)
+    {
+        throw OpsError(c_exitUsage, "--link expects /apps/<name>/<version>, got " + _path);
+    }
+    return {_path.substr(c_prefix.size(), slash - c_prefix.size()), _path.substr(slash + 1)};
+}
+
+/// BFS `link(name, version, address, abi)` at 0x…100e (BFSPrecompiled.cpp linkAdaptCNS, the
+/// form console's `deploy -l` uses): registers the contract as /apps/<name>/<version> so
+/// `readlink` resolves it. The absolute-path overload `link(string,string,string)` builds its
+/// table name with getContractTableName("/apps/", path) and therefore never lands where
+/// readlink looks (verified on a 3.16 chain: code 0, readlink 0x0). Returns the int32 code.
+int32_t linkContract(TxSender& _sender, bool _sm, std::string const& _path,
+    std::string const& _address, std::string const& _abiText)
+{
+    auto [name, version] = splitLinkPath(_path);
+    Abi abi(_sm);
+    Json::Value params(Json::arrayValue);
+    params.append(name);
+    params.append(version);
+    params.append(_address);
+    params.append(_abiText);
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "";
+    auto data = abi.encodeMethodBySignature(
+        "link(string,string,string,string)", Json::writeString(writer, params));
+    auto receipt =
+        _sender.send("0x" + std::string(bcos::precompiled::BFS_ADDRESS), std::move(data), "");
+    if (!receipt.ok())
+    {
+        throw OpsError(c_exitChecksFailed, "link " + _path + " failed: receipt status " +
+                                               std::to_string(receipt.status) + " " +
+                                               receipt.message);
+    }
+    auto outputHex = receipt.output.starts_with("0x") ? receipt.output.substr(2) : receipt.output;
+    if (outputHex.size() < 64)
+    {
+        return 0;
+    }
+    return static_cast<int32_t>(std::stoul(outputHex.substr(56, 8), nullptr, 16));
+}
+
 int runDeploy(Connection const& _connection, Args const& _args, std::ostream& _out)
 {
     auto const& positionals = _args.positionals();
     if (positionals.empty())
     {
-        throw OpsError(c_exitUsage, "usage: tx deploy <bin-file|hex> --abi <abi-file> [args...]");
+        throw OpsError(c_exitUsage,
+            "usage: tx deploy <bin-file|hex> --abi <abi-file> [args...] [--value N] "
+            "[--link /apps/<name>/<version>]");
     }
     auto abiPath = _args.option("abi");
     if (!abiPath)
     {
         throw OpsError(c_exitUsage, "tx deploy needs --abi <abi-file>");
     }
-    std::string bin = positionals[0];
-    if (std::ifstream(bin).good())
-    {
-        bin = readFile(bin, "bin file");
-    }
-    while (!bin.empty() && (bin.back() == '\n' || bin.back() == '\r' || bin.back() == ' '))
-    {
-        bin.pop_back();
-    }
+    std::string bin = hexOrFile(positionals[0], "bin file");
     if (bin.starts_with("0x"))
     {
         bin = bin.substr(2);
     }
     auto abiText = readFile(*abiPath, "abi file");
+    auto link = _args.option("link");
+    if (link)
+    {
+        (void)splitLinkPath(*link);  // reject a bad path before anything is sent
+    }
     auto facts = chainFacts(_connection);
     auto sender = makeSender(_connection, facts, _args);
     Abi abi(facts.sm);
     std::vector<std::string> ctorArgs(positionals.begin() + 1, positionals.end());
     auto data = abi.encodeConstructor(abiText, bin, argsToJsonArray(ctorArgs));
-    auto receipt = sender->send("", std::move(data), abiText);
-    printReceipt(_out, receipt, wantJson(_args.flag("json")));
-    return receipt.ok() ? c_exitOk : c_exitChecksFailed;
+    bool json = wantJson(_args.flag("json"));
+    Receipt receipt;
+    try
+    {
+        receipt = sender->send("", std::move(data), abiText, sendOptionsFrom(_args));
+    }
+    catch (OpsRpcError const& e)
+    {
+        return printRpcRefusal(_out, e, json);
+    }
+    if (receipt.ok() && link)
+    {
+        auto code = linkContract(*sender, facts.sm, *link, receipt.contractAddress, abiText);
+        receipt.raw["link"] = *link;
+        receipt.raw["linkCode"] = code;
+        if (code != 0)
+        {
+            receipt.raw["linkCodeName"] = precompiledCodeName(code);
+        }
+    }
+    printReceipt(_out, receipt, json);
+    if (!json && link)
+    {
+        printRows(
+            _out, {{"link", *link + (receipt.raw["linkCode"].asInt() == 0 ?
+                                            "" :
+                                            " FAILED " + receipt.raw["linkCodeName"].asString())}});
+    }
+    return receipt.ok() && receipt.raw.get("linkCode", 0).asInt() == 0 ? c_exitOk :
+                                                                         c_exitChecksFailed;
 }
 
-int runCallOrSend(Connection const& _connection, Args const& _args, std::ostream& _out, bool _send)
+int runRaw(Connection const& _connection, Args const& _args, std::ostream& _out)
+{
+    if (_args.positionals().empty())
+    {
+        throw OpsError(c_exitUsage, "usage: tx raw <signed-hex|@file>");
+    }
+    auto hex = hexOrFile(_args.positionals()[0], "raw transaction file");
+    if (hex.starts_with("0x"))
+    {
+        hex = hex.substr(2);
+    }
+    if (hex.empty() || hex.size() % 2 != 0 ||
+        std::any_of(hex.begin(), hex.end(), [](unsigned char c) { return std::isxdigit(c) == 0; }))
+    {
+        throw OpsError(c_exitUsage, "raw transaction is not hex");
+    }
+    auto facts = chainFacts(_connection);
+    auto sender = makeSender(_connection, facts, _args);
+    bool json = wantJson(_args.flag("json"));
+    try
+    {
+        auto receipt = sender->sendRaw(hex);
+        printReceipt(_out, receipt, json);
+        return receipt.ok() ? c_exitOk : c_exitChecksFailed;
+    }
+    catch (OpsRpcError const& e)
+    {
+        return printRpcRefusal(_out, e, json);
+    }
+}
+
+enum class TxMode
+{
+    Call,
+    Send,
+    Sign
+};
+
+int runCallOrSend(
+    Connection const& _connection, Args const& _args, std::ostream& _out, TxMode _mode)
 {
     auto const& positionals = _args.positionals();
+    bool send = _mode != TxMode::Call;
     if (positionals.size() < 2)
     {
-        throw OpsError(c_exitUsage, std::string("usage: tx ") + (_send ? "send" : "call") +
-                                        " <address> --abi <abi-file> <function> [args...]");
+        throw OpsError(c_exitUsage, std::string("usage: tx ") +
+                                        (_mode == TxMode::Call    ? "call" :
+                                            _mode == TxMode::Send ? "send" :
+                                                                    "sign") +
+                                        " <address> --abi <abi-file> <function> [args...]" +
+                                        (send ? " [--value N] [--nonce S] [--block-limit N]" : ""));
     }
     auto abiPath = _args.option("abi");
     if (!abiPath)
@@ -156,11 +337,34 @@ int runCallOrSend(Connection const& _connection, Args const& _args, std::ostream
     Abi abi(facts.sm);
     auto data = abi.encodeMethod(abiText, method, argsToJsonArray(methodArgs));
     bool json = wantJson(_args.flag("json"));
-    if (_send)
+    if (_mode == TxMode::Sign)
     {
-        auto receipt = sender->send(address, std::move(data), "");
-        printReceipt(_out, receipt, json);
-        return receipt.ok() ? c_exitOk : c_exitChecksFailed;
+        auto signedTx = sender->sign(address, std::move(data), "", sendOptionsFrom(_args));
+        if (json)
+        {
+            Json::Value value;
+            value["txHash"] = signedTx.hash;
+            value["raw"] = "0x" + signedTx.hex;
+            printJson(_out, value);
+        }
+        else
+        {
+            _out << "0x" << signedTx.hex << '\n';
+        }
+        return c_exitOk;
+    }
+    if (send)
+    {
+        try
+        {
+            auto receipt = sender->send(address, std::move(data), "", sendOptionsFrom(_args));
+            printReceipt(_out, receipt, json);
+            return receipt.ok() ? c_exitOk : c_exitChecksFailed;
+        }
+        catch (OpsRpcError const& e)
+        {
+            return printRpcRefusal(_out, e, json);
+        }
     }
     auto receipt = sender->call(address, std::move(data));
     std::string decoded;
@@ -195,9 +399,11 @@ int runGet(Connection const& _connection, Args const& _args, std::ostream& _out)
 {
     if (_args.positionals().empty())
     {
-        throw OpsError(c_exitUsage, "usage: tx get <txHash>");
+        throw OpsError(c_exitUsage, "usage: tx get <txHash> [--proof]");
     }
-    auto merged = fetchTransaction(_connection.call, _connection.group, _args.positionals()[0]);
+    bool proof = _args.flag("proof");
+    auto merged =
+        fetchTransaction(_connection.call, _connection.group, _args.positionals()[0], proof);
     if (wantJson(_args.flag("json")))
     {
         printJson(_out, merged);
@@ -207,6 +413,17 @@ int runGet(Connection const& _connection, Args const& _args, std::ostream& _out)
     std::vector<std::pair<std::string, std::string>> rows;
     rows.emplace_back("from", merged["transaction"].get("from", "").asString());
     rows.emplace_back("to", merged["transaction"].get("to", "").asString());
+    if (proof)
+    {
+        rows.emplace_back("txProof",
+            std::to_string(merged["transaction"].get("txProof", Json::arrayValue).size()) +
+                " nodes");
+        // getTransactionReceipt fills txReceiptProof; receiptProof is an always-empty
+        // compatibility field (JsonRpcImpl_2_0.cpp)
+        rows.emplace_back("receiptProof",
+            std::to_string(merged["receipt"].get("txReceiptProof", Json::arrayValue).size()) +
+                " nodes");
+    }
     rows.emplace_back("block", std::to_string(receipt.blockNumber));
     rows.emplace_back(
         "status", std::to_string(receipt.status) + (receipt.ok() ? " ok" : " FAILED"));
@@ -225,47 +442,70 @@ int runTx(Args const& _args, std::ostream& _out, std::ostream& _err)
     (void)_err;
     if (_args.positionals().empty())
     {
-        throw OpsError(c_exitUsage, "usage: tx smoke|deploy|call|send|get ...");
+        throw OpsError(c_exitUsage, "usage: tx smoke|deploy|call|send|sign|raw|get ...");
+    }
+    auto connection = connect(connectOptionsFrom(_args));
+    return runTxOn(connection, _args, _out);
+}
+
+}  // namespace
+
+int runTxOn(Connection const& _connection, Args const& _args, std::ostream& _out)
+{
+    if (_args.positionals().empty())
+    {
+        throw OpsError(c_exitUsage, "usage: tx smoke|deploy|call|send|sign|raw|get ...");
     }
     auto sub = _args.positionals()[0];
     std::vector<std::string> rest(_args.positionals().begin() + 1, _args.positionals().end());
     // re-wrap the remaining positionals; options are shared
     Args subArgs = _args.withPositionals(rest);
-    auto connection = connect(connectOptionsFrom(_args));
     if (sub == "smoke")
     {
-        return runSmokeCmd(connection, subArgs, _out);
+        return runSmokeCmd(_connection, subArgs, _out);
     }
     if (sub == "deploy")
     {
-        return runDeploy(connection, subArgs, _out);
+        return runDeploy(_connection, subArgs, _out);
     }
     if (sub == "call")
     {
-        return runCallOrSend(connection, subArgs, _out, false);
+        return runCallOrSend(_connection, subArgs, _out, TxMode::Call);
     }
     if (sub == "send")
     {
-        return runCallOrSend(connection, subArgs, _out, true);
+        return runCallOrSend(_connection, subArgs, _out, TxMode::Send);
+    }
+    if (sub == "sign")
+    {
+        return runCallOrSend(_connection, subArgs, _out, TxMode::Sign);
+    }
+    if (sub == "raw")
+    {
+        return runRaw(_connection, subArgs, _out);
     }
     if (sub == "get")
     {
-        return runGet(connection, subArgs, _out);
+        return runGet(_connection, subArgs, _out);
     }
     throw OpsError(c_exitUsage, "unknown tx subcommand: " + sub);
 }
 
-}  // namespace
-
 void registerTxCommand()
 {
-    registerCommand(
-        "tx", Command{"smoke (deploy HelloWorld, set, get) or deploy/call/send/get with an ABI",
-                  "smoke | deploy <bin> --abi <abi> [args..] | call <addr> --abi <abi> <fn> "
-                  "[args..] | "
-                  "send <addr> --abi <abi> <fn> [args..] | get <hash>   [--account <pem>] "
-                  "[--node-dir "
-                  "<dir> | --rpc <host:port>] [--json]",
-                  {}, runTx, {"account", "abi"}, true});
+    registerCommand("tx",
+        Command{"smoke (deploy HelloWorld, set, get), deploy/call/send with an ABI, raw signed "
+                "transactions, get with proof (console: deploy, call, sendTransaction, "
+                "getTransactionByHash/getTransactionReceipt)",
+            "smoke | deploy <bin|@file> --abi <abi> [args..] [--value N] [--link "
+            "/apps/<name>/<ver>] "
+            "(console: deploy -l) | call <addr> --abi <abi> <fn> [args..] | send <addr> --abi "
+            "<abi> "
+            "<fn> [args..] [--value N] [--nonce S] [--block-limit N] | sign <addr> --abi <abi> "
+            "<fn> "
+            "[args..] (sign only, prints the raw hex) | raw <hex|@file> (console: sendTransaction "
+            "with a signed tx) | get <hash> [--proof]   [--account <pem|hex-key>] [--node-dir "
+            "<dir> | --rpc <host:port>] [--json]",
+            {"proof"}, runTx});
 }
 }  // namespace bcos::ops

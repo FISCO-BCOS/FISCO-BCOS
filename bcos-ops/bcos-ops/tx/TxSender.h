@@ -23,6 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <json/json.h>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace bcos::ops
@@ -51,12 +52,35 @@ public:
     virtual Receipt call(std::string const& _to, bytes _data) = 0;
 };
 
+/// per-transaction overrides; every field empty means the builder's defaults (random nonce,
+/// blockLimit = current height + 500, no value → transaction version 0)
+struct SendOptions
+{
+    std::string value;  // decimal wei; non-empty switches to the v1 transaction layout
+    std::string nonce;
+    std::optional<int64_t> blockLimit;
+};
+
+struct SignedTx
+{
+    std::string hash;  // 0x-prefixed
+    std::string hex;   // tars-encoded signed transaction, no 0x
+};
+
 class TxSender : public Sender
 {
 public:
     TxSender(RpcCall _call, std::string _group, std::string _chainId, bool _sm,
         bcos::crypto::KeyPairInterface::UniquePtr _keyPair);
     Receipt send(std::string const& _to, bytes _data, std::string const& _abi) override;
+    /// send with explicit value / nonce / blockLimit
+    Receipt send(
+        std::string const& _to, bytes _data, std::string const& _abi, SendOptions const& _options);
+    /// the signed transaction without sending it (`tx sign`, raw-tx round trips)
+    SignedTx sign(
+        std::string const& _to, bytes _data, std::string const& _abi, SendOptions const& _options);
+    /// `sendTransaction [group,"",hex,false]` for an already signed transaction (0x optional)
+    Receipt sendRaw(std::string const& _signedHex);
     Receipt call(std::string const& _to, bytes _data) override;
     std::string address() const;
 
@@ -68,7 +92,8 @@ private:
     bcos::crypto::KeyPairInterface::UniquePtr m_keyPair;
 };
 
-/// getTransaction + getTransactionReceipt merged: {"transaction": ..., "receipt": ...}
+/// getTransaction + getTransactionReceipt merged: {"transaction": ..., "receipt": ...};
+/// _proof asks the node for txProof / receiptProof
 Json::Value fetchTransaction(
-    RpcCall const& _call, std::string const& _group, std::string const& _hash);
+    RpcCall const& _call, std::string const& _group, std::string const& _hash, bool _proof = false);
 }  // namespace bcos::ops

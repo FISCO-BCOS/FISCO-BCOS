@@ -81,6 +81,13 @@ public:
         m_results[_method] = std::move(_result);
     }
     void remove(std::string const& _method) { m_results.erase(_method); }
+    /// the node answers _method with a JSON-RPC error (a txpool refusal carries the
+    /// TransactionStatus value as code)
+    void fail(std::string const& _method, int _code, std::string _message)
+    {
+        m_results.erase(_method);
+        m_failures[_method] = {_code, std::move(_message)};
+    }
     /// replaces one key inside the string-encoded consensus status
     void setConsensus(std::string const& _key, Json::Value _value)
     {
@@ -103,6 +110,11 @@ public:
     {
         return [this](std::string_view _method, Json::Value const& _params) -> Json::Value {
             m_calls.emplace_back(std::string(_method), _params);
+            if (auto failure = m_failures.find(std::string(_method)); failure != m_failures.end())
+            {
+                throw OpsRpcError(
+                    std::string(_method), failure->second.first, failure->second.second);
+            }
             auto it = m_results.find(std::string(_method));
             if (it == m_results.end())
             {
@@ -115,6 +127,7 @@ public:
 
 private:
     std::map<std::string, Json::Value> m_results;
+    std::map<std::string, std::pair<int, std::string>> m_failures;
     std::vector<std::pair<std::string, Json::Value>> m_calls;
 };
 }  // namespace bcos::ops::test
