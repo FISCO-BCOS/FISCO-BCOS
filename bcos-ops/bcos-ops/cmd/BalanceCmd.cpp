@@ -36,8 +36,8 @@ namespace bcos::ops
 namespace
 {
 constexpr std::string_view c_balanceEnableHint =
-    "hint: feature_balance_precompiled registers the governors as callers; on a chain without a "
-    "committee run `balance register-caller <account>` (governor only) before add/sub/transfer";
+    "hint: feature_balance_precompiled registers the governors as callers; run `balance "
+    "register-caller <account>` as a governor account before add/sub/transfer from another one";
 constexpr std::string_view c_balanceDisabledHint =
     "hint: the balance precompiled is not registered on this chain, run `balance enable` "
     "(feature_balance + feature_balance_precompiled)";
@@ -61,8 +61,9 @@ constexpr std::array c_balanceSubs{
 
 // bcos::protocol::TransactionStatus::CallAddressError (bcos-protocol/TransactionStatus.h:45);
 // bcos-ops does not link bcos-protocol, same as Smoke.cpp. A 3.18 node reports the missing
-// precompiled as status 16 RevertInstruction with message "Call address error." instead
-// (TransactionExecutive.cpp callPrecompiled → CallAddressError exception), so both are checked.
+// precompiled as status 16 RevertInstruction whose output is Error("Call address error.")
+// (HostContext.h:626 puts the text into the revert output; the receipt carries no message), and
+// decodePresetResult fills `message` from that output through revertReason(), so both are checked.
 constexpr int32_t c_statusCallAddressError = 19;
 constexpr std::string_view c_callAddressErrorMessage = "Call address error";
 
@@ -79,11 +80,7 @@ bool balancePrecompiledMissing(Receipt const& _receipt)
 int runBalanceRead(Connection const& _connection, Args const& _args, std::ostream& _out,
     Preset const& _preset, std::vector<std::string> const& _params)
 {
-    auto facts = chainFacts(_connection);
-    TxSender sender(_connection.call, _connection.group, facts.chainId, facts.sm,
-        makeAccount(facts.sm, std::nullopt));
-    PresetRunner runner(sender, facts.sm, _connection.call, _connection.group);
-    auto result = runner.run(_preset, _params);
+    auto result = readPreset(_connection, _preset, _params);
     bool json = wantJson(_args.flag("json"));
     if (json)
     {
@@ -169,7 +166,7 @@ void registerBalanceCommand()
                 "chain). add/sub/transfer need a registered caller as --account",
             "get <acct> | add <acct> <amount> | sub <acct> <amount> | transfer <from> <to> "
             "<amount> | register-caller <acct> | unregister-caller <acct> | list-caller | enable   "
-            "[--account <key-file>] [--yes] [--direct] [--interval <blocks>] [--node-dir <dir> | "
+            "[--account <key-file>] [--yes] [--interval <blocks>] [--node-dir <dir> | "
             "--rpc <host:port>] [--json]",
             {"yes", "direct"}, runBalance});
 }

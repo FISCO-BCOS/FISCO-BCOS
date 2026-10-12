@@ -212,8 +212,11 @@ BOOST_AUTO_TEST_CASE(unregisteredPrecompiledHintsAtEnable)
         parseJson(out.str(), "add")["hint"].asString().find("balance enable") != std::string::npos);
     rpc.setCall(balSelector("getBalance(address)"), balCallResult(19, "0x"));
     std::ostringstream read;
-    FakeRpc byMessage;  // what a 3.18 node actually answers: status 16 + "Call address error."
-    byMessage.set("sendTransaction", balReceipt(16, "0x", "Call address error."));
+    // what a 3.18 node actually answers: status 16, no message, output = Error("Call address
+    // error.") (HostContext.h:626); the message the hint matches on is derived by revertReason()
+    FakeRpc byMessage;
+    byMessage.set("sendTransaction",
+        balReceipt(16, "0x08c379a0" + balOutput("string", R"(["Call address error."])").substr(2)));
     std::ostringstream msg;
     BOOST_CHECK_EQUAL(runBalanceOn(balConnection(byMessage),
                           balArgs({"sub", c_balAccount, "1", "--yes", "--json"}), msg),
@@ -339,6 +342,39 @@ BOOST_AUTO_TEST_CASE(usageAndHelp)
     {
         BOOST_CHECK(help.str().find(name) != std::string::npos);
     }
+}
+
+BOOST_AUTO_TEST_CASE(revertReasonIgnoresOutputsThatAreNotAnErrorString)
+{
+    // a long output under another selector, and Error(string) with an offset past the data
+    BOOST_CHECK_EQUAL(
+        revertReason("0x12345678" + balOutput("string", R"(["boom"])").substr(2), false), "");
+    std::string badOffset = "0x08c379a0" + std::string(62, '0') + "ff" + std::string(64, '0');
+    BOOST_CHECK_EQUAL(revertReason(badOffset, false), "");
+    BOOST_CHECK_EQUAL(
+        revertReason("0x08c379a0" + balOutput("string", R"(["boom"])").substr(2), false), "boom");
+}
+
+BOOST_AUTO_TEST_CASE(amountsBeyond64BitsReachTheCodecAsDigits)
+{
+    // jsoncpp would parse 1000 ether as the double 1e+21; the codec must see the digit string
+    FakeRpc rpc;
+    rpc.set("sendTransaction", balReceipt(0, "0x"));
+    std::ostringstream out;
+    BOOST_CHECK_EQUAL(
+        runBalanceOn(balConnection(rpc),
+            balArgs({"add", c_balAccount, "1000000000000000000000", "--yes", "--json"}), out),
+        c_exitOk);
+    auto sent = balSentTxs(rpc);
+    BOOST_REQUIRE_EQUAL(sent.size(), 1U);
+    BOOST_CHECK(sent[0].input.ends_with("3635c9adc5dea00000"));
+    std::ostringstream err;
+    BOOST_CHECK_THROW(runBalanceOn(balConnection(rpc),
+                          balArgs({"add", c_balAccount, "0x10", "--yes", "--json"}), err),
+        OpsError);
+    BOOST_CHECK_THROW(runBalanceOn(balConnection(rpc),
+                          balArgs({"add", c_balAccount, "1e21", "--yes", "--json"}), err),
+        OpsError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

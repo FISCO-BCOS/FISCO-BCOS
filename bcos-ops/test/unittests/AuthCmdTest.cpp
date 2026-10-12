@@ -19,9 +19,9 @@
  *        direct, and the set-contract-status overload choice
  * @file AuthCmdTest.cpp
  */
+#include "bcos-ops/cmd/AuthCmd.h"
 #include "bcos-ops/Cli.h"
 #include "bcos-ops/OpsError.h"
-#include "bcos-ops/cmd/BalanceCmd.h"
 #include "bcos-ops/tx/Abi.h"
 #include "fixtures/FakeRpc.h"
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
@@ -245,7 +245,8 @@ BOOST_AUTO_TEST_CASE(committeeWritesBecomeProposalsOnAnAuthChain)
         BOOST_CHECK_EQUAL(json["directMethod"].asString(), c.direct);
         BOOST_CHECK_EQUAL(json["proposal"]["id"].asString(), "9");
         BOOST_CHECK_EQUAL(json["proposal"]["statusName"].asString(), "passed");
-        BOOST_CHECK_EQUAL(json["params"][json["params"].size() - 1].asInt(), 1000);  // relative
+        BOOST_CHECK_EQUAL(
+            json["params"][json["params"].size() - 1].asString(), "1000");  // relative
         if (c.argv[0] == "open-deploy-auth")
         {
             BOOST_CHECK_EQUAL(json["params"][1].asBool(), true);
@@ -358,6 +359,24 @@ BOOST_AUTO_TEST_CASE(usageAndHelp)
     {
         BOOST_CHECK(help.str().find(name) != std::string::npos);
     }
+}
+
+BOOST_AUTO_TEST_CASE(resetAdminDirectKeepsContractThenAdmin)
+{
+    // AuthManagerPrecompiled.cpp:199-203 resetAdmin(address contract, address admin)
+    auto rpc = authChainRpc();
+    rpc.set("sendTransaction", authReceipt(authOutput("int32", "[0]")));
+    std::ostringstream out;
+    BOOST_CHECK_EQUAL(
+        runAuthOn(authConnection(rpc),
+            authArgs({"reset-admin", c_authContract, c_authAccount, "--direct", "--yes", "--json"}),
+            out),
+        c_exitOk);
+    auto tx = authSentTx(rpc);
+    BOOST_CHECK_EQUAL(tx.to, c_authAddress);
+    BOOST_CHECK_EQUAL(tx.input.substr(0, 8), authSel("resetAdmin(address,address)"));
+    BOOST_CHECK_EQUAL(tx.input.substr(8 + 24, 40), c_authContract.substr(2));
+    BOOST_CHECK_EQUAL(tx.input.substr(8 + 64 + 24, 40), c_authAccount.substr(2));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

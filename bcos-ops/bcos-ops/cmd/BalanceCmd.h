@@ -14,8 +14,7 @@
  *  limitations under the License.
  *
  * @brief `balance get|add|sub|transfer|register-caller|unregister-caller|list-caller|enable`
- *        and `auth <read>|<write>` over an already open Connection (the entries the unit tests
- *        drive with a FakeRpc)
+ *        over an already open Connection (the entry the unit tests drive with a FakeRpc)
  * @file BalanceCmd.h
  */
 #pragma once
@@ -28,5 +27,4 @@ namespace bcos::ops
 {
 /// _args.positionals()[0] is the sub-subcommand; returns the process exit code
 int runBalanceOn(Connection const& _connection, Args const& _args, std::ostream& _out);
-int runAuthOn(Connection const& _connection, Args const& _args, std::ostream& _out);
 }  // namespace bcos::ops

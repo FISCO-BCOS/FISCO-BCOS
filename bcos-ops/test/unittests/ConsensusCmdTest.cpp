@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(addSealerEncodesTwoOrThreeArguments)
     BOOST_CHECK_EQUAL(json["method"].asString(), "addSealer(string,uint256)");
     BOOST_CHECK_EQUAL(json["to"].asString(), "0x0000000000000000000000000000000000001003");
     BOOST_CHECK_EQUAL(json["params"][0].asString(), c_consNode3);
-    BOOST_CHECK_EQUAL(json["params"][1].asInt(), 2);
+    BOOST_CHECK_EQUAL(json["params"][1].asString(), "2");
     BOOST_CHECK_EQUAL(json["mode"].asString(), "direct");
     BOOST_CHECK(json["ok"].asBool());
 
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(addSealerEncodesTwoOrThreeArguments)
         consArgs({"add-sealer", c_consNode3, "2", "--term-weight", "5", "--yes", "--json"}), term);
     auto termJson = parseJson(term.str(), "add-sealer-term");
     BOOST_CHECK_EQUAL(termJson["method"].asString(), "addSealer(string,uint256,uint256)");
-    BOOST_CHECK_EQUAL(termJson["params"][2].asInt(), 5);
+    BOOST_CHECK_EQUAL(termJson["params"][2].asString(), "5");
 }
 
 BOOST_AUTO_TEST_CASE(negativeCodeNamesTheReasonAndExitsTwo)
