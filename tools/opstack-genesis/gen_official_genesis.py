@@ -404,9 +404,13 @@ def build_schedule(toml, ts0, extra_forks=None):
 # the consumer): op-geth's EL fork sequence, with the CL-only forks in their op-node
 # positions. NOTE this is NOT the order the monotonicity check walks — see
 # _ROLLUP_ORDERED_FORKS.
-_ROLLUP_FORK_KEYS = ["regolith", "canyon", "delta", "ecotone", "fjord", "granite",
-                     "holocene", "pectra_blob_schedule", "isthmus", "jovian", "karst",
-                     "interop"]
+# DERIVED from EL_FORKS: the EL rungs plus the CL-only forks at their op-node
+# positions (delta after canyon, pectra_blob_schedule after holocene, interop last)
+# — an EL rung added to EL_FORKS appears in the rollup keys automatically instead of
+# being silently omitted (the EL/CL disagreement the file's own comments call P0).
+_CL_ONLY_AFTER = {"canyon": ["delta"], "holocene": ["pectra_blob_schedule"]}
+_ROLLUP_FORK_KEYS = [rung for fork in EL_FORKS
+                     for rung in [fork, *_CL_ONLY_AFTER.get(fork, [])]] + ["interop"]
 # The forks op-node's rollup.Config.Check() actually orders: it calls checkFork on
 # exactly these seven adjacent canonical pairs, regolith->canyon->delta->ecotone->
 # fjord->granite->holocene->isthmus (op-node/rollup/types.go Check; pin
