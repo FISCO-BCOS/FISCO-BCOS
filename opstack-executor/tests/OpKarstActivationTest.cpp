@@ -314,6 +314,26 @@ BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTx, * boost::unit_test::labe
         OpConsensusError, isScheduleGateError);
 }
 
+// The karst term of `crossed(jovian) || crossed(karst)` on its own: jovian active since
+// genesis, karst crosses with THIS block. karstOnlySchedule forces jovian==karst (the fold
+// rule), so every case above fires the jovian disjunct too — deleting the karst term from
+// production left them green. Here parent is past jovian but before karst, so ONLY the
+// karst term can reject.
+BOOST_AUTO_TEST_CASE(KarstAloneActivationBlockRejectsUserTx, * boost::unit_test::label("fork-karst"))
+{
+    constexpr uint64_t c_karstTsSec = 200;
+    constexpr uint64_t c_parentPastJovianSec = 199;
+    bcos::ledger::OpForkSchedule schedule;
+    schedule.m_isthmusTime = 0;
+    schedule.m_jovianTime = 100;
+    schedule.m_karstTime = c_karstTsSec;
+    auto dep = depositWithJovianAttrs();
+    BOOST_CHECK_EXCEPTION(
+        runPreBlock(schedule, c_parentPastJovianSec, static_cast<int64_t>(c_karstTsSec) * 1000,
+            {c_depositEnvelope, c_typedEnvelope}, {dep, opeth::DepositTx{}}),
+        OpConsensusError, isScheduleGateError);
+}
+
 BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTxBeforeTrailingDeposit, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 {
     auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/c_jovianTsSec);

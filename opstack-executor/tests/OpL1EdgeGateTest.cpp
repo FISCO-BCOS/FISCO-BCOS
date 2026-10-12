@@ -318,6 +318,23 @@ BOOST_AUTO_TEST_CASE(JovianDaFootprintGasLimitBoundary, * boost::unit_test::labe
         statusForDaFootprintWithGasLimit(/*local=*/local, /*gasLimit=*/local - 1) == "INVALID");
 }
 
+// The accept direction of `daFootprint > gasLimit -> INVALID` (op-geth block_validator.go:131):
+// a gasLimit comfortably above BOTH the local Σ and the vector deposit's declared gas must
+// answer VALID. Without this cell the gate's accept side was pure prose — an inverted or
+// over-firing comparison (rejecting at any gasLimit >= Σ... short of the ==Σ edge below)
+// passed every suite. The exact ==Σ equality edge stays disclosed-unpinned: on this vector
+// the deposit declares gas=1M > Σ, so at gasLimit==Σ the deposit-fit gate rejects first
+// ("op deposit: block gas limit reached"); pinning that edge needs a small-deposit corpus
+// vector (same weight class as the golden-corpus work).
+BOOST_AUTO_TEST_CASE(JovianDaFootprintBelowGasLimitAccepted, * boost::unit_test::label("fork-jovian"))
+{
+    auto const local = localDaFootprintOfGoldenVector();
+    // Above the 1M deposit gas as well as Σ, so the deposit-fit gate passes too.
+    auto const status = statusForDaFootprintWithGasLimit(
+        /*local=*/local, /*gasLimit=*/std::max<uint64_t>(local + 1, 2'000'000));
+    BOOST_CHECK_EQUAL(status, "VALID");
+}
+
 // op-geth rejects a header whose blobGasUsed disagrees with the locally recomputed
 // footprint (block_validator.go:127 "invalid DA footprint in blobGasUsed field
 // (remote: %d local: %d)"). The F-A2 equality gate now enforces that here too, so this cell is

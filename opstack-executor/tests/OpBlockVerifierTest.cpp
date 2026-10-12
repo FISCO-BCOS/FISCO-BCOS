@@ -497,6 +497,54 @@ BOOST_AUTO_TEST_CASE(IsthmusBlockVerifiesAndCommits)
     checkCommitted(f, 1, result.blockHash, rawTxs);
 }
 
+// F8 (true arm): the verifier's OWN wiring of the deposits-only fork-activation gate.
+// The wiring probe above passes noUserTxActivationBlock=false, and every other fixture sits
+// below Jovian, so a regression in the verifier's parent fetch or the seconds cast silently
+// disabled the gate on the p2p lane while unit tests stayed green. Here the fixture's
+// schedule crosses Jovian between the committed parent and THIS block, the corpus user tx
+// (eip1559) is in the set, and verifyAndCommit must answer the consensus rejection — the
+// gate's parent read, opForkTimestampSec conversion and ethHeader.timestamp cast all run.
+BOOST_AUTO_TEST_CASE(JovianActivationUserTxForsakenOnVerifierLane)
+{
+    // The verifier's OWN wiring of the deposits-only fork-activation gate: the gate
+    // fires inside verifyAndCommit (parent fetch -> opForkTimestampSec conversion ->
+    // ethHeader.timestamp cast -> pre-block scan / execute-block shape check), which
+    // the noUserTxActivationBlock=false probe below never exercises. Commitments are
+    // probed on a below-Jovian fixture (execution under a Jovian schedule throws the
+    // gate mid-probe); the verifier under test carries the crossing schedule, so the
+    // block (deposit + user tx, header past the Jovian rung) must answer the
+    // consensus rejection and commit nothing.
+    bcos::ledger::OpForkSchedule probeSchedule;  // isthmus only — gate is a no-op
+    probeSchedule.m_isthmusTime = 0;
+    VerifierFixture probeFixture{probeSchedule};
+    probeFixture.prepareGenesis();
+
+    auto const rawTxs = corpusTxs();  // deposit + eip1559 user tx
+    auto data = makeEthHeaderBase(/*number=*/1, /*timestampSec=*/2000, /*isthmusShape=*/true);
+    auto commitments = probeCommitments(probeFixture, data, rawTxs);
+    fillCommitments(data, commitments);
+
+    bcos::ledger::OpForkSchedule crossingSchedule;  // jovian crosses at 2000
+    crossingSchedule.m_isthmusTime = 0;
+    crossingSchedule.m_jovianTime = 2000;
+    VerifierFixture f{crossingSchedule};
+    f.prepareGenesis();
+    auto const block = makeSyncBlock(data, rawTxs);
+
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
+        bcos::evm::OpConsensusError,
+        // Type match suffices (the file's own precedent at :598): both gate
+        // wordings translate to OpConsensusError inside verifyAndCommit — the
+        // pre-block scan and the execute-block Jovian shape check.
+        [](bcos::evm::OpConsensusError const&) { return true; });
+    // Nothing committed on the verifier under test: head stays at genesis.
+    auto view = f.multiLayerStorage.fork();
+    auto currentState = bcos::task::syncWait(bcos::storage2::readOne(
+        view, StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER}));
+    BOOST_REQUIRE(currentState.has_value());
+    BOOST_CHECK_EQUAL(std::string(currentState->get()), "0");
+}
+
 BOOST_AUTO_TEST_CASE(BedrockBlockVerifiesAndCommits)
 {
     // isthmus_time=2000 activates the full ladder; a block at second 1010 falls back to Bedrock.
