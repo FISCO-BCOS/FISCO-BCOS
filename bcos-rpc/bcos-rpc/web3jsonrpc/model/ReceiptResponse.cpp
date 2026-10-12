@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+ *
+ * @file ReceiptResponse.cpp
+ * @brief Receipt JSON rendering (eth_getTransactionReceipt / block receipts): the
+ *        op-geth wire shape, deposit-receipt fields and the L1-fee scalar format. */
 
 #include "ReceiptResponse.h"
 #include "Log.h"

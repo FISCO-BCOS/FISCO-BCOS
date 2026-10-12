@@ -12,12 +12,12 @@
 
 #pragma once
 
-#include <ethereum-executor/EVMSupport.h>
-#include <opstack-executor/OpFeeParams.h>
-#include <opstack-executor/OpRollupCost.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <ethereum-executor/EVMSupport.h>
+#include <opstack-executor/OpFeeParams.h>
+#include <opstack-executor/OpRollupCost.h>
 #include <array>
 #include <cstdint>
 #include <evmc/evmc.hpp>
@@ -81,13 +81,14 @@ struct OpReceiptMeta
     std::optional<intx::uint256> l1_blob_base_fee;  // = fee.blob_base_fee
     std::optional<uint32_t> l1_base_fee_scalar;
     std::optional<uint32_t> l1_blob_base_fee_scalar;
-    std::optional<intx::uint256> l1_fee;  // = l1_cost
+    std::optional<intx::uint256> l1_fee;         // = l1_cost
     std::optional<intx::uint256> l1_fee_scalar;  // Bedrock-era RAW slot-6 scalar — the
                                                  // LEGACY pricing path (pre-Ecotone, plus
                                                  // the first Ecotone block whose L1Block
                                                  // Ecotone params read zero); op-geth
                                                  // reports it as L1FeeScalar
-    std::optional<uint64_t> l1_gas_used;  // Fjord+; wire index 11
+    std::optional<uint64_t> l1_gas_used;         // wire index 11; Fjord formula, but the
+                                                 // legacy (Bedrock–Delta) branch fills it too
     // operator (Isthmus+)
     std::optional<intx::uint256> operator_fee;    // FISCO extension: actually-charged value
                                                   // (op-geth receipt has no such field)
