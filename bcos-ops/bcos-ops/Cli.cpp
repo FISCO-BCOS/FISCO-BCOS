@@ -49,6 +49,7 @@ std::map<std::string, Command>& commandTable()
         registerAttachCommands();
         registerLogCommand();
         registerTuiCommand();
+        registerCommitteeCommand();
         return true;
     }();
     (void)registered;
