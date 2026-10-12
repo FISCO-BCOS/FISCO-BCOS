@@ -16,6 +16,7 @@
  * @file Common.cpp
  */
 #include "Pages.h"
+#include "bcos-ops/Mode.h"
 #include "bcos-ops/Output.h"
 #include <chrono>
 #include <ctime>
@@ -79,7 +80,7 @@ Element renderTopBar(Model const& _model)
 {
     auto node = _model.status.nodeId ? shortNodeId(*_model.status.nodeId) : "--------";
     auto source = _model.source.empty() ? "connecting" : _model.source;
-    auto mode = _model.mode.empty() || _model.mode == "none" ? "pbft" : _model.mode;
+    std::string mode = _model.mode.empty() || _model.mode == "none" ? "pbft" : _model.mode;
     auto key = _model.keyAddress.empty() ? "none" : abridged(_model.keyAddress, 4);
     auto left = hbox({text(" fisco-bcos tui ") | bold, text(" node " + node),
         text("  source " + source), text("  mode " + mode),
@@ -94,6 +95,11 @@ Element renderTopBar(Model const& _model)
     return hbox({left, filler(), text(" key " + key + " ")}) | inverted;
 }
 
+std::string pageLabel(Model const& _model, Page _page)
+{
+    return _page == Page::consensus && isElMode(_model.mode) ? "txpool" : pageName(_page);
+}
+
 Element renderBottomBar(Model const& _model, Nav& _nav, int _width)
 {
     _nav.barHits.clear();
@@ -101,7 +107,7 @@ Element renderBottomBar(Model const& _model, Nav& _nav, int _width)
     int x = 0;
     auto label = [&](Page page) {
         std::string word =
-            " " + std::to_string(static_cast<int>(page)) + " " + pageName(page) + " ";
+            " " + std::to_string(static_cast<int>(page)) + " " + pageLabel(_model, page) + " ";
         _nav.barHits.push_back({page, x, x + static_cast<int>(word.size())});
         x += static_cast<int>(word.size());
         auto cell = text(word);
@@ -138,7 +144,7 @@ Element renderBottomBar(Model const& _model, Nav& _nav, int _width)
 Element renderHelp(Model const& _model)
 {
     Elements lines = {
-        text("1-5   pages: home consensus send log node"),
+        text("1-5   pages: home " + pageLabel(_model, Page::consensus) + " send log node"),
         text(_model.authChain ? "6     gov (auth chain)" : "6     gov (auth chains only)") | dim,
         text("Tab   next focus area (home: blocks / txs; log: list / filter)"),
         text("j k   or arrows: select a row;  PgUp PgDn: a page of rows"),
@@ -187,12 +193,18 @@ Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::st
             page = renderHome(_model, _nav, body);
             break;
         case Page::consensus:
-            page = renderConsensus(_model);
+            page = isElMode(_model.mode) ? renderTxpool(_model) : renderConsensus(_model);
             break;
         case Page::send:
         {
-            static SendForm s_snapshotForm = makeSendForm(false);  // headless renders only
-            page = renderSend(_model, _form ? *_form : s_snapshotForm, body);
+            // headless renders only (the interactive loop and the snapshots pass their form)
+            static SendForm s_snapshotForm = makeSendForm(false);
+            static SendForm s_snapshotElForm = makeSendForm(true);
+            page = renderSend(_model,
+                _form                 ? *_form :
+                isElMode(_model.mode) ? s_snapshotElForm :
+                                        s_snapshotForm,
+                body);
             break;
         }
         case Page::log:

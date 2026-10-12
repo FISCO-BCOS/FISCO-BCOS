@@ -60,6 +60,9 @@ struct SendRequest
     std::vector<std::string> params;
     std::string value;  // decimal wei; empty = none
     std::string raw;
+    // EL modes: the raw transaction goes to eth_sendRawTransaction on the web3 listener (an
+    // Ethereum RLP transaction) instead of sendTransaction (a tars-encoded FISCO transaction)
+    bool web3Raw = false;
     std::vector<std::string> features;
     bool openTxDetail = true;  // open the produced tx in a detail page (gov votes stay put)
     // the direct | proposal decision the confirmation layer showed; the worker sends exactly
@@ -70,6 +73,9 @@ struct SendRequest
     /// be known before the confirmation layer opens)
     static bool mayRouteThroughProposal(Kind _kind, Preset const* _preset);
 };
+
+/// how long an EL raw send waits for its receipt before reporting it pending
+constexpr int c_senderWeb3WaitMs = 30000;
 
 class Sender
 {
@@ -94,6 +100,7 @@ private:
     void publish(SendOutcome _outcome);
 
     Connection m_connection;
+    std::optional<RpcCall> m_web3;  // EL raw sends: the web3 listener, stop-aware
     Model& m_model;
     std::function<void()> m_onUpdate;
     std::thread m_thread;

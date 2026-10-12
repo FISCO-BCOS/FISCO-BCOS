@@ -17,6 +17,7 @@
  */
 #include "ListView.h"
 #include "Pages.h"
+#include "bcos-ops/Mode.h"
 #include "bcos-ops/Output.h"
 #include <algorithm>
 
@@ -36,12 +37,19 @@ std::string homeCheckSummary(Model const& _model)
         return "checks -";
     }
     size_t failed = 0;
+    size_t passed = 0;
     for (auto const& check : _model.checks)
     {
         failed += check.failed() ? 1 : 0;
+        passed += check.ok() ? 1 : 0;
     }
-    return failed > 0 ? "checks " + std::to_string(failed) + " FAIL" :
-                        "checks " + std::to_string(_model.checks.size()) + " ok";
+    if (failed > 0)
+    {
+        return "checks " + std::to_string(failed) + " FAIL";
+    }
+    auto skipped = _model.checks.size() - passed;
+    return "checks " + std::to_string(passed) + " ok" +
+           (skipped > 0 ? " (" + std::to_string(skipped) + " skip)" : "");
 }
 
 template <typename T>
@@ -55,6 +63,20 @@ Element homeBand(Model const& _model, Frame const& _frame)
     auto const& s = _model.status;
     auto summary = homeCheckSummary(_model);
     auto summaryColor = summary.find("FAIL") != std::string::npos ? Color::Red : Color::Green;
+    if (isElMode(_model.mode))
+    {
+        // no PBFT: the EL sync state instead of view / leader / quorum
+        auto line1 = hbox({text(" height ") | dim, text(homeShow(s.blockNumber)),
+            text("  peers ") | dim, text(homeShow(s.peerCount)), text("  syncing ") | dim,
+            text(s.isSyncing ? (*s.isSyncing ? "yes" : "no") : "-"), text("  highest ") | dim,
+            text(homeShow(s.knownHighestNumber)), text("  lag ") | dim, text(homeShow(s.lag)),
+            text("  "), text(summary) | color(summaryColor)});
+        auto age = lastBlockAgeMs(_model.explorer, _frame.nowMs);
+        auto line2 = hbox({text(" mode ") | dim, text(_model.mode), text("   pending ") | dim,
+            text(homeShow(s.pendingTxSize)), text("   last block ") | dim,
+            text(age ? ageText(*age) + " ago" : "-")});
+        return window(text(" chain "), vbox({line1, line2}), LIGHT);
+    }
     auto line1 = hbox({text(" height ") | dim, text(homeShow(s.blockNumber)), text("  view ") | dim,
         text(homeShow(s.view)), text("  leader ") | dim, text(homeShow(s.leaderIndex)),
         text("  nodes ") | dim,

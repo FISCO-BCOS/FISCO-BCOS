@@ -26,6 +26,7 @@
 #include <condition_variable>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <thread>
 
 namespace bcos::ops
@@ -77,6 +78,7 @@ private:
     std::function<std::vector<DetailWant>()> m_detailWants;
     std::function<GovernanceWants()> m_governanceWants;
     std::unique_ptr<CommitteeReader> m_committee;  // built on the worker when first needed
+    std::optional<RpcCall> m_web3;  // EL modes with the web3 listener on: txpool_content
     int m_intervalMs;
     std::thread m_thread;
     std::mutex m_wakeMutex;

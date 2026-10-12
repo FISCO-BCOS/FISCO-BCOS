@@ -24,6 +24,7 @@
 #include "bcos-ops/log/LogParser.h"
 #include "bcos-ops/tui/Explorer.h"
 #include "bcos-ops/tui/Governance.h"
+#include "bcos-ops/tui/Txpool.h"
 #include "bcos-ops/tx/FeatureFlags.h"
 #include <json/json.h>
 #include <deque>
@@ -79,6 +80,7 @@ struct Model
     GovernanceState governance;  // auth chains: the gov page (ticket 16)
     bool authChain = false;      // getGroupInfo isAuthCheck: the gov page exists
     std::string mode = "none";   // [ethereum].mode: none / el / opstack-el (ticket 17)
+    TxpoolState txpool;          // EL modes: page 2
     std::string keyAddress;      // loaded signing key, shown in the top bar (ticket 15)
     // txHash → the preset it was sent with, so the tx detail can decode its input (ticket 15
     // fills it; the table rows live for the whole process)

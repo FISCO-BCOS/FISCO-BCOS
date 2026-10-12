@@ -18,6 +18,7 @@
 #include "Explorer.h"
 #include "bcos-ops/OpsError.h"
 #include <algorithm>
+#include <cctype>
 
 namespace bcos::ops::tui
 {
@@ -105,8 +106,30 @@ std::vector<TxRow> txRowsFromBlock(Json::Value const& _block)
     return rows;
 }
 
+std::string blockParentHash(Json::Value const& _block)
+{
+    // the node's shape: parentInfo[{blockNumber, blockHash}]; parentHash as a fallback
+    auto const& info = _block["parentInfo"];
+    if (info.isArray() && !info.empty() && info[0].isObject())
+    {
+        return info[0].get("blockHash", "").asString();
+    }
+    return _block.get("parentHash", "").asString();
+}
+
 namespace
 {
+bool explorerSameHash(std::string const& _a, std::string const& _b)
+{
+    auto strip = [](std::string const& _h) {
+        auto body = _h.starts_with("0x") || _h.starts_with("0X") ? _h.substr(2) : _h;
+        std::transform(body.begin(), body.end(), body.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return body;
+    };
+    return strip(_a) == strip(_b);
+}
+
 bool explorerStopped(std::atomic<bool> const* _stop)
 {
     return _stop != nullptr && _stop->load();
@@ -137,6 +160,26 @@ bool explorerFetchOne(ExplorerState& _state, RpcCall const& _call, std::string c
     if (row.number < 0)
     {
         row.number = _number;
+    }
+    // EL modes reorg: a new head whose parent is not the row below it replaced that row's
+    // block. Drop the rows from the fork point and let the next round refetch from there.
+    auto parent = blockParentHash(block);
+    if (_front && !parent.empty() && !_state.blocks.empty() &&
+        _state.blocks.front().number == _number - 1 &&
+        !explorerSameHash(_state.blocks.front().hash, parent))
+    {
+        auto forkPoint = _number - 1;
+        while (!_state.blocks.empty() && _state.blocks.front().number >= forkPoint)
+        {
+            _state.blocks.pop_front();
+        }
+        while (!_state.txs.empty() && _state.txs.front().blockNumber >= forkPoint)
+        {
+            _state.txs.pop_front();
+        }
+        _state.lastFetchedHeight = forkPoint - 1;
+        ++_state.reorgs;
+        return false;
     }
     row.gapBelow = _gapBelow;
     auto txs = txRowsFromBlock(block);

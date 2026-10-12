@@ -171,7 +171,9 @@ std::vector<SendField> SendForm::fieldSpecs() const
         specs.push_back({"features", "flags", "", "space toggles, button enables"});
         break;
     case SendEntryKind::raw:
-        specs.push_back({"raw", "signed tx", "hex or @file", "tars-encoded signed transaction"});
+        specs.push_back({"raw", "signed tx", "hex or @file",
+            elMode ? "RLP-encoded signed Ethereum transaction" :
+                     "tars-encoded signed transaction"});
         break;
     case SendEntryKind::custom:
     {
@@ -303,6 +305,7 @@ SendRequest sendFormRequest(SendForm const& _form, SendContext const& _context)
     case SendEntryKind::raw:
         request.kind = Kind::raw;
         request.raw = _form.rawText;
+        request.web3Raw = _form.elMode;
         if (request.raw.empty())
         {
             throw OpsError(c_exitUsage, "missing signed transaction");
@@ -375,7 +378,8 @@ std::vector<std::pair<std::string, std::string>> sendConfirmRows(
         break;
     }
     case Kind::raw:
-        rows = {{"mode", "raw"}, {"to", "sendTransaction"},
+        rows = {{"mode", "raw"},
+            {"to", _request.web3Raw ? "eth_sendRawTransaction (web3)" : "sendTransaction"},
             {"method", _request.raw.starts_with("@") ? "file " + _request.raw.substr(1) :
                                                        "signed transaction"},
             {"params", std::to_string(_request.raw.size()) + " characters"}};
