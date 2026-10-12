@@ -86,4 +86,25 @@ BOOST_AUTO_TEST_CASE(eip7825GateFailsClosedOnUnknownTimestamp)
     BOOST_CHECK(eip7825InForceAt(cfg, 42, std::nullopt));
 }
 
+// The Eth-lane revision corner: an unset evmc_revision (no row for the target block yet)
+// is "unknown" and must clamp, mirroring the OP lane's unknown-timestamp rule — the arm
+// used to return "no clamp" for exactly the input whose pre-Osaka-ness it could not know.
+BOOST_AUTO_TEST_CASE(eip7825GateFailsClosedOnUnknownRevision)
+{
+    ledger::LedgerConfig cfg;
+    cfg.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+    // No revision set anywhere: evmcRevisionForBlock is disengaged.
+    BOOST_CHECK(!cfg.evmcRevisionForBlock(42).has_value());
+    BOOST_CHECK(eip7825InForceAt(cfg, 42, std::nullopt));
+
+    // A known pre-Osaka transition still reports "not in force".
+    cfg.clearForkTransitions();
+    cfg.addForkTransition(0, EVMC_CANCUN);
+    BOOST_CHECK(!eip7825InForceAt(cfg, 42, std::nullopt));
+    // At/after an Osaka transition it is in force.
+    cfg.addForkTransition(100, EVMC_OSAKA);
+    BOOST_CHECK(!eip7825InForceAt(cfg, 42, std::nullopt));
+    BOOST_CHECK(eip7825InForceAt(cfg, 100, std::nullopt));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

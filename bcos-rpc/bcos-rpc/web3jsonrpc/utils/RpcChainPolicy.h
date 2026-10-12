@@ -24,13 +24,13 @@
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 
-#include <optional>
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
+#include <optional>
 
 namespace bcos::rpc
 {
@@ -68,12 +68,13 @@ inline bool isOpStackLane(int executorVersion)
 /// a transaction consuming between 2^24 and the block limit is admissible there and its
 /// estimate must not fail (M1).
 ///
-/// Fail-closed on an UNKNOWN target timestamp (nullopt: unreadable/pruned header): 0 is
+/// Fail-closed on an UNKNOWN input on BOTH lanes. OP: a nullopt target timestamp (0 is
 /// a valid instant, so feeding `block ? ts : 0` here read "unknown" as "pre-Karst" and
 /// let an explicit gas up to the block cap slip the clamp on a Karst chain — the exact
-/// lie this gate exists to prevent. Over-clamping a pre-Karst estimate when its header
-/// cannot be read is recoverable (retry with a smaller gas); an unclamped over-cap
-/// estimate is not, so unknown timestamps clamp.
+/// lie this gate exists to prevent). Eth: a nullopt revision (no evmc_revision row for
+/// the target block yet), which must clamp for the same reason. Over-clamping a
+/// pre-Karst/pre-Osaka estimate when its header/revision cannot be read is recoverable
+/// (retry with a smaller gas); an unclamped over-cap estimate is not, so unknown clamps.
 [[nodiscard]] inline bool eip7825InForceAt(bcos::ledger::LedgerConfig const& ledgerConfig,
     bcos::protocol::BlockNumber targetBlock, std::optional<uint64_t> targetTimestampSeconds)
 {
@@ -90,7 +91,9 @@ inline bool isOpStackLane(int executorVersion)
     if (usesEthereumFeeSemantics(ledgerConfig.executorVersion()))
     {
         const auto revision = ledgerConfig.evmcRevisionForBlock(targetBlock);
-        return revision.has_value() && *revision >= EVMC_OSAKA;
+        // Unknown (no transition row / no explicit revision) clamps, mirroring the OP
+        // arm's unknown-timestamp rule.
+        return !revision.has_value() || *revision >= EVMC_OSAKA;
     }
     return false;
 }
