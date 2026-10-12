@@ -25,10 +25,16 @@
 #include "bcos-ops/tui/Explorer.h"
 #include <json/json.h>
 #include <deque>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
+
+namespace bcos::ops
+{
+struct Preset;
+}
 
 namespace bcos::ops::tui
 {
@@ -47,6 +53,9 @@ struct Model
     bool authChain = false;     // getGroupInfo isAuthCheck: the gov page exists
     std::string mode = "none";  // [ethereum].mode: none / el / opstack-el (ticket 17)
     std::string keyAddress;     // loaded signing key, shown in the top bar (ticket 15)
+    // txHash → the preset it was sent with, so the tx detail can decode its input (ticket 15
+    // fills it; the table rows live for the whole process)
+    std::map<std::string, Preset const*> sentPresets;
     int64_t lastRefreshMs = 0;
     int refreshInSeconds = 0;
 };

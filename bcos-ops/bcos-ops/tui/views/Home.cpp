@@ -15,6 +15,7 @@
  *
  * @file Home.cpp
  */
+#include "ListView.h"
 #include "Pages.h"
 #include "bcos-ops/Output.h"
 #include <algorithm>
@@ -27,104 +28,6 @@ namespace
 {
 constexpr int c_sideBySideColumns = 100;
 constexpr int c_bandRows = 4;  // window border 2 + two lines
-
-struct HomeColumn
-{
-    std::string name;
-    int width;
-    int priority;  // lower = kept longer
-};
-
-/// the columns that fit in _width, highest priority first dropped last; order preserved
-std::vector<HomeColumn> homeFitColumns(std::vector<HomeColumn> _all, int _width)
-{
-    auto total = [&]() {
-        int sum = 0;
-        for (auto const& column : _all)
-        {
-            sum += column.width + 1;
-        }
-        return sum - 1;
-    };
-    while (_all.size() > 1 && total() > _width)
-    {
-        auto drop = std::max_element(_all.begin(), _all.end(),
-            [](HomeColumn const& a, HomeColumn const& b) { return a.priority < b.priority; });
-        _all.erase(drop);
-    }
-    return _all;
-}
-
-Element homeCell(std::string const& _text, int _width)
-{
-    return text(_text) | size(WIDTH, EQUAL, _width);
-}
-
-Element homeRow(std::vector<std::pair<HomeColumn const*, std::string>> const& _cells)
-{
-    Elements cells;
-    for (size_t i = 0; i < _cells.size(); ++i)
-    {
-        if (i > 0)
-        {
-            cells.push_back(text(" "));
-        }
-        cells.push_back(homeCell(_cells[i].second, _cells[i].first->width));
-    }
-    return hbox(std::move(cells));
-}
-
-template <typename Row>
-Element homeList(std::string const& _title, std::vector<HomeColumn> const& _columns,
-    std::deque<Row> const& _rows, ListState& _list, bool _focused, int _height,
-    std::function<std::string(Row const&, HomeColumn const&)> const& _cell,
-    std::function<bool(Row const&)> const& _gapAfter)
-{
-    _list.count = _rows.size();
-    _list.pageRows = static_cast<size_t>(std::max(1, _height - 3));  // border 2 + header
-    if (_list.count > 0 && _list.selected >= _list.count)
-    {
-        _list.selected = _list.count - 1;
-    }
-    Elements lines;
-    std::vector<std::pair<HomeColumn const*, std::string>> header;
-    for (auto const& column : _columns)
-    {
-        header.emplace_back(&column, column.name);
-    }
-    lines.push_back(homeRow(header) | dim);
-    auto first = _list.firstVisible();
-    size_t drawn = 0;
-    for (size_t i = first; i < _rows.size() && drawn < _list.pageRows; ++i, ++drawn)
-    {
-        std::vector<std::pair<HomeColumn const*, std::string>> cells;
-        for (auto const& column : _columns)
-        {
-            cells.emplace_back(&column, _cell(_rows[i], column));
-        }
-        auto line = homeRow(cells);
-        if (i == _list.selected)
-        {
-            line = _focused ? line | inverted : line | bold;
-        }
-        lines.push_back(line);
-        if (_gapAfter(_rows[i]) && drawn + 1 < _list.pageRows)
-        {
-            lines.push_back(text(" ~ older rows skipped ~") | dim);
-            ++drawn;
-        }
-    }
-    if (_rows.empty())
-    {
-        lines.push_back(text("waiting for the first refresh") | dim);
-    }
-    auto title = text(_title);
-    if (_focused)
-    {
-        title = title | bold;
-    }
-    return window(title, vbox(std::move(lines)), LIGHT);
-}
 
 std::string homeCheckSummary(Model const& _model)
 {
@@ -185,18 +88,18 @@ Element renderHome(Model const& _model, Nav& _nav, Frame const& _frame)
     int listHeight = sideBySide ? listsHeight : listsHeight / 2;
     int listWidth = (sideBySide ? _frame.width / 2 : _frame.width) - 2;  // borders
 
-    std::vector<HomeColumn> blockColumns = {
+    std::vector<ListColumn> blockColumns = {
         {"height", 7, 0}, {"hash", 11, 1}, {"txs", 4, 2}, {"time", 5, 4}, {"age", 5, 3}};
-    std::vector<HomeColumn> txColumns = {
+    std::vector<ListColumn> txColumns = {
         {"hash", 11, 0}, {"from", 9, 3}, {"to", 9, 4}, {"status", 6, 1}, {"height", 7, 2}};
-    auto blocksFit = homeFitColumns(blockColumns, listWidth);
-    auto txsFit = homeFitColumns(txColumns, listWidth);
+    auto blocksFit = fitListColumns(blockColumns, listWidth);
+    auto txsFit = fitListColumns(txColumns, listWidth);
 
     bool focusBlocks = !_nav.inDetail() && _nav.page == Page::home && _nav.focus == 0;
     bool focusTxs = !_nav.inDetail() && _nav.page == Page::home && _nav.focus == 1;
-    auto blocks = homeList<BlockRow>(
+    auto blocks = renderListView<BlockRow>(
         " blocks ", blocksFit, _model.explorer.blocks, _nav.blocks, focusBlocks, listHeight,
-        [&](BlockRow const& row, HomeColumn const& column) -> std::string {
+        [&](BlockRow const& row, ListColumn const& column) -> std::string {
             if (column.name == "height")
             {
                 return std::to_string(row.number);
@@ -218,20 +121,20 @@ Element renderHome(Model const& _model, Nav& _nav, Frame const& _frame)
                        "-";
         },
         [](BlockRow const& row) { return row.gapBelow; });
-    auto txs = homeList<TxRow>(
+    auto txs = renderListView<TxRow>(
         " txs ", txsFit, _model.explorer.txs, _nav.txs, focusTxs, listHeight,
-        [&](TxRow const& row, HomeColumn const& column) -> std::string {
+        [&](TxRow const& row, ListColumn const& column) -> std::string {
             if (column.name == "hash")
             {
                 return abridged(row.hash, 4);
             }
             if (column.name == "from")
             {
-                return row.from.empty() ? "-" : abridged(row.from, 4).substr(0, 9);
+                return row.from.empty() ? "-" : abridged(row.from, 4);
             }
             if (column.name == "to")
             {
-                return row.to.empty() ? "create" : abridged(row.to, 4).substr(0, 9);
+                return row.to.empty() ? "create" : abridged(row.to, 4);
             }
             if (column.name == "status")
             {

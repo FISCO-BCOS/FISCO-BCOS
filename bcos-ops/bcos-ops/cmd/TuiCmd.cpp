@@ -104,18 +104,56 @@ int snapshotPages(
         std::function<void(tui::Nav&)> setup;
     };
     std::vector<Shot> shots = {
-        {"home", 80, 24, [](tui::Nav&) {}},
-        {"home-wide", 120, 40, [](tui::Nav&) {}},
-        {"consensus", 80, 24, [](tui::Nav& nav) { nav.page = tui::Page::consensus; }},
-        {"node", 80, 24, [](tui::Nav& nav) { nav.page = tui::Page::node; }},
-        {"log", 80, 24, [](tui::Nav& nav) { nav.page = tui::Page::log; }},
-        {"help", 80, 24, [](tui::Nav& nav) { nav.help = true; }},
+        {.name = "home", .width = 80, .height = 24, .setup = [](tui::Nav&) {}},
+        {.name = "home-wide", .width = 120, .height = 40, .setup = [](tui::Nav&) {}},
+        {.name = "consensus",
+            .width = 80,
+            .height = 24,
+            .setup = [](tui::Nav& nav) { nav.page = tui::Page::consensus; }},
+        {.name = "node",
+            .width = 80,
+            .height = 24,
+            .setup = [](tui::Nav& nav) { nav.page = tui::Page::node; }},
+        {.name = "log",
+            .width = 80,
+            .height = 24,
+            .setup = [](tui::Nav& nav) { nav.page = tui::Page::log; }},
+        {.name = "help",
+            .width = 80,
+            .height = 24,
+            .setup = [](tui::Nav& nav) { nav.help = true; }},
+        // the detail pages: the newest block and the newest transaction (when there is one)
+        {.name = "block",
+            .width = 80,
+            .height = 24,
+            .setup =
+                [](tui::Nav& nav) {
+                    nav.stack.push_back({.kind = tui::DetailKind::block, .number = 0});
+                }},
+        {.name = "tx",
+            .width = 80,
+            .height = 24,
+            .setup =
+                [](tui::Nav& nav) {
+                    nav.stack.push_back({.kind = tui::DetailKind::tx, .number = 0});
+                }},
     };
     int index = 1;
     for (auto const& shot : shots)
     {
         tui::Nav nav;
         shot.setup(nav);
+        if (nav.inDetail())
+        {
+            std::vector<tui::DetailWant> wants;
+            {
+                std::lock_guard<std::mutex> lock(model.mutex);
+                tui::resolveDetailRefs(nav, model.explorer);
+                wants = tui::detailWants(nav);
+            }
+            refresher.setDetailWants([wants]() { return wants; });
+            refresher.runOnce();
+        }
         auto screen = ftxui::Screen::Create(
             ftxui::Dimension::Fixed(shot.width), ftxui::Dimension::Fixed(shot.height));
         {
@@ -158,6 +196,13 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
     refresher.setRowCapacity([&]() { return tui::explorerCapacity(terminalRows.load()); });
     refresher.setVisibleTxRange(
         [&]() { return std::make_pair(visibleTxFrom.load(), visibleTxCount.load()); });
+    // the open detail pages: written by the UI thread after each render, read by the refresher
+    std::mutex wantsMutex;
+    std::vector<tui::DetailWant> wants;
+    refresher.setDetailWants([&]() {
+        std::lock_guard<std::mutex> lock(wantsMutex);
+        return wants;
+    });
 
     // log tail thread: 1 s
     std::atomic<bool> stopTail{false};
@@ -201,6 +246,10 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         auto element = tui::renderFrame(model, nav, frame, filter);
         visibleTxFrom = nav.txs.firstVisible();
         visibleTxCount = nav.txs.pageRows;
+        {
+            std::lock_guard<std::mutex> wantsLock(wantsMutex);
+            wants = tui::detailWants(nav);
+        }
         return element;
     });
     root = CatchEvent(root, [&](ftxui::Event event) {
@@ -209,12 +258,28 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         {
             return false;  // the filter box owns plain characters; Tab/Esc still reach Nav
         }
-        switch (tui::navHandle(nav, event))
+        auto depthBefore = nav.stack.size();
+        auto action = tui::navHandle(nav, event);
+        if (nav.stack.size() > depthBefore)
+        {
+            // a detail page opened: resolve now and fetch its data without waiting for the tick
+            {
+                std::lock_guard<std::mutex> lock(model.mutex);
+                tui::resolveDetailRefs(nav, model.explorer);
+            }
+            {
+                std::lock_guard<std::mutex> wantsLock(wantsMutex);
+                wants = tui::detailWants(nav);
+            }
+            refresher.refreshNow();
+        }
+        switch (action)
         {
         case tui::NavAction::quit:
             // stop every worker before Exit(): ScreenInteractive drops its event sender inside
             // Exit, and a redraw posted after that from another thread is a use-after-free. The
-            // refresher stop may wait for one in-flight RPC (at most the request timeout).
+            // explorer checks the stop flag before every RPC, so the wait is at most one
+            // in-flight request (the request timeout).
             stopWorkers();
             screen.Exit();
             return true;
@@ -224,10 +289,15 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         case tui::NavAction::redraw:
             return true;
         case tui::NavAction::none:
-            return false;
+            // the root is Renderer(filterInput, …): an unhandled key would land in the Input
+            // whatever the focus, so only the log page's filter focus lets keys through
+            return !editingFilter;
         }
         return false;
     });
+    // Ctrl-C goes through Nav like q so the workers stop before Exit(); FTXUI's default would
+    // call Exit() itself regardless of the handler
+    screen.ForceHandleCtrlC(false);
 
     refresher.start();
     screen.Loop(root);

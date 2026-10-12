@@ -234,5 +234,41 @@ BOOST_AUTO_TEST_CASE(errorBannerAndAuthChainBar)
     BOOST_CHECK(nav.authChain);
 }
 
+BOOST_AUTO_TEST_CASE(everyPageRendersAtTinySizesWithoutThrowing)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 128, 2);
+    tui::Model model;
+    model.authChain = true;
+    homeFill(rpc, model);
+    for (auto size : std::vector<std::pair<int, int>>{{10, 5}, {1, 1}, {40, 12}})
+    {
+        for (int key = 1; key <= 6; ++key)
+        {
+            tui::Nav nav;
+            nav.authChain = true;
+            tui::navHandle(nav, ftxui::Event::Character(static_cast<char>('0' + key)));
+            tui::Frame frame{size.first, size.second, c_homeNow, nullptr};
+            BOOST_CHECK_NO_THROW(
+                renderText(tui::renderFrame(model, nav, frame, ""), size.first, size.second));
+            nav.help = true;
+            BOOST_CHECK_NO_THROW(
+                renderText(tui::renderFrame(model, nav, frame, ""), size.first, size.second));
+        }
+        tui::Nav detail;
+        detail.stack.push_back({.kind = tui::DetailKind::block, .number = 0});
+        tui::Frame frame{size.first, size.second, c_homeNow, nullptr};
+        BOOST_CHECK_NO_THROW(
+            renderText(tui::renderFrame(model, detail, frame, ""), size.first, size.second));
+        detail.stack.push_back({.kind = tui::DetailKind::tx, .number = 0});
+        BOOST_CHECK_NO_THROW(
+            renderText(tui::renderFrame(model, detail, frame, ""), size.first, size.second));
+        detail.stack.clear();
+        detail.stack.push_back({.kind = tui::DetailKind::proposal, .number = 1});
+        BOOST_CHECK_NO_THROW(
+            renderText(tui::renderFrame(model, detail, frame, ""), size.first, size.second));
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::ops::test

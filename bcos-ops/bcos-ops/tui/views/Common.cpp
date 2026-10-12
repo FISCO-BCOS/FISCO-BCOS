@@ -170,57 +170,6 @@ Element renderLogPage(
         LIGHT);
 }
 
-Element renderDetail(Model const& _model, Nav& _nav, Frame const& _frame)
-{
-    (void)_frame;
-    auto const& ref = _nav.stack.back();
-    auto const& explorer = _model.explorer;
-    if (ref.kind == DetailKind::block)
-    {
-        auto index = static_cast<size_t>(std::max<int64_t>(0, ref.number));
-        if (index >= explorer.blocks.size())
-        {
-            _nav.detailTxs.count = 0;
-            return window(text(" block "), text("row no longer loaded; Esc") | dim, LIGHT);
-        }
-        auto const& block = explorer.blocks[index];
-        _nav.detailTxs.count = static_cast<size_t>(std::max(0, block.txCount));
-        auto title = " block " + std::to_string(block.number) + " ";
-        return window(text(title),
-            vbox({hbox({text("hash ") | dim, text(block.hash)}),
-                hbox({text("txs ") | dim, text(std::to_string(block.txCount))}),
-                hbox({text("time ") | dim, text(clockText(block.timestampMs))}),
-                text("block detail (header fields, signatures, the tx list) arrives with "
-                     "ticket 14") |
-                    dim}),
-            LIGHT);
-    }
-    if (ref.kind == DetailKind::tx)
-    {
-        _nav.detailTxs.count = 0;
-        std::string hash = ref.hash;
-        if (hash.empty() && _nav.stack.size() >= 2 &&
-            _nav.stack[_nav.stack.size() - 2].kind == DetailKind::block)
-        {
-            // opened from a block detail: the index counts inside that block (ticket 14 maps it)
-            hash = "tx #" + std::to_string(ref.number) + " of the block";
-        }
-        else if (hash.empty())
-        {
-            auto index = static_cast<size_t>(std::max<int64_t>(0, ref.number));
-            hash =
-                index < explorer.txs.size() ? explorer.txs[index].hash : "(row no longer loaded)";
-        }
-        return window(text(" tx "),
-            vbox({hbox({text("hash ") | dim, text(hash)}),
-                text("transaction and receipt detail arrives with ticket 14") | dim}),
-            LIGHT);
-    }
-    _nav.detailTxs.count = 0;
-    return window(text(" proposal " + std::to_string(ref.number) + " "),
-        text("proposal detail arrives with ticket 16") | dim, LIGHT);
-}
-
 Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::string const& _filter)
 {
     _nav.authChain = _model.authChain;
@@ -229,6 +178,7 @@ Element renderFrame(Model const& _model, Nav& _nav, Frame const& _frame, std::st
     Element page;
     if (_nav.inDetail())
     {
+        resolveDetailRefs(_nav, _model.explorer);
         page = renderDetail(_model, _nav, body);
     }
     else
