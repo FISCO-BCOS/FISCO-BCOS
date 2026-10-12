@@ -577,7 +577,17 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         auto executedBloom = executedHeader->logsBloom();
         std::copy(executedBloom.begin(), executedBloom.end(), payload.logsBloom.begin());
     }
+    // Mirrors the validation path's guard (validateOpNewPayloadRequest): a missing
+    // withdrawalsRoot on an executed Isthmus+ header is an Invalid anomaly, not a
+    // silently-empty field to stamp into the block hash.
     payload.withdrawalsRoot = executedHeader->withdrawalsRoot();
+    if (!payload.withdrawalsRoot.has_value())
+    {
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                std::string("executed header is missing withdrawalsRoot")),
+            .payloadId = std::nullopt};
+    }
     if (auto executedBlobGas = executedHeader->blobGasUsed())
     {
         payload.blobGasUsed = *executedBlobGas;
