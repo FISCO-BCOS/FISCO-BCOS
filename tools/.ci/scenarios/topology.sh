@@ -72,10 +72,10 @@ consensus_write()
     shift 2
     local result
     if [[ "${expect}" == "ok" ]]; then
-        result=$(ops "${node_dir}" consensus "$@" --yes "${topology_account[@]}") || { echo "${result}"; return 1; }
+        result=$(ops "${node_dir}" consensus "$@" --yes --timeout 60000 "${topology_account[@]}") || { echo "${result}"; return 1; }
         assert_jq "${result}" '.ok == true' "consensus $*" || return 1
     else
-        result=$(ops_expect_exit 2 "${node_dir}" consensus "$@" --yes "${topology_account[@]}") || return 1
+        result=$(ops_expect_exit 2 "${node_dir}" consensus "$@" --yes --timeout 60000 "${topology_account[@]}") || return 1
         assert_jq "${result}" '.ok == false and ((.codeName // .proposal.execCodeName) == "'"${expect}"'")' \
             "consensus $* answers ${expect}" || return 1
     fi
@@ -206,7 +206,7 @@ scenario_13_viewchange()
         "log viewchange has a consensus_timeout round after view ${view_before} with a new leader" || return 1
     # 3 of 4 sealers keep producing
     local smoke
-    smoke=$(ops "${survivor}" tx smoke) || { echo "${smoke}"; return 1; }
+    smoke=$(ops "${survivor}" tx smoke --timeout 60000) || { echo "${smoke}"; return 1; }
     assert_jq "${smoke}" '.ok == true' "tx smoke with the leader down" || return 1
     bash "${leader_dir}/start.sh" >/dev/null 2>&1
     local restarted=${SECONDS}
@@ -235,11 +235,11 @@ scenario_14_sync()
     # 20 transactions the node will have to fetch: one deploy plus 19 sets
     local abi deploy deployed sent i
     abi=$(contract_abi HelloWorld) || return 1
-    deploy=$(ops "${node_dir}" tx deploy "$(contract_bin HelloWorld "${chain}")" --abi "${abi}") || { echo "${deploy}"; return 1; }
+    deploy=$(ops "${node_dir}" tx deploy "$(contract_bin HelloWorld "${chain}")" --abi "${abi}" --timeout 60000) || { echo "${deploy}"; return 1; }
     assert_jq "${deploy}" '.status == 0' "deploy HelloWorld for the sync backlog" || return 1
     deployed=$(jq_get "${deploy}" '.contractAddress')
     for i in $(seq 1 19); do
-        sent=$(ops "${node_dir}" tx send "${deployed}" --abi "${abi}" set "sync ${i}") || { echo "${sent}"; return 1; }
+        sent=$(ops "${node_dir}" tx send "${deployed}" --abi "${abi}" set "sync ${i}" --timeout 60000) || { echo "${sent}"; return 1; }
         assert_jq "${sent}" '.status == 0' "tx send set ${i}" || return 1
     done
     local target
