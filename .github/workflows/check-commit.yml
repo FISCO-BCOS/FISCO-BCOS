@@ -26,3 +26,4 @@ jobs:
           python3 -m pip install --user "clang-format==$(cat tools/.ci/clang-format-version)"
           export PATH="$HOME/.local/bin:$PATH"
           bash tools/.ci/check-commit.sh
+          bash tools/.ci/check_log_events.sh
