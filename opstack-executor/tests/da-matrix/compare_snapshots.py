@@ -27,8 +27,10 @@ missing one is a hole. Both fail.
 
 Known divergences (the grid's `known_divergence` field, registry =
 DIVERGENCES.md): tags that mark a genuine cross-end difference —
-l1_fee_saturation, flz_zero_clamp, solidity_l1_uint32_overflow — are SKIPPED by
-this four-source comparator and counted (run_fisco still computes and compares
+l1_fee_saturation, flz_zero_clamp, solidity_l1_uint32_overflow,
+da_footprint_overflow, da_footprint_176b_activation_shape — exempt ONLY the
+l1_cost field of their case (their operator_cost is unaffected and stays
+compared on every end) and are counted (run_fisco still computes and compares
 the row against the fisco golden). `karst_alias` is registered too, but its ends
 are expected to AGREE by construction, so it stays compared: the agreement is
 the assertion. An unknown tag is fatal — a typo must not silently exempt a case.
@@ -201,12 +203,16 @@ def main() -> int:
     skipped = 0
     for cid in base:
         tag = registered.get(cid)
-        if tag in SKIPPED_DIVERGENCES:
-            # Registered cross-end divergence (DIVERGENCES.md): exempt from the
-            # four-source comparison by design; counted, never silently dropped.
-            print(f"SKIP {cid} known_divergence={tag}")
+        # review F23: every registered divergence is field-scoped — an l1_cost
+        # difference whose operator_cost is UNAFFECTED (DIVERGENCES.md: "getOperatorFee
+        # is unaffected"). A tag therefore exempts only the l1_cost comparison of its
+        # case; operator_cost stays compared on every end, so a tagged row can no
+        # longer hide an operator-fee regression behind its tag.
+        exempt_l1_cost = tag in SKIPPED_DIVERGENCES
+        if exempt_l1_cost:
+            print(f"SKIP-FIELD {cid} l1_cost known_divergence={tag} "
+                  "(operator_cost still compared)")
             skipped += 1
-            continue
         if tag in COMPARED_DIVERGENCES:
             print(f"NOTE {cid} known_divergence={tag}: still compared (ends agree by design)")
         for name in ("opgeth", "oprevm", "solidity"):
@@ -221,6 +227,13 @@ def main() -> int:
                 if other[cid][1] != base[cid][1]:
                     print(f"MISMATCH {cid} solidity operator: fisco={base[cid][1]} "
                           f"sol={other[cid][1]}")
+                    mismatches += 1
+            elif exempt_l1_cost:
+                compared += 1
+                if other[cid][1] != base[cid][1]:
+                    print(f"MISMATCH {cid} {name} operator (l1_cost exempt "
+                          f"known_divergence={tag}): fisco={base[cid][1]} "
+                          f"{name}={other[cid][1]}")
                     mismatches += 1
             else:
                 compared += 1

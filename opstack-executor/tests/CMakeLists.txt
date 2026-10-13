@@ -141,8 +141,13 @@ if(DA_MATRIX_PYTHON)
             ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden
             ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json)
 else()
-    message(WARNING "python3 not found: OpDaMatrixSnapshotCheck (the four-source "
-        "differential) will not be registered — only the fisco self-check runs.")
+    # review F17: the differential is the gate that detects FISCO drifting from
+    # op-geth/op-revm/solidity — silently unregistering it on a python3-less
+    # configure turns the claim "wired into ctest" into a fisco-only self-check
+    # behind a green ctest. Fail the configure instead.
+    message(FATAL_ERROR "python3 not found: OpDaMatrixSnapshotCheck (the four-source "
+        "differential) cannot be registered. Every CI runner provides python3; a "
+        "configure without it must not silently shrink the gate set.")
 endif()
 
 # Runtime suite (OpstackExecutorTest.cpp) stays with the web3-model decoupling follow-up.
