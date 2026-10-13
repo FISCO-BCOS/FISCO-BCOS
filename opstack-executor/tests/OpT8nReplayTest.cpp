@@ -2004,7 +2004,7 @@ BOOST_AUTO_TEST_CASE(RejectExecutorSurface)
                 "fisco": {
                     "consumer": "executor", "classification": "INVALID",
                     "latest_valid_hash": "parent",
-                    "validation_error_contains": "insufficient funds"
+                    "validation_error_contains": "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
                 }
             }
         }

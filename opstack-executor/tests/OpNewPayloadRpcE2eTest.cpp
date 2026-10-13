@@ -463,13 +463,14 @@ w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
     // latest_valid_hash=parent must still be asserted.
     if (id == "inline_invalid_executorStateRoot")
     {
-        return buildInlineInvalidSample(id, InlineInvalidSpec{
-                                                .baseId = "jovian_deposit_only",
-                                                .corruptField = "stateRoot",
-                                                .classification = "INVALID",
-                                                .validationContains = "intrinsic gas too low",
-                                                .consumer = "executor",
-                                            });
+        return buildInlineInvalidSample(
+            id, InlineInvalidSpec{
+                    .baseId = "jovian_deposit_only",
+                    .corruptField = "stateRoot",
+                    .classification = "INVALID",
+                    .validationContains = "TransactionException.INTRINSIC_GAS_TOO_LOW",
+                    .consumer = "executor",
+                });
     }
     throw std::runtime_error("makeInlineInvalidSample: unknown inline id " + id);
 }
@@ -1192,19 +1193,24 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         "withdrawalsRoot is required on the OP path (Isthmus+)",
         "excessBlobGas must be present and zero on the OP path",
         "blobGasUsed must be zero before Jovian (OP Isthmus)",
+        // evmone-0.24 note: the seven TransactionException.* entries are the
+        // enumerator-name messages 0.24 produces (nonce/auth checks surface the OP
+        // layer's own NONCE_MISMATCH_* / TYPE_4_* codes). The corpus pin must carry
+        // the matching validation_error_contains values — see the rename map in
+        // docs/EVMONE_0.24_UPGRADE_EVAL.md §12.
         "blockNumber must not be negative",
         "gasLimit exceeds the maximum block gas limit (2^63-1)",
         "invalid DA footprint in blobGasUsed field",
         "expectedBlobVersionedHashes must be an empty array on the OP path",
         "executionRequests must be a present-but-empty list on the OP path",
-        "intrinsic gas too low",
-        "nonce too low",
-        "nonce too high",
-        "insufficient funds for gas * price + value",
-        "max fee per gas less than block base fee",
-        "sender not an eoa",
+        "TransactionException.INTRINSIC_GAS_TOO_LOW",
+        "TransactionException.NONCE_MISMATCH_TOO_LOW",
+        "TransactionException.NONCE_MISMATCH_TOO_HIGH",
+        "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS",
+        "TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS",
+        "TransactionException.SENDER_NOT_EOA",
         "set code transaction must not be a create transaction",
-        "empty authorization list",
+        "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST",
         "unsupported tx type byte 0x03",
     };
     for (auto const* s : kRequiredErrors)
