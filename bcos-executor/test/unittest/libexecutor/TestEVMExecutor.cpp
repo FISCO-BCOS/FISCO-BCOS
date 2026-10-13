@@ -500,16 +500,18 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result2->origin(), std::string(sender));
     BOOST_CHECK_EQUAL(result2->from(), std::string(address));
     // evmc ABI 19: the created address arrives in `to` and must survive the scheduler hop
-    // (the resume path stores at the address the CREATE pushed). It is the legacy FISCO
-    // formula — newEVMAddress(hashHandler, blockNumber, contextID, seq + 1), the same
-    // inputs TransactionExecutive::externalCall uses — because this fixture runs with
-    // feature_evm_address OFF and the create_address_fn hook mirrors that branch
-    // (HostContext::createAddressForOpcode). Pin the exact value: a size check passes for
-    // any 40-character address, so reverting the hook's legacy branch to evmone's
-    // nonce-derived formula would leave this test green. Was `to().empty()` under 0.21's
-    // deferred address assignment (the simulation then injected this same formula golden).
-    const auto expectedCreateA = bcos::newEVMAddress(hashImpl, 1, 101, 1002);  // seq 1001 + 1
+    // (the resume path stores at the address the CREATE pushed). THIS FIXTURE ENABLES
+    // feature_evm_address (SYS_CONFIG row set to "1" above), so the create_address_fn
+    // hook's EIP branch derives it — newLegacyEVMAddress(creator, creatorNonce) =
+    // keccak(rlp(creator, nonce))[12:], the same value evmone's own derivation produces.
+    // Contract A (ff6f3085…) holds nonce 0 here (no nonce-initialization feature is
+    // active), so the address is pinned both literally and through the formula: a size
+    // check would pass for any 40-character address and hide a changed derivation. Was
+    // `to().empty()` under 0.21's deferred address assignment.
+    const auto expectedCreateA = std::string("0ad0adfd2d72408f1f46ff96a7e9bdd7c5072abb");
     BOOST_CHECK_EQUAL(result2->to(), expectedCreateA);
+    BOOST_CHECK_EQUAL(result2->to(),
+        bcos::newLegacyEVMAddressString(bytesConstRef(addressCreate.data(), 20), u256(0)));
     BOOST_CHECK_LT(result2->gasAvailable(), gas);
     BOOST_CHECK_EQUAL(result2->keyLocks().size(), 2);  // code,codeHash
     BOOST_CHECK_EQUAL(result2->keyLocks()[0], "code");
@@ -523,12 +525,13 @@ BOOST_AUTO_TEST_CASE(externalCall)
     // Clear the key lock to avoid effect
     result2->setKeyLocks({});
 
-    // evmc ABI 19: result2 carries the created address in `to`, again the legacy formula
-    // (seq 1002 + 1). The 0.21 flow returned `to` empty here and this simulation injected
-    // the formula golden (ee6f30856ad3bae00b1169808488502786a13e3c); the hook now derives
-    // it, so pin the value instead of accepting whatever the executor produced.
+    // Second nested create in the same tx: same derivation, and the creator's nonce is
+    // still 0 — the nonce bump on creators is the flag-gated behaviour
+    // (bugfix_nested_create_creator_nonce / bugfix_set_contract_nonce_when_create), off in
+    // this fixture, so both creates intentionally land on ONE address. Pin that too: the
+    // old size check let the collision pass silently.
     std::string addressString2{result2->to()};
-    BOOST_CHECK_EQUAL(addressString2, bcos::newEVMAddress(hashImpl, 1, 101, 1003));
+    BOOST_CHECK_EQUAL(addressString2, expectedCreateA);
 
     std::promise<ExecutionMessage::UniquePtr> executePromise3;
     executor->dmcExecuteTransaction(std::move(result2),
