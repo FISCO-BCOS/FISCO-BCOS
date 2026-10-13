@@ -57,7 +57,7 @@ jobs:
         with:
           distribution: "temurin"
           java-version: "11"
-      - uses: lukka/get-cmake@latest
+      - uses: lukka/get-cmake@v3.28.3
         with:
           cmakeVersion: 3.28.3
           ninjaVersion: 1.12.1
@@ -396,7 +396,7 @@ jobs:
         with:
           distribution: "temurin"
           java-version: "11"
-      - uses: lukka/get-cmake@latest
+      - uses: lukka/get-cmake@v3.28.3
         with:
           cmakeVersion: 3.28.3
           ninjaVersion: 1.12.1
@@ -566,7 +566,7 @@ jobs:
         with:
           distribution: "temurin"
           java-version: "11"
-      - uses: lukka/get-cmake@latest
+      - uses: lukka/get-cmake@v3.28.3
         with:
           cmakeVersion: 3.28.3
           ninjaVersion: 1.12.1
@@ -789,9 +789,14 @@ jobs:
 
       - name: Install just (op-deployer build)
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
-            | sudo bash -s -- --to /usr/local/bin
-          just --version
+          # just.systems/install.sh is an unpinned remote script (same shape as
+          # c2-e2e.yml's step), so pin the RESULT: download, run, then assert the
+          # version that actually landed.
+          curl --proto '=https' --tlsv1.2 -sSfL https://just.systems/install.sh \
+            -o /tmp/just-install.sh
+          sudo bash /tmp/just-install.sh --to /usr/local/bin
+          just --version | grep -q '^just 1\.' || {
+            echo "ERROR: unexpected just version: $(just --version)"; exit 1; }
 
       - name: Set up Go
         uses: actions/setup-go@v5

@@ -224,6 +224,13 @@ def test_exchange_capabilities() -> None:
         )
         return
 
+    # UNIMPLEMENTED_METHODS are routable (they answer -38005) but must never be
+    # advertised — a CL that trusted the list would send a version this node refuses.
+    leaked = [method for method in UNIMPLEMENTED_METHODS if method in returned]
+    if leaked:
+        _log_fail(f"unimplemented method(s) advertised: {leaked}")
+        return
+
     _log_info(f"{len(returned)} capabilities advertised, V1-V3 included")
     _log_pass()
 
@@ -675,7 +682,8 @@ def test_negative_cases() -> None:
     # Method versions this node does not implement answer -38005 Unsupported fork rather
     # than -32601: they are routed, just not built. Every OTHER version is served — the
     # V1-V3 flows above are the positive side of that.
-    expect_error_code("engine_forkchoiceUpdatedV4", [fc_state, None], -38005)
+    for method in UNIMPLEMENTED_METHODS:
+        expect_error_code(method, [fc_state, None], -38005)
 
     # getPayloadV4 IS served (Isthmus): an unknown id is -38001, not -38005.
     expect_error_code("engine_getPayloadV4", ["0x00000000deadbeef"], -38001)

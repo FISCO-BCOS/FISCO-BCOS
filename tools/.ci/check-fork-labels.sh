@@ -39,6 +39,28 @@ set -uo pipefail
 readonly LABELS="fork-regolith fork-canyon fork-ecotone fork-fjord fork-granite \
 fork-holocene fork-isthmus fork-jovian fork-karst"
 
+# review F27: this list is a third copy of the fork ladder, so derive the expected
+# value from the pinned table (gen_official_genesis.py EL_FORKS) at runtime and
+# refuse to run on drift. python3 missing / import failure degrades to a warning
+# naming the risk rather than failing a gate for an environment reason.
+FORK_LADDER_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/opstack-genesis/gen_official_genesis.py"
+derived=""
+if command -v python3 >/dev/null 2>&1 && [ -f "$FORK_LADDER_PY" ]; then
+    derived="$(python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("g", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+print(" ".join("fork-" + fork for fork in mod.EL_FORKS))
+' "$FORK_LADDER_PY" 2>/dev/null || true)"
+fi
+if [ -z "$derived" ]; then
+    echo "::warning::could not derive the fork ladder from $FORK_LADDER_PY (python3 unavailable or import failed); LABELS below is unverified against the pinned table" >&2
+elif [ "$derived" != "$LABELS" ]; then
+    echo "::error::fork ladder drift: LABELS='$LABELS' but gen_official_genesis.py EL_FORKS derives '$derived' — rename the labels or the pinned table, not one side" >&2
+    exit 1
+fi
+
 if [ "$#" -eq 0 ]; then
     echo "usage: $0 <test-binary> [<test-binary> ...]" >&2
     exit 2

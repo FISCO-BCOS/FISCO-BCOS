@@ -76,22 +76,19 @@ tools/console/
 # checkout (CI checks the corpus repo out and ln -s's it inline in workflow.yml and
 # the fork schedules; tools/.ci/provision_t8n_corpus.sh is the local-developer
 # equivalent and carries the pin default check-ci-pins.sh asserts — review F10).
-# Tracking a machine-absolute symlink broke CI checkouts — see finding F-CI-2. The patterns
-# below are leftovers from the earlier in-tree vendored subset; git cannot
-# re-include files under an ignored parent, so the ! entries are inert by design.
+# Tracking a machine-absolute symlink broke CI checkouts — see finding F-CI-2. The
+# patterns below are the symlink provisioning design's backstop: the tracked corpus
+# lives in the e2e-tests repo, and should the path ever be a real in-tree directory
+# again, its cases/vectors/goldens stay untracked here. review F47: the six `!`
+# re-include lines were deleted — git cannot re-include files under an ignored
+# parent, so they were inert.
 opstack-executor/tests/t8n
 # Provisioning marker written next to the symlink (tools/.ci/provision_t8n_corpus.sh)
 opstack-executor/tests/.t8n-pin
 bcos-evm/test/opstack/t8n/cases/
 opstack-executor/tests/t8n/cases/
 opstack-executor/tests/t8n/vectors/*.json
-!opstack-executor/tests/t8n/vectors/isthmus_deposit_only.json
-!opstack-executor/tests/t8n/vectors/jovian_deposit_only.json
-!opstack-executor/tests/t8n/vectors/jovian_transfer_multi.json
 opstack-executor/tests/t8n/golden/engine/*.golden.json
-!opstack-executor/tests/t8n/golden/engine/isthmus_deposit_only.golden.json
-!opstack-executor/tests/t8n/golden/engine/jovian_deposit_only.golden.json
-!opstack-executor/tests/t8n/golden/engine/jovian_transfer_multi.golden.json
 opstack-executor/tests/t8n/golden/engine/chained/*.json
 
 test/*

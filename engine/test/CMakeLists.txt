@@ -23,11 +23,12 @@ target_link_libraries(${TEST_BINARY_NAME} PUBLIC
     engine mempool protocol-tars rlp-protocol opstack-executor ledger rpc transaction-scheduler
     jsoncpp_static Boost::unit_test_framework)
 
-# S6: GoldenSample / t8n corpus. The vectors and golden/engine/ files are tracked in-tree
-# under opstack-executor/tests/t8n/ (the external FISCO-BCOS/op-stack-e2e-tests pin is an
-# optional refresh source, not a build requirement); OP_T8N_* below only override the
-# location. Local builds skip when the corpus is absent, CI (GITHUB_ACTIONS/CI or
-# -DREQUIRE_T8N_CORPUS=ON) must fail instead.
+# S6: GoldenSample / t8n corpus. opstack-executor/tests/t8n/ is a symlink to the
+# FISCO-BCOS/op-stack-e2e-tests checkout at the pinned ref (CI ln -s's it, see
+# workflow.yml and tools/.ci/provision_t8n_corpus.sh); the pinned corpus repo is the
+# single source of the vectors and golden/engine/ files, and OP_T8N_* below only
+# override the location. Local builds skip when the corpus is absent, CI
+# (GITHUB_ACTIONS/CI or -DREQUIRE_T8N_CORPUS=ON) must fail instead. (review F47)
 if(NOT DEFINED OP_T8N_VECTORS_DIR)
     set(OP_T8N_VECTORS_DIR "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors")
 endif()

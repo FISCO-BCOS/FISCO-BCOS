@@ -85,8 +85,17 @@ jobs:
           # review F24: BOTH C2 entry points carry the harness ref (check-ci-pins
           # Axis 4 requires them equal) — scan the pair so a stale ref in either
           # file is named, not just c2-e2e.yml's.
-          c2_pin=$(grep -hoE 'ref: [0-9a-f]{40}' .github/workflows/c2-e2e.yml \
-            .github/workflows/workflow.yml | awk '{print $2}' | sort -u)
+          # review F55: the blanket `ref:` grep over both files also swept
+          # workflow.yml's corpus checkout (b82691ac, path e2e-tests) and specs pin
+          # (564a0ce, path ci-specs) into the c2-harness class → permanent false
+          # STALE. workflow.yml's row now comes from the SAME parser as the t8n half
+          # (check-ci-pins --print-pins, filtered to the .ci-op-e2e-tests checkout).
+          # c2-e2e.yml is outside that file set; anchor on its .ci-op-e2e-tests path
+          # instead, whose ref: sits immediately above it in the same checkout block.
+          c2_pin=$( { bash tools/.ci/check-ci-pins.sh --print-pins \
+                        | awk '$3 !~ /NO-/ && $2 == ".ci-op-e2e-tests" { print $3 }'; \
+                      grep -B1 'path: .ci-op-e2e-tests' .github/workflows/c2-e2e.yml \
+                        | grep -hoE 'ref: [0-9a-f]{40}' | awk '{print $2}'; } | sort -u)
           # Each distinct t8n pin is checked against the blessed pipeline head.
           for pin in $t8n_pins; do
             check_class "t8n-corpus" "$pin" "$T8N_BLESSED"
