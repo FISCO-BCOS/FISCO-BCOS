@@ -1048,11 +1048,9 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.inner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
         // The block number feeds newEVMAddress(blockNumber, contextID, seq) — the stub's
-        // link address. The process-global executable cache (getCacheExecutables) is keyed
-        // by address alone and SHARED across test cases, so the link address must not
-        // collide with any address another case in this binary creates: their creates use
-        // small block numbers (the call() helper's static counter starts at 0), hence a
-        // large, odd one here.
+        // link address. The executable cache is content-addressed ((address, code hash)),
+        // so a shared address across test cases is no longer a poisoning hazard; the
+        // large, odd block number just keeps this case's link address distinct.
         blockHeader.setNumber(1000003);
         blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
         co_await initBFS(blockHeader, *hashImpl);

@@ -230,8 +230,8 @@ public:
         // This fixture drives the Ethereum lane (executor_version = 2), where finishExecute
         // commits the txsRoot over EIP-2718 wire bytes (calculateEthereumTransactionRoot) —
         // it throws on a FISCO-shaped payload, so the filler transaction is Web3-shaped.
-        block->appendTransaction(bcos::test::sharedmock::makeWeb3FillerTx(
-            static_cast<uint64_t>(number), *hashImpl));
+        block->appendTransaction(
+            bcos::test::sharedmock::makeWeb3FillerTx(static_cast<uint64_t>(number), *hashImpl));
 
         Error::Ptr execError;
         protocol::BlockHeader::Ptr executedHeader;
@@ -352,14 +352,9 @@ public:
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 
-// The trait getExecutable consults: the marker propagates through View and Rollbackable,
-// and plain storages stay non-historical (negative control).
-static_assert(hostcontext::isHistoricalStorage<HCHistoricalBackend>());
-static_assert(hostcontext::isHistoricalStorage<HCHistoricalView>());
-static_assert(hostcontext::isHistoricalStorage<Rollbackable<HCHistoricalView>>());
-static_assert(!hostcontext::isHistoricalStorage<HCViewType>());
-static_assert(!hostcontext::isHistoricalStorage<Rollbackable<HCViewType>>());
-static_assert(!hostcontext::isHistoricalStorage<HCMutableStorage>());
+// (The historical-storage trait that used to be pinned here is gone: getExecutable's cache
+// is content-addressed now — the key carries the code hash — so historical and latest
+// lookups share it safely and no bypass, and no trait to steer it, remains.)
 
 BOOST_FIXTURE_TEST_SUITE(TestEthCallHistory, EthCallHistoryFixture)
 
@@ -571,48 +566,79 @@ BOOST_AUTO_TEST_CASE(callAtBlockRefusalPaths)
     BOOST_CHECK(!zeroRootReceipt);
 }
 
-// getExecutable must not serve a historical call from the global address-keyed executable
-// cache, nor fill that cache from one: the cache is shared with latest-state execution and
-// code at an address can differ between the pinned block and today.
-BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
+// getExecutable serves and fills a content-addressed cache: the key carries the code hash
+// alongside the address, so an entry can never be served for code the state does not hold
+// (no address-only poisoning), replacing the code at an address builds a fresh executable
+// instead of serving a stale analysis, and historical lookups can share the cache safely.
+BOOST_AUTO_TEST_CASE(executableCacheIsContentAddressed)
 {
     auto headers = runCanonicalChain();
 
-    // A unique address so this test owns its global-cache entry.
+    // A unique address so this test owns its global-cache entries.
     evmc_address cachedAddress{};
     cachedAddress.bytes[0] = 0xCE;
     cachedAddress.bytes[19] = 0x01;
 
-    // Poison the global cache with an executable for that address.
     bytes fakeCode{0x60, 0x00, 0x60, 0x00, 0xF3};  // trivial EVM bytes
+    auto const fakeCodeHash =
+        hostcontext::executableCodeKey(bytesConstRef{fakeCode.data(), fakeCode.size()});
     auto poisoned =
         std::make_shared<hostcontext::Executable>(bytesConstRef{fakeCode.data(), fakeCode.size()});
-    task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(), cachedAddress, poisoned));
 
+    // A cache fill bound to fakeCode's hash must not be served while state holds no code at
+    // the address — the key only matches once state carries that code.
+    task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{cachedAddress, fakeCodeHash}, poisoned));
+
+    auto plainView = multiLayerStorage.fork();
+    plainView.newMutable();
+    Rollbackable<decltype(plainView)> plainRollbackable(plainView);
+    auto absentResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_CHECK(!absentResult);
+
+    // Seed the same code in state: the cached executable is now the right one to serve.
+    {
+        ledger::account::EVMAccount<decltype(plainRollbackable)> account(
+            plainRollbackable, cachedAddress, ledger::account::AddressTableMode::Hex);
+        task::syncWait(account.setCode(fakeCode, "", fakeCodeHash));
+    }
+    auto servedResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_CHECK_EQUAL(servedResult.get(), poisoned.get());
+
+    // Replace the code at the same address: a fresh executable must be built — a stale
+    // analysis must never execute the old code after an in-place upgrade/redeploy.
+    bytes otherCode{0x60, 0x01, 0x60, 0x01, 0xF3};
+    auto const otherCodeHash =
+        hostcontext::executableCodeKey(bytesConstRef{otherCode.data(), otherCode.size()});
+    {
+        ledger::account::EVMAccount<decltype(plainRollbackable)> account(
+            plainRollbackable, cachedAddress, ledger::account::AddressTableMode::Hex);
+        task::syncWait(account.setCode(otherCode, "", otherCodeHash));
+    }
+    auto freshResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(freshResult);
+    BOOST_CHECK(freshResult.get() != poisoned.get());
+
+    // Historical lookups resolve against the root they are pinned to — this address has no
+    // leaf at the block-1 root, so its code resolves to nothing regardless of the cache.
     auto latestView = multiLayerStorage.fork();
     HCHistoricalBackend historicalBackend(
         latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
-    Rollbackable<HCHistoricalView> rollbackable(historicalView);
-
-    // Historical storage: the poisoned cache entry must NOT be served. The address has no
-    // leaf at the block-1 root, so its code resolves to nothing — "no executable".
-    auto historicalResult = task::syncWait(hostcontext::getExecutable(
-        rollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    Rollbackable<HCHistoricalView> historicalRollbackable(historicalView);
+    auto historicalResult = task::syncWait(hostcontext::getExecutable(historicalRollbackable,
+        cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
     BOOST_CHECK(!historicalResult);
 
-    // Positive control: a latest-state storage IS served from the cache for the same
-    // address, proving the bypass above is what made the difference.
-    auto plainView = multiLayerStorage.fork();
-    plainView.newMutable();
-    Rollbackable<decltype(plainView)> plainRollbackable(plainView);
-    auto latestResult = task::syncWait(hostcontext::getExecutable(
-        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
-    BOOST_CHECK_EQUAL(latestResult.get(), poisoned.get());
-
-    // Clean up the global cache so no other test sees this entry.
-    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(), cachedAddress));
+    // Clean up the global cache so no other test sees these entries.
+    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{cachedAddress, fakeCodeHash}));
+    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{cachedAddress, otherCodeHash}));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
