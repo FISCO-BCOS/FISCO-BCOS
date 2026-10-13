@@ -163,7 +163,7 @@ public:
                                                     // gate (web3 tx && m_level != 0) and the
                                                     // throwing increaseNonce() semantics stay in
                                                     // force, so existing chains see no new nonce
-                                                    // rows. Review F3 of PR #5689.
+                                                    // rows.
     };
 
     // feature_flags bit = enum value. Pin the newest flag so a value beyond
