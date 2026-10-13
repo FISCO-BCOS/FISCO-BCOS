@@ -20,7 +20,8 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/protocol/Transaction.h>  // protocol transaction types (deposit gate virtual)
+// protocol transaction types (the single-homed deposit gate virtual)
+#include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
