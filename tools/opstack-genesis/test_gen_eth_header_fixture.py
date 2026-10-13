@@ -79,18 +79,25 @@ class TestHeaderRlpEncoding(unittest.TestCase):
 
 
 class TestWithdrawalsRoot(unittest.TestCase):
-    def test_allocs_without_passer_keeps_empty_root(self):
+    def test_allocs_without_passer_is_an_error(self):
+        # review F31: one policy with gen_official_genesis.message_passer_storage_root
+        # — this template is the Isthmus header shape, and a chain in that state
+        # without the predeploy cannot produce a spec-conformant withdrawalsRoot, so
+        # the tool errors instead of silently keeping the empty-trie root (the
+        # previous keep-the-default behaviour was the retired policy this test had
+        # pinned).
         with tempfile.NamedTemporaryFile("w", suffix=".ini", delete=False) as handle:
             handle.write("[alloc.1]\naddress=0x1234567890123456789012345678901234567890\n")
             path = handle.name
         try:
-            out = subprocess.run(
+            proc = subprocess.run(
                 [sys.executable, str(_HERE / "gen_eth_header_fixture.py"),
                  "--toml", "--allocs", path],
-                capture_output=True, text=True, check=True).stdout
+                capture_output=True, text=True, check=False)
         finally:
             pathlib.Path(path).unlink()
-        self.assertIn("withdrawals_root=" + _FIXTURE.EMPTY_TRIE_ROOT, out)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("no L2ToL1MessagePasser", proc.stderr)
 
     def test_passer_storage_drives_withdrawals_root(self):
         # Independent oracle, not a re-derivation: the expected root is the spec-correct

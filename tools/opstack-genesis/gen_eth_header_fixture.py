@@ -226,11 +226,21 @@ def main(argv=None):
         # (isthmus/exec-engine.md:100-101; op-geth core/genesis.go:711-719). The chain deploys
         # the passer with empty storage -> empty-trie root; a proxied op-deployer layout
         # carries storage and the tool must track it.
+        passer_root = None
         for alloc in allocs:
             if alloc["address"].lower() == PASSER_ADDRESS:
-                fields["withdrawals_root"] = "0x" + compute_storage_root(
-                    alloc.get("storage", [])).hex()
+                passer_root = "0x" + compute_storage_root(alloc.get("storage", [])).hex()
                 break
+        # review F31: one policy with gen_official_genesis.message_passer_storage_root
+        # — this template is the Isthmus header shape, and a chain in that state
+        # without the predeploy cannot produce a spec-conformant withdrawalsRoot, so
+        # it is an error rather than a silently-kept empty-trie root (which the C++
+        # tests would then pin as golden).
+        if passer_root is None:
+            raise ValueError(
+                "Isthmus active at genesis but no L2ToL1MessagePasser in the allocs "
+                "(same policy as gen_official_genesis.message_passer_storage_root)")
+        fields["withdrawals_root"] = passer_root
     if args.toml:
         print(to_toml_section(fields), end="")
         return 0

@@ -373,9 +373,15 @@ def word_int(value):
     `int(strip0x(...), 16)` would silently re-read the decimal digits as hex
     (16 -> 22). Ints are taken as-is; only strings go through hex parsing.
     """
-    if isinstance(value, int):
-        return value
-    return int(strip0x(value), 16)
+    # review F27: storage words are 256-bit values on BOTH lanes — the config lane's
+    # config_word rejects negatives and the base-allocs lane must not accept them (a
+    # negative lands in word_hex as the sign-prefixed "0x-000...01" pseudo-hex) nor
+    # anything >= 2**256 (a 65-digit word).
+    parsed = value if isinstance(value, int) else int(strip0x(value), 16)
+    if parsed < 0 or parsed >= 2 ** 256:
+        raise ValueError(
+            f"storage word out of range: {value!r} (must satisfy 0 <= word < 2**256)")
+    return parsed
 
 
 def config_word(value, label):

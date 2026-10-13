@@ -169,9 +169,15 @@ def check(config):
     if config["l1_chain_id"] == config["l2_chain_id"]:
         raise RollupConfigError("l1_chain_id and l2_chain_id must differ")
 
+    # review F28: order ONLY the canonical forks op-node's rollup.Config.Check()
+    # compares — the sibling's table (gen_official_genesis._ROLLUP_ORDERED_FORKS,
+    # pinned to op-node@76e4fad5). The external forks (pectra_blob_schedule,
+    # interop, jovian, karst) are set-but-never-compared there, so walking them
+    # would reject configs a karst-aware op-node accepts.
     previous = 0
-    for key in FORK_TIME_KEYS:
-        if config[key] < previous:
+    for fork in _official_genesis._ROLLUP_ORDERED_FORKS:
+        key = f"{fork}_time"
+        if config.get(key, 0) < previous:
             raise RollupConfigError(f"fork times must be monotonic, {key} regresses")
         previous = config[key]
 

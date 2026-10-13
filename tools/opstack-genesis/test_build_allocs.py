@@ -51,6 +51,22 @@ def test_c2_layout_address_is_not_special():
              "address": "0x4200000000000000000000000000000000001000"})
 
 
+def test_word_int_rejects_negative_and_overwide_on_both_input_shapes():
+    # review F27: the base-allocs storage lane used to accept "-1"/2**256 where the
+    # config lane (config_word) rejects them — one range rule for both lanes now.
+    with pytest.raises(ValueError, match="out of range"):
+        build_allocs.word_int(-1)
+    with pytest.raises(ValueError, match="out of range"):
+        build_allocs.word_int("0x-1")
+    with pytest.raises(ValueError, match="out of range"):
+        build_allocs.word_int(2 ** 256)
+    with pytest.raises(ValueError, match="out of range"):
+        build_allocs.word_int("0x1" + "00" * 32)
+    assert build_allocs.word_int(0x10) == 16
+    assert build_allocs.word_int("0x10") == 16
+    assert build_allocs.word_int(2 ** 256 - 1) == 2 ** 256 - 1
+
+
 def test_raw_storage_collision_with_oz_owner_is_refused():
     storage = {build_allocs.OZ_OWNER_SLOT: 1}
     # YAML strings parse as hex (word_int): slot 51 arrives as "0x33".

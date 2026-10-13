@@ -140,6 +140,47 @@ def test_equal_genesis_hashes_rejected():
         gen.check(gen.build_rollup_config(_args(l2_genesis_hash=L1_HASH)))
 
 
+def test_canonical_fork_regression_still_rejected():
+    # review F28: only the canonical pairs op-node orders are compared — and a
+    # regression among THOSE must still be rejected.
+    config = gen.build_rollup_config(_args())
+    config["regolith_time"] = 200
+    config["canyon_time"] = 100
+    with pytest.raises(gen.RollupConfigError, match="canyon_time regresses"):
+        gen.check(config)
+
+
+def test_external_fork_times_are_not_ordered():
+    # review F28: op-node never compares pectra_blob_schedule/interop/jovian/karst
+    # times, so their mutual order must not be rejected here either (the walk used to
+    # order all twelve FORK_TIME_KEYS and would refuse this config).
+    config = gen.build_rollup_config(_args())
+    config["jovian_time"] = 200
+    config["karst_time"] = 100
+    gen.check(config)  # must not raise
+
+
+@pytest.mark.parametrize("overrides,match", [
+    ({"block_time": 0}, "block_time must be > 0"),
+    ({"max_sequencer_drift": 0}, "max_sequencer_drift must be > 0"),
+    ({"channel_timeout": 0}, "channel_timeout must be > 0"),
+    ({"gas_limit": 0}, "gasLimit must be > 0"),
+    ({"batcher_addr": gen.ZERO_ADDRESS}, "batcherAddr must not be zero"),
+    ({"scalar": "0x" + "00" * 32}, "scalar must not be zero"),
+    ({"l1_chain_id": "0"}, "chain ids must be positive"),
+    ({"batch_inbox_address": gen.ZERO_ADDRESS}, "batch_inbox_address must not be zero"),
+    ({"l1_system_config_address": gen.ZERO_ADDRESS},
+     "l1_system_config_address must not be zero"),
+    ({"l1_genesis_hash": gen.ZERO_HASH}, "genesis.l1.hash must not be zero"),
+])
+def test_rejection_rule_per_branch(overrides, match):
+    # review F29: every check() rejection branch gets one parametrized case — the
+    # suite previously exercised only 5 of ~17 rules, so deleting any untested guard
+    # left CI green.
+    with pytest.raises(gen.RollupConfigError, match=match):
+        gen.check(gen.build_rollup_config(_args(**overrides)))
+
+
 def test_malformed_hash_rejected():
     with pytest.raises(gen.RollupConfigError, match="32-byte hex"):
         gen.build_rollup_config(_args(l2_genesis_hash="0x1234"))
