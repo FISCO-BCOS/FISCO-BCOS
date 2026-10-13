@@ -168,12 +168,20 @@ BOOST_AUTO_TEST_CASE(RequestsHashPresenceAsymmetryIsMismatch)
     a2.requestsHash = makeH256(0x02);
     BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c2, a2), "requestsHash");
 
-    // equal → match (4-element matrix completed)
+    // equal → match; the fourth cell below completes the 4-element matrix (review F13:
+    // the computed-set/announced-absent direction blobGasUsed already covered).
     C c3 = match();
     C a3 = match();
     c3.requestsHash = makeH256(0x09);
     a3.requestsHash = makeH256(0x09);
     BOOST_CHECK(!opEthMismatchedFieldOf(c3, a3).has_value());
+
+    // computed set, announced ABSENT — the presence asymmetry in the other direction,
+    // equally loud (review F13).
+    C c4 = match();
+    C a4 = match();
+    c4.requestsHash = makeH256(0x0a);
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c4, a4), "requestsHash");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

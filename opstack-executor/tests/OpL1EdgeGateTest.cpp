@@ -380,8 +380,8 @@ BOOST_AUTO_TEST_CASE(SnapshotFreezeFillsOpTxSnapshot)
         .base_fee_scalar = 1100,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = intx::uint256{0},
-        .operator_fee_scalar = 0,
-        .operator_fee_constant = 0,
+        .operator_fee_scalar = 1'000'000,
+        .operator_fee_constant = 42,
         .da_footprint_gas_scalar = 40};
 
     eth::EthBlockInfo block{};
@@ -416,6 +416,10 @@ BOOST_AUTO_TEST_CASE(SnapshotFreezeFillsOpTxSnapshot)
     BOOST_CHECK(snapshot.fee.blob_base_fee_scalar == F.blob_base_fee_scalar);
     BOOST_CHECK(snapshot.fee.blob_base_fee == F.blob_base_fee);
     BOOST_CHECK(snapshot.fee.da_footprint_gas_scalar == F.da_footprint_gas_scalar);
+    // Non-zero in F on purpose (review F15): 0 == 0 cannot distinguish a snapshot that
+    // copies the operator-fee fields from one that drops them.
+    BOOST_CHECK(snapshot.fee.operator_fee_scalar == F.operator_fee_scalar);
+    BOOST_CHECK(snapshot.fee.operator_fee_constant == F.operator_fee_constant);
     BOOST_CHECK(snapshot.l1_cost > intx::uint256{0});
     // Jovian: the DA footprint fields are snapshot-carried as well.
     BOOST_CHECK(snapshot.has_da_footprint);

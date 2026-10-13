@@ -2508,6 +2508,11 @@ BOOST_AUTO_TEST_CASE(pricingDispatchPinsHoloceneAndCanyonBoundaries)
 
     // (a) pre-Holocene parent (Bedrock rung), Canyon-active Isthmus+ child: the
     // pre-Holocene arm with denominatorCanyon = 250 (preset): 1e9 - 1e9/250 = 996M.
+    // KEYING DISCRIMINATOR (review F11): both rungs sit STRICTLY BETWEEN the parent
+    // (1'699.0s) and the child (1'700.0s), so a regression that keys the Holocene arm
+    // on the CHILD timestamp instead of the parent flips this cell to the Holocene-arm
+    // answer 995M — this is the fixture that catches a parent/child keying swap; the
+    // replay-layer suites (ts-0 single-rung schedules) cannot see it.
     bcos::ledger::OpForkSchedule canyonBeforeChild;
     canyonBeforeChild.m_canyonTime = 1'699'200'000;
     canyonBeforeChild.m_holoceneTime = 1'699'500'000;

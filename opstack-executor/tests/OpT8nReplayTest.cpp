@@ -2454,6 +2454,15 @@ BOOST_AUTO_TEST_CASE(AccessListArmBuildsAccessListTx)
 // derivation. Pre-Isthmus goldens (ecotone/fjord/granite) and Isthmus+ are both covered.
 BOOST_AUTO_TEST_CASE(GoldenTransactionsRootMatches)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     const fs::path goldenDir = OP_T8N_GOLDEN_ENGINE_DIR;
     BOOST_REQUIRE_MESSAGE(fs::is_directory(goldenDir), goldenDir);
     int checked = 0;

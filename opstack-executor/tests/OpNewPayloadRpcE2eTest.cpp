@@ -111,6 +111,15 @@ void assertSevenFields(std::string const& id, bcos::protocol::BlockHeader::Ptr c
 /// parseNewPayloadRequest(V4) -> newPayload(4) -> assertions.
 void runGoldenVector(std::string const& id)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto sample = w6test::loadVectorSample(id);
     auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
@@ -319,8 +328,11 @@ runVectorAndGetBlockHash(std::string const& id)
 }
 
 // ═══════════════════ Invalid-vector runner (classification-driven) ════
-// Consumer-first (atomicity): self-tests use inline vectors (no dependence on corpus
-// files); the runner also accepts on-disk invalid_*.json. Reject schema:
+// Consumer-first (atomicity): the runner's reject schema is pinned by the inline
+// vectors below, but their BASE sample still loads from the corpus (spec.baseId),
+// so these self-tests — like every corpus-reading case in this suite — run behind
+// the t8nCorpusAvailable/Required gate (review F7). The runner also accepts
+// on-disk invalid_*.json. Reject schema:
 // fisco.consumer / classification ("INVALID"|"SYNCING"|"-38005"|"-32603") /
 // latest_valid_hash("parent"|null) / validation_error_contains(optional) /
 // expect_throw("UnsupportedFork"|"OpExecutionInternalError") / version(optional, -38005 sets 3).
@@ -1170,16 +1182,43 @@ BOOST_AUTO_TEST_CASE(JovianPrecompileWrapValueRevert)
 //   two-pour)
 BOOST_AUTO_TEST_CASE(InvalidStateRootRejected)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     runInvalidVector("inline_invalid_stateRoot");
 }
 
 BOOST_AUTO_TEST_CASE(InvalidParentUnknownSyncing)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     runInvalidVector("inline_invalid_parentUnknown");
 }
 
 BOOST_AUTO_TEST_CASE(InvalidUnsupportedForkVersion3)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     runInvalidVector("inline_invalid_unsupportedFork");
 }
 
@@ -1190,6 +1229,15 @@ BOOST_AUTO_TEST_CASE(InvalidUnsupportedForkVersion3)
 // sibling-acceptance leg; the body answers the S5 dichotomy today — see the banner above).
 BOOST_AUTO_TEST_CASE(SiblingForkCanonicalPourValid_SiblingSideChainDichotomy)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     runInvalidVector("inline_invalid_siblingFork");
 }
 
@@ -1198,12 +1246,30 @@ BOOST_AUTO_TEST_CASE(SiblingForkCanonicalPourValid_SiblingSideChainDichotomy)
 // asserted.
 BOOST_AUTO_TEST_CASE(ExecutorConsumerSkipsMessageAssertion)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     runInvalidVector("inline_invalid_executorStateRoot");
 }
 
 // Manifest subset iteration (invalid_*.json). Empty corpus -> zero iterations (forward compat).
 BOOST_AUTO_TEST_CASE(InvalidVectorsFromManifest)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     for (auto const& id : loadInvalidManifest())
     {
         runInvalidVector(id);
@@ -2145,6 +2211,15 @@ BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
 // ① head known -> VALID + LatestValidHash=head (mirrors op-geth valid())
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadKnownValid)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     (void)number;
     auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
@@ -2192,6 +2267,15 @@ bcos::engine::PayloadAttributes makeJovianAttrs()
 
 BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingGasLimitInvalid)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     (void)number;
     auto attrs = makeJovianAttrs();
@@ -2207,6 +2291,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingGasLimitInvalid)
 
 BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingMinBaseFeeInvalid)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     (void)number;
     auto attrs = makeJovianAttrs();
@@ -2240,6 +2333,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMinBaseFeeBeforeJovianInvalid)
 
 BOOST_AUTO_TEST_CASE(ForkchoiceAttrsNonEmptyWithdrawalsInvalid)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     // MJ-2: OP attrs withdrawals must be present AND empty (op-geth api_optimism.go:55-58
     // rejects non-empty; buildOpPayload must never silently normalize them away).
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2257,6 +2359,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsNonEmptyWithdrawalsInvalid)
 
 BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingEip1559ParamsInvalid)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     // MJ-2: Holocene+ OP face requires eip1559Params (op-geth api_optimism.go:40-65);
     // a missing value is refused, never silently defaulted.
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2274,6 +2385,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingEip1559ParamsInvalid)
 
 BOOST_AUTO_TEST_CASE(ForkchoiceAttrsWrongSizeEip1559ParamsInvalid)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     // MJ-2: eip1559Params must be exactly 8 bytes (Holocene denominator|elasticity), and a
     // partial-zero pair (denominator=0 with elasticity!=0, or vice versa) is rejected at FCU
     // time (op-geth ValidateHolocene1559Params) -- both zero is allowed (= prior constants).
@@ -2315,6 +2435,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsWrongSizeEip1559ParamsInvalid)
 // validation verdicts exercised by the ForkchoiceAttrs*Invalid cases above.
 BOOST_AUTO_TEST_CASE(ForkchoiceAttributesVersionGate)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     (void)number;
     bcos::engine::PayloadAttributes attrs;
@@ -2338,6 +2467,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttributesVersionGate)
 // :263-280)
 BOOST_AUTO_TEST_CASE(ForkchoiceMonotonicityRejected)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     // Manually register a higher-numbered "known" block for finalized (registerVerifiedBlock writes
     // SYS_HASH_2_NUMBER)
@@ -2354,6 +2492,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceMonotonicityRejected)
 // VALID (mirrors :318-323)
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadIncrement)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash1, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
     // First FCU(head=block1) -> VALID (tracked head set to block1, number n1)
     auto [s1, p1] = bcos::task::syncWait(fixture->service.updateForkchoice(
@@ -2388,6 +2535,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadIncrement)
 // :334-338 + updateTrackedBlockNumbers :1520-1525)
 BOOST_AUTO_TEST_CASE(ForkchoiceNoAttributesHeadAdvance)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
         bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, nullptr, /*version=*/3));
@@ -2409,6 +2565,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceNoAttributesHeadAdvance)
 // known) is VALID — only finalized > head is forbidden by the monotonicity check.
 BOOST_AUTO_TEST_CASE(ForkchoiceSafeFinalizedIndependent)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash1, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
     // Register block n1+1 so we can use two different known blocks.
     bcos::h256 block2("0xaabbccdd00112233445566778899aabbccddeeff00112233445566778899aabb");
@@ -2431,6 +2596,15 @@ BOOST_AUTO_TEST_CASE(ForkchoiceSafeFinalizedIndependent)
 // is invalid (monotonicity, tested by ForkchoiceMonotonicityRejected).
 BOOST_AUTO_TEST_CASE(ForkchoiceSafeBelowHeadIsValid)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
     bcos::h256 block0("0x0000000000000000000000000000000000000000000000000000000000000001");
     registerVerifiedBlock(fixture->multiLayerStorage, block0, n1 - 1);
@@ -2582,6 +2756,15 @@ BOOST_AUTO_TEST_CASE(ReorgRetractNonCanonicalHeadStillRejected)
 // itself included; only the rebuild-on-parent WITH attributes builds (next case).
 BOOST_AUTO_TEST_CASE(ReorgParentHeadWithoutAttrsStillSwallowed)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     auto [state, pid] = bcos::task::syncWait(fixture->service.updateForkchoice(
         bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, nullptr,
@@ -2605,6 +2788,15 @@ BOOST_AUTO_TEST_CASE(ReorgParentHeadWithoutAttrsStillSwallowed)
 #ifdef FISCO_REORG_E2E  // Re-enable when SYS_REORG_UNDO / committed-tip sibling reorg lands.
 BOOST_AUTO_TEST_CASE(ReorgRebuildOnParentBuildsSibling)
 {
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto [fixture, canonicalHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     BOOST_REQUIRE_EQUAL(number, 1);
     auto [confirm, pid0] = bcos::task::syncWait(fixture->service.updateForkchoice(

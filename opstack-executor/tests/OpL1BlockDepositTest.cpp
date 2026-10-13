@@ -127,26 +127,16 @@ inline constexpr char c_setcodeTxEnvelopeHex[] =
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeOpHeader(
     bcos::protocol::BlockNumber number, int64_t timestampMillis)
 {
-    auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
-    h->setNumber(number);
-    h->setTimestamp(timestampMillis);
-    h->setParentInfo(
-        bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = bcos::h256{}});
-    h->setCoinbase(bcos::Address{});
-    h->setStateRoot(bcos::h256{});
-    h->setTxsRoot(bcos::h256{});
-    h->setReceiptsRoot(bcos::h256{});
-    h->setGasLimit(bcos::u256(3'000'000'000));
-    h->setGasUsed(bcos::u256(0));
-    h->setExtraData(bcos::bytes{});
-    h->setPrevRandao(bcos::h256{});
-    h->setBaseFee(bcos::u256(1'000'000'000));
-    h->setWithdrawalsRoot(bcos::h256{});
-    h->setBlobGasUsed(bcos::u256(0));
-    h->setExcessBlobGas(bcos::u256(0));
-    h->setParentBeaconBlockRoot(bcos::h256{});
-    h->setRequestsHash(bcos::h256{});
-    return h;
+    // Single-homed in support/DualRunHarness.h's makeMinimalHeader (review F19): the
+    // fork-optional fields follow the spec's header shape instead of an unconditional
+    // stamp that would leak into a pre-fork header. The threshold mirrors runOpBlock's
+    // jovianActive below; Isthmus and Jovian stamp the same field set, so existing
+    // cases' headers are byte-identical to the retired unconditional builder.
+    auto const spec = timestampMillis >= 2'000'000 ? opstack_test::opeth::OP_JOVIAN_SPEC :
+                                                     opstack_test::opeth::OP_ISTHMUS_SPEC;
+    return opstack_test::makeMinimalHeader(number, timestampMillis, 3'000'000'000,
+        bcos::u256(1'000'000'000), bcos::Address{}, bcos::h256{}, bcos::h256{}, bcos::h256{},
+        spec);
 }
 
 bcos::crypto::HashType keccak256(const bcos::bytes& data)
@@ -776,9 +766,12 @@ BOOST_AUTO_TEST_CASE(JovianShortAttributesRejected)
     JovianShapeFixture fx;
     bcos::bytes shortData = makeJovianCalldataNonZero();
     shortData.resize(170);
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         fx.run({makeDepositEnvelope(shortData)}, static_cast<int64_t>(2000) * 1000 + 1000),
-        std::runtime_error);
+        bcos::evm::OpConsensusError, [](bcos::evm::OpConsensusError const& e) {
+            return std::string(e.what()).find("too short for DA footprint gas scalar") !=
+                   std::string::npos;
+        });
 }
 
 // C-3 violation: 178B but with the wrong selector -> rejected.
@@ -790,9 +783,12 @@ BOOST_AUTO_TEST_CASE(JovianWrongSelectorRejected)
     wrong[1] = 0x00;
     wrong[2] = 0x00;
     wrong[3] = 0x00;
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         fx.run({makeDepositEnvelope(wrong)}, static_cast<int64_t>(2000) * 1000 + 1000),
-        std::runtime_error);
+        bcos::evm::OpConsensusError, [](bcos::evm::OpConsensusError const& e) {
+            return std::string(e.what()).find("does not have Jovian selector") !=
+                   std::string::npos;
+        });
 }
 
 // Isthmus-config block (timestamp < jovianTime): a 176B Isthmus deposit is a normal block shape
@@ -810,9 +806,12 @@ BOOST_AUTO_TEST_CASE(IsthmusActivationBlockSeals)
 BOOST_AUTO_TEST_CASE(FirstTxNotAttributesRejected)
 {
     JovianShapeFixture fx;
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         fx.run({bcos::fromHex(c_userTxEnvelopeHex)}, static_cast<int64_t>(2000) * 1000 + 1000),
-        std::runtime_error);
+        bcos::evm::OpConsensusError, [](bcos::evm::OpConsensusError const& e) {
+            return std::string(e.what()).find("no deposit transaction to seed the block") !=
+                   std::string::npos;
+        });
 }
 
 // A deposit appearing after a non-deposit tx: the retired OpSchedulerImpl rejected this as a
@@ -832,9 +831,16 @@ BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
 BOOST_AUTO_TEST_CASE(GasLimitOverBlockBudgetRejected)
 {
     JovianShapeFixture fx;
-    BOOST_CHECK_THROW(fx.run({makeDepositEnvelope(makeJovianCalldataNonZero(), 4'000'000'000)},
-                          static_cast<int64_t>(2000) * 1000 + 1000),
-        std::runtime_error);
+    // The scheduler wraps the executor's OpEthDepositGasLimitReached into
+    // OpConsensusError ("OpScheduler: deposit execution failed: op deposit: block gas
+    // limit reached") — pin the outer type plus the budget-rule substring, which no
+    // sibling rejection site shares.
+    BOOST_CHECK_EXCEPTION(
+        fx.run({makeDepositEnvelope(makeJovianCalldataNonZero(), 4'000'000'000)},
+            static_cast<int64_t>(2000) * 1000 + 1000),
+        bcos::evm::OpConsensusError, [](bcos::evm::OpConsensusError const& e) {
+            return std::string(e.what()).find("block gas limit reached") != std::string::npos;
+        });
 }
 
 // ---- Item 4: MessagePasser storage drives the withdrawal root (opStorageRoot, OpBlockSeal) ----

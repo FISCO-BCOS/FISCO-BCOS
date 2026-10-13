@@ -232,11 +232,14 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
     std::optional<opeth::OpRecentBlockHashes<std::decay_t<decltype(view)>>> hashes;
     auto sharedError = std::make_shared<opeth::OpStorageErrorSlot>();
     opeth::OpEthExecutor executor{receiptFactory, opeth::OP_ISTHMUS_SPEC, sharedError};
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(opeth::preBlockOpEthSteps(view, *header, opeth::OP_ISTHMUS_SPEC,
             rawTxBytes, deposits, executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar,
             /*noUserTxActivationBlock=*/false)),
-        std::runtime_error);
+        bcos::evm::OpConsensusError, [](bcos::evm::OpConsensusError const& e) {
+            return std::string(e.what()).find("missing L1 attributes deposit (empty block)") !=
+                   std::string::npos;
+        });
 }
 
 /// Finding J (round-2 review #5429): pin the M2 accept path — a deposit AFTER a non-deposit is
