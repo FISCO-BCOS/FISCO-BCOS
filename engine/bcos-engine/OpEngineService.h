@@ -69,6 +69,11 @@ struct OpPayloadArtifacts
     bcos::protocol::BlockHeader::Ptr canonicalHeader;
 };
 
+/// Default `[op_engine_rpc] unfinalized_window`: how far newPayload may run ahead of the
+/// finalized (backend) tip before it answers SYNCING. 1024 blocks ≈ 34 min at 2 s/block,
+/// covering op-node's ~12.8 min L1 finality delay plus batcher lag with margin.
+constexpr int64_t c_defaultUnfinalizedWindow = 1024;
+
 namespace engine_common::op
 {
 std::vector<std::string> supportedOpCapabilities();
@@ -131,7 +136,8 @@ public:
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
+        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false,
+        int64_t unfinalizedWindow = c_defaultUnfinalizedWindow)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),
@@ -139,12 +145,18 @@ public:
         m_blockTxCountLimit(blockTxCountLimit),
         m_delegate(std::move(delegate)),
         m_daCaps(std::move(daCaps)),
-        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
+        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes),
+        m_unfinalizedWindow(unfinalizedWindow)
     {
         if (!m_blockFactory)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidEngineConfig{} << bcos::errinfo_comment{"blockFactory must not be null"});
+        }
+        if (m_unfinalizedWindow <= 0)
+        {
+            BOOST_THROW_EXCEPTION(InvalidEngineConfig{} << bcos::errinfo_comment{
+                                      "unfinalizedWindow must be a positive block count"});
         }
     }
     ~OpEngineService() = default;
@@ -208,15 +220,53 @@ public:
         return head ? std::optional(head->blockNumber) : std::nullopt;
     }
 
-    /// Header returned by the last successful newPayload execute/commit (not the
-    /// request-rebuilt announcement). Null if this call did not run or persist execution.
-    bcos::protocol::BlockHeader::Ptr lastExecutedHeader() const
+    /// The Engine tracker's head (hash + number): what the RPC read plane maps `latest` to
+    /// (D1 §10.2). Empty until the first forkchoiceUpdated after start.
+    std::optional<TrackedHeadBlock> trackedHead() const { return m_tracker.trackedHead(); }
+
+    /// The execution-stamped header of an UNFINALIZED block (window entry of the delegate),
+    /// null once finalized or when unknown. Replaces the former lastExecutedHeader(): the
+    /// header of a newPayload'ed block is now read from its window entry, keyed by the CL
+    /// hash, so concurrent submissions cannot clobber each other.
+    bcos::protocol::BlockHeader::Ptr executedHeader(h256 const& blockHash) const
     {
-        std::lock_guard lock(m_lastExecutedHeaderMutex);
-        return m_lastExecutedHeader;
+        if (!m_delegate)
+        {
+            return nullptr;
+        }
+        auto entry = m_delegate->unfinalizedBlock(blockHash);
+        return entry ? entry->header : nullptr;
     }
 
+    /// Configured newPayload run-ahead bound over the finalized tip, in blocks.
+    int64_t unfinalizedWindow() const { return m_unfinalizedWindow; }
+
 private:
+    /// A block the engine could resolve: in the delegate's unfinalized window, or in the
+    /// finalized ledger (then `header` is null until loadHeaderOf reads it).
+    struct ResolvedBlock
+    {
+        bcos::protocol::BlockNumber number = 0;
+        h256 hash;
+        h256 parentHash;  // zero for a ledger block (not needed there)
+        bcos::protocol::BlockHeader::Ptr header;
+        bool inWindow = false;
+    };
+
+    /// Window first, then the ledger's SYS_HASH_2_NUMBER (which under the window model holds
+    /// finalized blocks only). nullopt = unknown.
+    task::Task<std::optional<ResolvedBlock>> resolveBlock(h256 const& blockHash);
+
+    /// The block's header: the window entry's, or SYS_NUMBER_2_BLOCK_HEADER decoded. Null when
+    /// the ledger row is missing.
+    task::Task<bcos::protocol::BlockHeader::Ptr> loadHeaderOf(ResolvedBlock const& block);
+
+    /// True when @p target is @p head itself or one of its ancestors: walks the window from
+    /// the head, then requires a finalized target to be at or below the finalized tip.
+    task::Task<bool> isOnChainOf(ResolvedBlock const& head, ResolvedBlock const& target);
+
+    /// The finalized (backend) tip height: SYS_CURRENT_STATE/current_number.
+    task::Task<bcos::protocol::BlockNumber> finalizedTipNumber();
     static PayloadStatus makeStatus(PayloadValidationStatus status,
         std::optional<h256> latestValidHash = std::nullopt,
         std::optional<std::string> validationError = std::nullopt)
@@ -261,9 +311,10 @@ private:
         return version == static_cast<std::uint32_t>(ApiVersion::V4);
     }
 
+    /// @p parentHeader is the resolved head's header (window entry or ledger row).
     task::Task<ForkchoiceUpdatedResult> buildOpPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
-        bcos::protocol::BlockNumber nextBlockNumber, std::vector<bcos::bytes> decodedForcedTxs);
+        bcos::protocol::BlockHeader::Ptr parentHeader, std::vector<bcos::bytes> decodedForcedTxs);
 
     task::Task<PayloadStatus> handleOpNewPayload(
         const NewPayloadRequest& request, std::uint32_t version);
@@ -302,26 +353,20 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
     bool m_allowSynthesizedL1Attributes;
-    /// Guards m_lastExecutedHeader: newPayload requests can run concurrently on RPC
-    /// threads (no serial executor), so the shared_ptr write/read must be synchronized.
-    ///
-    /// The m_delegate (an OpScheduler) sequences (reset → executeBlock, executeBlock →
-    /// commitBlock) need no extra serialization of their own — the reasoning, precisely:
-    /// OpScheduler::executeBlock try-locks m_executeMutex AND m_commitMutex ("Another
-    /// block is executing/committing!" — a concurrent second caller fails closed), and
-    /// executeBlock/commitBlock drive their task via task::syncWait, so a sequence's calls
-    /// are ordered within the calling thread. OpScheduler::reset is NOT a no-op: it takes
-    /// all three mutexes (scoped_lock, so it cannot interleave with an in-flight execute
-    /// or commit), then drops any uncommitted pending block (popping its verified storage
-    /// layer) and restores the continuity watermark to the committed tip. A reset landing
-    /// between another caller's executeBlock and commitBlock therefore makes that caller's
-    /// commitBlock fail CLOSED ("Unexpected empty results!" — the pending it needs was
-    /// dropped/replaced), which the OP service reports as an error and the sequencer
-    /// retries — convergent, never corrupt. Out-of-order parents cannot interleave: the
-    /// sequencer advances height n+1 only after height n's canonical status, and the
-    /// delegate's continuity check rejects anything else.
-    mutable std::mutex m_lastExecutedHeaderMutex;
-    bcos::protocol::BlockHeader::Ptr m_lastExecutedHeader;
+    /// newPayload requests can run concurrently on RPC threads (no serial executor). The
+    /// m_delegate (an OpScheduler) sequences (reset → executeBlock, executeBlock →
+    /// commitBlock) need no extra serialization here: OpScheduler::executeBlock try-locks
+    /// m_executeMutex AND m_commitMutex ("Another block is executing/committing!" — a
+    /// concurrent second caller fails closed), and executeBlock/commitBlock drive their task
+    /// via task::syncWait, so a sequence's calls are ordered within the calling thread.
+    /// OpScheduler::reset drops the STAGED (executed, not yet admitted) blocks and the probe
+    /// but never the window; a reset landing between another caller's executeBlock and
+    /// commitBlock makes that commitBlock fail CLOSED ("Unexpected empty results!" with the
+    /// OpPendingDropped tag), which this service answers by re-executing — convergent, never
+    /// corrupt. This service keeps no per-payload state of its own outside the tracker.
+    /// newPayload run-ahead bound over the finalized tip (blocks); beyond it newPayload
+    /// answers SYNCING (backpressure: op-node retries, nothing is lost).
+    int64_t m_unfinalizedWindow;
 };
 
 }  // namespace bcos::engine

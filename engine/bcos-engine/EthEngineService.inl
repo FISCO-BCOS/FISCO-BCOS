@@ -217,8 +217,11 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             forkchoiceState.finalizedBlockHash, canonicalFinalizedHash),
         .allowCanonicalHeadJump = m_externalPayloadVerifier != nullptr,
     };
-    if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Swallowed)
+    if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Rewind)
     {
+        // The L1 lane has no in-memory window to rewind in (its reorg model is the on-disk
+        // rollback journal above), so an older head keeps today's behaviour: VALID without
+        // a payloadId and the tracker untouched (resolved.headKnown stays false here).
         co_return ForkchoiceUpdatedResult{
             .payloadStatus = engine_common::makeStatus(
                 PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),

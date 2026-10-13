@@ -276,13 +276,14 @@ BOOST_AUTO_TEST_CASE(engine_tracker_zero_head_hash_is_rejected)
     BOOST_CHECK(!tracker.trackedHead().has_value());
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_swallows_parent_even_with_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_unvouched_rewind_parent_even_with_attributes)
 {
-    // Matrix: S2 — release EngineServiceImpl never rebuilds on parent; older head is swallowed.
+    // Matrix: S2 — an UNVOUCHED (headKnown=false) older head is reported as Rewind and left
+    // unapplied: the L1 lane has no window to rebuild on, so it keeps VALID/no-op.
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, true, true));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Rewind);
     BOOST_REQUIRE(tracker.trackedHead().has_value());
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
@@ -340,31 +341,31 @@ BOOST_AUTO_TEST_CASE(engine_tracker_head_canonical_required_on_first_apply_and_p
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 11);
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_swallows_old_head_without_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_unvouched_rewind_old_head_without_attributes)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, true, false));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Rewind);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_swallows_noncanonical_parent_even_with_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_unvouched_rewind_noncanonical_parent_even_with_attributes)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, false, true));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Rewind);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_swallows_older_than_parent_with_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_unvouched_rewind_older_than_parent_with_attributes)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(8), 8, true, true));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Rewind);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
 }
@@ -468,8 +469,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_allows_canonical_head_jump_when_permitted)
     // A non-canonical jump stays rejected even with the relaxation armed.
     ResolvedForkchoice nonCanonical = resolved(h256(18), 18, false, false);
     nonCanonical.allowCanonicalHeadJump = true;
-    checkExceptionMessage<InvalidForkchoiceState>(
-        [&]() { tracker.applyForkchoice(nonCanonical); },
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(nonCanonical); },
         "Forkchoice head block number must increase by exactly 1");
     BOOST_REQUIRE(tracker.trackedHead().has_value());
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 15);
@@ -1028,8 +1028,8 @@ BOOST_AUTO_TEST_CASE(engine_common_capabilities_gold)
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
         "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
         "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4",
-        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
-        "engine_getBlobsV1", "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
+        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1", "engine_getBlobsV1",
+        "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
     BOOST_CHECK(caps == gold);
 }
 
@@ -1234,4 +1234,64 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_rejects_tampered_withdrawals_lis
     BOOST_CHECK_NE(error->find("withdrawals"), std::string::npos);
 }
 
+
+// ---- Unfinalized-window lane (resolved.headKnown) ----
+// The OP engine resolves the head in its window (or as the finalized tip) and vouches for it;
+// the tracker then accepts any known block as the new head and reports a rewind instead of
+// swallowing it, so the caller can build on the older head (D1 §11.3).
+
+ResolvedForkchoice known(h256 hash, bcos::protocol::BlockNumber number, bool attributes = false)
+{
+    auto out = resolved(hash, number, /*canonical=*/false, attributes);
+    out.headKnown = true;
+    return out;
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_known_older_head_is_applied_and_reported_as_rewind)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    auto outcome = tracker.applyForkchoice(known(h256(9), 9, /*attributes=*/true));
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Rewind);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 9);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(9));
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_known_same_height_sibling_is_a_reorg_not_a_conflict)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    // Same height, different hash, NOT canonical on the ledger: rejected without the vouch…
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(resolved(h256(11), 10, false, false)); },
+        "Forkchoice head block hash conflicts with tracked block number");
+    // …and a plain head switch with it.
+    auto outcome = tracker.applyForkchoice(known(h256(11), 10));
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Applied);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(11));
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_known_head_may_jump_within_the_window_and_seed_first_apply)
+{
+    EngineTracker tracker;
+    // First apply of a window block after a restart: window membership confirms it.
+    auto first = tracker.applyForkchoice(known(h256(10), 10));
+    BOOST_CHECK(first == ForkchoiceApplyResult::Applied);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+    // +2 to another window block: every intermediate block is in the window by construction.
+    auto jump = tracker.applyForkchoice(known(h256(12), 12));
+    BOOST_CHECK(jump == ForkchoiceApplyResult::Applied);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 12);
+    // The unvouched jump rule is unchanged.
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(resolved(h256(20), 20, true, false)); },
+        "Forkchoice head block number must increase by exactly 1");
+    // The ordering gates still apply to a vouched head.
+    auto bad = known(h256(13), 13);
+    bad.safeNumber = 14;
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(bad); },
+        "Forkchoice safe block number must not exceed head block number");
+}
 BOOST_AUTO_TEST_SUITE_END()
