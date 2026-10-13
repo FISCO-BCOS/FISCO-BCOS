@@ -22,10 +22,12 @@
 // emitted as lowercase "0x" hex (the op-geth hexutil.Big convention, i.e. the
 // same shape run_fisco produces so Task 6 can diff the two ends).
 //
-// The operator cost MUST go through types.NewOperatorCostFunc — which mirrors
-// the FISCO computeChargedOperatorCost gate: it returns 0 for any pre-Isthmus
-// block and for a zero operatorFeeParams slot, and selects the Jovian
-// operator-fee-fix path via IsJovian (never KarstTime).
+// The operator cost MUST go through types.NewOperatorCostFunc — whose gate
+// mirrors the FISCO seam: computeOperatorCost (opstack-executor/OpRollupCost.h)
+// with the callers applying cfg.has_operator_fee (the block-transition gate,
+// OpTransition.cpp:395), never a raw ungated path. It returns 0 for any
+// pre-Isthmus block and for a zero operatorFeeParams slot, and selects the
+// Jovian operator-fee-fix path via IsJovian (never KarstTime).
 
 package main
 

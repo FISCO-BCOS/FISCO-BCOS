@@ -37,7 +37,7 @@ silently redefine the gate's expected values.
 ```
 da-matrix/
   da_matrix.json        grid: envelopes registry + 16 cases (slots 1/3/7/8, gas, fork)
-  run_fisco.cpp         FISCO C++ runner (computeL1Cost / computeChargedOperatorCost)
+  run_fisco.cpp         FISCO C++ runner (computeL1Cost / computeOperatorCost, caller-gated)
   run_oprevm/           op-revm 20.0.0 Rust runner (cargo +1.94 build --release)
   solidity/             Solidity authoritative end (GasPriceOracle forge test)
   golden/
@@ -59,9 +59,12 @@ da-matrix/
 cd <build>/opstack-executor/tests && ./opstack-da-matrix-runner \
   --grid <this>/da_matrix.json --out out_fisco.json
 
-# 2. op-geth (Task 4; authoritative reference v1.101702.2)
-#    run_opgeth/ carries main.go + go.sum only (no go.mod): drop the directory into an
-#    op-geth checkout at the pinned tag (its go.mod supplies the dependencies), then:
+# 2. op-geth (Task 4; authoritative reference v1.101702.2, commit
+#    e8800cffe53d459cde8a07c8e8f1de9d86e79e07 — see Provenance)
+#    run_opgeth/ carries main.go ONLY (no go.mod/go.sum): drop the directory into a
+#    checkout of op-geth at the pinned tag — the HOST checkout's go.mod/go.sum are
+#    this runner's dependency source (review F45: a committed go.sum without a
+#    go.mod was never read by any build) — then:
 cd run_opgeth && go run . --grid <this>/da_matrix.json --out out_opgeth.json
 
 # 3. op-revm (Task 5; op-revm 20.0.0 checkout)

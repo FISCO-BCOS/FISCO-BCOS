@@ -30,8 +30,9 @@
 // The operator fee is gated on Isthmus exactly like tx_cost() does internally
 // (`if spec.is_enabled_in(OpSpecId::ISTHMUS)`) so a pre-Isthmus fork
 // (ecotone/fjord/granite/holocene) reports 0 even with a non-zero scalar/
-// constant packed in slot 8 — mirroring the FISCO computeChargedOperatorCost
-// gate (OpTransition.cpp:395).
+// constant packed in slot 8 — mirroring the FISCO seam: computeOperatorCost
+// (opstack-executor/OpRollupCost.h) with the callers applying
+// cfg.has_operator_fee (the block-transition gate, OpTransition.cpp:395).
 //
 // OpSpecId::from_str is case-sensitive ("Ecotone".."Karst", spec.rs:63-87) and
 // the grid tags are lowercase, so we capitalize the first letter before parse.

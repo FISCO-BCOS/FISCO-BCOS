@@ -26,11 +26,11 @@
 // emitted as lowercase "0x" hex, the op-geth hexutil.Big convention
 // ("0x" + hex, no leading zeros).
 //
-// The operator cost MUST go through computeOperatorCost — the
-// has_operator_fee gate mirroring the block-transition decision
-// (OpTransition.cpp:395) — never through raw computeOperatorCost, so a
-// pre-Isthmus fork (fjord/granite/holocene) reports 0 even with a non-zero
-// scalar/constant packed in slot 8.
+// The operator cost goes through computeOperatorCost (opstack-executor/OpRollupCost.h)
+// with the CALLER applying the cfg.has_operator_fee gate — the same gate the
+// block-transition decision applies (OpTransition.cpp:395) — never a raw ungated
+// path, so a pre-Isthmus fork (fjord/granite/holocene) reports 0 even with a
+// non-zero scalar/constant packed in slot 8.
 //
 // Error paths are deliberately EXCEPTION-FREE (review fix round 1/5): with the
 // evmone/blst objects pulled in by this target's link configuration, an
