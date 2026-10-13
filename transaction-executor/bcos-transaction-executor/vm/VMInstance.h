@@ -46,8 +46,16 @@ public:
     VMInstance& operator=(VMInstance const&) = delete;
     VMInstance& operator=(VMInstance&&) noexcept = default;
 
+    // createAddressFn/create2AddressFn (PR #5689 review F1/F2) are the host's own CREATE /
+    // CREATE2 derivations; the caller supplies them because HostContext is a class template
+    // and the VM hook must stay a plain C function pointer. Installed on the fresh VM
+    // alongside hash_fn; nullptr keeps upstream's keccak/nonce-derived addresses.
     EVMCResult execute(const struct evmc_host_interface* host, struct evmc_host_context* context,
-        evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize);
+        evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize,
+        evmc_address (*createAddressFn)(
+            struct evmc_host_context*, const evmc_address*, uint64_t) = nullptr,
+        evmc_address (*create2AddressFn)(struct evmc_host_context*, const evmc_address*,
+            const evmc_bytes32*, const uint8_t*, size_t) = nullptr);
 
     void enableDebugOutput();
 

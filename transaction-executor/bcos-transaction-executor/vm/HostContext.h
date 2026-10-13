@@ -27,6 +27,7 @@
 #include "EVMHostInterface.h"
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/CallParameters.h"
@@ -102,32 +103,18 @@ struct Executable
 template <class Storage>
 using Account = ledger::account::EVMAccount<Storage>;
 
-/// The executable cache is content-addressed: the key carries BOTH the address and a hash
-/// of the code the executable was built from. A key covering only the address serves a
-/// stale analysis whenever the code at an address changes — an in-place upgrade, a
-/// redeploy, or (in tests) deterministic addresses carrying different code per case —
-/// and the stale analysis then executes the OLD code. With the hash in the key a hit
-/// proves identical code and a fill is bound to that code's hash, so historical
-/// (block-pinned) lookups may share the same cache safely in both directions.
-///
-/// executableCodeKey is deliberately a fixed keccak rather than the chain hasher: the key
-/// is a cache-internal identity that must be well-defined even where GlobalHashImpl is
-/// unset (unit-test contexts) and identical for every caller. Not a consensus value.
-inline h256 executableCodeKey(bytesConstRef code)
-{
-    crypto::Keccak256 hasher;
-    return hasher.hash(code);
-}
-inline h256 executableCodeKey(std::string_view code)
-{
-    return executableCodeKey(
-        bytesConstRef(reinterpret_cast<byte const*>(code.data()), code.size()));
-}
-
+/// The executable cache is content-addressed on the code, not the address: a key covering
+/// only the address serves a stale analysis whenever the code at an address changes (an
+/// in-place upgrade, a redeploy, or in tests deterministic addresses carrying different
+/// code per case), and the stale analysis then executes the OLD code. The key is the
+/// account's STORED CODE_HASH row plus the execution revision — the same shape as
+/// bcos-executor's EvmCodeCacheKey (vm/VMFactory.h), which keys its analysis cache this
+/// way (review F6: no address component, so identical code shares one entry instead of
+/// splitting the LRU per deployment, and no per-call keccak of the runtime body).
 struct ExecutableCacheKey
 {
-    evmc_address address;
     h256 codeHash;
+    evmc_revision revision{EVMC_LONDON};
     friend bool operator==(ExecutableCacheKey const&, ExecutableCacheKey const&) = default;
 };
 
@@ -135,12 +122,20 @@ struct ExecutableCacheKeyHash
 {
     size_t operator()(ExecutableCacheKey const& key) const noexcept
     {
-        auto addressHash = std::hash<evmc_address>{}(key.address);
         auto codeHash = std::hash<h256>{}(key.codeHash);
-        return addressHash ^
-               (codeHash + 0x9e3779b97f4a7c15ULL + (addressHash << 6) + (addressHash >> 2));
+        return codeHash ^ (static_cast<size_t>(key.revision) + 0x9e3779b97f4a7c15ULL +
+                              (codeHash << 6) + (codeHash >> 2));
     }
 };
+
+/// Fallback identity for rows whose CODE_HASH is missing (legacy/corrupt state): a fixed
+/// keccak of the body, computed ONCE per such load and never on the hot path. Not a
+/// consensus value.
+inline h256 executableCodeKey(bytesConstRef code)
+{
+    crypto::Keccak256 hasher;
+    return hasher.hash(code);
+}
 
 using CacheExecutables =
     storage2::memory_storage::MemoryStorage<ExecutableCacheKey, std::shared_ptr<Executable>,
@@ -152,21 +147,29 @@ CacheExecutables& getCacheExecutables();
 task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_address& address,
     const evmc_revision& revision, ledger::account::AddressTableMode addressTableMode)
 {
-    if (Account<std::decay_t<decltype(storage)>> account(storage, address, addressTableMode);
-        auto codeEntry = co_await account.code())
+    Account<std::decay_t<decltype(storage)>> account(storage, address, addressTableMode);
+    // Read the account's stored CODE_HASH row first: a cache hit then costs one row read
+    // and skips the code-body read entirely (review F6 — the probe used to sit behind
+    // account.code(), and the key hashed the whole body per call).
+    auto const storedHash = co_await account.codeHash();
+    if (storedHash != h256{})
     {
-        auto const codeHash = executableCodeKey(codeEntry->get());
         if (auto executable = co_await storage2::readOne(
-                getCacheExecutables(), ExecutableCacheKey{address, codeHash}))
+                getCacheExecutables(), ExecutableCacheKey{storedHash, revision}))
         {
             co_return std::move(*executable);
         }
-        auto executable = std::make_shared<Executable>(std::move(*codeEntry));
-        co_await storage2::writeOne(
-            getCacheExecutables(), ExecutableCacheKey{address, codeHash}, executable);
-        co_return executable;
     }
-    co_return {};
+    auto codeEntry = co_await account.code();
+    if (!codeEntry)
+    {
+        co_return {};
+    }
+    auto const codeHash = storedHash != h256{} ? storedHash : executableCodeKey(codeEntry->get());
+    auto executable = std::make_shared<Executable>(std::move(*codeEntry));
+    co_await storage2::writeOne(
+        getCacheExecutables(), ExecutableCacheKey{codeHash, revision}, executable);
+    co_return executable;
 }
 
 template <class Storage, class TransientStorage>
@@ -311,6 +314,69 @@ public:
     constexpr evmc_message const& message() const& { return m_message; }
     constexpr evmc_message& mutableMessage() & { return m_message; }
     constexpr ledger::LedgerConfig const& ledgerConfig() const& { return m_ledgerConfig.get(); }
+
+    /// PR #5689 review F1/F2 — this lane's own create-address derivations, installed on the
+    /// VM through VMInstance::execute so the CREATE/CREATE2 opcodes push exactly the address
+    /// the executor stores. getMessage resolves depth-0 messages the same way.
+    evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const
+    {
+        evmc_address out{};
+        if (!m_web3Tx)
+        {
+            // Historical v2 derivation (pre-0.24 getMessage): the chain hasher over
+            // "<blockNumber>_<contextID>_<seq>", first 20 bytes. The nested HostContext
+            // shares the parent's seq, so this is the value getMessage resolves for the
+            // created message — replay-stable under the DMC per-hop frame replay, unlike
+            // evmone's nonce-derived compute_create_address.
+            std::string key = std::to_string(m_blockHeader.get().number()) + "_" +
+                              std::to_string(m_contextID) + "_" + std::to_string(m_seq);
+            auto hash = m_hashImpl.get().hash(key);
+            std::copy_n(hash.data(), sizeof(out.bytes), out.bytes);
+            return out;
+        }
+        auto legacyAddr =
+            newLegacyEVMAddress(bytesConstRef(sender.bytes, sizeof(sender.bytes)), nonce);
+        std::copy(legacyAddr.begin(), legacyAddr.end(), out.bytes);
+        return out;
+    }
+
+    evmc_address create2AddressForOpcode(
+        const evmc_address& sender, const evmc_bytes32& salt, bytesConstRef initCode) const
+    {
+        // Historical v2 derivation (pre-0.24 getMessage's EVMC_CREATE2 case): the chain
+        // hasher over 0xff || sender || salt || chainHasher(initcode), last 20 bytes —
+        // the same formula as bcos::newCreate2EVMAddress. Upstream's
+        // compute_create2_address hashes with keccak256, which forks SM-crypto chains.
+        std::array<bcos::byte,
+            1 + sizeof(sender.bytes) + sizeof(salt.bytes) + crypto::HashType::SIZE>
+            buffer;
+        uint8_t* ptr = buffer.data();
+        *ptr++ = 0xff;
+        ptr = std::uninitialized_copy_n(sender.bytes, sizeof(sender.bytes), ptr);
+        ptr = std::uninitialized_copy(salt.bytes, sizeof(salt.bytes), ptr);
+        auto inputHash = m_hashImpl.get().hash(initCode);
+        ptr = std::uninitialized_copy(inputHash.begin(), inputHash.end(), ptr);
+        auto addressHash = m_hashImpl.get().hash(bytesConstRef(buffer.data(), buffer.size()));
+
+        evmc_address out{};
+        std::copy_n(addressHash.begin() + 12, sizeof(out.bytes), out.bytes);
+        return out;
+    }
+
+    static evmc_address createAddressHook(
+        evmc_host_context* context, const evmc_address* sender, uint64_t nonce)
+    {
+        auto& hostContext = *reinterpret_cast<HostContext*>(context);
+        return hostContext.createAddressForOpcode(*sender, nonce);
+    }
+
+    static evmc_address create2AddressHook(evmc_host_context* context, const evmc_address* sender,
+        const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size)
+    {
+        auto& hostContext = *reinterpret_cast<HostContext*>(context);
+        return hostContext.create2AddressForOpcode(
+            *sender, *salt, bytesConstRef(init_code, init_code_size));
+    }
 
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
@@ -781,7 +847,8 @@ private:
     void prepareCreate()
     {
         auto& ref = message();
-        bytesConstRef createCode(ref.input_data, ref.input_size);
+        bytesConstRef createCode(ref.input_data, ref.input_size, &HostContext::createAddressHook,
+            &HostContext::create2AddressHook);
         m_executable = std::make_shared<Executable>(createCode);
     }
 
@@ -858,7 +925,8 @@ private:
         }
         auto result = m_executable->m_vmInstance.execute(m_hostInterface,
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
-            ref.input_data, ref.input_size);
+            ref.input_data, ref.input_size, &HostContext::createAddressHook,
+            &HostContext::create2AddressHook);
         if (result.status_code == EVMC_SUCCESS)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);

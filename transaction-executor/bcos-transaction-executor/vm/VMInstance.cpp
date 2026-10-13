@@ -16,7 +16,10 @@ bcos::executor_v1::VMInstance::VMInstance(
 
 bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
-    const evmc_message* msg, const uint8_t* code, size_t codeSize)
+    const evmc_message* msg, const uint8_t* code, size_t codeSize,
+    evmc_address (*createAddressFn)(struct evmc_host_context*, const evmc_address*, uint64_t),
+    evmc_address (*create2AddressFn)(struct evmc_host_context*, const evmc_address*,
+        const evmc_bytes32*, const uint8_t*, size_t))
 {
     (void)code;  // execute uses pre-analyzed m_analysis
     (void)codeSize;
@@ -25,6 +28,11 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     evmc::VM evm{evmc_create_evmone()};
     auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
     evmoneVm->hash_fn = hostcontext::evm_hash_fn;
+    // PR #5689 review F1/F2: without these, evmone derives nested CREATE/CREATE2 addresses
+    // with keccak(rlp(sender,nonce)) / keccak256 — a different address than this lane stores
+    // (and, on SM-crypto chains, a different hasher).
+    evmoneVm->create_address_fn = createAddressFn;
+    evmoneVm->create2_address_fn = create2AddressFn;
     return EVMCResult(evmone::baseline::execute(*evmoneVm, *host, context, rev, *msg, *m_analysis));
 }
 
