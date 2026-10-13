@@ -68,30 +68,22 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 /// `Receipts.EncodeIndex` (core/types/receipt.go):
 ///   legacy  (txType 0x00) -> rlp([status, cumulativeGasUsed, logsBloom, logs])
 ///   typed                 -> <txType> || rlp([...])
-///   deposit (txType 0x7e) -> 0x7e || rlp([..., depositNonce, depositReceiptVersion])
-///   deposit, includeDepositNonceVersion=false -> 0x7e || rlp([status, cumGas, bloom, logs])
+///   deposit (txType 0x7e, receipt form)
+///                         -> 0x7e || rlp([status, cumGas, bloom, logs,
+///                                          depositNonce?, depositReceiptVersion?])
 /// where the deposit tail is present ONLY when the receipt carries depositReceiptVersion
 /// (Canyon+). A post-Regolith pre-Canyon deposit receipt carries depositNonce but EncodeIndex
 /// deliberately omits it from the trie leaf (op-geth's documented backwards-compatibility
 /// quirk) — this function reproduces that, so the fork matrix is driven by the producer
-/// (runDeposit sets the meta fields per fork), gated by the caller's includeDepositNonceVersion.
+/// (runDeposit sets the meta fields per fork), gated by presence of the version field.
 /// This is the value half of calculateReceiptsRoot; the caller keys the leaves by rlp(index).
 ///
 /// @param txType EIP-2718 type byte of the transaction that produced @p receipt (0 = legacy).
-/// @param includeDepositNonceVersion gates the deposit leaf shape on op-geth Receipts.
-///        EncodeIndex's version word: true requires and encodes nonce+version (Canyon+);
-///        false omits both - the pre-Canyon (Regolith) receipt hash inadvertently omitted
-///        the nonce upstream too. Ignored for non-deposit types.
 /// @throws EthReceiptEncodeError when the receipt is malformed: bloom not 256 bytes, an
 ///         unparseable cumulativeGasUsed, or a deposit receipt with a receipt version but
-///         no deposit nonce when includeDepositNonceVersion is true.
-[[nodiscard]] bcos::bytes encodeReceiptLeaf(bcos::protocol::TransactionReceipt const& receipt,
-    std::uint8_t txType, bool includeDepositNonceVersion);
-[[nodiscard]] inline bcos::bytes encodeReceiptLeaf(
-    bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType)
-{
-    return encodeReceiptLeaf(receipt, txType, /*includeDepositNonceVersion=*/true);
-}
+///         no deposit nonce.
+[[nodiscard]] bcos::bytes encodeReceiptLeaf(
+    bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType);
 
 /// Block-level logs bloom: bitwise OR of the per-receipt 256-byte blooms (each computed from its
 /// logs via bcos::getLogsBloom). Returns a zero bloom for an empty input. Forwarding reference:
@@ -100,8 +92,8 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 /// (not just any 1-byte-contiguous range): orBloom reads 256 bytes unconditionally, so a
 /// shorter buffer — e.g. a bcos::bytes decoded from receipt RLP — would be read past its end.
 template <::ranges::input_range Blooms>
-    requires std::same_as<std::remove_cvref_t<::ranges::range_value_t<Blooms>>, bcos::Bloom>
-bcos::Bloom calculateLogsBloom(Blooms&& blooms)
+requires std::same_as<std::remove_cvref_t<::ranges::range_value_t<Blooms>>, bcos::Bloom> bcos::Bloom
+calculateLogsBloom(Blooms&& blooms)
 {
     bcos::Bloom result{};
     for (auto const& bloom : blooms)

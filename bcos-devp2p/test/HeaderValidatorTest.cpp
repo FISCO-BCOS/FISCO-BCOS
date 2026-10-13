@@ -97,18 +97,15 @@ BOOST_AUTO_TEST_CASE(excessBlobGasGoldenVectors)
     auto parent = makeValidPair().parent;
     parent.excessBlobGas = u256(0);
     parent.blobGasUsed = u256(2 * kGasPerBlob);  // 262144
-    BOOST_CHECK_EQUAL(
-        computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(0));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(0));
 
     parent.excessBlobGas = u256(200000);
     parent.blobGasUsed = u256(2 * kGasPerBlob);
-    BOOST_CHECK_EQUAL(
-        computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(68928));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(68928));
 
     parent.excessBlobGas = u256(0);
     parent.blobGasUsed = u256(0);
-    BOOST_CHECK_EQUAL(
-        computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(0));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(0));
 }
 
 // EIP-7918 (Osaka): when the blob fee sits below the reserve price
@@ -196,8 +193,7 @@ BOOST_AUTO_TEST_CASE(postBpo2HeaderValidates)
     p.parent.blobGasUsed = u256(12 * kGasPerBlob);
     p.parent.baseFee = u256(1000000000);
     // Child has no blobs; its excess is recomputed under BPO2 + EIP-7918.
-    p.child.excessBlobGas =
-        computeNextExcessBlobGas(p.parent, kBpo2BlobSchedule, /*osaka=*/true);
+    p.child.excessBlobGas = computeNextExcessBlobGas(p.parent, kBpo2BlobSchedule, /*osaka=*/true);
     p.child.blobGasUsed = u256(0);
     auto result = validateHeaderPoS(p.child, p.parent, p.config);
     BOOST_CHECK(result.valid);
@@ -421,7 +417,7 @@ BOOST_AUTO_TEST_CASE(londonActivationBlockUsesInitialBaseFee)
 {
     auto p = makeValidPair();
     p.config.londonTime = 1600000001;  // the child block activates London
-    p.parent.baseFee.reset();           // parent is pre-London
+    p.parent.baseFee.reset();          // parent is pre-London
     p.child.baseFee = p.config.initialBaseFee;
     auto result = validateHeaderPoS(p.child, p.parent, p.config);
     BOOST_CHECK(result.valid);
@@ -438,9 +434,11 @@ BOOST_AUTO_TEST_CASE(londonActivationBlockUsesInitialBaseFee)
 BOOST_AUTO_TEST_CASE(excessBlobGasValidation)
 {
     // Parent with blob gas; child recomputes correctly. Prague activates after
-    // the child, so the Cancun schedule (target 3) applies.
+    // the child, so the Cancun schedule (target 3) applies — and the child must
+    // not carry the Prague-only requestsHash (symmetric presence rule).
     auto p = makeValidPair();
     p.config.pragueTime = 1600000002;
+    p.child.requestsHash.reset();
     p.parent.excessBlobGas = u256(200000);
     p.parent.blobGasUsed = u256(2 * kGasPerBlob);
     p.child.excessBlobGas =
@@ -474,8 +472,8 @@ BOOST_AUTO_TEST_CASE(pragueBlobScheduleRaisesBlobLimits)
 {
     // Prague (EIP-7691): target 6 / max 9 blobs per block.
     auto p = makeValidPair();
-    p.config.cancunTime = 0;            // Cancun from genesis
-    p.config.pragueTime = 1600000001;   // the child activates Prague
+    p.config.cancunTime = 0;           // Cancun from genesis
+    p.config.pragueTime = 1600000001;  // the child activates Prague
     p.parent.excessBlobGas = u256(0);
     p.parent.blobGasUsed = u256(0);
     p.child.excessBlobGas = u256(0);
@@ -498,12 +496,12 @@ BOOST_AUTO_TEST_CASE(pragueExcessBlobGasRecomputation)
     parent.blobGasUsed = u256(5 * kGasPerBlob);
     BOOST_CHECK_EQUAL(
         computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(2 * kGasPerBlob));
-    BOOST_CHECK_EQUAL(
-        computeNextExcessBlobGas(parent, kPragueBlobSchedule, false), u256(0));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kPragueBlobSchedule, false), u256(0));
 
     // The validator picks the schedule by the child header timestamp.
     auto p = makeValidPair();
     p.config.pragueTime = 1600000002;  // still Cancun at the child block
+    p.child.requestsHash.reset();      // Prague-only field must be absent pre-Prague
     p.parent.excessBlobGas = u256(0);
     p.parent.blobGasUsed = u256(5 * kGasPerBlob);
     p.child.excessBlobGas = u256(2 * kGasPerBlob);

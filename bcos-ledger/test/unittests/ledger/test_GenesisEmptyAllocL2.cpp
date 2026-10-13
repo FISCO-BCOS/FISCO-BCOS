@@ -14,8 +14,8 @@
  *  limitations under the License.
  *
  * @file test_GenesisEmptyAllocL2.cpp
- * @brief Empty-alloc L2 genesis must publish mpt::emptyRootHash() as the genesis
- *        stateRoot, not a zero h256. The combination (feature_l2_ethereum_compat
+ * @brief Empty-alloc Ethereum-lane genesis must publish mpt::emptyRootHash() as the genesis
+ *        stateRoot, not a zero h256. The combination (executor_version >= 2
  *        + no allocs) is rejected by NodeConfig::validateL2Invariants, but
  *        buildGenesisBlock is callable directly, and commitTrie() recognizes
  *        only emptyRootHash() as the from-empty marker — a zero parent root
@@ -49,16 +49,16 @@ struct GenesisEmptyAllocL2Fixture
 {
     GenesisEmptyAllocL2Fixture() { m_blockFactory = createBlockFactory(createNormalCryptoSuite()); }
 
-    // l2 flag on, allocs empty — constructed directly, bypassing
-    // NodeConfig::validateL2Invariants (which forbids this combination).
+    // Ethereum lane on (executor_version >= 2), allocs empty — constructed
+    // directly, bypassing NodeConfig::validateL2Invariants (which forbids this
+    // combination).
     static GenesisConfig makeEmptyAllocL2Genesis()
     {
         GenesisConfig genesisConfig;
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         genesisConfig.m_chainID = "901";
         genesisConfig.m_groupID = "group0";
         return genesisConfig;
@@ -120,6 +120,29 @@ BOOST_AUTO_TEST_CASE(GenesisRootIsUsableAsCommitTrieParent)
         // Same root the stateless from-empty core derives for this single entry.
         std::map<bcos::h256, bcos::bytes> entries{{key, bcos::bytes{0x42}}};
         BOOST_CHECK_EQUAL(result.root, mpt::computeTrieRoot(entries).root);
+    }());
+}
+
+// The restart guard recomputes the genesis state root from the (empty) alloc set
+// and compares it against the published header. A second buildGenesisBlock over
+// the SAME storage — the node-restart path — must therefore succeed; if the
+// publish path and the guard ever read different expressions, this fails with
+// "genesis allocs changed since first init".
+BOOST_AUTO_TEST_CASE(EmptyAllocGenesisSurvivesRebuild)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        auto first = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*first, makeEmptyAllocL2Genesis(), param));
+
+        auto second = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        BOOST_CHECK(co_await ledger::buildGenesisBlock(*second, makeEmptyAllocL2Genesis(), param));
     }());
 }
 

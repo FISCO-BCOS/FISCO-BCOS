@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include "libinitializer/BlockImportSummary.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/Initializer.h"
@@ -28,6 +29,11 @@
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <utility>
+
+namespace bcos::rpc
+{
+class NodeService;
+}  // namespace bcos::rpc
 
 namespace bcos::node
 {
@@ -50,6 +56,15 @@ public:
         bcos::initializer::Params const& _params, bcos::tool::NodeConfig const& _nodeConfig);
     virtual void start();
     virtual void stop();
+    /// Offline RLP block import (`--import-blocks`, the hive simulator contract).
+    /// Must be called AFTER init(Params) (full node init) and INSTEAD of start():
+    /// imports the blocks through the EL-mode verifier lane, then returns — the
+    /// caller exits 0 and the entrypoint starts the node normally, or exits 1
+    /// when nothing could be imported on a fresh ledger (imported == 0,
+    /// skipped > 0, head never advanced past genesis). Throws on hard
+    /// errors (bad path, malformed RLP framing, non-EL config); per-block failures
+    /// are logged and skipped. Ethereum L1 EL mode (executor v2) only.
+    virtual bcos::initializer::BlockImportSummary importEthereumBlocks(std::string const& _path);
     virtual bcos::initializer::Initializer::Ptr nodeInitializer() { return m_nodeInitializer; }
 
 protected:
@@ -74,6 +89,10 @@ private:
 
     // Ethereum L1 EL-mode self-sync driver (only set when [ethereum] mode=el).
     std::shared_ptr<bcos::initializer::EthereumSyncInitializer> m_ethereumSync;
+    // The NodeService built in init(config, genesis), kept weak so the EL wiring in
+    // init(params) — which runs AFTER that — can still hang the tx-gossip announce hook
+    // on it. The RPC (m_rpc) owns the strong reference.
+    std::weak_ptr<bcos::rpc::NodeService> m_nodeService;
     // OP-Stack EL-mode self-sync driver (only set when [ethereum] mode=opstack-el).
     std::shared_ptr<bcos::initializer::OpStackSyncInitializer> m_opStackSync;
 };

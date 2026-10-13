@@ -32,6 +32,7 @@
 #include <cctype>
 #include <charconv>
 #include <evmc/evmc.hpp>
+#include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <optional>
@@ -48,6 +49,12 @@ namespace bcos::ledger
 /// (explicit startup failure) rather than fall back to a compile-time default that could
 /// differ between binaries (a silent state-root fork).
 DERIVE_BCOS_EXCEPTION(InvalidEVMCRevisionConfig);
+
+/// Thrown when a persisted op_eip1559_params SYS_CONFIG value cannot be parsed — its own
+/// domain type, so consumers can classify EIP-1559 row faults apart from evmc_revision
+/// faults (same policy: the triple prices every pre-Holocene block, so a corrupt value
+/// must halt loudly rather than degrade to a preset).
+DERIVE_BCOS_EXCEPTION(InvalidOpEip1559Config);
 
 /// Thrown when a persisted web3_chain_id SYS_CONFIG value cannot be parsed. The value
 /// feeds the EVM CHAINID opcode, so a corrupt value must halt loudly rather than
@@ -161,6 +168,12 @@ public:
 
     int64_t difficulty() const { return m_difficulty; }
     void setDifficulty(int64_t d) { m_difficulty = d; }
+
+    /// The committed head block's EIP-1559 base fee (protocol::blockBaseFee over its header):
+    /// 0 on a native FISCO chain, the real value on the Ethereum and OP lanes; nullopt = no
+    /// head header was read. Distinct from gasPrice(), the tx_gas_price SYSTEM config row.
+    std::optional<u256> const& baseFeePerGas() const { return m_baseFeePerGas; }
+    void setBaseFeePerGas(std::optional<u256> baseFee) { m_baseFeePerGas = std::move(baseFee); }
 
     // EIP-4399 prev_randao (block mixHash). Used by the PREVRANDAO/DIFFICULTY
     // opcode for Paris+ revisions. Kept in the ledger config because the BCOS
@@ -290,6 +303,7 @@ private:
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {DEFAULT_GAS_LIMIT, 0};
     std::tuple<std::string, protocol::BlockNumber> m_gasPrice = {"0x0", 0};
     int64_t m_difficulty = 0;
+    std::optional<u256> m_baseFeePerGas;
     evmc::bytes32 m_prevRandao{};
     std::optional<uint64_t> m_excessBlobGas;
     /// The OP lane's declared EIP-1559 triple, read from the op_eip1559_params
@@ -513,7 +527,16 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
     oss << "0:" << evmcRevisionName(base);
     for (auto const& [block, rev] : forks)
     {
-        if (block <= 0)
+        if (block < 0)
+        {
+            // Cannot be spelled: the format has no negative heights, so emitting one would
+            // make the row decode to a different schedule than the map describes (the parser
+            // refuses such a row outright).
+            BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                      "negative block number " + std::to_string(block) +
+                                      " cannot be encoded into an evmc_revision config value"));
+        }
+        if (block == 0)
         {
             continue;  // block-0 entry is already emitted as the base
         }
@@ -522,35 +545,112 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
     return oss.str();
 }
 
-/// Parse a SYS_CONFIG value string produced by encodeEVMCRevisionConfig and populate
-/// @p ledgerConfig's EVMC revision settings (explicit revision + fork transitions).
+/// The row invariant both the SYS_CONFIG reader and the genesis writer enforce:
+/// zeros are arithmetic poison (gasTarget = gasLimit/elasticity, delta/denominator)
+/// and the Holocene extraData encodes each field as u32, so anything wider can
+/// never be emitted into a header. Returns the violation text, or nullopt when the
+/// triple is row-encodable. One rule set — a writer that skips it mints a
+/// genesis-frozen row the reader refuses on every later boot.
+[[nodiscard]] inline std::optional<std::string> opEip1559ParamsRowProblem(
+    const bcos::engine::OpEip1559Params& params)
+{
+    if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
+    {
+        return std::string("zero elasticity/denominator/denominatorCanyon");
+    }
+    if (params.elasticity > std::numeric_limits<std::uint32_t>::max() ||
+        params.denominator > std::numeric_limits<std::uint32_t>::max() ||
+        params.denominatorCanyon > std::numeric_limits<std::uint32_t>::max())
+    {
+        return std::string("elasticity/denominator/denominatorCanyon exceeding uint32");
+    }
+    return std::nullopt;
+}
+
 /// Parse the op_eip1559_params SYS_CONFIG row ("elasticity,denominator,denominatorCanyon").
 /// Same fail-closed policy as applyEVMCRevisionConfig: a malformed persisted value must
 /// halt loudly rather than silently degrading the fee prediction to a preset.
 inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value)
 {
     auto parseField = [&value](std::string_view field) -> std::uint64_t {
-        std::uint64_t out = 0;
-        auto [ptr, ec] = std::from_chars(field.data(), field.data() + field.size(), out);
-        if (ec != std::errc{} || ptr != field.data() + field.size())
+        // One acceptance window with the loaders and the codec (parseConfigUint64): the
+        // whole string must be consumed. The u32 bound is the Holocene extraData width
+        // every field must fit — a foreign row must fail the same way instead of
+        // silently carrying a value no header can emit.
+        auto const parsed =
+            parseConfigUint64(field, ConfigUint64Options{
+                                         .maxValue = std::numeric_limits<std::uint32_t>::max(),
+                                     });
+        if (parsed.error == ConfigUint64Error::outOfRange)
         {
             BOOST_THROW_EXCEPTION(
-                InvalidEVMCRevisionConfig()
+                InvalidOpEip1559Config() << errinfo_comment(
+                    "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
+        }
+        if (!parsed.value.has_value())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidOpEip1559Config()
                 << errinfo_comment("cannot parse op_eip1559_params value: " + std::string(value)));
         }
-        return out;
+        return *parsed.value;
     };
     auto comma1 = value.find(',');
     auto comma2 =
         comma1 == std::string_view::npos ? std::string_view::npos : value.find(',', comma1 + 1);
     if (comma1 == std::string_view::npos || comma2 == std::string_view::npos)
     {
-        BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+        BOOST_THROW_EXCEPTION(InvalidOpEip1559Config() << errinfo_comment(
                                   "cannot parse op_eip1559_params value: " + std::string(value)));
     }
-    return bcos::engine::OpEip1559Params{.elasticity = parseField(value.substr(0, comma1)),
+    auto params = bcos::engine::OpEip1559Params{.elasticity = parseField(value.substr(0, comma1)),
         .denominator = parseField(value.substr(comma1 + 1, comma2 - comma1 - 1)),
         .denominatorCanyon = parseField(value.substr(comma2 + 1))};
+    // The row invariant is shared with the genesis writer (opEip1559ParamsRowProblem),
+    // so a corrupt or foreign-written row fails as a named config error at boot instead
+    // of a divide-by-zero inside fee prediction — and the writer cannot mint a row this
+    // parser would refuse.
+    if (auto const problem = opEip1559ParamsRowProblem(params))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidOpEip1559Config() << errinfo_comment(
+                "op_eip1559_params value carries a " + *problem + ": " + std::string(value)));
+    }
+    return params;
+}
+
+/// The OP-lane boot probe's eip1559 check, symmetric with the schedule one except on the
+/// absent-recorded side: the chain's
+/// recorded triple (the genesis-frozen SYS_CONFIG row, absent on chains that never declared
+/// [op_eip1559]) must equal the triple THIS node will price with — effectiveOpEip1559 of the
+/// local section, i.e. the preset when it declares nothing. An ABSENT row still compares
+/// (against the preset), unlike the schedule probe's skip: the preset is a binary-side
+/// constant every unrecording node prices with, so a declared non-preset triple is a real
+/// divergence even with nothing recorded. A dropped or edited local section
+/// otherwise makes this node's header validation and zero-param substitution use constants the
+/// chain did not record, which the corpus devnet already demonstrated once (op-geth's own
+/// denominator vs the preset). Returns the violation text, or nullopt when the node may start;
+/// a malformed row throws from parseOpEip1559Params, which is the probe's parse check.
+[[nodiscard]] inline std::optional<std::string> opEip1559BootProbeProblem(
+    std::optional<std::string> const& recordedRow,
+    std::optional<bcos::engine::OpEip1559Params> const& localDeclared)
+{
+    auto const localEffective = bcos::engine::effectiveOpEip1559(localDeclared);
+    auto const recordedEffective = recordedRow.has_value() ?
+                                       parseOpEip1559Params(*recordedRow) :
+                                       bcos::engine::effectiveOpEip1559(std::nullopt);
+    if (localEffective == recordedEffective)
+    {
+        return std::nullopt;
+    }
+    auto const toText = [](bcos::engine::OpEip1559Params const& params) {
+        return std::to_string(params.elasticity) + "," + std::to_string(params.denominator) + "," +
+               std::to_string(params.denominatorCanyon);
+    };
+    return "the node's effective [op_eip1559] (" + toText(localEffective) +
+           ") does not match the chain's recorded triple (" + toText(recordedEffective) +
+           ") — the chain prices with the recorded one; declare a matching [op_eip1559] or "
+           "remove it";
 }
 
 /// Inverse of the genesis op_fork_schedule row write (Ledger::buildGenesisBlock): the row
@@ -559,6 +659,12 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
 /// sentinel, matching the [op_fork_timestamps] shorthand shape). Fail-closed on a
 /// malformed row — parseOpForkSchedule throws — same policy as evmc_revision and
 /// op_eip1559_params.
+///
+/// DELIBERATE NARROWING, load-bearing: every OTHER rung of a multi-rung row is dropped to
+/// the sentinel, so resolveOpFork over the result answers the isthmus baseline for a
+/// timestamp inside a declared middle rung. A consumer needing another rung must parse the
+/// row text itself (parseOpForkSchedule); do not widen the extract without auditing every
+/// consumer that reads the sentinel as "not scheduled".
 [[nodiscard]] inline OpForkSchedule opForkScheduleFromCanonical(std::string_view canonical)
 {
     OpForkSchedule schedule;
@@ -576,6 +682,8 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
     return schedule;
 }
 
+/// Parse a SYS_CONFIG value string produced by encodeEVMCRevisionConfig and populate
+/// @p ledgerConfig's EVMC revision settings (explicit revision + fork transitions).
 inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view value)
 {
     ledgerConfig.clearForkTransitions();
@@ -620,6 +728,16 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         {
             BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
                                       "malformed block number '" + std::string(blockStr) +
+                                      "' in evmc_revision config value: " + std::string(value)));
+        }
+        // BlockNumber is SIGNED and from_chars accepts a leading '-' for it: a foreign or
+        // hand-written row spelling "-5:cancun" used to be accepted, and because the encoder can
+        // only spell heights above zero the round trip silently moved that transition onto the
+        // block-0 base — the same blocks then executed under a different revision.
+        if (block < 0)
+        {
+            BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                      "negative block number '" + std::string(blockStr) +
                                       "' in evmc_revision config value: " + std::string(value)));
         }
         if (auto rev = evmcRevisionFromName(name); rev)

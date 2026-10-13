@@ -156,17 +156,14 @@ void stampForkFields(OpPair& p)
 // boilerplate from the presence/gating tests.
 u256 expectedBaseFee(OpPair const& p)
 {
-    bool parentHolocene =
-        bcos::ledger::resolveOpFork(p.config.forkSchedule, static_cast<uint64_t>(p.parent.timestamp)) >=
-        OpFork::Holocene;
-    bool parentJovian =
-        bcos::ledger::resolveOpFork(p.config.forkSchedule, static_cast<uint64_t>(p.parent.timestamp)) >=
-        OpFork::Jovian;
-    uint64_t denominator =
-        bcos::ledger::resolveOpFork(p.config.forkSchedule, static_cast<uint64_t>(p.child.timestamp)) >=
-                OpFork::Canyon ?
-            p.config.eip1559DenominatorCanyon :
-            p.config.eip1559DenominatorBedrock;
+    bool parentHolocene = bcos::ledger::resolveOpFork(p.config.forkSchedule,
+                              static_cast<uint64_t>(p.parent.timestamp)) >= OpFork::Holocene;
+    bool parentJovian = bcos::ledger::resolveOpFork(p.config.forkSchedule,
+                            static_cast<uint64_t>(p.parent.timestamp)) >= OpFork::Jovian;
+    uint64_t denominator = bcos::ledger::resolveOpFork(p.config.forkSchedule,
+                               static_cast<uint64_t>(p.child.timestamp)) >= OpFork::Canyon ?
+                               p.config.eip1559DenominatorCanyon :
+                               p.config.eip1559DenominatorBedrock;
     std::span<const bcos::byte> extra{p.parent.extraData.data(), p.parent.extraData.size()};
     return bcos::engine::calcOpBaseFeeFromFields(p.parent.gasLimit, p.parent.gasUsed,
         *p.parent.baseFee, p.parent.blobGasUsed, extra, parentHolocene, parentJovian, denominator,
@@ -217,6 +214,68 @@ BOOST_AUTO_TEST_CASE(canyonDenominatorSwitch)
     BOOST_CHECK_EQUAL(expectedBaseFee(p), u256(1020000000));
     p.child.baseFee = u256(1020000000);
     BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
+}
+
+// A chain declaring its own [op_eip1559] pair must have its pre-Holocene headers
+// re-priced with the DECLARED constants, not the superchain preset: OpStackSyncInitializer
+// threads the declared triple into this config (review AI), and a preset-priced
+// header on such a chain is a genuine mismatch the validator must reject.
+BOOST_AUTO_TEST_CASE(declaredEip1559TripleDrivesPreHolocenePricing)
+{
+    auto p = makeBedrockPair();
+    p.config.eip1559DenominatorBedrock = 70;  // declared pair, not the 50/6 preset
+    // deltaFee = 1e9 * 5M/5M/70 = +14'285'714 (floor)
+    p.child.baseFee = expectedBaseFee(p);
+    BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
+
+    // The preset-priced baseFee (denominator 50 -> 1020000000) must now FAIL on the
+    // declared chain: the declared pair is the chain's pricing contract, and validating
+    // with the preset would accept wrongly-priced headers on every declared chain.
+    auto presetPriced = makeBedrockPair();
+    presetPriced.config.eip1559DenominatorBedrock = 70;
+    BOOST_CHECK(
+        !validateOpHeader(presetPriced.child, presetPriced.parent, presetPriced.config).valid);
+}
+
+// The validator consumes all THREE chain-config parameters, but the cases above vary only
+// the Bedrock denominator — a regression that hardcodes the preset elasticity (6) or the
+// preset Canyon denominator (250) passes every one of them. Pin both remaining fields the
+// same way: declared-priced header accepted, preset-priced header rejected.
+BOOST_AUTO_TEST_CASE(declaredElasticityAndCanyonDenominatorDrivePricing)
+{
+    // Declared elasticity 4 (preset 6): target = 30M/4 = 7.5M, delta = 10M - 7.5M = 2.5M,
+    // deltaFee = 1e9 * 2.5M / 7.5M / 50 = +6'666'666 (floor).
+    auto p = makeBedrockPair();
+    p.config.eip1559Elasticity = 4;
+    BOOST_CHECK_EQUAL(expectedBaseFee(p), u256(1006666666));
+    p.child.baseFee = expectedBaseFee(p);
+    BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
+
+    // The preset-elasticity price (1020000000) must fail on the declared chain.
+    auto presetElasticity = makeBedrockPair();
+    presetElasticity.config.eip1559Elasticity = 4;
+    BOOST_CHECK(
+        !validateOpHeader(presetElasticity.child, presetElasticity.parent, presetElasticity.config)
+             .valid);
+
+    // Declared Canyon denominator 300 (preset 250), keyed on the CHILD's activation:
+    // deltaFee = 1e9 * 5M / 5M / 300 = +3'333'333 (floor).
+    auto c = makeBedrockPair();
+    c.config.forkSchedule.m_canyonTime = kChildTs;  // child is the first Canyon block
+    c.config.eip1559DenominatorCanyon = 300;
+    stampForkFields(c);
+    BOOST_CHECK_EQUAL(expectedBaseFee(c), u256(1003333333));
+    c.child.baseFee = expectedBaseFee(c);
+    BOOST_CHECK(validateOpHeader(c.child, c.parent, c.config).valid);
+
+    // The preset-Canyon price (1004000000, denominator 250) must fail on the declared chain.
+    auto presetCanyon = makeBedrockPair();
+    presetCanyon.config.forkSchedule.m_canyonTime = kChildTs;
+    presetCanyon.config.eip1559DenominatorCanyon = 300;
+    stampForkFields(presetCanyon);
+    presetCanyon.child.baseFee = u256(1004000000);
+    BOOST_CHECK(
+        !validateOpHeader(presetCanyon.child, presetCanyon.parent, presetCanyon.config).valid);
 }
 
 // Holocene: the EIP-1559 parameters come from the PARENT's 9-byte extraData
@@ -284,7 +343,7 @@ BOOST_AUTO_TEST_CASE(jovianMinBaseFeeFloorAndDaMetering)
     p.config.forkSchedule.m_canyonTime = kParentTs;  // Jovian implies the whole ladder below it
     p.config.forkSchedule.m_ecotoneTime = kParentTs;
     p.config.forkSchedule.m_holoceneTime = kParentTs;
-    p.config.forkSchedule.m_jovianTime = kParentTs;                       // parent already Jovian
+    p.config.forkSchedule.m_jovianTime = kParentTs;        // parent already Jovian
     p.parent.extraData = jovianExtra(100, 4, 2000000000);  // 2 gwei floor
     p.parent.blobGasUsed = u256(20000000);                 // DA footprint > gasUsed
     p.parent.gasUsed = 1000000;

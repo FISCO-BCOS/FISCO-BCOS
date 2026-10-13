@@ -40,14 +40,6 @@ namespace
 constexpr auto kBlockVersion = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_16_0_VERSION);
 constexpr std::string_view c_senderHex = "9015bca99e8d49107c33b2cac14013a8dfd2c1b0";
 
-ledger::Features makeL2Features()
-{
-    ledger::Features features;
-    features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-    features.setActivationBlock(ledger::Features::Flag::feature_l2_ethereum_compat, 0);
-    return features;
-}
-
 evmc_address decodeAddress(std::string_view hex)
 {
     evmc_address address{};
@@ -68,7 +60,8 @@ struct L2MptStorageFixture
 
     L2MptStorageFixture()
     {
-        ledgerConfig.setFeatures(makeL2Features());
+        // The Ethereum lane (executor_version >= 2) builds the MPT from genesis on.
+        ledgerConfig.setExecutorVersion(bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         auto address = decodeAddress(c_senderHex);
         ledger::account::EVMAccount account{
             backendStorage, address, bcos::ledger::account::AddressTableMode::Hex};
@@ -100,10 +93,10 @@ BOOST_FIXTURE_TEST_CASE(l2GenesisUsesMptRootNotXor, L2MptStorageFixture)
     auto mptHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
     mptHeader->setNumber(0);
     mptHeader->setVersion(kBlockVersion);
-    auto mptRoot = task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
-        mptView, *mptHeader, ledgerConfig, *cryptoSuite->hashImpl(), *blockFactory,
-        commitObserver))
-                       .stateRoot;
+    auto mptRoot =
+        task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(mptView, *mptHeader,
+                           ledgerConfig, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
+            .stateRoot;
 
     BOOST_CHECK_NE(mptRoot, xorRoot);
 }
@@ -118,9 +111,10 @@ BOOST_FIXTURE_TEST_CASE(nonL2ChainKeepsXorRoot, L2MptStorageFixture)
 
     auto xorRoot = task::syncWait(bcos::scheduler_v1::xorStateRoot(
         view, header->version(), *cryptoSuite->hashImpl(), legacyConfig.features()));
-    auto resolved = task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
-        view, *header, legacyConfig, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
-                        .stateRoot;
+    auto resolved =
+        task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(view, *header,
+                           legacyConfig, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
+            .stateRoot;
     BOOST_CHECK_EQUAL(resolved, xorRoot);
 }
 
@@ -157,8 +151,8 @@ BOOST_FIXTURE_TEST_CASE(l2BlocksChainParentRootAndPublishHeader, L2MptStorageFix
     auto const resolve = [&](RealGlobalStateStorage::ViewType& view,
                              bcos::protocol::BlockHeader& header,
                              ledger::LedgerConfig const& config) {
-        return task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
-            view, header, config, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
+        return task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(view, header,
+                                  config, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
             .stateRoot;
     };
 
@@ -214,10 +208,9 @@ BOOST_FIXTURE_TEST_CASE(l2BlocksChainParentRootAndPublishHeader, L2MptStorageFix
         auto header = control.blockFactory->blockHeaderFactory()->createBlockHeader();
         header->setNumber(2);
         header->setVersion(kBlockVersion);
-        BOOST_CHECK_THROW(
-            task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(view, *header,
-                control.ledgerConfig, *control.cryptoSuite->hashImpl(), *control.blockFactory,
-                control.commitObserver)),
+        BOOST_CHECK_THROW(task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
+                              view, *header, control.ledgerConfig, *control.cryptoSuite->hashImpl(),
+                              *control.blockFactory, control.commitObserver)),
             bcos::ledger::NotFoundBlockHeader);
     }
 }

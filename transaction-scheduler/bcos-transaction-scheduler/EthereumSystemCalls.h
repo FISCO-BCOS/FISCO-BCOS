@@ -45,9 +45,10 @@
 #include "ethereum-executor/EthSystemCalls.h"
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
-#include <evmc/evmc.hpp>
 #include <cstring>
+#include <evmc/evmc.hpp>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -77,8 +78,7 @@ inline executor_v1::eth::EthBlockInfo blockInfoForSystemCalls(
                              std::numeric_limits<uint64_t>::max() :
                              static_cast<uint64_t>(*ethHeader.baseFee);
     }
-    std::memcpy(
-        block.prev_randao.bytes, ethHeader.prevRandao.data(), sizeof(evmc_bytes32::bytes));
+    std::memcpy(block.prev_randao.bytes, ethHeader.prevRandao.data(), sizeof(evmc_bytes32::bytes));
     if (ethHeader.parentBeaconRoot)
     {
         std::memcpy(block.parent_beacon_block_root.bytes, ethHeader.parentBeaconRoot->data(),
@@ -100,14 +100,17 @@ inline evmc::bytes32 toEvmcBytes32(bcos::h256 const& hash)
 /// silently when the contract has no code (per the EIPs). The state updates are
 /// written into `view` in place; returns an error string on failure.
 /// Call only when the block's revision >= EVMC_CANCUN.
+/// @param storageErrorSlot the block's shared swallowed-read recorder
+///        (EthStorageErrorGuard.h); null keeps the legacy fail-safe reads.
 template <class Storage>
-task::Task<std::optional<std::string>> applyBlockStartSystemCalls(
-    Storage& view, evmc::VM& vm, protocol::EthBlockHeaderData const& ethHeader,
-    evmc_revision rev)
+task::Task<std::optional<std::string>> applyBlockStartSystemCalls(Storage& view, evmc::VM& vm,
+    protocol::EthBlockHeaderData const& ethHeader, evmc_revision rev,
+    std::shared_ptr<executor_v1::eth::EthStorageErrorSlot> storageErrorSlot = nullptr)
 {
     co_return co_await executor_v1::eth::systemCallBlockStart(view, vm,
         eth_system_calls_detail::blockInfoForSystemCalls(ethHeader),
-        eth_system_calls_detail::toEvmcBytes32(ethHeader.parentInfo.blockHash), rev);
+        eth_system_calls_detail::toEvmcBytes32(ethHeader.parentInfo.blockHash), rev,
+        executor_v1::eth::EthL1Policy{}, std::move(storageErrorSlot));
 }
 
 struct BlockEndSystemCallsResult
@@ -121,13 +124,16 @@ struct BlockEndSystemCallsResult
 /// here — on a real chain both contracts are deployed by ordinary pre-fork
 /// transactions, so a failure means divergent local state.
 /// Call only when the block's revision >= EVMC_PRAGUE.
+/// @param storageErrorSlot the block's shared swallowed-read recorder
+///        (EthStorageErrorGuard.h); null keeps the legacy fail-safe reads.
 template <class Storage>
-task::Task<BlockEndSystemCallsResult> applyBlockEndSystemCalls(
-    Storage& view, evmc::VM& vm, protocol::EthBlockHeaderData const& ethHeader,
-    evmc_revision rev)
+task::Task<BlockEndSystemCallsResult> applyBlockEndSystemCalls(Storage& view, evmc::VM& vm,
+    protocol::EthBlockHeaderData const& ethHeader, evmc_revision rev,
+    std::shared_ptr<executor_v1::eth::EthStorageErrorSlot> storageErrorSlot = nullptr)
 {
-    auto result = co_await executor_v1::eth::systemCallBlockEnd(
-        view, vm, eth_system_calls_detail::blockInfoForSystemCalls(ethHeader), rev);
+    auto result = co_await executor_v1::eth::systemCallBlockEnd(view, vm,
+        eth_system_calls_detail::blockInfoForSystemCalls(ethHeader), rev,
+        executor_v1::eth::EthL1Policy{}, std::move(storageErrorSlot));
     co_return BlockEndSystemCallsResult{std::move(result.error), std::move(result.requests)};
 }
 }  // namespace bcos::scheduler_v1

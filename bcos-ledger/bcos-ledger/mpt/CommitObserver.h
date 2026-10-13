@@ -22,6 +22,9 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <functional>
+#include <optional>
 #include <vector>
 
 namespace bcos::ledger::mpt
@@ -47,6 +50,11 @@ class CommitObserver
 public:
     CommitObserver() = default;
     virtual ~CommitObserver() = default;
+
+    /// The stateRoot of block @p n (nullopt when that block's header is unavailable),
+    /// shared by the rollback hook below and MPTPruner's startup rebuild.
+    using StateRootLookup =
+        std::function<bcos::task::Task<std::optional<bcos::h256>>(bcos::protocol::BlockNumber)>;
 
     /// Timing contract (spec §5.6): the commit flow calls this AFTER the block's WriteBatch
     /// has landed on disk and BEFORE lastCommittedBlockNumber advances, so the delta the
@@ -75,6 +83,20 @@ public:
     /// because the pruner's set-based fallback reading of an untallied delta would over-count.
     /// NoopCommitObserver keeps the default; MPTPruner overrides it to true.
     virtual bool needsRefCountDeltas() const noexcept { return false; }
+
+    /// EL-mode shallow-reorg hook (EthereumChainRollback.h): called on the commit path AFTER a
+    /// rollback to @p newHead has landed (its WriteBatch merged), so the observer can re-sync
+    /// whatever in-memory state it derives from the committed chain. @p stateRootAt resolves
+    /// post-rollback state roots (every queried block is <= newHead, whose rows the rollback
+    /// keeps). The default is a no-op — an observer that keeps no per-chain state (Noop) has
+    /// nothing to rebuild. MAY throw: a failed rebuild leaves the observer's state undefined,
+    /// which must surface to the rollback caller rather than run on with a stale view of the
+    /// chain.
+    virtual bcos::task::Task<void> coOnRollback(
+        bcos::protocol::BlockNumber /*newHead*/, StateRootLookup /*stateRootAt*/)
+    {
+        co_return;
+    }
 
 protected:
     // Protected, not public: derived observers keep their own defaults, but outside code cannot

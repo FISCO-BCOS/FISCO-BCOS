@@ -30,7 +30,7 @@
 namespace bcos::initializer
 {
 /// The on-chain executor_version and its activation block, read once for both the lane
-/// wiring (Initializer) and the OP-mode boot invariant (validateOpModeGenesisOnly).
+/// wiring (Initializer) and the genesis-only boot invariant (validateOpModeGenesisOnly).
 struct OnChainExecutorVersion
 {
     int version = 0;

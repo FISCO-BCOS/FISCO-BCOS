@@ -20,8 +20,12 @@
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/engine/OpForkId.h>
+#include <bcos-framework/ledger/ConfigUint64.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
+#include <magic_enum/magic_enum.hpp>
 
 #include <array>
 #include <cctype>
@@ -64,21 +68,85 @@ inline constexpr std::string_view c_legacyJovianCanonical = "0:jovian";
 
 namespace detail
 {
-// Protocol order is the array index; bcos-evm's OpFork enum must match it 1:1.
-// op-geth params/config_op.go, whose OP EL fork fields have no Delta entry: delta
-// does not affect the execution layer, so it is not nameable here. The count is
-// deduced from the list, so the two cannot drift apart.
-inline constexpr auto c_opForkNames = std::to_array<std::string_view>({
-    "regolith",
-    "canyon",
-    "ecotone",
-    "fjord",
-    "granite",
-    "holocene",
-    "isthmus",
-    "jovian",
-    "karst",
-});
+// The nameable rungs — every ladder row carrying an Engine-API fork id
+// (OpForkId.h c_opForkLadder) — in protocol order. Derived, not re-listed: a rung
+// cannot be nameable here while missing from the ladder, or the reverse.
+inline constexpr auto c_opForkNames = [] {
+    std::array<std::string_view, magic_enum::enum_count<bcos::engine::OpForkId>()> names{};
+    std::size_t n = 0;
+    for (auto const& row : bcos::engine::c_opForkLadder)
+    {
+        if (row.engineForkId.has_value())
+        {
+            names[n++] = row.name;
+        }
+    }
+    return names;
+}();
+
+// Pin the spelling AND the order to the ledger enum (declaration order): the table
+// is the ladder minus its L1-only rungs (Bedrock, Delta are never decodable OP names).
+// Without this a rung renamed on either side drifts into silently accepting the old
+// text — the same magic_enum idiom LedgerTypeDef.h uses for the SYS_CONFIG keys.
+static_assert(
+    [] {
+        auto const asciiLowerEqual = [](std::string_view a, std::string_view b) {
+            if (a.size() != b.size())
+            {
+                return false;
+            }
+            for (std::size_t k = 0; k < a.size(); ++k)
+            {
+                auto const lower = [](char c) {
+                    return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+                };
+                if (lower(a[k]) != lower(b[k]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        };
+        std::size_t j = 0;
+        for (auto const name : magic_enum::enum_names<OpFork>())
+        {
+            if (name == magic_enum::enum_name(OpFork::Bedrock) ||
+                name == magic_enum::enum_name(OpFork::Delta))
+            {
+                continue;
+            }
+            if (j >= c_opForkNames.size() || !asciiLowerEqual(name, c_opForkNames[j]))
+            {
+                return false;
+            }
+            ++j;
+        }
+        return j == c_opForkNames.size();
+    }(),
+    "c_opForkNames must equal the lowercased enum_names<OpFork>() minus the L1-only rungs "
+    "(Bedrock, Delta)");
+
+// ... and the table's own spelling must be LOWERCASE. The pin above compares
+// case-insensitively (the enum names are CamelCase), but `forkOrder` compares byte-exactly
+// against input that normalizeForkName has lowercased: a case-only edit of a ladder row.name
+// ("Jovian") would pass the pin above and then reject every schedule spelling the fork in any
+// case at load ("unknown fork" / "invalid baseline fork").
+static_assert(
+    [] {
+        for (auto const name : c_opForkNames)
+        {
+            for (char const ch : name)
+            {
+                if (ch >= 'A' && ch <= 'Z')
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }(),
+    "c_opForkNames entries must be lowercase (forkOrder compares byte-exact against the lowercased "
+    "input)");
 
 // Pure lookups: no allocation and no throw path, so they are noexcept like
 // legacyOpForkScheduleCanonical.
@@ -110,20 +178,36 @@ inline std::string trimAscii(std::string_view input)
 
 inline uint64_t parseTimestamp(std::string_view token)
 {
-    if (token.empty())
-        throwInvalidOpForkSchedule("empty timestamp");
-    uint64_t value = 0;
-    for (const char ch : token)
+    // One acceptance window with the config loaders (ConfigUint64.h): the whole string must be
+    // decimal digits — the canonical channel never spelled hex — and the not-scheduled
+    // sentinel is refused. The sentinel is spelled as UINT64_MAX here (not c_opForkTimeUnset,
+    // which is declared below this point) and is the same value.
+    auto const parsed =
+        parseConfigUint64(token, ConfigUint64Options{.allowHex = false,
+                                     .maxValue = std::numeric_limits<uint64_t>::max(),
+                                     .refuseSentinel = true,
+                                     .sentinel = std::numeric_limits<uint64_t>::max()});
+    switch (parsed.error)
     {
-        if (ch < '0' || ch > '9')
-            throwInvalidOpForkSchedule("invalid timestamp");
-        const auto digit = static_cast<uint64_t>(ch - '0');
-        // Pre-multiply guard: `next < value` misses wraps that land above value.
-        if (value > (std::numeric_limits<uint64_t>::max() - digit) / 10)
-            throwInvalidOpForkSchedule("timestamp overflow");
-        value = value * 10 + digit;
+    case ConfigUint64Error::empty:
+        throwInvalidOpForkSchedule("empty timestamp");
+    case ConfigUint64Error::none:
+        return *parsed.value;
+    case ConfigUint64Error::sentinel:
+        // The all-9s value IS the not-scheduled sentinel downstream (c_opForkTimeUnset): a
+        // literal 18446744073709551615 in canonical text would parse and round-trip, then
+        // read as "not scheduled" at the snapshot boundary — one representation silently
+        // carrying two meanings. Reject it so the canonical channel cannot smuggle the
+        // sentinel in as a declared activation time.
+        throwInvalidOpForkSchedule(
+            "timestamp 18446744073709551615 is the not-scheduled sentinel and cannot be "
+            "declared as an activation time");
+    case ConfigUint64Error::outOfRange:
+        throwInvalidOpForkSchedule("timestamp overflow");
+    case ConfigUint64Error::invalid:
+        break;
     }
-    return value;
+    throwInvalidOpForkSchedule("invalid timestamp");
 }
 
 inline std::string normalizeForkName(std::string_view token)
@@ -248,29 +332,38 @@ inline std::string canonicalOpForkSchedule(std::span<const OpForkActivationRecor
 inline constexpr uint64_t c_opForkTimeUnset = std::numeric_limits<uint64_t>::max();
 
 /// Fold the [op_fork_timestamps] shorthand (jovian_time / karst_time in seconds,
-/// c_opForkTimeUnset = not scheduled) into the canonical activation list. op-geth's
-/// CheckConfigForkOrder compares with `>`, so EQUAL times are legal and mean the later
-/// fork's rules apply from that second: a simultaneous pair collapses into the later
-/// fork — (0,0) becomes "0:karst", (T,T) becomes "0:isthmus,T:karst". A later fork at
-/// an EARLIER second is rejected with the keys named, because Karst is defined as
-/// Jovian's rules on an Osaka EVM and cannot activate first. NodeConfig validates the
+/// c_opForkTimeUnset = not scheduled) into the canonical activation list. Following the
+/// strict-`>` ordering convention of geth's config order checks, EQUAL times are legal
+/// and mean the later fork's rules apply from that second: a simultaneous pair collapses
+/// into the later fork — (0,0) becomes "0:karst", (T,T) becomes "0:isthmus,T:karst". A
+/// later fork at an EARLIER second is rejected with the keys named, because Karst is
+/// defined as Jovian's rules on an Osaka EVM and cannot activate first. (op-geth itself
+/// does not validate OP activation times — its CheckConfigForkOrder only orders the L1
+/// fork list; the cross-repo authority for the OP ladder is op-node's rollup config
+/// check.) NodeConfig validates the
 /// section through this same function, so the shorthand and the canonical channel can
 /// never drift into two rule sets. The result passes validateScheduleRecords, i.e. it
 /// is always parseable canonical text.
 [[nodiscard]] inline std::vector<OpForkActivationRecord> foldOpForkShorthand(
     uint64_t jovianTime, uint64_t karstTime)
 {
-    if (karstTime != c_opForkTimeUnset && jovianTime == c_opForkTimeUnset)
+    // karst scheduled with jovian unset is a legal JUMP (op-node CheckConfigForkOrder
+    // allows skipping intermediates; the 10-rung ladder keeps jovian at the not-scheduled
+    // sentinel, ledger::c_opForkTimeUnset): Karst is a
+    // superset of Jovian, so the fold implies Jovian AT karst's time — the same merge the
+    // equal-times pair takes below. One rule with NodeConfig's ladder validator (H):
+    // previously this threw while NodeConfig accepted the shape, crashing buildGenesisBlock.
+    uint64_t const effectiveJovianTime =
+        (jovianTime == c_opForkTimeUnset && karstTime != c_opForkTimeUnset) ? karstTime :
+                                                                              jovianTime;
+    if (karstTime < effectiveJovianTime)
         throwInvalidOpForkSchedule("karst_time (" + std::to_string(karstTime) +
-                                   ") is set but jovian_time is not: fork activation "
-                                   "times must be non-decreasing");
-    if (karstTime < jovianTime)
-        throwInvalidOpForkSchedule("karst_time (" + std::to_string(karstTime) +
-                                   ") is earlier than jovian_time (" + std::to_string(jovianTime) +
+                                   ") is earlier than jovian_time (" +
+                                   std::to_string(effectiveJovianTime) +
                                    "): fork activation times must be non-decreasing");
 
     std::vector<OpForkActivationRecord> records;
-    if (jovianTime == c_opForkTimeUnset)
+    if (effectiveJovianTime == c_opForkTimeUnset)
     {
         // Neither fork scheduled: the all-Isthmus legacy chain.
         records.push_back({std::string("isthmus"), 0});
@@ -278,9 +371,9 @@ inline constexpr uint64_t c_opForkTimeUnset = std::numeric_limits<uint64_t>::max
     else
     {
         // Isthmus is the implicit baseline unless Jovian itself activates at genesis.
-        if (jovianTime != 0)
+        if (effectiveJovianTime != 0)
             records.push_back({std::string("isthmus"), 0});
-        records.push_back({std::string("jovian"), jovianTime});
+        records.push_back({std::string("jovian"), effectiveJovianTime});
     }
     if (karstTime != c_opForkTimeUnset)
         records.push_back({std::string("karst"), karstTime});

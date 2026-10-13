@@ -1,0 +1,515 @@
+diff -ruN /tmp/tarscpp-orig/servant/jmem/jmem_hashmap.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/jmem/jmem_hashmap.h
+--- a/servant/jmem/jmem_hashmap.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/jmem/jmem_hashmap.h	2026-10-01 09:44:08.091213894 +0800
+@@ -17,6 +17,7 @@
+ #ifndef _JMEM_HASHMAP_H
+ #define _JMEM_HASHMAP_H
+ 
++#include <cstdint>
+ #include "util/tc_hashmap.h"
+ #include "util/tc_autoptr.h"
+ #include "jmem/jmem_policy.h"
+diff -ruN /tmp/tarscpp-orig/servant/jmem/jmem_hashmap_compact.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/jmem/jmem_hashmap_compact.h
+--- a/servant/jmem/jmem_hashmap_compact.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/jmem/jmem_hashmap_compact.h	2026-10-01 09:44:08.092294691 +0800
+@@ -17,6 +17,7 @@
+ #ifndef _JMEM_HASHMAP_COMPACT_H
+ #define _JMEM_HASHMAP_COMPACT_H
+ 
++#include <cstdint>
+ #include "util/tc_hashmap_compact.h"
+ #include "util/tc_autoptr.h"
+ #include "jmem/jmem_policy.h"
+diff -ruN /tmp/tarscpp-orig/servant/jmem/jmem_multi_hashmap.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/jmem/jmem_multi_hashmap.h
+--- a/servant/jmem/jmem_multi_hashmap.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/jmem/jmem_multi_hashmap.h	2026-10-01 09:44:08.090069134 +0800
+@@ -17,6 +17,7 @@
+ #ifndef _JMEM_MULTI_HASHMAP_H
+ #define _JMEM_MULTI_HASHMAP_H
+ 
++#include <cstdint>
+ #include "util/tc_multi_hashmap.h"
+ #include "util/tc_autoptr.h"
+ #include "jmem/jmem_policy.h"
+diff -ruN /tmp/tarscpp-orig/servant/servant/AdapterProxy.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/AdapterProxy.h
+--- a/servant/servant/AdapterProxy.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/AdapterProxy.h	2026-10-01 09:44:08.098171219 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TARS_ADAPTER_PROXY_H_
+ #define __TARS_ADAPTER_PROXY_H_
+ 
++#include <cstdint>
+ #include "util/tc_timeout_queue_new.h"
+ #include "util/tc_timeout_queue_map.h"
+ #include "util/tc_transceiver.h"
+diff -ruN /tmp/tarscpp-orig/servant/servant/AppCache.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/AppCache.h
+--- a/servant/servant/AppCache.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/AppCache.h	2026-10-01 09:44:08.102428581 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __APP_CACHE_H_
+ #define __APP_CACHE_H_
+ 
++#include <cstdint>
+ #include <string>
+ #include <memory>
+ #include <map>
+diff -ruN /tmp/tarscpp-orig/servant/servant/AppProtocol.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/AppProtocol.h
+--- a/servant/servant/AppProtocol.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/AppProtocol.h	2026-10-01 09:44:08.097255100 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TARS_PROTOCOL_H_
+ #define __TARS_PROTOCOL_H_
+ 
++#include <cstdint>
+ #include <string>
+ #include <memory>
+ #include <map>
+diff -ruN /tmp/tarscpp-orig/servant/servant/Application.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/Application.h
+--- a/servant/servant/Application.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/Application.h	2026-10-01 09:44:08.096375532 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TARS_APPLICATION_H
+ #define __TARS_APPLICATION_H
+ 
++#include <cstdint>
+ #include <iostream>
+ #include <set>
+ #include <signal.h>
+diff -ruN /tmp/tarscpp-orig/servant/servant/Communicator.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/Communicator.h
+--- a/servant/servant/Communicator.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/Communicator.h	2026-10-01 09:44:08.095491985 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TARS_COMMUNICATOR_H_
+ #define __TARS_COMMUNICATOR_H_
+ 
++#include <cstdint>
+ #include "util/tc_thread.h"
+ #include "util/tc_config.h"
+ #include "util/tc_singleton.h"
+diff -ruN /tmp/tarscpp-orig/servant/servant/CommunicatorEpoll.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/CommunicatorEpoll.h
+--- a/servant/servant/CommunicatorEpoll.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/CommunicatorEpoll.h	2026-10-01 09:44:08.103296537 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TARS__COMMUNICATOR_EPOLL_H_
+ #define __TARS__COMMUNICATOR_EPOLL_H_
+ 
++#include <cstdint>
+ #include "util/tc_thread.h"
+ #include "util/tc_thread_mutex.h"
+ #include "util/tc_epoller.h"
+diff -ruN /tmp/tarscpp-orig/servant/servant/Current.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/Current.h
+--- a/servant/servant/Current.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/Current.h	2026-10-01 09:44:08.101601356 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TARS_CURRENT_H_
+ #define __TARS_CURRENT_H_
+ 
++#include <cstdint>
+ #include "util/tc_epoll_server.h"
+ #include "tup/RequestF.h"
+ #include "tup/tup.h"
+diff -ruN /tmp/tarscpp-orig/servant/servant/EndpointInfo.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/EndpointInfo.h
+--- a/servant/servant/EndpointInfo.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/EndpointInfo.h	2026-10-01 09:44:08.099061709 +0800
+@@ -18,6 +18,7 @@
+ #define __TARS_ENDPOINT_INFO_H_
+ 
+ //#include "servant/Global.h"
++#include <cstdint>
+ #include "util/tc_socket.h"
+ #include "util/tc_clientsocket.h"
+ #include "servant/EndpointF.h"
+diff -ruN /tmp/tarscpp-orig/servant/servant/EndpointManager.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/EndpointManager.h
+--- a/servant/servant/EndpointManager.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/EndpointManager.h	2026-10-01 09:44:08.093470325 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TARS_ENDPOINT_MANAGER_H_
+ #define __TARS_ENDPOINT_MANAGER_H_
+ 
++#include <cstdint>
+ #include "servant/EndpointInfo.h"
+ #include "servant/EndpointF.h"
+ #include "servant/QueryF.h"
+diff -ruN /tmp/tarscpp-orig/servant/servant/Message.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/Message.h
+--- a/servant/servant/Message.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/Message.h	2026-10-01 09:44:08.100785504 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TARS_MESSAGE_H_
+ #define __TARS_MESSAGE_H_
+ 
++#include <cstdint>
+ #include <util/tc_network_buffer.h>
+ #include "util/tc_autoptr.h"
+ #include "util/tc_monitor.h"
+diff -ruN /tmp/tarscpp-orig/servant/servant/ServantProxy.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/ServantProxy.h
+--- a/servant/servant/ServantProxy.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/ServantProxy.h	2026-10-01 09:44:08.094321332 +0800
+@@ -17,6 +17,7 @@
+ #ifndef _TARS_SERVANT_PROXY_H_
+ #define _TARS_SERVANT_PROXY_H_
+ 
++#include <cstdint>
+ #include "util/tc_common.h"
+ #include "util/tc_uuid_generator.h"
+ #include "util/tc_monitor.h"
+diff -ruN /tmp/tarscpp-orig/servant/servant/StatReport.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/servant/StatReport.h
+--- a/servant/servant/StatReport.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/servant/StatReport.h	2026-10-01 09:44:08.099876825 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TARS_STAT_REPORT_H_
+ #define __TARS_STAT_REPORT_H_
+ 
++#include <cstdint>
+ #include "util/tc_thread.h"
+ #include "util/tc_readers_writer_data.h"
+ #include "servant/PropertyReport.h"
+diff -ruN /tmp/tarscpp-orig/servant/tup/TarsJson.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/servant/tup/TarsJson.h
+--- a/servant/tup/TarsJson.h	2026-05-09 17:14:50.000000000 +0800
++++ b/servant/tup/TarsJson.h	2026-10-01 09:44:08.104089579 +0800
+@@ -1,6 +1,7 @@
+ ﻿#ifndef __TARS_JSON_H__
+ #define __TARS_JSON_H__
+ 
++#include <cstdint>
+ #include <iostream>
+ #include <cassert>
+ #include <vector>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_clientsocket.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_clientsocket.h
+--- a/util/include/util/tc_clientsocket.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_clientsocket.h	2026-10-01 09:44:08.075231596 +0800
+@@ -17,6 +17,7 @@
+ #ifndef _TC_CLIENTSOCKET_H__
+ #define _TC_CLIENTSOCKET_H__
+ 
++#include <cstdint>
+ #include "util/tc_socket.h"
+ #include <sstream>
+ #include "util/tc_http.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_consistent_hash_new.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_consistent_hash_new.h
+--- a/util/include/util/tc_consistent_hash_new.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_consistent_hash_new.h	2026-10-01 09:44:08.068256849 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_CONSISTENT_HASH_NEW_H_
+ #define __TC_CONSISTENT_HASH_NEW_H_
+ 
++#include <cstdint>
+ #include "util/tc_md5.h"
+ #include "util/tc_autoptr.h"
+ #include "util/tc_hash_fun.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_coroutine.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_coroutine.h
+--- a/util/include/util/tc_coroutine.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_coroutine.h	2026-10-01 09:44:08.084784248 +0800
+@@ -17,6 +17,7 @@
+ #ifndef _TC_COROUTINES_H_
+ #define _TC_COROUTINES_H_
+ 
++#include <cstdint>
+ #include <cstddef>
+ #include <list>
+ #include <set>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_cron.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_cron.h
+--- a/util/include/util/tc_cron.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_cron.h	2026-10-01 09:44:08.071656090 +0800
+@@ -1,5 +1,6 @@
+ ﻿#pragma once
+ 
++#include <cstdint>
+ #include <mutex>
+ #include <condition_variable>
+ #include <unordered_map>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_epoll_server.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_epoll_server.h
+--- a/util/include/util/tc_epoll_server.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_epoll_server.h	2026-10-01 09:44:08.080275836 +0800
+@@ -16,6 +16,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <string>
+ #include <memory>
+ #include <map>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_epoller.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_epoller.h
+--- a/util/include/util/tc_epoller.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_epoller.h	2026-10-01 09:44:08.073462774 +0800
+@@ -17,6 +17,7 @@
+ #ifndef	__TC_EPOLLER_H_
+ #define __TC_EPOLLER_H_
+ 
++#include <cstdint>
+ #include "util/tc_platform.h"
+ #include "util/tc_socket.h"
+ #include "util/tc_timer.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_grpc.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_grpc.h
+--- a/util/include/util/tc_grpc.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_grpc.h	2026-10-01 09:44:08.087458196 +0800
+@@ -1,6 +1,7 @@
+ ﻿#ifndef __TC_GRPC_PROTOCOL_H__
+ #define __TC_GRPC_PROTOCOL_H__
+ 
++#include <cstdint>
+ #include <unordered_map>
+ #include "util/tc_network_buffer.h"
+ #include "util/tc_spin_lock.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_hash_fun.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_hash_fun.h
+--- a/util/include/util/tc_hash_fun.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_hash_fun.h	2026-10-01 09:44:08.062268183 +0800
+@@ -17,6 +17,7 @@
+ #ifndef _TC_HASH_FUN_H_
+ #define _TC_HASH_FUN_H_
+ 
++#include <cstdint>
+ #include <iostream>
+ #include <string>
+ 
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_hashmap.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_hashmap.h
+--- a/util/include/util/tc_hashmap.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_hashmap.h	2026-10-01 09:44:08.086461339 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_HASHMAP_H__
+ #define __TC_HASHMAP_H__
+ 
++#include <cstdint>
+ #include <vector>
+ #include <memory>
+ #include <cassert>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_hashmap_compact.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_hashmap_compact.h
+--- a/util/include/util/tc_hashmap_compact.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_hashmap_compact.h	2026-10-01 09:44:08.065439879 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_HASHMAP_COMPACT_H__
+ #define __TC_HASHMAP_COMPACT_H__
+ 
++#include <cstdint>
+ #include <vector>
+ #include <memory>
+ #include <cassert>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_http.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_http.h
+--- a/util/include/util/tc_http.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_http.h	2026-10-01 09:44:08.063313932 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_HTTP_H_
+ #define __TC_HTTP_H_
+ 
++#include <cstdint>
+ #include "util/tc_ex.h"
+ #include "util/tc_port.h"
+ #include "util/tc_common.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_http2.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_http2.h
+--- a/util/include/util/tc_http2.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_http2.h	2026-10-01 09:44:08.088252073 +0800
+@@ -1,6 +1,7 @@
+ ﻿#ifndef __TC_HTTP2_H__
+ #define __TC_HTTP2_H__
+ 
++#include <cstdint>
+ #include "util/tc_http.h"
+ #include "util/tc_spin_lock.h"
+ #include "util/tc_network_buffer.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_http_async.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_http_async.h
+--- a/util/include/util/tc_http_async.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_http_async.h	2026-10-01 09:44:08.069833827 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_HTTP_ASYNC_H_
+ #define __TC_HTTP_ASYNC_H_
+ 
++#include <cstdint>
+ #include <functional>
+ #include "util/tc_platform.h"
+ #include "util/tc_thread_pool.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_json.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_json.h
+--- a/util/include/util/tc_json.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_json.h	2026-10-01 09:44:08.081417444 +0800
+@@ -18,6 +18,7 @@
+ #ifndef __TC_JSON_H
+ #define __TC_JSON_H
+ 
++#include <cstdint>
+ #include <string>
+ #include <unordered_map>
+ #include <vector>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_loop_queue.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_loop_queue.h
+--- a/util/include/util/tc_loop_queue.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_loop_queue.h	2026-10-01 09:44:08.083115691 +0800
+@@ -17,6 +17,7 @@
+ #ifndef  _TC_LOOP_QUEUE_H_
+ #define  _TC_LOOP_QUEUE_H_
+ 
++#include <cstdint>
+ #include <vector>
+ #include <atomic>
+ #include <stdlib.h>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_md5.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_md5.h
+--- a/util/include/util/tc_md5.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_md5.h	2026-10-01 09:44:08.067421107 +0800
+@@ -16,6 +16,7 @@
+ #ifndef __TC_MD5_H
+ #define __TC_MD5_H
+ 
++#include <cstdint>
+ #include <string>
+ #include "util/tc_ex.h"
+ #include "util/tc_common.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_multi_hashmap.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_multi_hashmap.h
+--- a/util/include/util/tc_multi_hashmap.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_multi_hashmap.h	2026-10-01 09:44:08.066334794 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_MULTI_HASHMAP_H__
+ #define __TC_MULTI_HASHMAP_H__
+ 
++#include <cstdint>
+ #include <vector>
+ #include <memory>
+ #include <cassert>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_network_buffer.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_network_buffer.h
+--- a/util/include/util/tc_network_buffer.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_network_buffer.h	2026-10-01 09:44:08.072533320 +0800
+@@ -17,6 +17,7 @@
+ #ifndef TC_CPP_TC_NETWORKBUFFER_H
+ #define TC_CPP_TC_NETWORKBUFFER_H
+ 
++#include <cstdint>
+ #include <list>
+ #include <vector>
+ #include <functional>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_port.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_port.h
+--- a/util/include/util/tc_port.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_port.h	2026-10-01 09:44:08.089085631 +0800
+@@ -1,6 +1,7 @@
+ ﻿#ifndef __TC_PORT_H
+ #define __TC_PORT_H
+ 
++#include <cstdint>
+ #include "util/tc_platform.h"
+ 
+ #if TARGET_PLATFORM_LINUX || TARGET_PLATFORM_IOS
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_socket.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_socket.h
+--- a/util/include/util/tc_socket.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_socket.h	2026-10-01 09:44:08.082265345 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_SOCKET_H
+ #define __TC_SOCKET_H
+ 
++#include <cstdint>
+ #include "util/tc_platform.h"
+ 
+ #if TARGET_PLATFORM_LINUX||TARGET_PLATFORM_IOS
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_thread.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_thread.h
+--- a/util/include/util/tc_thread.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_thread.h	2026-10-01 09:44:08.069064471 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_THREAD_H_
+ #define __TC_THREAD_H_
+ 
++#include <cstdint>
+ #include <sys/types.h>
+ #include <signal.h>
+ // #include <pthread.h>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_thread_pool.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_thread_pool.h
+--- a/util/include/util/tc_thread_pool.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_thread_pool.h	2026-10-01 09:44:08.078575498 +0800
+@@ -1,5 +1,6 @@
+ ﻿#pragma once
+ 
++#include <cstdint>
+ #include "util/tc_platform.h"
+ #include "util/tc_thread.h"
+ #include "util/tc_timeprovider.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_timeout_queue.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_timeout_queue.h
+--- a/util/include/util/tc_timeout_queue.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_timeout_queue.h	2026-10-01 09:44:08.083929699 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_TIMEOUT_QUEUE_H
+ #define __TC_TIMEOUT_QUEUE_H
+ 
++#include <cstdint>
+ #include <deque>
+ #include <iostream>
+ #include <list>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_timeout_queue_map.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_timeout_queue_map.h
+--- a/util/include/util/tc_timeout_queue_map.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_timeout_queue_map.h	2026-10-01 09:44:08.079442772 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_TIMEOUT_QUEUE_MAP_H
+ #define __TC_TIMEOUT_QUEUE_MAP_H
+ 
++#include <cstdint>
+ #include <iostream>
+ #include <cassert>
+ #include "util/tc_timeprovider.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_timeout_queue_new.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_timeout_queue_new.h
+--- a/util/include/util/tc_timeout_queue_new.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_timeout_queue_new.h	2026-10-01 09:44:08.077715921 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_TIMEOUT_QUEUE_NEW_H
+ #define __TC_TIMEOUT_QUEUE_NEW_H
+ 
++#include <cstdint>
+ #include <map>
+ #include <list>
+ #include <functional>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_timeout_queue_noid.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_timeout_queue_noid.h
+--- a/util/include/util/tc_timeout_queue_noid.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_timeout_queue_noid.h	2026-10-01 09:44:08.064600730 +0800
+@@ -17,6 +17,7 @@
+ #ifndef _TC_TIMEOUT_QUEUE_NOID_H_
+ #define _TC_TIMEOUT_QUEUE_NOID_H_
+ 
++#include <cstdint>
+ #include <map>
+ #include <list>
+ #include <iostream>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_timeprovider.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_timeprovider.h
+--- a/util/include/util/tc_timeprovider.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_timeprovider.h	2026-10-01 09:44:08.085641327 +0800
+@@ -17,6 +17,7 @@
+ #ifndef __TC_TIME_PROVIDER_H_
+ #define __TC_TIME_PROVIDER_H_
+ 
++#include <cstdint>
+ #include <string.h>
+ #include "util/tc_platform.h"
+ #include "util/tc_common.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_timer.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_timer.h
+--- a/util/include/util/tc_timer.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_timer.h	2026-10-01 09:44:08.076916880 +0800
+@@ -16,6 +16,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <mutex>
+ #include <condition_variable>
+ #include <unordered_map>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_transceiver.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_transceiver.h
+--- a/util/include/util/tc_transceiver.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_transceiver.h	2026-10-01 09:44:08.070670424 +0800
+@@ -17,6 +17,7 @@
+ #ifndef TC_CPP_TRANSCEIVER_H
+ #define TC_CPP_TRANSCEIVER_H
+ 
++#include <cstdint>
+ #include <list>
+ #include "util/tc_network_buffer.h"
+ #include "util/tc_clientsocket.h"
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_uuid_generator.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_uuid_generator.h
+--- a/util/include/util/tc_uuid_generator.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_uuid_generator.h	2026-10-01 09:44:08.076094946 +0800
+@@ -2,6 +2,7 @@
+ #ifndef __TC_UUID_GENERATOR_H
+ #define __TC_UUID_GENERATOR_H
+ 
++#include <cstdint>
+ #include "util/tc_platform.h"
+ #if TARGET_PLATFORM_LINUX || TARGET_PLATFORM_IOS
+ #include <unistd.h>
+diff -ruN /tmp/tarscpp-orig/util/include/util/tc_xml.h /home/more/vcpkg/buildtrees/tarscpp/src/6faa637714-b7a6d543e0.clean/util/include/util/tc_xml.h
+--- a/util/include/util/tc_xml.h	2026-05-09 17:14:50.000000000 +0800
++++ b/util/include/util/tc_xml.h	2026-10-01 09:44:08.074408016 +0800
+@@ -1,6 +1,7 @@
+ ﻿#ifndef __TC_XML_H_
+ #define __TC_XML_H_
+ 
++#include <cstdint>
+ #include <string>
+ #include <map>
+ #include <vector>

@@ -78,10 +78,11 @@ task::Task<EngineStateRootResolution> resolveEngineBlockStateRoot(ViewType& view
     ledger::mpt::CommitObserver const& commitObserver)
 {
     auto const blockNumber = blockHeader.number();
-    if (scheduler_v1::shouldBuildMPT(ledgerConfig.features(), blockNumber))
+    if (scheduler_v1::shouldBuildMPT(
+            ledgerConfig.executorVersion(), ledgerConfig.features(), blockNumber))
     {
-        auto mptDelta = co_await scheduler_v1::buildMPTStateRootForView(view, blockHeader,
-            ledgerConfig, blockFactory, commitObserver.needsRefCountDeltas());
+        auto mptDelta = co_await scheduler_v1::buildMPTStateRootForView(
+            view, blockHeader, ledgerConfig, blockFactory, commitObserver.needsRefCountDeltas());
         auto const stateRoot = mptDelta.stateRoot;
         blockHeader.setStateRoot(stateRoot);
         co_await scheduler_v1::publishPendingBlockHeaderForMPT(view, blockHeader);

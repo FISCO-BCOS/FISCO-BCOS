@@ -33,7 +33,8 @@ namespace bcos::protocol
 /// - transactionIndex / logIndex are always written (the first log of receipt i
 ///   is numbered after all logs of receipts 0..i-1).
 /// - logsBloom is always recomputed from logEntries. It is a pure function of them, and
-///   the only in-tree producer of a receipt bloom (bcos-evm/opstack/OpTransition.cpp
+///   the only in-tree producer of a receipt bloom (the OP lane's receipt construction in
+///   opstack-executor/OpExecutionPolicy.h, successor of the retired bcos-evm/opstack
 ///   makeFiscoReceipt) derives both the bloom and the log entries from the same evmone
 ///   receipt, with a 1:1 log mapping — so no producer-supplied value can legitimately
 ///   differ. Matching the base finishExecute, which also recomputed it unconditionally.

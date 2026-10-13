@@ -15,11 +15,13 @@
  *
  * @file OpForkScheduleTest.cpp
  * @brief Pins bcos::ledger::resolveOpFork — the single OP fork-activation parser the
- *        executor (configAt) and the devp2p header validator both delegate to:
+ *        executor (opstack-executor/OpForkSpec.h) and the devp2p header validator both
+ *        delegate to:
  *        isthmus-unset zero-start baseline, unscheduled-rung implication, UINT64_MAX =
  *        not scheduled, ts >= forkTime activation.
  * @date 2026/9/22
  */
+#include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/ledger/OpForkSchedule.h>
 #include <boost/test/unit_test.hpp>
 #include <limits>
@@ -165,6 +167,84 @@ BOOST_AUTO_TEST_CASE(forkEnumOrderIsTheActivationOrder)
     BOOST_CHECK(OpFork::Holocene < OpFork::Isthmus);
     BOOST_CHECK(OpFork::Isthmus < OpFork::Jovian);
     BOOST_CHECK(OpFork::Jovian < OpFork::Karst);
+}
+
+BOOST_AUTO_TEST_CASE(activationGateNeverReadsAnUnsetRungAsACrossing)
+{
+    using bcos::ledger::isOpNoUserTxActivationBlock;
+    // All rungs unset (the zero-start Isthmus baseline): no crossing can ever fire —
+    // not even at the sentinel boundary itself (the sentinel means "not scheduled").
+    OpForkSchedule unset;
+    BOOST_CHECK(!isOpNoUserTxActivationBlock(unset, 0, 100));
+    BOOST_CHECK(!isOpNoUserTxActivationBlock(unset, 0, std::numeric_limits<uint64_t>::max()));
+    // A scheduled rung crosses exactly at its activation second.
+    OpForkSchedule jovian;
+    jovian.m_jovianTime = 100;
+    BOOST_CHECK(isOpNoUserTxActivationBlock(jovian, 99, 100));
+    BOOST_CHECK(!isOpNoUserTxActivationBlock(jovian, 100, 101));
+    // The fold rule: karst without jovian fires only on the karst crossing.
+    OpForkSchedule karst;
+    karst.m_karstTime = 50;
+    BOOST_CHECK(isOpNoUserTxActivationBlock(karst, 49, 50));
+    BOOST_CHECK(!isOpNoUserTxActivationBlock(karst, 50, 51));
+}
+
+// The Engine-API method-version triples and the fork→id mapping, pinned against
+// independent hard-coded vectors (op-node rollup/types.go NewPayloadVersion /
+// GetPayloadVersion / ForkchoiceUpdatedVersion, plus this repo's Karst getPayload V5).
+// The ladder's own static_asserts pin order/bijection/lowercase — but NO assert or test
+// pinned the VALUES, so an edited triple (wrong method version for a rung) survived every
+// build and test. A table edit that changes any cell below fails here.
+BOOST_AUTO_TEST_CASE(engineApiProfilesAndForkIdsAreValuePinned)
+{
+    using bcos::engine::ApiVersion;
+    using bcos::engine::EngineApiProfile;
+    using bcos::engine::engineApiProfileFor;
+    using bcos::engine::OpForkId;
+    using bcos::engine::opForkIdFor;
+    struct Row
+    {
+        OpFork fork;
+        bool hasId;
+        OpForkId id;
+        ApiVersion fcu;
+        ApiVersion getPayload;
+        ApiVersion newPayload;
+    };
+    Row const rows[] = {
+        {OpFork::Bedrock, false, {}, ApiVersion::V1, ApiVersion::V1, ApiVersion::V1},
+        {OpFork::Regolith, true, OpForkId::Regolith, ApiVersion::V1, ApiVersion::V2,
+            ApiVersion::V2},
+        {OpFork::Canyon, true, OpForkId::Canyon, ApiVersion::V2, ApiVersion::V2, ApiVersion::V2},
+        {OpFork::Delta, false, {}, ApiVersion::V1, ApiVersion::V1, ApiVersion::V1},
+        {OpFork::Ecotone, true, OpForkId::Ecotone, ApiVersion::V3, ApiVersion::V3, ApiVersion::V3},
+        {OpFork::Fjord, true, OpForkId::Fjord, ApiVersion::V3, ApiVersion::V3, ApiVersion::V3},
+        {OpFork::Granite, true, OpForkId::Granite, ApiVersion::V3, ApiVersion::V3, ApiVersion::V3},
+        {OpFork::Holocene, true, OpForkId::Holocene, ApiVersion::V3, ApiVersion::V3,
+            ApiVersion::V3},
+        {OpFork::Isthmus, true, OpForkId::Isthmus, ApiVersion::V3, ApiVersion::V4, ApiVersion::V4},
+        {OpFork::Jovian, true, OpForkId::Jovian, ApiVersion::V3, ApiVersion::V4, ApiVersion::V4},
+        {OpFork::Karst, true, OpForkId::Karst, ApiVersion::V3, ApiVersion::V5, ApiVersion::V4},
+    };
+    for (auto const& row : rows)
+    {
+        auto const id = opForkIdFor(row.fork);
+        BOOST_CHECK_EQUAL(id.has_value(), row.hasId);
+        if (id.has_value() && row.hasId)
+        {
+            BOOST_CHECK_EQUAL(static_cast<int>(*id), static_cast<int>(row.id));
+            // The fork↔id PAIRING the ladder's static_asserts do not check (a permuted id
+            // column still satisfies order+bijection): the profile looked up through the
+            // id must equal the pinned triple for that rung.
+            auto const profile = engineApiProfileFor(*id);
+            BOOST_CHECK_EQUAL(
+                static_cast<int>(profile.forkchoiceUpdated), static_cast<int>(row.fcu));
+            BOOST_CHECK_EQUAL(
+                static_cast<int>(profile.getPayload), static_cast<int>(row.getPayload));
+            BOOST_CHECK_EQUAL(
+                static_cast<int>(profile.newPayload), static_cast<int>(row.newPayload));
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -12,6 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
+ *
+ * @file LedgerMethods.h
+ * @brief Storage-level ledger primitives: table/row access, system-config reads and the
+ *        genesis/schedule metadata helpers.
  */
 
 #pragma once
@@ -29,10 +33,12 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-rlp-protocol/BlockHeaderHash.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
@@ -493,13 +499,18 @@ task::Task<void> tag_invoke(
 /// call sites only differ in how they fetch their inputs (node list, system configs /
 /// features at their respective block basis, header hash / timestamp); this helper performs
 /// the pure mapping so the consensus-relevant assembly cannot drift between the paths.
-/// Callers resolve an absent committed header to a disengaged hash/timestamp, leaving the
-/// previous values untouched — matching the historical behavior of both call sites.
+/// Callers resolve an absent committed header to a disengaged hash/timestamp/baseFee, leaving
+/// the previous values untouched — matching the historical behavior of both call sites.
 inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
     bcos::consensus::ConsensusNodeList const& nodeList, ledger::SystemConfigs const& sysConfig,
     ledger::Features const& features, protocol::BlockNumber blockNumber,
-    std::optional<int64_t> const& timestamp, std::optional<crypto::HashType> const& blockHash)
+    std::optional<int64_t> const& timestamp, std::optional<crypto::HashType> const& blockHash,
+    std::optional<u256> const& headBaseFee)
 {
+    if (headBaseFee)
+    {
+        ledgerConfig.setBaseFeePerGas(headBaseFee);
+    }
     ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto const& node) {
         return node.type == consensus::Type::consensus_sealer;
     }) | ::ranges::to<std::vector>());
@@ -619,16 +630,18 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
     if (ledger::isOpLaneVersion(executorVersion))
     {
         // The OP lane's declared EIP-1559 triple rides the same snapshot so the RPC fee
-        // prediction prices pre-Holocene blocks with the chain's own parameters. Fail
-        // closed on a malformed row, same policy as evmc_revision above.
+        // prediction (part B — at this head bcos-rpc still prices pre-Holocene blocks with
+        // the preset constants, FeeHistory.cpp) can price with the chain's own parameters.
+        // Fail closed on a malformed row, same policy as evmc_revision above.
         if (auto opEip1559 = sysConfig.get(ledger::SystemConfig::op_eip1559_params); opEip1559)
         {
             ledgerConfig.setOpEip1559Params(ledger::parseOpEip1559Params(opEip1559.value().first));
         }
         // The resolved fork schedule rides the snapshot too: the RPC estimate gas-cap gate
-        // applies EIP-7825 only where the chain has actually activated Karst at the target
-        // block (M1). Absent on OP chains initialized before the row existed — the gate
-        // treats that as "no Karst activation known" and leaves the budget unclamped.
+        // (M1, part B) will apply EIP-7825 only where the chain has actually activated
+        // Karst at the target block. Absent on OP chains initialized before the row
+        // existed — the gate treats that as "no Karst activation known" and leaves the
+        // budget unclamped.
         if (auto opForkSchedule = sysConfig.get(ledger::SystemConfig::op_fork_schedule);
             opForkSchedule)
         {
@@ -636,6 +649,42 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
                 ledger::opForkScheduleFromCanonical(opForkSchedule.value().first));
         }
     }
+}
+
+/// The boot probe's integrity-triple validation, with the binding target resolved HERE so
+/// a schedule-carrying genesis built without a config-side [eth_genesis_header] boots
+/// instead of being unbootable (review F5): the config's declared hash when the node
+/// carries the section, else the chain's OWN block-0 header (the writer bound the triple
+/// to exactly that hash at genesis, so a self-consistent datadir passes while a tampered
+/// or foreign triple still refuses). Absent rows co_return nullopt (a pre-triple chain is
+/// legal); partial/corrupt/mis-bound rows throw InvalidOpForkSchedule, as before.
+template <class Storage>
+task::Task<std::optional<OpForkScheduleMetadata>> readValidatedOpForkScheduleMetadataForBoot(
+    Storage& storage, protocol::BlockFactory& blockFactory,
+    std::optional<crypto::HashType> const& configGenesisHash)
+{
+    auto rows = co_await readOpForkScheduleMetadataRows(storage);
+    if (opForkScheduleMetadataRowsAbsent(rows))
+    {
+        co_return std::nullopt;
+    }
+    if (configGenesisHash.has_value())
+    {
+        co_return validateOpForkScheduleMetadataRows(std::move(rows), *configGenesisHash);
+    }
+    auto entry = co_await storage2::readOne(
+        storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, "0"});
+    if (!entry)
+    {
+        BOOST_THROW_EXCEPTION(InvalidOpForkSchedule() << errinfo_comment(
+                                  "SYS_OP_CHAIN_METADATA triple is present but the chain's "
+                                  "genesis block (block 0) cannot be read to validate its "
+                                  "genesis binding against"));
+    }
+    auto field = entry->get();
+    auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
+        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+    co_return validateOpForkScheduleMetadataRows(std::move(rows), headerPtr->hash());
 }
 
 task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& storage,
@@ -652,6 +701,7 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
 
     std::optional<int64_t> timestamp;
     std::optional<crypto::HashType> blockHash;
+    std::optional<u256> headBaseFee;
     auto blockNumberStr = std::to_string(blockNumber);
     if (auto entry = co_await storage2::readOne(
             storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
@@ -661,13 +711,14 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
             bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
         timestamp = headerPtr->timestamp();
         blockHash = headerPtr->hash();
+        headBaseFee = protocol::blockBaseFee(*headerPtr);
     }
 
     Features features;
     co_await readFromStorage(features, storage, blockNumber);
 
-    applyLedgerConfig(
-        ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp, blockHash);
+    applyLedgerConfig(ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp,
+        blockHash, headBaseFee);
 }
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);

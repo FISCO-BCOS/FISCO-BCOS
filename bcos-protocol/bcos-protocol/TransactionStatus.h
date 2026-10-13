@@ -87,9 +87,14 @@ enum class TransactionStatus : int32_t
     /// gasLimit exceeds the per-transaction cap (tx_gas_limit, or the Osaka constant cap).
     MaxGasLimitExceeded = 10023,
     /// A FISCO-native (tars BCOSTransaction) transaction on a chain that carries EIP-2718
-    /// envelopes only (feature_l2_ethereum_compat). It has no envelope an OP verifier can
-    /// re-derive, so one inside a block makes that verifier reject the whole block.
+    /// envelopes only (executor_version >= ETHEREUM_EXECUTOR_VERSION). It has no envelope an
+    /// OP verifier can re-derive, so one inside a block makes that verifier reject the whole
+    /// block.
     BcosTxNotAllowed = 10024,
+    /// EIP-4844: a blob (type-0x03) transaction must carry a non-empty blobVersionedHashes list
+    /// and a `to` address. The empty-hashes case is also what normalize reports for a blob
+    /// envelope that decodes without any hashes.
+    BlobTxMissingHashes = 10025,
 };
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
@@ -233,6 +238,9 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
         break;
     case TransactionStatus::BcosTxNotAllowed:
         _out << "BcosTxNotAllowed";
+        break;
+    case TransactionStatus::BlobTxMissingHashes:
+        _out << "BlobTxMissingHashes";
         break;
     case TransactionStatus::AlreadyInTxPoolAndAccept:
         _out << "AlreadyInTxPoolAndAccept";

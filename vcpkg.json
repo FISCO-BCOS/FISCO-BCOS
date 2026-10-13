@@ -82,6 +82,7 @@
         "cryptopp",
         "tarscpp",
         "blst",
+        "c-kzg-4844",
         "ittapi",
         "gmp",
         "group-sig",

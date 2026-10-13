@@ -24,6 +24,7 @@
  * @date 2026/8/18
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -48,7 +49,6 @@
 #include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
-#include "EthereumBlockHashLookup.h"
 #include <bcos-devp2p/sync/Block.h>
 #include <bcos-devp2p/sync/HeaderValidator.h>
 #include <boost/test/unit_test.hpp>
@@ -78,8 +78,7 @@ using ESMultiLayerStorage = MultiLayerStorage<ESMutableStorage, void, ESCheckpoi
 /// The real Sepolia genesis allocs (eth-clients/sepolia metadata/besu.json):
 /// 15 pre-funded EOAs; the state root over exactly these allocs is the canonical
 /// Sepolia genesis state root (verified against the archive RPC).
-const char* kSepoliaStateRoot =
-    "5eb6e371a698b8d68f665192350ffcecbbbf322916f4b51bd79bb6887da3f494";
+const char* kSepoliaStateRoot = "5eb6e371a698b8d68f665192350ffcecbbbf322916f4b51bd79bb6887da3f494";
 const char* kSepoliaGenesisHash =
     "25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9";
 
@@ -166,8 +165,7 @@ public:
     {
         blockHashLookup = [&backend = backendStorage](
                               int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-            return initializer::ethBlockHashLookupFromStorage(
-                backend, blockNumber, currentHeight);
+            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
         };
         executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
         blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
@@ -201,13 +199,13 @@ BOOST_FIXTURE_TEST_CASE(loadSepoliaGenesisVerifyEmptyBlock, ESSFixture)
         // 2. The computed root MUST be the canonical Sepolia genesis state root,
         //    and the root node must be persisted as a "/mpt/" row.
         BOOST_CHECK_EQUAL(genesisStateRoot.hex(), std::string(kSepoliaStateRoot));
-        auto rootNodeEntry = co_await storage2::readOne(
-            backendStorage, storage2::mptNodeStateKey(genesisStateRoot));
+        auto rootNodeEntry =
+            co_await storage2::readOne(backendStorage, storage2::mptNodeStateKey(genesisStateRoot));
         BOOST_CHECK(rootNodeEntry.has_value());
 
         // 3. Genesis bookkeeping: block-0 hash mapping + height + v2 system config.
-        auto genesisHash = crypto::HashType(
-            std::string_view(kSepoliaGenesisHash), crypto::HashType::FromHex);
+        auto genesisHash =
+            crypto::HashType(std::string_view(kSepoliaGenesisHash), crypto::HashType::FromHex);
         co_await ESSWriteBlockHash(backendStorage, 0, genesisHash);
         {
             storage::Entry entry;
@@ -252,6 +250,9 @@ BOOST_FIXTURE_TEST_CASE(loadSepoliaGenesisVerifyEmptyBlock, ESSFixture)
         ethHeader.stateRoot = genesisStateRoot;  // empty block -> state root unchanged
         ethHeader.txsRoot = ledger::mpt::emptyRootHash();
         ethHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+        // Shanghai active from genesis: commit to the empty withdrawals trie and carry
+        // an empty withdrawals list.
+        ethHeader.withdrawalsHash = ledger::mpt::emptyRootHash();
         ethHeader.prevRandao = bcos::h256{};
         ethHeader.coinbase = bcos::Address{};
         ethHeader.nonce = bcos::h64{};
@@ -270,15 +271,16 @@ BOOST_FIXTURE_TEST_CASE(loadSepoliaGenesisVerifyEmptyBlock, ESSFixture)
                 std::runtime_error{"legacy state-root fold must not run for executor v2"});
         };
         scheduler_v1::EvmcForkTimestamps forks;
-        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
-        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.londonTime = 0;  // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;   // unset fields default to UINT64_MAX = never active)
         forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, {}, std::nullopt, forks, 11155111, {}, 0, decoder, stateRootCalc);
+            parentHeader, {}, std::vector<bcos::bytes>{}, forks, 11155111, {}, 0, decoder,
+            stateRootCalc);
 
         BOOST_CHECK(result.valid);
         BOOST_CHECK(result.error.empty());
@@ -326,14 +328,13 @@ BOOST_FIXTURE_TEST_CASE(sepoliaBlock1PoWRewardStateRoot, ESSFixture)
         bcos::protocol::EthBlockHeaderData block1;
         block1.number = 1;
         block1.coinbase = bcos::Address(
-            std::string_view("0x2f14582947e292a2ecd20c430b46f2d27cfe213c"),
-            bcos::Address::FromHex);
+            std::string_view("0x2f14582947e292a2ecd20c430b46f2d27cfe213c"), bcos::Address::FromHex);
         std::vector<bcos::bytes> noUncles;
         co_await accumulatePoWBlockRewards(view, block1, noUncles, ledgerConfig);
 
         // 3. The resulting state root must be the canonical Sepolia block-1 root.
-        auto block1Root = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            computeMptStateRoot(view, genesisStateRoot, ledgerConfig);
+        auto block1Root = co_await EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view, genesisStateRoot, ledgerConfig);
         crypto::HashType expectedBlock1Root(
             bytesConstRef(reinterpret_cast<const bcos::byte*>(
                               "\xc9\x1d\x4e\xcd\x59\xdc\xe3\x06\x7d\x34\x0b\x3a\xad\xfc\x05\x42"

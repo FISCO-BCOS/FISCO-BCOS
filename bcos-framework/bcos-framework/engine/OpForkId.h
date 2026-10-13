@@ -19,8 +19,13 @@
 #pragma once
 
 #include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
+#include <magic_enum/magic_enum.hpp>
 
+#include <array>
 #include <cstdint>
+#include <optional>
+#include <string_view>
 #include <variant>
 
 namespace bcos::engine
@@ -40,6 +45,118 @@ enum class OpForkId : uint8_t
     Jovian,
     Karst,
 };
+
+/// The ONE OP fork ladder, as data: one row per OpFork rung, in declaration order,
+/// carrying the rung's op-node name and its Engine-API fork id (nullopt for rungs
+/// without an Engine API surface: Bedrock predates it, Delta has no EL effect).
+/// Every consumer that would otherwise re-list the rungs — the canonical-text name
+/// table, the fork->OpForkId mapping — derives from these rows.
+struct OpForkLadderRow
+{
+    bcos::ledger::OpFork fork;
+    std::string_view name;
+    std::optional<OpForkId> engineForkId;
+};
+
+inline constexpr std::array<OpForkLadderRow, 11> c_opForkLadder{{
+    {bcos::ledger::OpFork::Bedrock, "bedrock", std::nullopt},
+    {bcos::ledger::OpFork::Regolith, "regolith", OpForkId::Regolith},
+    {bcos::ledger::OpFork::Canyon, "canyon", OpForkId::Canyon},
+    {bcos::ledger::OpFork::Delta, "delta", std::nullopt},
+    {bcos::ledger::OpFork::Ecotone, "ecotone", OpForkId::Ecotone},
+    {bcos::ledger::OpFork::Fjord, "fjord", OpForkId::Fjord},
+    {bcos::ledger::OpFork::Granite, "granite", OpForkId::Granite},
+    {bcos::ledger::OpFork::Holocene, "holocene", OpForkId::Holocene},
+    {bcos::ledger::OpFork::Isthmus, "isthmus", OpForkId::Isthmus},
+    {bcos::ledger::OpFork::Jovian, "jovian", OpForkId::Jovian},
+    {bcos::ledger::OpFork::Karst, "karst", OpForkId::Karst},
+}};
+
+// Total over the ladder enum, in declaration order, with an Engine-API id for
+// exactly the OpForkId rungs.
+static_assert(
+    [] {
+        auto const rungs = magic_enum::enum_values<bcos::ledger::OpFork>();
+        if (rungs.size() != c_opForkLadder.size())
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < rungs.size(); ++i)
+        {
+            if (rungs[i] != c_opForkLadder[i].fork)
+            {
+                return false;
+            }
+        }
+        return true;
+    }(),
+    "c_opForkLadder must list every OpFork rung in declaration order");
+static_assert(
+    [] {
+        // A BIJECTION, not a count: every OpForkId value must be carried by exactly one row.
+        // The count form let a duplicated id plus an id no row carried through (both keep the
+        // number of id-carrying rows equal), and opForkIdFor then answered the duplicated
+        // row's id — the wrong Engine-API profile — for the rung whose id was dropped.
+        std::array<bool, magic_enum::enum_count<OpForkId>()> seen{};
+        for (auto const& row : c_opForkLadder)
+        {
+            if (!row.engineForkId.has_value())
+            {
+                continue;
+            }
+            auto const index = static_cast<std::size_t>(*row.engineForkId);
+            if (index >= seen.size() || seen[index])
+            {
+                return false;
+            }
+            seen[index] = true;
+        }
+        for (bool const mapped : seen)
+        {
+            if (!mapped)
+            {
+                return false;
+            }
+        }
+        return true;
+    }(),
+    "c_opForkLadder must map every OpForkId rung exactly once (bijection, not a count)");
+static_assert(
+    [] {
+        // The PAIRING the two pins above do not check: order pins the fork column, the
+        // bijection pins the id SET — but permuting the engineForkId payloads between two
+        // rows satisfies both while opForkIdFor then answers the wrong Engine-API profile
+        // for every consumer of the swapped rungs. The k-th id-carrying row must carry
+        // OpForkId(k): the ids follow the same declaration order the fork column is pinned
+        // to (Bedrock/Delta carry no id and are skipped by this and the bijection alike).
+        std::uint8_t next = 0;
+        for (auto const& row : c_opForkLadder)
+        {
+            if (!row.engineForkId.has_value())
+            {
+                continue;
+            }
+            if (static_cast<std::uint8_t>(*row.engineForkId) != next)
+            {
+                return false;
+            }
+            ++next;
+        }
+        return next == magic_enum::enum_count<OpForkId>();
+    }(),
+    "c_opForkLadder ids must pair with their own rungs (id-carrying row k carries OpForkId(k))");
+
+[[nodiscard]] inline std::optional<OpForkId> opForkIdFor(bcos::ledger::OpFork fork)
+{
+    for (auto const& row : c_opForkLadder)
+    {
+        if (row.fork == fork)
+        {
+            return row.engineForkId;
+        }
+    }
+    return std::nullopt;
+}
 
 /// Shape of a block's extraData for an OP fork: empty before Holocene, the
 /// 9-byte Holocene 1559 params, or the 17-byte Jovian form with minBaseFee.
@@ -130,9 +247,11 @@ struct EngineForkContext
     return OpExtraDataLayout::Empty;
 }
 
-// The base-fee clock reads this table instead of the fork order (see OpBaseFeeClock):
-// "layout != Empty" means Holocene or later, "layout == Jovian17" means Jovian or
-// later. These pin each boundary so a layout change cannot silently re-price blocks.
+// Fork -> extraData layout, the layout-side reference for the base-fee clock's boundary
+// flags: "layout != Empty" means Holocene or later, "layout == Jovian17" means Jovian or
+// later. The base-fee helpers (OpBaseFee.h) still derive those flags from the fork schedule —
+// wiring that seam to this table is a follow-up, so no production reader exists yet. These
+// pin each boundary so a layout change cannot silently re-price blocks.
 static_assert(extraDataLayoutFor(OpForkId::Regolith) == OpExtraDataLayout::Empty &&
               extraDataLayoutFor(OpForkId::Canyon) == OpExtraDataLayout::Empty &&
               extraDataLayoutFor(OpForkId::Ecotone) == OpExtraDataLayout::Empty &&

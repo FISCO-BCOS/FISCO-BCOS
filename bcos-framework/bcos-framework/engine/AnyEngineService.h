@@ -41,6 +41,7 @@ PRO_DEF_MEM_DISPATCH(MemGetPayload, getPayload);
 PRO_DEF_MEM_DISPATCH(MemNewPayload, newPayload);
 PRO_DEF_MEM_DISPATCH(MemGetSafeBlockNumber, getSafeBlockNumber);
 PRO_DEF_MEM_DISPATCH(MemGetFinalizedBlockNumber, getFinalizedBlockNumber);
+PRO_DEF_MEM_DISPATCH(MemGetHeadBlockNumber, getHeadBlockNumber);
 
 /// Facade declaring the EngineServiceConcept interface for proxy.
 struct AnyEngineServiceFacade
@@ -49,14 +50,15 @@ struct AnyEngineServiceFacade
             std::vector<std::string>)>::add_convention<MemUpdateForkchoice,
         task::Task<ForkchoiceUpdatedResult>(const ForkchoiceState&, const PayloadAttributes*,
             std::uint32_t)>::add_convention<MemGetPayload,
-        task::Task<GetPayloadResult>(const PayloadID&, std::uint32_t)>::
-        add_convention<MemNewPayload, task::Task<PayloadStatus>(const NewPayloadRequest&,
-                                          std::uint32_t)>::add_convention<MemGetSafeBlockNumber,
-            std::optional<bcos::protocol::BlockNumber>()
-                const>::add_convention<MemGetFinalizedBlockNumber,
-            std::optional<bcos::protocol::BlockNumber>()
-                const>::support_relocation<pro::constraint_level::nothrow>::
-            support_destruction<pro::constraint_level::nothrow>::build
+        task::Task<GetPayloadResult>(
+            const PayloadID&, std::uint32_t)>::add_convention<MemNewPayload,
+        task::Task<PayloadStatus>(
+            const NewPayloadRequest&, std::uint32_t)>::add_convention<MemGetSafeBlockNumber,
+        std::optional<bcos::protocol::BlockNumber>()
+            const>::add_convention<MemGetFinalizedBlockNumber,
+        std::optional<bcos::protocol::BlockNumber>() const>::add_convention<MemGetHeadBlockNumber,
+        std::optional<bcos::protocol::BlockNumber>() const>::support_relocation<pro::
+            constraint_level::nothrow>::support_destruction<pro::constraint_level::nothrow>::build
 {
 };
 
@@ -69,7 +71,7 @@ struct AnyEngineServiceFacade
 /// Usage:
 /// @code
 ///   // For non-movable types (recommended):
-///   AnyEngineService any(std::in_place_type<EthEngineService<...>>, memPool, storage, ...);
+///   AnyEngineService any(std::in_place_type<EngineServiceImpl<...>>, memPool, storage, ...);
 ///   auto result = co_await any.updateForkchoice(state, nullptr, 1);
 /// @endcode
 class AnyEngineService
@@ -89,16 +91,16 @@ public:
     /// Construct from any type satisfying EngineServiceConcept.
     /// The value is copied/moved into the proxy (owning semantics).
     template <class T>
-        requires EngineServiceConcept<std::remove_cvref_t<T>> &&
-                 (!std::same_as<std::remove_cvref_t<T>, AnyEngineService>)
-    explicit AnyEngineService(T&& engine)
+    requires EngineServiceConcept<std::remove_cvref_t<T>> &&
+        (!std::same_as<std::remove_cvref_t<T>, AnyEngineService>)explicit AnyEngineService(
+            T&& engine)
       : m_impl(pro::make_proxy<AnyEngineServiceFacade, std::remove_cvref_t<T>>(
             std::forward<T>(engine)))
     {}
 
     /// Construct in-place from constructor arguments (for non-movable types).
     template <class T, class... Args>
-        requires EngineServiceConcept<T> && std::is_constructible_v<T, Args...>
+    requires EngineServiceConcept<T> && std::is_constructible_v<T, Args...>
     explicit AnyEngineService(std::in_place_type_t<T>, Args&&... args)
       : m_impl(pro::make_proxy<AnyEngineServiceFacade, T>(std::forward<Args>(args)...))
     {}
@@ -142,6 +144,12 @@ public:
     {
         assert(m_impl.has_value() && "AnyEngineService must be initialized before use");
         return m_impl->getFinalizedBlockNumber();
+    }
+
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const
+    {
+        assert(m_impl.has_value() && "AnyEngineService must be initialized before use");
+        return m_impl->getHeadBlockNumber();
     }
 
     /// Access the underlying proxy for advanced operations.

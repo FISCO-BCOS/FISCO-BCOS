@@ -30,6 +30,7 @@
 #include "bcos-tx-validator/CheckSet.h"
 #include "bcos-tx-validator/LedgerNonceChecker.h"
 #include "bcos-tx-validator/NonceCheckerInterface.h"
+#include "bcos-tx-validator/Normalize.h"
 #include "bcos-tx-validator/Web3NonceChecker.h"
 #include "bcos-utilities/Common.h"
 #include <functional>
@@ -67,6 +68,17 @@ struct AccountState
 /// catching binary-wide -- into every module that admits a transaction.
 using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 
+/// The OP rollup cost of one signed envelope -- L1 data fee plus operator fee at @p gasLimit.
+/// @p head is the snapshot the pass judges by: its timestamp selects the fork, its (number,
+/// hash) keys the callable's per-head cache; the L1Block attributes come from the committed
+/// plane. Injected for the same reason SystemTxPredicate is (the formulas live behind evmone).
+/// nullopt = no rollup cost on this chain, Check::L1Cost stands down. Bound on the OP lane only.
+/// 512-bit: the L1 fee and the operator fee are each up to 2^256-1 and execution adds them at
+/// 512 bits (OpPolicy::additionalMaxCost); a callable that saturated their sum to 2^256-1 would
+/// let a sender holding exactly 2^256-1 through a check execution then fails.
+using RollupCostFn = std::function<task::Task<std::optional<u512>>(
+    bytesConstRef signedEnvelope, uint64_t gasLimit, ledger::LedgerConfig const& head)>;
+
 /// The one place a transaction is judged admissible, for every ingress of both transaction
 /// pools: JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The txpool's two
 /// entry points call it -- verifyAndSubmitTransaction for submission and the peer fetch,
@@ -86,7 +98,7 @@ using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 ///     and continuing. That is NOT this rule seen from the other end, and the two are not
 ///     copies to merge: the builder enforces a payload-encoding invariant that holds on any
 ///     chain -- a transaction with no EIP-2718 wire form cannot be written into an engine
-///     payload at all, whatever feature_l2_ethereum_compat says -- while the check below is a
+///     payload at all, whatever the chain's executor_version says -- while the check below is a
 ///     ruling about what THIS chain's configuration admits, and reports a status a caller can
 ///     read. Different predicate, different domain, different consequence.
 ///
@@ -110,7 +122,8 @@ public:
         std::shared_ptr<ledger::LedgerInterface> ledger,
         ledger::LedgerConfigState::Ptr ledgerConfigState,
         NonceCheckerInterface::Ptr txPoolNonceChecker, Web3NonceChecker::Ptr web3NonceChecker,
-        SystemTxPredicate isSystemTx, std::string groupId, std::string chainId);
+        SystemTxPredicate isSystemTx, std::string groupId, std::string chainId,
+        BlobPolicy blobPolicy = {});
 
     /// Bound after construction: the ledger nonce checker cannot be built until the pool has read
     /// the chain's block limit. Until it is bound there is nothing to check a BCOS nonce against,
@@ -124,6 +137,9 @@ public:
     /// built. Until it is bound, and in engine-driven mode where there is none, the balance check
     /// falls back to the committed ledger balance instead of the pending plane.
     void setScheduler(std::weak_ptr<scheduler::SchedulerInterface> scheduler);
+
+    /// Bound by the OP lane's initializer after construction. Unbound, Check::L1Cost passes.
+    void setRollupCostFn(RollupCostFn rollupCost);
 
     /// Run the check set for (kind of @p tx, @p context, @p policy), in c_checkOrder order.
     ///
@@ -155,6 +171,11 @@ protected:
     virtual task::Task<std::optional<AccountState>> readAccountState(std::string_view sender);
 
 private:
+    /// The bound RollupCostFn's answer for @p tx, or nullopt when none is bound. Reassembles the
+    /// signed envelope from the mirror; @p head is the snapshot the pass judges by.
+    task::Task<std::optional<u512>> readRollupCost(
+        protocol::Transaction const& tx, ledger::LedgerConfig const& head);
+
     crypto::CryptoSuite::Ptr m_cryptoSuite;
     std::shared_ptr<ledger::LedgerInterface> m_ledger;
     ledger::LedgerConfigState::Ptr m_ledgerConfigState;
@@ -163,6 +184,9 @@ private:
     SystemTxPredicate m_isSystemTx;
     std::string m_groupId;
     std::string m_chainId;
+    /// Blob (EIP-4844) admission for normalize(): refused on L2, admitted with the
+    /// per-transaction blob bound on L1.
+    BlobPolicy m_blobPolicy;
     /// The two late-bound dependencies, both written once from an init path that runs while
     /// transactions may already be arriving, hence the lock. Readers copy the handle out and
     /// release, so nothing is held across a co_await.
@@ -174,6 +198,8 @@ private:
     /// and resolves to shared_ptr<NonceCheckerInterface>, which loses the derived type.
     std::shared_ptr<LedgerNonceChecker> m_ledgerNonceChecker;
     std::weak_ptr<scheduler::SchedulerInterface> m_scheduler;
+    /// shared_ptr: a reader copies a pointer under the lock, not the closure.
+    std::shared_ptr<const RollupCostFn> m_rollupCost;
 };
 
 }  // namespace bcos::txvalidator

@@ -281,12 +281,15 @@ BOOST_AUTO_TEST_CASE(web3ChainIdSharesParseWeb3ChainId)
     BOOST_CHECK_THROW(trySet("4294967296"), PrecompiledError);
 }
 
-// feature_l2_ethereum_compat is genesis-only. Features::validate refuses it, and this pins the
-// refusal where an operator meets it: the governance setValueByKey transaction, which must fail
-// rather than turn L2 mode on for a chain that was not born one. The message matters too --
-// SystemConfigPrecompiled re-throws the errinfo_comment verbatim (SystemConfigPrecompiled.cpp:334)
-// so what is asserted here is the revert reason the caller sees.
-BOOST_AUTO_TEST_CASE(genesisOnlyFeatureIsRefusedByGovernance)
+// feature_l2_ethereum_compat is gone, not merely gated: bit 57 is now the tombstone
+// reserved_removed_l2_ethereum_compat (Features.h), and the old name is deliberately NOT
+// recognised -- Features::string2Flag throws NoSuchFeatureError for it, so a config or
+// transaction still carrying the name fails loudly instead of silently enabling nothing.
+// The lane it used to switch on is a genesis property now (executor_version >= 2). This
+// pins the refusal where an operator meets it: the governance setValueByKey transaction
+// rejects the key as unknown ("unsupported key", SystemConfigPrecompiled::validate, which
+// re-throws with the errinfo_comment the caller sees as the revert reason).
+BOOST_AUTO_TEST_CASE(removedL2FlagNameIsRefusedByGovernance)
 {
     SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
     auto setParameters = std::make_shared<PrecompiledExecResult>();
@@ -298,26 +301,25 @@ BOOST_AUTO_TEST_CASE(genesisOnlyFeatureIsRefusedByGovernance)
     BOOST_CHECK_EXCEPTION(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError,
         [](PrecompiledError const& e) {
             auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
-            return msg != nullptr && msg->find("genesis-only") != std::string::npos;
+            return msg != nullptr && msg->find("unsupported key") != std::string::npos;
         });
 
-    // The refusal is the feature rule, not the unknown-key rule: the key IS recognised, so a
-    // neighbouring feature on the same channel is still settable by governance. (feature_op_jovian
-    // was the control until OP forks moved to [op_fork_timestamps]; its bit 60 is now reserved.)
+    // The refusal is the unknown-key rule, so a recognised feature on the same channel is
+    // still settable by governance.
     setInput = codec.encodeWithSig("setValueByKey(string,string)",
         std::string("bugfix_eip161_1052_account_semantics"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
     BOOST_CHECK_NO_THROW(systemConfigPrecompiled.call(executive, setParameters));
 }
 
-// OP mode (executor_version >= ledger::OPSTACK_EXECUTOR_VERSION) is chosen once at boot from
-// the on-chain executor_version row: it decides the block producer (an external op-node over
-// the Engine API), the scheduler slot and the fork schedule. This precompile is the only
-// RUNTIME writer of that row -- genesis writes it directly, without validate() -- so refusing
-// the value here is what makes the boundary un-crossable on a running chain. Versioned on
-// 3.18.0 so replaying a pre-3.18.0 block that already wrote such a value still reproduces the
-// old acceptance.
-BOOST_AUTO_TEST_CASE(executorVersionOpModeIsNotGovernable)
+// The Ethereum lane (executor_version >= ledger::ETHEREUM_EXECUTOR_VERSION: L1 EL at 2, OP-Stack
+// at 3+) is chosen once at boot from the on-chain executor_version row: it decides the
+// account-table lane, the state-root scheme, the block producer and the fork schedule. This
+// precompile is the only RUNTIME writer of that row -- genesis writes it directly, without
+// validate() -- so refusing the crossing here is what makes the boundary un-crossable on a
+// running chain. Versioned on 3.18.0 so replaying a pre-3.18.0 block that already wrote such a
+// value still reproduces the old acceptance.
+BOOST_AUTO_TEST_CASE(executorVersionEthereumLaneIsNotGovernable)
 {
     SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
     CodecWrapper codec(hashImpl);
@@ -347,12 +349,18 @@ BOOST_AUTO_TEST_CASE(executorVersionOpModeIsNotGovernable)
         return systemConfigPrecompiled.call(executiveAt, setParameters);
     };
 
-    // 3.18.0: the OP boundary is closed. 3 is the first OP value; anything above it is OP too.
-    BOOST_CHECK_THROW(trySetAt(protocol::BlockVersion::V3_18_0_VERSION, "3"), PrecompiledError);
-    BOOST_CHECK_THROW(trySetAt(protocol::BlockVersion::V3_18_0_VERSION, "4"), PrecompiledError);
-    // ...and only the OP boundary is closed: every value below it stays governable, so a v1
-    // chain can still be moved onto the pure-Ethereum executor by governance.
-    for (auto const* accepted : {"2", "1", "0"})
+    // 3.18.0: the Ethereum boundary is closed. 2 is the first Ethereum-lane value (L1 EL);
+    // 3 and above are OP -- every value at or over the boundary is refused.
+    for (auto const* refused : {"2", "3", "4"})
+    {
+        BOOST_CHECK_EXCEPTION(trySetAt(protocol::BlockVersion::V3_18_0_VERSION, refused),
+            PrecompiledError, [](PrecompiledError const& e) {
+                auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
+                return msg != nullptr && msg->find("is a genesis property") != std::string::npos;
+            });
+    }
+    // ...and only the crossing is closed: consortium-lane values stay governable.
+    for (auto const* accepted : {"1", "0"})
     {
         expectWritten(trySetAt(protocol::BlockVersion::V3_18_0_VERSION, accepted));
     }

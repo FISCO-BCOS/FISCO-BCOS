@@ -9,15 +9,22 @@
 ///   * the initial state is read straight from BCOS storage via
 ///     ledger::account::EVMAccount + storage2 (synchronous, fail-safe — the
 ///     evmc::Host interface is noexcept, so a failed read is reported as
-///     "absent / empty" like the old StorageStateView adapter did);
+///     "absent / empty" like the old StorageStateView adapter did). An
+///     OPTIONAL observer hook (setStorageErrorHandler) reports each swallowed
+///     read failure before the zero value is returned: default-empty keeps the
+///     legacy behaviour byte-identical (eth_call, tests), while the consensus
+///     block lanes inject a recorder and fail loud at the block boundary —
+///     OP via OpStorageErrorGuard (OpStorageError), the L1 EL builder/verifier
+///     via EthStorageErrorGuard (EthStorageError), both mapped away from
+///     INVALID and from any commit;
 ///   * the final write-back is applyToStorage(), which writes the modified
 ///     accounts directly to BCOS storage via EVMAccount/storage2 — there is no
 ///     evmone::state::StateDiff struct and no separate applyStateDiff function.
 ///
 /// Types are renamed (EthAccount / EthStorageValue / EthereumState) so this
-/// port never collides with the unchanged bcos-evm library's
-/// evmone::state::{Account, StorageValue, State} (both may be linked into the
-/// same binary — bcos-evm keeps serving the opstack layer and its tests).
+/// port never collided with the retired bcos-evm library's
+/// evmone::state::{Account, StorageValue, State} while both were linked into
+/// the same binary.
 ///
 /// Known limitation — code hash algorithm:
 /// applyToStorage() keys the SYS_CODE_BINARY table by the code hash, and the
@@ -38,6 +45,8 @@
 #include <evmc/evmc.h>
 #include <cassert>
 #include <evmc/evmc.hpp>
+#include <exception>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <string>
@@ -251,6 +260,28 @@ class EthereumState
 
     Storage& m_storage;
 
+    /// Optional storage-failure observer (the OP fail-loud channel). Empty by
+    /// default — the three synchronous read wrappers below then keep the legacy
+    /// fail-safe behaviour exactly (a failed read is "absent / empty"). When
+    /// set, every swallowed read exception is handed to the observer BEFORE the
+    /// default value is returned, so an OP-side block-boundary check can fail
+    /// loud instead of executing on silent zero reads. The observer MUST NOT
+    /// throw (it runs inside a noexcept read wrapper); a throwing observer is
+    /// swallowed too, preserving the noexcept contract.
+    std::function<void(std::exception_ptr)> m_onStorageError;
+
+    void reportStorageError(std::exception_ptr error) const noexcept
+    {
+        if (!m_onStorageError)
+            return;
+        try
+        {
+            m_onStorageError(error);
+        }
+        catch (...)
+        {}
+    }
+
     // ---- Direct BCOS storage reads (synchronous, fail-safe) ----
 
     task::Task<std::optional<eth_state_detail::ReadAccount>> readAccountImpl(address addr) const
@@ -373,6 +404,7 @@ class EthereumState
         }
         catch (...)
         {
+            reportStorageError(std::current_exception());
             return std::nullopt;
         }
     }
@@ -402,6 +434,7 @@ class EthereumState
         }
         catch (...)
         {
+            reportStorageError(std::current_exception());
             return {};
         }
     }
@@ -426,12 +459,24 @@ class EthereumState
         }
         catch (...)
         {
+            reportStorageError(std::current_exception());
             return {};
         }
     }
 
 public:
     explicit EthereumState(Storage& storage) noexcept : m_storage(storage) {}
+
+    /// Install the optional storage-failure observer (see m_onStorageError).
+    /// Default-constructed EthereumState has none: legacy fail-safe behaviour
+    /// is unchanged. The consensus block-execution paths inject a first-error
+    /// recorder here and check it at the block boundary
+    /// (opstack-executor/OpStorageErrorGuard.h for OP,
+    /// ethereum-executor/EthStorageErrorGuard.h for the L1 lanes).
+    void setStorageErrorHandler(std::function<void(std::exception_ptr)> handler) noexcept
+    {
+        m_onStorageError = std::move(handler);
+    }
 
     /// Inserts the new account at the address.
     /// There must not exist any account under this address before.

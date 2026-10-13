@@ -107,11 +107,10 @@ struct SweepInlineCompletionCheck<Backend, true>
     using RangeAwaitable = decltype(std::declval<Backend&>().range(
         bcos::storage2::RANGE_SEEK, std::declval<bcos::executor_v1::StateKey&>()));
     using Iterator = bcos::task::AwaitableReturnType<RangeAwaitable>;
-    static constexpr bool value =
-        kIsAwaitableValue<RangeAwaitable> &&
-        kIsAwaitableValue<decltype(std::declval<Iterator&>().next())> &&
-        kIsAwaitableValue<decltype(std::declval<Backend&>().removeSome(
-            std::declval<std::vector<bcos::executor_v1::StateKey>>()))>;
+    static constexpr bool value = kIsAwaitableValue<RangeAwaitable> &&
+                                  kIsAwaitableValue<decltype(std::declval<Iterator&>().next())> &&
+                                  kIsAwaitableValue<decltype(std::declval<Backend&>().removeSome(
+                                      std::declval<std::vector<bcos::executor_v1::StateKey>>()))>;
 };
 
 /// Reference-counting MPT pruning (spec §4.8), one instance per chain over the committed-state
@@ -228,9 +227,9 @@ public:
 
     /// The stateRoot of block @p n (nullopt when that block's header is unavailable). A pre-MPT
     /// block may return its legacy XOR root — init truncates the walk at firstMptBlock via the
-    /// features, so the callable need not distinguish.
-    using StateRootLookup =
-        std::function<bcos::task::Task<std::optional<bcos::h256>>(bcos::protocol::BlockNumber)>;
+    /// features, so the callable need not distinguish. Aliased from the observer base so the
+    /// rollback hook (coOnRollback) and the startup rebuild share one type.
+    using StateRootLookup = CommitObserver::StateRootLookup;
 
     /// Called after each deleted chunk of the startup sweep: rows deleted so far, garbage rows
     /// found so far (the total is unknown until the scan finishes; the last call reports the
@@ -257,19 +256,20 @@ public:
     /// @throws MPTInvariantViolation when a
     /// reachable node row is missing (the trie is the source of truth — fail loud, same
     /// convention as Trie.h) or the head header carries no root.
-    bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock,
+    bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock, int64_t executorVersion,
         StateRootLookup stateRootAt, bool sweepGarbage, GarbageProgress progress = {})
     {
         m_watermark.store(currentBlock, std::memory_order_relaxed);
+        m_executorVersion = executorVersion;
 
         bcos::ledger::Features features;
         co_await features.readFromStorage(*m_backend, currentBlock);
         using Flag = bcos::ledger::Features::Flag;
 
         std::optional<bcos::protocol::BlockNumber> firstMptBlock;
-        if (features.get(Flag::feature_l2_ethereum_compat))
+        if (executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            firstMptBlock = 0;  // scenario B/L2: the genesis stateRoot is already an MPT root
+            firstMptBlock = 0;  // Ethereum lane: the genesis stateRoot is already an MPT root
         }
         else if (features.get(Flag::feature_mpt_state_root))
         {
@@ -406,8 +406,7 @@ public:
                              << shardCount << " shard(s) (progress logged every "
                              << SWEEP_SCAN_LOG_INTERVAL << " rows)";
         oneapi::tbb::parallel_for(size_t{0}, shardCount,
-            [this, &scanned, &garbage, &garbageDeleted, &progress, &progressMutex](
-                size_t shard) {
+            [this, &scanned, &garbage, &garbageDeleted, &progress, &progressMutex](size_t shard) {
                 auto const startKey = [shard] {
                     (void)shard;  // unused when shardCount == 1 (clang -Wunused-lambda-capture)
                     if constexpr (shardCount > 1)
@@ -635,7 +634,7 @@ public:
         // the staged erases (a bucket entry this block's movements already revoked is skipped);
         // the removals themselves are only staged — onCommit mutates the base buckets.
         for (auto bucketIt = m_pending.begin();
-            bucketIt != m_pending.end() && bucketIt->first <= horizon; ++bucketIt)
+             bucketIt != m_pending.end() && bucketIt->first <= horizon; ++bucketIt)
         {
             uint64_t const deadline = bucketIt->first;
             for (auto const& hash : bucketIt->second)
@@ -732,6 +731,28 @@ public:
     /// The pruner counts references from the delta — the build must maintain the tally.
     bool needsRefCountDeltas() const noexcept override { return true; }
 
+    /// EL-mode shallow-reorg hook (EthereumChainRollback.h): after a rollback to @p newHead the
+    /// in-memory counts/queue no longer describe the chain — blocks above newHead armed or
+    /// consumed schedules that must be re-derived. Nothing was persisted, so the exact fix is
+    /// the same rebuild every startup runs: discard every table (including any uncommitted
+    /// staged overlay) and re-walk the post-rollback roots. Costs a full head-trie walk per
+    /// reorg — the accepted trade-off for exact self-healing, and only paid when pruning is
+    /// enabled (the default Noop observer keeps the hook a no-op). The startup window
+    /// invariant (mpt_prune_window >= reorg_window, enforced by NodeConfig) guarantees every
+    /// root in [newHead - N, newHead] is still fully resolvable on disk. The garbage sweep is
+    /// NOT re-run: a reorg deletes no node rows itself, and the next boot's sweep policy
+    /// covers whatever the rollback made unreachable.
+    bcos::task::Task<void> coOnRollback(
+        bcos::protocol::BlockNumber newHead, StateRootLookup stateRootAt) override
+    {
+        m_stagedCounts.clear();
+        m_stagedDeadlineErases.clear();
+        m_stagedDeadlineInserts.clear();
+        m_counts.clear();
+        m_pending.clear();
+        co_await init(newHead, m_executorVersion, std::move(stateRootAt), /*sweepGarbage=*/false);
+    }
+
     /// After the block's WriteBatch: apply the staged overlay to the base tables and advance
     /// the in-memory watermark. coPreparePruneRows staged the block's counting work precisely so
     /// that a failed merge (which never reaches this hook) leaves the counts untouched and the
@@ -777,8 +798,7 @@ public:
         auto current = m_watermark.load(std::memory_order_relaxed);
         while (current < blockNumber &&
                !m_watermark.compare_exchange_weak(current, blockNumber, std::memory_order_relaxed))
-        {
-        }
+        {}
     }
 
     /// Highest committed block number this pruner has seen (currentBlock at init(), onCommit
@@ -871,7 +891,7 @@ private:
             {
                 stack.emplace_back(
                     bcos::h256(bcos::bytesConstRef(ext->child.data(), ext->child.size())
-                            .getCroppedData(1)),
+                                   .getCroppedData(1)),
                     accountTrie);
             }
         }
@@ -1140,6 +1160,10 @@ private:
 
     Backend* m_backend;
     int64_t m_pruneWindow;
+    // The chain's executor_version, captured by init and replayed by coOnRollback's rebuild
+    // (the lane — legacy vs Ethereum — decides firstMptBlock; it is genesis-fixed, so the
+    // init-time value stays correct across a reorg).
+    int64_t m_executorVersion = 0;
     std::atomic<int64_t> m_watermark{-1};
     uint64_t m_lastSweepDeleted = 0;
     std::unordered_map<bcos::h256, Entry> m_counts;

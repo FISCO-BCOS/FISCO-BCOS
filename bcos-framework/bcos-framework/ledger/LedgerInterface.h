@@ -31,6 +31,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Error.h>
+#include <boost/lexical_cast.hpp>
 #include <gsl/span>
 #include <map>
 
@@ -224,12 +225,36 @@ public:
     /// Read ONE feature flag's enabled state at @p _blockNumber. The default implementation
     /// derives it from fetchAllFeatures (correct but reads every feature key); production
     /// Ledger overrides with a single SYS_CONFIG read (round-2 Finding E: the historical
-    /// state-read path needs exactly feature_l2_ethereum_compat, not a ~61-key scan).
+    /// state-read path needs exactly one flag (e.g. feature_mpt_state_root), not a ~60-key scan).
     virtual task::Task<bool> fetchFeature(
         bcos::ledger::Features::Flag _flag, protocol::BlockNumber _blockNumber)
     {
         auto features = co_await fetchAllFeatures(_blockNumber);
         co_return features.get(_flag);
+    }
+
+    /// Read the executor_version SYS_CONFIG entry effective at @p _blockNumber (0 when the
+    /// row is absent or not yet enabled — a pre-Ethereum-lane chain). The default derives it
+    /// from fetchAllSystemConfigs (correct but reads every config key); production Ledger
+    /// overrides with a single SYS_CONFIG row read (the historical state-read path's lane
+    /// decision, same Finding-E shape as fetchFeature). The lane it decides is genesis-fixed:
+    /// SystemConfigPrecompiled refuses governance writes crossing ETHEREUM_EXECUTOR_VERSION,
+    /// so any block number resolves it correctly.
+    virtual task::Task<int64_t> fetchExecutorVersionAt(protocol::BlockNumber _blockNumber)
+    {
+        auto configs = co_await fetchAllSystemConfigs(_blockNumber);
+        if (auto entry = configs.get(ledger::SystemConfig::executor_version))
+        {
+            try
+            {
+                co_return boost::lexical_cast<int64_t>(entry->first);
+            }
+            catch (boost::bad_lexical_cast const&)
+            {
+                co_return 0;
+            }
+        }
+        co_return 0;
     }
 
     virtual bcos::storage::StorageInterface::Ptr getStateStorage()

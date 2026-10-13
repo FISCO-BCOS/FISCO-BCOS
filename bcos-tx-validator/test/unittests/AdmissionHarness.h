@@ -89,6 +89,10 @@ struct TxSpec
     std::optional<Address> to = Address{"0x811a752c8cd697e3cb27279c330ed1ada745a8d7"};
     bcos::bytes data{};
     u256 value = 1;
+    /// EIP-4844 fields, inert unless type is EIP4844: a blob transaction with no hashes is what
+    /// normalize() rejects, so the blob cases set this explicitly.
+    u256 maxFeePerBlobGas = 0;
+    h256s blobVersionedHashes{};
     bool withAuthorization = false;
     /// Zero out r after signing: the envelope stays self-consistent (the hash commits to the
     /// signature bytes as sent) but recovery is impossible, so the rejection is the signature
@@ -112,6 +116,8 @@ inline std::shared_ptr<bcostars::protocol::TransactionImpl> admitTx(TxSpec const
     web3.to = spec.to;
     web3.data = spec.data;
     web3.value = spec.value;
+    web3.maxFeePerBlobGas = spec.maxFeePerBlobGas;
+    web3.blobVersionedHashes = spec.blobVersionedHashes;
     if (spec.withAuthorization)
     {
         rpc::AuthorizationListEntry entry;
@@ -230,8 +236,20 @@ struct AdmitHarness
     std::shared_ptr<NonceCheckerInterface> txPoolNonceChecker;
     /// Nothing is a system transaction unless a case says so.
     SystemTxPredicate isSystemTx = [](Transaction const&) { return false; };
+    /// Default {} is allow=false: blob envelopes stay refused unless a case opts in, matching
+    /// the chains most tests describe.
+    BlobPolicy blobPolicy{};
     AccountState account{};
     bool accountExists = true;
+    /// The OP rollup cost the bound RollupCostFn answers; nullopt = bind nothing, as on the
+    /// FISCO and L1 lanes. `rollupCostAsks` counts the calls, so a case can state that a
+    /// context or lane never priced the envelope rather than infer it from a status.
+    std::optional<u512> rollupCost;
+    int rollupCostAsks = 0;
+    /// The envelope and head the callable was last asked about, for pinning what it is handed.
+    bytes lastRollupEnvelope;
+    uint64_t lastRollupGasLimit = 0;
+    protocol::BlockNumber lastRollupHeadNumber = -1;
 
     AdmitHarness()
     {
@@ -290,9 +308,21 @@ struct AdmitHarness
                 std::make_shared<crypto::Secp256k1Crypto>(), nullptr);
         auto validator =
             std::make_unique<CodeInjectingValidator>(cryptoSuite, ledger, ledgerConfigState,
-                txPoolNonceChecker, web3NonceChecker, isSystemTx, "group0", "chain0");
+                txPoolNonceChecker, web3NonceChecker, isSystemTx, "group0", "chain0", blobPolicy);
         validator->code = account.code;
         validator->setScheduler(scheduler);
+        if (rollupCost)
+        {
+            validator->setRollupCostFn(
+                [this](bytesConstRef envelope, uint64_t gasLimit,
+                    ledger::LedgerConfig const& head) -> task::Task<std::optional<u512>> {
+                    ++rollupCostAsks;
+                    lastRollupEnvelope.assign(envelope.begin(), envelope.end());
+                    lastRollupGasLimit = gasLimit;
+                    lastRollupHeadNumber = head.blockNumber();
+                    co_return rollupCost;
+                });
+        }
         if (ledgerNonceChecker)
         {
             validator->setLedgerNonceChecker(ledgerNonceChecker);

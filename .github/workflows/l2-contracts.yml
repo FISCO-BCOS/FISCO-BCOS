@@ -22,7 +22,7 @@ concurrency:
 jobs:
   forge:
     name: forge build/test + storage-layout drift gate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: bcos-l2-contracts

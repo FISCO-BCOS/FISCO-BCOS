@@ -32,15 +32,15 @@
 #include "MPTBuilder.h"
 #include "MPTFeatureGates.h"
 #include "ViewNodeStorage.h"
-#include <bcos-ledger/LedgerMethods.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-task/Task.h>
+#include <bcos-ledger/LedgerMethods.h>
 #include <bcos-task/TBBWait.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>
@@ -68,9 +68,8 @@ task::Task<MPTDeltaLayer> computeMptStateDelta(ViewType& view,
     bool trackRefCounts = false)
 {
     ViewNodeStorage<ViewType> nodeStorage(view);
-    bool const l2Mode =
-        ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-    co_return co_await buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode,
+    bool const ethLane = ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
+    co_return co_await buildAndCollect(nodeStorage, parentStateRoot, view, ethLane,
         ledger::account::nodeAddressTableMode(), trackRefCounts);
 }
 
@@ -93,11 +92,12 @@ task::Task<crypto::HashType> computeMptStateRoot(ViewType& view,
 /// under an MPT parent throws NotFoundBlockHeader (getBlockData, LedgerMethods.h) — never
 /// a silent empty-trie rebuild.
 template <class ViewType>
-task::Task<h256> parentStateRootFor(ViewType& view, ledger::Features const& features,
-    protocol::BlockNumber blockNumber, protocol::BlockFactory& blockFactory)
+task::Task<h256> parentStateRootFor(ViewType& view, int64_t executorVersion,
+    ledger::Features const& features, protocol::BlockNumber blockNumber,
+    protocol::BlockFactory& blockFactory)
 {
     h256 parentStateRoot = emptyRootHash();
-    if (blockNumber > 0 && shouldBuildMPT(features, blockNumber - 1))
+    if (blockNumber > 0 && shouldBuildMPT(executorVersion, features, blockNumber - 1))
     {
         auto parentBlock =
             co_await ledger::getBlockData(view, blockNumber - 1, ledger::HEADER, blockFactory);

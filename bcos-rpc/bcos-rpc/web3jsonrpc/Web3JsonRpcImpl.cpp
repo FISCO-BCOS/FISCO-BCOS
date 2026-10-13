@@ -74,7 +74,9 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
 
         Json::Value const& params = _request["params"];
         Json::Value result;
-        co_await (m_endpoints.*optHandler.value())(params, result);
+        auto handler = optHandler.value();
+        auto task = (m_endpoints.*handler)(params, result);
+        co_await std::move(task);
         result["id"] = _request["id"];
         response = std::move(result);
 
@@ -191,9 +193,9 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, const Sender& 
 void Web3JsonRpcImpl::onRPCRequest(
     const bcos::boostssl::http::HttpRequest& _request, const Sender& _sender)
 {
-    // JWT verification is mandatory for the OP-Engine RPC path: the handler below is only
+    // JWT verification is mandatory for the engine RPC path: the handler below is only
     // registered together with setJwtVerifier() in
-    // RpcFactory::buildWeb3JsonRpc(_enableOPEngine=true), so m_jwtVerifier is always set when this
+    // RpcFactory::buildWeb3JsonRpc(_enableEngineRpc=true), so m_jwtVerifier is always set when this
     // overload is reachable. The assert is a zero-cost documentation of that invariant (it compiles
     // out under NDEBUG).
     assert(m_jwtVerifier && "m_jwtVerifier is not set");

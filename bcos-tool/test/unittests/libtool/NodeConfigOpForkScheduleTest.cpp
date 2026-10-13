@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -6,8 +6,19 @@
  *  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file NodeConfigOpForkScheduleTest.cpp
+ * @brief NodeConfig [op_fork_schedule] canonical loader tests, joining the
+ *        generator output to the node loader.
  */
 
+#include "EthLaneGenesisFixture.h"
 #include "ExceptionCheck.h"
 #include "NodeConfigLoaderProbe.h"
 #include <boost/test/unit_test.hpp>
@@ -108,6 +119,27 @@ BOOST_AUTO_TEST_CASE(sectionWithoutCanonicalFailsClosed)
     LoaderProbe probe;
     BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(pt), InvalidConfig,
         [](auto const& e) { return errinfoContains(e, "canonical"); });
+}
+
+// The loader's unknown-key policy matches its two siblings ([op_fork_timestamps] and
+// [op_eip1559] both reject unrecognised keys): a stray key — schedule syntax pasted from
+// another section, or a misspelling — is refused instead of silently ignored, because the
+// canonical text is genesis-frozen into the SYS_CONFIG row (review F3).
+BOOST_AUTO_TEST_CASE(unknownKeyIsRejectedLikeTheSiblingLoaders)
+{
+    LoaderProbe probe;
+    BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
+                                                           "canonical=0:isthmus\n"
+                                                           "jovian_time=1000\n")),
+        InvalidConfig, [](auto const& e) { return errinfoContains(e, "unrecognised key"); });
+    BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
+                                                           "canonica=0:isthmus\n")),
+        InvalidConfig, [](auto const& e) { return errinfoContains(e, "unrecognised key"); });
+    // The recognised key alone still loads (the whitelist does not over-reject).
+    probe.loadOpForkSchedule(
+        fromIni("[op_fork_schedule]\n"
+                "canonical=0:isthmus\n"));
+    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(missingSectionLeavesScheduleUnset)

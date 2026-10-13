@@ -1,0 +1,4 @@
+The package c-kzg-4844 provides CMake targets:
+
+    find_package(c-kzg-4844 CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE ckzg)

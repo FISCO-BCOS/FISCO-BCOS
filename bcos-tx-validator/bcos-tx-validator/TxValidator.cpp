@@ -28,6 +28,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rlp-protocol/Web3TxEnvelope.h"
+#include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include "bcos-tx-validator/Normalize.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/DataConvertUtility.h"
@@ -60,7 +61,11 @@ bool isDelegatedCode(bytes const& code) noexcept
 /// Route on the SIGNED envelope, never on web3TypedTxKind: the mirror is unauthenticated, and a
 /// peer that mis-declares a 1559 envelope as legacy would otherwise dodge TipNotAboveCap and
 /// TypeByRevision.
-TxKind kindOf(Transaction const& tx)
+///
+/// A blob envelope routes to Web3Blob only when the chain admits blob transactions; otherwise it
+/// lands in Rejected, the same verdict it always had. normalize() applies the same policy, so the
+/// two cannot disagree.
+TxKind kindOf(Transaction const& tx, BlobPolicy blobPolicy)
 {
     if (tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {
@@ -74,6 +79,8 @@ TxKind kindOf(Transaction const& tx)
         return TxKind::Web3AccessList;
     case engine::RawTransactionKind::DynamicFee:
         return TxKind::Web3DynamicFee;
+    case engine::RawTransactionKind::Blob:
+        return blobPolicy.allow ? TxKind::Web3Blob : TxKind::Rejected;
     case engine::RawTransactionKind::SetCode:
         return TxKind::Web3SetCode;
     default:
@@ -90,6 +97,8 @@ evmc_revision requiredRevision(TxKind kind) noexcept
         return EVMC_BERLIN;  // EIP-2930
     case TxKind::Web3DynamicFee:
         return EVMC_LONDON;  // EIP-1559
+    case TxKind::Web3Blob:
+        return EVMC_CANCUN;  // EIP-4844
     case TxKind::Web3SetCode:
         return EVMC_PRAGUE;  // EIP-7702
     default:
@@ -118,7 +127,7 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     std::shared_ptr<ledger::LedgerInterface> ledger,
     ledger::LedgerConfigState::Ptr ledgerConfigState, NonceCheckerInterface::Ptr txPoolNonceChecker,
     Web3NonceChecker::Ptr web3NonceChecker, SystemTxPredicate isSystemTx, std::string groupId,
-    std::string chainId)
+    std::string chainId, BlobPolicy blobPolicy)
   : m_cryptoSuite(std::move(cryptoSuite)),
     m_ledger(std::move(ledger)),
     m_ledgerConfigState(std::move(ledgerConfigState)),
@@ -126,7 +135,8 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     m_web3NonceChecker(std::move(web3NonceChecker)),
     m_isSystemTx(std::move(isSystemTx)),
     m_groupId(std::move(groupId)),
-    m_chainId(std::move(chainId))
+    m_chainId(std::move(chainId)),
+    m_blobPolicy(blobPolicy)
 {
     if (!m_ledgerConfigState)
     {
@@ -168,6 +178,12 @@ void TxValidator::setScheduler(std::weak_ptr<scheduler::SchedulerInterface> sche
     m_scheduler = std::move(scheduler);
 }
 
+void TxValidator::setRollupCostFn(RollupCostFn rollupCost)
+{
+    WriteGuard guard(x_lateBound);
+    m_rollupCost = std::make_shared<const RollupCostFn>(std::move(rollupCost));
+}
+
 namespace
 {
 /// What every stage sees: the normalized transaction, its routing key and the validator's own
@@ -204,6 +220,11 @@ struct ChainView
     /// stand down. An unset row reaches the snapshot as getLedgerConfig's "0x0" default, which
     /// is the verdict the checks always gave an unset row anyway.
     u256 baseFee;
+    /// executor_version >= OPSTACK_EXECUTOR_VERSION, derived with baseFee. OP execution verifies
+    /// balance >= gasLimit * maxFeePerGas + value + rollup cost whatever the head base fee is
+    /// (OpExecutionPolicy.h validateTransaction, the cap withholdUpfront relies on), so the
+    /// free-gas exception in gasAndValueCost is the FISCO and L1 lanes' only.
+    bool opLane = false;
     /// web3_chain_id. nullopt only on a holder nothing has published to yet: getLedgerConfig
     /// always sets it, serving an unset row as 0 exactly as the executor's CHAINID does.
     std::optional<u256> web3ChainId;
@@ -220,6 +241,9 @@ struct StateInputs
     TxKind kind;
     ChainView const& chain;
     std::optional<AccountState> const& sender;
+    /// Asked of the bound RollupCostFn exactly when the set contains Check::L1Cost. nullopt =
+    /// no rollup cost on this chain (nothing bound, or the callable declined): it stands down.
+    std::optional<u512> const& rollupCost;
 };
 
 /// Inputs of the pool stage. Either checker may be null: see checkBcosPoolNonce and
@@ -250,8 +274,9 @@ struct PoolInputs
 
 TransactionStatus checkTypeGate(Envelope const& in)
 {
-    // An allow-list, not a deny-list. normalize() already refused blob/deposit/reserved
-    // envelopes, so Rejected here means the routing key and the gate disagree; and a value that
+    // An allow-list, not a deny-list. normalize() already refused deposit/reserved envelopes and,
+    // on a chain whose policy disallows them, blob envelopes too, so Rejected here means the
+    // routing key and the gate disagree; and a value that
     // is no TxKind at all (which kindOf() cannot produce, but the table resolves to this gate
     // alone precisely so that such a value is judged by something) must fall through to the
     // rejection too. Fail closed either way.
@@ -261,6 +286,7 @@ TransactionStatus checkTypeGate(Envelope const& in)
     case TxKind::Web3Legacy:
     case TxKind::Web3AccessList:
     case TxKind::Web3DynamicFee:
+    case TxKind::Web3Blob:
     case TxKind::Web3SetCode:
         return TransactionStatus::None;
     case TxKind::Rejected:
@@ -351,22 +377,24 @@ TransactionStatus checkBcosGroupChainId(Envelope const& in)
 
 TransactionStatus checkBcosTxAllowedOnChain(StateInputs const& in)
 {
-    // An OP-Stack L2 carries EIP-2718 envelopes only. A BCOSTransaction has none, so op-reth
-    // cannot re-derive it and rejects the whole block that carries it -- one native transaction
-    // in one block stalls the whole L2. Refuse it here instead of sealing a block the verifier
-    // throws away.
+    // An Ethereum-lane chain (executor_version >= ETHEREUM_EXECUTOR_VERSION: L1 EL or
+    // OP-Stack L2) carries EIP-2718 envelopes only. A BCOSTransaction has none, so the EL /
+    // op-reth cannot re-derive it and rejects the whole block that carries it -- one native
+    // transaction in one block stalls the whole chain. Refuse it here instead of sealing a
+    // block the verifier throws away.
     //
-    // The flag comes from the same snapshot every other state check reads, so this follows
-    // whatever the chain last published. It cannot change under a running pool: the flag is
-    // genesis-only, and Features::validate rejects it on the governance setSystemConfig path
-    // (bcos-framework/ledger/Features.cpp). That closes what would otherwise be a hole here --
-    // transactions already admitted are not re-judged at seal time (MemoryStorage re-checks the
-    // ledger nonce alone), so a mid-chain flip would leave native transactions in the pool
-    // eligible for a proposal. The rest of the tree makes the same genesis-time assumption
-    // (OpScheduler.h; NodeConfig::validateL2Invariants, which validates the flag against the
-    // genesis alloc; scheduler_v1::validateMPTFlagMatrix, which refuses to boot when its
-    // activation block is not 0).
-    if (in.chain.config->features().get(ledger::Features::Flag::feature_l2_ethereum_compat))
+    // The executor_version comes from the same snapshot every other state check reads, so
+    // this follows whatever the chain last published. It cannot change under a running pool:
+    // the lane is genesis-only, and SystemConfigPrecompiled refuses governance writes that
+    // cross the ETHEREUM_EXECUTOR_VERSION boundary. That closes what would otherwise be a
+    // hole here -- transactions already admitted are not re-judged at seal time
+    // (MemoryStorage re-checks the ledger nonce alone), so a mid-chain flip would leave
+    // native transactions in the pool eligible for a proposal. The rest of the tree makes
+    // the same genesis-time assumption (OpScheduler.h; NodeConfig::validateL2Invariants,
+    // which validates the genesis alloc against the lane;
+    // scheduler_v1::validateOpModeGenesisOnly, which refuses to boot when an
+    // executor_version at or above the Ethereum lane has an activation block that is not 0).
+    if (in.chain.config->executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         return TransactionStatus::BcosTxNotAllowed;
     }
@@ -392,6 +420,15 @@ TransactionStatus checkTipNotAboveCap(StateInputs const& in)
 TransactionStatus checkSetCodeHasTo(StateInputs const& in)
 {
     return in.tx.to().empty() ? TransactionStatus::CreateSetCodeTx : TransactionStatus::None;
+}
+
+TransactionStatus checkBlobHasTo(StateInputs const& in)
+{
+    // evmone's CREATE_BLOB_TX: a blob transaction is never a contract creation. The other half of
+    // evmone's blob block -- blob_hashes non-empty -- runs while normalizing, because an empty
+    // list cannot survive the mirror (Web3TarsBridge writes the hashes the envelope carried, and
+    // normalize refuses an envelope that carried none).
+    return in.tx.to().empty() ? TransactionStatus::BlobTxMissingHashes : TransactionStatus::None;
 }
 
 TransactionStatus checkAuthListNonEmpty(StateInputs const& in)
@@ -549,30 +586,51 @@ TransactionStatus checkInitCodeSize(StateInputs const& in)
     return TransactionStatus::None;
 }
 
-TransactionStatus checkBalance(StateInputs const& in)
+/// What the sender must cover before any rollup cost -- geth's tx.Cost(). Which fee it charges
+/// depends on the lane and on whether this chain charges gas at all:
+///   OP lane                                    -> value + gasLimit * effectiveGasPrice, always
+///   baseFee == 0 (tx_gas_price unset or "0")  -> gas is free; only `value` has to be covered
+///   baseFee > 0                                -> value + gasLimit * effectiveGasPrice
+/// The free-gas rule mirrors the FISCO one. It differs from evmone, which always charges
+/// max_gas_price * gas_limit + value, because on a free-gas FISCO chain the sender is never
+/// actually debited the fee cap they declared -- charging it at admission would reject
+/// transactions that execute perfectly well. The OP lane has no such chain: its execution runs
+/// the evmone comparison unconditionally (OpExecutionPolicy.h validateTransaction), so a
+/// zero-base-fee OP head must not admit a positive-fee transaction that execution refuses.
+///
+/// 512-bit, deliberately. bcos::u256 carries boost::multiprecision::unchecked, so
+/// gasLimit * gasPrice + value is reduced mod 2^256 with no signal -- with a maxFeePerGas
+/// near 2^256-1 the product comes back small and an unfundable transaction is admitted.
+/// Widening FIRST is what makes this correct: two 256-bit operands multiply into at most 512
+/// bits, so the u512 product cannot wrap even though u512 is itself `unchecked`.
+u512 gasAndValueCost(StateInputs const& in)
 {
-    // What the sender must be able to cover depends on whether this chain charges gas at all:
-    //   tx_gas_price unset or "0"  -> gas is free; only `value` has to be covered
-    //   tx_gas_price > 0           -> value + gasLimit * effectiveGasPrice
-    // This mirrors the existing rule. It differs from evmone, which always charges
-    // max_gas_price * gas_limit + value, because on a free-gas FISCO chain the sender is never
-    // actually debited the fee cap they declared -- charging it at admission would reject
-    // transactions that execute perfectly well.
-    const bool chargesGas = in.chain.baseFee != 0;
-
-    u256 const balance = in.sender.value().balance;
-
-    // 512-bit, deliberately. bcos::u256 carries boost::multiprecision::unchecked, so
-    // gasLimit * gasPrice + value is reduced mod 2^256 with no signal -- with a maxFeePerGas
-    // near 2^256-1 the product comes back small and an unfundable transaction is admitted.
-    // Widening FIRST is what makes this correct: two 256-bit operands multiply into at most 512
-    // bits, so the u512 product cannot wrap even though u512 is itself `unchecked`.
     u512 required{in.tx.value()};
-    if (chargesGas)
+    if (in.chain.baseFee != 0 || in.chain.opLane)
     {
         required += u512{in.tx.gasLimit()} * u512{protocol::effectiveGasPrice(in.tx)};
     }
-    if (u512{balance} < required)
+    return required;
+}
+
+TransactionStatus checkBalance(StateInputs const& in)
+{
+    if (u512{in.sender.value().balance} < gasAndValueCost(in))
+    {
+        return TransactionStatus::InsufficientFunds;
+    }
+    return TransactionStatus::None;
+}
+
+TransactionStatus checkL1Cost(StateInputs const& in)
+{
+    if (!in.rollupCost.has_value())
+    {
+        return TransactionStatus::None;  // no rollup cost on this chain
+    }
+    // op-geth ValidateTransactionWithState: balance < tx.Cost() + rollupCost. Both addends are
+    // 512-bit already; their sum is below 2^322 (gasLimit is 64-bit), so nothing wraps.
+    if (u512{in.sender.value().balance} < gasAndValueCost(in) + *in.rollupCost)
     {
         return TransactionStatus::InsufficientFunds;
     }
@@ -670,6 +728,7 @@ constexpr std::array<CheckEntry<StateInputs>, c_stateOrder.size()> c_stateRegist
     {Check::BcosTxAllowedOnChain, &checkBcosTxAllowedOnChain},
     {Check::TypeByRevision, &checkTypeByRevision},
     {Check::SetCodeHasTo, &checkSetCodeHasTo},
+    {Check::BlobHasTo, &checkBlobHasTo},
     {Check::AuthListNonEmpty, &checkAuthListNonEmpty},
     {Check::TipNotAboveCap, &checkTipNotAboveCap},
     {Check::MaxGasLimit, &checkMaxGasLimit},
@@ -680,6 +739,7 @@ constexpr std::array<CheckEntry<StateInputs>, c_stateOrder.size()> c_stateRegist
     {Check::Web3NonceWindow, &checkWeb3NonceWindow},
     {Check::InitCodeSize, &checkInitCodeSize},
     {Check::Balance, &checkBalance},
+    {Check::L1Cost, &checkL1Cost},
     {Check::IntrinsicGas, &checkIntrinsicGas},
 }};
 
@@ -774,9 +834,23 @@ ChainView readChainView(ledger::LedgerConfigState const& configState, Check chec
     }
     if ((checks & c_baseFeeDependent) != Check::None)
     {
-        // The raw SYS_CONFIG string: "0x0" by default, hex as SystemConfigPrecompiled enforces. A
-        // value u256 cannot parse throws here, as it did when the checks parsed it themselves.
-        view.baseFee = u256(std::get<0>(view.config->gasPrice()));
+        // The OP lane prices against the head block's EIP-1559 base fee, as op-geth's pool
+        // does against head.BaseFee; tx_gas_price is a FISCO governance row the OP fee market
+        // never reads. The FISCO and L1 lanes keep tx_gas_price, as does an OP snapshot whose
+        // getLedgerConfig read no head header.
+        auto const& headBaseFee = view.config->baseFeePerGas();
+        view.opLane = view.config->executorVersion() >= ledger::OPSTACK_EXECUTOR_VERSION;
+        if (view.opLane && headBaseFee)
+        {
+            view.baseFee = *headBaseFee;
+        }
+        else
+        {
+            // The raw SYS_CONFIG string: "0x0" by default, hex as SystemConfigPrecompiled
+            // enforces. A value u256 cannot parse throws here, as it did when the checks parsed
+            // it themselves.
+            view.baseFee = u256(std::get<0>(view.config->gasPrice()));
+        }
     }
     if (contains(checks, Check::ChainId))
     {
@@ -857,6 +931,25 @@ task::Task<std::optional<AccountState>> TxValidator::readAccountState(std::strin
     co_return state;
 }
 
+task::Task<std::optional<u512>> TxValidator::readRollupCost(
+    protocol::Transaction const& tx, ledger::LedgerConfig const& head)
+{
+    std::shared_ptr<const RollupCostFn> rollupCost;
+    {
+        ReadGuard guard(x_lateBound);
+        rollupCost = m_rollupCost;
+    }
+    if (!rollupCost)
+    {
+        co_return std::nullopt;
+    }
+    // The wire form: extraTransactionBytes is the signing payload, and the L1 fee covers the
+    // signature too.
+    auto const envelope = bcostars::protocol::reassembleWeb3RawTransaction(
+        tx.extraTransactionBytes(), tx.signatureData());
+    co_return co_await (*rollupCost)(ref(envelope), static_cast<uint64_t>(tx.gasLimit()), head);
+}
+
 task::Task<TransactionStatus> TxValidator::verify(
     Transaction& tx, AdmissionContext context, SignaturePolicy policy)
 {
@@ -872,12 +965,12 @@ task::Task<TransactionStatus> TxValidator::verify(
     // that reads a business field reads the mirror, and until this runs the mirror is whatever
     // the sender chose. It is not a Check bit precisely so that no context can switch it off and
     // nothing can order a mirror-reading check ahead of it.
-    if (auto status = normalize(tx); status != TransactionStatus::None)
+    if (auto status = normalize(tx, m_blobPolicy); status != TransactionStatus::None)
     {
         co_return status;
     }
 
-    const auto kind = kindOf(tx);
+    const auto kind = kindOf(tx, m_blobPolicy);
     // A system transaction is one whose `to` is a system contract: a property of the
     // transaction, not of any check, so it is marked here regardless of which checks run. The
     // pool-side validator marked it inside its signature path, which SignaturePolicy::Disabled
@@ -913,7 +1006,13 @@ task::Task<TransactionStatus> TxValidator::verify(
         {
             sender = co_await readAccountState(tx.sender());
         }
-        const StateInputs inputs{.tx = tx, .kind = kind, .chain = chain, .sender = sender};
+        std::optional<u512> rollupCost;
+        if ((checks & c_rollupCostDependent) != Check::None)
+        {
+            rollupCost = co_await readRollupCost(tx, *chain.config);
+        }
+        const StateInputs inputs{
+            .tx = tx, .kind = kind, .chain = chain, .sender = sender, .rollupCost = rollupCost};
         if (auto status = runStage(c_stateRegistry, checks, inputs);
             status != TransactionStatus::None)
         {

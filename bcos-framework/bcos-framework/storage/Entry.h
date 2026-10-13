@@ -26,9 +26,14 @@ namespace bcos::storage
 {
 
 template <class T>
-concept ByteBuffer = requires(const T& t) {
-    { t.data() } -> std::convertible_to<const void*>;
-    { t.size() } -> std::convertible_to<std::size_t>;
+concept ByteBuffer = requires(const T& t)
+{
+    {
+        t.data()
+        } -> std::convertible_to<const void*>;
+    {
+        t.size()
+        } -> std::convertible_to<std::size_t>;
     requires sizeof(typename std::remove_cvref_t<T>::value_type) == 1;
 };
 
@@ -148,8 +153,7 @@ public:
 
 // Adapts any ByteBuffer-conforming type T.
 template <ByteBuffer T, EntryStatus S>
-    requires(sizeof(T) <= MAX_PROXY_BUFFER_SIZE)
-class BufferModel
+requires(sizeof(T) <= MAX_PROXY_BUFFER_SIZE) class BufferModel
 {
     T m_value;
 
@@ -231,10 +235,11 @@ inline constexpr encode_t encode{};
 // reconstructs a typed value from raw bytes (getTyped() only returns a
 // pointer when the entry already holds a T).
 template <typename T>
-concept Encodable = requires(const T& v) {
+concept Encodable = requires(const T& v)
+{
     {
         encode(v, [](bytesConstRef) {})
-    } -> std::same_as<void>;
+        } -> std::same_as<void>;
 };
 
 // ─── Typed holder model ────────────────────────────────────────────
@@ -263,6 +268,19 @@ public:
     std::type_index typeIndex() const noexcept { return typeid(T); }
 };
 
+class Entry;
+
+// Constraint for Entry's greedy constructor.  Spelled as a concept with the
+// class as a template parameter so member lookup of `set` is dependent and
+// deferred to instantiation (when Entry is complete): an in-class
+// requires-clause naming `Entry::set` directly makes clang reject the member
+// access into the still-incomplete class.
+template <typename T, typename E>
+concept EntrySettable = requires(E& self, T&& value)
+{
+    self.set(std::forward<T>(value));
+};
+
 class Entry
 {
 public:
@@ -280,7 +298,6 @@ public:
     using Holder = pro::proxy<AnyEntryFacade>;
 
     Entry() = default;
-    explicit Entry(auto input) { set(std::move(input)); }
 
     // m_buffer is the sole member: defaulted special members preserve the
     // held model (typed entries stay typed).  Move is noexcept thanks to
@@ -307,11 +324,11 @@ public:
     // "holds an empty buffer".  The returned view aliases the entry's
     // internal storage — same lifetime rules as get().
     template <ByteBuffer T = std::string_view>
-        requires(IsByteBufferViewV<T> && std::constructible_from<T,
-                     const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
-    std::optional<T> getBuffer() const
-        noexcept(std::is_nothrow_constructible_v<T,
-            const typename std::remove_cvref_t<T>::value_type*, std::size_t>);
+    requires(IsByteBufferViewV<T>&& std::constructible_from<T,
+        const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
+        std::optional<T> getBuffer()
+    const noexcept(std::is_nothrow_constructible_v<T,
+        const typename std::remove_cvref_t<T>::value_type*, std::size_t>);
     const char* data() const&;
     int32_t size() const;
 
@@ -346,8 +363,8 @@ public:
     }
 
     template <typename T>
-        requires(!ByteBuffer<std::remove_cvref_t<T>> && std::convertible_to<T, std::string_view>)
-    void set(T&& value)
+    requires(!ByteBuffer<std::remove_cvref_t<T>> &&
+             std::convertible_to<T, std::string_view>) void set(T&& value)
     {
         set(std::string_view(std::forward<T>(value)));
     }
@@ -357,6 +374,20 @@ public:
     {
         m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
             SharedBufferModel<T, ENTRY_MODIFIED>{std::move(value)});
+    }
+
+    // Constrained to the types set() accepts: unconstrained, this constructor
+    // makes is_constructible_v<Entry, T> true for every T, which sends
+    // libstdc++ 16's std::optional<Entry> into a self-dependent constraint
+    // ("satisfaction of atomic constraint ... depends on itself").  Takes the
+    // argument BY VALUE (like the original Entry(auto)) so an lvalue argument
+    // is copied, not moved-from; the Entry exclusion keeps the copy/move
+    // constructors winning for Entry arguments.
+    template <typename T>
+    requires(!std::same_as<std::remove_cvref_t<T>, Entry> &&
+             EntrySettable<T, Entry>) explicit Entry(T input)
+    {
+        set(std::move(input));
     }
 
     // ── Typed storage API ──────────────────────────────────────────
@@ -377,7 +408,7 @@ public:
     bool holdsBuffer() const noexcept
     {
         return m_buffer.has_value() && m_buffer->getTypedPtr() == nullptr &&
-            m_buffer->status() != ENTRY_DELETED;
+               m_buffer->status() != ENTRY_DELETED;
     }
 
     // Encode for persistence via the facade's encode convention.
@@ -473,19 +504,19 @@ bool Entry::holdsType() const noexcept
 }
 
 template <ByteBuffer T>
-    requires(IsByteBufferViewV<T> && std::constructible_from<T,
-                 const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
-std::optional<T> Entry::getBuffer() const
-    noexcept(std::is_nothrow_constructible_v<T,
-        const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
+requires(IsByteBufferViewV<T>&&
+        std::constructible_from<T, const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
+    std::optional<T> Entry::getBuffer()
+const noexcept(std::is_nothrow_constructible_v<T,
+    const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
 {
     using RawType = std::remove_cvref_t<T>;
     if (!holdsBuffer())
     {
         return std::nullopt;
     }
-    return RawType{reinterpret_cast<const typename RawType::value_type*>(m_buffer->data()),
-        m_buffer->size()};
+    return RawType{
+        reinterpret_cast<const typename RawType::value_type*>(m_buffer->data()), m_buffer->size()};
 }
 
 }  // namespace bcos::storage

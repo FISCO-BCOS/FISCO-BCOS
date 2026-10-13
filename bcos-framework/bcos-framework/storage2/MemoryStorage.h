@@ -14,6 +14,10 @@
  *  limitations under the License.
  */
 
+/// @file MemoryStorage.h
+/// @brief In-memory Storage2 backend: ordered/concurrent buckets, logical deletion
+/// and the merge primitives (each merge destination needs its own copy of a row).
+
 #pragma once
 
 #include "Storage.h"
@@ -59,10 +63,11 @@ struct NullLock
 };
 
 template <class Object>
-concept HasMemberSize = requires(Object object) {
+concept HasMemberSize = requires(Object object)
+{
     {
         object.size()
-    } -> std::integral;
+        } -> std::integral;
 };
 
 struct Empty
@@ -164,11 +169,7 @@ public:
     Buckets m_buckets;
     [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> m_maxCapacity;
 
-    void setMaxCapacity(int64_t capacity)
-        requires withLRU
-    {
-        m_maxCapacity = capacity;
-    }
+    void setMaxCapacity(int64_t capacity) requires withLRU { m_maxCapacity = capacity; }
 
     size_t getBucketIndex(auto const& key)
     {
@@ -196,9 +197,8 @@ public:
         }
     }
 
-    void updateLRUAndCheck(
-        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt)
-        requires withLRU
+    void updateLRUAndCheck(Bucket& bucket,
+        typename Container::template nth_index<0>::type::iterator entryIt) requires withLRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
@@ -479,8 +479,8 @@ public:
         co_return;
     }
 
-    task::AwaitableValue<void> merge(MemoryStorage& fromStorage)
-        requires(!std::is_const_v<decltype(fromStorage)>)
+    task::AwaitableValue<void> merge(MemoryStorage& fromStorage) requires(
+        !std::is_const_v<decltype(fromStorage)>)
     {
         for (auto&& [bucket, fromBucket] : ::ranges::views::zip(m_buckets, fromStorage.m_buckets))
         {
@@ -572,14 +572,11 @@ public:
         return task::AwaitableValue(std::move(iterator));
     }
 
-    void mergeConcurrent(MemoryStorage& toStorage)
-        requires withConcurrent
-    {}
+    void mergeConcurrent(MemoryStorage& toStorage) requires withConcurrent {}
     template <class FromStorage, class... FromStorages>
-    void mergeConcurrent(
-        MemoryStorage& toStorage, FromStorage& fromStorage, FromStorages&... fromStorages)
-        requires(withConcurrent && !FromStorage::withConcurrent &&
-                 (... && (!FromStorages::withConcurrent)))
+    void mergeConcurrent(MemoryStorage& toStorage, FromStorage& fromStorage,
+        FromStorages&... fromStorages) requires(withConcurrent && !FromStorage::withConcurrent &&
+                                                (... && (!FromStorages::withConcurrent)))
     {
         auto& bucket = fromStorage.m_buckets[0];
         auto& index = bucket.container.template get<0>();
@@ -607,21 +604,17 @@ public:
                 for (auto& [data, _] : chunk)
                 {
                     auto&& [key, value] = *data;
-                    // Copy, never move — and the copy is the floor for this shape, not
-                    // overhead to be optimized away. mergeIntoBackends merges the SAME
-                    // source storage into the backend and the cache in parallel
-                    // (tbb::parallel_invoke), so two mergeConcurrent passes read this
-                    // source concurrently: moving out of the shared source would let the
-                    // second pass write a moved-from (gutted) Entry — a nondeterministic
-                    // corruption of one layer (observed as intermittent state-root
-                    // mismatches on the switch-SetCanonical path).
-                    // Both destinations need their own copy of every merged value, so two
-                    // deep copies per row is the theoretical minimum here. And move is NOT
-                    // recoverable by dispatching on the single-pass (no-cache) shape:
-                    // mergeBackStorage hands the merged source layer back to its caller,
-                    // who may keep reading it — a moved-out row would be a silent read
-                    // miss on that layer. Recovering the copy needs an explicit
-                    // move-and-erase contract on the source, agreed with every caller of
+                    // A copy, spelled as one. The source is const-bound (the transform
+                    // lambda above takes Data const&), so innerValue deduces const and
+                    // this line was ALREADY a copy when it read std::move(innerValue) —
+                    // a const rvalue selects the copy constructor. Keep it explicit so
+                    // nobody "optimizes" it into a real move: mergeIntoBackends merges
+                    // the SAME source storage into the backend and the cache in
+                    // parallel (tbb::parallel_invoke), so two mergeConcurrent passes
+                    // read this source concurrently, and a real move here would let the
+                    // second pass write a moved-from (gutted) Entry — one layer silently
+                    // corrupted. Recovering the move needs an explicit move-and-erase
+                    // contract on the source, agreed with every caller of
                     // mergeBackStorage/mergeToBackends — not a silent move here.
                     std::visit(
                         [&](auto& innerValue) {
@@ -635,8 +628,8 @@ public:
     }
 
     template <class... FromStorages>
-        requires(withConcurrent && (... && (!FromStorages::withConcurrent)))
-    task::AwaitableValue<void> merge(FromStorages&... fromStorage)
+    requires(withConcurrent && (... && (!FromStorages::withConcurrent)))
+        task::AwaitableValue<void> merge(FromStorages&... fromStorage)
     {
         mergeConcurrent(*this, fromStorage...);
         return {};

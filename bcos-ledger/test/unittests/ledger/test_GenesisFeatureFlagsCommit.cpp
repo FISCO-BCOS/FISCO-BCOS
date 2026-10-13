@@ -46,7 +46,7 @@ GenesisConfig makeConfigWithoutFlagsSlot()
     genesisConfig.m_txGasLimit = 3000000000;
     genesisConfig.m_compatibilityVersion =
         static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-    genesisConfig.m_features.push_back(FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+    genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     genesisConfig.m_chainID = "901";
     genesisConfig.m_groupID = "group0";
     genesisConfig.m_allocs.push_back(Alloc{.address = "43000000000000000000000000000000000000c0",
@@ -54,6 +54,16 @@ GenesisConfig makeConfigWithoutFlagsSlot()
         .nonce = "0",
         .code = "6080604052",
         .storage = {}});
+    return genesisConfig;
+}
+
+GenesisConfig makeConfigWithoutFlagsSlotAt(std::string address)
+{
+    // Same shape as makeConfigWithoutFlagsSlot, on another layout: the committed C2 genesis
+    // puts the SystemConfig predeploy at 0x4200...1000, and the slot mandate must not be
+    // keyed on the template's 0x43...C0 account.
+    auto genesisConfig = makeConfigWithoutFlagsSlot();
+    genesisConfig.m_allocs[0].address = std::move(address);
     return genesisConfig;
 }
 
@@ -116,6 +126,28 @@ BOOST_AUTO_TEST_CASE(MissingFlagsSlotRefusesToBuild)
     }());
 }
 
+// The value check is slot-keyed, so it also runs on a layout the mandate list does not name
+// as long as the slot is present: a C2-layout alloc whose feature_flags word disagrees with
+// this node's feature set refuses (before the slot-key lookup it was skipped silently).
+BOOST_AUTO_TEST_CASE(MismatchingFlagsSlotAtTheC2LayoutRefusesToBuild)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto param = makeParam();
+        auto genesisConfig =
+            makeConfigWithoutFlagsSlotAt("4200000000000000000000000000000000001000");
+        appendGenesisFeatureFlagsSlot(genesisConfig, "4200000000000000000000000000000000001000");
+        BOOST_REQUIRE(!genesisConfig.m_allocs[0].storage.empty());
+        genesisConfig.m_allocs[0].storage[0].second = std::string(64, 'f');  // wrong flags word
+        BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
+            bcos::tool::InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "does not match this node's genesis feature set");
+            });
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(MismatchingFlagsSlotRefusesToBuild)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -163,9 +195,8 @@ BOOST_AUTO_TEST_CASE(RestartGuardsOnGenesisPinNotFeatureFlags)
         auto perturbed = genesisConfig;
         perturbed.m_features.push_back(FeatureSet{Features::Flag::feature_rpbft_term_weight, 1});
         BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, perturbed, param),
-            bcos::tool::InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "Genesis Data is inconsistent");
-            });
+            bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "Genesis Data is inconsistent"); });
         co_return;
     }());
 }

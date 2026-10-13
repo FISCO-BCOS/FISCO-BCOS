@@ -204,7 +204,11 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_raw_address",
         "feature_rpbft_vrf_type_secp256k1",
         "feature_balance_policy2",
-        "feature_l2_ethereum_compat",
+        // Bit 57 is reserved, not reusable: it was feature_l2_ethereum_compat on the
+        // release-3.18.0 development line, but the Ethereum lane is now decided by
+        // executor_version (>= 2) alone. It is still declared so the next flag added cannot
+        // take its on-chain bit.
+        "reserved_removed_l2_ethereum_compat",
         "feature_mpt_state_root",
         // Last, matching Flag's declaration: bugfix_nonce_ordering takes the next unused enum
         // value (59) rather than the slot next to bugfix_statestorage_hash_v3_17 it occupies on
@@ -246,6 +250,25 @@ BOOST_AUTO_TEST_CASE(retiredOpJovianBitIsReservedNotReusable)
     BOOST_CHECK_EQUAL(features.toFlagsNumber(), bcos::u256(1) << 60);
 }
 
+// The enum value IS the on-chain feature_flags bit position, so bit 57 staying occupied by the
+// reserved placeholder is a consensus constant, not a cosmetic detail. Pin the number, and pin
+// that the retired NAME no longer resolves — a genesis still carrying
+// feature_l2_ethereum_compat=1 must fail at load rather than quietly enable nothing: the
+// Ethereum lane is now expressed by executor_version (>= 2), not by a feature flag.
+BOOST_AUTO_TEST_CASE(retiredL2EthereumCompatBitIsReservedNotReusable)
+{
+    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::reserved_removed_l2_ethereum_compat), 57);
+    BOOST_CHECK(!Features::contains("feature_l2_ethereum_compat"));
+    BOOST_CHECK_THROW(Features::string2Flag("feature_l2_ethereum_compat"), NoSuchFeatureError);
+
+    // The reserved slot carries no behaviour of its own: it is off in a default Features and
+    // packs to exactly bit 57 when set, which is what keeps it un-reusable.
+    Features features;
+    BOOST_CHECK(!features.get(Features::Flag::reserved_removed_l2_ethereum_compat));
+    features.set(Features::Flag::reserved_removed_l2_ethereum_compat);
+    BOOST_CHECK_EQUAL(features.toFlagsNumber(), bcos::u256(1) << 57);
+}
+
 BOOST_AUTO_TEST_CASE(toFlagsNumber)
 {
     // empty feature set packs to 0
@@ -254,15 +277,15 @@ BOOST_AUTO_TEST_CASE(toFlagsNumber)
 
     // bit = the flag's explicit enum value
     Features one;
-    one.set(Features::Flag::feature_l2_ethereum_compat);
-    auto l2Bit = static_cast<size_t>(Features::Flag::feature_l2_ethereum_compat);
-    BOOST_CHECK_EQUAL(one.toFlagsNumber(), bcos::u256(1) << l2Bit);
+    one.set(Features::Flag::feature_mpt_state_root);
+    auto mptBit = static_cast<size_t>(Features::Flag::feature_mpt_state_root);
+    BOOST_CHECK_EQUAL(one.toFlagsNumber(), bcos::u256(1) << mptBit);
 
     // bugfix_revert has value 0 -> bit 0; multiple set flags OR together
     Features two;
     two.set(Features::Flag::bugfix_revert);
-    two.set(Features::Flag::feature_l2_ethereum_compat);
-    BOOST_CHECK_EQUAL(two.toFlagsNumber(), (bcos::u256(1) << 0) | (bcos::u256(1) << l2Bit));
+    two.set(Features::Flag::feature_mpt_state_root);
+    BOOST_CHECK_EQUAL(two.toFlagsNumber(), (bcos::u256(1) << 0) | (bcos::u256(1) << mptBit));
 }
 
 BOOST_AUTO_TEST_CASE(flagCountWithinReflectionRange)

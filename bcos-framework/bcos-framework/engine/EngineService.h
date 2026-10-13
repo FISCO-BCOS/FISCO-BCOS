@@ -42,33 +42,38 @@ namespace bcos::engine
 /// via AnyEngineService.
 template <class EngineServiceType>
 concept EngineServiceConcept = requires(EngineServiceType& engine,
-    std::vector<std::string> remoteCapabilities,
-    const ForkchoiceState& forkchoiceState, const PayloadAttributes* payloadAttributes,
-    std::uint32_t version, const PayloadID& payloadId,
-    const NewPayloadRequest& newPayloadRequest) {
+    std::vector<std::string> remoteCapabilities, const ForkchoiceState& forkchoiceState,
+    const PayloadAttributes* payloadAttributes, std::uint32_t version, const PayloadID& payloadId,
+    const NewPayloadRequest& newPayloadRequest)
+{
     {
         engine.exchangeCapabilities(remoteCapabilities)
-    } -> task::IsAwaitableReturnValue<std::vector<std::string>>;
+        } -> task::IsAwaitableReturnValue<std::vector<std::string>>;
 
     {
         engine.updateForkchoice(forkchoiceState, payloadAttributes, version)
-    } -> task::IsAwaitableReturnValue<ForkchoiceUpdatedResult>;
+        } -> task::IsAwaitableReturnValue<ForkchoiceUpdatedResult>;
 
     {
         engine.getPayload(payloadId, version)
-    } -> task::IsAwaitableReturnValue<GetPayloadResult>;
+        } -> task::IsAwaitableReturnValue<GetPayloadResult>;
 
     {
         engine.newPayload(newPayloadRequest, version)
-    } -> task::IsAwaitableReturnValue<PayloadStatus>;
+        } -> task::IsAwaitableReturnValue<PayloadStatus>;
 
     {
         engine.getSafeBlockNumber()
-    } -> std::same_as<std::optional<bcos::protocol::BlockNumber>>;
+        } -> std::same_as<std::optional<bcos::protocol::BlockNumber>>;
 
     {
         engine.getFinalizedBlockNumber()
-    } -> std::same_as<std::optional<bcos::protocol::BlockNumber>>;
+        } -> std::same_as<std::optional<bcos::protocol::BlockNumber>>;
+
+    // The head of the last applied forkchoice (unset before the first one).
+    {
+        engine.getHeadBlockNumber()
+        } -> std::same_as<std::optional<bcos::protocol::BlockNumber>>;
 };
 
 }  // namespace bcos::engine

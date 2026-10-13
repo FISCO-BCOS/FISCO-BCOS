@@ -12,6 +12,9 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
+ *
+ * @file OpEip1559Params.h
+ * @brief The declared-config EIP-1559 triple and its legacy fallback preset.
  */
 
 #pragma once
@@ -36,6 +39,10 @@ struct OpEip1559Params
     std::uint64_t elasticity = 0;
     std::uint64_t denominator = 0;
     std::uint64_t denominatorCanyon = 0;
+
+    /// Field-wise identity — the boot probe's recorded-vs-effective comparison and the tests
+    /// compare whole triples, not individual fields.
+    [[nodiscard]] friend bool operator==(OpEip1559Params const&, OpEip1559Params const&) = default;
 };
 
 /// The OP mainnet preset op-deployer emits (op-deployer/pkg/deployer/standard/standard.go:32-34),
@@ -53,7 +60,7 @@ struct OpEip1559Params
 /// genesis pin (bcos-tool) and both pricing paths, so changing it would re-price every undeclared
 /// chain and split it away from the pin. An undeclared OP-lane node logs a WARNING at boot and
 /// again when the zero-param substitution fires, so the assumption is never silent.
-inline constexpr OpEip1559Params kLegacyOpEip1559Params{.elasticity = 6,
+inline constexpr OpEip1559Params c_legacyOpEip1559Params{.elasticity = 6,
     .denominator = 50,
     .denominatorCanyon = 250};
 
@@ -63,7 +70,7 @@ inline constexpr OpEip1559Params kLegacyOpEip1559Params{.elasticity = 6,
 [[nodiscard]] inline OpEip1559Params effectiveOpEip1559(
     std::optional<OpEip1559Params> const& declared) noexcept
 {
-    return declared.has_value() ? *declared : kLegacyOpEip1559Params;
+    return declared.has_value() ? *declared : c_legacyOpEip1559Params;
 }
 
 }  // namespace bcos::engine

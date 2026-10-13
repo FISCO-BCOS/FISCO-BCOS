@@ -34,8 +34,8 @@ namespace bcos::rpc
 {
 /// The log entry's address as 40 hex digits, no 0x prefix. LogEntry::address() carries
 /// whichever form the executing lane produced, and the two lanes disagree:
-///   * the OP lane stores the raw 20 bytes (bcos-evm/opstack/OpTransition.cpp
-///     mapOpLogAddress — a byte copy, deliberately not a hex encode);
+///   * the OP lane stores the raw 20 bytes (opstack-executor/OpExecutionPolicy.h —
+///     a byte copy, deliberately not a hex encode);
 ///   * the FISCO / eth-mode lane stores the ASCII hex text (bcos-executor HostContext::log
 ///     passes myAddress(), which is the text form on that lane).
 /// Every JSON producer of a log address must normalize through here: hex-encoding the text

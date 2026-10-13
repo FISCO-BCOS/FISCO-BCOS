@@ -224,6 +224,15 @@ public:
 
     // FIB-185: expose the consensus-timer watchdog for unit testing.
     void checkConsensusTimerWatchdogForTest() { PBFTEngine::checkConsensusTimerWatchdog(); }
+
+    // Test-only: expose the FIB-132 in-flight verify count so tests can wait for
+    // a deliberately-rejected proposal's async verification to drain before
+    // reusing the same (index, hash, view) key in a follow-up case.
+    size_t inFlightProposalSizeForTest()
+    {
+        RecursiveGuard lock(m_mutex);
+        return m_inFlightProposals.size();
+    }
 };
 
 class FakePBFTImpl : public PBFTImpl

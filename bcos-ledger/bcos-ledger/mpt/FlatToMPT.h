@@ -112,11 +112,12 @@ struct FlatAccountMeta
 /// migration). Reads only; this function never writes.
 ///
 /// @p ethLaneNaming selects the lane's naming rule (the OP lane passes its l2Mode here):
-/// the Storage2State bridge deliberately writes the c_systemTxsAddress members under their
+/// the OP lane writes the c_systemTxsAddress members under their
 /// /apps/ logical name like any other account (in Ethereum they ARE ordinary accounts;
-/// Storage2State.h applyModifiedEntry explains), so on that lane the flat name comes from
+/// the retired Storage2State bridge established this convention), so on that lane the
+/// flat name comes from
 /// account::ethLaneAccountTableName — /apps/ logical, no /sys/ routing, re-encoded to the
-/// node layout — keeping this back-fill on the same logical row as the bridge in both
+/// node layout — keeping this back-fill on the same logical row as the executor in both
 /// encodings. The v1 lane passes false and keeps EVMAccount's /sys/ routing.
 ///
 /// Missing rows take the Yellow Paper defaults: nonce/balance 0, codeHash = emptyCodeHash() —

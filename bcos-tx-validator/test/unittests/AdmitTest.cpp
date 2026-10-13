@@ -557,6 +557,94 @@ BOOST_AUTO_TEST_CASE(blobAndDepositEnvelopesAreRefused)
     BOOST_CHECK_EQUAL(harness.accountStateReads(), 0);
 }
 
+// ------------------------------------------------------------ blob admission (BlobPolicy::allow)
+
+// The mirror image of the refusal above: with the policy on, a well-formed blob envelope takes
+// the Web3Blob column -- the Web3 common set plus the revision gate, the tip rule and "to
+// present" -- and a conforming transaction is admitted.
+BOOST_AUTO_TEST_CASE(blobTransactionIsAdmittedWhenTheChainAllowsIt)
+{
+    AdmitHarness harness;
+    harness.blobPolicy = {.allow = true};
+    auto tx = admitTx({.type = rpc::TransactionType::EIP4844,
+        .maxFeePerBlobGas = 1,
+        .blobVersionedHashes = {h256("0x01" + std::string(62, '0'))}});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+// EIP-4844: a blob transaction cannot create a contract (evmone's CREATE_BLOB_TX).
+BOOST_AUTO_TEST_CASE(blobTransactionWithoutRecipientIsRejected)
+{
+    AdmitHarness harness;
+    harness.blobPolicy = {.allow = true};
+    auto tx = admitTx({.type = rpc::TransactionType::EIP4844,
+        .to = std::nullopt,
+        .maxFeePerBlobGas = 1,
+        .blobVersionedHashes = {h256("0x01" + std::string(62, '0'))}});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::BlobTxMissingHashes);
+}
+
+// EIP-4844: at least one blob (evmone's EMPTY_BLOB_HASHES_LIST). This fires while normalizing,
+// before any check runs -- an empty list cannot survive into the mirror.
+BOOST_AUTO_TEST_CASE(blobTransactionWithoutBlobsIsRejected)
+{
+    AdmitHarness harness;
+    harness.blobPolicy = {.allow = true};
+    auto tx = admitTx({.type = rpc::TransactionType::EIP4844, .maxFeePerBlobGas = 1});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::BlobTxMissingHashes);
+}
+
+// EIP-4844: every versioned hash must carry the 0x01 (KZG) version byte (evmone's
+// INVALID_BLOB_HASH_VERSION).
+BOOST_AUTO_TEST_CASE(blobTransactionWithAWrongHashVersionIsRejected)
+{
+    AdmitHarness harness;
+    harness.blobPolicy = {.allow = true};
+    auto tx = admitTx({.type = rpc::TransactionType::EIP4844,
+        .maxFeePerBlobGas = 1,
+        .blobVersionedHashes = {h256("0x02" + std::string(62, '0'))}});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::Malformed);
+}
+
+// The per-transaction blob bound comes from the policy, not a constant: the schedule's max.
+BOOST_AUTO_TEST_CASE(blobTransactionAboveThePerTransactionBlobCapIsRejected)
+{
+    AdmitHarness harness;
+    harness.blobPolicy = {.allow = true, .maxBlobsPerTransaction = 6};
+    auto tx = admitTx({.type = rpc::TransactionType::EIP4844,
+        .maxFeePerBlobGas = 1,
+        .blobVersionedHashes = h256s(7, h256("0x01" + std::string(62, '0')))});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::Malformed);
+}
+
+// TypeByRevision on the Web3Blob kind: EIP-4844 is Cancun, and the harness chain is Prague by
+// default, so this needs an explicit step down.
+BOOST_AUTO_TEST_CASE(blobTransactionBeforeCancunIsRejected)
+{
+    AdmitHarness harness;
+    harness.blobPolicy = {.allow = true};
+    harness.ledgerConfig->setEVMCRevision(EVMC_SHANGHAI);
+    auto tx = admitTx({.type = rpc::TransactionType::EIP4844,
+        .maxFeePerBlobGas = 1,
+        .blobVersionedHashes = {h256("0x01" + std::string(62, '0'))}});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::TxTypeNotSupported);
+}
+
+// evmone routes the blob type through the eip1559 hierarchy for TIP_GT_FEE_CAP, so the admission
+// column carries TipNotAboveCap too -- admission stricter or weaker than execution is the failure
+// this module exists to prevent.
+BOOST_AUTO_TEST_CASE(blobTransactionWithTipAboveTheFeeCapIsRejected)
+{
+    AdmitHarness harness;
+    harness.blobPolicy = {.allow = true};
+    auto tx = admitTx({.type = rpc::TransactionType::EIP4844,
+        .maxFeePerGas = 1000,
+        .maxPriorityFeePerGas = 2000,
+        .maxFeePerBlobGas = 1,
+        .blobVersionedHashes = {h256("0x01" + std::string(62, '0'))}});
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::TipGreaterThanFeeCap);
+}
+
 // The gate's `to` format check, on the only kind whose `to` is a free-form string: a Web3 `to`
 // is decoded from the envelope and is 20 bytes or empty by construction.
 BOOST_AUTO_TEST_CASE(malformedRecipientIsRejectedAtTheGate)

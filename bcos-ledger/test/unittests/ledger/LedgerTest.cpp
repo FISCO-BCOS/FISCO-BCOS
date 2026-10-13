@@ -1631,6 +1631,10 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         blockHeader->setNumber(10086);
         blockHeader->setVersion(200);
         blockHeader->setTimestamp(110);
+        // An OP-shaped head (NON_ETH with withdrawalsRoot + baseFee, isOpEthereumBlock): the
+        // snapshot must carry its base fee for OP admission's fee floor.
+        blockHeader->setWithdrawalsRoot(crypto::HashType{});
+        blockHeader->setBaseFee(u256(7));
         auto hashImpl = std::make_shared<Keccak256>();
         blockHeader->calculateHash(*hashImpl);
         auto randomHash = blockHeader->hash();
@@ -1654,6 +1658,9 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         BOOST_CHECK_EQUAL(ledgerConfig->blockNumber(), 10086);
         BOOST_CHECK_EQUAL(ledgerConfig->hash(), randomHash);
         BOOST_CHECK_EQUAL(ledgerConfig->consensusType(), RPBFT_CONSENSUS_TYPE);
+        BOOST_REQUIRE(ledgerConfig->baseFeePerGas().has_value());
+        BOOST_CHECK_EQUAL(*ledgerConfig->baseFeePerGas(), u256(7));
+        BOOST_CHECK_EQUAL(ledgerConfig->timestamp(), 110);
 
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochSealerNum()), 12345);
         BOOST_CHECK_EQUAL(std::get<0>(ledgerConfig->epochBlockNum()), 1000);
@@ -1789,9 +1796,12 @@ BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        // enable the L2 feature in genesis
+        // Ethereum-lane genesis: the lane is the genesis-fixed executor_version,
+        // not a feature flag any more.
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
+        // enable an ordinary feature in genesis: its bit must land in the packed word
         genesisConfig.m_features.push_back(
-            ledger::FeatureSet{.flag = Features::Flag::feature_l2_ethereum_compat, .enable = 1});
+            ledger::FeatureSet{.flag = Features::Flag::feature_rpbft_term_weight, .enable = 1});
         // SystemConfig predeploy at the canonical L2 address (no 0x prefix, 40 hex)
         genesisConfig.m_allocs.push_back(
             Alloc{.address = "43000000000000000000000000000000000000c0",
@@ -1821,10 +1831,17 @@ BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
         auto value = entry->get();
         BOOST_CHECK_EQUAL(value.size(), 32U);
 
-        // the feature_l2_ethereum_compat bit (= its enum value) must be set in the big-endian value
-        auto idx = static_cast<size_t>(Features::Flag::feature_l2_ethereum_compat);
+        // the enabled feature's bit (= its enum value) must be set in the big-endian value
+        auto idx = static_cast<size_t>(Features::Flag::feature_rpbft_term_weight);
         auto theByte = static_cast<uint8_t>(value[value.size() - 1 - (idx / 8)]);
         BOOST_CHECK(((theByte >> (idx % 8)) & 1U) == 1U);
+
+        // bit 57 — the removed feature_l2_ethereum_compat, now a reserved tombstone
+        // (Features::Flag::reserved_removed_l2_ethereum_compat) — must NOT be set: the
+        // Ethereum lane comes from executor_version, and nothing packs that bit any more.
+        auto tombIdx = static_cast<size_t>(Features::Flag::reserved_removed_l2_ethereum_compat);
+        auto tombByte = static_cast<uint8_t>(value[value.size() - 1 - (tombIdx / 8)]);
+        BOOST_CHECK(((tombByte >> (tombIdx % 8)) & 1U) == 0U);
     }());
 }
 
@@ -1924,6 +1941,35 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
 // under different revisions (a silent state-root fork at upgrades). The boot-time
 // probe (Initializer's "Effective EVMC revision" block) reaches this parser before
 // any block, so the operator sees the named entry instead of a per-block loop.
+// A negative block height cannot be spelled in the row format (the encoder only emits
+// heights above zero), so a row carrying one is foreign or hand-written — the exact input
+// this parser is the defence against. Accepting it let "-5:cancun" govern blocks 0..4 and
+// then silently move that transition onto the block-0 base on the round trip.
+BOOST_AUTO_TEST_CASE(evmcRevisionNegativeBlockHeightsRefused)
+{
+    LedgerConfig parsed;
+    BOOST_CHECK_EXCEPTION(ledger::applyEVMCRevisionConfig(parsed, "-5:cancun,10:osaka"),
+        ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+            return boost::diagnostic_information(e).find("negative block number") !=
+                   std::string::npos;
+        });
+    // ... and the encoder refuses to mint one instead of dropping it silently.
+    BOOST_CHECK_EXCEPTION(
+        ledger::encodeEVMCRevisionConfig(EVMC_PRAGUE, {{-5, EVMC_CANCUN}, {10, EVMC_OSAKA}}),
+        ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+            return boost::diagnostic_information(e).find("negative block number") !=
+                   std::string::npos;
+        });
+    // The valid sibling still round-trips (the happy path is untouched).
+    auto const encoded = ledger::encodeEVMCRevisionConfig(EVMC_PRAGUE, {{10, EVMC_OSAKA}});
+    LedgerConfig reparsed;
+    ledger::applyEVMCRevisionConfig(reparsed, encoded);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*reparsed.evmcRevisionForBlock(0)), static_cast<int>(EVMC_PRAGUE));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*reparsed.evmcRevisionForBlock(10)), static_cast<int>(EVMC_OSAKA));
+}
+
 BOOST_AUTO_TEST_CASE(evmcRevisionUnknownNamesFailClosed)
 {
     LedgerConfig parsed;
@@ -1960,6 +2006,75 @@ BOOST_AUTO_TEST_CASE(evmcRevisionUnknownNamesFailClosed)
     // Valid mixed transitions still parse (the happy path is untouched).
     ledger::applyEVMCRevisionConfig(parsed, "0:cancun,100:osaka");
     BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100), EVMC_OSAKA);
+}
+
+// The evmc row codec's accepted domain round-trips: every shape an honest loader can
+// produce re-encodes to a string whose parse reproduces the same revision schedule.
+// Base selection order: forks.find(0) > explicitRev > forks.begin().
+BOOST_AUTO_TEST_CASE(evmcRowAcceptedDomainRoundTrip_F3)
+{
+    struct Case
+    {
+        std::optional<evmc_revision> explicitRev;
+        std::map<bcos::protocol::BlockNumber, evmc_revision> forks;
+        std::string_view expected;
+        evmc_revision revAt0;
+        evmc_revision revAt10;
+    };
+    for (auto const& c : std::array<Case, 5>{{
+             {EVMC_PRAGUE, {}, "0:prague", EVMC_PRAGUE, EVMC_PRAGUE},
+             {std::nullopt, {{0, EVMC_CANCUN}, {10, EVMC_OSAKA}}, "0:cancun,10:osaka", EVMC_CANCUN,
+                 EVMC_OSAKA},
+             {EVMC_PRAGUE, {{10, EVMC_OSAKA}}, "0:prague,10:osaka", EVMC_PRAGUE, EVMC_OSAKA},
+             {EVMC_PRAGUE, {{0, EVMC_CANCUN}, {10, EVMC_OSAKA}}, "0:cancun,10:osaka", EVMC_CANCUN,
+                 EVMC_OSAKA},
+             {std::nullopt, {{100000, EVMC_CANCUN}}, "0:cancun,100000:cancun", EVMC_CANCUN,
+                 EVMC_CANCUN},
+         }})
+    {
+        auto const encoded = ledger::encodeEVMCRevisionConfig(c.explicitRev, c.forks);
+        BOOST_CHECK_EQUAL(encoded, std::string(c.expected));
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, encoded);
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(0), c.revAt0);
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(10).has_value());
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(10), c.revAt10);
+    }
+}
+
+// The block-0 entry is emitted once as the base and is not repeated as a transition;
+// ascending positive entries keep their order through the round trip.
+BOOST_AUTO_TEST_CASE(evmcRowZeroBaseAndOrderConsistency_F3)
+{
+    auto const singled = ledger::encodeEVMCRevisionConfig(std::nullopt,
+        std::map<bcos::protocol::BlockNumber, evmc_revision>{{0, EVMC_CANCUN}, {100, EVMC_OSAKA}});
+    BOOST_CHECK_EQUAL(singled, "0:cancun,100:osaka");
+    LedgerConfig parsed;
+    ledger::applyEVMCRevisionConfig(parsed, singled);
+    BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(0), EVMC_CANCUN);
+    BOOST_REQUIRE(parsed.evmcRevisionForBlock(99).has_value());
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(99), EVMC_CANCUN);
+    BOOST_REQUIRE(parsed.evmcRevisionForBlock(100).has_value());
+    BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100), EVMC_OSAKA);
+
+    // Table: three ascending shapes re-parse pointwise.
+    struct Chain
+    {
+        std::string_view text;
+        bcos::protocol::BlockNumber probe;
+        evmc_revision expected;
+    };
+    for (auto const& c :
+        std::array<Chain, 3>{{{"0:cancun", 500, EVMC_CANCUN}, {"0:cancun,10:osaka", 10, EVMC_OSAKA},
+            {"0:cancun,10:osaka,20:prague", 20, EVMC_PRAGUE}}})
+    {
+        LedgerConfig round;
+        ledger::applyEVMCRevisionConfig(round, c.text);
+        BOOST_REQUIRE(round.evmcRevisionForBlock(c.probe).has_value());
+        BOOST_CHECK_EQUAL(*round.evmcRevisionForBlock(c.probe), c.expected);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(web3ChainIdConfigFailStop)
@@ -2114,12 +2229,13 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsNodeAddressTableMode)
     }());
 }
 
-// F2: Ledger::getStorageAt must branch on feature_l2_ethereum_compat exactly like the
+// F2: Ledger::getStorageAt must branch on the executor_version lane exactly like the
 // genesis alloc import and the executor do: on an Eth-lane chain the system-tx addresses
 // (e.g. SYS_CONFIG_ADDRESS 0x...1000) are ordinary accounts under /apps/, and only the v1
-// lane routes them to /sys/. The feature row is written straight into SYS_CONFIG
-// (enableNumber 0, as genesis sets it on L2 chains) instead of running a full genesis
-// import — fetchFeature reads exactly that one row.
+// lane routes them to /sys/. The lane is genesis-fixed (governance cannot cross
+// ETHEREUM_EXECUTOR_VERSION either way); the executor_version row is written straight into
+// SYS_CONFIG (enableNumber 0, as genesis writes it on Ethereum-lane chains) instead of
+// running a full genesis import — fetchExecutorVersionAt reads exactly that one row.
 BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
 {
     namespace account = bcos::ledger::account;
@@ -2139,18 +2255,19 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
         co_await storage2::writeOne(*storage, executor_v1::StateKey(sysTable, slotKey),
             storage::Entry{std::string_view{"sys-value"}});
 
-        // v1 lane (no feature row): the /sys/ routing holds.
+        // v1 lane (no executor_version row): the /sys/ routing holds.
         auto v1Entry = co_await ledger->getStorageAt(sysTxAddress, slotKey, 0);
         BOOST_REQUIRE(v1Entry.has_value());
         BOOST_CHECK_EQUAL(std::string(v1Entry->get()), "sys-value");
 
-        // Enable feature_l2_ethereum_compat at block 0: the same address now resolves
-        // through the lane rule to /apps/.
+        // Write the executor_version row genesis persists on an Ethereum-lane chain
+        // (value 2, enableNumber 0): the same address now resolves through the lane rule
+        // to /apps/.
         co_await storage2::writeOne(*storage,
             executor_v1::StateKey(ledger::SYS_CONFIG,
-                std::string(
-                    magic_enum::enum_name(ledger::Features::Flag::feature_l2_ethereum_compat))),
-            storage::Entry{bcos::storage::serialize::encode(ledger::SystemConfigEntry{"1", 0})});
+                std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version))),
+            storage::Entry{bcos::storage::serialize::encode(ledger::SystemConfigEntry{
+                std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION), 0})});
         auto laneEntry = co_await ledger->getStorageAt(sysTxAddress, slotKey, 0);
         BOOST_REQUIRE(laneEntry.has_value());
         BOOST_CHECK_EQUAL(std::string(laneEntry->get()), "lane-value");

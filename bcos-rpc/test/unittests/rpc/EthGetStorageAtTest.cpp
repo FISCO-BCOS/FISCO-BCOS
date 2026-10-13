@@ -23,6 +23,8 @@
 #include "../common/RPCFixture.h"
 #include <bcos-framework/ledger/AccountTableName.h>
 #include <bcos-framework/ledger/Features.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
@@ -144,6 +146,17 @@ public:
     {
         nodeService->setStateStorageProvider(
             [this]() { return makeOwningStateStorage(m_latestState); });
+    }
+
+    /// Put the fake chain on the Ethereum lane (executor_version >= 2, scenario B): the
+    /// endpoint resolves the lane per block from the executor_version SYS_CONFIG entry
+    /// (LedgerInterface::fetchExecutorVersionAt — FakeLedger's fetchAllSystemConfigs serves
+    /// it from this map).
+    void useEthereumLane()
+    {
+        m_ledger->setSystemConfig(
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION));
     }
 
     /// Write a flat account-table slot row (32-byte value) into the latest-state plane.
@@ -346,13 +359,11 @@ BOOST_AUTO_TEST_CASE(HistoricalSlotFromMPTRoot)
     BOOST_TEST(resp2["result"].asString() == paddedHex(0x1337));
 }
 
-// Historical state, scenario B (feature_l2_ethereum_compat): the storage tries are complete,
-// so a slot absent from the trie provably reads zero.
+// Historical state, scenario B (the Ethereum lane, executor_version >= 2): the storage
+// tries are complete, so a slot absent from the trie provably reads zero.
 BOOST_AUTO_TEST_CASE(HistoricalAbsentSlotScenarioBReadsZero)
 {
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
+    useEthereumLane();
 
     buildTrie();
     wireReader();
@@ -416,9 +427,7 @@ BOOST_AUTO_TEST_CASE(HistoricalDormantAccountScenarioAErrors)
 // Historical state, scenario B: a genuinely absent account provably has no state → zero.
 BOOST_AUTO_TEST_CASE(HistoricalDormantAccountScenarioBReadsZero)
 {
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
+    useEthereumLane();
 
     buildTrie();
     wireReader();
@@ -460,9 +469,7 @@ BOOST_AUTO_TEST_CASE(HistoricalEmptyStorageRootScenarioAFallsBackToFlat)
 // trie — the account genuinely has no storage).
 BOOST_AUTO_TEST_CASE(HistoricalEmptyStorageRootScenarioBReadsZero)
 {
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
+    useEthereumLane();
 
     buildEmptyStorageTrie();
     wireReader();
@@ -534,9 +541,7 @@ BOOST_AUTO_TEST_CASE(HistoricalPreMptRootWithPruningSaysPredatesActivation)
 // Ethereum semantics.
 BOOST_AUTO_TEST_CASE(HistoricalEmptyRootScenarioBReadsZero)
 {
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
+    useEthereumLane();
 
     wireReader();
     m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(mpt::emptyRootHash());
@@ -679,9 +684,7 @@ BOOST_AUTO_TEST_CASE(HistoricalBalanceFromMPT)
 // read the tip block's committed root (not the empty flat ACCOUNT_BALANCE row).
 BOOST_AUTO_TEST_CASE(LatestBalanceFromMPTOnScenarioB)
 {
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
+    useEthereumLane();
 
     buildTrie();
     wireReader();

@@ -10,9 +10,9 @@
 ///        build-time alternatives (this build always uses the evmone
 ///        implementations).
 ///
-/// SYNC CONTRACT: this file is a port of
+/// SYNC CONTRACT: this file is a port of the retired
 /// bcos-evm/bcos-evm/eth/state/precompiles.cpp (itself the vendored evmone
-/// test/state/precompiles.cpp). Keep the two implementations in step: when the
+/// test/state/precompiles.cpp). Keep it in step with upstream: when the
 /// upstream precompiles change (fork gas repricing, new precompiles), mirror
 /// the change here. The only intended differences are the namespace, the
 /// removed libsecp256k1/GMP build-time alternatives, the `namespace crypto`

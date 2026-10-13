@@ -14,6 +14,7 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/MPTDeltaLayer.h"
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_group.h>
@@ -31,7 +32,6 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {
@@ -97,7 +97,7 @@ concept BaselineSchedulerParams =
         Executor, std::vector<protocol::Transaction::ConstPtr>>;
 
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
-    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:
@@ -265,8 +265,8 @@ public:
     /// writes landing in a fresh mutable layer stacked on a HistoricalStateBackend
     /// (read-your-writes inside the call, nothing persisted; HistoricalCallStorage.h).
     ///
-    /// Gated to scenario B (feature_l2_ethereum_compat): only there is the trie the
-    /// COMPLETE state at the root. A scenario-A trie excludes every account dormant since
+    /// Gated to scenario B (the Ethereum lane, executor_version >= 2): only there is the trie
+    /// the COMPLETE state at the root. A scenario-A trie excludes every account dormant since
     /// activation, so a historical call could silently execute against a state where such
     /// accounts read as absent — refused loudly instead (OQ6 resolution, MPTAccount.h:83-85).
     /// Blocks above the latest height and blocks whose header records no state root

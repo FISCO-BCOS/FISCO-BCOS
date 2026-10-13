@@ -38,6 +38,7 @@
  *        committed state with no worker to drain.
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-codec/rlp/Common.h"
 #include "bcos-codec/rlp/RLPEncode.h"
@@ -66,7 +67,6 @@
 #include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
-#include "EthereumBlockHashLookup.h"
 #include <bcos-devp2p/sync/HeaderValidator.h>
 #include <boost/test/unit_test.hpp>
 #include <limits>
@@ -166,9 +166,8 @@ task::Task<void> MPSWriteSystemConfig(
 }
 
 /// Web3-shaped EIP-1559 value-transfer tx (maxFeePerGas must cover the block base fee).
-std::shared_ptr<MPSTestTransactionImpl> MPSMakeWeb3TransferTx(
-    evmc_address const& sender, evmc_address const& recipient, uint64_t value,
-    std::string const& nonce, uint64_t maxFeePerGas)
+std::shared_ptr<MPSTestTransactionImpl> MPSMakeWeb3TransferTx(evmc_address const& sender,
+    evmc_address const& recipient, uint64_t value, std::string const& nonce, uint64_t maxFeePerGas)
 {
     auto tx = std::make_shared<MPSTestTransactionImpl>();
     auto& inner = tx->mutableInner();
@@ -195,11 +194,11 @@ std::shared_ptr<MPSTestTransactionImpl> MPSMakeWeb3TransferTx(
     inner.web3TypedTxKind = 2;  // EIP-1559
 
     bcos::bytes body;
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));                // chainId
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));                // nonce
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));                // maxPriorityFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(maxFeePerGas));     // maxFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));           // gasLimit
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));             // chainId
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));             // nonce
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));             // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(maxFeePerGas));  // maxFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));        // gasLimit
     bcos::codec::rlp::encode(
         body, bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes))));
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(value));  // value
@@ -207,8 +206,8 @@ std::shared_ptr<MPSTestTransactionImpl> MPSMakeWeb3TransferTx(
     body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);              // empty accessList
     bcos::bytes payloadBytes;
     payloadBytes.push_back(0x02);
-    bcos::codec::rlp::encodeHeader(payloadBytes,
-        bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    bcos::codec::rlp::encodeHeader(
+        payloadBytes, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
     payloadBytes.insert(payloadBytes.end(), body.begin(), body.end());
     inner.extraTransactionBytes.assign(payloadBytes.begin(), payloadBytes.end());
 
@@ -244,6 +243,9 @@ bcos::protocol::EthBlockHeaderData MPSBaseHeader(
     header.stateRoot = ledger::mpt::emptyRootHash();
     header.txsRoot = ledger::mpt::emptyRootHash();
     header.receiptsRoot = ledger::mpt::emptyRootHash();
+    // Shanghai is active from genesis in this suite: every block commits to the
+    // empty withdrawals trie and carries an empty withdrawals list.
+    header.withdrawalsHash = ledger::mpt::emptyRootHash();
     return header;
 }
 
@@ -288,8 +290,7 @@ public:
     {
         blockHashLookup = [&backend = backendStorage](
                               int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-            return initializer::ethBlockHashLookupFromStorage(
-                backend, blockNumber, currentHeight);
+            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
         };
         executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
         blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
@@ -337,11 +338,13 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
             std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
 
         // ---- The REAL pruner over the committed-state backend, wired as the verifier's
-        //      CommitObserver. Boot at genesis: no feature_mpt_state_root row is set, so
-        //      init starts empty (trackedCount 0) — the first block's full build seeds the
-        //      counts through the ordinary delta path, exactly as in the PBFT-lane wiring
-        //      test. The sync lane's headers are served by peers, not read from the local
-        //      ledger, so the boot lookup is backed by the roots this test commits.
+        //      CommitObserver. Boot at genesis on the Ethereum lane (the executor_version
+        //      SYS_CONFIG row above): firstMptBlock is 0, so init walks the head root — the
+        //      EMPTY genesis trie (emptyRootHash) — and ends with trackedCount 0; the first
+        //      block's full build seeds the counts through the ordinary delta path, exactly
+        //      as in the PBFT-lane wiring test. The sync lane's headers are served by peers,
+        //      not read from the local ledger, so the boot lookup is backed by the roots this
+        //      test commits.
         auto& backend = multiLayerStorage.latestBackend();
         auto pruner = std::make_shared<MPSPruner>(backend, c_pruneWindow);
         std::map<protocol::BlockNumber, h256> committedRoots;
@@ -351,7 +354,8 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
             auto const it = committedRoots.find(number);
             co_return it != committedRoots.end() ? std::optional<h256>{it->second} : std::nullopt;
         };
-        co_await pruner->init(0, stateRootAt, /*sweepGarbage=*/false);
+        co_await pruner->init(
+            0, ledger::ETHEREUM_EXECUTOR_VERSION, stateRootAt, /*sweepGarbage=*/false);
         BOOST_CHECK_EQUAL(pruner->trackedCount(), 0U);
 
         auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
@@ -364,8 +368,8 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
         };
 
         scheduler_v1::EvmcForkTimestamps forks;
-        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
-        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.londonTime = 0;  // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;   // unset fields default to UINT64_MAX = never active)
         forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
@@ -444,11 +448,9 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
 
             // ---- Verification side: the devp2p-sync commit path, with the real pruner. ----
             auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger,
-                ethHeader, prevEthHeader, std::vector<bcos::bytes>{raw},
-                std::optional<std::vector<bcos::bytes>>{}, forks, 1, std::vector<bcos::bytes>{},
-                0, decoder, stateRootCalc);
-            BOOST_REQUIRE_MESSAGE(result.valid,
-                "block " << number << " invalid: " << result.error);
+                ethHeader, prevEthHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{},
+                forks, 1, std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc);
+            BOOST_REQUIRE_MESSAGE(result.valid, "block " << number << " invalid: " << result.error);
             // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does not advance
             // SYS_KEY_CURRENT_NUMBER the way the real Ledger::prewriteBlock
             // (Ledger.cpp:296-300) does — write the row the real commit would have written,
@@ -506,14 +508,12 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
         try
         {
             co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeaders[1],
-                ethHeaders[0], std::vector<bcos::bytes>{raws[1]},
-                std::optional<std::vector<bcos::bytes>>{}, forks, 1, std::vector<bcos::bytes>{},
-                0, decoder, stateRootCalc);
+                ethHeaders[0], std::vector<bcos::bytes>{raws[1]}, std::vector<bcos::bytes>{}, forks,
+                1, std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc);
         }
         catch (StaleOrOutOfOrderBlock const& e)
         {
-            BOOST_CHECK(std::string(e.what()).find("not the ledger head + 1") !=
-                        std::string::npos);
+            BOOST_CHECK(std::string(e.what()).find("not the ledger head + 1") != std::string::npos);
             staleRejected = true;
         }
         BOOST_CHECK(staleRejected);

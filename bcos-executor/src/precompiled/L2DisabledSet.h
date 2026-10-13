@@ -14,9 +14,10 @@
  *  limitations under the License.
  *
  * @file L2DisabledSet.h
- * @brief FISCO-private stateful precompiles that become invisible in L2 mode
- *        (feature_l2_ethereum_compat). When the flag is unset (pbft mode) the
- *        predicate is a no-op and behavior is identical to today. (A6.8)
+ * @brief FISCO-private stateful precompiles that become invisible on the Ethereum lane
+ *        (executor_version >= ETHEREUM_EXECUTOR_VERSION: L1 EL and L2 OP-Stack).
+ *        Off the Ethereum lane (consortium-chain versions 0/1) the predicate is a
+ *        no-op and behavior is identical to today. (A6.8)
  */
 #pragma once
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -27,7 +28,7 @@
 namespace bcos::executor
 {
 
-/// The 18 FISCO-private precompiles hidden when running in L2 mode. Split into
+/// The 18 FISCO-private precompiles hidden on the Ethereum lane. Split into
 /// two groups by the dispatch path that reaches them in HostContext:
 ///
 /// 1. m_precompiled (stateful) — gated via the PrecompiledMap predicate. The
@@ -107,13 +108,14 @@ static_assert(detail::noOpPredeployCollision(),
     "kL2DisabledSet member collides with OP 0x42.. predeploy range");
 
 /// Returns a PrecompiledMap predicate (uint32_t version, bool isAuth, Features const&).
-/// Result is `false` (precompile hidden) iff feature_l2_ethereum_compat is set;
-/// otherwise `true` (visible, identical to pbft mode).
-inline auto disabledInL2()
+/// Result is `false` (precompile hidden) iff the chain runs on the Ethereum lane
+/// (@p ethLane, executor_version >= ETHEREUM_EXECUTOR_VERSION); otherwise `true`
+/// (visible, identical to consortium-chain mode). The lane is genesis-fixed, so the
+/// caller captures it once at boot — the predicate never re-reads it.
+inline auto disabledInL2(bool ethLane)
 {
-    return [](uint32_t /*version*/, bool /*isAuth*/, ledger::Features const& features) -> bool {
-        return !features.get(ledger::Features::Flag::feature_l2_ethereum_compat);
-    };
+    return [ethLane](uint32_t /*version*/, bool /*isAuth*/,
+               ledger::Features const& /*features*/) -> bool { return !ethLane; };
 }
 
 /// Composes two PrecompiledMap predicates with logical AND. Used to layer

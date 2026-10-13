@@ -32,7 +32,7 @@ enum class RawTransactionKind : std::uint8_t
     Legacy,       ///< first byte >= 0xc0 (RLP list header)
     AccessList,   ///< 0x01 (EIP-2930)
     DynamicFee,   ///< 0x02 (EIP-1559)
-    Blob,         ///< 0x03 (EIP-4844) — parseable but always rejected on L2
+    Blob,         ///< 0x03 (EIP-4844) — admitted only on chains whose BlobPolicy allows it
     SetCode,      ///< 0x04 (EIP-7702)
     Deposit,      ///< 0x7e (OP Stack deposit)
     Unsupported,  ///< everything else, including 0x00 and empty input

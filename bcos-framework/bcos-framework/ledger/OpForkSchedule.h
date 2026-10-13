@@ -125,10 +125,10 @@ struct OpForkSchedule
 /// (consensus/misc/eip1559/eip1559.go CalcBaseFee), while the L1-attributes calldata layout
 /// and the Jovian payload attributes key on the CHILD's (op-node derive/l1_block_info.go,
 /// derive/attributes.go). Callers whose internal timestamps are milliseconds convert through
-/// opstack-executor/OpCommon.h's forkTimestampSec.
+/// opstack-executor/OpForkSpec.h's opForkTimestampSec.
 ///
-/// This is THE fork-activation parser: every component (bcos-evm configAt, the devp2p
-/// OpHeaderValidator, the engine service) must resolve forks through it — a second
+/// This is THE fork-activation parser: every component (opstack-executor's OpForkSpec, the
+/// devp2p OpHeaderValidator, the engine service) must resolve forks through it — a second
 /// per-field interpretation (UINT64_MAX = "inactive" instead of "implied") rejects
 /// headers the executor accepts, which is exactly the jovian-only-schedule boot-but-
 /// never-syncs failure this function exists to prevent. The EIP-2124 fork-id ladder
@@ -182,5 +182,32 @@ inline OpFork resolveOpFork(const OpForkSchedule& schedule, uint64_t timestampSe
         return OpFork::Regolith;
     }
     return OpFork::Bedrock;
+}
+
+/// True iff the child block is the ACTIVATION block of some Jovian-or-later fork: a rung
+/// active at @p childTsSec that was not active at @p parentTsSec. Such blocks must be
+/// deposits-only — op-node sequences them with NoTxPool (op-node/rollup/sequencing/
+/// sequencer.go, the Jovian/Karst activation branches), and alloy-op-evm makes that a
+/// consensus rule at execution time (UnexpectedNonDepositTxInForkActivationBlock, the
+/// namesake of the gate the pre-cutover FISCO executor carried). op-geth enforces only
+/// the Jovian-activation slice, via the 176-byte L1-attributes shape in CalcDAFootprint;
+/// this schedule-driven rule is the stricter op-reth reading and runs ALONGSIDE that
+/// shape check, not instead of it.
+///
+/// Run times are Unix seconds (UINT64_MAX = unscheduled). Genesis has no parent, so it is
+/// never an activation block — callers without a parent header pass no gate at all. A
+/// future post-Karst rung field extends the fold here.
+inline bool isOpNoUserTxActivationBlock(
+    const OpForkSchedule& schedule, uint64_t parentTsSec, uint64_t childTsSec) noexcept
+{
+    auto crossed = [&](uint64_t rungTime) {
+        // UINT64_MAX = unscheduled, never a crossing: without the exclusion a block
+        // stamped exactly at the sentinel would read as crossing an unset rung (the
+        // shorthand parser rejects the sentinel as a declared time, but grammar-admitted
+        // inputs should not be able to reach this gate).
+        return rungTime != std::numeric_limits<uint64_t>::max() && childTsSec >= rungTime &&
+               parentTsSec < rungTime;
+    };
+    return crossed(schedule.m_jovianTime) || crossed(schedule.m_karstTime);
 }
 }  // namespace bcos::ledger

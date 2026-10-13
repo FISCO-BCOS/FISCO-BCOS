@@ -79,7 +79,36 @@ generate_auth_account()
         LOG_INFO "Downloading ${account_script} from ${get_account_link}..."
         curl -#LO "${get_account_link}"
   fi
+  # NOTE: this account-script patch block is duplicated in
+  # tools/BcosAirBuilder/build_chain.sh's generate_auth_account (build_chain.sh
+  # is a standalone release asset, so the logic cannot be factored into a shared
+  # helper); any change here must be mirrored there.
+  # The console get_*_account.sh scripts probe the arch with the non-portable
+  # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04);
+  # rewrite those probes to `uname -m` and fail loudly if any probe survives
+  sed -i.bak "s/\$(uname -p)/\$(uname -m)/g" "${account_script}" && rm -f "${account_script}.bak"
+  # The script downloads tassl from gitee, which is flaky from CI runners
+  # (transient "Connection reset by peer"); add retries to its curl calls.
+  # --retry-all-errors requires curl >= 7.71 (2020-06); this script also runs on
+  # older hosts whose curl would abort on the unknown option, so probe for
+  # support first and fall back to plain --retry
+  local curl_retry_opts="--retry 5 --retry-delay 3"
+  if curl --help all 2>/dev/null | grep -q -- "--retry-all-errors"; then
+    curl_retry_opts="--retry 5 --retry-all-errors"
+  fi
+  sed -i.bak "s/curl -#LO/curl -#L ${curl_retry_opts} -O/g" "${account_script}" && rm -f "${account_script}.bak"
+  if grep -qF "\$(uname -p)" "${account_script}"; then
+      LOG_ERROR "${account_script} still contains a non-portable \`uname -p\` arch probe; please update or patch the script manually"
+      exit 1
+  fi
   auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  # fail fast: a broken account script run (e.g. its tassl download failed)
+  # yields an empty/garbage address; deploying with it surfaces only minutes
+  # later as an obscure expand-node timeout
+  if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+      LOG_ERROR "Failed to generate a valid auth admin account (got '${auth_admin_account}'); check the ${account_script} output above (e.g. tassl download failure)"
+      exit 1
+  fi
   LOG_INFO "Admin account: ${auth_admin_account}"
 }
 
