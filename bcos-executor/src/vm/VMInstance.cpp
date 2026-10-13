@@ -48,6 +48,8 @@ VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view cod
     static_cast<evmone::VM*>(m_evmcVm->get_raw_pointer())->hash_fn = evm_hash_fn;
     static_cast<evmone::VM*>(m_evmcVm->get_raw_pointer())->create_address_fn =
         evm_create_address_fn;
+    static_cast<evmone::VM*>(m_evmcVm->get_raw_pointer())->create2_address_fn =
+        evm_create2_address_fn;
     // Set the options.
     if (m_evmcVm->get_raw_pointer()->set_option != nullptr)
     {  // baseline interpreter could not work with precompiled
@@ -83,6 +85,7 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
     auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
     evmoneVm->hash_fn = evm_hash_fn;
     evmoneVm->create_address_fn = evm_create_address_fn;
+    evmoneVm->create2_address_fn = evm_create2_address_fn;
     return Result(evmone::baseline::execute(
         *evmoneVm, *_hostContext.hostInterface, hostCtx, m_revision, *_msg, *m_analysis));
 }

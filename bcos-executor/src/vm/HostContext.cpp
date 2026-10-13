@@ -65,6 +65,14 @@ evmc_address evm_create_address_fn(
     return hostContext.createAddressForOpcode(*sender, nonce);
 }
 
+evmc_address evm_create2_address_fn(evmc_host_context* context, const evmc_address* sender,
+    const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size)
+{
+    auto& hostContext = *reinterpret_cast<HostContext*>(context);
+    return hostContext.create2AddressForOpcode(
+        *sender, *salt, bytesConstRef(init_code, init_code_size));
+}
+
 HostContext::HostContext(CallParameters::UniquePtr callParameters,
     std::shared_ptr<TransactionExecutive> executive, std::string tableName)
   : m_callParameters(std::move(callParameters)),
@@ -836,6 +844,22 @@ evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uin
     auto& exec = *m_executive;
     const auto addrStr = bcos::newEVMAddress(exec.blockContext().hashHandler(),
         exec.blockContext().number(), exec.contextID(), exec.seq() + 1);
+    boost::algorithm::unhex(addrStr, out.bytes);
+    return out;
+}
+
+evmc_address HostContext::create2AddressForOpcode(
+    const evmc_address& sender, const evmc_bytes32& salt, bytesConstRef initCode) const
+{
+    // The exact formula TransactionExecutive::externalCall's CREATE2 branch stored
+    // (bcos::newCreate2EVMAddress): the chain hasher over
+    // 0xff || sender || salt || chainHasher(initcode), last 20 bytes. Kept host-side so
+    // the CREATE2 push, the message recipient and the stored account all carry the
+    // chain's own address (upstream compute_create2_address hashes with keccak256).
+    evmc_address out{};
+    auto& exec = *m_executive;
+    const auto addrStr = bcos::newCreate2EVMAddress(
+        exec.blockContext().hashHandler(), evmAddress2String(sender), initCode, fromEvmC(salt));
     boost::algorithm::unhex(addrStr, out.bytes);
     return out;
 }

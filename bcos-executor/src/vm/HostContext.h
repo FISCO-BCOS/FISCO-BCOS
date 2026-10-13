@@ -44,6 +44,8 @@ class TransactionExecutive;
 evmc_bytes32 evm_hash_fn(evmc_host_context* context, const uint8_t* data, size_t size);
 evmc_address evm_create_address_fn(
     evmc_host_context* context, const evmc_address* sender, uint64_t nonce);
+evmc_address evm_create2_address_fn(evmc_host_context* context, const evmc_address* sender,
+    const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size);
 
 class HostContext
 {
@@ -152,6 +154,12 @@ public:
     /// feature_evm_address chains, the legacy replay-stable FISCO formula
     /// otherwise (both mirroring TransactionExecutive::externalCall).
     evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const;
+    /// CREATE2 counterpart (PR #5689 review F2): the chain hasher over
+    /// 0xff || sender || salt || hash(initcode) — newCreate2EVMAddress's formula, kept
+    /// host-side so the opcode pushes the chain's own address (keccak256 upstream would
+    /// fork SM-crypto chains).
+    evmc_address create2AddressForOpcode(
+        const evmc_address& sender, const evmc_bytes32& salt, bytesConstRef initCode) const;
     bool selfdestruct(const evmc_address* _addr, const evmc_address* _beneficiary);
 
     CallParameters::UniquePtr&& takeCallParameters();
