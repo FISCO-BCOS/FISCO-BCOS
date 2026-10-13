@@ -65,6 +65,30 @@ bcos::bytes buildDepositEnvelope(bcos::u256 const& value, bcos::u256 const& mint
     return raw;
 }
 
+BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeYieldsTheConstructedValues)
+{
+    // review F21: the value-level oracle the corpus suites lack — they hand-fill the
+    // struct from the golden JSON and pin only the renderer, so a field-order swap or
+    // the doc-admitted uint64 truncation in decodeDepositTransaction shipped green.
+    // Here the production decoder runs over real wire bytes and every decoded field
+    // is asserted against the values buildDepositEnvelope constructed them from.
+    auto const envelope = buildDepositEnvelope(/*value=*/bcos::u256(7), /*mint=*/bcos::u256(11));
+    bcos::bytesRef cursor(const_cast<bcos::byte*>(envelope.data()), envelope.size());
+    bcos::rpc::DepositTransaction decoded;
+    auto const error = bcos::rpc::decodeDepositTransaction(cursor, decoded);
+    BOOST_REQUIRE(error == nullptr);
+    BOOST_CHECK(decoded.sourceHash == bcos::h256(std::string(64, '5')));
+    BOOST_CHECK(decoded.from == bcos::h160(std::string(40, 'd')));
+    BOOST_CHECK(decoded.to == bcos::h160(std::string(40, 'e')));
+    BOOST_CHECK(decoded.mint == bcos::u256(11));
+    BOOST_CHECK(decoded.value == bcos::u256(7));
+    BOOST_CHECK_EQUAL(decoded.gas, 21'000u);
+    BOOST_CHECK_EQUAL(decoded.isSystemTx, false);
+    BOOST_CHECK(decoded.input.empty());
+    // type byte + exactly one RLP list: the decoder consumes the whole envelope.
+    BOOST_CHECK_EQUAL(cursor.size(), 0u);
+}
+
 bcos::protocol::TransactionReceipt::Ptr makeDepositReceipt(
     bcos::protocol::BlockFactory::Ptr const& factory, uint64_t depositNonce)
 {
