@@ -39,6 +39,7 @@ std::map<std::string, Command>& commandTable()
     // initializer never re-enters commandTable()
     static bool const registered = []() {
         registerStatusCommand();
+        registerTxCommand();
         return true;
     }();
     (void)registered;
