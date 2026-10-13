@@ -164,9 +164,10 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].address = "0x430000000000000000000000000000000000c0";
-        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "alloc address must be exactly 40 hex digits");
-        });
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "alloc address must be exactly 40 hex digits");
+            });
     }
     // odd-length code
     {
@@ -179,17 +180,19 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].storage = {{gsrKey32('0'), "0x01"}};
-        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "storage slot value must be exactly 64 hex digits");
-        });
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "storage slot value must be exactly 64 hex digits");
+            });
     }
     // over-long storage slot key (66 hex digits)
     {
         auto config = gsrBaseConfig();
         config.m_allocs[0].storage = {{"0x" + std::string(66, '0'), gsrKey32('0')}};
-        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "storage slot key must be exactly 64 hex digits");
-        });
+        BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "storage slot key must be exactly 64 hex digits");
+            });
     }
     // non-decimal nonce: must abort with the field-naming InvalidConfig (not an
     // unnamed boost::bad_lexical_cast), matching every other alloc field.

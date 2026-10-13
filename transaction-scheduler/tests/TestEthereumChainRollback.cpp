@@ -36,7 +36,6 @@
  *              of the number-keyed rows, and a fork block at the same height lands its own.
  */
 
-#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-codec/rlp/RLPEncode.h"
 #include "bcos-crypto/hash/Keccak256.h"
@@ -61,6 +60,7 @@
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
+#include "EthereumBlockHashLookup.h"
 #include <bcos-devp2p/sync/HeaderValidator.h>
 #include <boost/test/unit_test.hpp>
 #include <limits>
@@ -154,8 +154,9 @@ task::Task<void> RBWriteSystemConfig(
 }
 
 /// Web3-shaped EIP-1559 value-transfer tx (same builder idiom as TestMPTPrunerSyncWiring).
-std::shared_ptr<RBTestTransactionImpl> RBMakeWeb3TransferTx(evmc_address const& sender,
-    evmc_address const& recipient, uint64_t value, std::string const& nonce, uint64_t maxFeePerGas)
+std::shared_ptr<RBTestTransactionImpl> RBMakeWeb3TransferTx(
+    evmc_address const& sender, evmc_address const& recipient, uint64_t value,
+    std::string const& nonce, uint64_t maxFeePerGas)
 {
     auto tx = std::make_shared<RBTestTransactionImpl>();
     auto& inner = tx->mutableInner();
@@ -194,8 +195,8 @@ std::shared_ptr<RBTestTransactionImpl> RBMakeWeb3TransferTx(evmc_address const& 
     body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);              // empty accessList
     bcos::bytes payloadBytes;
     payloadBytes.push_back(0x02);
-    bcos::codec::rlp::encodeHeader(
-        payloadBytes, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    bcos::codec::rlp::encodeHeader(payloadBytes,
+        bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
     payloadBytes.insert(payloadBytes.end(), body.begin(), body.end());
     inner.extraTransactionBytes.assign(payloadBytes.begin(), payloadBytes.end());
 
@@ -243,9 +244,9 @@ bcos::protocol::EthBlockHeaderData RBBaseHeader(
 bcos::protocol::EthBlockHeaderData RBEmptyChildHeader(
     bcos::protocol::EthBlockHeaderData const& parent, uint64_t gasLimit)
 {
-    auto header =
-        RBBaseHeader(parent.number + 1, parent.timestamp + 1, bcos::protocol::ethHeaderHash(parent),
-            gasLimit, bcos::devp2p::sync::computeNextBaseFee(parent));
+    auto header = RBBaseHeader(parent.number + 1, parent.timestamp + 1,
+        bcos::protocol::ethHeaderHash(parent), gasLimit,
+        bcos::devp2p::sync::computeNextBaseFee(parent));
     header.stateRoot = parent.stateRoot;
     return header;
 }
@@ -273,7 +274,8 @@ public:
     {
         blockHashLookup = [&backend = backendStorage](
                               int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
+            return initializer::ethBlockHashLookupFromStorage(
+                backend, blockNumber, currentHeight);
         };
         executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
         blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
@@ -377,12 +379,13 @@ task::Task<void> RBDriveChain(RBFixture& fixture, SchedulerSerialImpl& scheduler
         BOOST_CHECK_EQUAL(receipts[0]->status(), 0);
         auto comp = co_await std::remove_reference_t<decltype(verifier)>::computeEthereumRoots(
             receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
-        auto stateRoot = co_await std::remove_reference_t<decltype(verifier)>::computeMptStateRoot(
-            view, prevEthHeader.stateRoot, prodConfig);
+        auto stateRoot =
+            co_await std::remove_reference_t<decltype(verifier)>::computeMptStateRoot(view,
+                prevEthHeader.stateRoot, prodConfig);
         prodStorage.pushView(std::move(view));
 
-        auto ethHeader = RBBaseHeader(
-            number, timestamp, bcos::protocol::ethHeaderHash(prevEthHeader), kGasLimit, baseFee);
+        auto ethHeader = RBBaseHeader(number, timestamp,
+            bcos::protocol::ethHeaderHash(prevEthHeader), kGasLimit, baseFee);
         ethHeader.stateRoot = stateRoot;
         ethHeader.txsRoot = comp.txsRoot;
         ethHeader.receiptsRoot = comp.receiptsRoot;
@@ -390,8 +393,9 @@ task::Task<void> RBDriveChain(RBFixture& fixture, SchedulerSerialImpl& scheduler
         ethHeader.logsBloom = comp.logsBloom;
 
         auto result = co_await verifier.verifyAndCommit(fixture.multiLayerStorage, fakeLedger,
-            ethHeader, prevEthHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{},
-            forks, 1, std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc);
+            ethHeader, prevEthHeader, std::vector<bcos::bytes>{raw},
+            std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{}, 0,
+            decoder, stateRootCalc);
         BOOST_REQUIRE_MESSAGE(result.valid, "block " << number << " invalid: " << result.error);
         // FakeLedger::asyncPrewriteBlock is a no-op: write the ledger metadata rows the real
         // Ledger::prewriteBlock would have written (same as TestMPTPrunerSyncWiring).
@@ -450,9 +454,10 @@ BOOST_FIXTURE_TEST_CASE(staleReorgRetryRollsBackAndCommits, RBFixture)
         auto decoder = [&chain](bcos::bytes const& raw) -> protocol::Transaction::Ptr {
             return chain.rawToTx.at(raw);
         };
-        auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, forkHeader,
-            chain.headers[1], std::vector<bcos::bytes>{}, std::vector<bcos::bytes>{}, forks, 1,
-            std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc);
+        auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger,
+            forkHeader, chain.headers[1], std::vector<bcos::bytes>{},
+            std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{}, 0,
+            decoder, stateRootCalc);
         BOOST_REQUIRE_MESSAGE(result.valid, "fork block invalid: " << result.error);
         BOOST_CHECK_EQUAL(result.stateRoot, chain.roots[2]);
 
@@ -469,10 +474,10 @@ BOOST_FIXTURE_TEST_CASE(staleReorgRetryRollsBackAndCommits, RBFixture)
                 !rowInBackend(backendStorage, ledger::SYS_NUMBER_2_HASH, std::to_string(n)),
                 "number->hash of rolled-back block " << n << " survived");
             auto const hashBinary = chain.hashes[n].asBytes();
-            BOOST_CHECK_MESSAGE(
-                !rowInBackend(backendStorage, ledger::SYS_HASH_2_NUMBER,
-                    std::string_view(
-                        reinterpret_cast<char const*>(hashBinary.data()), hashBinary.size())),
+            BOOST_CHECK_MESSAGE(!rowInBackend(backendStorage, ledger::SYS_HASH_2_NUMBER,
+                                    std::string_view(reinterpret_cast<char const*>(
+                                                         hashBinary.data()),
+                                        hashBinary.size())),
                 "hash->number of rolled-back block " << n << " survived");
         }
         BOOST_CHECK(rowInBackend(backendStorage, ledger::SYS_ROLLBACK_JOURNAL, "3"));
@@ -480,9 +485,10 @@ BOOST_FIXTURE_TEST_CASE(staleReorgRetryRollsBackAndCommits, RBFixture)
         // Blocks 1..2 keep their rows.
         for (protocol::BlockNumber n = 1; n <= 2; ++n)
         {
-            BOOST_CHECK(rowInBackend(backendStorage, ledger::SYS_NUMBER_2_HASH, std::to_string(n)));
-            BOOST_CHECK(
-                rowInBackend(backendStorage, ledger::SYS_ROLLBACK_JOURNAL, std::to_string(n)));
+            BOOST_CHECK(rowInBackend(backendStorage, ledger::SYS_NUMBER_2_HASH,
+                std::to_string(n)));
+            BOOST_CHECK(rowInBackend(
+                backendStorage, ledger::SYS_ROLLBACK_JOURNAL, std::to_string(n)));
         }
         // FakeLedger never wrote current_number for the fork block — the rollback set it to
         // 2 and the (no-op) FakeLedger prewrite left it there; the next block's height guard
@@ -520,9 +526,11 @@ BOOST_FIXTURE_TEST_CASE(rollbackChainRestoresAndRefuses, RBFixture)
         BOOST_CHECK(rowInBackend(backendStorage, ledger::SYS_ROLLBACK_JOURNAL, "4"));
 
         // (c1) Beyond the window: depth 3 > 2 — refused, state untouched.
-        BOOST_CHECK_THROW(co_await verifier.rollbackChain(multiLayerStorage, 1), RollbackRefused);
+        BOOST_CHECK_THROW(
+            co_await verifier.rollbackChain(multiLayerStorage, 1), RollbackRefused);
         // (c2) Not behind the head — refused.
-        BOOST_CHECK_THROW(co_await verifier.rollbackChain(multiLayerStorage, 4), RollbackRefused);
+        BOOST_CHECK_THROW(
+            co_await verifier.rollbackChain(multiLayerStorage, 4), RollbackRefused);
         BOOST_CHECK_EQUAL(co_await RBReadBalance(backendStorage, chain.recipient), u256(400));
 
         // (b) The good rollback: 4 -> 2 (depth 2 == window, journals 3 and 4 present).
@@ -542,7 +550,8 @@ BOOST_FIXTURE_TEST_CASE(rollbackChainRestoresAndRefuses, RBFixture)
 
         // (c3) Journal pruned by the window: rolling further to block 1 needs journal 2,
         //      which commit 4 already deleted — refused, and block 2's state stays.
-        BOOST_CHECK_THROW(co_await verifier.rollbackChain(multiLayerStorage, 1), RollbackRefused);
+        BOOST_CHECK_THROW(
+            co_await verifier.rollbackChain(multiLayerStorage, 1), RollbackRefused);
         BOOST_CHECK_EQUAL(co_await RBReadBalance(backendStorage, chain.recipient), u256(200));
         {
             auto view = multiLayerStorage.forkCommitted();
@@ -591,8 +600,9 @@ BOOST_FIXTURE_TEST_CASE(staleNonCanonicalParentStillThrows, RBFixture)
         };
         BOOST_CHECK_THROW(
             co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, bogus,
-                nonCanonicalParent, std::vector<bcos::bytes>{}, std::vector<bcos::bytes>{}, forks,
-                1, std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc),
+                nonCanonicalParent, std::vector<bcos::bytes>{},
+                std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{},
+                0, decoder, stateRootCalc),
             StaleOrOutOfOrderBlock);
         BOOST_CHECK_EQUAL(co_await RBReadBalance(backendStorage, chain.recipient), u256(400));
         {
@@ -637,11 +647,13 @@ BOOST_FIXTURE_TEST_CASE(disabledWindowJournalsNothing, RBFixture)
         };
         BOOST_CHECK_THROW(
             co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, forkHeader,
-                chain.headers[0], std::vector<bcos::bytes>{}, std::vector<bcos::bytes>{}, forks, 1,
-                std::vector<bcos::bytes>{}, 0, decoder, stateRootCalc),
+                chain.headers[0], std::vector<bcos::bytes>{},
+                std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{},
+                0, decoder, stateRootCalc),
             StaleOrOutOfOrderBlock);
         // And the explicit entry point refuses immediately.
-        BOOST_CHECK_THROW(co_await verifier.rollbackChain(multiLayerStorage, 0), RollbackRefused);
+        BOOST_CHECK_THROW(
+            co_await verifier.rollbackChain(multiLayerStorage, 0), RollbackRefused);
     }());
 }
 
@@ -674,8 +686,8 @@ BOOST_FIXTURE_TEST_CASE(rollbackDeletesBlobRows, RBFixture)
                 StateKey{ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)}, std::move(entry));
         };
         auto readBlobRow = [this](protocol::BlockNumber number) -> task::Task<bcos::bytes> {
-            auto entry = co_await storage2::readOne(
-                backendStorage, StateKeyView{ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)});
+            auto entry = co_await storage2::readOne(backendStorage,
+                StateKeyView{ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)});
             BOOST_REQUIRE(entry);
             co_return bcos::bytes(entry->get().begin(), entry->get().end());
         };

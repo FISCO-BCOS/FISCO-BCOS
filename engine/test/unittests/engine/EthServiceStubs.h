@@ -22,7 +22,6 @@
 #pragma once
 
 #include <bcos-concepts/ByteBuffer.h>
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -35,6 +34,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
@@ -282,10 +282,7 @@ inline void uniquifyForkchoiceHeights(ForkchoiceState const& forkchoiceState,
 }
 
 template <class Storage>
-requires requires(Storage& s)
-{
-    s.backendStorage;
-}
+    requires requires(Storage& s) { s.backendStorage; }
 void setForkchoiceBlockNumbers(Storage& storage, ForkchoiceState const& forkchoiceState,
     protocol::BlockNumber headBlockNumber, protocol::BlockNumber safeBlockNumber,
     protocol::BlockNumber finalizedBlockNumber)
@@ -309,10 +306,7 @@ void setForkchoiceBlockNumbers(Storage& storage, ForkchoiceState const& forkchoi
 /// GateMergeStorage (and similar) have no fixture ctor: write executor config
 /// plus the default 5/4/3 forkchoice rows in one call.
 template <class Storage>
-requires requires(Storage& s)
-{
-    s.backendStorage;
-}
+    requires requires(Storage& s) { s.backendStorage; }
 void seedForkchoiceStorage(
     Storage& storage, ForkchoiceState const& forkchoice, evmc_revision rev = EVMC_CANCUN)
 {

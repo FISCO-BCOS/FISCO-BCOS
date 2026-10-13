@@ -417,12 +417,12 @@ BOOST_AUTO_TEST_CASE(sizeCountsEachVariableLengthFieldSeparately)
     // One authorization entry per field, only that field set: each push's delta is exactly
     // that field's width — an implementation that counts address twice and never signer
     // (both 40) fails on the signer push.
-    auto const pushEntryWith = [&](std::string bcostars::AuthorizationEntry::*field,
-                                   std::string value) {
-        bcostars::AuthorizationEntry entry;
-        entry.*field = std::move(value);
-        inner.data.authorizationList.push_back(entry);
-    };
+    auto const pushEntryWith =
+        [&](std::string bcostars::AuthorizationEntry::* field, std::string value) {
+            bcostars::AuthorizationEntry entry;
+            entry.*field = std::move(value);
+            inner.data.authorizationList.push_back(entry);
+        };
     std::size_t const base = tx->size();
     pushEntryWith(&bcostars::AuthorizationEntry::address, std::string(40, 'a'));
     BOOST_CHECK_EQUAL(tx->size() - base, 40U);

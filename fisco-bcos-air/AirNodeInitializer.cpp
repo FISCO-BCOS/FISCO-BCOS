@@ -309,10 +309,10 @@ bcos::initializer::BlockImportSummary AirNodeInitializer::importEthereumBlocks(
                                   "[ethereum] mode=el in config.ini"));
     }
     bcos::initializer::EthereumBlockImporter importer(nodeConfig, initializer->ledger(),
-        initializer->protocolInitializer()->blockFactory(), initializer->ethereumSerialScheduler(),
-        initializer->ethereumExecutor(), initializer->globalStateStorageInitializer(),
-        initializer->mptCommitObserver(), initializer->ledgerConfigState(),
-        initializer->elBlockVerifier());
+        initializer->protocolInitializer()->blockFactory(),
+        initializer->ethereumSerialScheduler(), initializer->ethereumExecutor(),
+        initializer->globalStateStorageInitializer(), initializer->mptCommitObserver(),
+        initializer->ledgerConfigState(), initializer->elBlockVerifier());
     auto summary = importer.import(_path);
     // Double-write the outcome: stdout for the hive/entrypoint harness, the node log
     // for operators.
@@ -320,7 +320,8 @@ bcos::initializer::BlockImportSummary AirNodeInitializer::importEthereumBlocks(
     std::cout << "import-blocks done: imported=" << summary.imported
               << " skipped=" << summary.skipped << " headNumber=" << summary.headNumber
               << " headHash=" << summary.headHash.hex() << std::endl;
-    INITIALIZER_LOG(INFO) << LOG_DESC("import-blocks done") << LOG_KV("imported", summary.imported)
+    INITIALIZER_LOG(INFO) << LOG_DESC("import-blocks done")
+                          << LOG_KV("imported", summary.imported)
                           << LOG_KV("skipped", summary.skipped)
                           << LOG_KV("headNumber", summary.headNumber)
                           << LOG_KV("headHash", summary.headHash.hex());

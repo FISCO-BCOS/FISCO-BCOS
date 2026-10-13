@@ -96,7 +96,8 @@ inline bool computeBlobKzgProof(
 inline bool verifyBlobKzgProof(
     bcos::bytesConstRef blob, bcos::bytesConstRef commitment, bcos::bytesConstRef proof)
 {
-    if (blob.size() != BlobSize || commitment.size() != CommitmentSize || proof.size() != ProofSize)
+    if (blob.size() != BlobSize || commitment.size() != CommitmentSize ||
+        proof.size() != ProofSize)
     {
         return false;
     }
@@ -107,8 +108,8 @@ inline bool verifyBlobKzgProof(
     Bytes48 kzgProof;
     std::memcpy(kzgProof.bytes, proof.data(), ProofSize);
     bool ok = false;
-    return ::verify_blob_kzg_proof(&ok, &kzgBlob, &kzgCommitment, &kzgProof, kzgSettings()) ==
-               C_KZG_OK &&
+    return ::verify_blob_kzg_proof(
+               &ok, &kzgBlob, &kzgCommitment, &kzgProof, kzgSettings()) == C_KZG_OK &&
            ok;
 }
 

@@ -36,8 +36,9 @@ namespace
 }
 }  // namespace
 
-OpEthBlockCommitments opEthCommitmentsOf(const OpEthBlockSeal& seal, const bcos::h256& stateRoot,
-    uint64_t gasUsed, const bcos::h256& txRoot)
+OpEthBlockCommitments opEthCommitmentsOf(
+    const OpEthBlockSeal& seal, const bcos::h256& stateRoot, uint64_t gasUsed,
+    const bcos::h256& txRoot)
 {
     return OpEthBlockCommitments{
         .receiptsRoot = seal.receiptsRoot,

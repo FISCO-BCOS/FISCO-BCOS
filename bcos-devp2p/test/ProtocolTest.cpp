@@ -285,11 +285,12 @@ BOOST_AUTO_TEST_CASE(forkIdLadderAllPassed)
     // Sepolia-style ladder (shanghai..bpo2) all in the past for the local head.
     // Genesis timestamp is Sepolia's real one (1633267481), below every fork point.
     auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1765000000ull,
-        {1677557088ull, 1706655072ull, 1741159776ull, 1760427360ull, 1761017184ull, 1761607008ull});
+        {1677557088ull, 1706655072ull, 1741159776ull, 1760427360ull, 1761017184ull,
+            1761607008ull});
     // Every fork point was chained into the checksum.
     uint32_t expected = 0x12345678u;
-    for (auto fork :
-        {1677557088ull, 1706655072ull, 1741159776ull, 1760427360ull, 1761017184ull, 1761607008ull})
+    for (auto fork : {1677557088ull, 1706655072ull, 1741159776ull, 1760427360ull,
+             1761017184ull, 1761607008ull})
     {
         expected = eth::forkIdAddForkPoint(expected, fork);
     }
@@ -315,8 +316,9 @@ BOOST_AUTO_TEST_CASE(forkIdLadderOmittedTailFork)
 {
     // Only scheduled up to Prague; osaka/bpo1/bpo2 are absent (UINT64_MAX).
     auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1760000000ull,
-        {1677557088ull, 1706655072ull, 1741159776ull, std::numeric_limits<uint64_t>::max(),
-            std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()});
+        {1677557088ull, 1706655072ull, 1741159776ull,
+            std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max(),
+            std::numeric_limits<uint64_t>::max()});
     // The ladder chains up to Prague and STOPS: next must be 0, never UINT64_MAX.
     uint32_t expected = 0x12345678u;
     for (auto fork : {1677557088ull, 1706655072ull, 1741159776ull})
@@ -329,8 +331,9 @@ BOOST_AUTO_TEST_CASE(forkIdLadderOmittedTailFork)
     // A node whose head has not passed Prague yet still announces Prague as next,
     // even when the post-Prague tail is unscheduled.
     auto beforePrague = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1740000000ull,
-        {1677557088ull, 1706655072ull, 1741159776ull, std::numeric_limits<uint64_t>::max(),
-            std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()});
+        {1677557088ull, 1706655072ull, 1741159776ull,
+            std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max(),
+            std::numeric_limits<uint64_t>::max()});
     uint32_t hashThroughCancun = 0x12345678u;
     for (auto fork : {1677557088ull, 1706655072ull})
     {
@@ -354,10 +357,10 @@ BOOST_AUTO_TEST_CASE(forkIdLadderZeroSkipped)
 // only once — geth's gatherForks deduplicates adjacent equal fork points.
 BOOST_AUTO_TEST_CASE(forkIdLadderDuplicateForkDeduplicated)
 {
-    auto single = eth::forkIdFromTimeLadder(
-        0x12345678u, 1633267481ull, 1760000000ull, {1677557088ull, 1706655072ull});
-    auto duplicated = eth::forkIdFromTimeLadder(
-        0x12345678u, 1633267481ull, 1760000000ull, {1677557088ull, 1706655072ull, 1706655072ull});
+    auto single = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1760000000ull,
+        {1677557088ull, 1706655072ull});
+    auto duplicated = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1760000000ull,
+        {1677557088ull, 1706655072ull, 1706655072ull});
     BOOST_CHECK(duplicated == single);
     uint32_t expected = eth::forkIdAddForkPoint(0x12345678u, 1677557088ull);
     expected = eth::forkIdAddForkPoint(expected, 1706655072ull);

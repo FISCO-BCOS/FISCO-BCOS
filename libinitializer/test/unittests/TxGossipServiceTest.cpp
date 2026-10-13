@@ -41,8 +41,8 @@ struct GossipTestFixture
     GossipTestFixture()
       : hashImpl(std::make_shared<crypto::Keccak256>()),
         memPool(txpool::MemPoolConfig{.chainKind = txpool::ChainKind::L1}),
-        service(
-            memPool, [this](protocol::Transaction& tx) -> task::Task<protocol::TransactionStatus> {
+        service(memPool,
+            [this](protocol::Transaction& tx) -> task::Task<protocol::TransactionStatus> {
                 // The production wrapper is TxValidator::verify(Required); the stub keeps
                 // the part the pool depends on (sender recovery + taint clear) and admits.
                 crypto::Secp256k1Crypto secp;
@@ -58,8 +58,8 @@ struct GossipTestFixture
 
 // Deliver one encoded frame. The payload is taken by value so the bytes outlive the call
 // (handlePeerMessage never retains the view; bcos::ref cannot bind a temporary).
-TxGossipService::PeerVerdict gossipDeliver(TxGossipService& service,
-    TxGossipService::PeerState& peer, uint16_t frameId, bcos::bytes payload)
+TxGossipService::PeerVerdict gossipDeliver(
+    TxGossipService& service, TxGossipService::PeerState& peer, uint16_t frameId, bcos::bytes payload)
 {
     return service.handlePeerMessage(peer, frameId, bcos::ref(payload));
 }
@@ -150,8 +150,8 @@ BOOST_AUTO_TEST_CASE(blobWrapperIngressAdmittedWithSidecar)
     auto const versionedHash =
         crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar.commitments.front()));
 
-    auto web3Tx =
-        gossipMakeBlobTx(0, Address("2222222222222222222222222222222222222222"), versionedHash);
+    auto web3Tx = gossipMakeBlobTx(0, Address("2222222222222222222222222222222222222222"),
+        versionedHash);
     auto stripped = gossipSign(web3Tx, *key);
     auto const txHash = web3Tx.txHash();
     // Re-decode the signed stripped form so the wrapper embeds the signature.
@@ -171,8 +171,8 @@ BOOST_AUTO_TEST_CASE(blobWrapperIngressAdmittedWithSidecar)
     BOOST_CHECK(pooledSidecar->blobs == sidecar.blobs);
 
     // The STRIPPED form (no sidecar) is not a gossip shape: dropped, never pooled.
-    auto otherTx =
-        gossipMakeBlobTx(1, Address("3333333333333333333333333333333333333333"), versionedHash);
+    auto otherTx = gossipMakeBlobTx(1, Address("3333333333333333333333333333333333333333"),
+        versionedHash);
     auto otherStripped = gossipSign(otherTx, *key);
     auto const otherHash = otherTx.txHash();
     gossipDeliver(service, *peer.state, eth::frameId(eth::msg::Transactions),
@@ -180,8 +180,8 @@ BOOST_AUTO_TEST_CASE(blobWrapperIngressAdmittedWithSidecar)
     BOOST_CHECK(!memPool.get(std::vector<crypto::HashType>{otherHash}).front());
 
     // A tampered sidecar (KZG proof no longer matches) is dropped too.
-    auto thirdTx =
-        gossipMakeBlobTx(2, Address("3636363636363636363636363636363636363636"), versionedHash);
+    auto thirdTx = gossipMakeBlobTx(2, Address("3636363636363636363636363636363636363636"),
+        versionedHash);
     auto thirdStripped = gossipSign(thirdTx, *key);
     auto const thirdHash = thirdTx.txHash();
     rpc::Web3Transaction thirdDecoded;
@@ -278,8 +278,8 @@ BOOST_AUTO_TEST_CASE(blobTransactionServedAsWrapperFromPoolFallback)
     auto sidecar = gossipMakeSidecar(0x5e);
     auto const versionedHash =
         crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar.commitments.front()));
-    auto web3Tx =
-        gossipMakeBlobTx(0, Address("6666666666666666666666666666666666666666"), versionedHash);
+    auto web3Tx = gossipMakeBlobTx(0, Address("6666666666666666666666666666666666666666"),
+        versionedHash);
     auto stripped = gossipSign(web3Tx, *key);
     auto const txHash = web3Tx.txHash();
 
@@ -291,8 +291,8 @@ BOOST_AUTO_TEST_CASE(blobTransactionServedAsWrapperFromPoolFallback)
         [moved = decodedTx.takeToTarsTransaction()]() mutable { return &moved; });
     tarsTx->mutableInner().extraTransactionHash.assign(txHash.begin(), txHash.end());
     tarsTx->verify(*hashImpl, secp);
-    BOOST_REQUIRE(
-        memPool.tryAdd(std::move(tarsTx), std::move(sidecar)) == protocol::TransactionStatus::None);
+    BOOST_REQUIRE(memPool.tryAdd(std::move(tarsTx), std::move(sidecar)) ==
+                  protocol::TransactionStatus::None);
 
     GossipTestPeer asker;
     eth::GetPooledTransactionsMessage request{.requestId = 9, .hashes = {txHash}};
@@ -305,10 +305,10 @@ BOOST_AUTO_TEST_CASE(blobTransactionServedAsWrapperFromPoolFallback)
     // The served bytes are the network wrapper: they decode back to the same tx + sidecar.
     rpc::Web3Transaction servedTx;
     engine::BlobTxSidecar servedSidecar;
-    BOOST_REQUIRE(rpc::isBlobTxNetworkWrapper(bcos::bytesConstRef(
-        reply->transactions.front().data(), reply->transactions.front().size())));
-    rpc::decodeBlobTxNetworkWrapper(
-        bcos::bytesConstRef(reply->transactions.front().data(), reply->transactions.front().size()),
+    BOOST_REQUIRE(rpc::isBlobTxNetworkWrapper(
+        bcos::bytesConstRef(reply->transactions.front().data(), reply->transactions.front().size())));
+    rpc::decodeBlobTxNetworkWrapper(bcos::bytesConstRef(reply->transactions.front().data(),
+                                        reply->transactions.front().size()),
         servedTx, servedSidecar);
     BOOST_CHECK(servedTx.txHash() == txHash);
     BOOST_REQUIRE_EQUAL(servedSidecar.commitments.size(), 1);
@@ -358,8 +358,8 @@ BOOST_AUTO_TEST_CASE(pingAnsweredAndDisconnectCloses)
     auto verdict = service.handlePeerMessage(*peer.state, devp2p::rlpx::baseMsg::Ping, {});
     BOOST_CHECK(verdict == TxGossipService::PeerVerdict::Ok);
     BOOST_REQUIRE_EQUAL(peer.frames.size(), 1);
-    BOOST_CHECK_EQUAL(
-        peer.frames.front().first, static_cast<uint16_t>(devp2p::rlpx::baseMsg::Pong));
+    BOOST_CHECK_EQUAL(peer.frames.front().first,
+        static_cast<uint16_t>(devp2p::rlpx::baseMsg::Pong));
 
     BOOST_CHECK(service.handlePeerMessage(*peer.state, devp2p::rlpx::baseMsg::Disconnect, {}) ==
                 TxGossipService::PeerVerdict::Closed);

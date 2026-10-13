@@ -17,7 +17,7 @@
 #include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError
 #include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult / opEthCommitmentsOf / opEthMismatchedFieldOf
 #include <opstack-executor/OpEthL1Attributes.h>  // OpEthL1BlockInfo / synthesizeOpEthL1AttributesEnvelope
-#include <opstack-executor/OpForkSpec.h>         // OpFork / opForkTimestampSec
+#include <opstack-executor/OpForkSpec.h>  // OpFork / opForkTimestampSec
 #include <cstdint>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
@@ -141,8 +141,8 @@ private:
     /// Single conversion point from internal milliseconds to the schedule's seconds.
     [[nodiscard]] bcos::ledger::OpFork forkAt(int64_t internalTimestampMs) const noexcept
     {
-        return bcos::ledger::resolveOpFork(
-            m_forkSchedule, bcos::executor_v1::opstack::opForkTimestampSec(internalTimestampMs));
+        return bcos::ledger::resolveOpFork(m_forkSchedule,
+            bcos::executor_v1::opstack::opForkTimestampSec(internalTimestampMs));
     }
 
     bcos::ledger::OpForkSchedule m_forkSchedule;

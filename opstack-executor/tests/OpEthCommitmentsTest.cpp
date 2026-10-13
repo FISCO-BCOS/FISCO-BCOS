@@ -8,8 +8,8 @@
 
 #include <opstack-executor/OpEthCommitments.h>
 
-#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <opstack-executor/OpCommon.h>  // bcos::evm::OpConsensusError (typed catch)
+#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <boost/test/unit_test.hpp>
 
 #include <cstring>
@@ -46,8 +46,8 @@ OpEthBlockSeal makeSeal()
 OpEthBlockCommitments makeComputed()
 {
     return opEthCommitmentsOf(makeSeal(),
-        bcos::h256{"0x4444444444444444444444444444444444444444444444444444444444444444"}, 21000,
-        bcos::h256{"0x5555555555555555555555555555555555555555555555555555555555555555"});
+        bcos::h256{"0x4444444444444444444444444444444444444444444444444444444444444444"},
+        21000, bcos::h256{"0x5555555555555555555555555555555555555555555555555555555555555555"});
 }
 }  // namespace
 
@@ -109,8 +109,7 @@ BOOST_AUTO_TEST_CASE(AnnouncedCommitmentsOfProjectsPayload)
         bcos::h256{"0x1111111111111111111111111111111111111111111111111111111111111111"};
     for (size_t i = 0; i < payload.logsBloom.size(); ++i)
         payload.logsBloom[i] = static_cast<bcos::byte>(0xff - i);
-    payload.stateRoot =
-        bcos::h256{"0x4444444444444444444444444444444444444444444444444444444444444444"};
+    payload.stateRoot = bcos::h256{"0x4444444444444444444444444444444444444444444444444444444444444444"};
     payload.gasUsed = bcos::u256(21000);
     payload.blobGasUsed = bcos::u256(777);
     payload.withdrawalsRoot =
@@ -143,7 +142,8 @@ BOOST_AUTO_TEST_CASE(AnnouncedCommitmentsOfGuards)
     {
         bcos::engine::ExecutionPayload payload{};
         payload.withdrawalsRoot = std::nullopt;
-        BOOST_CHECK_THROW((void)announcedOpEthCommitmentsOf(payload, bcos::h256{}, *header),
+        BOOST_CHECK_THROW(
+            (void)announcedOpEthCommitmentsOf(payload, bcos::h256{}, *header),
             bcos::evm::OpConsensusError);
     }
     // Over-wide announced blobGasUsed: consensus reject, never truncation.
@@ -151,7 +151,8 @@ BOOST_AUTO_TEST_CASE(AnnouncedCommitmentsOfGuards)
         bcos::engine::ExecutionPayload payload{};
         payload.withdrawalsRoot = bcos::h256{};
         payload.blobGasUsed = bcos::u256(1) << 64;
-        BOOST_CHECK_THROW((void)announcedOpEthCommitmentsOf(payload, bcos::h256{}, *header),
+        BOOST_CHECK_THROW(
+            (void)announcedOpEthCommitmentsOf(payload, bcos::h256{}, *header),
             bcos::evm::OpConsensusError);
     }
     // Absent blobGasUsed passes through as nullopt.

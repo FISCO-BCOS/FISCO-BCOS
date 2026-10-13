@@ -24,9 +24,9 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <boost/lexical_cast.hpp>
+#include <evmc/evmc.hpp>
 #include <cstdint>
 #include <cstring>
-#include <evmc/evmc.hpp>
 #include <map>
 #include <optional>
 #include <string>

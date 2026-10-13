@@ -157,9 +157,10 @@ inline TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, bool is_crea
     const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, data));
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
 
-    const auto auth_list_cost = (rev >= EVMC_PRAGUE) ? static_cast<int64_t>(authorization_count) *
-                                                           AUTHORIZATION_EMPTY_ACCOUNT_COST :
-                                                       0;
+    const auto auth_list_cost =
+        (rev >= EVMC_PRAGUE) ?
+            static_cast<int64_t>(authorization_count) * AUTHORIZATION_EMPTY_ACCOUNT_COST :
+            0;
 
     const auto initcode_cost =
         (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(data.size()) : 0;

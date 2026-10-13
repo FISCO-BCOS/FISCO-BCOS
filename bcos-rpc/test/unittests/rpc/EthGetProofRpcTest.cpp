@@ -106,9 +106,8 @@ public:
         Json::Value value;
         Json::Reader reader;
         std::promise<bcos::bytes> promise;
-        web3JsonRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
-            promise.set_value(std::move(resp));
-        });
+        web3JsonRpc->onRPCRequest(
+            req, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
         auto jsonBytes = promise.get_future().get();
         std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         reader.parse(json.begin(), json.end(), value);
@@ -318,8 +317,7 @@ BOOST_AUTO_TEST_CASE(HashFormReturnsSameProofAsNumber)
     buildTrie();
     wireReader();
 
-    auto respByHash =
-        getProof(address.hexPrefixed(), {slotA.hexPrefixed()}, latestHash.hexPrefixed());
+    auto respByHash = getProof(address.hexPrefixed(), {slotA.hexPrefixed()}, latestHash.hexPrefixed());
     BOOST_REQUIRE(!respByHash.isMember("error"));
     BOOST_REQUIRE(respByHash.isMember("result"));
 
@@ -328,10 +326,9 @@ BOOST_AUTO_TEST_CASE(HashFormReturnsSameProofAsNumber)
     BOOST_REQUIRE(respByNumber.isMember("result"));
 
     // The two paths must produce identical account and slot proofs (same stateRoot).
-    BOOST_CHECK_EQUAL(
-        respByHash["result"]["balance"].asString(), respByNumber["result"]["balance"].asString());
-    BOOST_CHECK_EQUAL(
-        respByHash["result"]["nonce"].asString(), respByNumber["result"]["nonce"].asString());
+    BOOST_CHECK_EQUAL(respByHash["result"]["balance"].asString(),
+        respByNumber["result"]["balance"].asString());
+    BOOST_CHECK_EQUAL(respByHash["result"]["nonce"].asString(), respByNumber["result"]["nonce"].asString());
     BOOST_CHECK_EQUAL(respByHash["result"]["storageHash"].asString(),
         respByNumber["result"]["storageHash"].asString());
     BOOST_REQUIRE(respByHash["result"]["storageProof"].isArray());

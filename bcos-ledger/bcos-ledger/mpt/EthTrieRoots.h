@@ -92,8 +92,8 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 /// (not just any 1-byte-contiguous range): orBloom reads 256 bytes unconditionally, so a
 /// shorter buffer — e.g. a bcos::bytes decoded from receipt RLP — would be read past its end.
 template <::ranges::input_range Blooms>
-requires std::same_as<std::remove_cvref_t<::ranges::range_value_t<Blooms>>, bcos::Bloom> bcos::Bloom
-calculateLogsBloom(Blooms&& blooms)
+    requires std::same_as<std::remove_cvref_t<::ranges::range_value_t<Blooms>>, bcos::Bloom>
+bcos::Bloom calculateLogsBloom(Blooms&& blooms)
 {
     bcos::Bloom result{};
     for (auto const& bloom : blooms)

@@ -85,15 +85,15 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         "genesis config file path, eg. genesis.ini")("prune,p", "prune the node data")("snapshot,s",
         boost::program_options::value<bool>(),
         "generate snapshot with or without txs and receipts, if true generate snapshot with txs "
-        "and receipts")("output,o", boost::program_options::value<std::string>(),
-        "snapshot output directory")("import,i", boost::program_options::value<std::string>(),
-        "import snapshot from directory")("import-blocks",
-        boost::program_options::value<std::string>(),
+        "and receipts")(
+        "output,o", boost::program_options::value<std::string>(), "snapshot output directory")(
+        "import,i", boost::program_options::value<std::string>(), "import snapshot from directory")(
+        "import-blocks", boost::program_options::value<std::string>(),
         "offline import of RLP-encoded Ethereum blocks (a chain.rlp-style file or a "
-        "directory of one-block *.rlp files), then exit — Ethereum L1 EL mode only")("el,e",
-        "run in EL self-sync mode (mirror of [ethereum].mode=el or mode=opstack-el; "
-        "conflicts with the config file are rejected)")("bootnodes,b",
-        boost::program_options::value<std::string>(),
+        "directory of one-block *.rlp files), then exit — Ethereum L1 EL mode only")(
+        "el,e", "run in EL self-sync mode (mirror of [ethereum].mode=el or mode=opstack-el; "
+                "conflicts with the config file are rejected)")(
+        "bootnodes,b", boost::program_options::value<std::string>(),
         "path to the EL-mode bootnodes file (mirror of [ethereum].bootnodes_file; a value that "
         "differs from the config file is rejected)");
 
@@ -225,6 +225,6 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         ethereumBootnodesFile = vm["bootnodes"].as<std::string>();
     }
 
-    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed, ethereumEL,
-        ethereumBootnodesFile, op, std::move(importBlocksPath)};
+    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed,
+        ethereumEL, ethereumBootnodesFile, op, std::move(importBlocksPath)};
 }

@@ -107,10 +107,11 @@ struct SweepInlineCompletionCheck<Backend, true>
     using RangeAwaitable = decltype(std::declval<Backend&>().range(
         bcos::storage2::RANGE_SEEK, std::declval<bcos::executor_v1::StateKey&>()));
     using Iterator = bcos::task::AwaitableReturnType<RangeAwaitable>;
-    static constexpr bool value = kIsAwaitableValue<RangeAwaitable> &&
-                                  kIsAwaitableValue<decltype(std::declval<Iterator&>().next())> &&
-                                  kIsAwaitableValue<decltype(std::declval<Backend&>().removeSome(
-                                      std::declval<std::vector<bcos::executor_v1::StateKey>>()))>;
+    static constexpr bool value =
+        kIsAwaitableValue<RangeAwaitable> &&
+        kIsAwaitableValue<decltype(std::declval<Iterator&>().next())> &&
+        kIsAwaitableValue<decltype(std::declval<Backend&>().removeSome(
+            std::declval<std::vector<bcos::executor_v1::StateKey>>()))>;
 };
 
 /// Reference-counting MPT pruning (spec §4.8), one instance per chain over the committed-state
@@ -256,8 +257,9 @@ public:
     /// @throws MPTInvariantViolation when a
     /// reachable node row is missing (the trie is the source of truth — fail loud, same
     /// convention as Trie.h) or the head header carries no root.
-    bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock, int64_t executorVersion,
-        StateRootLookup stateRootAt, bool sweepGarbage, GarbageProgress progress = {})
+    bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock,
+        int64_t executorVersion, StateRootLookup stateRootAt, bool sweepGarbage,
+        GarbageProgress progress = {})
     {
         m_watermark.store(currentBlock, std::memory_order_relaxed);
         m_executorVersion = executorVersion;
@@ -406,7 +408,8 @@ public:
                              << shardCount << " shard(s) (progress logged every "
                              << SWEEP_SCAN_LOG_INTERVAL << " rows)";
         oneapi::tbb::parallel_for(size_t{0}, shardCount,
-            [this, &scanned, &garbage, &garbageDeleted, &progress, &progressMutex](size_t shard) {
+            [this, &scanned, &garbage, &garbageDeleted, &progress, &progressMutex](
+                size_t shard) {
                 auto const startKey = [shard] {
                     (void)shard;  // unused when shardCount == 1 (clang -Wunused-lambda-capture)
                     if constexpr (shardCount > 1)
@@ -634,7 +637,7 @@ public:
         // the staged erases (a bucket entry this block's movements already revoked is skipped);
         // the removals themselves are only staged — onCommit mutates the base buckets.
         for (auto bucketIt = m_pending.begin();
-             bucketIt != m_pending.end() && bucketIt->first <= horizon; ++bucketIt)
+            bucketIt != m_pending.end() && bucketIt->first <= horizon; ++bucketIt)
         {
             uint64_t const deadline = bucketIt->first;
             for (auto const& hash : bucketIt->second)
@@ -798,7 +801,8 @@ public:
         auto current = m_watermark.load(std::memory_order_relaxed);
         while (current < blockNumber &&
                !m_watermark.compare_exchange_weak(current, blockNumber, std::memory_order_relaxed))
-        {}
+        {
+        }
     }
 
     /// Highest committed block number this pruner has seen (currentBlock at init(), onCommit
@@ -891,7 +895,7 @@ private:
             {
                 stack.emplace_back(
                     bcos::h256(bcos::bytesConstRef(ext->child.data(), ext->child.size())
-                                   .getCroppedData(1)),
+                            .getCroppedData(1)),
                     accountTrie);
             }
         }

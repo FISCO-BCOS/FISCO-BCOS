@@ -110,10 +110,12 @@ inline std::optional<std::string> validateOpBaseFee(
     {
         return "parent header is missing baseFee";
     }
-    bool const parentIsHolocene = bcos::ledger::resolveOpFork(_config.forkSchedule,
-                                      static_cast<uint64_t>(_parent.timestamp)) >= OpFork::Holocene;
-    bool const parentIsJovian = bcos::ledger::resolveOpFork(_config.forkSchedule,
-                                    static_cast<uint64_t>(_parent.timestamp)) >= OpFork::Jovian;
+    bool const parentIsHolocene =
+        bcos::ledger::resolveOpFork(_config.forkSchedule,
+            static_cast<uint64_t>(_parent.timestamp)) >= OpFork::Holocene;
+    bool const parentIsJovian =
+        bcos::ledger::resolveOpFork(_config.forkSchedule,
+            static_cast<uint64_t>(_parent.timestamp)) >= OpFork::Jovian;
     std::span<const bcos::byte> parentExtra{_parent.extraData.data(), _parent.extraData.size()};
     if (parentIsHolocene)
     {
@@ -142,12 +144,13 @@ inline std::optional<std::string> validateOpBaseFee(
             // BaseFeeChangeDenominator(header.Time) (params/config.go:1349-1359).
             auto const params =
                 bcos::engine::OpEip1559Params{.elasticity = _config.eip1559Elasticity,
-                    .denominator = _config.eip1559DenominatorBedrock,
-                    .denominatorCanyon = _config.eip1559DenominatorCanyon};
+                .denominator = _config.eip1559DenominatorBedrock,
+                .denominatorCanyon = _config.eip1559DenominatorCanyon};
             expected = bcos::engine::calcOpBaseFeePreHolocene(_parent.gasLimit, _parent.gasUsed,
                 *_parent.baseFee,
-                bcos::ledger::resolveOpFork(_config.forkSchedule,
-                    static_cast<uint64_t>(_header.timestamp)) >= OpFork::Canyon,
+                bcos::ledger::resolveOpFork(
+                    _config.forkSchedule, static_cast<uint64_t>(_header.timestamp)) >=
+                    OpFork::Canyon,
                 params);
         }
         if (*_header.baseFee != expected)

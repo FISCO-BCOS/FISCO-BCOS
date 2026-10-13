@@ -25,6 +25,7 @@
  */
 
 #include "Initializer.h"
+#include <bcos-framework/ledger/OpForkScheduleMetadata.h>
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
@@ -64,7 +65,6 @@
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/ledger/OpForkScheduleMetadata.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
@@ -740,11 +740,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
         if (declaredOpEip1559.has_value())
         {
-            INITIALIZER_LOG(INFO) << LOG_DESC("OP chain EIP-1559 parameters")
-                                  << LOG_KV("declared", true)
-                                  << LOG_KV("elasticity", opEip1559.elasticity)
-                                  << LOG_KV("denominator", opEip1559.denominator)
-                                  << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+            INITIALIZER_LOG(INFO)
+                << LOG_DESC("OP chain EIP-1559 parameters") << LOG_KV("declared", true)
+                << LOG_KV("elasticity", opEip1559.elasticity)
+                << LOG_KV("denominator", opEip1559.denominator)
+                << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
         }
         else
         {
@@ -752,9 +752,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             // engine lane) and pre-Holocene header re-pricing (the el lane) fall back to,
             // and the preset need not be this chain's pair.
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC(
-                       "OP chain declares no [op_eip1559]: preset-priced fallback "
-                       "will use the OP-mainnet PRESET")
+                << LOG_DESC("OP chain declares no [op_eip1559]: preset-priced fallback "
+                            "will use the OP-mainnet PRESET")
                 << LOG_KV("elasticity", opEip1559.elasticity)
                 << LOG_KV("denominator", opEip1559.denominator)
                 << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
@@ -938,10 +937,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             // Fail-visible rather than fail-open: the tamper check below then runs with
             // no triple side. The production Ledger never lands here (both getStateStorage
             // branches return a storage); only a non-overriding LedgerInterface does.
-            INITIALIZER_LOG(WARNING) << LOG_DESC(
-                "OP boot probe: ledger exposes no state storage — the "
-                "SYS_OP_CHAIN_METADATA integrity triple cannot be read and its "
-                "tamper check is SKIPPED");
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("OP boot probe: ledger exposes no state storage — the "
+                            "SYS_OP_CHAIN_METADATA integrity triple cannot be read and its "
+                            "tamper check is SKIPPED");
         }
         // The schedule this node will actually run comes from WHICHEVER declaration channel
         // it carries — the canonical [op_fork_schedule] (Optional) or the folded

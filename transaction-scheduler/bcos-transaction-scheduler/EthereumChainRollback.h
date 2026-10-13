@@ -218,15 +218,16 @@ struct RollbackResult
 /// @tparam GlobalStateStorage MultiLayerStorage-like: forkCommitted()/mergeToBackends()/
 ///         MutableStorage
 template <class GlobalStateStorage>
-task::Task<RollbackResult> rollbackCommittedChain(
-    GlobalStateStorage& globalStateStorage, protocol::BlockNumber targetNumber, int64_t reorgWindow)
+task::Task<RollbackResult> rollbackCommittedChain(GlobalStateStorage& globalStateStorage,
+    protocol::BlockNumber targetNumber, int64_t reorgWindow)
 {
     auto committed = globalStateStorage.forkCommitted();
     auto const head = co_await ledger::getCurrentBlockNumber(committed, ledger::fromStorage);
     if (targetNumber < 0 || targetNumber >= head)
     {
         BOOST_THROW_EXCEPTION(RollbackRefused{"rollback target " + std::to_string(targetNumber) +
-                                              " is not behind the head " + std::to_string(head)});
+                                              " is not behind the head " +
+                                              std::to_string(head)});
     }
     auto const depth = head - targetNumber;
     if (reorgWindow <= 0 || depth > reorgWindow)
@@ -252,8 +253,8 @@ task::Task<RollbackResult> rollbackCommittedChain(
                                 "cannot rewind safely)"});
         }
         auto const raw = entry->get();
-        journals.push_back(decodeRollbackJournal(
-            bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(raw.data()), raw.size())));
+        journals.push_back(decodeRollbackJournal(bcos::bytesConstRef(
+            reinterpret_cast<bcos::byte const*>(raw.data()), raw.size())));
     }
 
     typename GlobalStateStorage::MutableStorage batch;
@@ -294,9 +295,9 @@ task::Task<RollbackResult> rollbackCommittedChain(
                 committed, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_HASH, numberStr}))
         {
             auto const hashBinary = hashEntry->get();
-            co_await storage2::removeOne(
-                batch, executor_v1::StateKey{ledger::SYS_HASH_2_NUMBER,
-                           std::string_view(hashBinary.data(), hashBinary.size())});
+            co_await storage2::removeOne(batch,
+                executor_v1::StateKey{ledger::SYS_HASH_2_NUMBER,
+                    std::string_view(hashBinary.data(), hashBinary.size())});
         }
         co_await storage2::removeOne(
             batch, executor_v1::StateKey{ledger::SYS_NUMBER_2_HASH, numberStr});

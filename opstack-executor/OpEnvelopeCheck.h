@@ -60,7 +60,8 @@ namespace bcos::executor_v1::opstack
 /// Block-path only: address(0) is the eth_call default, but a sealed block
 /// must not execute with that sender. The sender is read with the same
 /// accessor the executor uses (eth::ethSender).
-[[nodiscard]] std::optional<std::string> opEthBlockPathZeroSender(protocol::Transaction const& tx);
+[[nodiscard]] std::optional<std::string> opEthBlockPathZeroSender(
+    protocol::Transaction const& tx);
 
 /// Block-path only: 7702 authorizationList[].signer is copied from the tars
 /// mirror and is not recovered from the signed envelope. A non-empty list on

@@ -120,7 +120,7 @@ public:
         // no-op row.
         feature_raw_address = 54,
         feature_rpbft_vrf_type_secp256k1 = 55,
-        feature_balance_policy2 = 56,  // 转账白名单 Transfer whitelist
+        feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
         // RESERVED, never reuse. Bit 57 was feature_l2_ethereum_compat on the
         // release-3.18.0 development line (introduced by #5273 before any release shipped),
         // the "Ethereum-compatible lane" switch. The lane is now decided by executor_version
@@ -131,9 +131,9 @@ public:
         // a genesis still carrying `feature_l2_ethereum_compat=1` fails loudly at load instead
         // of silently enabling nothing.
         reserved_removed_l2_ethereum_compat = 57,
-        feature_mpt_state_root = 58,  // MPT lazy-build: block stateRoot switches to the
-                                      // Ethereum MPT root from this flag's activation
-                                      // block on (spec 2026-04-24 design3 4.3)
+        feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
+                                          // Ethereum MPT root from this flag's activation
+                                          // block on (spec 2026-04-24 design3 4.3)
         // Takes the next unused number per the rule above, rather than the slot next to
         // bugfix_statestorage_hash_v3_17 it occupies on release-3.17.0: inserting it there would
         // renumber every feature_ flag after it and silently move their on-chain bits.

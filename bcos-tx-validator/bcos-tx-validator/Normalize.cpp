@@ -175,8 +175,8 @@ TransactionStatus normalize(Transaction& tx, BlobPolicy blobPolicy)
         {
             return TransactionStatus::Malformed;
         }
-        if (std::ranges::any_of(
-                decoded.blobVersionedHashes, [](auto const& hash) { return hash[0] != 0x01; }))
+        if (std::ranges::any_of(decoded.blobVersionedHashes,
+                [](auto const& hash) { return hash[0] != 0x01; }))
         {
             return TransactionStatus::Malformed;
         }

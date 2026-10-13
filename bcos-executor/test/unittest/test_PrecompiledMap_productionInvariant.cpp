@@ -95,11 +95,11 @@ BOOST_AUTO_TEST_CASE(EvmProductionMapHidesAllL2DisabledMembers)
     // Ethereum lane: same build path, but the ledger's executor_version row puts the
     // boot-time ledgerConfig on the Ethereum lane, so the same insert sites capture
     // disabledInL2(true).
-    auto ethExecutor =
-        bcos::executor::TransactionExecutorFactory::build(std::make_shared<EthLaneLedger>(storage),
-            txpool, nullptr, storage, std::make_shared<NativeExecutionMessageFactory>(),
-            std::make_shared<storage::StateStorageFactory>(0), hashImpl,
-            /*isAuthCheck*/ true, std::string("eth-lane-executor"));
+    auto ethExecutor = bcos::executor::TransactionExecutorFactory::build(
+        std::make_shared<EthLaneLedger>(storage), txpool, nullptr, storage,
+        std::make_shared<NativeExecutionMessageFactory>(),
+        std::make_shared<storage::StateStorageFactory>(0), hashImpl,
+        /*isAuthCheck*/ true, std::string("eth-lane-executor"));
     auto const* ethLaneMap = ethExecutor->precompiledMapForTest();
     BOOST_REQUIRE(ethLaneMap != nullptr);
 
@@ -113,8 +113,7 @@ BOOST_AUTO_TEST_CASE(EvmProductionMapHidesAllL2DisabledMembers)
         BOOST_TEST_INFO("address=" << addr);
         // Consortium lane (original gate satisfied) -> registered and visible.
         BOOST_CHECK_MESSAGE(consortiumMap->at(addr, kMaxVersion, isAuth, gates) != nullptr,
-            "expected " << addr
-                        << " visible off the Ethereum lane (gate or missing registration?)");
+            "expected " << addr << " visible off the Ethereum lane (gate or missing registration?)");
         // Ethereum lane -> hidden by disabledInL2(true), whatever the features say.
         BOOST_CHECK_MESSAGE(ethLaneMap->at(addr, kMaxVersion, isAuth, gates) == nullptr,
             "expected " << addr << " hidden on the Ethereum lane "

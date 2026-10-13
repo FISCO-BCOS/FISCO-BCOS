@@ -91,16 +91,16 @@ public:
     /// Construct from any type satisfying EngineServiceConcept.
     /// The value is copied/moved into the proxy (owning semantics).
     template <class T>
-    requires EngineServiceConcept<std::remove_cvref_t<T>> &&
-        (!std::same_as<std::remove_cvref_t<T>, AnyEngineService>)explicit AnyEngineService(
-            T&& engine)
+        requires EngineServiceConcept<std::remove_cvref_t<T>> &&
+                 (!std::same_as<std::remove_cvref_t<T>, AnyEngineService>)
+    explicit AnyEngineService(T&& engine)
       : m_impl(pro::make_proxy<AnyEngineServiceFacade, std::remove_cvref_t<T>>(
             std::forward<T>(engine)))
     {}
 
     /// Construct in-place from constructor arguments (for non-movable types).
     template <class T, class... Args>
-    requires EngineServiceConcept<T> && std::is_constructible_v<T, Args...>
+        requires EngineServiceConcept<T> && std::is_constructible_v<T, Args...>
     explicit AnyEngineService(std::in_place_type_t<T>, Args&&... args)
       : m_impl(pro::make_proxy<AnyEngineServiceFacade, T>(std::forward<Args>(args)...))
     {}

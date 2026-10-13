@@ -75,8 +75,8 @@ int main(int argc, const char* argv[])
                 // normally either way.
                 initializer->init(param);
                 std::cout << "[" << bcos::getCurrentDateTime() << "] ";
-                std::cout << "importing Ethereum blocks from " << param.importBlocksPath << " ..."
-                          << std::endl;
+                std::cout << "importing Ethereum blocks from " << param.importBlocksPath
+                          << " ..." << std::endl;
                 auto summary = initializer->importEthereumBlocks(param.importBlocksPath);
                 // Skips are the consume-rlp contract (invalid blocks are rejected and
                 // the run continues). A run that imported nothing is a hard failure

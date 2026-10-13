@@ -11,6 +11,15 @@
 // commitBlock: prewriteBlockToBuffer(announcedHash) → mergeBackStorage.
 // Committed-tip sibling reorg (ReorgUndo / one-level rollback) is a follow-up.
 
+#include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError / detail conversions
+#include <opstack-executor/OpEthBlockSteps.h>  // preBlockOpEthSteps / finalizeOpEthBlockResult
+#include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult / opEthMismatchedFieldOf
+#include <opstack-executor/OpEthExecutor.h>     // OpEthExecutor / OpEthBlockContext
+#include <opstack-executor/OpEthDeposit.h>      // decodeOpDepositEnvelope / OP_DEPOSIT_TX_TYPE
+#include <opstack-executor/OpForkSpec.h>        // opForkSpecAt / opForkTimestampSec
+#include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source
+#include <opstack-executor/OpSchedulerPolicy.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/engine/Errors.h>
@@ -47,15 +56,6 @@
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <fmt/format.h>
-#include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError / detail conversions
-#include <opstack-executor/OpEthBlockSteps.h>   // preBlockOpEthSteps / finalizeOpEthBlockResult
-#include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult / opEthMismatchedFieldOf
-#include <opstack-executor/OpEthDeposit.h>      // decodeOpDepositEnvelope / OP_DEPOSIT_TX_TYPE
-#include <opstack-executor/OpEthExecutor.h>     // OpEthExecutor / OpEthBlockContext
-#include <opstack-executor/OpForkSpec.h>        // opForkSpecAt / opForkTimestampSec
-#include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source
-#include <opstack-executor/OpSchedulerPolicy.h>
-#include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -71,7 +71,6 @@
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
-#include <semaphore>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -94,11 +93,11 @@ public:
 
     struct PendingBlock
     {
-        protocol::Block::Ptr block;                 // receipts attached at commit time
-        OpEthExecuteBlockResult result;             // commitments + receipts
+        protocol::Block::Ptr block;               // receipts attached at commit time
+        OpEthExecuteBlockResult result;           // commitments + receipts
         bcos::crypto::HashType announcedBlockHash;  // keyed by the CL-announced hash
         protocol::BlockHeader::Ptr executedHeader;  // commitment-filled header
-        bool verified = false;                      // true only after verify=true + pushView
+        bool verified = false;                    // true only after verify=true + pushView
     };
 
     /// execute() result before it is wrapped as PendingBlock.
@@ -111,8 +110,8 @@ public:
     /// verify=false probe retained for adoptProbeAsPending.
     struct ProbeSlot
     {
-        ViewType view;                              // forkCommitted()+newMutable execution view
-        OpEthExecuteBlockResult result;             // commitments + receipts
+        ViewType view;  // forkCommitted()+newMutable execution view
+        OpEthExecuteBlockResult result;            // commitments + receipts
         protocol::BlockHeader::Ptr executedHeader;  // commitment-filled header
     };
 
@@ -1085,7 +1084,8 @@ private:
             // an optional debug cross-check (default off) can still run a full rebuild here.
             bool const incrementalRoot = persistTrieNodes && header.number() > 0;
             result = co_await finalizeOpEthBlockResult(view, header, execLedgerConfig, spec,
-                sharedError, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr, incrementalRoot);
+                sharedError, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr,
+                incrementalRoot);
 
             // Persist this block's trie nodes. Parent nodes must already exist; otherwise
             // MPTInvariantViolation (do not rebuild from an empty trie).
@@ -1131,16 +1131,16 @@ private:
                             }
                             bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>
                                 fullNodeStorage;
-                            auto fullDelta = co_await ledger::mpt::buildAndCollect(fullNodeStorage,
-                                ledger::mpt::emptyRootHash(), scratch,
+                            auto fullDelta = co_await ledger::mpt::buildAndCollect(
+                                fullNodeStorage, ledger::mpt::emptyRootHash(), scratch,
                                 /*l2Mode=*/true, bcos::ledger::account::nodeAddressTableMode());
                             fullRoot = fullDelta.stateRoot;
                         }
                         catch (const std::exception& e)
                         {
-                            throw bcos::evm::engine::OpStorageError(
-                                fmt::format("OpScheduler: full rebuild failed at block {}: {}",
-                                    header.number(), e.what()));
+                            throw bcos::evm::engine::OpStorageError(fmt::format(
+                                "OpScheduler: full rebuild failed at block {}: {}",
+                                header.number(), e.what()));
                         }
                         if (delta.stateRoot != fullRoot)
                         {
@@ -1560,17 +1560,16 @@ private:
             // A poisoned slot is a storage fault even if validation wrapped it as consensus
             // (missing inner node → get_account returns nullopt → insufficient funds).
             if (executor.opErrorSlot()->poisoned())
-                throw bcos::evm::engine::OpStorageError(
-                    fmt::format("OpScheduler: {} state read fault: {}", errTag,
-                        executor.opErrorSlot()->firstErrorMessage()));
+                throw bcos::evm::engine::OpStorageError(fmt::format(
+                    "OpScheduler: {} state read fault: {}", errTag,
+                    executor.opErrorSlot()->firstErrorMessage()));
             throw;
         }
 
         // Fail if the executor reported a storage read fault.
         if (executor.opErrorSlot()->poisoned())
-            throw bcos::evm::engine::OpStorageError(
-                fmt::format("OpScheduler: {} state read fault: {}", errTag,
-                    executor.opErrorSlot()->firstErrorMessage()));
+            throw bcos::evm::engine::OpStorageError(fmt::format("OpScheduler: {} state read fault: {}",
+                errTag, executor.opErrorSlot()->firstErrorMessage()));
         if (hashErr.has_value())
             throw bcos::evm::engine::OpStorageError(
                 fmt::format("OpScheduler: {} block-hash lookup failed: {}", errTag, *hashErr));

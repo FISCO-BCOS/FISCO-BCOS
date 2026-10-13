@@ -147,8 +147,7 @@ inline void validateOpEthJovianShape(
     protocol::BlockHeader const& header, OpForkSpec const& spec, bool lenientOptionals = false)
 {
     bool const lenient = lenientOptionals || spec.fork < OpFork::Ecotone;
-    auto requireField = [](auto const& opt, char const* name) -> auto const&
-    {
+    auto requireField = [](auto const& opt, char const* name) -> auto const& {
         if (!opt.has_value())
             throw OpEthBlockError(
                 std::string("op-eth block: missing required header field ") + name);

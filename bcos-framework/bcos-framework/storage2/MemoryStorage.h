@@ -63,11 +63,8 @@ struct NullLock
 };
 
 template <class Object>
-concept HasMemberSize = requires(Object object)
-{
-    {
-        object.size()
-        } -> std::integral;
+concept HasMemberSize = requires(Object object) {
+    { object.size() } -> std::integral;
 };
 
 struct Empty
@@ -169,7 +166,11 @@ public:
     Buckets m_buckets;
     [[no_unique_address]] std::conditional_t<withLRU, int64_t, Empty> m_maxCapacity;
 
-    void setMaxCapacity(int64_t capacity) requires withLRU { m_maxCapacity = capacity; }
+    void setMaxCapacity(int64_t capacity)
+        requires withLRU
+    {
+        m_maxCapacity = capacity;
+    }
 
     size_t getBucketIndex(auto const& key)
     {
@@ -197,8 +198,9 @@ public:
         }
     }
 
-    void updateLRUAndCheck(Bucket& bucket,
-        typename Container::template nth_index<0>::type::iterator entryIt) requires withLRU
+    void updateLRUAndCheck(
+        Bucket& bucket, typename Container::template nth_index<0>::type::iterator entryIt)
+        requires withLRU
     {
         auto& index = bucket.container.template get<1>();
         auto seqIt = index.iterator_to(*entryIt);
@@ -479,8 +481,8 @@ public:
         co_return;
     }
 
-    task::AwaitableValue<void> merge(MemoryStorage& fromStorage) requires(
-        !std::is_const_v<decltype(fromStorage)>)
+    task::AwaitableValue<void> merge(MemoryStorage& fromStorage)
+        requires(!std::is_const_v<decltype(fromStorage)>)
     {
         for (auto&& [bucket, fromBucket] : ::ranges::views::zip(m_buckets, fromStorage.m_buckets))
         {
@@ -572,11 +574,14 @@ public:
         return task::AwaitableValue(std::move(iterator));
     }
 
-    void mergeConcurrent(MemoryStorage& toStorage) requires withConcurrent {}
+    void mergeConcurrent(MemoryStorage& toStorage)
+        requires withConcurrent
+    {}
     template <class FromStorage, class... FromStorages>
-    void mergeConcurrent(MemoryStorage& toStorage, FromStorage& fromStorage,
-        FromStorages&... fromStorages) requires(withConcurrent && !FromStorage::withConcurrent &&
-                                                (... && (!FromStorages::withConcurrent)))
+    void mergeConcurrent(
+        MemoryStorage& toStorage, FromStorage& fromStorage, FromStorages&... fromStorages)
+        requires(withConcurrent && !FromStorage::withConcurrent &&
+                 (... && (!FromStorages::withConcurrent)))
     {
         auto& bucket = fromStorage.m_buckets[0];
         auto& index = bucket.container.template get<0>();
@@ -628,8 +633,8 @@ public:
     }
 
     template <class... FromStorages>
-    requires(withConcurrent && (... && (!FromStorages::withConcurrent)))
-        task::AwaitableValue<void> merge(FromStorages&... fromStorage)
+        requires(withConcurrent && (... && (!FromStorages::withConcurrent)))
+    task::AwaitableValue<void> merge(FromStorages&... fromStorage)
     {
         mergeConcurrent(*this, fromStorage...);
         return {};

@@ -35,9 +35,8 @@ namespace
 // Fork-id ladder per op-geth (see OpForkId.h): canyon(=Shanghai), ecotone(=Cancun),
 // fjord, granite, holocene, isthmus(=Prague), jovian, karst. Delta has no ChainConfig
 // field and RegolithTime is 0, so neither is a fork-id point.
-const h256 c_opSepoliaGenesisHash{
-    std::string_view("0x102de6ffb001480cc9b8b548fd05c34cd4f46ae4aa91759393db90ea0409887d"),
-    h256::FromHex};
+const h256 c_opSepoliaGenesisHash{std::string_view(
+    "0x102de6ffb001480cc9b8b548fd05c34cd4f46ae4aa91759393db90ea0409887d"), h256::FromHex};
 constexpr uint64_t c_genesisTime = 1691802540;
 constexpr uint64_t kNever = std::numeric_limits<uint64_t>::max();
 const eth::OpForkIdLadder c_opSepoliaLadder{
@@ -59,8 +58,8 @@ BOOST_AUTO_TEST_CASE(opSepoliaLadderPinned)
 {
     // Fresh node (head = genesis): checksum is bare crc32(genesisHash); next is the
     // first scheduled fork — every remote accepts this via EIP-2124 rule #2.
-    auto atGenesis = eth::computeOpForkId(
-        c_opSepoliaGenesisHash, c_genesisTime, c_genesisTime, c_opSepoliaLadder);
+    auto atGenesis = eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime,
+        c_genesisTime, c_opSepoliaLadder);
     BOOST_CHECK_EQUAL(atGenesis.hash, 0x67a40328u);
     BOOST_CHECK_EQUAL(atGenesis.next, 1699981200ull);  // canyon
 
@@ -82,8 +81,8 @@ BOOST_AUTO_TEST_CASE(opSepoliaLadderPinned)
     };
     for (auto const& w : windows)
     {
-        auto id = eth::computeOpForkId(
-            c_opSepoliaGenesisHash, c_genesisTime, w.headTime, c_opSepoliaLadder);
+        auto id = eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, w.headTime,
+            c_opSepoliaLadder);
         BOOST_CHECK_EQUAL(id.hash, w.hash);
         BOOST_CHECK_EQUAL(id.next, w.next);
     }
@@ -104,17 +103,15 @@ BOOST_AUTO_TEST_CASE(unscheduledIntermediateRungsDropped)
     eth::OpForkIdLadder const baseline{kNever, kNever, kNever, kNever, kNever, kNever,
         1763568001 /*jovian*/, 1781712001 /*karst*/};
     // Head past both: both rungs are chained even though six rungs precede them unset.
-    auto pastAll =
-        eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, 1781712001, baseline);
-    uint32_t expected =
-        eth::crc32(bytesConstRef(c_opSepoliaGenesisHash.data(), c_opSepoliaGenesisHash.size()));
+    auto pastAll = eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, 1781712001, baseline);
+    uint32_t expected = eth::crc32(
+        bytesConstRef(c_opSepoliaGenesisHash.data(), c_opSepoliaGenesisHash.size()));
     expected = eth::forkIdAddForkPoint(expected, 1763568001);
     expected = eth::forkIdAddForkPoint(expected, 1781712001);
     BOOST_CHECK_EQUAL(pastAll.hash, expected);
     BOOST_CHECK_EQUAL(pastAll.next, 0ull);
     // Head before jovian: bare genesis checksum, jovian announced as next.
-    auto early =
-        eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, c_genesisTime, baseline);
+    auto early = eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, c_genesisTime, baseline);
     BOOST_CHECK_EQUAL(early.hash,
         eth::crc32(bytesConstRef(c_opSepoliaGenesisHash.data(), c_opSepoliaGenesisHash.size())));
     BOOST_CHECK_EQUAL(early.next, 1763568001ull);
@@ -127,8 +124,8 @@ BOOST_AUTO_TEST_CASE(genesisActiveForksSkipped)
 {
     eth::OpForkIdLadder const fromGenesis{0, 0, 0, 0, 0, 0, 1763568001, 1781712001};
     auto id = eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, 1781712001, fromGenesis);
-    uint32_t expected =
-        eth::crc32(bytesConstRef(c_opSepoliaGenesisHash.data(), c_opSepoliaGenesisHash.size()));
+    uint32_t expected = eth::crc32(
+        bytesConstRef(c_opSepoliaGenesisHash.data(), c_opSepoliaGenesisHash.size()));
     expected = eth::forkIdAddForkPoint(expected, 1763568001);
     expected = eth::forkIdAddForkPoint(expected, 1781712001);
     BOOST_CHECK_EQUAL(id.hash, expected);
@@ -138,7 +135,8 @@ BOOST_AUTO_TEST_CASE(genesisActiveForksSkipped)
     // (op-geth dedups; e.g. a chain whose canyon and ecotone coincide).
     eth::OpForkIdLadder const dup{
         1700000000, 1700000000, kNever, kNever, kNever, kNever, kNever, kNever};
-    auto dupId = eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, 1700000001, dup);
+    auto dupId =
+        eth::computeOpForkId(c_opSepoliaGenesisHash, c_genesisTime, 1700000001, dup);
     uint32_t dupExpected = eth::forkIdAddForkPoint(
         eth::crc32(bytesConstRef(c_opSepoliaGenesisHash.data(), c_opSepoliaGenesisHash.size())),
         1700000000);

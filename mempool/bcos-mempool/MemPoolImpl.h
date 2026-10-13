@@ -136,28 +136,25 @@ struct PooledTransaction
 };
 
 template <class TransactionsType>
-concept InputTransactions = ::ranges::input_range<TransactionsType> &&
+concept InputTransactions =
+    ::ranges::input_range<TransactionsType> &&
     std::same_as<::ranges::range_value_t<TransactionsType>, protocol::Transaction::Ptr>;
 
 template <class InputHashesType>
-concept InputHashes = ::ranges::input_range<InputHashesType> &&
+concept InputHashes =
+    ::ranges::input_range<InputHashesType> &&
     std::same_as<::ranges::range_value_t<InputHashesType>, bcos::crypto::HashType>;
 
 template <class SenderNonceTuple>
-concept SenderNonce = requires(SenderNonceTuple senderNonce)
-{
-    {
-        std::get<0>(senderNonce)
-        } -> std::convertible_to<std::string_view>;
-    {
-        std::get<1>(senderNonce)
-        } -> std::convertible_to<int64_t>;
+concept SenderNonce = requires(SenderNonceTuple senderNonce) {
+    { std::get<0>(senderNonce) } -> std::convertible_to<std::string_view>;
+    { std::get<1>(senderNonce) } -> std::convertible_to<int64_t>;
 };
 
 
 template <class SenderNoncesType>
 concept SenderNonces = ::ranges::input_range<SenderNoncesType> &&
-    SenderNonce<::ranges::range_value_t<SenderNoncesType>>;
+                       SenderNonce<::ranges::range_value_t<SenderNoncesType>>;
 
 
 class MemPoolImpl

@@ -123,8 +123,7 @@ BOOST_AUTO_TEST_CASE(PredicateAndComposesWithExistingFlag)
 
     // Consortium lane, balance feature set -> visible.
     auto consortiumMap = makeMap(false);
-    BOOST_CHECK(
-        consortiumMap.at(BALANCE_PRECOMPILED_ADDRESS, kVersion, false, balanceOn) != nullptr);
+    BOOST_CHECK(consortiumMap.at(BALANCE_PRECOMPILED_ADDRESS, kVersion, false, balanceOn) != nullptr);
 
     // Consortium lane, balance feature unset -> hidden (balance gate fails).
     Features none;

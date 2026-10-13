@@ -392,7 +392,8 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
         int remaining = accountReadThrowRemaining->load(std::memory_order_acquire);
         while (remaining > 0 && !accountReadThrowRemaining->compare_exchange_weak(
                                     remaining, remaining - 1, std::memory_order_acq_rel))
-        {}
+        {
+        }
         if (remaining > 0)
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"injected storage read fault"});
@@ -406,8 +407,8 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
             key, std::forward<decltype(args)>(args)...);
     }
 
-    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
-        -> task::Task<std::vector<DataValue>>
+    auto readSomeRaw(
+        ::ranges::input_range auto keys, auto&&... args) -> task::Task<std::vector<DataValue>>
     {
         if (accountReadGate->load(std::memory_order_acquire) ||
             accountReadThrowRemaining->load(std::memory_order_acquire) > 0)
@@ -428,8 +429,8 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
             std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto readSome(::ranges::input_range auto keys, auto&&... args)
-        -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
+    auto readSome(::ranges::input_range auto keys,
+        auto&&... args) -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
     {
         if (accountReadGate->load(std::memory_order_acquire) ||
             accountReadThrowRemaining->load(std::memory_order_acquire) > 0)
@@ -553,7 +554,8 @@ public:
         int remaining = prewriteFailRemaining->load(std::memory_order_acquire);
         while (remaining > 0 && !prewriteFailRemaining->compare_exchange_weak(
                                     remaining, remaining - 1, std::memory_order_acq_rel))
-        {}
+        {
+        }
         if (remaining > 0)
         {
             callback("injected", BCOS_ERROR_PTR(bcos::ledger::LedgerError::ErrorArgument,

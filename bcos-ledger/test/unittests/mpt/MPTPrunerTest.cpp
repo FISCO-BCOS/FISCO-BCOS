@@ -221,9 +221,10 @@ void writeGarbageRows(PruneBackend& backend, size_t count)
 // marker on RocksDBStorage2 makes kParallelSweepSafe true, so init's Phase 3 runs the
 // 256-shard tbb::parallel_for path the in-memory PruneBackend never exercises.
 // ---------------------------------------------------------------------------
-using RocksPruneBackend = bcos::storage2::rocksdb::RocksDBStorage2<bcos::executor_v1::StateKey,
-    bcos::executor_v1::StateValue, bcos::storage2::rocksdb::StateKeyResolver,
-    bcos::storage2::rocksdb::StateValueResolver>;
+using RocksPruneBackend =
+    bcos::storage2::rocksdb::RocksDBStorage2<bcos::executor_v1::StateKey,
+        bcos::executor_v1::StateValue, bcos::storage2::rocksdb::StateKeyResolver,
+        bcos::storage2::rocksdb::StateValueResolver>;
 using RocksPruner = MPTPruner<RocksPruneBackend>;
 
 /// A temp-dir RocksDB opened create-if-missing, wiped on teardown.
@@ -244,7 +245,8 @@ struct RocksDBSweepFixture
         std::filesystem::remove_all(path);
     }
 
-    std::string const path = "./rocksdb-mpt-pruner-sweep-" + std::to_string(std::random_device{}());
+    std::string const path =
+        "./rocksdb-mpt-pruner-sweep-" + std::to_string(std::random_device{}());
     std::unique_ptr<::rocksdb::DB> rocksDB;
 };
 
@@ -282,10 +284,11 @@ void writeMptActivation(auto& backend, bcos::protocol::BlockNumber activation)
 }
 
 /// A StateRootLookup over a recorded (block → stateRoot) map; absent blocks report nullopt.
-Pruner::StateRootLookup rootLookupOf(std::map<bcos::protocol::BlockNumber, bcos::h256> const& roots)
+Pruner::StateRootLookup rootLookupOf(
+    std::map<bcos::protocol::BlockNumber, bcos::h256> const& roots)
 {
-    return [&roots](
-               bcos::protocol::BlockNumber number) -> bcos::task::Task<std::optional<bcos::h256>> {
+    return [&roots](bcos::protocol::BlockNumber number)
+               -> bcos::task::Task<std::optional<bcos::h256>> {
         auto const it = roots.find(number);
         co_return it == roots.end() ? std::nullopt : std::optional<bcos::h256>{it->second};
     };
@@ -321,8 +324,8 @@ void runEmptyBlocks(PruneBackend& backend, Pruner& pruner, bcos::protocol::Block
 /// One block of the account-trie chain the pruning tests drive, in the production commit order:
 /// build the trie delta → flush its nodes → prepare + apply the pruning batch + onCommit (the
 /// deletions of expired nodes, the prewriteStorage stand-in). Returns the delta for inspection.
-MPTDeltaLayer commitAccountBlock(PruneBackend& backend, auto& nodes, Pruner& pruner,
-    std::map<bcos::Address, Account>& accounts, bcos::h256 priorRoot,
+MPTDeltaLayer commitAccountBlock(PruneBackend& backend, auto& nodes,
+    Pruner& pruner, std::map<bcos::Address, Account>& accounts, bcos::h256 priorRoot,
     std::map<bcos::Address, std::optional<Account>> const& accountChanges,
     bcos::protocol::BlockNumber blockNumber)
 {
@@ -421,7 +424,8 @@ BOOST_AUTO_TEST_CASE(SummaryLogIntervalFloorsAtHundred)
     // prune window from printing one line per block.
     BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(0), Pruner::SUMMARY_LOG_MIN_INTERVAL);
     BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(1), Pruner::SUMMARY_LOG_MIN_INTERVAL);
-    BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(100), Pruner::SUMMARY_LOG_MIN_INTERVAL);
+    BOOST_CHECK_EQUAL(
+        Pruner::summaryLogInterval(100), Pruner::SUMMARY_LOG_MIN_INTERVAL);
     BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(101), 101);
     BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(10'000), 10'000);
 }
@@ -692,8 +696,9 @@ BOOST_AUTO_TEST_CASE(CrossTrieSharingSurvivesUntilLastReferenceDrops)
     constexpr int64_t N = 3;
     Pruner pruner(backend, N);
 
-    std::map<bcos::h256, bcos::bytes> const content{{makeHash(0x11), bcos::bytes{0x01}},
-        {makeHash(0x22), bcos::bytes(40, 0x02)}, {makeHash(0x33), bcos::bytes(20, 0x03)}};
+    std::map<bcos::h256, bcos::bytes> const content{
+        {makeHash(0x11), bcos::bytes{0x01}}, {makeHash(0x22), bcos::bytes(40, 0x02)},
+        {makeHash(0x33), bcos::bytes(20, 0x03)}};
     std::map<bcos::h256, std::optional<bcos::bytes>> const contentChanges{
         content.begin(), content.end()};
 
@@ -850,8 +855,7 @@ BOOST_AUTO_TEST_CASE(WindowedRandomWorkloadInvariants)
                 changes[address] = makePruneAccount(++versions[address], 1000 + rng() % 1000);
             }
         }
-        auto const delta =
-            commitAccountBlock(backend, nodes, pruner, accounts, root, changes, block);
+        auto const delta = commitAccountBlock(backend, nodes, pruner, accounts, root, changes, block);
         root = delta.stateRoot;
         history.push_back(Version{.number = block, .root = root, .accounts = accounts});
         while (history.size() > static_cast<size_t>(N) + 1)
@@ -868,8 +872,8 @@ BOOST_AUTO_TEST_CASE(WindowedRandomWorkloadInvariants)
             size_t proven = 0;
             for (auto const& [address, account] : version.accounts)
             {
-                auto proof = bcos::task::syncWait(
-                    generateProof(nodes, version.root, address, std::span<bcos::h256 const>{}));
+                auto proof = bcos::task::syncWait(generateProof(
+                    nodes, version.root, address, std::span<bcos::h256 const>{}));
                 BOOST_REQUIRE_MESSAGE(std::holds_alternative<EIP1186Proof>(proof),
                     "window root failed generateProof at block " << version.number);
                 ++proven;
@@ -920,8 +924,7 @@ BOOST_AUTO_TEST_CASE(OnCommitAdvancesWatermarkAfterBatchDeletion)
             auto const older = makeAddress(static_cast<uint8_t>(block - 1));
             changes[older] = makePruneAccount(++versions[older], 7 * block);
         }
-        auto const delta =
-            commitAccountBlock(backend, nodes, pruner, accounts, root, changes, block);
+        auto const delta = commitAccountBlock(backend, nodes, pruner, accounts, root, changes, block);
         root = delta.stateRoot;
         history.emplace_back(block, root);
     }
@@ -999,7 +1002,8 @@ BOOST_AUTO_TEST_CASE(RebuildCountsCrossTrieSharing)
     Pruner pruner(backend, N);
 
     std::map<bcos::h256, std::optional<bcos::bytes>> const storageChanges{
-        {makeHash(0x11), bcos::bytes{0x01}}, {makeHash(0x22), bcos::bytes(40, 0x02)},
+        {makeHash(0x11), bcos::bytes{0x01}},
+        {makeHash(0x22), bcos::bytes(40, 0x02)},
         {makeHash(0x33), bcos::bytes(20, 0x03)}};
     auto resultA = bcos::task::syncWait(commitTrie(nodes, emptyRootHash(), storageChanges));
     auto resultB = bcos::task::syncWait(commitTrie(nodes, emptyRootHash(), storageChanges));
@@ -1044,8 +1048,7 @@ BOOST_AUTO_TEST_CASE(RebuildCountsCrossTrieSharing)
     // the same counts from the head root alone.
     Pruner rebuilt(backend, N);
     std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, delta.stateRoot}};
-    bcos::task::syncWait(
-        rebuilt.init(1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    bcos::task::syncWait(rebuilt.init(1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(rebuilt.trackedCount(), pruner.trackedCount());
     for (auto const& hash : storageLive)
     {
@@ -1113,8 +1116,7 @@ BOOST_AUTO_TEST_CASE(RebuildAfterRestartMatchesIncrementalState)
 
     // Restart: a fresh pruner rebuilds from the same backend and the recorded roots.
     Pruner prunerB(backend, N);
-    bcos::task::syncWait(
-        prunerB.init(BLOCKS, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    bcos::task::syncWait(prunerB.init(BLOCKS, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(prunerB.watermark(), BLOCKS);
 
     // Every hash tracked by either pruner lives in the union of the window's live sets
@@ -1163,8 +1165,8 @@ BOOST_AUTO_TEST_CASE(RebuildAfterRestartMatchesIncrementalState)
             size_t proven = 0;
             for (auto const& [address, account] : accountsAt[v])
             {
-                auto proof = bcos::task::syncWait(
-                    generateProof(nodes, roots[v], address, std::span<bcos::h256 const>{}));
+                auto proof = bcos::task::syncWait(generateProof(
+                    nodes, roots[v], address, std::span<bcos::h256 const>{}));
                 BOOST_REQUIRE_MESSAGE(std::holds_alternative<EIP1186Proof>(proof),
                     "post-restart window root failed generateProof at block " << v);
                 if (++proven >= 2)
@@ -1194,8 +1196,7 @@ BOOST_AUTO_TEST_CASE(RebuildDeletesSmallGarbageAtStartup)
     {
         std::map<bcos::Address, std::optional<Account>> changes;
         changes[makeAddress(static_cast<uint8_t>(block))] = makePruneAccount(0, 10 * block);
-        auto const delta =
-            commitAccountBlock(backend, nodes, prunerA, accounts, root, changes, block);
+        auto const delta = commitAccountBlock(backend, nodes, prunerA, accounts, root, changes, block);
         root = delta.stateRoot;
         roots[block] = root;
     }
@@ -1210,8 +1211,7 @@ BOOST_AUTO_TEST_CASE(RebuildDeletesSmallGarbageAtStartup)
 
     // Restart with the sweep enabled: init rebuilds and deletes the garbage on the spot.
     Pruner prunerB(backend, N);
-    bcos::task::syncWait(
-        prunerB.init(3, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/true));
+    bcos::task::syncWait(prunerB.init(3, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/true));
     for (auto const& hash : garbage)
     {
         BOOST_CHECK(!nodeRowExists(backend, hash));
@@ -1274,8 +1274,7 @@ BOOST_AUTO_TEST_CASE(StartupSweepDisabled)
     auto const rowsBefore = countRowsInTable(backend, bcos::storage2::kMPTTable);
 
     Pruner pruner(backend, N);
-    bcos::task::syncWait(
-        pruner.init(1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    bcos::task::syncWait(pruner.init(1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(pruner.lastSweepDeleted(), 0U);
     BOOST_CHECK_EQUAL(countRowsInTable(backend, bcos::storage2::kMPTTable), rowsBefore);
     BOOST_CHECK(nodeRowExists(backend, garbageHash(0)));
@@ -1308,8 +1307,8 @@ BOOST_AUTO_TEST_CASE(StartupSweepEnabled)
 
     std::vector<std::pair<uint64_t, uint64_t>> progress;
     Pruner pruner(backend, N);
-    bcos::task::syncWait(pruner.init(1, /*executorVersion=*/0, rootLookupOf(roots),
-        /*sweepGarbage=*/true, [&progress, &backend](uint64_t done, uint64_t total) {
+    bcos::task::syncWait(pruner.init(1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/true,
+        [&progress, &backend](uint64_t done, uint64_t total) {
             progress.emplace_back(done, total);
             if (done == Pruner::SWEEP_DELETE_CHUNK)
             {
@@ -1317,7 +1316,8 @@ BOOST_AUTO_TEST_CASE(StartupSweepEnabled)
                 // garbage keys order by their trailing counter) is already deleted, the last
                 // garbage row is still on disk awaiting the scan.
                 BOOST_CHECK(!nodeRowExists(backend, garbageHash(0)));
-                BOOST_CHECK(!nodeRowExists(backend, garbageHash(Pruner::SWEEP_DELETE_CHUNK - 1)));
+                BOOST_CHECK(
+                    !nodeRowExists(backend, garbageHash(Pruner::SWEEP_DELETE_CHUNK - 1)));
                 BOOST_CHECK(nodeRowExists(backend, garbageHash(garbageCount - 1)));
             }
         }));
@@ -1375,8 +1375,9 @@ BOOST_FIXTURE_TEST_CASE(StartupSweepParallelShardsOnRocksDB, RocksDBSweepFixture
         rows.reserve(garbageCount);
         for (size_t shard = 0; shard < RocksPruner::SWEEP_SHARDS; ++shard)
         {
-            uint32_t const count =
-                shard == HOT_SHARD ? RocksPruner::SWEEP_DELETE_CHUNK + HOT_EXTRA : PER_SHARD;
+            uint32_t const count = shard == HOT_SHARD
+                                       ? RocksPruner::SWEEP_DELETE_CHUNK + HOT_EXTRA
+                                       : PER_SHARD;
             for (uint32_t i = 0; i < count; ++i)
             {
                 bcos::storage::Entry entry;
@@ -1396,13 +1397,15 @@ BOOST_FIXTURE_TEST_CASE(StartupSweepParallelShardsOnRocksDB, RocksDBSweepFixture
     std::atomic<uint64_t> maxInFlight{0};
     RocksPruner pruner(backend, N);
     std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, root}};
-    bcos::task::syncWait(pruner.init(1, /*executorVersion=*/0, rootLookupOf(roots),
-        /*sweepGarbage=*/true, [&progress, &inFlight, &maxInFlight](uint64_t done, uint64_t total) {
+    bcos::task::syncWait(pruner.init(1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/true,
+        [&progress, &inFlight, &maxInFlight](uint64_t done, uint64_t total) {
             auto const depth = inFlight.fetch_add(1, std::memory_order_acq_rel) + 1;
             auto observed = maxInFlight.load(std::memory_order_relaxed);
             while (depth > observed &&
-                   !maxInFlight.compare_exchange_weak(observed, depth, std::memory_order_relaxed))
-            {}
+                   !maxInFlight.compare_exchange_weak(observed, depth,
+                       std::memory_order_relaxed))
+            {
+            }
             progress.emplace_back(done, total);
             inFlight.fetch_sub(1, std::memory_order_acq_rel);
         }));
@@ -1433,8 +1436,9 @@ BOOST_FIXTURE_TEST_CASE(StartupSweepParallelShardsOnRocksDB, RocksDBSweepFixture
     // exactly the live set.
     for (size_t shard = 0; shard < RocksPruner::SWEEP_SHARDS; ++shard)
     {
-        uint32_t const count =
-            shard == HOT_SHARD ? RocksPruner::SWEEP_DELETE_CHUNK + HOT_EXTRA : PER_SHARD;
+        uint32_t const count = shard == HOT_SHARD
+                                   ? RocksPruner::SWEEP_DELETE_CHUNK + HOT_EXTRA
+                                   : PER_SHARD;
         for (uint32_t i = 0; i < count; ++i)
         {
             BOOST_CHECK(!nodeRowExists(backend, shardGarbageHash(shard, i)));
@@ -1473,8 +1477,7 @@ BOOST_AUTO_TEST_CASE(RebuildTruncatesAtScenarioAActivation)
     {
         std::map<bcos::Address, std::optional<Account>> changes;
         changes[makeAddress(static_cast<uint8_t>(block))] = makePruneAccount(0, block);
-        auto const delta =
-            commitAccountBlock(backend, nodes, prunerA, accounts, root, changes, block);
+        auto const delta = commitAccountBlock(backend, nodes, prunerA, accounts, root, changes, block);
         root = delta.stateRoot;
         roots[block] = root;
     }
@@ -1538,8 +1541,8 @@ BOOST_AUTO_TEST_CASE(RebuildAfterWindowWideningSkipsPrunedRoots)
     // pruned root of block 3 and stops there instead of throwing MPTInvariantViolation.
     constexpr int64_t NEW_N = 5;
     Pruner prunerB(backend, NEW_N);
-    BOOST_CHECK_NO_THROW(bcos::task::syncWait(
-        prunerB.init(HEAD, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)));
+    BOOST_CHECK_NO_THROW(
+        bcos::task::syncWait(prunerB.init(HEAD, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)));
 
     // The effective window starts at the first surviving root: every node of roots 4..6 is
     // tracked (counted or scheduled); nothing from the pruned roots can be resurrected.
@@ -1615,13 +1618,14 @@ BOOST_AUTO_TEST_CASE(ShrinkChurnWidenRebuildsCleanly)
     constexpr int64_t SHRUNK_N = 2;
     {
         Pruner prunerB(backend, SHRUNK_N);
-        BOOST_CHECK_NO_THROW(bcos::task::syncWait(
-            prunerB.init(8, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)));
+        BOOST_CHECK_NO_THROW(
+            bcos::task::syncWait(prunerB.init(8, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)));
         for (bcos::protocol::BlockNumber block = 9; block <= 11; ++block)
         {
             std::map<bcos::Address, std::optional<Account>> changes;
             changes[makeAddress(static_cast<uint8_t>(block))] = makePruneAccount(0, 10 * block);
-            changes[makeAddress(static_cast<uint8_t>(block - 3))] = makePruneAccount(2, 10 * block);
+            changes[makeAddress(static_cast<uint8_t>(block - 3))] =
+                makePruneAccount(2, 10 * block);
             root = commitAccountBlock(backend, nodes, prunerB, accounts, root, changes, block)
                        .stateRoot;
             roots[block] = root;
@@ -1635,8 +1639,8 @@ BOOST_AUTO_TEST_CASE(ShrinkChurnWidenRebuildsCleanly)
     // 10..9 resolve, block 8's root (== root 6) is already pruned, so the walk stops there
     // instead of resolving (and failing loud on) the nodes block 11 deleted.
     Pruner prunerC(backend, WIDE_N);
-    BOOST_CHECK_NO_THROW(bcos::task::syncWait(
-        prunerC.init(11, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)));
+    BOOST_CHECK_NO_THROW(
+        bcos::task::syncWait(prunerC.init(11, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)));
 
     // The effective window is the surviving roots 9..11: exactly their nodes are tracked (the
     // oldest one's unique nodes carry the WIDE deadline 9+1+5, the first in the queue) and
@@ -1676,8 +1680,7 @@ BOOST_AUTO_TEST_CASE(RebuildSkippedBeforeActivationThenDeltaSeeds)
 
     // No feature rows at all (pre-activation head): nothing to rebuild.
     std::map<bcos::protocol::BlockNumber, bcos::h256> const emptyRoots;
-    bcos::task::syncWait(
-        pruner.init(2, /*executorVersion=*/0, rootLookupOf(emptyRoots), /*sweepGarbage=*/false));
+    bcos::task::syncWait(pruner.init(2, /*executorVersion=*/0, rootLookupOf(emptyRoots), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(pruner.trackedCount(), 0U);
     BOOST_CHECK_EQUAL(pruner.pendingCount(), 0U);
     BOOST_CHECK_EQUAL(pruner.watermark(), 2);
@@ -1709,8 +1712,7 @@ BOOST_AUTO_TEST_CASE(RebuildSkippedBeforeActivationThenDeltaSeeds)
     // And a later restart rebuilds the same counts from disk.
     Pruner rebuilt(backend, N);
     std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{3, delta.stateRoot}};
-    bcos::task::syncWait(
-        rebuilt.init(3, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
+    bcos::task::syncWait(rebuilt.init(3, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(rebuilt.trackedCount(), live.size());
     for (auto const& hash : live)
     {
@@ -1728,9 +1730,8 @@ BOOST_AUTO_TEST_CASE(RebuildFailsLoudOnMissingNode)
     Pruner pruner(backend, /*pruneWindow=*/2);
 
     std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, makeHash(0x01)}};
-    BOOST_CHECK_THROW(bcos::task::syncWait(pruner.init(
-                          1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)),
-        MPTInvariantViolation);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(pruner.init(1, /*executorVersion=*/0, rootLookupOf(roots), /*sweepGarbage=*/false)), MPTInvariantViolation);
 }
 
 BOOST_AUTO_TEST_CASE(NewNodesGuardKeepsQueueEntryForRecheck)

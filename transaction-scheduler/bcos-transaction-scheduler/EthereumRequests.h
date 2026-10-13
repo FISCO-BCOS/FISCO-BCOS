@@ -62,15 +62,15 @@ inline std::optional<bcos::bytes> collectDepositRequestsData(
     constexpr size_t DEPOSIT_LOG_DATA_SIZE = 576;
     // ABI layout of the DepositEvent log data: five head words (offsets), then each
     // dynamic bytes field as a length word followed by the value padded to words.
-    constexpr size_t PUBKEY_OFFSET = WORD * 5;  // 160
+    constexpr size_t PUBKEY_OFFSET = WORD * 5;                 // 160
     constexpr size_t PUBKEY_SIZE = 48;
-    constexpr size_t WITHDRAWAL_OFFSET = PUBKEY_OFFSET + WORD + WORD * 2;  // 256
+    constexpr size_t WITHDRAWAL_OFFSET = PUBKEY_OFFSET + WORD + WORD * 2;   // 256
     constexpr size_t WITHDRAWAL_SIZE = 32;
-    constexpr size_t AMOUNT_OFFSET = WITHDRAWAL_OFFSET + WORD + WORD;  // 320
+    constexpr size_t AMOUNT_OFFSET = WITHDRAWAL_OFFSET + WORD + WORD;       // 320
     constexpr size_t AMOUNT_SIZE = 8;
-    constexpr size_t SIGNATURE_OFFSET = AMOUNT_OFFSET + WORD + WORD;  // 384
+    constexpr size_t SIGNATURE_OFFSET = AMOUNT_OFFSET + WORD + WORD;        // 384
     constexpr size_t SIGNATURE_SIZE = 96;
-    constexpr size_t INDEX_OFFSET = SIGNATURE_OFFSET + WORD + WORD * 3;  // 512
+    constexpr size_t INDEX_OFFSET = SIGNATURE_OFFSET + WORD + WORD * 3;     // 512
     constexpr size_t INDEX_SIZE = 8;
     constexpr std::array<size_t, 5> EXPECTED_OFFSETS{
         PUBKEY_OFFSET, WITHDRAWAL_OFFSET, AMOUNT_OFFSET, SIGNATURE_OFFSET, INDEX_OFFSET};
@@ -137,8 +137,8 @@ inline std::optional<bcos::bytes> collectDepositRequestsData(
                 return std::nullopt;
             }
             auto append = [&depositRequests](bcos::bytesConstRef data, size_t pos, size_t size) {
-                depositRequests.insert(
-                    depositRequests.end(), data.data() + pos, data.data() + pos + size);
+                depositRequests.insert(depositRequests.end(), data.data() + pos,
+                    data.data() + pos + size);
             };
             append(data, PUBKEY_OFFSET + WORD, PUBKEY_SIZE);
             append(data, WITHDRAWAL_OFFSET + WORD, WITHDRAWAL_SIZE);
@@ -156,7 +156,8 @@ inline std::optional<bcos::bytes> collectDepositRequestsData(
 /// sha256("") — the canonical empty requestsHash every post-Prague header without
 /// requests carries. `blockEndRequests` are the EIP-7002/7251 system-call outputs in
 /// REQUESTS_SYSTEM_CONTRACTS (withdrawal, consolidation) order.
-inline crypto::HashType calculateRequestsHash(bcos::bytes const& depositRequestsData,
+inline crypto::HashType calculateRequestsHash(
+    bcos::bytes const& depositRequestsData,
     std::vector<executor_v1::eth::EthRequests> const& blockEndRequests)
 {
     bcos::bytes digests;
@@ -177,8 +178,8 @@ inline crypto::HashType calculateRequestsHash(bcos::bytes const& depositRequests
     for (auto const& request : blockEndRequests)
     {
         auto const data = request.data();
-        appendIfNonEmpty(
-            static_cast<uint8_t>(request.type()), bcos::bytesConstRef(data.data(), data.size()));
+        appendIfNonEmpty(static_cast<uint8_t>(request.type()),
+            bcos::bytesConstRef(data.data(), data.size()));
     }
     return bcos::crypto::sha256Hash(bcos::ref(digests));
 }

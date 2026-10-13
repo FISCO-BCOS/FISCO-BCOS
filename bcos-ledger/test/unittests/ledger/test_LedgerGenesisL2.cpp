@@ -146,8 +146,8 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
         // 4) the executor_version row persisted: the Ethereum lane is genesis-fixed
         // through it (SystemConfigPrecompiled refuses governance writes crossing
         // ETHEREUM_EXECUTOR_VERSION).
-        BOOST_CHECK_EQUAL(
-            co_await ledger->fetchExecutorVersionAt(0), bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
+        BOOST_CHECK_EQUAL(co_await ledger->fetchExecutorVersionAt(0),
+            bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
     }());
 }
 

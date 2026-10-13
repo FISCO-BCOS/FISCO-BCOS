@@ -25,9 +25,9 @@
 // validateELModeInvariants, libinitializer and transaction-scheduler), so a new lane-specific
 // key had no defined home. This suite pins the OP section family's contract as a table.
 
-#include "EthLaneGenesisFixture.h"
 #include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include "EthLaneGenesisFixture.h"
 #include <bcos-tool/ChainLaneConfig.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
@@ -108,8 +108,8 @@ BOOST_AUTO_TEST_CASE(laneMatrixCoversTheOpSectionFamily)
         BOOST_CHECK(rule->lane == ChainLane::Op);
         BOOST_CHECK(rule->presence == expected_rule.presence);
         BOOST_CHECK_EQUAL(rule->pinned, expected_rule.pinned);
-        BOOST_CHECK_MESSAGE(
-            !rule->reason.empty(), expected_rule.section << " must cite its provenance");
+        BOOST_CHECK_MESSAGE(!rule->reason.empty(),
+            expected_rule.section << " must cite its provenance");
         BOOST_CHECK_EQUAL(rule->rejectMessage, expected_rule.rejectMessage);
         // A Required rule must carry the absence message too (validateL2Invariants throws it).
         if (rule->presence == KeyPresence::Required)
@@ -154,23 +154,24 @@ BOOST_AUTO_TEST_CASE(opSectionOnANonOpLaneIsRejectedByTheMatrix)
 BOOST_AUTO_TEST_CASE(opLaneWithoutTheRequiredSectionThrowsTheTableMessage)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    auto const genesis = std::string(
-                             "[version]\ncompatibility_version=3.18.0\n"
-                             "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-                             "[web3]\nchain_id=1\n"
-                             "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
-                             "leader_period=1\nnode.0=") +
-                         std::string(128, '1') +
-                         ":1:1\n"
-                         "[tx]\ngas_limit=3000000000\n"
-                         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-                         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-                         "version=3\n" +
-                         ethLaneGenesisSections();
-    BOOST_CHECK_EXCEPTION(
-        cfg.loadGenesisConfigFromString(genesis), InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
+    auto const genesis =
+        std::string(
+            "[version]\ncompatibility_version=3.18.0\n"
+            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+            "[web3]\nchain_id=1\n"
+            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
+            "leader_period=1\nnode.0=") +
+        std::string(128, '1') +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=3\n" +
+        ethLaneGenesisSections();
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
+        [](auto const& e) {
+            return errinfoContains(e,
+                "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
         });
 }
 
@@ -187,29 +188,29 @@ BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
                    "[web3]\nchain_id=1\n"
                    "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
                    "leader_period=1\nnode.0=") +
-               std::string(128, '1') +
-               ":1:1\n"
-               "[tx]\ngas_limit=3000000000\n"
-               "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-               "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-               "version=3\n"
-               "[op_fork_timestamps]\n" +
-               std::string(timestamps) + "[op_fork_schedule]\ncanonical=" + std::string(canonical) +
-               "\n" + ethLaneGenesisSections();
+            std::string(128, '1') +
+            ":1:1\n"
+            "[tx]\ngas_limit=3000000000\n"
+            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+            "version=3\n"
+            "[op_fork_timestamps]\n" +
+            std::string(timestamps) + "[op_fork_schedule]\ncanonical=" + std::string(canonical) +
+            "\n" + ethLaneGenesisSections();
     };
 
     // Agreeing: jovian at genesis on both channels.
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_NO_THROW(
-            cfg.loadGenesisConfigFromString(genesisWith("jovian_time=0\n", "0:jovian")));
+        BOOST_CHECK_NO_THROW(cfg.loadGenesisConfigFromString(
+            genesisWith("jovian_time=0\n", "0:jovian")));
     }
     // Agreeing via the implied jump: shorthand karst-only folds jovian to karst's second,
     // and a canonical that declares exactly that shape matches.
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_NO_THROW(
-            cfg.loadGenesisConfigFromString(genesisWith("karst_time=5\n", "0:isthmus,5:karst")));
+        BOOST_CHECK_NO_THROW(cfg.loadGenesisConfigFromString(
+            genesisWith("karst_time=5\n", "0:isthmus,5:karst")));
     }
     // Diverging: the canonical activates jovian at 100 while the shorthand says 0 — the
     // stored row and the executor would disagree; reject with both values named.
@@ -217,8 +218,9 @@ BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(genesisWith("jovian_time=0\n", "0:isthmus,100:jovian")),
-            InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "declare different schedules"); });
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "declare different schedules");
+            });
     }
     // The karst rung diverges on its own too (the jovian pair above agrees): shorthand
     // karst_time=5 vs canonical karst at 100.
@@ -226,8 +228,9 @@ BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(genesisWith("karst_time=5\n", "0:isthmus,100:karst")),
-            InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "declare different schedules"); });
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "declare different schedules");
+            });
     }
 }
 

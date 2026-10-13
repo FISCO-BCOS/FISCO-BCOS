@@ -2,12 +2,12 @@
 #include "Common.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
-#include <fmt/format.h>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/graph/detail/adjacency_list.hpp>
 #include <boost/graph/properties.hpp>
 #include <boost/throw_exception.hpp>
+#include <fmt/format.h>
 
 using namespace bcos::scheduler;
 
@@ -29,7 +29,8 @@ bool GraphKeyLocks::Vertex::operator==(const KeyLockView& rhs) const
 
 namespace bcos::scheduler
 {
-bool operator<(const GraphKeyLocks::Vertex& lhs, const GraphKeyLocks::KeyLockView& rhs)
+bool operator<(const GraphKeyLocks::Vertex& lhs,
+    const GraphKeyLocks::KeyLockView& rhs)
 {
     if (lhs.index() != 1)
     {
@@ -41,7 +42,8 @@ bool operator<(const GraphKeyLocks::Vertex& lhs, const GraphKeyLocks::KeyLockVie
     return view < rhs;
 }
 
-bool operator<(const GraphKeyLocks::KeyLockView& lhs, const GraphKeyLocks::Vertex& rhs)
+bool operator<(const GraphKeyLocks::KeyLockView& lhs,
+    const GraphKeyLocks::Vertex& rhs)
 {
     if (rhs.index() != 1)
     {

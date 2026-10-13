@@ -49,10 +49,8 @@ struct BlockContextOf<E, std::void_t<typename E::BlockContext>>
 /// OpEthBlockContext deliberately does not opt in: value-initializing it (null
 /// blockHashes, chainId 0, ...) would compile and be nonsense.
 template <class C>
-concept ValueInitValidBlockContext = std::same_as<C, EmptyBlockContext> || requires
-{
-    C::kValueInitializedValid;
-};
+concept ValueInitValidBlockContext =
+    std::same_as<C, EmptyBlockContext> || requires { C::kValueInitializedValid; };
 
 #define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
 
@@ -216,11 +214,10 @@ public:
     /// temporary/default argument would die at the full-expression). Constrained to
     /// contexts that stay meaningful when value-initialized (ValueInitValidBlockContext).
     template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
-    requires ValueInitValidBlockContext<typename BlockContextOf<TransactionExecutor>::type>
-        task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
-            TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
-            ::ranges::input_range auto const& transactions,
-            ledger::LedgerConfig const& ledgerConfig)
+        requires ValueInitValidBlockContext<typename BlockContextOf<TransactionExecutor>::type>
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
+        TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
+        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)
     {
         if constexpr (std::same_as<typename BlockContextOf<TransactionExecutor>::type,
                           EmptyBlockContext>)

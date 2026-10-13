@@ -116,14 +116,13 @@ BOOST_AUTO_TEST_CASE(opStackELGenesisLoadsAndPins)
     BOOST_CHECK(data.find("[ethereum]\nmode:opstack-el\n") != std::string::npos);
     BOOST_CHECK(data.find("[web3]\nchain_id:11155420\n") != std::string::npos);
     // The OP fork pin keeps its own section and its own emit rules.
-    BOOST_CHECK(
-        data.find("[opForkTimestamps]\njovian_time:0\nkarst_time:0\n") != std::string::npos);
+    BOOST_CHECK(data.find("[opForkTimestamps]\njovian_time:0\nkarst_time:0\n") !=
+                std::string::npos);
 
     // A different chain id produces different genesis data (the id is pinned, not
     // just validated).
     auto other = loadGenesis(opStackELGenesis("10"));
-    BOOST_CHECK(
-        data != bcos::tool::generateGenesisData(other.genesisConfig(), *other.ledgerConfig()));
+    BOOST_CHECK(data != bcos::tool::generateGenesisData(other.genesisConfig(), *other.ledgerConfig()));
 }
 
 // The declaration is bound to the OP lane: on executor.version < 3 the sync client's
@@ -145,8 +144,8 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresOpLane)
         "version=2\nevm_revision=cancun\n" +
         l2Sections() + "[ethereum]\nmode=opstack-el\n";
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(
-        cfg.loadGenesisConfigFromString(genesis), InvalidConfig, [](auto const& e) {
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
+        [](auto const& e) {
             return errinfoContains(e, "mode=opstack-el requires executor.version >= 3");
         });
 }
@@ -169,10 +168,10 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresOpForkSchedule)
         "version=3\n" +
         l2Sections() + "[ethereum]\nmode=opstack-el\n";
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(
-        cfg.loadGenesisConfigFromString(genesis), InvalidConfig, [](auto const& e) {
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
+        [](auto const& e) {
             return errinfoContains(
-                e, "requires an [op_fork_schedule] canonical or an [op_fork_timestamps] section");
+                e, "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
         });
 }
 
@@ -184,10 +183,12 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresOpForkSchedule)
 BOOST_AUTO_TEST_CASE(opStackELRequiresEthLaneGenesisShape)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(
-                              opGenesis("11155420", false, "[ethereum]\nmode=opstack-el\n")),
-        InvalidConfig,
-        [](auto const& e) { return errinfoContains(e, "requires a non-empty [alloc.*] section"); });
+    BOOST_CHECK_EXCEPTION(
+        cfg.loadGenesisConfigFromString(
+            opGenesis("11155420", false, "[ethereum]\nmode=opstack-el\n")),
+        InvalidConfig, [](auto const& e) {
+            return errinfoContains(e, "requires a non-empty [alloc.*] section");
+        });
 }
 
 // Same rule as mode=el: no silent mainnet fallback for the chain id the fork-id
@@ -197,7 +198,8 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresChainId)
     // An empty chain_id fails even earlier, in loadWeb3ChainConfig's own parse.
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opStackELGenesis("")), InvalidConfig,
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opStackELGenesis("")),
+            InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "web3ChainId must be a number"); });
     }
     // Any zero spelling lands on the reserved "unset" value and is rejected by the
@@ -205,22 +207,23 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresChainId)
     for (const auto* chainId : {"0", "00"})
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opStackELGenesis(chainId)),
-            InvalidConfig,
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(opStackELGenesis(chainId)), InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "non-zero [web3] chain_id"); });
     }
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(
-        cfg.loadGenesisConfigFromString(opStackELGenesis("99999999999999999999999")), InvalidConfig,
-        [](auto const& e) { return errinfoContains(e, "chain_id to fit uint64"); });
+        cfg.loadGenesisConfigFromString(opStackELGenesis("99999999999999999999999")),
+        InvalidConfig, [](auto const& e) { return errinfoContains(e, "chain_id to fit uint64"); });
 }
 
 // Invalid mode values fail fast like every neighbouring parse.
 BOOST_AUTO_TEST_CASE(opStackELInvalidModeRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opStackELGenesis().replace(
-                              opStackELGenesis().find("mode=opstack-el"), 15, "mode=opstack")),
+    BOOST_CHECK_EXCEPTION(
+        cfg.loadGenesisConfigFromString(opStackELGenesis().replace(
+            opStackELGenesis().find("mode=opstack-el"), 15, "mode=opstack")),
         InvalidConfig, [](auto const& e) { return errinfoContains(e, "[ethereum].mode invalid"); });
     NodeConfig iniCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(iniCfg.loadConfigFromString("[ethereum]\nmode=opstack\n"), InvalidConfig,
@@ -244,28 +247,31 @@ BOOST_AUTO_TEST_CASE(opStackELIniBinding)
     {
         auto cfg = loadGenesis(opStackELGenesis());
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
-        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "declares [ethereum] mode=opstack-el but config.ini");
-        });
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "declares [ethereum] mode=opstack-el but config.ini");
+            });
     }
     // config.ini says el on an opstack-el genesis -> the EL direction of the hook fires
     // first (an el declaration needs an el genesis).
     {
         auto cfg = loadGenesis(opStackELGenesis());
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=el\n"));
-        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "ethereum.mode=el requires config.genesis to declare [ethereum] mode=el");
-        });
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(
+                    e, "ethereum.mode=el requires config.genesis to declare [ethereum] mode=el");
+            });
     }
     // config.ini says opstack-el on a genesis that does not declare it -> rejected.
     {
         auto cfg = loadGenesis(opGenesis("11155420", true, ""));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=opstack-el\n"));
-        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "ethereum.mode=opstack-el requires config.genesis to declare");
-        });
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(
+                    e, "ethereum.mode=opstack-el requires config.genesis to declare");
+            });
     }
 }
 
@@ -276,7 +282,8 @@ BOOST_AUTO_TEST_CASE(opStackELMutualExclusion)
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(
-            cfg.loadConfigFromString("[op_engine_rpc]\nenable=true\n[ethereum]\nmode=opstack-el\n"),
+            cfg.loadConfigFromString(
+                "[op_engine_rpc]\nenable=true\n[ethereum]\nmode=opstack-el\n"),
             InvalidConfig, [](auto const& e) {
                 return errinfoContains(
                     e, "ethereum.mode=opstack-el and op_engine_rpc.enable are mutually exclusive");

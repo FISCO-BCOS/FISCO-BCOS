@@ -32,15 +32,15 @@
 #include "MPTBuilder.h"
 #include "MPTFeatureGates.h"
 #include "ViewNodeStorage.h"
+#include <bcos-ledger/LedgerMethods.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-ledger/LedgerMethods.h>
-#include <bcos-task/TBBWait.h>
 #include <bcos-task/Task.h>
+#include <bcos-task/TBBWait.h>
 #include <bcos-utilities/Common.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>
@@ -68,7 +68,8 @@ task::Task<MPTDeltaLayer> computeMptStateDelta(ViewType& view,
     bool trackRefCounts = false)
 {
     ViewNodeStorage<ViewType> nodeStorage(view);
-    bool const ethLane = ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
+    bool const ethLane =
+        ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
     co_return co_await buildAndCollect(nodeStorage, parentStateRoot, view, ethLane,
         ledger::account::nodeAddressTableMode(), trackRefCounts);
 }

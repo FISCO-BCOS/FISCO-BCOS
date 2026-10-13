@@ -107,7 +107,8 @@ task::Task<bool> fillMissingValues(
 }
 
 template <class MutableStorageType, class CachedStorage, class BackendStorageType>
-requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>))) class View
+    requires((std::is_void_v<CachedStorage> || (!std::is_void_v<CachedStorage>)))
+class View
 {
 public:
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
@@ -123,22 +124,26 @@ public:
         std::reference_wrapper<std::remove_reference_t<CachedStorage>>, std::monostate>
         m_cacheStorage;
 
-    View(BackendStorage backendStorage) requires(!withCacheStorage)
+    View(BackendStorage backendStorage)
+        requires(!withCacheStorage)
       : m_backendStorage(std::move(backendStorage))
     {}
-    View(BackendStorage* backendStorage) requires(!withCacheStorage)
+    View(BackendStorage* backendStorage)
+        requires(!withCacheStorage)
       : m_backendStorage(backendStorage)
     {}
     View(BackendStorage backendStorage,
         std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
             std::monostate>
-            cacheStorage) requires(withCacheStorage)
+            cacheStorage)
+        requires(withCacheStorage)
       : m_backendStorage(std::move(backendStorage)), m_cacheStorage(cacheStorage)
     {}
     View(BackendStorage* backendStorage,
         std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
             std::monostate>
-            cacheStorage) requires(withCacheStorage)
+            cacheStorage)
+        requires(withCacheStorage)
       : m_backendStorage(backendStorage), m_cacheStorage(cacheStorage)
     {}
 
@@ -175,7 +180,7 @@ public:
 
     template <::ranges::input_range Keys>
     auto readSomeRaw(Keys keys) -> task::Task<std::vector<storage2::StorageValueType<Value>>>
-    requires ::ranges::sized_range<Keys>
+        requires ::ranges::sized_range<Keys>
     {
         auto keySize = static_cast<size_t>(keys.size());
         std::vector<storage2::StorageValueType<Value>> values(keySize);
@@ -212,7 +217,7 @@ public:
     template <::ranges::input_range Keys>
     auto readSomeRaw(Keys keys, auto... tags)
         -> task::Task<std::vector<storage2::StorageValueType<Value>>>
-    requires ::ranges::sized_range<Keys>
+        requires ::ranges::sized_range<Keys>
     {
         constexpr bool bypassMultiLayer = contains_tag_v<BYPASS_MULTILAYER_TYPE, decltype(tags)...>;
         if constexpr (bypassMultiLayer)
@@ -486,9 +491,10 @@ public:
 };
 
 template <class MutableStorageType, class CachedStorage, class BackendStorage>
-requires MutableStorageType::withLogicalDeletion &&
-    CheckpointStorage < std::remove_reference_t<BackendStorage>,
-typename MutableStorageType::Key, typename MutableStorageType::Value > class MultiLayerStorage
+    requires MutableStorageType::withLogicalDeletion &&
+             CheckpointStorage<std::remove_reference_t<BackendStorage>,
+                 typename MutableStorageType::Key, typename MutableStorageType::Value>
+class MultiLayerStorage
 {
 public:
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
@@ -513,14 +519,16 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    explicit MultiLayerStorage(BackendStorage& backendStorage) noexcept requires(!withCacheStorage)
+    explicit MultiLayerStorage(BackendStorage& backendStorage) noexcept
+        requires(!withCacheStorage)
       : m_backendStorage(backendStorage), m_latestBackend(backendStorage.open())
     {}
 
     MultiLayerStorage(BackendStorage& backendStorage,
         std::conditional_t<withCacheStorage, std::add_lvalue_reference_t<CachedStorage>,
             std::monostate>
-            cacheStorage) noexcept requires(withCacheStorage)
+            cacheStorage) noexcept
+        requires(withCacheStorage)
       : m_backendStorage(backendStorage),
         m_cacheStorage(cacheStorage),
         m_latestBackend(backendStorage.open())

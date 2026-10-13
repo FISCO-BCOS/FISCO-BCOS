@@ -14,7 +14,6 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/MPTDeltaLayer.h"
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_group.h>
@@ -32,6 +31,7 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {
@@ -97,7 +97,7 @@ concept BaselineSchedulerParams =
         Executor, std::vector<protocol::Transaction::ConstPtr>>;
 
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
-requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:

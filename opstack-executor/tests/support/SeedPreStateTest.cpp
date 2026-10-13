@@ -93,8 +93,8 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
     const auto addr = opstack_test::jsonAddress("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf");
     auto acct = bcos::executor_v1::eth::ethViewAccount(view, addr);
     BOOST_REQUIRE(bcos::task::syncWait(acct.exists()));
-    BOOST_CHECK(
-        bcos::task::syncWait(acct.balance()) == opstack_test::jsonU256("0x56bc75e2d63100000"));
+    BOOST_CHECK(bcos::task::syncWait(acct.balance()) ==
+                opstack_test::jsonU256("0x56bc75e2d63100000"));
     BOOST_CHECK_EQUAL(bcos::task::syncWait(acct.nonce()).value_or(""), "0");
     const auto l1 = opstack_test::jsonAddress("0x4200000000000000000000000000000000000015");
     auto l1Acct = bcos::executor_v1::eth::ethViewAccount(view, l1);

@@ -204,11 +204,11 @@ inline std::shared_ptr<bcostars::protocol::TransactionImpl> makeWeb3FillerTx(
     // Signing payload: 0x02 || rlp([chainId, nonce, maxPriorityFeePerGas, maxFeePerGas,
     // gasLimit, to, value, data, accessList]) — the canonical EIP-1559 shape.
     bcos::bytes body;
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));           // chainId
-    bcos::codec::rlp::encode(body, nonce);                              // nonce
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));           // maxPriorityFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));  // maxFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));      // gasLimit
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));            // chainId
+    bcos::codec::rlp::encode(body, nonce);                               // nonce
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));            // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));   // maxFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));       // gasLimit
     bcos::codec::rlp::encode(
         body, bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes))));
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));  // value
@@ -216,8 +216,8 @@ inline std::shared_ptr<bcostars::protocol::TransactionImpl> makeWeb3FillerTx(
     body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);          // empty accessList
     bcos::bytes payloadBytes;
     payloadBytes.push_back(0x02);
-    bcos::codec::rlp::encodeHeader(
-        payloadBytes, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    bcos::codec::rlp::encodeHeader(payloadBytes,
+        bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
     payloadBytes.insert(payloadBytes.end(), body.begin(), body.end());
 
     bcos::bytes signature(65, 0);
@@ -375,7 +375,8 @@ public:
         // so the filler transaction is Web3-shaped there.
         if (m_executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            block->appendTransaction(makeWeb3FillerTx(static_cast<uint64_t>(number), *m_hashImpl));
+            block->appendTransaction(
+                makeWeb3FillerTx(static_cast<uint64_t>(number), *m_hashImpl));
         }
         else
         {

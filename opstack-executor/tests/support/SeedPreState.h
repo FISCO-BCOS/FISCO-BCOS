@@ -102,8 +102,9 @@ void seedPreStateIntoView(View& view, Json::Value const& pre)
             {
                 auto const codeEvmc = jsonBytes(codeStr);
                 bcos::bytes code{codeEvmc.begin(), codeEvmc.end()};
-                bcos::task::syncWait(account.setCode(code, {},
-                    bcos::crypto::keccak256Hash(bcos::bytesConstRef{code.data(), code.size()})));
+                bcos::task::syncWait(account.setCode(
+                    code, {}, bcos::crypto::keccak256Hash(bcos::bytesConstRef{
+                                  code.data(), code.size()})));
             }
         }
         if (acct.isMember("storage"))

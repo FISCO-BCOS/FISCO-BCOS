@@ -24,11 +24,11 @@
 #include "Ledger.h"
 #include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
+#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/Ledger.h"
-#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -1153,7 +1153,7 @@ static void asyncGetBlockTransactionHashStrings(bcos::storage::StorageInterface&
     task::wait([](bcos::storage::StorageInterface& storage,
                    bcos::protocol::BlockFactory& blockFactory,
                    bcos::protocol::BlockNumber blockNumber,
-                   std::function<void(Error::Ptr&&, std::vector<std::string> &&)> callback)
+                   std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback)
                    -> task::Task<void> {
         std::vector<std::string> hashList;
         try
@@ -1503,22 +1503,23 @@ static void verifyL2FeatureFlagsSlot(
     auto flagsNumber = features.toFlagsNumber();
     for (size_t i = 0; i < expectedValue.size(); ++i)
     {
-        expectedValue[expectedValue.size() - 1 - i] = (flagsNumber & 0xFF).convert_to<uint8_t>();
+        expectedValue[expectedValue.size() - 1 - i] =
+            (flagsNumber & 0xFF).convert_to<uint8_t>();
         flagsNumber >>= 8;
     }
 
-    // Two duties, without guessing which account plays the SystemConfig role:
-    //  * any account carrying the slot has its VALUE compared (the slot-key lookup below), so
-    //    the check covers every layout the allocs actually use, not just the template's;
-    //  * an account at the TEMPLATE address (0x43...C0) must carry the slot — the layout the
-    //    generator writes for (build-allocs.py's requirement is keyed on that address).
-    // The presence mandate is deliberately NOT extended to other layouts yet: their allocs
-    // do not carry the slot today (the harness's chain-config leaves `system_config` empty for
-    // the committed C2 layout, so build-allocs.py writes no slot there), and mandating it
-    // refuses such a node at genesis — measured: the C2 e2e goes red. Extend the mandate in
-    // the same change that makes the generator write the slot for that layout.
-    // This runs before ANY genesis write, so a refusal leaves the datadir untouched and a
-    // config fix is a plain retry.
+        // Two duties, without guessing which account plays the SystemConfig role:
+        //  * any account carrying the slot has its VALUE compared (the slot-key lookup below), so
+        //    the check covers every layout the allocs actually use, not just the template's;
+        //  * an account at the TEMPLATE address (0x43...C0) must carry the slot — the layout the
+        //    generator writes for (build-allocs.py's requirement is keyed on that address).
+        // The presence mandate is deliberately NOT extended to other layouts yet: their allocs
+        // do not carry the slot today (the harness's chain-config leaves `system_config` empty for
+        // the committed C2 layout, so build-allocs.py writes no slot there), and mandating it
+        // refuses such a node at genesis — measured: the C2 e2e goes red. Extend the mandate in
+        // the same change that makes the generator write the slot for that layout.
+        // This runs before ANY genesis write, so a refusal leaves the datadir untouched and a
+        // config fix is a plain retry.
     for (auto const& importAccount : allocs)
     {
         const ledger::Alloc::State* featureFlagsSlot = nullptr;
@@ -1560,8 +1561,8 @@ static void verifyL2FeatureFlagsSlot(
                 bcos::tool::InvalidConfig() << errinfo_comment(
                     "SystemConfig feature_flags slot in the genesis allocs does not match "
                     "this node's genesis feature set (Features::toFlagsNumber()): alloc=0x" +
-                    toHex(actualValue) + " expected=0x" + toHex(expectedValue) + " (account 0x" +
-                    std::string(importAccount.address) +
+                    toHex(actualValue) + " expected=0x" + toHex(expectedValue) +
+                    " (account 0x" + std::string(importAccount.address) +
                     "); the alloc artifact and the node's [features] config disagree"));
         }
     }
@@ -2179,8 +2180,8 @@ bool Ledger::buildGenesisBlock(
         }
 
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(
-            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
+        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
+            *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
 
         // Ethereum lane (executor_version >= 2): block 1 builds the MPT incrementally on top
         // of the genesis state
@@ -2590,7 +2591,7 @@ void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
 
         task::wait(
             [](decltype(*this)& self, std::string key,
-                std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry> &&)> callback)
+                std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback)
                 -> task::Task<void> {
                 std::optional<bcos::storage::Entry> entry;
                 try
@@ -2686,7 +2687,8 @@ task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockN
 {
     // Same single-row idiom as fetchFeature: an absent row is a pre-Ethereum-lane chain (0);
     // a row whose enableNumber is after _blockNumber reads as 0 for that block.
-    auto const key = std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+    auto const key =
+        std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
     auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
     if (error || !entry)
     {
@@ -2706,8 +2708,8 @@ task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockN
     {
         // Boot (readOnChainExecutorVersion) refuses an unparseable row, so reaching this
         // means the row was corrupted afterwards -- corruption, not a legacy chain.
-        BOOST_THROW_EXCEPTION(
-            std::runtime_error("on-chain executor_version is not an integer: '" + value + "'"));
+        BOOST_THROW_EXCEPTION(std::runtime_error(
+            "on-chain executor_version is not an integer: '" + value + "'"));
     }
 }
 bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()

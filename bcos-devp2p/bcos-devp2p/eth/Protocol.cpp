@@ -547,8 +547,8 @@ RlpResult<NewPooledTransactionHashesMessage> decodeNewPooledTransactionHashes(by
     // agree — a mismatch is a malformed announcement, not a partial one.
     if (msg.types.size() != msg.hashes.size() || msg.sizes.size() != msg.hashes.size())
     {
-        return std::unexpected(
-            genericError("eth: NewPooledTransactionHashes types/sizes/hashes count mismatch"));
+        return std::unexpected(genericError(
+            "eth: NewPooledTransactionHashes types/sizes/hashes count mismatch"));
     }
     return msg;
 }

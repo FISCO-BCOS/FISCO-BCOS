@@ -46,9 +46,10 @@ static_assert(
 // when the executor declares a BlockContext, the scheduler calls the 7-arg
 // createExecuteContext with it (an lvalue — the deleted rvalue overload must
 // not interfere).
-static_assert(requires(opeth::OpEthExecutor & executor, opstack_test::MutableStorage& storage,
-    bcos::protocol::BlockHeader const& header, bcos::protocol::Transaction const& tx,
-    bcos::ledger::LedgerConfig const& config, opeth::OpEthBlockContext const& ctx) {
+static_assert(requires(opeth::OpEthExecutor& executor, opstack_test::MutableStorage& storage,
+                  bcos::protocol::BlockHeader const& header,
+                  bcos::protocol::Transaction const& tx, bcos::ledger::LedgerConfig const& config,
+                  opeth::OpEthBlockContext const& ctx) {
     executor.createExecuteContext(storage, header, tx, 0, config, false, ctx);
 });
 
@@ -202,9 +203,9 @@ BOOST_AUTO_TEST_CASE(SixArgBlockExecutionThrows)
     DualRunFixture f;
     auto const header = makeExecutorHeader(1, kHeaderBaseFee);
     auto const keyPair = fixedSenderKeyPair();
-    auto const env =
-        signEip1559(*keyPair, 0, 100'000, bcos::u256(2'000'000'000), bcos::u256(1'000'000),
-            bcos::Address{kTransferTarget.bytes, sizeof(kTransferTarget.bytes)}, bcos::u256(1));
+    auto const env = signEip1559(*keyPair, 0, 100'000, bcos::u256(2'000'000'000),
+        bcos::u256(1'000'000), bcos::Address{kTransferTarget.bytes, sizeof(kTransferTarget.bytes)},
+        bcos::u256(1));
     auto const tx = buildFiscoTx(env, f.hashImpl);
 
     auto view = f.multiLayerStorage.fork();
@@ -213,7 +214,7 @@ BOOST_AUTO_TEST_CASE(SixArgBlockExecutionThrows)
     opeth::OpEthExecutor executor{f.receiptFactory, opeth::OP_ECOTONE_SPEC};
     BOOST_CHECK_THROW(
         bcos::task::syncWait(executor.executeTransaction(view, *header, *tx, 0, ledgerConfig,
-            /*call=*/false)),
+                                 /*call=*/false)),
         bcos::evm::OpConsensusError);
 }
 

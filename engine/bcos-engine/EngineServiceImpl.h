@@ -140,10 +140,11 @@ std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-requires executor_v1::TransactionExecutor<ExecutorType,
-    typename GlobalStateStorageType::ViewType> &&
-    scheduler_v1::TransactionScheduler<SchedulerType, typename GlobalStateStorageType::ViewType,
-        ExecutorType, std::vector<protocol::Transaction::Ptr>>
+    requires executor_v1::TransactionExecutor<ExecutorType,
+                 typename GlobalStateStorageType::ViewType> &&
+             scheduler_v1::TransactionScheduler<SchedulerType,
+                 typename GlobalStateStorageType::ViewType, ExecutorType,
+                 std::vector<protocol::Transaction::Ptr>>
 class EngineServiceImpl
 {
 public:
