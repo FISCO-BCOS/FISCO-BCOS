@@ -73,8 +73,10 @@ tools/BcosAirBuilder/*
 tools/console/
 
 # t8n corpus: the path itself is a symlink to the FISCO-BCOS/op-stack-e2e-tests
-# checkout (CI provisions it via tools/.ci/provision_t8n_corpus.sh; tracking a
-# machine-absolute symlink broke CI checkouts — see finding F-CI-2). The patterns
+# checkout (CI checks the corpus repo out and ln -s's it inline in workflow.yml and
+# the fork schedules; tools/.ci/provision_t8n_corpus.sh is the local-developer
+# equivalent and carries the pin default check-ci-pins.sh asserts — review F10).
+# Tracking a machine-absolute symlink broke CI checkouts — see finding F-CI-2. The patterns
 # below are leftovers from the earlier in-tree vendored subset; git cannot
 # re-include files under an ignored parent, so the ! entries are inert by design.
 opstack-executor/tests/t8n

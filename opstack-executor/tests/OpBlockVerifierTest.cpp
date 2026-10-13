@@ -696,8 +696,7 @@ BOOST_AUTO_TEST_CASE(MissingHeadHashRowIsStorageFaultNotDeterministic)
     auto const rawTxs = corpusTxs();
     auto const block = makeSyncBlock(makeEthHeaderBase(2, 1012, /*isthmusShape=*/true), rawTxs);
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
-        bcos::evm::engine::OpStorageError,
-        [](bcos::evm::engine::OpStorageError const& e) {
+        bcos::evm::engine::OpStorageError, [](bcos::evm::engine::OpStorageError const& e) {
             return std::string(e.what()).find("no hash row") != std::string::npos;
         });
 }

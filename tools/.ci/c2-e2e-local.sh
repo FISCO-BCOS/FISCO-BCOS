@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 FISCO BCOS.
+# SPDX-License-Identifier: Apache-2.0
 # c2-e2e-local.sh — one-command local C2 full-stack e2e runner (CONTEST=0 smoke
 # by default; CONTEST=1 for the adversarial leg, same as nightly CI).
 #

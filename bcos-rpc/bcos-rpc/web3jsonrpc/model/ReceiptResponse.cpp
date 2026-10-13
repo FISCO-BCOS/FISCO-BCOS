@@ -160,8 +160,8 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         // Ecotone on, gen_receipt_json.go:40). FISCO's meta stores the RAW slot-6 scalar
         // and the field is only present on the Bedrock formula path, so gating on presence
         // reproduces upstream's fork gate; formatL1FeeScalar reproduces its decimal string
-        // rendering including the fractional part (canonical Bedrock 684000 -> "0.684",
-        // which the old truncating quantity rendered as "0x0").
+        // rendering including the fractional part (canonical Bedrock 684000 -> "0.684";
+        // a plain toQuantity of the scaled value would truncate to "0x0").
         if (meta->l1_fee_scalar)
             result["l1FeeScalar"] = formatL1FeeScalar(*meta->l1_fee_scalar);
         if (meta->l1_blob_base_fee)

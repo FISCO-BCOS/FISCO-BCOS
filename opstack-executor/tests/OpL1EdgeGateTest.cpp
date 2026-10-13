@@ -134,8 +134,6 @@ std::string statusForDaFootprintRemoteAndGasLimit(uint64_t remote, std::optional
     request.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
 
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
-    std::fprintf(stderr, "PROBE status=%d reason=%s\n", static_cast<int>(status.status),
-        status.validationError ? status.validationError->c_str() : "<none>");
     // PayloadValidationStatus is an enum class without operator<<; anything not Invalid
     // passed the Step-2 static gate.
     return status.status == bcos::engine::PayloadValidationStatus::Invalid ? "INVALID" : "VALID";

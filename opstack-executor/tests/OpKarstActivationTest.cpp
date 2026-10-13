@@ -427,10 +427,8 @@ BOOST_AUTO_TEST_CASE(ResolveEngineForkAtKarstSelectsGetPayloadV5,
 }
 
 // clang-format off
-// clang-format off
 BOOST_AUTO_TEST_CASE(ResolveEngineForkBelowActivationFallsBackToIsthmusBaseline,
     * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
-// clang-format on
 // clang-format on
 {
     // Jovian scheduled at 50: timestamps below the activation still resolve under the

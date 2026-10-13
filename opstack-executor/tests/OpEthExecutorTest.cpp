@@ -57,10 +57,10 @@ namespace
 {
 
 using evmc::literals::operator""_address;
-constexpr evmc::address kCoinbase = 0x4200000000000000000000000000000000000011_address;
-constexpr evmc::address kTransferTarget = 0xb0b0000000000000000000000000000000000001_address;
-const bcos::u256 kHeaderBaseFee{1'000'000'000};  // 1 gwei
-constexpr uint64_t kBlockGasLimit = 10'000'000;
+constexpr evmc::address cCoinbase = 0x4200000000000000000000000000000000000011_address;
+constexpr evmc::address cTransferTarget = 0xb0b0000000000000000000000000000000000001_address;
+const bcos::u256 cHeaderBaseFee{1'000'000'000};  // 1 gwei
+constexpr uint64_t cBlockGasLimit = 10'000'000;
 
 /// Synthetic OP header with every strict-mode (Ecotone+) field populated
 /// (same recipe as OpEthForkMatrixTest's makeForkHeader).
@@ -72,11 +72,11 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeExecutorHeader(
     h->setTimestamp((0x3f2 + number) * 1000);  // ms (FISCO convention)
     h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = number - 1,
         .blockHash = bcos::h256{std::string(opstack_test::c_corpusParentHashHex)}});
-    h->setCoinbase(bcos::Address{bcos::bytesConstRef{kCoinbase.bytes, sizeof(kCoinbase.bytes)}});
+    h->setCoinbase(bcos::Address{bcos::bytesConstRef{cCoinbase.bytes, sizeof(cCoinbase.bytes)}});
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});
     h->setReceiptsRoot(bcos::h256{});
-    h->setGasLimit(bcos::u256(kBlockGasLimit));
+    h->setGasLimit(bcos::u256(cBlockGasLimit));
     h->setGasUsed(bcos::u256(0));
     h->setExtraData(bcos::bytes{});
     h->setPrevRandao(bcos::h256{});
@@ -156,10 +156,10 @@ BOOST_AUTO_TEST_CASE(BlockPathRequiresWiredBlockHashLookup)
     auto const sender = keyPair->address(makeCryptoSuite()->hashImpl());
 
     DualRunFixture f;
-    auto const header = makeExecutorHeader(1, kHeaderBaseFee);
+    auto const header = makeExecutorHeader(1, cHeaderBaseFee);
     auto const env = signEip1559(*keyPair, /*nonce=*/0, /*gasLimit=*/100'000,
         bcos::u256(2'000'000'000), bcos::u256(1'000'000),
-        bcos::Address{kTransferTarget.bytes, sizeof(kTransferTarget.bytes)}, bcos::u256(1));
+        bcos::Address{cTransferTarget.bytes, sizeof(cTransferTarget.bytes)}, bcos::u256(1));
     auto const tx = buildFiscoTx(env, f.hashImpl);
 
     auto view = f.multiLayerStorage.fork();
@@ -171,7 +171,7 @@ BOOST_AUTO_TEST_CASE(BlockPathRequiresWiredBlockHashLookup)
     auto ledgerConfig = ecotoneLedgerConfig();
     opeth::OpEthExecutor executor{f.receiptFactory, opeth::OP_ECOTONE_SPEC};
     opeth::OpEthBlockContext ctx{};
-    ctx.blockGasLeft = static_cast<int64_t>(kBlockGasLimit);
+    ctx.blockGasLeft = static_cast<int64_t>(cBlockGasLimit);
     ctx.chainId = c_opChainId;
     // ctx.blockHashLookup deliberately left empty.
 
@@ -200,11 +200,11 @@ BOOST_AUTO_TEST_CASE(BlockPathRequiresWiredBlockHashLookup)
 BOOST_AUTO_TEST_CASE(SixArgBlockExecutionThrows)
 {
     DualRunFixture f;
-    auto const header = makeExecutorHeader(1, kHeaderBaseFee);
+    auto const header = makeExecutorHeader(1, cHeaderBaseFee);
     auto const keyPair = fixedSenderKeyPair();
     auto const env =
         signEip1559(*keyPair, 0, 100'000, bcos::u256(2'000'000'000), bcos::u256(1'000'000),
-            bcos::Address{kTransferTarget.bytes, sizeof(kTransferTarget.bytes)}, bcos::u256(1));
+            bcos::Address{cTransferTarget.bytes, sizeof(cTransferTarget.bytes)}, bcos::u256(1));
     auto const tx = buildFiscoTx(env, f.hashImpl);
 
     auto view = f.multiLayerStorage.fork();
@@ -222,7 +222,7 @@ BOOST_AUTO_TEST_CASE(SixArgBlockExecutionThrows)
 BOOST_AUTO_TEST_CASE(EthCallFakeBalanceClampAndRollback)
 {
     DualRunFixture f;
-    auto const header = makeExecutorHeader(1, kHeaderBaseFee);
+    auto const header = makeExecutorHeader(1, cHeaderBaseFee);
 
     // Unsigned pricing-less call shape (the RPC default): no gasPrice /
     // maxFeePerGas, no nonce, no signed envelope — the sizing envelope is
@@ -263,7 +263,7 @@ BOOST_AUTO_TEST_CASE(EthCallFakeBalanceClampAndRollback)
     std::memcpy(senderEvmc.bytes, sender.data(), sizeof(senderEvmc.bytes));
     auto senderAcc = eth::ethViewAccount(view, senderEvmc);
     BOOST_CHECK(!bcos::task::syncWait(senderAcc.exists()));
-    auto targetAcc = eth::ethViewAccount(view, kTransferTarget);
+    auto targetAcc = eth::ethViewAccount(view, cTransferTarget);
     BOOST_CHECK(!bcos::task::syncWait(targetAcc.exists()));
 }
 

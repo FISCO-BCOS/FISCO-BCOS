@@ -19,9 +19,10 @@
 
 #pragma once
 
-// Test-only Karst schedule helpers. Production parse names `karst` after a
-// Jovian baseline or activation. TestBypass remains for fixtures that skip
-// the ledger codec. Do not call from Initializer.
+// Test-only Karst schedule builders (the two schedule constructors below).
+// Production parse names `karst` after a Jovian baseline or activation; the
+// historical TestBypass shape retired with the codec-locked fixtures. Do not
+// call from Initializer (review F38).
 
 #include <bcos-framework/ledger/OpForkSchedule.h>
 #include <cstdint>

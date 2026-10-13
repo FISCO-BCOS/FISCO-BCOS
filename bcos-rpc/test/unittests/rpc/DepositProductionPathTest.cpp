@@ -39,7 +39,6 @@
 
 namespace
 {
-constexpr uint8_t kDepositType = 0x7e;
 
 /// A valid 0x7e envelope (the wire shape decodeDepositTransaction expects):
 /// type byte + RLP list [sourceHash, from, to, mint, value, gas, isSystemTx, input].
@@ -59,7 +58,7 @@ bcos::bytes buildDepositEnvelope(bcos::u256 const& value, bcos::u256 const& mint
     bcos::codec::rlp::encode(body, input);
 
     bcos::bytes raw;
-    raw.push_back(kDepositType);
+    raw.push_back(bcos::rpc::c_depositTxType);
     bcos::codec::rlp::encodeHeader(
         raw, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
     raw.insert(raw.end(), body.begin(), body.end());

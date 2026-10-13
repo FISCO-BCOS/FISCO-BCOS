@@ -294,9 +294,8 @@ void runChainedPair(std::string const& aId, std::string const& bId)
 /// Seeds and submits one vector block, returning {fixture, blockHash, blockNumber} for
 /// FCU case reuse. Mirrors runGoldenVector's flow but keeps the fixture and block
 /// identity — updateForkchoice seeds head/safe/finalized with that block. Warning:
-/// parseNewPayloadRequest's real signature is the 3-arg
-/// `bcos::rpc::parseNewPayloadRequest(params, txFactory, version)` (EngineHelper.h:68-70);
-/// the task brief's 1-arg `bcos::engine::parseNewPayloadRequest(params)` is a stale draft.
+/// parseNewPayloadRequest's real signature is the 2-arg
+/// `bcos::rpc::parseNewPayloadRequest(params, version)` (EngineHelper.h) (review F36).
 std::tuple<std::unique_ptr<OpE2eFixture>, bcos::h256, bcos::protocol::BlockNumber>
 runVectorAndGetBlockHash(std::string const& id)
 {
@@ -785,11 +784,11 @@ ObservedInvalidRun runInvalidVector(std::string const& id)
                     expected.find("transactions is required") != std::string::npos) &&
                 status.validationError &&
                 status.validationError->find("blockHash does not match") != std::string::npos;
-            // Jovian DA footprint: op-geth checks blobGasUsed != CalcDAFootprint(txs) BEFORE
-            // daFootprint > GasLimit (block_validator.go:127/:131). A vector that sets
-            // The corpus expectation for this shape is refreshed (the generator now pins the
-            // equality-gate wording, matching op-geth's ordering at block_validator.go:127), so
-            // the plain substring match above is the only acceptor again.
+            // Jovian DA footprint: op-geth checks blobGasUsed != CalcDAFootprint(txs)
+            // BEFORE daFootprint > GasLimit (block_validator.go:127/:131). The corpus
+            // expectation for this shape is refreshed (the generator now pins the
+            // equality-gate wording, matching op-geth's ordering at block_validator.go:127),
+            // so the acceptors below are the plain substring matches (review F39).
             BOOST_CHECK_MESSAGE(matched || blobAlt || txMissingAlt,
                 id << ": validationError missing '" << expected
                    << "', got: " << (status.validationError ? *status.validationError : "<none>"));
@@ -1547,7 +1546,10 @@ BOOST_AUTO_TEST_CASE(PreIsthmusBuildRejectedAtTheEngineBaseline)
 // (bcos-framework/bcos-framework/engine/OpBaseFee.h:43-47 for the pre-Holocene path,
 // engine/bcos-engine/EngineServiceCommon.cpp:294-299 for the encode fallback), and no
 // section of config.genesis can carry the chain's own values — the ini schema has no
-// eip1559 key, so the values cannot reach the engine even in principle.
+// eip1559 key, so the values could not reach the engine at the pre-fix head. Today
+// the channel exists (SystemConfigs op_eip1559_params, written at genesis when
+// config.genesis declares [op_eip1559]) and this suite pins it — see the
+// "declares no [op_eip1559]" cases below (review F35).
 //
 // The divergence is invisible whenever gasUsed == gasTarget (the step is zero, so any
 // denominator gives the parent's base fee back). That is exactly why the Regolith case
@@ -2488,8 +2490,9 @@ BOOST_AUTO_TEST_CASE(ForkchoiceMonotonicityRejected)
         bcos::engine::InvalidForkchoiceState);
 }
 
-// ⑤ head increment must be exactly +1: skipping (missing middle block) -> conflict; strict +1 ->
-// VALID (mirrors :318-323)
+// ⑤ head increment: a jump to a KNOWN canonical head is VALID (the S5 relaxation
+// this very case asserts below); strict +1 is the pre-S5 contract this comment
+// used to state (review F37).
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadIncrement)
 {
     if (!w6test::t8nCorpusAvailable())

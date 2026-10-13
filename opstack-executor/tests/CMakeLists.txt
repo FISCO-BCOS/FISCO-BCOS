@@ -207,5 +207,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
 
-# OpEngineServiceParityTest lives in engine/test (S5); the t8n corpus vectors/goldens are
-# tracked under opstack-executor/tests/t8n/ and are exercised by the engine exec parity suite.
+# OpEngineServiceParityTest lives in engine/test (S5); the t8n corpus is an external
+# symlink (gitignored by design; provisioned by tools/.ci/provision_t8n_corpus.sh or the
+# workflow checkout+ln steps) — nothing under tests/t8n/ is tracked here (review F12).
