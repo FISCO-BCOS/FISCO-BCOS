@@ -20,7 +20,7 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/protocol/Transaction.h>  // isDepositTransaction's parameter type
+#include <bcos-framework/protocol/Transaction.h>  // protocol transaction types (deposit gate virtual)
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
@@ -39,12 +39,11 @@ inline constexpr uint8_t c_depositTxType = 0x7e;
 /// fields (TransactionResponse's receipt overload and BlockResponse's full-tx
 /// path): fillDepositReceiptFields overwrites `nonce` for any receipt carrying
 /// deposit_nonce, so an ungated call would stamp a misaligned receipt's deposit
-/// nonce over a non-deposit transaction's account nonce.
-[[nodiscard]] inline bool isDepositTransaction(bcos::protocol::Transaction const& tx)
-{
-    auto const extraBytes = tx.extraTransactionBytes();
-    return !extraBytes.empty() && extraBytes[0] == c_depositTxType;
-}
+/// nonce over a non-deposit transaction's account nonce. The gate itself is
+/// single-homed in the protocol virtual Transaction::isDepositTx() — the tars
+/// override reads the same 0x7e envelope byte this decoder's c_depositTxType
+/// pins (review F20) — so every render/sampling site calls the virtual, never
+/// a second local predicate.
 
 /// Decoded form of an OP Stack deposit transaction (0x7E). Field set and semantics follow
 /// op-geth core/types.DepositTx and the executor-side DepositTx in

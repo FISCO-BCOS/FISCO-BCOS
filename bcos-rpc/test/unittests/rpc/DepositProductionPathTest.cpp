@@ -83,7 +83,7 @@ bcos::protocol::Transaction::Ptr makeDepositTarsTx(
 {
     // A Web3Transaction gives the tars record its consensus fields; the deposit
     // envelope rides extraTransactionBytes — the exact lane the production gate
-    // (isDepositTransaction) reads.
+    // (Transaction::isDepositTx, the tars override reading the same byte) reads.
     bcos::rpc::Web3Transaction web3Tx;
     web3Tx.type = bcos::rpc::TransactionType::Deposit;
     web3Tx.chainId = 1;

@@ -189,7 +189,7 @@ void bcos::rpc::combineBlockResponse(
             // over that transaction's account nonce. Gated, the fill is exact for the
             // deposit rows and a no-op elsewhere; a short receipt list simply skips
             // the tail (the row then renders as the receipt-less shape).
-            if (isDepositTransaction(*tx) && index < receipts.size())
+            if (tx->isDepositTx() && index < receipts.size())
             {
                 fillDepositReceiptFields(txJson, *receipts[index]);
             }

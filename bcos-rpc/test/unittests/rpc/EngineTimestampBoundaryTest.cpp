@@ -66,6 +66,13 @@ Json::Value makeNewPayloadParams(std::string timestampQuantity)
     params.append(ep);
     return params;
 }
+
+Json::Value makeNewPayloadParams(std::string timestampQuantity, std::string blockNumberQuantity)
+{
+    auto params = makeNewPayloadParams(std::move(timestampQuantity));
+    params[0]["blockNumber"] = std::move(blockNumberQuantity);
+    return params;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(EngineTimestampBoundaryTest)
@@ -142,6 +149,24 @@ BOOST_AUTO_TEST_CASE(int64BoundaryIsExact)
     payload.timestamp = 9'223'372'036'854'775'000ULL;
     auto ep = serializeExecutionPayload(payload, engine::ApiVersion::V1);
     BOOST_CHECK_EQUAL(ep["timestamp"].asString(), "0x20c49ba5e353f7");
+}
+
+BOOST_AUTO_TEST_CASE(blockNumberRangeGateIsExact)
+{
+    // review F22: executionPayload.blockNumber lands in an int64_t BlockHeader
+    // field; the X1 gate must accept INT64_MAX and reject one above it (which
+    // would otherwise narrow to INT64_MIN), in both directions.
+    auto accepted = parseNewPayloadRequest(
+        makeNewPayloadParams("0x1", "0x7fffffffffffffff"), engine::ApiVersion::V1);
+    BOOST_CHECK_EQUAL(accepted.executionPayload.blockNumber,
+        static_cast<bcos::protocol::BlockNumber>(9'223'372'036'854'775'807));
+
+    BOOST_CHECK_EXCEPTION(parseNewPayloadRequest(makeNewPayloadParams("0x1", "0x8000000000000000"),
+                              engine::ApiVersion::V1),
+        JsonRpcException, [](JsonRpcException const& error) {
+            return std::string(error.what()).find("blockNumber exceeds representable range") !=
+                   std::string::npos;
+        });
 }
 
 void expectOddNibbleReject(auto const& parse, std::string_view field)
