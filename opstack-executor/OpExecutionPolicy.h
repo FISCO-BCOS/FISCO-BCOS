@@ -95,7 +95,7 @@ public:
         // rejected; an accepted out-of-range kind would fall through the revision
         // gates and be priced as legacy.
         if (txKind == 3 || txKind > 4)
-            return make_error_code(eth::evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(eth::evm::ErrorCode::TYPE_NOT_SUPPORTED);
 
         const auto maxGasPrice = eth::ethMaxGasPrice(tx, callParams);
         const auto maxPriorityGasPrice = eth::ethMaxPriorityGasPrice(tx, callParams);
@@ -105,7 +105,7 @@ public:
         {
         case 4:  // set_code
             if (rev < EVMC_PRAGUE)
-                return make_error_code(eth::evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+                return make_error_code(eth::evm::ErrorCode::TYPE_NOT_SUPPORTED);
             if (!hasTo)
                 return make_error_code(eth::evm::ErrorCode::CREATE_SET_CODE_TX);
             if (tx.authorizationList().empty())
@@ -120,16 +120,18 @@ public:
         case 4:  // set_code
         case 2:  // eip1559
             if (rev < EVMC_LONDON)
-                return make_error_code(eth::evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+                return make_error_code(eth::evm::ErrorCode::TYPE_NOT_SUPPORTED);
 
             if (maxPriorityGasPrice > maxGasPrice)
-                return make_error_code(eth::evm::ErrorCode::TIP_GT_FEE_CAP);  // Priority gas price
-                                                                              // is too high.
+                return make_error_code(
+                    eth::evm::ErrorCode::PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS);  // Priority gas
+                                                                                  // price is too
+                                                                                  // high.
             [[fallthrough]];
 
         case 1:  // access_list
             if (rev < EVMC_BERLIN)
-                return make_error_code(eth::evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+                return make_error_code(eth::evm::ErrorCode::TYPE_NOT_SUPPORTED);
             [[fallthrough]];
 
         case 0:;  // legacy
@@ -338,12 +340,15 @@ public:
 
         if (exec.status_code == EVMC_SUCCESS && exec.output_size > 0)
         {
-            const evmc_result result{
-                EVMC_SUCCESS, gas_left, 0, output_data, exec.output_size,
-                [](const evmc_result* res) noexcept { delete[] res->output_data; },
-                evmc::address{},  // create_address
-                {}                // padding
-            };
+            // evmc ABI 19: bind by designator — the struct gained state_gas and
+            // lost create_address/padding, so positional init misaligns.
+            const evmc_result result{.status_code = EVMC_SUCCESS,
+                .gas_left = gas_left,
+                .gas_refund = 0,
+                .state_gas = {},
+                .output_data = output_data,
+                .output_size = exec.output_size,
+                .release = [](const evmc_result* res) noexcept { delete[] res->output_data; }};
             return evmc::Result{result};
         }
         delete[] output_data;

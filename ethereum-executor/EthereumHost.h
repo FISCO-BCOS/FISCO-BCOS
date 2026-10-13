@@ -393,8 +393,8 @@ evmc::uint256be EthereumHost<Storage, Policy>::get_balance(const address& addr) 
 // evmc ABI 18: the VM reads the sender's nonce itself to compute CREATE addresses
 // (and to enforce EIP-2681); return the stored pre-bump value so the address the
 // VM derives matches the one prepare_message assigns for transaction-level creates.
-template <class Storage>
-uint64_t EthereumHost<Storage>::get_nonce(const address& addr) const noexcept
+template <class Storage, class Policy>
+uint64_t EthereumHost<Storage, Policy>::get_nonce(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
     return (acc != nullptr) ? acc->nonce : 0;
@@ -711,8 +711,7 @@ evmc_tx_context EthereumHost<Storage, Policy>::get_tx_context() const noexcept
         evmc::uint256be{static_cast<uint64_t>(m_chainId)},  // Chain ID (EIP-155).
         evmc::uint256be{base_fee}, evm::toEvmcBE<evmc::uint256be>(m_policy.blobBaseFee(m_block)),
         blob_hashes, blob_hashes_count,
-        nullptr,  // initcodes (TXCREATE) — not used by this executor.
-        0,        // initcodes_count
+        0,  // block_slot_number (EIP-7843, evmc ABI 19): no beacon slot on this chain.
     };
 }
 

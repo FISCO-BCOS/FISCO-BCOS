@@ -723,21 +723,21 @@ BOOST_AUTO_TEST_CASE(JovianDaFootprintSeal)
 // scope: a local struct may not carry a static data member.)
 struct Secp256r1OrderSpec
 {
-    static constexpr auto ORDER = evmmax::secp256r1::Curve::ORDER;
+    static constexpr auto ORDER = evmone::crypto::secp256r1::Curve::ORDER;
 };
-using Secp256r1Scalar = evmmax::ecc::FieldElement<Secp256r1OrderSpec>;
+using Secp256r1Scalar = evmone::crypto::ecc::FieldElement<Secp256r1OrderSpec>;
 
 BOOST_AUTO_TEST_CASE(KarstP256OsakaPricing)
 {
-    namespace secp256r1 = evmmax::secp256r1;
+    namespace secp256r1 = evmone::crypto::secp256r1;
     using Fn = Secp256r1Scalar;
     const intx::uint256 d = 0xdeadbeef;
     const intx::uint256 k = 0x12345;
     ethash::hash256 h{};
     h.bytes[31] = 0x42;
     auto const hVal = intx::be::load<intx::uint256>(h.bytes) % secp256r1::Curve::ORDER;
-    auto const Q = evmmax::ecc::to_affine(evmmax::ecc::mul(secp256r1::G, d));
-    auto const R = evmmax::ecc::to_affine(evmmax::ecc::mul(secp256r1::G, k));
+    auto const Q = evmone::crypto::ecc::to_affine(evmone::crypto::ecc::mul(secp256r1::G, d));
+    auto const R = evmone::crypto::ecc::to_affine(evmone::crypto::ecc::mul(secp256r1::G, k));
     auto const r = R.x.value() % secp256r1::Curve::ORDER;
     auto const s = ((Fn(hVal) + Fn(r) * Fn(d)) * Fn(k).inv()).value();
     auto const qx = Q.x.value();
