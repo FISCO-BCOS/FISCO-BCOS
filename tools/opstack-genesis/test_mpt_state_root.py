@@ -114,6 +114,39 @@ def test_duplicate_slot_key_inside_one_section_is_rejected(tmp_path):
         mpt.parse_allocs_ini(str(ini))
 
 
+def test_case_variant_duplicate_slot_key_is_rejected(tmp_path):
+    # review F24: 0xAB and 0xab are one slot; the raw-string comparison let the pair
+    # through and re-opened the depth-64 IndexError the duplicate guard closes.
+    import pytest
+
+    ini = tmp_path / "allocs.ini"
+    ini.write_text(
+        "[alloc.1111111111111111111111111111111111111111]\n"
+        "balance = 5\n"
+        "[alloc.1111111111111111111111111111111111111111.storage]\n"
+        "0x" + "ab" * 32 + " = 0x" + "22" * 32 + "\n"
+        "0x" + "AB" * 32 + " = 0x" + "33" * 32 + "\n"
+    )
+    with pytest.raises(ValueError, match="duplicate storage slot"):
+        mpt.parse_allocs_ini(str(ini))
+
+
+def test_case_variant_duplicate_scalar_key_is_rejected(tmp_path):
+    # review F24: 'Balance' silently last-won over 'balance'; the scalar guard now
+    # compares case-normalized, matching the address lane.
+    import pytest
+
+    ini = tmp_path / "allocs.ini"
+    ini.write_text(
+        "[alloc.1]\n"
+        "address = 0x" + "11" * 20 + "\n"
+        "balance = 5\n"
+        "Balance = 6\n"
+    )
+    with pytest.raises(ValueError, match="duplicate key"):
+        mpt.parse_allocs_ini(str(ini))
+
+
 def test_duplicate_address_key_across_alloc_n_sections_is_rejected(tmp_path):
     # The [alloc.N] + address= layout build-allocs emits bypasses the section-suffix
     # guard: two indices carrying the same address= used to survive parsing and only

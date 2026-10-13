@@ -122,6 +122,22 @@ class TestWithdrawalsRoot(unittest.TestCase):
             pathlib.Path(path).unlink()
         self.assertIn("withdrawals_root=0x" + expected_hex, out)
 
+    def test_bare_hex_passer_spelling_is_found(self):
+        # review F22: the declared one-policy sibling strips 0x on both sides; this
+        # template compared the raw spelling, so a bare-hex address= (a layout
+        # parse_allocs_ini documents) raised a false "no L2ToL1MessagePasser".
+        with tempfile.NamedTemporaryFile("w", suffix=".ini", delete=False) as handle:
+            handle.write("[alloc.1]\naddress=" + PASSER[2:] + "\nbalance=0\n")
+            path = handle.name
+        try:
+            out = subprocess.run(
+                [sys.executable, str(_HERE / "gen_eth_header_fixture.py"),
+                 "--toml", "--allocs", path],
+                capture_output=True, text=True, check=True).stdout
+        finally:
+            pathlib.Path(path).unlink()
+        self.assertIn("withdrawals_root=0x", out)
+
 
 if __name__ == "__main__":
     unittest.main()

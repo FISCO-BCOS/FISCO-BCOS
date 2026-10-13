@@ -227,8 +227,13 @@ def main(argv=None):
         # the passer with empty storage -> empty-trie root; a proxied op-deployer layout
         # carries storage and the tool must track it.
         passer_root = None
+        passer_target = _strip0x(PASSER_ADDRESS).lower()
         for alloc in allocs:
-            if alloc["address"].lower() == PASSER_ADDRESS:
+            # review F22: normalize both sides exactly like the declared sibling
+            # (gen_official_genesis.message_passer_storage_root): a bare-hex or
+            # case-variant spelling an INI may carry must find the predeploy, not
+            # raise a false "no L2ToL1MessagePasser" error.
+            if _strip0x(alloc["address"]).lower() == passer_target:
                 passer_root = "0x" + compute_storage_root(alloc.get("storage", [])).hex()
                 break
         # review F31: one policy with gen_official_genesis.message_passer_storage_root

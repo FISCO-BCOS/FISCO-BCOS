@@ -128,6 +128,21 @@ def test_raw_storage_negative_int_rejected():
         build_allocs.apply_raw_storage_overlay({}, {"0x1": -1}, "L1Block")
 
 
+def test_raw_storage_overwide_int_rejected():
+    # review F23: the config int lane lacked word_int's 2**256 cap — an unquoted
+    # overwide decimal rendered through word_hex as a >64-char "word" the fixed-width
+    # C++ unhex would misread (config_word(2**300) accepted before this guard).
+    over = 2 ** 256
+    with pytest.raises(ValueError):
+        build_allocs.config_word(over, "L1Block")
+    with pytest.raises(ValueError):
+        build_allocs.apply_raw_storage_overlay({}, {over: "0x1"}, "L1Block")
+    with pytest.raises(ValueError):
+        build_allocs.apply_raw_storage_overlay({}, {"0x1": over}, "L1Block")
+    with pytest.raises(ValueError):
+        build_allocs.word_hex(over)
+
+
 def test_chain_config_duplicate_yaml_key_rejected():
     # The CLI parses the (hand-edited) chain config with the same duplicate-key
     # rule as the op-deployer JSON loader: yaml.safe_load would silently keep the

@@ -177,9 +177,12 @@ def check(config):
     previous = 0
     for fork in _official_genesis._ROLLUP_ORDERED_FORKS:
         key = f"{fork}_time"
+        # review F52: read-with-default but indexed directly used to crash with a raw
+        # KeyError on a config missing a canonical key — the validator's contract is
+        # a typed RollupConfigError on the first violation, for any input.
         if config.get(key, 0) < previous:
             raise RollupConfigError(f"fork times must be monotonic, {key} regresses")
-        previous = config[key]
+        previous = config.get(key, 0)
 
     op_config = config.get("chain_op_config") or {}
     if (op_config.get("eip1559Elasticity", 0) <= 0

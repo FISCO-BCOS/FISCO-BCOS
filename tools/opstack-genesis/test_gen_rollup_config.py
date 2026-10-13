@@ -186,6 +186,18 @@ def test_malformed_hash_rejected():
         gen.build_rollup_config(_args(l2_genesis_hash="0x1234"))
 
 
+def test_missing_canonical_fork_key_is_typed_not_keyerror():
+    # review F52: a config missing a canonical fork key used to pass the monotonic
+    # read (as 0) and then crash with a raw KeyError on the update — check()'s
+    # documented contract is a typed RollupConfigError on the first violation.
+    config = gen.build_rollup_config(_args())
+    del config["isthmus_time"]
+    gen.check(config)  # missing key reads as 0, exactly as before — no KeyError
+    config["regolith_time"] = 10  # canyon_time (0) now regresses against it
+    with pytest.raises(gen.RollupConfigError, match="monotonic"):
+        gen.check(config)
+
+
 def test_main_writes_file(tmp_path, capsys):
     out = tmp_path / "rollup.json"
     rc = gen.main([

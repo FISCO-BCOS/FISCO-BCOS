@@ -312,7 +312,12 @@ def parse_allocs_ini(path):
                 # late-failure mode the duplicate-address guard above closes. Two
                 # entries for one slot overwrite each other in any real MPT, so the
                 # root would be meaningless either way; reject at parse time.
-                if any(existing == key for existing, _ in current_storage):
+                # review F24: compare on the case/prefix-normalized spelling, like the
+                # address lane — 0xAB and 0xab are one slot, and letting the pair
+                # through re-opened the very depth-64 crash this guard closes.
+                # (lower() before strip0x: the helper's prefix test is case-sensitive.)
+                if any(strip0x(existing.lower()) == strip0x(key.lower())
+                       for existing, _ in current_storage):
                     raise ValueError(
                         f"{path}: duplicate storage slot {key!r} inside one "
                         "[alloc.N.storage] section — merge the entries into one line")
@@ -322,12 +327,13 @@ def parse_allocs_ini(path):
                 # scalar silently overwrote (last-wins). seen_scalar_keys holds only
                 # keys set by BODY lines of this section — the section header seeds
                 # {"address", "storage"} itself, and the first body `address =` line
-                # legitimately refines the seeded placeholder.
-                if key in seen_scalar_keys:
+                # legitimately refines the seeded placeholder. review F24: keys are
+                # compared case-normalized, matching the address lane.
+                if key.lower() in seen_scalar_keys:
                     raise ValueError(
                         f"{path}: duplicate key {key!r} inside one "
                         "[alloc.N] section — merge the entries into one line")
-                seen_scalar_keys.add(key)
+                seen_scalar_keys.add(key.lower())
                 current[key] = value
     # The section-suffix guard above only sees the [alloc.<address>] layout; the
     # [alloc.N] + address= layout build-allocs emits carries the real address in a

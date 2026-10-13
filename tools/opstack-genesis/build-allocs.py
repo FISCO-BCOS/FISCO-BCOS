@@ -400,6 +400,14 @@ def config_word(value, label):
                 f"{label}: negative ints are not valid storage words (YAML parsed "
                 f"'{value}' from an unquoted negative decimal; write a 0x-prefixed "
                 f"hex value instead)")
+        if value >= 2 ** 256:
+            # review F23: the int lane is the one path word_int's range rule did not
+            # reach; an overwide value renders through word_hex as a >64-char "word"
+            # that the fixed-width C++ unhex misreads. One range rule, both lanes.
+            raise ValueError(
+                f"{label}: int storage words must satisfy 0 <= word < 2**256 (YAML "
+                f"parsed '{value}' from an unquoted decimal; write an 0x-prefixed "
+                f"hex value of at most 64 digits)")
         return value
     text = str(value).strip().lower()
     if not text.startswith("0x"):
@@ -424,6 +432,10 @@ def word_hex(value_int):
     32-byte buffers (left-aligned), so short hex would be misread — always
     emit the full 64 chars.
     """
+    if value_int < 0 or value_int >= 2 ** 256:
+        # review F23: belt-and-braces — both parse lanes reject out-of-range words,
+        # and this guard keeps the fixed-width invariant true for any future caller.
+        raise ValueError(f"storage word out of range for word_hex: {value_int}")
     return "0x" + format(value_int, "064x")
 
 
