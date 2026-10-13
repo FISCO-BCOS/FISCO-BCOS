@@ -179,17 +179,21 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         // as the creation address. Top-level deploys never pass through
         // externalRequest — their executor-built messages carry the tx's own
         // receiveAddress — so this only affects nested opcode creates.
-        if (!concepts::bytebuffer::equalTo(
-                _msg->recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
-        {
-            request->receiveAddress = evmAddress2String(_msg->recipient);
-            request->codeAddress = request->receiveAddress;
-        }
+        // Pre-bugfix chains reject CREATE2 outright, and the rejected message keeps its
+        // historical shape: no derived recipient is assigned before the break below, so a
+        // legacy CREATE2 still addresses the empty address (the DMC lane routing and the
+        // isStaticPrecompiled/isEthereumPrecompiled probes then see what they saw before).
         if (_msg->kind == EVMC_CREATE2 &&
             !features().get(
                 ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
         {
             break;  // pre-bugfix chains keep rejecting CREATE2 (historical behavior)
+        }
+        if (!concepts::bytebuffer::equalTo(
+                _msg->recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+        {
+            request->receiveAddress = evmAddress2String(_msg->recipient);
+            request->codeAddress = request->receiveAddress;
         }
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
         request->create = true;
