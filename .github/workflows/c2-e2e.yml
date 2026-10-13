@@ -140,6 +140,13 @@ jobs:
           path: |
             .ci-op-monorepo
             .ci-c2-bins
+          # BOTH paths are required. .ci-c2-bins carries the binaries, but .ci-op-monorepo must
+          # stay in the entry even though the e2e itself only consumes the binaries: setup_c2.sh
+          # ends with a versions.json check that ENFORCES op_monorepo.commit (`git -C $MONOREPO
+          # rev-parse HEAD`), and c2-e2e.sh passes MONOREPO=$REPO_ROOT/.ci-op-monorepo. On a cache
+          # hit the Build step is skipped, so an entry without the clone makes that check read ""
+          # and the e2e aborts with "version manifest mismatch" - far from the cause. Do not
+          # narrow this to .ci-c2-bins alone.
           # The -kona1- token describes the cached binary SET: this entry now also carries
           # kona-host/kona-client (cargo build). A cache keyed only on the OP monorepo commit
           # would hit a pre-kona entry (op-deployer/op-node/op-batcher only) and skip the
