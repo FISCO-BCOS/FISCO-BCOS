@@ -674,6 +674,34 @@ BOOST_AUTO_TEST_CASE(OutOfOrderAndStaleHeightsRejected)
         [](bcos::executor_v1::opstack::OpStaleOrOutOfOrderBlock const&) { return true; });
 }
 
+BOOST_AUTO_TEST_CASE(MissingHeadHashRowIsStorageFaultNotDeterministic)
+{
+    // review F3: the height guard proves number continuity, not identity; the identity
+    // row (SYS_NUMBER_2_HASH[head]) is a storage invariant of THIS node — its absence is
+    // a transient storage fault (OpStorageError, retryable after the row is repaired),
+    // never the deterministic no-retry OpStaleOrOutOfOrderBlock the foreign-parent arm
+    // below uses. Bump the head number without writing its hash row to reach the arm.
+    VerifierFixture f;
+    f.prepareGenesis();
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::storage::Entry e;
+        e.set(boost::lexical_cast<std::string>(1));
+        bcos::task::syncWait(bcos::storage2::writeOne(view,
+            StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
+            std::move(e)));
+        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
+    }
+    auto const rawTxs = corpusTxs();
+    auto const block = makeSyncBlock(makeEthHeaderBase(2, 1012, /*isthmusShape=*/true), rawTxs);
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
+        bcos::evm::engine::OpStorageError,
+        [](bcos::evm::engine::OpStorageError const& e) {
+            return std::string(e.what()).find("no hash row") != std::string::npos;
+        });
+}
+
 BOOST_AUTO_TEST_CASE(BlobAnd0x7dTypeBytesRejected)
 {
     VerifierFixture f;

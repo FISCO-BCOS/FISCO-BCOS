@@ -444,7 +444,11 @@ public:
                 co_await ledger::getBlockHash(view, currentNumber, ledger::fromStorage);
             if (!headHash.has_value())
             {
-                BOOST_THROW_EXCEPTION(OpStaleOrOutOfOrderBlock{fmt::format(
+                // A missing SYS_NUMBER_2_HASH row is a storage invariant failure on this
+                // node (row migration gap, transient to repair), not block content —
+                // OpStorageError keeps it out of the deterministic no-retry class the
+                // foreign-parent refusal below belongs to (review F3).
+                BOOST_THROW_EXCEPTION(bcos::evm::engine::OpStorageError{fmt::format(
                     "OpBlockVerifier: ledger head {} has no hash row — cannot bind block {}'s "
                     "parent",
                     currentNumber, number)});

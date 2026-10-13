@@ -1850,6 +1850,31 @@ BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal
         bcos::engine::OpExecutionInternalError);
 }
 
+BOOST_AUTO_TEST_CASE(op_fcu_build_missing_executed_withdrawals_root_is_internal_error)
+{
+    // review F1: the build lane classifies the SAME node fault the same way as the
+    // newPayload case above — the scheduler stamps withdrawalsRoot, so its absence
+    // during an FCU-with-attributes build is -32603 (OpExecutionInternalError),
+    // never an INVALID verdict the CL would act on.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+    delegate->stampWithdrawalsRoot = false;
+    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3)),
+        bcos::engine::OpExecutionInternalError);
+}
+
 /// mapDelegateError's routing is the load-bearing half of the delegate-concurrency
 /// rationale: a commitBlock whose pending was dropped by a concurrent reset
 /// carries the bcos::engine::OpPendingDropped tag ("Unexpected empty results!", OpScheduler.h) —
