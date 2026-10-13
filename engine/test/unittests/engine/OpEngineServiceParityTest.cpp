@@ -63,7 +63,8 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Exceptions.h>
-#include <opstack-executor/OpEthL1Attributes.h>  // synthesize fixture: DepositTx / OP_ETH_* constants
+// synthesize fixture: DepositTx / OP_ETH_* constants
+#include <opstack-executor/OpEthL1Attributes.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
@@ -1846,8 +1847,15 @@ BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal
     // Dropped-pending code: only that fault falls through to the execute path where the
     // missing withdrawalsRoot is detected.
     delegate->tagPendingDropped = true;
-    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
-        bcos::engine::OpExecutionInternalError);
+    // review F34: the type alone cannot distinguish this node fault from any other
+    // OpExecutionInternalError — pin errinfo_comment (OpEngineService.inl:951), the
+    // same predicate checkBothExceptionMessages applies to its two parity actions.
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(pair.service.newPayload(request, 4)),
+        bcos::engine::OpExecutionInternalError,
+        [](bcos::engine::OpExecutionInternalError const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr && *comment == "executed header is missing withdrawalsRoot";
+        });
 }
 
 BOOST_AUTO_TEST_CASE(op_fcu_build_missing_executed_withdrawals_root_is_internal_error)
@@ -1871,8 +1879,15 @@ BOOST_AUTO_TEST_CASE(op_fcu_build_missing_executed_withdrawals_root_is_internal_
     registerVerifiedBlock(pair.storage, hash, 0);
     registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
     delegate->stampWithdrawalsRoot = false;
-    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3)),
-        bcos::engine::OpExecutionInternalError);
+    // review F34: same predicate on the build lane (OpEngineService.inl:601) — both lanes
+    // must carry the IDENTICAL errinfo_comment, not merely the same exception type.
+    BOOST_CHECK_EXCEPTION(
+        bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3)),
+        bcos::engine::OpExecutionInternalError,
+        [](bcos::engine::OpExecutionInternalError const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr && *comment == "executed header is missing withdrawalsRoot";
+        });
 }
 
 /// mapDelegateError's routing is the load-bearing half of the delegate-concurrency

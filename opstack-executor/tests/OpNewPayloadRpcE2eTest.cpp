@@ -117,7 +117,14 @@ void runGoldenVector(std::string const& id)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto sample = w6test::loadVectorSample(id);
@@ -213,6 +220,24 @@ void runGoldenVector(std::string const& id)
 /// FCU deliberately omitted (see implementation hint #4).
 void runChainedPair(std::string const& aId, std::string const& bId)
 {
+    // review F14: corpus-reading entry point — same gate as runGoldenVector, so a missing
+    // corpus fails in CI (FISCO_REQUIRE_T8N_CORPUS) and skips locally.
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
+        return;
+    }
     auto sampleA = w6test::loadChainedSample(aId);
     auto sampleB = w6test::loadChainedSample(bId);
     BOOST_REQUIRE(sampleA.jovian == sampleB.jovian);  // chained pair shares one fork (isthmus or
@@ -330,7 +355,9 @@ runVectorAndGetBlockHash(std::string const& id)
 // Consumer-first (atomicity): the runner's reject schema is pinned by the inline
 // vectors below, but their BASE sample still loads from the corpus (spec.baseId),
 // so these self-tests — like every corpus-reading case in this suite — run behind
-// the t8nCorpusAvailable/Required gate (review F7). The runner also accepts
+// the t8nCorpusAvailable/Required gate (review F7; review F14 closed the three entries
+// the sweep missed: runChainedPair, CoverageMatrixFromManifest and the forkVectorSample
+// case). The runner also accepts
 // on-disk invalid_*.json. Reject schema:
 // fisco.consumer / classification ("INVALID"|"SYNCING"|"-38005"|"-32603") /
 // latest_valid_hash("parent"|null) / validation_error_contains(optional) /
@@ -1187,7 +1214,14 @@ BOOST_AUTO_TEST_CASE(InvalidStateRootRejected)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     runInvalidVector("inline_invalid_stateRoot");
@@ -1201,7 +1235,14 @@ BOOST_AUTO_TEST_CASE(InvalidParentUnknownSyncing)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     runInvalidVector("inline_invalid_parentUnknown");
@@ -1215,7 +1256,14 @@ BOOST_AUTO_TEST_CASE(InvalidUnsupportedForkVersion3)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     runInvalidVector("inline_invalid_unsupportedFork");
@@ -1234,7 +1282,14 @@ BOOST_AUTO_TEST_CASE(SiblingForkCanonicalPourValid_SiblingSideChainDichotomy)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     runInvalidVector("inline_invalid_siblingFork");
@@ -1251,7 +1306,14 @@ BOOST_AUTO_TEST_CASE(ExecutorConsumerSkipsMessageAssertion)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     runInvalidVector("inline_invalid_executorStateRoot");
@@ -1266,7 +1328,14 @@ BOOST_AUTO_TEST_CASE(InvalidVectorsFromManifest)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     for (auto const& id : loadInvalidManifest())
@@ -1303,6 +1372,24 @@ BOOST_AUTO_TEST_CASE(InvalidManifestStemStripsJsonSuffix)
 // params[1]/params[3] through), each validation_error_contains target string.
 BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
 {
+    // review F14: the manifest + vectors live in the t8n corpus — a missing corpus must
+    // fail in CI, never let the coverage gate pass vacuously.
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
+        return;
+    }
     const auto names = loadInvalidManifest();
     BOOST_REQUIRE_MESSAGE(!names.empty(), "coverage: manifest has no invalid_* vectors");
     std::set<std::string> classifications;
@@ -2219,7 +2306,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadKnownValid)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2275,7 +2369,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingGasLimitInvalid)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2299,7 +2400,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingMinBaseFeeInvalid)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2341,7 +2449,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsNonEmptyWithdrawalsInvalid)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     // MJ-2: OP attrs withdrawals must be present AND empty (op-geth api_optimism.go:55-58
@@ -2367,7 +2482,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingEip1559ParamsInvalid)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     // MJ-2: Holocene+ OP face requires eip1559Params (op-geth api_optimism.go:40-65);
@@ -2393,7 +2515,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsWrongSizeEip1559ParamsInvalid)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     // MJ-2: eip1559Params must be exactly 8 bytes (Holocene denominator|elasticity), and a
@@ -2443,7 +2572,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttributesVersionGate)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2475,7 +2611,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceMonotonicityRejected)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2501,7 +2644,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadIncrement)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash1, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2544,7 +2694,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceNoAttributesHeadAdvance)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2574,7 +2731,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceSafeFinalizedIndependent)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash1, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2605,7 +2769,14 @@ BOOST_AUTO_TEST_CASE(ForkchoiceSafeBelowHeadIsValid)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2765,7 +2936,14 @@ BOOST_AUTO_TEST_CASE(ReorgParentHeadWithoutAttrsStillSwallowed)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2797,7 +2975,14 @@ BOOST_AUTO_TEST_CASE(ReorgRebuildOnParentBuildsSibling)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto [fixture, canonicalHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -2858,6 +3043,24 @@ BOOST_AUTO_TEST_CASE(ReorgRebuildOnParentBuildsSibling)
 // the parent base instead of stacking on top of the abandoned build.
 BOOST_AUTO_TEST_CASE(ReorgCaseUReplacesUncommittedPending)
 {
+    // review F14: forkVectorSample reads the t8n corpus — gate here (the helper's return
+    // cannot skip its caller).
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
+        return;
+    }
     auto sample = forkVectorSample("invalid_jovian_chain_3_fork");
     auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);

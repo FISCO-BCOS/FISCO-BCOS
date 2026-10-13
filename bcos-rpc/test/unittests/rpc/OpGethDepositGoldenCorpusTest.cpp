@@ -198,13 +198,14 @@ BOOST_AUTO_TEST_CASE(RenderersReproduceTheGoldenValues)
         {
             BOOST_CHECK_EQUAL(result["isSystemTx"].asBool(), goldenTx["isSystemTx"].asBool());
         }
-        // depositReceiptVersion rides the receipt: present iff the receipt golden carries it.
-        if (goldenTx.isMember("depositReceiptVersion"))
+        // depositReceiptVersion rides the receipt: present iff the receipt golden carries it
+        // (review F41: predicate on the fill's actual source, goldenReceipt, not goldenTx).
+        if (goldenReceipt.isMember("depositReceiptVersion"))
         {
             BOOST_CHECK_MESSAGE(
                 result.isMember("depositReceiptVersion") &&
                     result["depositReceiptVersion"].asString() ==
-                        goldenTx["depositReceiptVersion"].asString(),
+                        goldenReceipt["depositReceiptVersion"].asString(),
                 stem << ": depositReceiptVersion mismatch");
         }
         else

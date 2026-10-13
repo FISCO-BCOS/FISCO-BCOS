@@ -43,7 +43,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateDelta / emptyRootHash / parentStateRootFor
+#include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateDelta/emptyRootHash/parentStateRootFor
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -78,8 +78,8 @@ namespace vdetail = bcos::executor_v1::opstack::detail;  // the verifier's inlin
 namespace
 {
 
-constexpr uint64_t c_chainId = 0x2105;  // 8453 — matches the eip1559 envelope's chainId
-const bcos::Address kSender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // envelope sender
+// review F42: the OP chain id is single-homed in support/T8nCorpus.h (opstack_test::c_opChainId).
+const bcos::Address c_sender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // envelope sender
 
 // Corpus isthmus_transfer_basic.json: block.transactions[1]._op_raw (op-geth-signed eip1559
 // envelope).
@@ -267,10 +267,10 @@ struct VerifierFixture
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        verifier(std::make_shared<Verifier>(receiptFactory, hashImpl, c_chainId, forkSchedule,
-            blockFactory, multiLayerStorage, ledger, ioServicePool))
+        verifier(std::make_shared<Verifier>(receiptFactory, hashImpl, opstack_test::c_opChainId,
+            forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
-        seedSender(multiLayerStorage, kSender, hashImpl);
+        seedSender(multiLayerStorage, c_sender, hashImpl);
         seedSysTables(multiLayerStorage);
     }
 
@@ -393,7 +393,7 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header->gasLimit()),
         .blockHashLookup = opeth::opEthBlockHashLookup(*hashes),
-        .chainId = c_chainId,
+        .chainId = opstack_test::c_opChainId,
         .daFootprintGasScalar = daFootprintGasScalar};
     bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);

@@ -124,7 +124,7 @@ struct StubExecutor
 using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
 using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, EngineOpScheduler>;
 
-constexpr uint64_t kChainId = 0x2105;
+constexpr uint64_t c_chainId = 0x2105;  // review F35: c_ prefix, same constant as OpSchedulerTest
 
 bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {
@@ -309,7 +309,7 @@ struct OpE2eFixture
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         opDelegate(
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
-                kChainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool)),
+                c_chainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate)
     {

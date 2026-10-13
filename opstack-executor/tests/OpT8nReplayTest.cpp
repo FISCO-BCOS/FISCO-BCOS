@@ -2055,7 +2055,14 @@ BOOST_AUTO_TEST_CASE(Vectors)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     // Order-independence: the B3 proof-of-run counter is per-run of this case,
@@ -2463,7 +2470,14 @@ BOOST_AUTO_TEST_CASE(GoldenTransactionsRootMatches)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     const fs::path goldenDir = OP_T8N_GOLDEN_ENGINE_DIR;

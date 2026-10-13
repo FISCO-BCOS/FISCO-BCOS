@@ -75,8 +75,8 @@ namespace memory_storage = bcos::storage2::memory_storage;
 namespace
 {
 
-constexpr uint64_t kOpSepoliaChainId = 11155420;
-constexpr int64_t kFetchWindow = 25;  // blocks per header batch; raw txs of the window batch too
+constexpr uint64_t c_opSepoliaChainId = 11155420;
+constexpr int64_t c_fetchWindow = 25;  // blocks per header batch; raw txs of the window batch too
 
 // ── fixture pieces (same shape as OpBlockVerifierTest; anonymous-namespace fixture
 //    pieces are deliberately not shared across test TUs) ──
@@ -413,7 +413,7 @@ void runReplay(ReplayOptions const& options)
         genesis.m_ethGenesisHeader.has_value(), "genesis must carry [eth_genesis_header]");
     BOOST_REQUIRE_MESSAGE(
         genesis.m_opForkSchedule.has_value(), "genesis must carry [fork_timestamps] (op)");
-    BOOST_REQUIRE_EQUAL(nodeConfig.ethereumChainId(), kOpSepoliaChainId);
+    BOOST_REQUIRE_EQUAL(nodeConfig.ethereumChainId(), c_opSepoliaChainId);
     BOOST_TEST_MESSAGE("genesis loaded: allocs=" << genesis.m_allocs.size()
                                                  << " chainId=" << nodeConfig.ethereumChainId());
 
@@ -471,7 +471,7 @@ void runReplay(ReplayOptions const& options)
 
     int64_t windowStart = options.startBlock;
     auto pending = std::async(std::launch::async, fetchTimed, windowStart,
-        std::min(kFetchWindow, endBlock - windowStart + 1));
+        std::min(c_fetchWindow, endBlock - windowStart + 1));
     while (windowStart <= endBlock)
     {
         auto blocks = pending.get();
@@ -480,7 +480,7 @@ void runReplay(ReplayOptions const& options)
         if (nextStart <= endBlock)
         {
             pending = std::async(std::launch::async, fetchTimed, nextStart,
-                std::min(kFetchWindow, endBlock - nextStart + 1));
+                std::min(c_fetchWindow, endBlock - nextStart + 1));
         }
 
         for (auto& fetched : blocks)
@@ -596,9 +596,12 @@ BOOST_AUTO_TEST_CASE(ReplayRealOpSepoliaFromGenesis)
         std::ifstream probe(options.genesisPath);
         if (!probe.good())
         {
-            BOOST_TEST_MESSAGE("skipping OpSepoliaReplayTest: genesis config not readable at "
-                               << options.genesisPath);
-            return;
+            // review F13: with OP_SEPOLIA_REPLAY_RPC set the operator has explicitly
+            // asked for the replay, so an unreadable genesis is an error, not a skip —
+            // supply OP_SEPOLIA_REPLAY_GENESIS (the dispatch input above) or the file.
+            BOOST_FAIL("OpSepoliaReplayTest: genesis config not readable at "
+                       << options.genesisPath
+                       << " — set OP_SEPOLIA_REPLAY_GENESIS to a readable config.genesis");
         }
     }
     BOOST_TEST_MESSAGE("replaying op-sepolia blocks ["

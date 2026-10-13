@@ -68,7 +68,10 @@ struct DepositTransaction
 /// trailing bytes inside the RLP list are an error. Returns nullptr on success.
 ///
 /// Display-grade, not consensus-grade: bytes after the RLP list are not rejected,
-/// non-canonical integer encodings are accepted, and over-long uint64 payloads truncate.
+/// non-canonical integer encodings are accepted, and an over-long uint64 payload is
+/// rejected by the RLP integer reader ("integer wider than target type", pinned by
+/// DepositProductionPathTest's 9-byte-gas case — review F11; the previous wording
+/// claimed truncation).
 /// Execution wiring must NOT reuse this decoder for consensus-side validation.
 bcos::Error::UniquePtr decodeDepositTransaction(
     bcos::bytesRef& in, DepositTransaction& out) noexcept;

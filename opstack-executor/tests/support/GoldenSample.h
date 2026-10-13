@@ -28,6 +28,7 @@
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -65,6 +66,15 @@ inline bool t8nCorpusRequired()
 #else
     return false;
 #endif
+}
+
+/// review F12: Boost.Test (every version available in this repo's toolchains) has no
+/// public runtime-skip API, so a missing corpus used to leave the case counted as
+/// PASSED. The default is now explicit: without the corpus the case FAILS unless the
+/// developer opts into skipping with FISCO_ALLOW_MISSING_T8N=1.
+inline bool t8nCorpusSkipAllowed()
+{
+    return std::getenv("FISCO_ALLOW_MISSING_T8N") != nullptr;
 }
 
 struct GoldenSample

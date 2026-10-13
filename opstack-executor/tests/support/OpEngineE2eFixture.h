@@ -27,6 +27,7 @@
 
 #include "GenesisTrie.h"                   // copyFlatRows + computeAndPersistParentTrie
 #include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
+#include "support/T8nCorpus.h"             // opstack_test::c_opChainId (single-homed, review F42)
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -91,8 +92,6 @@ struct StubMemPool
 
 using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
 using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, EngineOpScheduler>;
-
-constexpr uint64_t c_chainId = 0x2105;
 
 inline bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {
@@ -340,7 +339,8 @@ struct OpE2eFixture
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
-            hashImpl, c_chainId, schedule, blockFactory, multiLayerStorage, ledger, ioServicePool)),
+            hashImpl, opstack_test::c_opChainId, schedule, blockFactory, multiLayerStorage, ledger,
+            ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate, nullptr,
             /*allowSynthesizedL1Attributes=*/true, eip1559)

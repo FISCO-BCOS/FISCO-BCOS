@@ -814,9 +814,9 @@ BOOST_AUTO_TEST_CASE(PrecompileMaxInputSize)
     opeth::OpPolicy const jovianPolicy{opeth::OP_JOVIAN_SPEC, block};
     opeth::OpPolicy const isthmusPolicy{opeth::OP_ISTHMUS_SPEC, block};
 
-    constexpr size_t kJovianBn256Limit = 81'984;
-    std::vector<uint8_t> const overCap(kJovianBn256Limit + 1, 0xaa);
-    std::vector<uint8_t> const atCap(kJovianBn256Limit, 0xaa);
+    constexpr size_t c_jovianBn256Limit = 81'984;
+    std::vector<uint8_t> const overCap(c_jovianBn256Limit + 1, 0xaa);
+    std::vector<uint8_t> const atCap(c_jovianBn256Limit, 0xaa);
     auto msg = [&](uint8_t const* input, size_t size, int64_t gas) {
         evmc_message m{};
         m.kind = EVMC_CALL;

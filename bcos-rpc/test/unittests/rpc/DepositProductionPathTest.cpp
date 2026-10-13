@@ -42,7 +42,8 @@ namespace
 
 /// A valid 0x7e envelope (the wire shape decodeDepositTransaction expects):
 /// type byte + RLP list [sourceHash, from, to, mint, value, gas, isSystemTx, input].
-bcos::bytes buildDepositEnvelope(bcos::u256 const& value, bcos::u256 const& mintValue)
+bcos::bytes buildDepositEnvelope(bcos::u256 const& value, bcos::u256 const& mintValue,
+    bcos::u256 const& gas = bcos::u256(21'000))
 {
     bcos::bytes body;
     bcos::h256 const sourceHash(std::string(64, '5'));
@@ -52,7 +53,7 @@ bcos::bytes buildDepositEnvelope(bcos::u256 const& value, bcos::u256 const& mint
     bcos::codec::rlp::encode(body, bcos::h160(std::string(40, 'e')));  // to
     bcos::codec::rlp::encode(body, mintValue);
     bcos::codec::rlp::encode(body, value);
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(21'000));
+    bcos::codec::rlp::encode(body, gas);
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));  // isSystemTx
     bcos::bytes const input;
     bcos::codec::rlp::encode(body, input);
@@ -89,14 +90,36 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeYieldsTheConstructedValues)
     BOOST_CHECK_EQUAL(cursor.size(), 0u);
 }
 
+// review F11: DepositTransaction.h documents an over-long uint64 payload as truncating, but
+// the shared RLP scalar decoder now REJECTS integers wider than the target type before
+// fromBigEndian ("integer wider than target type", RLPDecode.h — op-geth parity), and
+// decodeDepositTransaction folds that throw into an Error. Pin the actual contract over real
+// wire bytes (a 9-byte gas item) so neither the note nor the behavior drifts silently.
+BOOST_AUTO_TEST_CASE(OverLongGasItemIsRejectedNotTruncated)
+{
+    auto const envelope = buildDepositEnvelope(
+        /*value=*/bcos::u256(0), /*mint=*/bcos::u256(0), /*gas=*/bcos::u256(1) << 64);
+    bcos::bytesRef cursor(const_cast<bcos::byte*>(envelope.data()), envelope.size());
+    bcos::rpc::DepositTransaction decoded;
+    auto const error = bcos::rpc::decodeDepositTransaction(cursor, decoded);
+    BOOST_REQUIRE_MESSAGE(error != nullptr, "a 9-byte gas item must be rejected, not truncated");
+    BOOST_CHECK_MESSAGE(
+        error->errorMessage().find("integer wider than target type") != std::string::npos,
+        "pin the shared decoder's rejection reason, got: " << error->errorMessage());
+}
+
 bcos::protocol::TransactionReceipt::Ptr makeDepositReceipt(
-    bcos::protocol::BlockFactory::Ptr const& factory, uint64_t depositNonce)
+    bcos::protocol::BlockFactory::Ptr const& factory, uint64_t depositNonce,
+    bool withVersion = true)
 {
     auto receipt = factory->receiptFactory()->createReceipt(bcos::u256(21'000),
         "0x0000000000000000000000000000000000000000", {}, 1, bcos::bytesConstRef{}, 7);
     bcos::protocol::OpStackReceiptMeta meta;
     meta.deposit_nonce = depositNonce;
-    meta.deposit_receipt_version = 1;
+    if (withVersion)
+    {
+        meta.deposit_receipt_version = 1;
+    }
     receipt->setOpStackMeta(meta);
     return receipt;
 }
@@ -146,7 +169,19 @@ BOOST_AUTO_TEST_CASE(ReceiptOverloadAndFullTxFillCarryTheDepositBranch)
     BOOST_REQUIRE_MESSAGE(txResult["nonce"].asString() == "0xbb9",
         "the receipt overload stamped the deposit nonce over `nonce`, got: "
             << txResult["nonce"].asString());
-    BOOST_CHECK(txResult.isMember("depositReceiptVersion"));
+    // review F39: assert the VALUE (toQuantity(1) == "0x1"), not mere presence.
+    BOOST_REQUIRE_MESSAGE(txResult.isMember("depositReceiptVersion"),
+        "the deposit branch ran (depositReceiptVersion emitted)");
+    BOOST_CHECK_EQUAL(txResult["depositReceiptVersion"].asString(), "0x1");
+    // review F39 no-version arm: a pre-Canyon deposit receipt carries the deposit nonce
+    // but no version — the same production overload must then leave the key absent.
+    auto const preCanyon =
+        makeDepositReceipt(m_blockFactory, /*depositNonce=*/0xbb9, /*withVersion=*/false);
+    Json::Value preCanyonResult = Json::objectValue;
+    bcos::rpc::combineTxResponse(preCanyonResult, *tx, *preCanyon, blockHash);
+    BOOST_CHECK_EQUAL(preCanyonResult["nonce"].asString(), "0xbb9");
+    BOOST_CHECK_MESSAGE(!preCanyonResult.isMember("depositReceiptVersion"),
+        "a versionless receipt must leave depositReceiptVersion absent");
 
     // (2) The gated full-tx fill inside combineBlockResponse: a two-entry block
     // (deposit first) proves the positional receipt pairing, and the non-deposit

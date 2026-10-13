@@ -34,7 +34,6 @@ BOOST_AUTO_TEST_SUITE(GoldenSampleSuite)
 
 BOOST_AUTO_TEST_CASE(LoadVectorAndGolden)
 {
-
     // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
     // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
     if (!w6test::t8nCorpusAvailable())
@@ -43,7 +42,14 @@ BOOST_AUTO_TEST_CASE(LoadVectorAndGolden)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
@@ -59,7 +65,6 @@ BOOST_AUTO_TEST_CASE(LoadVectorAndGolden)
 
 BOOST_AUTO_TEST_CASE(DecodeGoldenHeaderRoundTrip)
 {
-
     // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
     // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
     if (!w6test::t8nCorpusAvailable())
@@ -68,7 +73,14 @@ BOOST_AUTO_TEST_CASE(DecodeGoldenHeaderRoundTrip)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
@@ -88,7 +100,6 @@ BOOST_AUTO_TEST_CASE(DecodeGoldenHeaderRoundTrip)
 
 BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
 {
-
     // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
     // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
     if (!w6test::t8nCorpusAvailable())
@@ -97,7 +108,14 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
@@ -171,7 +189,6 @@ BOOST_AUTO_TEST_CASE(MakeInvalidParamsJsonPassesBlobParamsThrough)
 
 BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
 {
-
     // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
     // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
     if (!w6test::t8nCorpusAvailable())
@@ -180,7 +197,14 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
         {
             BOOST_FAIL("t8n corpus required in CI but missing");
         }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        if (!w6test::t8nCorpusSkipAllowed())
+        {
+            BOOST_FAIL(
+                "t8n corpus missing and FISCO_ALLOW_MISSING_T8N is not set: "
+                "provision the corpus (tools/.ci/provision_t8n_corpus.sh) or "
+                "opt into skipping explicitly");
+        }
+        BOOST_TEST_MESSAGE("SKIPPED by opt-in (FISCO_ALLOW_MISSING_T8N set): t8n corpus missing");
         return;
     }
     // D4: automatic golden-manifest validation — manifest.txt (non-comment lines) ↔
@@ -214,7 +238,7 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
                 continue;
             constexpr std::string_view c_jsonSuffix = ".json";
             if (line.size() > c_jsonSuffix.size() && line.compare(line.size() - c_jsonSuffix.size(),
-                                                        c_jsonSuffix.size(), c_jsonSuffix) == 0)
+                                                         c_jsonSuffix.size(), c_jsonSuffix) == 0)
                 line.resize(line.size() - c_jsonSuffix.size());
             manifest.insert(line);
         }

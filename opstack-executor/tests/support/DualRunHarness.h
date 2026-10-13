@@ -1,3 +1,23 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file DualRunHarness.h
+ * @brief Shared harness for the bcos-evm-free OP executor tests (fixture pieces,
+ *        envelope->tars carrier, production-scheduler driver, row-diff diagnostics).
+ */
+
 #pragma once
 // Shared harness for the bcos-evm-free OP executor tests. Holds the pieces
 // OpEthExecutorDualRunTest.cpp (C1) and OpEthForkMatrixTest.cpp (C2) both drive:
@@ -16,6 +36,7 @@
 // Suite-level plumbing (t8n corpus loading, golden headers) stays in support/GoldenSample.h.
 
 #include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
+#include "support/T8nCorpus.h"  // opstack_test::c_opChainId (single-homed, review F42)
 #include <opstack-executor/OpEthBlockSteps.h>    // preBlockOpEthSteps / finalizeOpEthBlockResult
 #include <opstack-executor/OpEthCommitments.h>   // OpEthExecuteBlockResult
 #include <opstack-executor/OpEthDeposit.h>       // decodeOpDepositEnvelope
@@ -59,11 +80,6 @@ using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
 namespace opeth = bcos::executor_v1::opstack;
-
-// The FISCO OP chain id — the same constant OpSchedulerTest's c_chainId pins and the t8n corpus
-// envelopes embed (8453 = 0x2105).
-inline constexpr uint64_t c_opChainId = 0x2105;
-
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
@@ -252,7 +268,8 @@ bcos::task::Task<RowMap> collectRows(ViewType& view)
 template <class ViewType>
 bcos::task::Task<void> dumpDeltaRows(ViewType& view, char const* tag)
 {
-    auto it = co_await bcos::storage2::range(mutableStorage(view));  // ADL: MultiLayerStorage View friend
+    // ADL: MultiLayerStorage View friend
+    auto it = co_await bcos::storage2::range(mutableStorage(view));
     while (auto kv = co_await it.next())
     {
         auto const& [k, v] = *kv;
@@ -283,8 +300,9 @@ void dumpRowDiff(ViewType& viewA, ViewType& viewB)
                     std::string const& a, std::string const& b) {
         if (shown++ >= 60)
             return;
-        BOOST_TEST_MESSAGE("[" << side << "] table=" << key.first << " key=" << bcos::toHex(key.second)
-                               << " old=" << a << " new=" << b);
+        BOOST_TEST_MESSAGE("[" << side << "] table=" << key.first
+                               << " key=" << bcos::toHex(key.second) << " old=" << a
+                               << " new=" << b);
     };
     for (auto const& [key, va] : rowsA)
     {
@@ -302,8 +320,8 @@ void dumpRowDiff(ViewType& viewA, ViewType& viewB)
     {
         auto it = rowsB.find(key);
         BOOST_TEST_MESSAGE("[old] table=" << key.first << " key=" << bcos::toHex(key.second)
-                                          << " old=" << va
-                                          << " new=" << (it == rowsB.end() ? "<absent>" : it->second));
+                                          << " old=" << va << " new="
+                                          << (it == rowsB.end() ? "<absent>" : it->second));
     }
 }
 

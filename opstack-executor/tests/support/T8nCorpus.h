@@ -20,6 +20,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <string_view>
 
 namespace opstack_test
@@ -44,4 +45,11 @@ inline constexpr std::array<std::string_view, 2> c_t8nCriticalStems{
 /// std::string(c_corpusParentHashHex).
 inline constexpr std::string_view c_corpusParentHashHex{
     "0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"};
+
+/// The FISCO OP chain id (8453 = 0x2105) the t8n corpus envelopes embed; every suite that
+/// builds an envelope or an execution context announces it from here. Single-homed by
+/// review F42 — the fixture-side copies (DualRunHarness.h, OpEngineE2eFixture.h,
+/// OpBlockVerifierTest.cpp) had already drifted into three definitions of one value, and
+/// OpSchedulerTest's c_chainId pins the same constant.
+inline constexpr uint64_t c_opChainId = 0x2105;
 }  // namespace opstack_test

@@ -39,6 +39,7 @@
 //       rewrites): ties the corpus those goldens extend to a specific op-geth
 //       checkout, machine-readably, instead of to README prose.
 
+#include "support/GoldenSample.h"  // w6test::t8nCorpusAvailable / t8nCorpusRequired (review F15)
 #include "support/T8nCorpus.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
@@ -225,6 +226,19 @@ BOOST_AUTO_TEST_CASE(GoldenCorpusProvenanceIsPinned,
     * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
+    // review F15: a missing corpus has ONE verdict file-wide — fail in CI, skip on a
+    // bare local checkout — matching the two sibling cases below instead of hard-failing
+    // here. Covers both the absent corpus tree and a present tree without SHA256SUMS.
+    if (!w6test::t8nCorpusAvailable() ||
+        !fs::exists(fs::path(OP_T8N_GOLDEN_ENGINE_DIR) / "SHA256SUMS"))
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing (golden/engine/SHA256SUMS)");
+        }
+        BOOST_TEST_MESSAGE("t8n corpus missing (local run); skipping");
+        return;
+    }
     // ---- (a) checksums over the golden corpus ----
     auto const checksums = loadGoldenChecksums();
     BOOST_REQUIRE_MESSAGE(!checksums.empty(), "SHA256SUMS listed no files");
