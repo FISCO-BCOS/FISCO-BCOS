@@ -136,6 +136,11 @@ inline h256 executableCodeKey(bytesConstRef code)
     crypto::Keccak256 hasher;
     return hasher.hash(code);
 }
+inline h256 executableCodeKey(std::string_view code)
+{
+    return executableCodeKey(
+        bytesConstRef(reinterpret_cast<byte const*>(code.data()), code.size()));
+}
 
 using CacheExecutables =
     storage2::memory_storage::MemoryStorage<ExecutableCacheKey, std::shared_ptr<Executable>,
@@ -324,12 +329,14 @@ public:
         if (!m_web3Tx)
         {
             // Historical v2 derivation (pre-0.24 getMessage): the chain hasher over
-            // "<blockNumber>_<contextID>_<seq>", first 20 bytes. The nested HostContext
-            // shares the parent's seq, so this is the value getMessage resolves for the
-            // created message — replay-stable under the DMC per-hop frame replay, unlike
-            // evmone's nonce-derived compute_create_address.
+            // "<blockNumber>_<contextID>_<seq>", first 20 bytes. externalCall increments
+            // m_seq BEFORE constructing the nested HostContext, so the child's seq — the
+            // value its own getMessage resolves with, and the one the eip2929 create pin
+            // uses — is m_seq + 1. The hook runs inside the creator's VM before that
+            // increment, hence the +1 here: replay-stable under the DMC per-hop frame
+            // replay, unlike evmone's nonce-derived compute_create_address.
             std::string key = std::to_string(m_blockHeader.get().number()) + "_" +
-                              std::to_string(m_contextID) + "_" + std::to_string(m_seq);
+                              std::to_string(m_contextID) + "_" + std::to_string(m_seq + 1);
             auto hash = m_hashImpl.get().hash(key);
             std::copy_n(hash.data(), sizeof(out.bytes), out.bytes);
             return out;
@@ -353,7 +360,7 @@ public:
         uint8_t* ptr = buffer.data();
         *ptr++ = 0xff;
         ptr = std::uninitialized_copy_n(sender.bytes, sizeof(sender.bytes), ptr);
-        ptr = std::uninitialized_copy(salt.bytes, sizeof(salt.bytes), ptr);
+        ptr = std::uninitialized_copy_n(salt.bytes, sizeof(salt.bytes), ptr);
         auto inputHash = m_hashImpl.get().hash(initCode);
         ptr = std::uninitialized_copy(inputHash.begin(), inputHash.end(), ptr);
         auto addressHash = m_hashImpl.get().hash(bytesConstRef(buffer.data(), buffer.size()));
@@ -847,8 +854,7 @@ private:
     void prepareCreate()
     {
         auto& ref = message();
-        bytesConstRef createCode(ref.input_data, ref.input_size, &HostContext::createAddressHook,
-            &HostContext::create2AddressHook);
+        bytesConstRef createCode(ref.input_data, ref.input_size);
         m_executable = std::make_shared<Executable>(createCode);
     }
 
@@ -1075,7 +1081,8 @@ private:
 
         co_return m_executable->m_vmInstance.execute(m_hostInterface,
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
-            (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size());
+            (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size(),
+            &HostContext::createAddressHook, &HostContext::create2AddressHook);
     }
 };
 
