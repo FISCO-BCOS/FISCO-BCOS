@@ -205,6 +205,11 @@ bool computeCase(
     }
     const opeth::OpForkSpec& cfg = forkSpecFor(fork);
 
+    // Input subset consumed by this end (review F48): id, envelope_ref, gas, slots
+    // 1/3/5/6/7/8 and fork. `block_time` is NOT read — the FISCO cost functions take
+    // an OpForkSpec, not a timestamp (the grid's fork tag selects it) — so a non-zero
+    // grid block_time would not reach this computation. Op-geth is the only end that
+    // consumes it; see README.md "Grid input contract".
     const auto l1 = computeL1Cost(params, env, cfg);
     // The scheduler line moved the has_operator_fee gate out of the cost function (callers
     // gate); the runner re-applies it so the four-end comparable value matches what the goldens

@@ -31,7 +31,8 @@
 //      fork, and every slot value is exactly 32-byte hex (0x + 64 hex digits);
 //   3. fork ∈ {ecotone,fjord,granite,holocene,isthmus,jovian,karst};
 //   4. envelope_ref ∈ envelopes registry (and registry values are valid hex);
-//   5. known_divergence, when present, ∈ {l1_fee_saturation,flz_zero_clamp,karst_alias};
+//   5. known_divergence, when present, ∈ the canonical registry
+//      (da-matrix/known_divergences.json, mirrored by c_divergences below);
 //   6. 7-class coverage: id prefix ∈ {baseline,max,overflow,pre_isthmus,missing,
 //      switch,blob}, each class present at least once;
 //   7. a referenced envelope of 0-byte length without known_divergence==flz_zero_clamp
@@ -55,8 +56,13 @@ namespace
 {
 const std::set<std::string> c_forks = {
     "ecotone", "fjord", "granite", "holocene", "isthmus", "jovian", "karst"};
-const std::set<std::string> c_divergences = {
-    "l1_fee_saturation", "flz_zero_clamp", "karst_alias"};
+// Canonical known_divergence list = da-matrix/known_divergences.json (review F17:
+// ONE registry consumed by compare_snapshots.py and run_opgeth/main.go; C++ cannot
+// read JSON without a dependency, so this set MIRRORS that file — update both in
+// the same change). The prose registry is DIVERGENCES.md.
+const std::set<std::string> c_divergences = {"l1_fee_saturation", "flz_zero_clamp",
+    "karst_alias", "solidity_l1_uint32_overflow", "da_footprint_overflow",
+    "da_footprint_176b_activation_shape"};
 const std::set<std::string> c_classPrefixes = {
     "baseline", "blob", "max", "missing", "overflow", "pre_isthmus", "switch"};
 const std::vector<std::string> c_requiredSlots = {"1", "3", "7", "8"};

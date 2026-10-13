@@ -232,6 +232,10 @@ fn main() {
             ..Default::default()
         };
 
+        // Input subset consumed here (review F48): id, envelope, gas, fork (-> OpSpecId)
+        // and slots 1/3/7/8. `block_time` is NOT read — op-revm's cost methods take an
+        // OpSpecId, not a timestamp — so a non-zero grid block_time would not reach
+        // this computation; see README.md "Grid input contract".
         let l1_cost = info.calculate_tx_l1_cost(&envelope, spec);
         let operator_cost = if spec.is_enabled_in(OpSpecId::ISTHMUS) {
             info.operator_fee_charge(&envelope, U256::from(gas), spec)

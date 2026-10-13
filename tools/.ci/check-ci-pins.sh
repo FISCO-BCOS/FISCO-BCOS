@@ -212,6 +212,28 @@ for entry in \
     fi
 done
 
+# review F19: the da-matrix goldens are op-geth-axis artifacts (the op-geth end is
+# the reference oracle), so their provenance manifest is checked here, on this same
+# axis: golden/SHA256SUMS must match the four committed out_*.json byte-for-byte.
+# A snapshot edited in place (or replaced without regenerating the manifest) would
+# silently redefine what the differential gate asserts.
+golden_manifest="$REPO_ROOT/opstack-executor/tests/da-matrix/golden/SHA256SUMS"
+if [ ! -f "$golden_manifest" ]; then
+    fail "da-matrix golden manifest missing: $golden_manifest (regenerate the goldens' \
+manifest: cd opstack-executor/tests/da-matrix/golden && shasum -a 256 */out_*.json > SHA256SUMS)"
+else
+    # shasum -c verifies hash AND filename from the manifest; sha256sum covers hosts
+    # without perl's shasum. Either way this is a hard failure on any mismatch.
+    if (cd "${golden_manifest%/*}" \
+        && { shasum -a 256 -c SHA256SUMS || sha256sum -c SHA256SUMS; } >/dev/null 2>&1); then
+        echo "  OK da-matrix golden/SHA256SUMS verifies against the committed goldens"
+    else
+        fail "da-matrix golden/SHA256SUMS does not verify: a golden was changed without \
+regenerating the manifest ($golden_manifest) — run (cd ${golden_manifest%/*} && \
+shasum -a 256 */out_*.json > SHA256SUMS) in the same change"
+    fi
+fi
+
 # -----------------------------------------------------------------------------
 # Axis 2: op-revm oracle revision vs the documented revision.
 # -----------------------------------------------------------------------------

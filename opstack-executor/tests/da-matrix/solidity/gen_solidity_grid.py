@@ -45,6 +45,11 @@ def main() -> int:
 
     envelopes = grid["envelopes"]
     lines = []
+    # Input subset consumed by the Solidity end (review F48): id, envelope, gas, fork
+    # (-> GasPriceOracle's isEcotone/isFjord/isIsthmus/isJovian setters) and the
+    # slot-derived scalars below. `block_time` is NOT emitted — GasPriceOracle has no
+    # time input — so a non-zero grid block_time would not reach the Solidity
+    # computation; see ../README.md "Grid input contract".
     for c in grid["cases"]:
         slots = c["slots"]
         s1 = bytes.fromhex(slots["1"][2:])

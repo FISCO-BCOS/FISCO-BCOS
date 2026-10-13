@@ -10,8 +10,14 @@ bit-for-bit**, either because one end deliberately chooses different semantics
 in undefined territory, or because the fork is not implemented the same way in
 every source.
 
-One consumer reads the grid's `known_divergence` field: `compare_snapshots.py`
-(the four-source comparator). It splits the registry in two: the tags that mark a
+The **canonical machine-readable tag list is `known_divergences.json`** beside this
+file (review F17): `compare_snapshots.py` loads it, `run_opgeth/main.go` reads it at
+runtime, and `OpDaMatrixSchemaTest.cpp`'s `c_divergences` mirrors it (C++, no JSON
+dep). This file is its prose companion — add a new tag there first, then register it
+below.
+
+One consumer reads the grid's `known_divergence` field at comparison time:
+`compare_snapshots.py` (the four-source comparator). It splits the registry in two: the tags that mark a
 genuine cross-end difference — `l1_fee_saturation`, `flz_zero_clamp`,
 `solidity_l1_uint32_overflow`, `da_footprint_overflow`,
 `da_footprint_176b_activation_shape` — are skipped and counted (the skip is
@@ -116,7 +122,10 @@ ends by design:
 - **Why not a grid `known_divergence`:** it is a Solidity-implementation bug
   (real contracts never use scalars that large); the FISCO/op-geth/op-revm
   values are correct. Tracked here and in the task-5 report; a follow-up could
-  file an upstream note against GasPriceOracle.sol.
+  file an upstream note against GasPriceOracle.sol. Should a future row ever
+  carry the tag, the comparator's l1_cost exemption is **end-scoped** (review
+  F18): only the solidity end is exempt — opgeth/oprevm still compare both
+  fields of that row.
 
 ## `rpc_l1_fee_scalar_truncation` — RESOLVED: RPC `l1FeeScalar` now renders like op-geth
 

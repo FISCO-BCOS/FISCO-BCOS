@@ -140,6 +140,41 @@ func cfgFor(fork string) *params.ChainConfig {
 	return &cfg
 }
 
+// knownDivergencesPath resolves the canonical tag registry (review F17) beside the
+// grid: the grid names tags, known_divergences.json defines them, and this runner,
+// compare_snapshots.py and OpDaMatrixSchemaTest.cpp must all agree on the set. The
+// file used to be an inline map here — four disagreeing copies, one of which
+// rejected a tag the prose registry tells future rows to carry.
+func knownDivergencesPath(gridPath string) string {
+	return filepath.Join(filepath.Dir(gridPath), "known_divergences.json")
+}
+
+// loadKnownTags reads the canonical registry. A missing or malformed file is FATAL
+// (loudly, with the path): silently falling back to a built-in list would recreate
+// the very drift this registry exists to prevent.
+func loadKnownTags(gridPath string) (map[string]bool, error) {
+	path := knownDivergencesPath(gridPath)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read the canonical known_divergence registry: %w", err)
+	}
+	var tags []string
+	if err := json.Unmarshal(raw, &tags); err != nil {
+		return nil, fmt.Errorf("malformed canonical known_divergence registry %s: %w", path, err)
+	}
+	if len(tags) == 0 {
+		return nil, fmt.Errorf("canonical known_divergence registry %s is empty", path)
+	}
+	known := make(map[string]bool, len(tags))
+	for _, tag := range tags {
+		if tag == "" {
+			return nil, fmt.Errorf("canonical known_divergence registry %s carries an empty tag", path)
+		}
+		known[tag] = true
+	}
+	return known, nil
+}
+
 type grid struct {
 	SchemaVersion int               `json:"schema_version"`
 	Envelopes     map[string]string `json:"envelopes"`
@@ -181,12 +216,15 @@ func main() {
 		fmt.Fprintln(os.Stderr, "run_opgeth: grid must carry an 'envelopes' object and a 'cases' array")
 		os.Exit(1)
 	}
-	// A known_divergence tag must be registered (DIVERGENCES.md) — the field used to be
+	// A known_divergence tag must be registered — the field used to be
 	// parsed and never read, so a typo would silently exempt nothing while the registry
-	// claimed the row was registered. Keep in sync with compare_snapshots.py.
-	knownTags := map[string]bool{
-		"karst_alias": true, "l1_fee_saturation": true, "flz_zero_clamp": true,
-		"solidity_l1_uint32_overflow": true,
+	// claimed the row was registered. The tag set is read at runtime from
+	// known_divergences.json (review F17), the single canonical list also consumed by
+	// compare_snapshots.py and mirrored by OpDaMatrixSchemaTest.cpp.
+	knownTags, err := loadKnownTags(*gridPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "run_opgeth: %v\n", err)
+		os.Exit(1)
 	}
 	seenIDs := make(map[string]bool, len(g.Cases))
 	for _, c := range g.Cases {
@@ -196,8 +234,8 @@ func main() {
 		}
 		seenIDs[c.ID] = true
 		if c.KnownDivergence != nil && !knownTags[*c.KnownDivergence] {
-			fmt.Fprintf(os.Stderr, "run_opgeth: case %q carries unknown known_divergence %q (register it in DIVERGENCES.md)\n",
-				c.ID, *c.KnownDivergence)
+			fmt.Fprintf(os.Stderr, "run_opgeth: case %q carries unknown known_divergence %q (register it in %s)\n",
+				c.ID, *c.KnownDivergence, knownDivergencesPath(*gridPath))
 			os.Exit(1)
 		}
 	}
@@ -235,6 +273,11 @@ func main() {
 		}
 
 		rcd := types.NewRollupCostData(envBytes)
+		// op-geth is the only da-matrix end whose cost functions take the block time:
+		// it gates Ecotone/Fjord/Isthmus/Jovian and the Regolith L1 path inside the
+		// returned funcs. FISCO/op-revm/Solidity are keyed by the grid's fork tag
+		// instead; every row pins block_time 0, so the selections agree (review F48,
+		// README "Grid input contract").
 		l1Cost := l1(rcd, c.BlockTime)
 		opCost := op(c.Gas, c.BlockTime)
 

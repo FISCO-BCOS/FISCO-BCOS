@@ -13,6 +13,25 @@ known_divergence rows still computed and compared — the fisco golden carries
 them, so the exemption scopes only the four-source comparator). `compare_snapshots.py` additionally
 cross-compares the committed snapshots and FAILS on a missing end.
 
+## Provenance
+
+The four ends of the committed `golden/` snapshots are pinned as follows (review
+F19):
+
+| End | Source | Pinned to |
+|---|---|---|
+| fisco | this tree | the FISCO runner (`run_fisco.cpp` over `opstack-executor/OpRollupCost.h`); recomputed by the `OpDaMatrixCheck` ctest |
+| opgeth | op-geth | tag **v1.101702.2** (commit `e8800cffe53d459cde8a07c8e8f1de9d86e79e07`, recorded in `opstack-executor/tests/support/GoldenSample.h`) |
+| oprevm | op-revm 20.0.0 | the `op-revm` git rev in `run_oprevm/Cargo.toml` (`5f90f749caea14398554afb75062f7111b1fc554`; see its F12 fetchability warning) |
+| solidity | contracts-bedrock | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (same optimism monorepo checkout as op-revm — see `PINNED REFERENCES` below) |
+
+`golden/SHA256SUMS` carries the sha256 of the four `out_*.json` snapshots.
+Regenerate it in the SAME change as any snapshot edit
+(`cd golden && shasum -a 256 */out_*.json > SHA256SUMS`), and verify with
+`cd golden && shasum -a 256 -c SHA256SUMS`: `tools/.ci/check-ci-pins.sh`'s
+op-geth axis fails on a mismatch, so an edited-but-unmanifested golden cannot
+silently redefine the gate's expected values.
+
 ## Layout
 
 ```
@@ -26,7 +45,10 @@ da-matrix/
     opgeth/             op-geth snapshot  (out_opgeth.json)
     oprevm/             op-revm snapshot  (out_oprevm.json)
     solidity/           Solidity snapshot (out_solidity.json)
-  DIVERGENCES.md        known_divergence registry
+    SHA256SUMS          sha256 of the four snapshots (provenance pin)
+  known_divergences.json  canonical known_divergence tag list (single source)
+  test_compare_snapshots.py  pytest probes for the comparator's mismatch path
+  DIVERGENCES.md        known_divergence registry (prose companion)
   README.md
 ```
 
@@ -62,6 +84,30 @@ Outputs are unified lowercase `"0x"` hex (op-geth `hexutil.Big` convention).
 > `l1_cost` is a **cross-reference only** (`GasPriceOracle.getL1Fee` uses the
 > unsigned-tx **+68** convention, see `DIVERGENCES.md` and
 > `solidity_l1_uint32_overflow`).
+
+## Grid input contract: `block_time` and slots 5/6
+
+Every grid case pins `block_time: 0`, and the comparability of the four ends
+rests on that. Op-geth is the only end that CONSUMES the field: both of its cost
+functions take the block time and use it to gate fork activation (Ecotone →
+Fjord → Isthmus → Jovian) and the Regolith L1-fee path
+(`core/types/rollup_cost.go`). The other three ends take no timestamp at all —
+FISCO selects an `OpForkSpec` from the grid's `fork` tag (`run_fisco.cpp`),
+op-revm selects an `OpSpecId` the same way (`run_oprevm/src/main.rs`), and the
+Solidity end sets GasPriceOracle's fork flags from the tag
+(`gen_solidity_grid.py` → `OperatorFeeCheck.t.sol`); each of those runners
+carries a comment naming the input subset it consumes. With `block_time: 0`
+against a config that activates every listed fork at time 0, the time-based and
+tag-based selections agree, which is why the snapshots compare. A future row
+with a NON-ZERO `block_time` is therefore only fully defined for the op-geth
+end: either keep new rows at 0, or give the other ends a time input first.
+
+Slots 5/6 (Bedrock-era overhead/scalar) are single-ended in the same way:
+`run_fisco.cpp` reads them (zero-fill when absent, promotable if a future row
+carries them), but no case does, and the other ends' readers take only slots
+1/3/7/8 (op-geth warns "unexpected slot ... (ignored)"). A row that starts
+carrying 5/6 would therefore be FISCO-only until the other ends grow the same
+inputs — the schema test requires 1/3/7/8 and does not forbid extras.
 
 ## Current four-source status
 
@@ -102,7 +148,10 @@ Both must print `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd`.
 
 ## known_divergence
 
-See `DIVERGENCES.md`. Only `switch_karst` (karst_alias) is marked in the grid;
+The canonical machine-readable tag list is `known_divergences.json`: it is loaded
+by `compare_snapshots.py`, read at runtime by `run_opgeth`, and mirrored by
+`OpDaMatrixSchemaTest.cpp`'s `c_divergences` (review F17). `DIVERGENCES.md` is its
+prose companion. Only `switch_karst` (karst_alias) is marked in the grid;
 `l1_fee_saturation` and `flz_zero_clamp` are registered but not triggered by
 any current row. The Solidity-side `solidity_l1_uint32_overflow` is a new
 finding from the four-source comparison (GasPriceOracle.getL1Fee uint32
