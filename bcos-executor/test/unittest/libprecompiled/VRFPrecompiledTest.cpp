@@ -41,7 +41,6 @@ class VRFPrecompiledFixture
 public:
     VRFPrecompiledFixture(bool _useSM, uint32_t _blockVersion)
     {
-        clearName2SelectCache();
         if (!_useSM)
         {
             m_cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
