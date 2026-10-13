@@ -1823,6 +1823,12 @@ generate_genesis_config() {
     # executor version=2 refuses to boot without an explicit on-chain EVM revision, so -O
     # (which pins version=2) must also pin one; edit before the first boot to change it
     local executor_evm_revision_line=""
+    # executor version >= 2 takes its chain id from [chain] chain_id (a non-zero decimal)
+    # and does not read [web3]
+    local genesis_chainid="${default_chainid}"
+    if [[ "${executor_version}" -ge 2 ]]; then
+        genesis_chainid="${default_web3_chainid}"
+    fi
     if [[ "${enable_op_engine_rpc}" == "true" ]]; then
         executor_evm_revision_line="
     evm_revision=cancun"
@@ -1835,7 +1841,7 @@ generate_genesis_config() {
     ; the group id, should nerver be changed
     group_id=${default_group}
     ; the chain id, should nerver be changed
-    chain_id=${default_chainid}
+    chain_id=${genesis_chainid}
 
 [web3]
     chain_id=${default_web3_chainid}

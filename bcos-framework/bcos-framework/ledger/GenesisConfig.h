@@ -225,7 +225,7 @@ public:
     // an OP-Stack chain synced over devp2p (OpStackSyncInitializer), executor
     // version >= OPSTACK_EXECUTOR_VERSION. Same chain-level pin semantics as
     // m_ethereumELMode; validateL2Invariants binds it to m_opForkSchedule, the L2
-    // genesis shape ([eth_genesis_header] + [alloc.*]) and a non-zero [web3]
+    // genesis shape ([eth_genesis_header] + [alloc.*]) and a non-zero [chain]
     // chain_id. Mutually exclusive with m_ethereumELMode by construction (one
     // mode string).
     bool m_opStackELMode = false;

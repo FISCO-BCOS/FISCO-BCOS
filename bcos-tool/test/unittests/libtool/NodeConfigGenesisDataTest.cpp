@@ -384,16 +384,19 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     BOOST_CHECK(
         data == bcos::tool::generateGenesisData(cfgTail.genesisConfig(), *cfgTail.ledgerConfig()));
 
-    // A node with a different [web3] chain_id (same schedule) also produces
+    // A node with a different [chain] chain_id (same schedule) also produces
     // different genesis data — the id is pinned, not just validated.
     std::string baseOtherChain = base;
-    baseOtherChain.replace(baseOtherChain.find("[web3]\nchain_id=1\n"),
-        std::string("[web3]\nchain_id=1\n").size(), "[web3]\nchain_id=11155111\n");
+    baseOtherChain.replace(baseOtherChain.find("group_id=group0\nchain_id=1\n"),
+        std::string("group_id=group0\nchain_id=1\n").size(),
+        "group_id=group0\nchain_id=11155111\n");
     NodeConfig cfg4(keyFactory);
     BOOST_REQUIRE_NO_THROW(
         cfg4.loadGenesisConfigFromString(baseOtherChain + schedule + ethLaneGenesisSections()));
-    BOOST_CHECK(
-        data != bcos::tool::generateGenesisData(cfg4.genesisConfig(), *cfg4.ledgerConfig()));
+    auto const data4 = bcos::tool::generateGenesisData(cfg4.genesisConfig(), *cfg4.ledgerConfig());
+    BOOST_CHECK(data != data4);
+    // The EL chain-id line follows [chain] chain_id, not just the chainID line.
+    BOOST_CHECK(data4.find("[web3]\nchain_id:11155111\n") != std::string::npos);
 
     // No [fork_timestamps] section -> no [forkTimestamps] emission (legacy chains stay
     // byte-identical); an explicit evm_revision satisfies the v2 guard instead.
@@ -493,8 +496,7 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         "1234567890123456789012345678901234567890123456789012345678901234";
     const std::string head =
         "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=";
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=";
     const std::string tail =
         "\n"
         "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
@@ -523,22 +525,21 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         BOOST_CHECK(cfg.ethereumELModeEnabled());
         BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 11155111u);
     }
-    // [web3] chain_id absent (loader default "0") -> rejected at genesis load,
-    // no mainnet fallback.
+    // [chain] chain_id zero -> rejected at genesis load, no mainnet fallback.
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(head + "0" + tail), InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "non-zero [web3] chain_id"); });
+            [](auto const& e) { return errinfoContains(e, "[chain].chain_id must be non-zero"); });
     }
-    // [web3] chain_id overflowing uint64 -> rejected at genesis load.
+    // [chain] chain_id overflowing uint64 -> rejected at genesis load.
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(head + "99999999999999999999999" + tail), InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "chain_id to fit uint64"); });
+            [](auto const& e) { return errinfoContains(e, "[chain].chain_id must fit uint64"); });
     }
-    // Non-EL genesis (no declaration, no schedule) never requires a chain id (normal
-    // FISCO chains are unaffected); the unset getter reads 0, never mainnet 1.
+    // Non-EL genesis (no declaration, no schedule): the EL-sync getter stays unset and
+    // reads 0, never mainnet 1.
     {
         NodeConfig cfg(keyFactory);
         const std::string plainGenesis =

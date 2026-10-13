@@ -140,7 +140,7 @@ public:
         if (nodeConfig.ethereumChainId() == 0)
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "opstack-el mode requires a non-zero [web3] chain_id in "
+                                      "opstack-el mode requires a non-zero [chain] chain_id in "
                                       "config.genesis (the OP chain id, e.g. 11155420 for "
                                       "op-sepolia)"));
         }
@@ -268,7 +268,7 @@ private:
         return {static_cast<uint64_t>(current + 1), head, genesisHeader};
     }
 
-    /// The header-validation chain config: chain id ([web3] chain_id, pinned by
+    /// The header-validation chain config: chain id ([chain] chain_id, pinned by
     /// validateL2Invariants for opstack-el), the block cadence knob ([ethereum]
     /// op_block_time_seconds) and the OP fork schedule from [op_fork_timestamps],
     /// carried whole so the validator resolves forks through the same

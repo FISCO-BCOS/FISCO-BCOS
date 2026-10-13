@@ -286,19 +286,17 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
         idx += 1
 
     # EEST fixtures sign authorizations / EIP-155 payloads with their own
-    # configured chain id (config.chainid, usually 0x01). The node's [web3]
-    # chain_id MUST match: processAuthorizationList (EIP-7702) compares each
-    # authorization's chain_id against the node's chain id, and a mismatch
-    # silently skips the authorization (observed: 7702 delegation code never
-    # written for chainid=0x01 fixtures against the old hardcoded 20200).
+    # configured chain id (config.chainid, usually 0x01). The node's [chain]
+    # chain_id (the v2 lane's only chain id) MUST match: processAuthorizationList
+    # (EIP-7702) compares each authorization's chain_id against the node's chain
+    # id, and a mismatch silently skips the authorization (observed: 7702
+    # delegation code never written for chainid=0x01 fixtures against the old
+    # hardcoded 20200).
     web3_chain_id = int(fixture.config.get("chainid"), 16) if fixture.config.get("chainid") else 20200
 
     genesis = f"""[chain]
     sm_crypto=false
     group_id=group0
-    chain_id=chain0
-
-[web3]
     chain_id={web3_chain_id}
 
 [consensus]

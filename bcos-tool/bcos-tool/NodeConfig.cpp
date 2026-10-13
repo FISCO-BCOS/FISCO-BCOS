@@ -141,6 +141,39 @@ void requireDecimalField(
                 "[" + section + "]." + field + " must be decimal digits: " + value));
     }
 }
+
+/// The v2/v3 chain id (EIP-155 / EIP-2124, the web3_chain_id row, the genesis pin): the
+/// genesis [chain] chain_id, a non-zero decimal uint64. These lanes do not read [web3].
+std::string ethLaneChainId(boost::property_tree::ptree const& genesis)
+{
+    auto const chainId = genesis.get_optional<std::string>("chain.chain_id");
+    if (!chainId)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "executor.version >= 2 requires [chain] chain_id in "
+                                  "config.genesis (the Ethereum chain id, e.g. 11155111 for "
+                                  "Sepolia); [web3] chain_id is not read on this lane"));
+    }
+    requireDecimalField("chain", "chain_id", *chainId);
+    auto const parsed = ledger::parseConfigUint64(*chainId, ledger::ConfigUint64Options{});
+    if (!parsed.value)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("[chain].chain_id must fit uint64: " + *chainId));
+    }
+    if (*parsed.value == 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[chain].chain_id must be non-zero on executor.version >= 2"));
+    }
+    // One spelling per id: "007" and "7" would pin and seed web3_chain_id differently.
+    if (chainId->front() == '0')
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[chain].chain_id must not have leading zeros: " + *chainId));
+    }
+    return *chainId;
+}
 /// Parse one fork-activation timestamp: decimal or 0x-prefixed hex. std::from_chars rejects
 /// sign characters ('-' would silently wrap to "never activates" under std::stoull) and the
 /// ENTIRE string must be consumed (std::stoull silently truncates trailing garbage like
@@ -307,7 +340,15 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     {
         loadChainConfig(_genesisConfig, true);
     }
-    loadWeb3ChainConfig(_genesisConfig);
+    if (isEthereumLaneGenesis(_genesisConfig))
+    {
+        // One chain id per v2/v3 chain: [chain] chain_id feeds every [web3] chain_id consumer.
+        m_genesisConfig.m_web3ChainID = ethLaneChainId(_genesisConfig);
+    }
+    else
+    {
+        loadWeb3ChainConfig(_genesisConfig);
+    }
     // v2/v3 fork on the Ethereum / OP schedule only; their [features] is ignored.
     m_genesisConfig.m_features.clear();
     if (!isEthereumLaneGenesis(_genesisConfig))
@@ -642,43 +683,15 @@ void NodeConfig::validateL2Invariants()
                                   "takes mode=opstack-el"));
     }
     // EL-sync mode's EIP-155 signature validation and geth's EIP-2124 fork-id handshake
-    // (parts 7-9) key on the CHAIN id: a silent fallback to mainnet (1) would accept
-    // transactions signed for another chain or announce a stale fork-id checksum. Require
-    // an explicit [web3] chain_id (the chain-level id, part of the genesis pin) on every
-    // EL-sync-declaring genesis (both el and opstack-el) — "0" is loadWeb3ChainConfig's
-    // absent default, and a value that overflows uint64 is a config error, not a
-    // fallback. Keyed on the genesis declaration (not the per-node config.ini mode) so
-    // the check is independent of load order.
+    // (parts 7-9) key on the CHAIN id. On the Ethereum lanes that id is [chain] chain_id,
+    // already held to a non-zero decimal uint64 by ethLaneChainId; an EL declaration on
+    // any other lane is refused by its own version check (mode=el above, opstack-el below).
+    // 0 = unset, never a mainnet fallback.
     if (genesis.m_ethereumELMode || genesis.m_opStackELMode)
     {
-        auto const& web3ChainId = genesis.m_web3ChainID;
-        if (web3ChainId.empty())
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=el/opstack-el requires [web3] chain_id in "
-                                      "config.genesis (the Ethereum chain id, e.g. 11155111 "
-                                      "for Sepolia, 11155420 for op-sepolia)"));
-        }
-        try
-        {
-            m_ethereumChainId = boost::lexical_cast<uint64_t>(web3ChainId);
-        }
-        catch (boost::bad_lexical_cast const&)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=el/opstack-el requires [web3] chain_id "
-                                      "to fit uint64: " +
-                                      web3ChainId));
-        }
-        // Check the PARSED value, not the string: any zero spelling ("0", "00", ...)
-        // yields the reserved "unset" value, which is not a chain id.
-        if (m_ethereumChainId == 0)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=el/opstack-el requires a non-zero [web3] "
-                                      "chain_id in config.genesis (e.g. 11155111 for Sepolia, "
-                                      "11155420 for op-sepolia)"));
-        }
+        m_ethereumChainId =
+            ledger::parseConfigUint64(genesis.m_web3ChainID, ledger::ConfigUint64Options{})
+                .value.value_or(0);
     }
     // The OP lane and its fork schedule are bound both ways (enforced in the
     // laneKeyRules walk below): a [op_fork_timestamps] section on a non-OP chain would
@@ -794,7 +807,7 @@ void NodeConfig::validateL2Invariants()
 
 // Cross-file EL-mode invariant: config.ini's ethereum.mode=el must be backed by the
 // chain-level declaration in config.genesis (which itself binds [fork_timestamps] and
-// [web3] chain_id — validateL2Invariants). This hook reads BOTH files' members, so it
+// [chain] chain_id — validateL2Invariants). This hook reads BOTH files' members, so it
 // must run after both are loaded: the node initializers call it explicitly. It is NOT
 // done inside loadEthereumConfig because tools (archive-tool, storage-tool) load
 // config.ini before config.genesis and must not trip on the not-yet-loaded genesis.
@@ -1494,7 +1507,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     // (archive-tool, storage-tool) call loadConfig BEFORE loadGenesisConfig, so
     // a genesis-reading guard here would fail them on EL-mode nodes. The
     // cross-file requirements live in two order-independent places instead:
-    // genesis-side pairing (EL declaration <-> [fork_timestamps] <-> [web3]
+    // genesis-side pairing (EL declaration <-> [fork_timestamps] <-> [chain]
     // chain_id) in validateL2Invariants, and the config.ini->config.genesis
     // direction in validateELModeInvariants, which the node initializers call
     // after BOTH files are loaded.
@@ -1682,7 +1695,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
         m_genesisConfig.m_ethereumELMode = (mode == "el");
         // opstack-el: the chain-level declaration of the OP devp2p self-sync lane
         // (OpStackSyncInitializer). Bound to the OP fork schedule / L2 genesis shape /
-        // [web3] chain_id in validateL2Invariants, and to config.ini's
+        // [chain] chain_id in validateL2Invariants, and to config.ini's
         // [ethereum].mode=opstack-el in validateELModeInvariants.
         m_genesisConfig.m_opStackELMode = (mode == "opstack-el");
     }
@@ -4061,8 +4074,9 @@ std::string bcos::tool::generateGenesisData(
             // The EIP-155 / EIP-2124 chain id is validated as part of the EL
             // declaration (validateL2Invariants), so it belongs to the pin too:
             // emitted next to the declaration (gated the same way, so legacy
-            // chains stay byte-identical) — an operator editing [web3] chain_id
-            // after init now fails the genesis comparison on restart.
+            // chains stay byte-identical) — an operator editing [chain] chain_id
+            // after init now fails the genesis comparison on restart. (The "[web3]"
+            // label below is the pin's historical spelling.)
             ss << "[ethereum]" << '\n'
                << "mode:el" << '\n'
                << "[web3]" << '\n'
@@ -4283,7 +4297,7 @@ uint32_t bcos::tool::NodeConfig::ethereumMaxBatchSize() const
 }
 uint64_t bcos::tool::NodeConfig::ethereumChainId() const
 {
-    // Validated and pinned from config.genesis's [web3] chain_id when the genesis
+    // Validated and pinned from config.genesis's [chain] chain_id when the genesis
     // declares EL mode (validateL2Invariants throws on an absent/invalid id).
     // 0 = unset (non-EL chains) — never a silent mainnet fallback.
     return m_ethereumChainId;

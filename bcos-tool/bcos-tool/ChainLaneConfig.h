@@ -91,7 +91,7 @@ struct LaneKeyRule
 /// NodeConfig::validateL2Invariants. TODO (deliberately NOT in this change): the
 /// remaining pairs —
 /// [eth_genesis_header] <-> feature_l2_ethereum_compat, [alloc.*] <-> the same feature,
-/// [fork_timestamps] <-> [ethereum] mode=el, mode=el -> [web3] chain_id, OP lane forbids
+/// [fork_timestamps] <-> [ethereum] mode=el, mode=el -> [chain] chain_id, OP lane forbids
 /// executor.evm_revision, config.ini <-> genesis EL mode — still live where they were.
 [[nodiscard]] inline std::vector<LaneKeyRule> const& laneKeyRules()
 {

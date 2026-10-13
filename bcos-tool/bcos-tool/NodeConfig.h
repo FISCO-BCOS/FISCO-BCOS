@@ -296,7 +296,7 @@ public:
     // on first start (conf/node.rlpx.key) so the RLPx identity survives restarts
     const std::string& ethereumNodeKeyFile() const;
     uint32_t ethereumMaxBatchSize() const;
-    // the EL-sync chain id ([web3] chain_id in config.genesis), pinned when the genesis
+    // the EL-sync chain id ([chain] chain_id in config.genesis), pinned when the genesis
     // declares an EL-sync mode (el or opstack-el); 0 = unset (never a mainnet fallback)
     uint64_t ethereumChainId() const;
     // EL-mode fork schedule ([fork_timestamps] in config.genesis): L1 PoS chains fork on
@@ -722,7 +722,7 @@ private:
     // 0x7f02c3e3c98b133055b8b348b2ac625669182295).
     bcos::Address m_ethereumDepositContractAddress{
         std::string("0x00000000219ab540356cBB839Cbe05303d7705Fa")};
-    // The EL-sync chain id, validated and pinned from config.genesis's [web3] chain_id
+    // The EL-sync chain id, validated and pinned from config.genesis's [chain] chain_id
     // (validateL2Invariants) when the genesis declares an EL-sync mode (el or
     // opstack-el). 0 = unset: a read outside EL-sync mode is obviously invalid rather
     // than silently Ethereum mainnet.

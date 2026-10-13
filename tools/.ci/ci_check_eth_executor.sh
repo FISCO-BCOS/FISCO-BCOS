@@ -64,6 +64,8 @@ log "patching config.genesis for executor_version=2 + L2 alloc"
 cd "${WORK_DIR}"
 # executor version 1 -> 2
 perl -p -i -e 's/version=1/version=2/' config.genesis
+# executor version 2 takes its chain id from [chain] chain_id (a decimal), not [web3]
+perl -p -i -e 's/chain_id=chain0/chain_id=20200/' config.genesis
 # evmc revision (cancun from genesis; the v2 executor needs an EVMC revision)
 perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' config.genesis
 
