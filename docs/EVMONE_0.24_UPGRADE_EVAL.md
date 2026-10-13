@@ -280,3 +280,17 @@ evmone 重建链接后全矩阵 transaction-executor rc=0(十套件实证)。
 
 ### 风险登记册增补
 - **R13(P0,已修复,机制记录)**:DMC 重放调度 × 0.24 nonce 地址推导不兼容;任何未来把嵌套创建地址改回 nonce 推导的尝试都会复现。钩子(`create_address_fn`)是该 lane 的永久性结构依赖,与 SM3 hash_fn 同级维护。
+
+## 13. release-3.18.0 同步记录(提交 e0170a0f6 + 25fb61bbe)
+
+**同步源**:fisco/release-3.18.0 @ 51574ce90(hive 客户端、Karst part A、Engine aux、txpool OP 准入等 10 个提交,433 文件 +38k/−25.6k)。
+
+**重大架构变化**:上游 `08d79e9d1`(#5639)**删除了 bcos-evm 模块**——升级分支阶段 3 所 rebase 的 vendored eth/state 被整体重构:状态机改写为 in-tree 的 `ethereum-executor`(EthereumTransition/EthereumState/EthExecutionPolicy,Policy 模板化系统调用)与 `opstack-executor`(OpEth* 系列、co_await preBlockOpEthSteps、OpForkSpec/OpRecentBlockHashes)。上游 port 仍为 0.21。
+
+**合并策略**(110 冲突):上游架构整体采纳(bcos-evm 删除接受,含本分支在其下新增的文件——阶段 3 vendored rebase 就此被上游实现取代);无升级增量的缝合残留(engine/、libinitializer/、rpc 测试、~125 个上游已删文件)整体取上游;**0.24 重适配按既定手册重放到新文件**:错误枚举重命名(Eth/OpExecutionPolicy、OpEthExecutor)、tx_context 的 initcodes→block_slot_number(EthereumHost)、get_nonce 重新模板化 `<Storage, Policy>`、OpEthDeposit 的 create2_salt→state_gas、p256verify 结果 designated 化、evmmax→evmone::crypto(测试)。
+
+**保留的本分支成果**:0.24 port(含 create_address_fn/modarith 钩子)、bcos-executor 全部适配(fnTable/getNonce/钩子接线/嵌套创建)、transaction-executor 适配、LedgerConfig fork 表(零冲突合并)、EVMPrecompiles/EVMSupport 镜像同步、全部升级文档。
+
+**验证**:全树构建零错误;十套测试全绿——test-bcos-engine、test-bcos-executor、ethereum-executor state-smoke + authorization-list(新)、test-transaction-executor、opstack-executor 五套(含 block-tests,pinned 语料下)。
+
+**遗留提示**:engine/libinitializer 等取上游的模块今后如需 0.24 适配,按本报告手册执行;阶段 3 的"以 0.24 test/state 为底重放"经验已沉淀为 §3/§10 记录,如上游新状态机未来重新贴近 evmone 源码可复用。
