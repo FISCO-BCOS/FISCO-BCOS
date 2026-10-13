@@ -705,13 +705,23 @@ evmc_tx_context EthereumHost<Storage, Policy>::get_tx_context() const noexcept
     const auto blob_hashes_count = m_txContext.has_value() ? m_txContext->blobHashes.size() : 0;
 
     return evmc_tx_context{
-        evm::toEvmcBE<evmc::uint256be>(effective_gas_price),  // By EIP-1559.
-        sender, m_block.coinbase, m_block.number, m_block.timestamp, m_block.gas_limit,
-        m_block.prev_randao,
-        evmc::uint256be{static_cast<uint64_t>(m_chainId)},  // Chain ID (EIP-155).
-        evmc::uint256be{base_fee}, evm::toEvmcBE<evmc::uint256be>(m_policy.blobBaseFee(m_block)),
-        blob_hashes, blob_hashes_count,
-        0,  // block_slot_number (EIP-7843, evmc ABI 19): no beacon slot on this chain.
+        .tx_gas_price = evm::toEvmcBE<evmc::uint256be>(effective_gas_price),  // By EIP-1559.
+        .tx_origin = sender,
+        .block_coinbase = m_block.coinbase,
+        .block_number = m_block.number,
+        .block_timestamp = m_block.timestamp,
+        .block_gas_limit = m_block.gas_limit,
+        .block_prev_randao = m_block.prev_randao,
+        .chain_id = evmc::uint256be{static_cast<uint64_t>(m_chainId)},  // Chain ID (EIP-155).
+        .block_base_fee = evmc::uint256be{base_fee},
+        .blob_base_fee = evm::toEvmcBE<evmc::uint256be>(m_policy.blobBaseFee(m_block)),
+        .blob_hashes = blob_hashes,
+        .blob_hashes_count = blob_hashes_count,
+        // Designators like the sibling producer (transaction-executor EVMHostInterface.h):
+        // every field here is an int64_t/pointer run, so a future insertion inside a
+        // positional list would silently misalign instead of failing to compile.
+        .block_slot_number = 0,  // block_slot_number (EIP-7843, evmc ABI 19): no beacon slot on
+                                 // this chain.
     };
 }
 

@@ -364,12 +364,11 @@ ExecutionResult ecrecover_execute(
     const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept
 {
     assert(output_size >= 32);
-// Select better implementation.
-#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
-    return ecrecover_execute_libsecp256k1(input, input_size, output, output_size);
-#else
+    // The libsecp256k1/GMP build-time alternatives stay removed (see the header note
+    // above): upstream's #ifdef dispatch named ecrecover_execute_libsecp256k1, a function
+    // that does not exist in this tree — it only linked because the macro was never
+    // defined. Call the one implementation directly.
     return ecrecover_execute_evmone(input, input_size, output, output_size);
-#endif
 }
 
 ExecutionResult sha256_execute(const uint8_t* input, size_t input_size, uint8_t* output,
