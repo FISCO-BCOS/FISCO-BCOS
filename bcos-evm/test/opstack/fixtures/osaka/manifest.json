@@ -1,0 +1,37 @@
+[
+  {
+    "file": "p256verify_valid_input.bin",
+    "case_id": "p256verify_valid_input",
+    "eest_tag": "v5.3.0",
+    "source_path": "tests/osaka/eip7951_p256verify_precompiles/test_p256verify.py#valid_input",
+    "sha256": "97fb89c23bb467103846ad24b0405dc263a9745b9da3d20353a37cb106cb2f65"
+  },
+  {
+    "file": "modexp_nagydani_1_square.input.bin",
+    "case_id": "modexp_nagydani_1_square.input",
+    "eest_tag": "v5.3.0",
+    "source_path": "tests/osaka/eip7883_modexp_gas_increase/vector/vectors.json#nagydani-1-square",
+    "sha256": "0138e3fb9e62139ad1d9fff645b9df84aae86e4745bfbb993f95af5a79f0307f"
+  },
+  {
+    "file": "modexp_nagydani_1_square.expected.bin",
+    "case_id": "modexp_nagydani_1_square.expected",
+    "eest_tag": "v5.3.0",
+    "source_path": "tests/osaka/eip7883_modexp_gas_increase/vector/vectors.json#nagydani-1-square",
+    "sha256": "173bc056487155483fe9eb19dd4a5af452d6d29787349b91c7b1dc8ec129b5c4"
+  },
+  {
+    "file": "modexp_nagydani_2_pow0x10001.input.bin",
+    "case_id": "modexp_nagydani_2_pow0x10001.input",
+    "eest_tag": "v5.3.0",
+    "source_path": "tests/osaka/eip7883_modexp_gas_increase/vector/vectors.json#nagydani-2-pow0x10001",
+    "sha256": "2659dd123f53088594b9cbbaaf3ac4f3b42b557e60b42991da5162d02de7192a"
+  },
+  {
+    "file": "modexp_nagydani_2_pow0x10001.expected.bin",
+    "case_id": "modexp_nagydani_2_pow0x10001.expected",
+    "eest_tag": "v5.3.0",
+    "source_path": "tests/osaka/eip7883_modexp_gas_increase/vector/vectors.json#nagydani-2-pow0x10001",
+    "sha256": "e2fc81c754623d0c4f08842b0ae835bf06c3442394f513168c576d2efbd5f275"
+  }
+]

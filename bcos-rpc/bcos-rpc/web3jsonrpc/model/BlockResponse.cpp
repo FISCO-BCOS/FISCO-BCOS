@@ -1,12 +1,31 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file BlockResponse.cpp
+ * @brief the block-tx/receipt response renderers
+ */
 #include "BlockResponse.h"
+#include "DepositTransaction.h"
 #include "Log.h"
 
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
-#include <bcos-utilities/Bloom.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#include <bcos-utilities/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
 
@@ -168,11 +187,30 @@ void bcos::rpc::combineBlockResponse(
 
     if (fullTxs)
     {
+        // op-geth parity (pinned e8800cff, internal/ethapi/api.go): the full-block
+        // path IS receipt-filled for deposit txs — newRPCTransactionFromBlockIndex
+        // feeds depositTxReceipt into newRPCTransaction, which fills nonce from
+        // receipt.DepositNonce and emits depositReceiptVersion when set. The block
+        // call sites fetch RECEIPTS alongside TRANSACTIONS, so the receipt is in
+        // scope here.
+        // ranges::any_view is not const-iterable (FeeHistory.cpp keeps the same
+        // non-const local); copy the view once and index it positionally.
+        auto receipts = block.receipts();
         Json::Value txList = Json::arrayValue;
         for (auto [index, tx] : ::ranges::views::enumerate(block.transactions()))
         {
             Json::Value txJson = Json::objectValue;
             combineTxResponse(txJson, *tx, index, blockNumber, blockHash);
+            // Same deposit gate as TransactionResponse's receipt overload — the fill
+            // overwrites `nonce` for ANY receipt carrying deposit_nonce, so pairing it
+            // with an arbitrary transaction positionally would stamp a deposit nonce
+            // over that transaction's account nonce. Gated, the fill is exact for the
+            // deposit rows and a no-op elsewhere; a short receipt list simply skips
+            // the tail (the row then renders as the receipt-less shape).
+            if (tx->isDepositTx() && index < receipts.size())
+            {
+                fillDepositReceiptFields(txJson, *receipts[index]);
+            }
             txList.append(txJson);
         }
         result["transactions"] = std::move(txList);

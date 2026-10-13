@@ -1,0 +1,147 @@
+name: opstack-fork-nightly
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 03:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      sepolia_rpc:
+        description: "OP-Sepolia JSON-RPC endpoint for the M5a replay (empty: the public node)"
+        required: false
+        default: ""
+      sepolia_genesis:
+        # review F56: workflow_dispatch inputs are not env vars, so the case's
+        # OP_SEPOLIA_REPLAY_GENESIS had no supported way in; exported below.
+        description: "Runner-workspace path to the OP-Sepolia config.genesis (empty: the case skips)"
+        required: false
+        default: ""
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  fork-matrix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+      - name: Initialize vcpkg submodule
+        run: git submodule update --init --recursive -- vcpkg
+      - name: Compute vcpkg revision
+        id: vcpkg-revision
+        shell: bash
+        run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 3.28.3
+          ninjaVersion: 1.12.1
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/build/vcpkg_installed
+          key: vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v4
+      - name: Checkout op-stack-e2e-tests assets (the composite action reads its regen.sh
+        # through the caller's workspace -- F-CI-2 untracked the in-tree symlink, so the
+        # corpus must be checked out and linked here, exactly as workflow.yml does)
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: b82691ac133a94637da9e6969a63f86279c6b0a2
+          path: e2e-tests
+      - name: Symlink the t8n corpus into in-tree paths
+        # review F47: clear the destination first (plain `ln -s` into an existing
+        # path nests the link inside it) and assert the landing, exactly as
+        # workflow.yml's provisioning does.
+        run: |
+          rm -rf "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
+          test -f "$GITHUB_WORKSPACE/opstack-executor/tests/t8n/vectors/SHA256SUMS"
+      - name: Regenerate opstack t8n vectors (corpus + goldens + getpayload envelopes)
+        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@b82691ac133a94637da9e6969a63f86279c6b0a2
+      - name: Install toolchain (matches the coverage job's recipe)
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends \
+              lcov wget python3-dev python3-pip git curl zip unzip tar \
+              clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
+              flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
+      - name: Configure + build the three suite binaries
+        run: |
+          mkdir -p build && cd build
+          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold \
+            -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
+            -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          cmake --build . --target test-bcos-engine opstack-executor-block-tests \
+            opstack-executor-scheduler-tests -j 4
+      - name: Fork-label gate (all nine fork-* labels present)
+        run: |
+          set -euo pipefail
+          # The fork-labelled suites compile into opstack-executor-block-tests
+          # (the post-cutover port landed): OpGoldenCorpusProvenanceTest pins all
+          # nine rungs, OpKarstActivationTest/OpL1EdgeGateTest the Jovian/Karst
+          # pair. check-fork-labels.sh fails when any label disappears from the
+          # binary — the old step here deferred four suite names of which three
+          # (OpEnginePayloadShapeBaselineSuite, OpForkBoundarySweepSuite,
+          # OpHeaderFieldSetBaselineSuite) exist in no source file and the fourth
+          # is compiled; the deferral text was stale and the step ran nothing.
+          bash tools/.ci/check-fork-labels.sh build/opstack-executor/tests/opstack-executor-block-tests
+      - name: Run the built suites (the label gate alone executes nothing)
+        # review F25/F53: this schedule used to only compile test-bcos-engine and
+        # opstack-executor-block-tests and list their labels — a runtime regression
+        # with its decorator intact was invisible to the nightly. All three built
+        # binaries run here now (the Sepolia acceptance case self-skips without its
+        # env; the corpus is symlinked above, so the real replay runs).
+        run: |
+          cd build
+          ./opstack-executor/tests/opstack-executor-block-tests
+          ./opstack-executor/tests/opstack-executor-scheduler-tests
+          ./engine/test/test-bcos-engine
+      - name: M5a Sepolia acceptance replay (manual dispatch only)
+        # review F9/F56: OpSepoliaReplaySuite's envs finally have a supported way in —
+        # the dispatch inputs above are exported here (workflow_dispatch inputs are
+        # not env vars by themselves). Set both inputs, or the case skips with its
+        # documented warning as scheduled runs do (network-gated acceptance).
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          OP_SEPOLIA_RPC: ${{ inputs.sepolia_rpc }}
+          OP_SEPOLIA_REPLAY_GENESIS: ${{ inputs.sepolia_genesis }}
+        run: |
+          cd build
+          OP_SEPOLIA_REPLAY_RPC="${OP_SEPOLIA_RPC:-https://optimism-sepolia-rpc.publicnode.com}" \
+            ./opstack-executor/tests/opstack-executor-scheduler-tests --run_test='OpSepoliaReplaySuite'
+      - name: Set up Python 3.11 (pytest runner for the sweep)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pytest + suite dependencies
+        # The genesis suites are NOT stdlib-only: build-allocs needs PyYAML and
+        # gen_trieroot_golden needs pycryptodome (module-scope imports — collection
+        # dies without them; a clean-venv run is the honest reproduction).
+        run: python -m pip install pytest pyyaml pycryptodome
+      - name: Ensure zstd is present
+        # The sweep needs the zstd CLI; a missing one must fail HERE (loudly) rather than
+        # skip inside pytest. Runners normally ship it — pin it explicitly (review F3).
+        run: command -v zstd >/dev/null || sudo apt-get install -y zstd
+      - name: M5 registry sweep (zip from the op-geth pin tree; empty/missing fails)
+        env:
+          OP_GETH_ZIP: ${{ runner.temp }}/op-geth/superchain/superchain-configs.zip
+          OP_REQUIRE_REGISTRY_ZIP: "1"
+        run: python -m pytest tools/opstack-genesis/test_gen_official_genesis.py -q
+      - name: opstack-genesis python suites (the four the registry sweep does not cover)
+        run: python -m pytest tools/opstack-genesis/test_gen_rollup_config.py tools/opstack-genesis/test_gen_eth_header_fixture.py tools/opstack-genesis/test_mpt_state_root.py tools/opstack-genesis/test_build_allocs.py -q
+      - name: gen_trieroot_golden self-check (declared judge; review F30)
+        # The docstring names this run as the check that every computed root equals
+        # the C++ pin — give the declared judge a CI consumer.
+        run: python3 tools/opstack-genesis/gen_trieroot_golden.py
+      - name: route failure to an issue, do not block PRs
+        if: failure()
+        run: |
+          gh label create test-matrix --color D93F0B --force || true
+          gh issue create --label test-matrix \
+            --title "nightly fork matrix failed: ${{ github.run_id }}" \
+            --body "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

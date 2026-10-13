@@ -41,6 +41,11 @@ class TransactionFactoryImpl;
 
 namespace bcos::protocol
 {
+/// OP 0x7E deposit-type byte (EIP-2718 typed-envelope prefix). ONE home for the byte the
+/// executor's admission predicate, the RPC deposit gate and the envelope checker all key
+/// on (review F4); the per-module names are aliases of this definition.
+inline constexpr uint8_t c_depositTxType = 0x7e;
+
 enum class TransactionType : uint8_t
 {
     BCOSTransaction = 0,

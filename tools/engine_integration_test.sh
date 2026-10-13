@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 FISCO BCOS.
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # =============================================================================
 # FISCO-BCOS Engine API Integration Test
 #
@@ -12,7 +25,7 @@
 #   RPC_PORT  = 8551
 #
 # CI 用法:
-#   bash tools/engine_integration_test.sh build 8545
+#   bash tools/engine_integration_test.sh build 8551
 # =============================================================================
 
 set -e
@@ -27,6 +40,10 @@ WORK_DIR="${BUILD_DIR}/engine_integration_test"
 # Resolve to absolute path (we cd into WORK_DIR later)
 mkdir -p "${WORK_DIR}"
 WORK_DIR="$(cd "${WORK_DIR}" && pwd)"
+# The ONE shared Eth-lane genesis fixture ([alloc.0] + [eth_genesis_header]):
+# tools/.ci/ci_check_eth_executor.sh appends the SAME file to its config.genesis,
+# so the state_root/hash consensus literals cannot drift (review F29).
+FIXTURE_FILE="${SCRIPT_DIR}/fixtures/genesis_fixture.ini"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -40,10 +57,12 @@ FAILED=0
 # without pkill'ing unrelated fisco-bcos processes on shared runners.
 PID_FILE="${WORK_DIR}/node.pid"
 
-# Kill any stale fisco-bcos processes from previous runs of this script only
+# Kill a stale node from a previous run of this script only. The command-line
+# check guards against PID reuse: a recycled PID must not be signalled just
+# because it is the number this script wrote last time (review F30).
 if [ -f "${PID_FILE}" ]; then
     OLD_PID=$(cat "${PID_FILE}" 2>/dev/null || true)
-    if [ -n "${OLD_PID}" ]; then
+    if [ -n "${OLD_PID}" ] && ps -p "${OLD_PID}" -o command= 2>/dev/null | grep -qF -- "${BINARY}"; then
         kill "${OLD_PID}" 2>/dev/null || true
         pkill -P "${OLD_PID}" 2>/dev/null || true
     fi
@@ -55,9 +74,10 @@ sleep 1
 cleanup() {
     echo ""
     echo "=== Cleaning up ==="
-    # Kill only the node started by this script (via PID file), not every
-    # fisco-bcos process on the machine.
-    if [ -n "${NODE_PID:-}" ]; then
+    # Kill only the node this script launched ($!, never a pgrep match that could
+    # be an unrelated fisco-bcos), and only while its command line still names
+    # the binary — a recycled PID must not be signalled (review F30).
+    if [ -n "${NODE_PID:-}" ] && ps -p "${NODE_PID}" -o command= 2>/dev/null | grep -qF -- "${ABS_BINARY}"; then
         kill "${NODE_PID}" 2>/dev/null || true
         pkill -P "${NODE_PID}" 2>/dev/null || true
     fi
@@ -167,6 +187,10 @@ if [ ! -f "${BINARY}" ]; then
     log_fail "Binary not found: ${BINARY}"
     exit 1
 fi
+if [ ! -f "${FIXTURE_FILE}" ]; then
+    log_fail "Shared genesis fixture not found: ${FIXTURE_FILE}"
+    exit 1
+fi
 # Resolve absolute path before cd
 ABS_BINARY="$(cd "$(dirname "${BINARY}")" && pwd)/$(basename "${BINARY}")"
 log_info "Binary: ${ABS_BINARY}"
@@ -202,8 +226,8 @@ listen_ip=0.0.0.0
 listen_port=${RPC_PORT}
 jwt_secret_file=${WORK_DIR}/jwt.hex
 clock_skew_secs=300
-; The Karst Engine API surface is served by the v2 pure-Ethereum executor (executor_version=2
-; + executor.evm_revision=cancun below), matching the production [op_engine_rpc] configuration.
+; Eth Cancun Engine API (executor_version=2 + evm_revision=cancun). This harness
+; is EthEngineService, not OpEngineService / Karst.
 
 [p2p]
 listen_ip=0.0.0.0
@@ -246,45 +270,19 @@ enable=true
 log_path=./
 level=debug
 
+GENESIS_EOF
+
 # The Ethereum lane (executor_version >= 2) REQUIRES a non-empty [alloc.*] section
 # unless the chain declares [ethereum] mode=el (the L1 EL lane, where an
 # empty-alloc genesis publishes the canonical empty-trie root), and an
 # [eth_genesis_header] section (NodeConfig::validateL2Invariants): the node
 # cross-checks state_root against the MPT root it derives from the [alloc.*] sections
-# and hash against keccak256(rlp(header)) of the other 21 fields.
-# The values below are the same single-alloc fixture tools/.ci/ci_check_eth_executor.sh
-# uses; state_root/hash are valid only for exactly this one alloc — regenerate both
-# (tools/opstack-genesis/gen_eth_header_fixture.py) if the alloc changes.
-[alloc.0]
-    address=0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0
-    balance=1000000000000000000000
-    nonce=0
-    code=
-
-[eth_genesis_header]
-parent_hash=0x0000000000000000000000000000000000000000000000000000000000000000
-sha3_uncles=0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
-miner=0x4200000000000000000000000000000000000011
-state_root=0x6ea0c8bc0a9b451c2bab98df63d4be058d3b82b9b3a2e5e02cbf0122ef95e5a5
-transactions_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-receipts_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-logs_bloom=0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-difficulty=0x0
-number=0x0
-gas_limit=0x1c9c380
-gas_used=0x0
-timestamp=0x689d5c00
-extra_data=0x01000000fa000000060000000000000000
-mix_hash=0x0000000000000000000000000000000000000000000000000000000000000000
-nonce=0x0000000000000000
-base_fee_per_gas=0x3b9aca00
-withdrawals_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-blob_gas_used=0x0
-excess_blob_gas=0x0
-parent_beacon_block_root=0x0000000000000000000000000000000000000000000000000000000000000000
-requests_hash=0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-hash=0xf66beef79256c0b3f1fd2852040413c5dffa1ff44f0f78421ae17cf8f397a1a5
-GENESIS_EOF
+# and hash against keccak256(rlp(header)) of the other 21 fields. The fixture is the
+# ONE shared copy (review F29), also appended by tools/.ci/ci_check_eth_executor.sh,
+# so the state_root/hash literals cannot drift; they are valid only for exactly this
+# one alloc — regenerate both with tools/opstack-genesis/gen_eth_header_fixture.py
+# if the alloc changes.
+cat "${FIXTURE_FILE}" >> "${WORK_DIR}/config.genesis"
 
 # Generate minimal certs (use existing from repo if available, otherwise generate self-signed)
 mkdir -p "${WORK_DIR}/conf"
@@ -394,18 +392,15 @@ log_section "Step 2: Start FISCO-BCOS node"
 ulimit -c unlimited 2>/dev/null || true
 
 cd "${WORK_DIR}"
-# Binary daemonizes: nohup only captures parent's brief version output.
-# The child writes to a timestamped log file — we must watch that instead.
+# The node logs to a timestamped log file, not stdout (nohup.out only catches the
+# startup banner), so watch the log file for readiness.
 rm -f log_*.log 2>/dev/null
 nohup "${ABS_BINARY}" -c config.genesis -g config.genesis > nohup.out 2>&1 &
+# The air binary runs in the foreground (main() blocks until shutdown), so $! IS
+# the node: never re-adopt a `pgrep fisco-bcos` match, which on a shared runner
+# can be an unrelated node (review F30).
 NODE_PID=$!
 sleep 1
-
-# After daemonization, find the real child PID via pgrep
-CHILD_PID=$(pgrep -f "$(basename "${ABS_BINARY}")" | head -1)
-if [ -n "${CHILD_PID}" ]; then
-    NODE_PID="${CHILD_PID}"
-fi
 log_info "Node PID: ${NODE_PID}"
 echo "${NODE_PID}" > "${PID_FILE}"
 
@@ -413,18 +408,16 @@ echo "${NODE_PID}" > "${PID_FILE}"
 STARTUP_LOG=""
 for i in $(seq 1 30); do
     sleep 2
-    # Binaries daemonize — if the process is gone, find it again
+    # $! is the node itself (no daemonize), so a failed kill -0 means it really
+    # died — no pgrep re-adoption that could latch onto another fisco-bcos.
     if ! kill -0 "${NODE_PID}" 2>/dev/null; then
-        NODE_PID=$(pgrep -f "$(basename "${ABS_BINARY}")" | head -1)
-    fi
-    if [ -z "${NODE_PID}" ]; then
-        log_fail "Node process died"
+        log_fail "Node process died (PID ${NODE_PID})"
         # Dump any available logs
         for f in log_*.log; do tail -30 "$f"; done
         exit 1
     fi
 
-    # Find the daemonized child's log file
+    # Find the node's log file
     STARTUP_LOG=$(ls -t log_*.log 2>/dev/null | head -1)
     if [ -n "${STARTUP_LOG}" ]; then
         # Check if the OP Engine HTTP server has started listening
@@ -477,7 +470,7 @@ else
     log_fail "No result: ${RESP}"
 fi
 
-# 3.2 engine_exchangeCapabilities — everything implemented, pre-Karst included (B4)
+# 3.2 engine_exchangeCapabilities — Eth supportedCapabilities() (not the OP list)
 log_test "engine_exchangeCapabilities (implemented surface)"
 RESP=$(rpc_call "engine_exchangeCapabilities" '[["engine_newPayloadV4"]]')
 if echo "${RESP}" | grep -q '"result"'; then

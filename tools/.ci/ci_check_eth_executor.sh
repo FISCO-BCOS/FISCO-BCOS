@@ -18,6 +18,10 @@ BINARY="${REPO_ROOT}/build/fisco-bcos-air/fisco-bcos"
 BUILDER="${REPO_ROOT}/tools/BcosAirBuilder/build_chain.sh"
 WORK_DIR="${REPO_ROOT}/tools/nodes/127.0.0.1/node0"
 RPC_URL="http://127.0.0.1:8545"
+# Shared Eth-lane genesis fixture ([alloc.0] + [eth_genesis_header]); the SAME file
+# is appended by tools/engine_integration_test.sh, so the state_root/hash
+# consensus literals cannot drift between the two harnesses (review F29).
+FIXTURE_FILE="${REPO_ROOT}/tools/fixtures/genesis_fixture.ini"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[eth-executor-ci]${NC} $*"; }
@@ -46,6 +50,7 @@ stop_node() {
 trap stop_node EXIT
 
 [ -f "${BINARY}" ] || fail "binary not found: ${BINARY}"
+[ -f "${FIXTURE_FILE}" ] || fail "shared genesis fixture not found: ${FIXTURE_FILE}"
 
 # ---- 1. build the single-node chain ----
 log "building single-node chain via build_chain.sh"
@@ -72,58 +77,18 @@ perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' conf
 # targets). The Eth lane is mode-aware: a fresh
 # chain is born with the binary account-table layout ("/s/<20 raw bytes>") and the lane
 # reads and writes it through account::ethLaneAccountTableName.
-
-# Pre-fund the fixture sender (secretKey below) via genesis alloc. The alloc
-# parser requires a `code` key; an empty value means "no code" (a plain EOA).
-# Sender is from fixtures/state_tests/berlin/eip2930_access_list/test_transaction_intrinsic_gas_cost.json
-cat >> config.genesis <<'GENESIS_EOF'
-[alloc.0]
-    address=0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0
-    balance=1000000000000000000000
-    nonce=0
-    code=
-GENESIS_EOF
-
-# The Ethereum lane (executor_version >= 2) now REQUIRES an [eth_genesis_header]
-# section (NodeConfig::validateL2Invariants, upstream #5420): an Ethereum-lane chain
-# without it would mint a Tars-hashed B0 that no op-node/op-reth can match.
-# The section is a full Prague-era B0 header artifact; the node cross-checks
-# state_root against the MPT root it derives from the [alloc.*] sections and
-# hash against keccak256(rlp(header)) of the other 21 fields.
 #
-# Values below are the standard empty-chain defaults from
-# the harness's tools/opstack-genesis/gen_eth_header_fixture.py, EXCEPT:
-#   state_root = 0x6ea0c8bc... — the genesis MPT root for the single alloc
-#     above, computed with the node's own Ledger::computeGenesisStateTrie;
-#     MUST be regenerated if [alloc.0] changes (a stale root fails genesis).
-#   hash       = 0xf66beef7... — keccak256(rlp(header)) over the 21 fields,
-#     from gen_eth_header_fixture.py with the state_root override above.
-cat >> config.genesis <<'GENESIS_EOF'
-
-[eth_genesis_header]
-parent_hash=0x0000000000000000000000000000000000000000000000000000000000000000
-sha3_uncles=0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
-miner=0x4200000000000000000000000000000000000011
-state_root=0x6ea0c8bc0a9b451c2bab98df63d4be058d3b82b9b3a2e5e02cbf0122ef95e5a5
-transactions_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-receipts_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-logs_bloom=0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-difficulty=0x0
-number=0x0
-gas_limit=0x1c9c380
-gas_used=0x0
-timestamp=0x689d5c00
-extra_data=0x01000000fa000000060000000000000000
-mix_hash=0x0000000000000000000000000000000000000000000000000000000000000000
-nonce=0x0000000000000000
-base_fee_per_gas=0x3b9aca00
-withdrawals_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-blob_gas_used=0x0
-excess_blob_gas=0x0
-parent_beacon_block_root=0x0000000000000000000000000000000000000000000000000000000000000000
-requests_hash=0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-hash=0xf66beef79256c0b3f1fd2852040413c5dffa1ff44f0f78421ae17cf8f397a1a5
-GENESIS_EOF
+# Pre-fund the fixture sender (secretKey below) and carry the Eth-lane genesis
+# header, both from the ONE shared fixture (review F29 — the same file
+# tools/engine_integration_test.sh appends). The alloc parser requires a `code`
+# key; an empty value means "no code" (a plain EOA). The fixture's state_root is
+# the genesis MPT root for that single alloc (the node's own
+# Ledger::computeGenesisStateTrie) and its hash is keccak256(rlp(header)) over
+# the 21 fields [NodeConfig::validateL2Invariants, upstream #5420]; both are
+# valid ONLY for this alloc and must be regenerated together with it
+# (tools/opstack-genesis/gen_eth_header_fixture.py). Sender is from
+# fixtures/state_tests/berlin/eip2930_access_list/test_transaction_intrinsic_gas_cost.json
+cat "${FIXTURE_FILE}" >> config.genesis
 
 # enable web3_rpc (eth_*) on port 8545
 perl -p -i -e 'if (/\[web3_rpc\]/) { $f=1 } elsif ($f && s/enable\s*=\s*false/enable=true/) { $f=0 }' config.ini

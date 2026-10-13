@@ -1,0 +1,8 @@
+[
+  "l1_fee_saturation",
+  "flz_zero_clamp",
+  "karst_alias",
+  "solidity_l1_uint32_overflow",
+  "da_footprint_overflow",
+  "da_footprint_176b_activation_shape"
+]

@@ -36,7 +36,11 @@ class FakeTxPool : public TxPoolInterface
 {
 public:
     using Ptr = std::shared_ptr<FakeTxPool>;
-    FakeTxPool() { m_worker = std::make_shared<IOServicePool>(1, "txpool"); m_strand = std::make_unique<Strand>(m_worker); }
+    FakeTxPool()
+    {
+        m_worker = std::make_shared<IOServicePool>(1, "txpool");
+        m_strand = std::make_unique<Strand>(m_worker);
+    }
     ~FakeTxPool() override {}
 
     void start() override {}
@@ -68,10 +72,12 @@ public:
     {}
 
     // notify related interfaces: useless for the PBFT module
-    void notifyConsensusNodeList(ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
+    void notifyConsensusNodeList(
+        bcos::consensus::ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
     {}
     // notify related interfaces: useless for the PBFT module
-    void notifyObserverNodeList(ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
+    void notifyObserverNodeList(
+        bcos::consensus::ConsensusNodeList const&, std::function<void(Error::Ptr)>) override
     {}
 
     void notifyConnectedNodes(

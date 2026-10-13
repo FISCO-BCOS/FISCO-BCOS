@@ -21,6 +21,7 @@
 // native frames. That is a test-side guard only — production feeds blocks from the
 // sync loop one task per block.
 
+#include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
 #include <opstack-executor/OpBlockVerifier.h>
 
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -67,37 +68,19 @@
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
+
+using opstack_test::TrivialCheckpointStorage;
 namespace memory_storage = bcos::storage2::memory_storage;
 
 namespace
 {
 
-constexpr uint64_t kOpSepoliaChainId = 11155420;
-constexpr int64_t kFetchWindow = 25;  // blocks per header batch; raw txs of the window batch too
+constexpr uint64_t c_opSepoliaChainId = 11155420;
+constexpr int64_t c_fetchWindow = 25;  // blocks per header batch; raw txs of the window batch too
 
 // ── fixture pieces (same shape as OpBlockVerifierTest; anonymous-namespace fixture
 //    pieces are deliberately not shared across test TUs) ──
 
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const& /*unused*/) & { std::abort(); }
-    void createCheckpoint(Storage& /*unused*/, CheckpointName const& /*unused*/) {}
-    void deleteCheckpoint(CheckpointName const& /*unused*/) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
@@ -161,18 +144,21 @@ std::string hexQuantity(int64_t number)
 bcos::protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
 {
     bcos::protocol::EthBlockHeaderData h;
-    h.parentInfo.blockHash = bcos::crypto::HashType(
-        std::string_view(stripHexPrefix(j["parentHash"].asString())), bcos::crypto::HashType::FromHex);
-    h.uncleHash = bcos::crypto::HashType(
-        std::string_view(stripHexPrefix(j["sha3Uncles"].asString())), bcos::crypto::HashType::FromHex);
-    h.stateRoot = bcos::crypto::HashType(
-        std::string_view(stripHexPrefix(j["stateRoot"].asString())), bcos::crypto::HashType::FromHex);
-    h.txsRoot = bcos::crypto::HashType(
-        std::string_view(stripHexPrefix(j["transactionsRoot"].asString())),
-        bcos::crypto::HashType::FromHex);
-    h.receiptsRoot = bcos::crypto::HashType(
-        std::string_view(stripHexPrefix(j["receiptsRoot"].asString())),
-        bcos::crypto::HashType::FromHex);
+    h.parentInfo.blockHash =
+        bcos::crypto::HashType(std::string_view(stripHexPrefix(j["parentHash"].asString())),
+            bcos::crypto::HashType::FromHex);
+    h.uncleHash =
+        bcos::crypto::HashType(std::string_view(stripHexPrefix(j["sha3Uncles"].asString())),
+            bcos::crypto::HashType::FromHex);
+    h.stateRoot =
+        bcos::crypto::HashType(std::string_view(stripHexPrefix(j["stateRoot"].asString())),
+            bcos::crypto::HashType::FromHex);
+    h.txsRoot =
+        bcos::crypto::HashType(std::string_view(stripHexPrefix(j["transactionsRoot"].asString())),
+            bcos::crypto::HashType::FromHex);
+    h.receiptsRoot =
+        bcos::crypto::HashType(std::string_view(stripHexPrefix(j["receiptsRoot"].asString())),
+            bcos::crypto::HashType::FromHex);
     auto bloomBytes = hexToBytes(j["logsBloom"].asString());
     std::copy(bloomBytes.begin(), bloomBytes.end(), h.logsBloom.begin());
     h.difficulty = bcos::u256(j["difficulty"].asString());
@@ -219,9 +205,9 @@ bcos::protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
     }
     if (j.isMember("requestsHash"))
     {
-        h.requestsHash = bcos::crypto::HashType(
-            std::string_view(stripHexPrefix(j["requestsHash"].asString())),
-            bcos::crypto::HashType::FromHex);
+        h.requestsHash =
+            bcos::crypto::HashType(std::string_view(stripHexPrefix(j["requestsHash"].asString())),
+                bcos::crypto::HashType::FromHex);
     }
     return h;
 }
@@ -259,8 +245,7 @@ public:
         {
             if (attempt > 0)
             {
-                std::this_thread::sleep_for(
-                    std::chrono::milliseconds(500 * (1 << (attempt - 1))));
+                std::this_thread::sleep_for(std::chrono::milliseconds(500 * (1 << (attempt - 1))));
             }
             std::string response;
             CURL* curl = curl_easy_init();
@@ -342,9 +327,9 @@ private:
 struct FetchedBlock
 {
     bcos::protocol::EthBlockHeaderData header;
-    bcos::h256 announcedHash;                 // the RPC-announced block hash
-    std::vector<std::string> txHashHex;       // on-chain tx hashes (announcement)
-    std::vector<bcos::bytes> rawTxs;          // opaque EIP-2718 envelopes
+    bcos::h256 announcedHash;            // the RPC-announced block hash
+    std::vector<std::string> txHashHex;  // on-chain tx hashes (announcement)
+    std::vector<bcos::bytes> rawTxs;     // opaque EIP-2718 envelopes
 };
 
 /// Fetch `count` blocks starting at `startNum`: one batch of eth_getBlockByNumber
@@ -356,8 +341,8 @@ std::vector<FetchedBlock> fetchWindow(RpcClient const& client, int64_t startNum,
     headerCalls.reserve(count);
     for (int64_t i = 0; i < count; ++i)
     {
-        headerCalls.emplace_back("eth_getBlockByNumber",
-            "[\"" + hexQuantity(startNum + i) + "\",false]");
+        headerCalls.emplace_back(
+            "eth_getBlockByNumber", "[\"" + hexQuantity(startNum + i) + "\",false]");
     }
     auto headers = client.batch(headerCalls);
 
@@ -380,13 +365,13 @@ std::vector<FetchedBlock> fetchWindow(RpcClient const& client, int64_t startNum,
                                      std::to_string(startNum + i) + ", got " +
                                      std::to_string(b.header.number));
         }
-        b.announcedHash = bcos::crypto::HashType(
-            std::string_view(stripHexPrefix(j["hash"].asString())), bcos::crypto::HashType::FromHex);
+        b.announcedHash =
+            bcos::crypto::HashType(std::string_view(stripHexPrefix(j["hash"].asString())),
+                bcos::crypto::HashType::FromHex);
         for (auto const& txHash : j["transactions"])
         {
             b.txHashHex.push_back(txHash.asString());
-            txCalls.emplace_back("eth_getRawTransactionByHash",
-                "[\"" + txHash.asString() + "\"]");
+            txCalls.emplace_back("eth_getRawTransactionByHash", "[\"" + txHash.asString() + "\"]");
             txOwner.emplace_back(static_cast<size_t>(i), b.txHashHex.size() - 1);
         }
         b.rawTxs.resize(b.txHashHex.size());
@@ -398,12 +383,10 @@ std::vector<FetchedBlock> fetchWindow(RpcClient const& client, int64_t startNum,
         {
             if (!raws[k].isString())
             {
-                throw std::runtime_error(
-                    "eth_getRawTransactionByHash returned no raw tx for " +
-                    blocks[txOwner[k].first].txHashHex[txOwner[k].second]);
+                throw std::runtime_error("eth_getRawTransactionByHash returned no raw tx for " +
+                                         blocks[txOwner[k].first].txHashHex[txOwner[k].second]);
             }
-            blocks[txOwner[k].first].rawTxs[txOwner[k].second] =
-                hexToBytes(raws[k].asString());
+            blocks[txOwner[k].first].rawTxs[txOwner[k].second] = hexToBytes(raws[k].asString());
         }
     }
     return blocks;
@@ -430,9 +413,9 @@ void runReplay(ReplayOptions const& options)
         genesis.m_ethGenesisHeader.has_value(), "genesis must carry [eth_genesis_header]");
     BOOST_REQUIRE_MESSAGE(
         genesis.m_opForkSchedule.has_value(), "genesis must carry [fork_timestamps] (op)");
-    BOOST_REQUIRE_EQUAL(nodeConfig.ethereumChainId(), kOpSepoliaChainId);
-    BOOST_TEST_MESSAGE("genesis loaded: allocs=" << genesis.m_allocs.size() << " chainId="
-                                                 << nodeConfig.ethereumChainId());
+    BOOST_REQUIRE_EQUAL(nodeConfig.ethereumChainId(), c_opSepoliaChainId);
+    BOOST_TEST_MESSAGE("genesis loaded: allocs=" << genesis.m_allocs.size()
+                                                 << " chainId=" << nodeConfig.ethereumChainId());
 
     // ── fixture: MLS over an in-memory backend, Ledger over a LegacyStorageWrapper on
     //    the SAME backend (the OpBlockVerifierTest wiring) — no manual seeding at all;
@@ -488,7 +471,7 @@ void runReplay(ReplayOptions const& options)
 
     int64_t windowStart = options.startBlock;
     auto pending = std::async(std::launch::async, fetchTimed, windowStart,
-        std::min(kFetchWindow, endBlock - windowStart + 1));
+        std::min(c_fetchWindow, endBlock - windowStart + 1));
     while (windowStart <= endBlock)
     {
         auto blocks = pending.get();
@@ -497,7 +480,7 @@ void runReplay(ReplayOptions const& options)
         if (nextStart <= endBlock)
         {
             pending = std::async(std::launch::async, fetchTimed, nextStart,
-                std::min(kFetchWindow, endBlock - nextStart + 1));
+                std::min(c_fetchWindow, endBlock - nextStart + 1));
         }
 
         for (auto& fetched : blocks)
@@ -522,9 +505,9 @@ void runReplay(ReplayOptions const& options)
             {
                 auto const txHash = hashImpl->hash(bcos::bytesConstRef(
                     block.transactions[t].data(), block.transactions[t].size()));
-                auto const announced = bcos::crypto::HashType(
-                    std::string_view(stripHexPrefix(fetched.txHashHex[t])),
-                    bcos::crypto::HashType::FromHex);
+                auto const announced =
+                    bcos::crypto::HashType(std::string_view(stripHexPrefix(fetched.txHashHex[t])),
+                        bcos::crypto::HashType::FromHex);
                 BOOST_REQUIRE_MESSAGE(txHash == announced,
                     "block " << number << " tx[" << t << "] hash mismatch: computed="
                              << txHash.hex() << " announced=" << announced.hex());
@@ -536,15 +519,14 @@ void runReplay(ReplayOptions const& options)
             }
             catch (bcos::executor_v1::opstack::OpBlockVerificationFailed const& e)
             {
-                BOOST_REQUIRE_MESSAGE(false,
-                    "block " << number << " commitment mismatch: field=" << e.field
-                             << " computed=" << e.computedValue
-                             << " announced=" << e.announcedValue);
+                BOOST_REQUIRE_MESSAGE(false, "block " << number << " commitment mismatch: field="
+                                                      << e.field << " computed=" << e.computedValue
+                                                      << " announced=" << e.announcedValue);
             }
             catch (bcos::executor_v1::opstack::OpStaleOrOutOfOrderBlock const& e)
             {
-                BOOST_REQUIRE_MESSAGE(false, "block " << number << " stale/out-of-order: "
-                                                      << e.what());
+                BOOST_REQUIRE_MESSAGE(
+                    false, "block " << number << " stale/out-of-order: " << e.what());
             }
             catch (std::exception const& e)
             {
@@ -555,14 +537,14 @@ void runReplay(ReplayOptions const& options)
 
             if (verified % 100 == 0)
             {
-                auto const elapsed = std::chrono::duration<double>(
-                    std::chrono::steady_clock::now() - replayT0)
-                                         .count();
-                BOOST_TEST_MESSAGE(
-                    "replayed " << verified << " blocks (height " << number << ", txs "
-                                << totalTxs << ") in " << elapsed << " s — "
-                                << (verified / elapsed) << " blocks/s, rpc share "
-                                << (rpcSeconds / elapsed * 100.0) << "%");
+                auto const elapsed =
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - replayT0)
+                        .count();
+                BOOST_TEST_MESSAGE("replayed " << verified << " blocks (height " << number
+                                               << ", txs " << totalTxs << ") in " << elapsed
+                                               << " s — " << (verified / elapsed)
+                                               << " blocks/s, rpc share "
+                                               << (rpcSeconds / elapsed * 100.0) << "%");
             }
         }
         windowStart = nextStart;
@@ -570,11 +552,10 @@ void runReplay(ReplayOptions const& options)
 
     auto const elapsed =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - replayT0).count();
-    BOOST_TEST_MESSAGE("REPLAY DONE: blocks [" << options.startBlock << ".." << endBlock << "] ("
-                                               << verified << " blocks, " << totalTxs << " txs) in "
-                                               << elapsed << " s — " << (verified / elapsed)
-                                               << " blocks/s, rpc share "
-                                               << (rpcSeconds / elapsed * 100.0) << "%");
+    BOOST_TEST_MESSAGE("REPLAY DONE: blocks ["
+                       << options.startBlock << ".." << endBlock << "] (" << verified << " blocks, "
+                       << totalTxs << " txs) in " << elapsed << " s — " << (verified / elapsed)
+                       << " blocks/s, rpc share " << (rpcSeconds / elapsed * 100.0) << "%");
     BOOST_REQUIRE_EQUAL(verified, options.blockCount);
 }
 
@@ -615,15 +596,18 @@ BOOST_AUTO_TEST_CASE(ReplayRealOpSepoliaFromGenesis)
         std::ifstream probe(options.genesisPath);
         if (!probe.good())
         {
-            BOOST_TEST_MESSAGE("skipping OpSepoliaReplayTest: genesis config not readable at "
-                               << options.genesisPath);
-            return;
+            // review F13: with OP_SEPOLIA_REPLAY_RPC set the operator has explicitly
+            // asked for the replay, so an unreadable genesis is an error, not a skip —
+            // supply OP_SEPOLIA_REPLAY_GENESIS (the dispatch input above) or the file.
+            BOOST_FAIL("OpSepoliaReplayTest: genesis config not readable at "
+                       << options.genesisPath
+                       << " — set OP_SEPOLIA_REPLAY_GENESIS to a readable config.genesis");
         }
     }
-    BOOST_TEST_MESSAGE("replaying op-sepolia blocks [" << options.startBlock << ".."
-                                                       << (options.startBlock +
-                                                              options.blockCount - 1)
-                                                       << "] via " << options.rpcUrl);
+    BOOST_TEST_MESSAGE("replaying op-sepolia blocks ["
+                       << options.startBlock << ".."
+                       << (options.startBlock + options.blockCount - 1) << "] via "
+                       << options.rpcUrl);
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 

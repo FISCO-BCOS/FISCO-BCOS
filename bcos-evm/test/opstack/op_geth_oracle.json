@@ -1,0 +1,14 @@
+{
+  "source": {
+    "repo": "blockchain-impl/op-geth",
+    "commit": "e8800cffe53d459cde8a07c8e8f1de9d86e79e07",
+    "files": [
+      "core/vm/testdata/precompiles/bn256Pairing.json"
+    ]
+  },
+  "bn256": {
+    "g2_valid_point_hex": "203e205db4f19b37b60121b83a7333706db86431c6d835849957ed8c3928ad7927dc7234fd11d3e8c36c59277c3e6f149d5cd3cfa9a62aee49f8130962b4b3b9195e8aa5b7827463722b8c153931579d3505566b4edf48d498e185f0509de15204bb53b8977e5f92a0bc372742c4830944a59b4fe6b1c0466e2a6dad122b5d2e",
+    "vector": "two_point_match_3",
+    "offset_hex": "128..384"
+  }
+}

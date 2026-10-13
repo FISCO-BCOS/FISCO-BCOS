@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthL1Attributes.h
 /// @brief L1-attributes deposit synthesis on the bcos-evm-free OP layer —
 ///        the counterpart of bcos-evm's OpTransition.h L1BlockInfo /
@@ -15,11 +17,11 @@
 
 #pragma once
 
+#include <bcos-utilities/Common.h>
 #include <opstack-executor/OpEthBlockExecute.h>  // OP_ETH_*_L1_ATTRIBUTES_LEN / Jovian selector
 #include <opstack-executor/OpEthDeposit.h>       // DepositTx / OP_DEPOSITOR (via OpFeeParams.h)
 #include <opstack-executor/OpFeeParams.h>        // OP_DEPOSITOR / OP_L1_BLOCK
 #include <opstack-executor/OpForkSpec.h>         // OpForkSchedule / opForkTimestampSec
-#include <bcos-utilities/Common.h>
 #include <array>
 #include <cstdint>
 #include <evmc/evmc.hpp>
@@ -35,6 +37,12 @@ inline constexpr std::array<uint8_t, 4> OP_ETH_ISTHMUS_L1_ATTRIBUTES_SELECTOR = 
 
 /// Gas limit used when synthesizing the L1-attributes deposit.
 inline constexpr int64_t OP_ETH_L1_INFO_DEPOSIT_GAS = 1'000'000;
+
+/// setL1BlockValues calldata offsets of the operator-fee fields (op-node
+/// L1BlockInfo binary layout; the full offset table lives in the .cpp). The t8n
+/// replay's emission-flag probe reads these two — the same constants, one home.
+inline constexpr std::size_t OP_ETH_L1_OPERATOR_FEE_SCALAR_OFFSET = 164;
+inline constexpr std::size_t OP_ETH_L1_OPERATOR_FEE_CONSTANT_OFFSET = 168;
 
 /// L1 block fields for synthesizing the L1-attributes deposit (the
 /// bcos::u256 counterpart of bcos-evm's L1BlockInfo).

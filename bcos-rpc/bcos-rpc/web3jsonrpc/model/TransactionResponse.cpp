@@ -1,3 +1,21 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file TransactionResponse.cpp
+ * @brief the transaction response renderers (deposit-aware)
+ */
 #include "TransactionResponse.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/web3jsonrpc/model/DepositTransaction.h"
@@ -8,11 +26,22 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
 {
     combineTxResponse(result, tx, receipt.transactionIndex(), receipt.blockNumber(), blockHash);
-    // TODO: Check
-    if (!receipt.effectiveGasPrice().empty())
+    // op-geth's newRPCTransaction fills a deposit tx's nonce from the receipt's
+    // depositNonce and emits depositReceiptVersion when the receipt carries one — the
+    // deposit branch below has no receipt in scope, so the fill happens here (the
+    // overload every eth_getTransaction* caller with a receipt goes through).
+    if (tx.isDepositTx())
     {
-        auto gasPrice = receipt.effectiveGasPrice();
-        result["gasPrice"] = std::string{gasPrice.empty() ? "0x0" : gasPrice};
+        fillDepositReceiptFields(result, receipt);
+    }
+    // review F9: the fee-market overlay must not run on deposits — the deposit branch
+    // above pins gasPrice "0x0" (op-geth emits zero quantities for these) and the
+    // full-block path never applies this overwrite, so the unconditional version made
+    // one deposit render differently via eth_getTransactionByHash vs
+    // eth_getBlockByNumber(full). (The old inner ternary was dead code inside !empty().)
+    if (!tx.isDepositTx() && !receipt.effectiveGasPrice().empty())
+    {
+        result["gasPrice"] = std::string{receipt.effectiveGasPrice()};
     }
 }
 
@@ -45,9 +74,9 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     // the geth-shaped deposit fields (sourceHash/mint/isSystemTx, zero nonce/gasPrice and
     // zero v/r/s — deposits are unsigned) come from decoding it. Return early: the
     // signature-derived fields below have no deposit semantics.
-    if (auto extraBytes = tx.extraTransactionBytes();
-        !extraBytes.empty() && extraBytes[0] == c_depositTxType)
+    if (tx.isDepositTx())
     {
+        auto extraBytes = tx.extraTransactionBytes();
         DepositTransaction deposit;
         auto rawCursor = bcos::bytesRef(const_cast<byte*>(extraBytes.data()), extraBytes.size());
         if (auto error = decodeDepositTransaction(rawCursor, deposit); error == nullptr)

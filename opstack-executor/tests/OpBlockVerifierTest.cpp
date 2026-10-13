@@ -28,6 +28,9 @@
 #include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
 #include <opstack-executor/OpForkSpec.h>         // opForkSpecAt
 
+#include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
+#include "support/GenesisTrie.h"           // copyFlatRows + computeAndPersistParentTrie
+#include "support/T8nCorpus.h"             // opstack_test::c_corpusParentHashHex (single-homed)
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -40,8 +43,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateDelta / emptyRootHash / parentStateRootFor
-#include <bcos-ledger/mpt/ViewNodeStorage.h>
+#include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateDelta/emptyRootHash/parentStateRootFor
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -59,6 +61,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -66,6 +69,8 @@ using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 using evmc::literals::operator""_address;
 using evmc::literals::operator""_bytes32;
+
+using opstack_test::TrivialCheckpointStorage;
 namespace memory_storage = bcos::storage2::memory_storage;
 namespace opeth = bcos::executor_v1::opstack;
 namespace vdetail = bcos::executor_v1::opstack::detail;  // the verifier's inline helpers
@@ -73,38 +78,19 @@ namespace vdetail = bcos::executor_v1::opstack::detail;  // the verifier's inlin
 namespace
 {
 
-constexpr uint64_t kChainId = 0x2105;  // 8453 — matches the eip1559 envelope's chainId
-const bcos::Address kSender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // envelope sender
+// review F42: the OP chain id is single-homed in support/T8nCorpus.h (opstack_test::c_opChainId).
+const bcos::Address c_sender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // envelope sender
 
 // Corpus isthmus_transfer_basic.json: block.transactions[1]._op_raw (op-geth-signed eip1559
 // envelope).
-constexpr const char* kEip1559EnvelopeHex =
+constexpr const char* c_eip1559EnvelopeHex =
     "0x02f874822105808405f5e100847735940082520894b0b0000000000000000000000000000000000001880de"
     "0b6b3a764000080c001a0e37533ddb9f696c0b21788f1b00c78adc4a81b1d811d84e70fad672096fc924ea00ae"
     "693f4d68955a4c01ee8bab26f5be740ee416dd2556822f68b747d5aab7714";
 
 // Same minimal CheckpointStorage stub as OpSchedulerTest (anonymous-namespace fixture pieces are
 // deliberately not shared across test TUs).
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
 
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const& /*unused*/) & { std::abort(); }
-    void createCheckpoint(Storage& /*unused*/, CheckpointName const& /*unused*/) {}
-    void deleteCheckpoint(CheckpointName const& /*unused*/) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
@@ -153,7 +139,7 @@ opeth::DepositTx makeDeposit()
 
 std::vector<bcos::bytes> corpusTxs()
 {
-    auto const eipEvmc = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto const eipEvmc = evmc::from_hex(c_eip1559EnvelopeHex).value();
     return {opeth::encodeOpEthDepositEnvelope(makeDeposit()),
         bcos::bytes(eipEvmc.begin(), eipEvmc.end())};
 }
@@ -189,6 +175,14 @@ void seedSysTables(MLS& mls)
     }
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
+
+/// The parent every assembled p2p block announces (the corpus' parent block). The fixture
+/// registers it as the seeded head's identity hash too: OpBlockVerifier's commit-time
+/// parent binding reads SYS_NUMBER_2_HASH[head], and production always carries that row
+/// (the ledger writes it on every commit) — a seeded head without it is a fixture gap.
+/// Single-homed in support/T8nCorpus.h (shared with the three suites that assemble
+/// corpus-shaped headers); the local alias keeps the call sites below short.
+constexpr std::string_view c_corpusParentHashHex = opstack_test::c_corpusParentHashHex;
 
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeGenesisHeader(bcos::h256 stateRoot)
 {
@@ -234,47 +228,24 @@ void seedHeadAndGenesisHeader(MLS& mls, bcos::protocol::BlockHeader::Ptr const& 
                 boost::lexical_cast<std::string>(genesisHeader->number())},
             std::move(e)));
     }
+    {
+        // The identity hash of the seeded head: production's commit path always writes
+        // SYS_NUMBER_2_HASH for every committed block (LedgerMethods), and the verifier's
+        // commit-time parent binding reads this row — the fixture must carry it for the
+        // blocks its cases assemble (all announce c_corpusParentHashHex).
+        bcos::storage::Entry e;
+        e.set(bcos::h256{std::string(c_corpusParentHashHex)}.asBytes());
+        bcos::task::syncWait(bcos::storage2::writeOne(view,
+            StateKey{bcos::ledger::SYS_NUMBER_2_HASH,
+                boost::lexical_cast<std::string>(genesisHeader->number())},
+            std::move(e)));
+    }
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
 // ── genesis MPT trie (the scenario-B import, verbatim from OpSchedulerTest) ──
 
 /// Copy every flat row visible through @p from into @p to's top mutable layer. The
-/// incremental MPT build scans the top mutable layer ONLY (buildAndCollect), so a
-/// backend-merged seed is invisible to it — this re-materializes the committed state as the
-/// genesis build's delta.
-template <class From, class To>
-bcos::task::Task<void> copyFlatRows(From& from, To& to)
-{
-    auto it = co_await bcos::storage2::range(from);
-    while (auto kv = co_await it.next())
-    {
-        auto const& [k, v] = *kv;
-        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
-            co_await bcos::storage2::writeOne(to, k, *entry);
-    }
-}
-
-/// Compute the scenario-B genesis state trie over the seeded accounts via the production MPT
-/// builder (computeMptStateDelta, parent = the empty root) and persist every node as "/mpt/"
-/// rows — the test-local mirror of Ledger::buildGenesisBlock's Ethereum-lane genesis import.
-/// Returns the root to stamp on the genesis header.
-bcos::h256 computeAndPersistGenesisTrie(MLS& mls)
-{
-    auto readView = mls.fork();  // read-through to the committed backend (never merged)
-    auto view = mls.fork();
-    view.newMutable();
-    bcos::task::syncWait(copyFlatRows(readView, view));
-    bcos::ledger::LedgerConfig ledgerConfig;
-    ledgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
-    auto delta = bcos::task::syncWait(bcos::ledger::mpt::computeMptStateDelta(
-        view, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
-    bcos::ledger::mpt::ViewNodeStorage<ViewType> nodeStorage(view);
-    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, delta.newNodes));
-    bcos::task::syncWait(mls.mergeView(std::move(view)));
-    return delta.stateRoot;
-}
-
 struct VerifierFixture
 {
     BackendMemStorage backendStorage{1};
@@ -296,10 +267,10 @@ struct VerifierFixture
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        verifier(std::make_shared<Verifier>(receiptFactory, hashImpl, kChainId, forkSchedule,
-            blockFactory, multiLayerStorage, ledger, ioServicePool))
+        verifier(std::make_shared<Verifier>(receiptFactory, hashImpl, opstack_test::c_opChainId,
+            forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
-        seedSender(multiLayerStorage, kSender, hashImpl);
+        seedSender(multiLayerStorage, c_sender, hashImpl);
         seedSysTables(multiLayerStorage);
     }
 
@@ -308,7 +279,7 @@ struct VerifierFixture
     /// (executor_version >= OPSTACK_EXECUTOR_VERSION), so no feature row is seeded.
     void prepareGenesis()
     {
-        auto const genesisRoot = computeAndPersistGenesisTrie(multiLayerStorage);
+        auto const genesisRoot = opstack_test::computeAndPersistParentTrie(multiLayerStorage);
         seedHeadAndGenesisHeader(multiLayerStorage, makeGenesisHeader(genesisRoot));
     }
 };
@@ -324,9 +295,8 @@ bcos::protocol::EthBlockHeaderData makeEthHeaderBase(
     bcos::protocol::EthBlockHeaderData d;
     d.number = number;
     d.timestamp = timestampSec;
-    d.parentInfo = bcos::protocol::ParentInfo{.blockNumber = number - 1,
-        .blockHash =
-            bcos::h256{"0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"}};
+    d.parentInfo = bcos::protocol::ParentInfo{
+        .blockNumber = number - 1, .blockHash = bcos::h256{std::string(c_corpusParentHashHex)}};
     d.coinbase = bcos::Address{"0x4200000000000000000000000000000000000011"};
     d.prevRandao = bcos::h256{};
     d.gasLimit = bcos::u256(0x989680);  // 10000000 (corpus currentGasLimit)
@@ -349,8 +319,7 @@ bcos::protocol::EthBlockHeaderData makeEthHeaderBase(
 /// Fill the announced commitment fields from a probe result, preserving the fork's field
 /// PRESENCE (an optional stays unset when the probe reports it absent). Both the probe and
 /// verifyAndCommit report the new-layer OpEthBlockCommitments.
-void fillCommitments(
-    bcos::protocol::EthBlockHeaderData& d, opeth::OpEthBlockCommitments const& c)
+void fillCommitments(bcos::protocol::EthBlockHeaderData& d, opeth::OpEthBlockCommitments const& c)
 {
     d.stateRoot = c.stateRoot;
     d.txsRoot = c.txRoot;
@@ -382,7 +351,8 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
     auto const number = ethHeader.number;
     // The p2p header timestamp is SECONDS (EthBlockHeaderData keeps the Ethereum RLP domain) —
     // the same conversion-free fork resolution OpBlockVerifier::verifyAndCommit step 2 runs.
-    const auto spec = opeth::opForkSpecAt(f.forkSchedule, static_cast<uint64_t>(ethHeader.timestamp));
+    const auto spec =
+        opeth::opForkSpecAt(f.forkSchedule, static_cast<uint64_t>(ethHeader.timestamp));
     auto header = vdetail::projectOpP2pHeader(ethHeader, *f.blockFactory);
 
     bcos::ledger::Features features;
@@ -416,18 +386,23 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<opeth::OpRecentBlockHashes<ViewType>> hashes;
     bcos::task::syncWait(opeth::preBlockOpEthSteps(view, *header, spec, rawRefs, deposits,
-        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar));
+        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar,
+        /*noUserTxActivationBlock=*/false));  // probe skips the parent read; the schedule
+    // gate runs for real inside verifyAndCommit below (its fixtures stay below Jovian)
 
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header->gasLimit()),
         .blockHashLookup = opeth::opEthBlockHashLookup(*hashes),
-        .chainId = kChainId,
+        .chainId = opstack_test::c_opChainId,
         .daFootprintGasScalar = daFootprintGasScalar};
     bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);
     auto transactionsRefs =
-        transactions | ::ranges::views::transform([](bcos::protocol::Transaction::Ptr const& ptr)
-                           -> bcos::protocol::Transaction const& { return *ptr; });
+        transactions |
+        ::ranges::views::transform(
+            [](bcos::protocol::Transaction::Ptr const& ptr) -> bcos::protocol::Transaction const& {
+                return *ptr;
+            });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         view, executor, *header, transactionsRefs, execLedgerConfig, ctx));
     auto opResult = bcos::task::syncWait(
@@ -456,8 +431,7 @@ bcos::devp2p::sync::Block makeSyncBlock(
 
 /// Probe → announced header → verifyAndCommit success path. Returns the verifier result.
 bcos::executor_v1::opstack::OpBlockVerificationResult verifyOk(VerifierFixture& f,
-    std::vector<bcos::bytes> const& rawTxs, int64_t number, int64_t timestampSec,
-    bool isthmusShape)
+    std::vector<bcos::bytes> const& rawTxs, int64_t number, int64_t timestampSec, bool isthmusShape)
 {
     auto data = makeEthHeaderBase(number, timestampSec, isthmusShape);
     auto commitments = probeCommitments(f, data, rawTxs);
@@ -499,9 +473,9 @@ void checkCommitted(VerifierFixture& f, bcos::protocol::BlockNumber number,
             StateKey{bcos::ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)}));
         BOOST_REQUIRE_MESSAGE(
             txEntry.has_value(), "SYS_HASH_2_TX must be written for tx " << txHash.hex());
-        auto receiptEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
-            StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
-                bcos::concepts::bytebuffer::toView(txHash)}));
+        auto receiptEntry = bcos::task::syncWait(
+            bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
+                                              bcos::concepts::bytebuffer::toView(txHash)}));
         BOOST_REQUIRE_MESSAGE(
             receiptEntry.has_value(), "SYS_HASH_2_RECEIPT must be written for tx " << txHash.hex());
     }
@@ -528,6 +502,83 @@ BOOST_AUTO_TEST_CASE(IsthmusBlockVerifiesAndCommits)
     BOOST_CHECK_EQUAL(result.header->number(), 1);
 
     checkCommitted(f, 1, result.blockHash, rawTxs);
+}
+
+// F8 (true arm): the verifier's OWN wiring of the deposits-only fork-activation gate.
+// The wiring probe above passes noUserTxActivationBlock=false, and every other fixture sits
+// below Jovian, so a regression in the verifier's parent fetch or the seconds cast silently
+// disabled the gate on the p2p lane while unit tests stayed green. Here the fixture's
+// schedule crosses Jovian between the committed parent and THIS block, the corpus user tx
+// (eip1559) is in the set, and verifyAndCommit must answer the consensus rejection — the
+// gate's parent read, opForkTimestampSec conversion and ethHeader.timestamp cast all run.
+BOOST_AUTO_TEST_CASE(JovianActivationUserTxForsakenOnVerifierLane)
+{
+    // The verifier's OWN wiring of the deposits-only fork-activation gate: the gate
+    // fires inside verifyAndCommit (parent fetch -> opForkTimestampSec conversion ->
+    // ethHeader.timestamp cast -> pre-block scan / execute-block shape check), which
+    // the noUserTxActivationBlock=false probe below never exercises. Commitments are
+    // probed on a below-Jovian fixture (execution under a Jovian schedule throws the
+    // gate mid-probe); the verifier under test carries the crossing schedule, so the
+    // block (deposit + user tx, header past the Jovian rung) must answer the
+    // consensus rejection and commit nothing.
+    bcos::ledger::OpForkSchedule probeSchedule;  // isthmus only — gate is a no-op
+    probeSchedule.m_isthmusTime = 0;
+    VerifierFixture probeFixture{probeSchedule};
+    probeFixture.prepareGenesis();
+
+    // Blind-spot arrangement, on purpose. The lane has three early rules: the FIRST
+    // envelope must be the L1-attributes-seeding deposit ("no deposit transaction to
+    // seed the block"), the op-gettish JOVIAN SHAPE check inspects only the LAST
+    // envelope (OpEthBlockExecute.h: "unexpected non-deposit transactions in Jovian
+    // activation block"), and only then the schedule-driven activation scan runs
+    // (OpEthBlockSteps.h: "...fork-activation block..."). With the corpus order
+    // [deposit, user] the shape rule rejects first; with [user, deposit] there is no
+    // attrs seed — neither reaches the schedule gate this case exists to pin. Hiding
+    // the user tx between two deposits (the exact blind spot the scan restores) is
+    // the only arrangement in which the "fork-activation" wording below can fire and
+    // the case proves the verifier's parent-fetch wiring.
+    auto const txs = corpusTxs();  // {attrs deposit (isthmus shape), eip1559 user tx}
+    // The attrs deposit must carry the JOVIAN data shape: under the crossing schedule
+    // the pre-block DA-footprint checks (OpEthBlockExecute.h) inspect the attrs
+    // envelope BEFORE the activation scan, and an isthmus-shaped (empty-data) attrs
+    // deposit dies at "L1 attributes transaction data too short for DA footprint gas
+    // scalar" instead of reaching the gate (the idiom is depositWithJovianAttrs() in
+    // OpKarstActivationTest; the pre-Jovian probe ignores the data shape).
+    auto attrs = makeDeposit();
+    attrs.data.assign(opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN, bcos::byte{0});
+    std::memcpy(attrs.data.data(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.data(),
+        opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.size());
+    auto trailingDeposit = makeDeposit();
+    trailingDeposit.sourceHash =
+        0x1111111111111111111111111111111111111111111111111111111111111111_bytes32;
+    trailingDeposit.to =
+        0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001_address;  // back to the depositor: no-op
+    std::vector<bcos::bytes> const rawTxs{opeth::encodeOpEthDepositEnvelope(attrs), txs[1],
+        opeth::encodeOpEthDepositEnvelope(trailingDeposit)};
+    auto data = makeEthHeaderBase(/*number=*/1, /*timestampSec=*/2000, /*isthmusShape=*/true);
+    auto commitments = probeCommitments(probeFixture, data, rawTxs);
+    fillCommitments(data, commitments);
+
+    bcos::ledger::OpForkSchedule crossingSchedule;  // jovian crosses at 2000
+    crossingSchedule.m_isthmusTime = 0;
+    crossingSchedule.m_jovianTime = 2000;
+    VerifierFixture f{crossingSchedule};
+    f.prepareGenesis();
+    auto const block = makeSyncBlock(data, rawTxs);
+
+    std::string thrownWhat;
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
+        bcos::evm::OpConsensusError, [&](bcos::evm::OpConsensusError const& e) {
+            thrownWhat = e.what();
+            return std::string_view{e.what()}.find("fork-activation") != std::string_view::npos;
+        });
+    BOOST_TEST_MESSAGE("JovianActivation gate message: " << thrownWhat);
+    // Nothing committed on the verifier under test: head stays at genesis.
+    auto view = f.multiLayerStorage.fork();
+    auto currentState = bcos::task::syncWait(bcos::storage2::readOne(
+        view, StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER}));
+    BOOST_REQUIRE(currentState.has_value());
+    BOOST_CHECK_EQUAL(std::string(currentState->get()), "0");
 }
 
 BOOST_AUTO_TEST_CASE(BedrockBlockVerifiesAndCommits)
@@ -565,11 +616,9 @@ BOOST_AUTO_TEST_CASE(StateRootMismatchRejected)
     auto const block = makeSyncBlock(data, rawTxs);
 
     using bcos::executor_v1::opstack::OpBlockVerificationFailed;
-    BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(f.verifier->verifyAndCommit(block)), OpBlockVerificationFailed,
-        [](OpBlockVerificationFailed const& e) {
-            return e.field == "stateRoot" && !e.computedValue.empty() &&
-                   !e.announcedValue.empty();
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
+        OpBlockVerificationFailed, [](OpBlockVerificationFailed const& e) {
+            return e.field == "stateRoot" && !e.computedValue.empty() && !e.announcedValue.empty();
         });
     // A mismatch is a consensus-level rejection (INVALID), catchable as OpConsensusError.
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
@@ -595,8 +644,8 @@ BOOST_AUTO_TEST_CASE(GasUsedMismatchRejected)
     auto const block = makeSyncBlock(data, rawTxs);
 
     using bcos::executor_v1::opstack::OpBlockVerificationFailed;
-    BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(f.verifier->verifyAndCommit(block)), OpBlockVerificationFailed,
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
+        OpBlockVerificationFailed,
         [](OpBlockVerificationFailed const& e) { return e.field == "gasUsed"; });
 }
 
@@ -625,6 +674,33 @@ BOOST_AUTO_TEST_CASE(OutOfOrderAndStaleHeightsRejected)
         [](bcos::executor_v1::opstack::OpStaleOrOutOfOrderBlock const&) { return true; });
 }
 
+BOOST_AUTO_TEST_CASE(MissingHeadHashRowIsStorageFaultNotDeterministic)
+{
+    // review F3: the height guard proves number continuity, not identity; the identity
+    // row (SYS_NUMBER_2_HASH[head]) is a storage invariant of THIS node — its absence is
+    // a transient storage fault (OpStorageError, retryable after the row is repaired),
+    // never the deterministic no-retry OpStaleOrOutOfOrderBlock the foreign-parent arm
+    // below uses. Bump the head number without writing its hash row to reach the arm.
+    VerifierFixture f;
+    f.prepareGenesis();
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::storage::Entry e;
+        e.set(boost::lexical_cast<std::string>(1));
+        bcos::task::syncWait(bcos::storage2::writeOne(view,
+            StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
+            std::move(e)));
+        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
+    }
+    auto const rawTxs = corpusTxs();
+    auto const block = makeSyncBlock(makeEthHeaderBase(2, 1012, /*isthmusShape=*/true), rawTxs);
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
+        bcos::evm::engine::OpStorageError, [](bcos::evm::engine::OpStorageError const& e) {
+            return std::string(e.what()).find("no hash row") != std::string::npos;
+        });
+}
+
 BOOST_AUTO_TEST_CASE(BlobAnd0x7dTypeBytesRejected)
 {
     VerifierFixture f;
@@ -637,15 +713,13 @@ BOOST_AUTO_TEST_CASE(BlobAnd0x7dTypeBytesRejected)
 
     auto const blobBlock = makeSyncBlock(data, {depEnv, bcos::bytes{0x03}});
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(blobBlock)),
-        bcos::evm::OpConsensusError,
-        [](bcos::evm::OpConsensusError const& e) {
+        bcos::evm::OpConsensusError, [](bcos::evm::OpConsensusError const& e) {
             return std::string(e.what()).find("0x03") != std::string::npos;
         });
 
     auto const depositRevertBlock = makeSyncBlock(data, {depEnv, bcos::bytes{0x7d}});
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(depositRevertBlock)),
-        bcos::evm::OpConsensusError,
-        [](bcos::evm::OpConsensusError const& e) {
+        bcos::evm::OpConsensusError, [](bcos::evm::OpConsensusError const& e) {
             return std::string(e.what()).find("0x7d") != std::string::npos;
         });
 }

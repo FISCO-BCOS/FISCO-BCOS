@@ -72,19 +72,23 @@ tools/BcosAirBuilder/*
 # CI clones FISCO-BCOS/console here (tools/.ci/ci_check_air.sh); never track it
 tools/console/
 
-# t8n reference vectors: the vendored S6 subset that OpEngineServiceExecParityTest
-# executes is TRACKED (6 JSON under vectors/ + golden/engine/); other locally
-# regenerated vector/golden files stay untracked.
+# t8n corpus: the path itself is a symlink to the FISCO-BCOS/op-stack-e2e-tests
+# checkout (CI checks the corpus repo out and ln -s's it inline in workflow.yml and
+# the fork schedules; tools/.ci/provision_t8n_corpus.sh is the local-developer
+# equivalent and carries the pin default check-ci-pins.sh asserts — review F10).
+# Tracking a machine-absolute symlink broke CI checkouts — see finding F-CI-2. The
+# patterns below are the symlink provisioning design's backstop: the tracked corpus
+# lives in the e2e-tests repo, and should the path ever be a real in-tree directory
+# again, its cases/vectors/goldens stay untracked here. review F47: the six `!`
+# re-include lines were deleted — git cannot re-include files under an ignored
+# parent, so they were inert.
+opstack-executor/tests/t8n
+# Provisioning marker written next to the symlink (tools/.ci/provision_t8n_corpus.sh)
+opstack-executor/tests/.t8n-pin
 bcos-evm/test/opstack/t8n/cases/
 opstack-executor/tests/t8n/cases/
 opstack-executor/tests/t8n/vectors/*.json
-!opstack-executor/tests/t8n/vectors/isthmus_deposit_only.json
-!opstack-executor/tests/t8n/vectors/jovian_deposit_only.json
-!opstack-executor/tests/t8n/vectors/jovian_transfer_multi.json
 opstack-executor/tests/t8n/golden/engine/*.golden.json
-!opstack-executor/tests/t8n/golden/engine/isthmus_deposit_only.golden.json
-!opstack-executor/tests/t8n/golden/engine/jovian_deposit_only.golden.json
-!opstack-executor/tests/t8n/golden/engine/jovian_transfer_multi.golden.json
 opstack-executor/tests/t8n/golden/engine/chained/*.json
 
 test/*
@@ -93,5 +97,28 @@ test/*
 # Claude Code
 CLAUDE.local.md
 .worktrees/
+
+# Review intermediate artifacts — never commit into a product branch.
+.agents/reviews/
 .claude/worktrees
 .claude/agents
+
+# RocksDB unittest working directory (created by UT runs, never commit).
+unittestdb/
+
+# Process/planning documents stay local-only (archived under ~/octo/docs-archive).
+docs/plans/
+
+# Local C2 e2e scratch dirs (tools/.ci/c2-e2e.sh defaults for OP_MONOREPO /
+# OP_E2E_DIR / BIN_DIR). CI checks these out inside its own workspace, so they must
+# never be committed -- an unignored scratch dir is how a stray `git add -A` sweeps
+# third-party checkouts and local binaries into a PR.
+.ci-op-monorepo/
+.ci-op-e2e-tests/
+.ci-c2-bins/
+
+# Dated working documents (audit/design snapshots) stay local: their baselines and
+# sibling documents live on other branches, so an in-tree copy carries dangling
+# cross-references and goes stale silently. Keep the files in the workspace and the
+# local archive; see ~/octo/docs-archive.
+docs/2*-*.md

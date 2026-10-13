@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 # Copyright (c) FISCO-BCOS, Apache-2.0
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # CI entry for the C2 full-stack OP e2e (deposit + withdraw + optional contest).
 # Wraps tools/op-e2e/withdraw_e2e_ephemeral.sh with pinned OP monorepo binaries.
@@ -111,6 +123,15 @@ fi
 for b in op-deployer op-node op-batcher; do
   [ -x "$BIN_DIR/$b" ] || die "missing $BIN_DIR/$b"
 done
+
+if [[ "${SKIP_OP_BUILD:-0}" == "1" ]]; then
+  # The enforced pin check downstream compares the MONOREPO CHECKOUT's git HEAD, not these
+  # pre-placed binaries — with a cache-restored BIN_DIR nothing here proves the binaries were
+  # built from that commit. CI's cache key provides that linkage implicitly; a local run does
+  # not. Say so instead of letting "enforced" overstate the guarantee (review P1).
+  log "WARN: SKIP_OP_BUILD=1 - binaries in $BIN_DIR are used as-is; their provenance vs the"
+  log "WARN: versions.json pins is NOT verified (CI relies on its cache key for that)"
+fi
 
 # The existence check runs in BOTH modes: SKIP_FISCO_BUILD=1 only documents that the
 # binary came from the prebuilt artifact instead of a local build — it must not skip the

@@ -24,11 +24,12 @@
 // OpEngineService::lastExecutedHeader() after newPayload — NOT rebuildOpEthHeader(request),
 // which copies those fields from the JSON and stays green if execution is skipped.
 
+#include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
 #include "support/GoldenSample.h"
 #include "support/SeedPreState.h"
 
-#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -38,9 +39,9 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
-#include <bcos-ledger/mpt/HashBuilder.h>   // computeTrieRoot / flushTrieNodes
-#include <bcos-ledger/mpt/MPTBuilder.h>    // TrieBuildResult
-#include <bcos-ledger/mpt/StateRoots.h>    // computeMptStateDelta / emptyRootHash
+#include <bcos-ledger/mpt/HashBuilder.h>  // computeTrieRoot / flushTrieNodes
+#include <bcos-ledger/mpt/MPTBuilder.h>   // TrieBuildResult
+#include <bcos-ledger/mpt/StateRoots.h>   // computeMptStateDelta / emptyRootHash
 #include <bcos-ledger/mpt/ViewNodeStorage.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
@@ -67,30 +68,13 @@
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
+
+using opstack_test::TrivialCheckpointStorage;
 namespace memory_storage = bcos::storage2::memory_storage;
 
 namespace op_engine_exec_parity
 {
 
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
@@ -140,7 +124,7 @@ struct StubExecutor
 using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
 using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, EngineOpScheduler>;
 
-constexpr uint64_t kChainId = 0x2105;
+constexpr uint64_t c_chainId = 0x2105;  // review F35: c_ prefix, same constant as OpSchedulerTest
 
 bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {
@@ -325,7 +309,7 @@ struct OpE2eFixture
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         opDelegate(
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
-                kChainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool)),
+                c_chainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate)
     {

@@ -12,3 +12,7 @@ exclude_paths:
   - tools/.ci/fetch-l2-contract-deps.sh
   - tools/.ci/ci_opnode_startup_check.sh
   - tools/.ci/l2-integration/**
+  # tools/opstack-genesis is the same devnet toolchain (genesis/allocs/rollup generation
+  # plus its pytest suite, driven by setup_c2.sh from the pinned harness checkout): the
+  # analyzer's findings there are test asserts and the zstd CLI call, not node code.
+  - tools/opstack-genesis/**

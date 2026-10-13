@@ -1,0 +1,234 @@
+# Copyright (c) 2026 FISCO BCOS.
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Unit tests for gen_rollup_config.py: the emitted rollup.json must carry every
+field a karst-aware op-node's rollup.Config.Check() validates, with all fork times
+0 (post-Karst genesis) and a non-empty chain_op_config. The K0 artifact carries
+karst_time, which the pinned op-node (no KarstTime, DisallowUnknownFields) rejects
+at decode; that limitation is disclosed, not a v1.19.3-compatibility claim (U7-F3)."""
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+# Load by file path (same as test_mpt_state_root.py): tools/opstack-genesis/ is not a
+# package, so a plain `import gen_rollup_config` only works under pytest's default
+# rootdir sys.path insertion — path loading keeps the test import-mode independent.
+_SPEC = importlib.util.spec_from_file_location(
+    "gen_rollup_config", str(Path(__file__).parent / "gen_rollup_config.py"))
+gen = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(gen)
+
+L1_HASH = "0x" + "11" * 32
+L2_HASH = "0x" + "22" * 32
+
+
+def _args(**overrides):
+    argv = [
+        "--l1-chain-id", overrides.pop("l1_chain_id", "900"),
+        "--l2-chain-id", overrides.pop("l2_chain_id", "901"),
+        "--l1-genesis-hash", overrides.pop("l1_genesis_hash", L1_HASH),
+        "--l2-genesis-hash", overrides.pop("l2_genesis_hash", L2_HASH),
+        "--l2-genesis-time", overrides.pop("l2_genesis_time", "1700000000"),
+    ]
+    for key, value in overrides.items():
+        argv += ["--" + key.replace("_", "-"), str(value)]
+    return gen.parse_args(argv)
+
+
+def test_default_config_passes_check_and_serializes():
+    config = gen.check(gen.build_rollup_config(_args()))
+    text = json.dumps(config)
+    round_tripped = json.loads(text)
+    assert round_tripped["l1_chain_id"] == 900
+    assert round_tripped["l2_chain_id"] == 901
+    assert round_tripped["genesis"]["l1"]["hash"] == L1_HASH
+    assert round_tripped["genesis"]["l2"]["hash"] == L2_HASH
+    assert round_tripped["genesis"]["l2_time"] == 1700000000
+    # the four Check()-relevant system_config keys, camelCase per op-service/eth
+    system_config = round_tripped["genesis"]["system_config"]
+    assert set(system_config) == {"batcherAddr", "overhead", "scalar", "gasLimit"}
+    assert int(system_config["scalar"], 16) != 0
+    assert system_config["gasLimit"] == 30_000_000
+
+
+def test_all_fork_times_zero_through_karst():
+    config = gen.check(gen.build_rollup_config(_args()))
+    for key in gen.FORK_TIME_KEYS:
+        assert config[key] == 0, key
+    assert "karst_time" in gen.FORK_TIME_KEYS
+    # The key set is single-sourced from gen_official_genesis._ROLLUP_FORK_KEYS — but
+    # the assertion must be able to FAIL, so the expectation is a LITERAL (review F41:
+    # the previous `== [same comprehension]` was tautological — a mutation inside the
+    # shared table passed it silently; the CL-only rungs were once dropped by a
+    # hand-listed mirror, and the op-node order puts interop last). Updating this list
+    # is the deliberate act a genuine rung addition requires.
+    assert gen.FORK_TIME_KEYS == [
+        "regolith_time",
+        "canyon_time",
+        "delta_time",
+        "ecotone_time",
+        "fjord_time",
+        "granite_time",
+        "holocene_time",
+        "pectra_blob_schedule_time",  # CL-only: after holocene, at its op-node position
+        "isthmus_time",
+        "jovian_time",
+        "karst_time",
+        "interop_time",  # op-node order: interop last
+    ]
+    for cl_only in ("delta_time", "pectra_blob_schedule_time", "interop_time"):
+        assert cl_only in gen.FORK_TIME_KEYS, cl_only
+    assert gen.FORK_TIME_KEYS[-1] == "interop_time"
+
+
+def test_module_discloses_pinned_opnode_rejects_karst_time():
+    """U7-F3: K0 emits karst_time unconditionally. The op-node revision pinned by
+    this branch (optimism@76e4fad5) has no KarstTime and decodes rollup.json with
+    DisallowUnknownFields, so it rejects these artifacts at decode
+    (`json: unknown field "karst_time"`). That is a disclosed limitation, not a
+    v1.19.3-compatibility claim; pin the disclosure so it cannot be quietly
+    reverted. test_all_fork_times_zero_through_karst remains the intended K0
+    behaviour: do not delete or invert it."""
+    doc = gen.__doc__ or ""
+    assert "karst_time" in doc
+    assert "DisallowUnknownFields" in doc
+
+
+def test_chain_op_config_non_empty():
+    config = gen.check(gen.build_rollup_config(_args()))
+    op_config = config["chain_op_config"]
+    assert op_config["eip1559Elasticity"] > 0
+    assert op_config["eip1559Denominator"] > 0
+    assert op_config["eip1559DenominatorCanyon"] > 0
+
+
+def test_equal_chain_ids_rejected():
+    with pytest.raises(gen.RollupConfigError, match="must differ"):
+        gen.check(gen.build_rollup_config(_args(l2_chain_id="900")))
+
+
+def test_seq_window_size_below_two_rejected():
+    with pytest.raises(gen.RollupConfigError, match="seq_window_size"):
+        gen.check(gen.build_rollup_config(_args(seq_window_size=1)))
+
+
+def test_zero_l2_time_rejected():
+    with pytest.raises(gen.RollupConfigError, match="l2_time"):
+        gen.check(gen.build_rollup_config(_args(l2_genesis_time="0")))
+
+
+def test_zero_deposit_contract_rejected():
+    with pytest.raises(gen.RollupConfigError, match="deposit_contract_address"):
+        gen.check(gen.build_rollup_config(
+            _args(deposit_contract_address=gen.ZERO_ADDRESS)))
+
+
+def test_equal_genesis_hashes_rejected():
+    with pytest.raises(gen.RollupConfigError, match="genesis hashes"):
+        gen.check(gen.build_rollup_config(_args(l2_genesis_hash=L1_HASH)))
+
+
+def test_canonical_fork_regression_still_rejected():
+    # review F28: only the canonical pairs op-node orders are compared — and a
+    # regression among THOSE must still be rejected.
+    config = gen.build_rollup_config(_args())
+    config["regolith_time"] = 200
+    config["canyon_time"] = 100
+    with pytest.raises(gen.RollupConfigError, match="canyon_time regresses"):
+        gen.check(config)
+
+
+def test_external_fork_times_are_not_ordered():
+    # review F28: op-node never compares pectra_blob_schedule/interop/jovian/karst
+    # times, so their mutual order must not be rejected here either (the walk used to
+    # order all twelve FORK_TIME_KEYS and would refuse this config).
+    config = gen.build_rollup_config(_args())
+    config["jovian_time"] = 200
+    config["karst_time"] = 100
+    gen.check(config)  # must not raise
+
+
+@pytest.mark.parametrize("overrides,match", [
+    ({"block_time": 0}, "block_time must be > 0"),
+    ({"max_sequencer_drift": 0}, "max_sequencer_drift must be > 0"),
+    ({"channel_timeout": 0}, "channel_timeout must be > 0"),
+    ({"gas_limit": 0}, "gasLimit must be > 0"),
+    ({"batcher_addr": gen.ZERO_ADDRESS}, "batcherAddr must not be zero"),
+    ({"scalar": "0x" + "00" * 32}, "scalar must not be zero"),
+    ({"l1_chain_id": "0"}, "chain ids must be positive"),
+    ({"batch_inbox_address": gen.ZERO_ADDRESS}, "batch_inbox_address must not be zero"),
+    ({"l1_system_config_address": gen.ZERO_ADDRESS},
+     "l1_system_config_address must not be zero"),
+    ({"l1_genesis_hash": gen.ZERO_HASH}, "genesis.l1.hash must not be zero"),
+])
+def test_rejection_rule_per_branch(overrides, match):
+    # review F29: every check() rejection branch gets one parametrized case — the
+    # suite previously exercised only 5 of ~17 rules, so deleting any untested guard
+    # left CI green.
+    with pytest.raises(gen.RollupConfigError, match=match):
+        gen.check(gen.build_rollup_config(_args(**overrides)))
+
+
+def test_malformed_hash_rejected():
+    with pytest.raises(gen.RollupConfigError, match="32-byte hex"):
+        gen.build_rollup_config(_args(l2_genesis_hash="0x1234"))
+
+
+def test_missing_canonical_fork_key_is_typed_not_keyerror():
+    # review F52: a config missing a canonical fork key used to pass the monotonic
+    # read (as 0) and then crash with a raw KeyError on the update — check()'s
+    # documented contract is a typed RollupConfigError on the first violation.
+    config = gen.build_rollup_config(_args())
+    del config["isthmus_time"]
+    gen.check(config)  # missing key reads as 0, exactly as before — no KeyError
+    config["regolith_time"] = 10  # canyon_time (0) now regresses against it
+    with pytest.raises(gen.RollupConfigError, match="monotonic"):
+        gen.check(config)
+
+
+def test_main_writes_file(tmp_path, capsys):
+    out = tmp_path / "rollup.json"
+    rc = gen.main([
+        "--l1-chain-id", "900", "--l2-chain-id", "901",
+        "--l1-genesis-hash", L1_HASH, "--l2-genesis-hash", L2_HASH,
+        "--l2-genesis-time", "1700000000", "--out", str(out),
+    ])
+    assert rc == 0
+    config = json.loads(out.read_text())
+    assert config["chain_op_config"]["eip1559Denominator"] == 50
+
+
+def test_main_rejects_bad_config_with_nonzero_exit(capsys):
+    rc = gen.main([
+        "--l1-chain-id", "900", "--l2-chain-id", "900",
+        "--l1-genesis-hash", L1_HASH, "--l2-genesis-hash", L2_HASH,
+        "--l2-genesis-time", "1700000000",
+    ])
+    assert rc == 1
+    assert "must differ" in capsys.readouterr().err
+
+
+def test_zero_overhead_accepted():
+    """Zero overhead must PASS check(): overhead is a pre-Ecotone L1-fee parameter
+    (deprecated at Ecotone) and op-node v1.19.3 Config.Check() (rollup/types.go:317
+    at tag op-node/v1.19.3) validates no overhead field. Verified against a real
+    op-node v1.19.3: a zero-overhead rollup.json passes config validation and
+    reaches L1 dialing, while a zero scalar dies there ("missing genesis system
+    config scalar"). This test pins that fact - do not "fix" the default to a
+    non-zero magic value or add a zero-overhead rejection: post-Ecotone chains
+    ship overhead 0x00...00."""
+    config = gen.build_rollup_config(_args())
+    assert config["genesis"]["system_config"]["overhead"] == "0x" + "00" * 32
+    gen.check(config)  # must not raise
