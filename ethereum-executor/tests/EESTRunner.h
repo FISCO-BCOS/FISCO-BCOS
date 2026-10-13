@@ -210,6 +210,8 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
 /// Map an EEST fork name to an EVMC revision.
 /// Returns EVMC_OSAKA (latest handled) as a default for unknown forks.
-evmc_revision forkNameToRevision(std::string const& forkName);
+/// std::nullopt = the fork has no executable revision in this binary (Constantinople) and its
+/// fixtures must be skipped.
+std::optional<evmc_revision> forkNameToRevision(std::string const& forkName);
 
 }  // namespace bcos::test

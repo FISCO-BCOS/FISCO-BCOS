@@ -563,7 +563,7 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
     return fixtures;
 }
 
-evmc_revision forkNameToRevision(std::string const& forkName)
+std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
 {
     // Normalize: lowercase
     auto lower = forkName;
@@ -582,11 +582,11 @@ evmc_revision forkNameToRevision(std::string const& forkName)
     // evmone 0.23 removed the Constantinople revision. EEST fixtures naming it are
     // SKIPPED, not retargeted to Petersburg: Petersburg is Constantinople minus the
     // reverted EIP-1283 (SSTORE net gas metering), so running those fixtures under
-    // Petersburg charges different gas and yields a wrong post-state. Refusing the name
-    // here makes the fixture parser drop the case with its usual warning.
+    // Petersburg charges different gas and yields a wrong post-state. nullopt is the
+    // skip signal — an exception here aborted the whole runner (exit 134) wherever the
+    // call was not wrapped in a try/catch, which is most call sites.
     if (lower == "constantinople" || lower == "constantinoplefix")
-        throw std::invalid_argument(
-            "Constantinople fixtures are skipped: EIP-1283 metering differs from Petersburg");
+        return std::nullopt;
     if (lower == "petersburg")
         return EVMC_PETERSBURG;
     if (lower == "istanbul")
@@ -651,6 +651,7 @@ std::atomic<int> g_unexpectedFailure{0};
 // transaction_tests) or failed to load/parse — kept so the summary's 100%
 // carries its domain and a loader regression can't silently raise the pass rate.
 std::atomic<int> g_skippedFiles{0};
+std::atomic<int> g_skippedTests{0};  // fixtures whose fork has no revision here
 std::atomic<int> g_loadFailures{0};
 
 // Failure details for summary
@@ -800,11 +801,18 @@ public:
                 -> evmc::bytes32 { return blockHashes->get_block_hash(blockNumber); })
     {}
 
-    void configureFork(std::string const& forkName)
+    /// Returns false when the fork has no executable revision in this binary
+    /// (e.g. Constantinople) — the caller must skip the fixture instead of running it
+    /// under a different gas schedule.
+    bool configureFork(std::string const& forkName)
     {
         auto const rev = test::forkNameToRevision(forkName);
-        m_currentRevision = rev;
-        m_ledgerConfig.setEVMCRevision(rev);
+        if (!rev)
+        {
+            return false;
+        }
+        m_currentRevision = *rev;
+        m_ledgerConfig.setEVMCRevision(*rev);
         m_forkTransition.reset();
 
         // Detect fork transition names like "CancunToPragueAtTime15k"
@@ -827,14 +835,19 @@ public:
                 {
                     transitionTime = std::stoll(timeStr);
                 }
-                m_forkTransition = ForkTransition{test::forkNameToRevision(fromFork),
-                    test::forkNameToRevision(toFork), transitionTime};
+                auto const from = test::forkNameToRevision(fromFork);
+                auto const to = test::forkNameToRevision(toFork);
+                if (from && to)
+                {
+                    m_forkTransition = ForkTransition{*from, *to, transitionTime};
+                }
             }
             catch (...)
             {
                 m_forkTransition.reset();
             }
         }
+        return true;
     }
 
     /// Get the EVMC revision for a block given its timestamp (handles fork transitions).
@@ -1323,10 +1336,14 @@ public:
     }
 
     /// Run a single fixture test case. Returns true if passed.
-    bool runFixture(::test::EESTFixture const& fixture, std::string const& forkName,
+    std::optional<bool> runFixture(::test::EESTFixture const& fixture, std::string const& forkName,
         ::test::EESTForkPost const& post)
     {
-        configureFork(forkName);
+        if (!configureFork(forkName))
+        {
+            ++g_skippedTests;
+            return std::nullopt;
+        }
         m_chainId = fixture.chainId;
         m_ledgerConfig.setChainId(evmc::bytes32{static_cast<uint64_t>(m_chainId)});
         configureEnvironment(fixture.env);
@@ -1628,14 +1645,18 @@ public:
     /// Run a blockchain test fixture: execute blocks sequentially,
     /// apply block rewards via finalize(), then verify postState.
     /// Returns true if passed.
-    bool runBlockchainFixture(test::EESTBlockchainFixture const& fixture)
+    std::optional<bool> runBlockchainFixture(test::EESTBlockchainFixture const& fixture)
     {
         auto forkName = extractForkFromName(fixture.name);
         if (forkName.empty())
         {
             forkName = "Cancun";  // default
         }
-        configureFork(forkName);
+        if (!configureFork(forkName))
+        {
+            ++g_skippedTests;
+            return std::nullopt;
+        }
         m_chainId = fixture.chainId;
         m_ledgerConfig.setChainId(evmc::bytes32{static_cast<uint64_t>(m_chainId)});
 
@@ -2007,8 +2028,13 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
         for (auto const& fixture : bcFixtures)
         {
             ++g_totalTests;
-            bool passed = runner.runBlockchainFixture(fixture);
-            if (passed)
+            auto outcome = runner.runBlockchainFixture(fixture);
+            if (!outcome)
+            {
+                --g_totalTests;
+                continue;
+            }
+            if (*outcome)
             {
                 ++g_totalPassed;
                 ++result.passed;
@@ -2051,9 +2077,13 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
             {
                 ++g_totalTests;
                 auto const& post = posts[i];
-                bool passed = runner.runFixture(fixture, forkName, post);
-
-                if (passed)
+                auto outcome = runner.runFixture(fixture, forkName, post);
+                if (!outcome)
+                {
+                    --g_totalTests;
+                    continue;
+                }
+                if (*outcome)
                 {
                     ++g_totalPassed;
                     ++result.passed;
@@ -2250,6 +2280,8 @@ int main(int argc, char* argv[])
               << "\n";
     std::cout << "  Files:         " << totalFiles << "\n";
     std::cout << "  Skipped files: " << g_skippedFiles.load() << "\n";
+    std::cout << "  Skipped tests:  " << g_skippedTests.load()
+              << " (forks with no executable revision, e.g. Constantinople)\n";
     std::cout << "  Load failures: " << g_loadFailures.load() << "\n";
     std::cout << "  Elapsed:       " << elapsed << "s\n";
 
