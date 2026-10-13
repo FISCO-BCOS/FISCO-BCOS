@@ -810,7 +810,10 @@ void bcos::rpc::combineGetPayloadResponse(Json::Value& _result,
         }
         _result["executionRequests"] = std::move(executionRequests);
     }
-    if (_response->parentBeaconBlockRoot.has_value())
+    // review F38: parentBeaconBlockRoot belongs to the V3+ response shape (Cancun);
+    // emitted unconditionally it leaked into V1/V2 responses whose shape has no such
+    // field. withdrawalsRoot/executionRequests gate the same way (V4) above.
+    if (version >= engine::ApiVersion::V3 && _response->parentBeaconBlockRoot.has_value())
     {
         _result["parentBeaconBlockRoot"] = _response->parentBeaconBlockRoot->hexPrefixed();
     }

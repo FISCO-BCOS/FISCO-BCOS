@@ -659,9 +659,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
 
     OpPayloadArtifacts stagedArtifact{.canonicalHeader = std::move(canonicalHeader)};
     {
-        // Copy the hash before the entry is moved: publishBuiltPayload stores the
-        // payload by move, which leaves the original object's blockHash member
-        // moved-from, and putStaged then hashes that reference into hashToId.
+        // review F33: snapshot the hash defensively before the entry is handed away —
+        // publishBuiltPayload moves the shared_ptr, so the pointee (and its const
+        // blockHash member) is untouched; the previous comment claimed a moved-from
+        // member, a mechanism the shared_ptr move never performs.
         const auto blockHash = commonEntry->executionPayload.blockHash;
         auto guard = m_tracker.lockExclusive();
         publishBuiltPayload(guard, m_artifacts, payloadId, blockHash, std::move(commonEntry),

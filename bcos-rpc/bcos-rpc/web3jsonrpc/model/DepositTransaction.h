@@ -31,8 +31,9 @@
 namespace bcos::rpc
 {
 
-/// EIP-2718 type byte of an OP Stack deposit transaction.
-inline constexpr uint8_t c_depositTxType = 0x7e;
+/// EIP-2718 type byte of an OP Stack deposit transaction. Alias of the single home in
+/// bcos::protocol (review F4) — this name stays for the rpc-side readers.
+inline constexpr uint8_t c_depositTxType = bcos::protocol::c_depositTxType;
 
 /// True when @p tx's envelope carries the OP deposit type byte. This is the ONE
 /// definition of the deposit gate both renderers apply before touching deposit

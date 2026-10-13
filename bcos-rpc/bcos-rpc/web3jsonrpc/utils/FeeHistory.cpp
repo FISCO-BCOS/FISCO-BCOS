@@ -108,8 +108,8 @@ u256 bcos::rpc::nextOpBaseFee(
     // validator do not share: they resolve the child through the fork schedule. The
     // formula itself is the shared helper (OpBaseFee.h).
     auto const childIsCanyon = parent.withdrawalsRoot().has_value();
-    return engine::calcOpBaseFeePreHolocene(parent.gasLimit(), parent.gasUsed(),
-        parent.baseFee().value_or(0), childIsCanyon, params);
+    return engine::calcOpBaseFeePreHolocene(
+        parent.gasLimit(), parent.gasUsed(), parent.baseFee().value_or(0), childIsCanyon, params);
 }
 
 task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& ledger,
@@ -121,6 +121,17 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
     if (blockCount == 0)
     {
         co_return result;
+    }
+    // review F8: the upper-side guard below left the lower side open — a negative
+    // newest wrapped uint64(newest)+1 to 0, skipped the loop and dereferenced the null
+    // `last` header (UB in this coroutine). The shared tag resolver rejects >INT64_MAX
+    // and clamps safe/finalized at 0, so no in-tree caller produces this today; the
+    // guard exists for direct/out-of-tree callers and keeps the contract total.
+    if (newest < 0 || head < 0)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "negative block number: requested " + std::to_string(newest) +
+                               ", head " + std::to_string(head)));
     }
     if (newest > head)
     {
@@ -178,8 +189,8 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
     // declared triple so a pre-Holocene tail cannot price with the legacy preset on a
     // chain that declared its own pair (the same substitution the engine performs).
     auto const declared = co_await ledger::getLedgerConfig(ledger);
-    baseFees.append(toQuantity(nextOpBaseFee(
-        *last, declared ? declared->opEip1559Params() : std::nullopt)));
+    baseFees.append(
+        toQuantity(nextOpBaseFee(*last, declared ? declared->opEip1559Params() : std::nullopt)));
     result["baseFeePerGas"] = std::move(baseFees);
     result["gasUsedRatio"] = std::move(ratios);
     if (wantRewards)

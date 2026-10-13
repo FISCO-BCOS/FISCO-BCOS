@@ -331,10 +331,13 @@ BOOST_AUTO_TEST_CASE(depositJsonMatchesGethShape)
     combineDepositTxResponse(systemResult, systemDeposit);
     BOOST_CHECK_EQUAL(systemResult["isSystemTx"].asBool(), true);
     BOOST_CHECK(systemResult["to"].isNull());
-    // op-geth always emits mint (its decoder materializes *big.Int(0) for the empty
-    // RLP item, so a system deposit reports "0x0", never an omitted field) — the
-    // always-emit contract in combineDepositTxResponse pins this.
-    BOOST_CHECK_EQUAL(systemResult["mint"].asString(), "0x0");
+    // op-geth omits mint when the tx carries none (json:"mint,omitempty" plus the
+    // rlp:"nil" decode of the empty item — its own derived attributes deposit is in
+    // exactly this state, so even the every-block first deposit reports no mint key).
+    // The empty mint item must therefore render as an ABSENT key, not "0x0" (review F6;
+    // this case used to pin the always-emit shape, whose op-geth-parity rationale was
+    // wrong — its decoder yields nil, not a non-nil zero).
+    BOOST_CHECK(!systemResult.isMember("mint"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -16,11 +16,14 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     {
         fillDepositReceiptFields(result, receipt);
     }
-    // TODO: Check
-    if (!receipt.effectiveGasPrice().empty())
+    // review F9: the fee-market overlay must not run on deposits — the deposit branch
+    // above pins gasPrice "0x0" (op-geth emits zero quantities for these) and the
+    // full-block path never applies this overwrite, so the unconditional version made
+    // one deposit render differently via eth_getTransactionByHash vs
+    // eth_getBlockByNumber(full). (The old inner ternary was dead code inside !empty().)
+    if (!tx.isDepositTx() && !receipt.effectiveGasPrice().empty())
     {
-        auto gasPrice = receipt.effectiveGasPrice();
-        result["gasPrice"] = std::string{gasPrice.empty() ? "0x0" : gasPrice};
+        result["gasPrice"] = std::string{receipt.effectiveGasPrice()};
     }
 }
 

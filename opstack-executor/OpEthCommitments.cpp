@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthCommitments.cpp
 /// @brief Non-template parts of OpEthCommitments.h: the computed/announced
 ///        projections and the six-way comparison. Ported from the pre-cutover OpCommitments.h
@@ -36,9 +38,8 @@ namespace
 }
 }  // namespace
 
-OpEthBlockCommitments opEthCommitmentsOf(
-    const OpEthBlockSeal& seal, const bcos::h256& stateRoot, uint64_t gasUsed,
-    const bcos::h256& txRoot)
+OpEthBlockCommitments opEthCommitmentsOf(const OpEthBlockSeal& seal, const bcos::h256& stateRoot,
+    uint64_t gasUsed, const bcos::h256& txRoot)
 {
     return OpEthBlockCommitments{
         .receiptsRoot = seal.receiptsRoot,

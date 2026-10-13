@@ -215,6 +215,33 @@ BOOST_AUTO_TEST_CASE(SameHeightOffLineageTieResolvesDeterministically)
     }
 }
 
+// review F5: the canonical-lineage arbitration had NO tie rule (bare insert_or_assign
+// let unordered_map order pick the winner). Non-monotonic staged numbering can put two
+// ancestors of the head at one height (P.parent=Q, both reporting number 5 under head
+// H(n=6)); both are on-lineage, the winner must be the LOWEST hash in either insertion
+// order — the same rule the off-lineage pass uses.
+BOOST_AUTO_TEST_CASE(SameHeightOnLineageTieResolvesDeterministically)
+{
+    auto const expected = hashOf('P') < hashOf('Q') ? hashOf('P') : hashOf('Q');
+    for (bool flipOrder : {false, true})
+    {
+        bcos::engine::ImportedStore store;
+        if (!flipOrder)
+        {
+            BOOST_CHECK(store.put(block('Q', 0, 5)));
+            BOOST_CHECK(store.put(block('P', 'Q', 5)));
+        }
+        else
+        {
+            BOOST_CHECK(store.put(block('P', 'Q', 5)));
+            BOOST_CHECK(store.put(block('Q', 0, 5)));
+        }
+        BOOST_CHECK(store.put(block('H', 'P', 6)));
+        store.adoptCanonicalHead(6, hashOf('H'));
+        BOOST_CHECK_EQUAL(*store.occupantAt(5), expected);
+    }
+}
+
 // The detach must actually FIRE when ancestry is decidable: an old-branch block at a
 // height the new chain occupies is detached and its height re-keyed to the new chain's
 // block. (The walk from the head passes the candidate's height via the sibling, so the

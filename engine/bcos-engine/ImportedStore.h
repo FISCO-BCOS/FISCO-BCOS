@@ -176,15 +176,28 @@ public:
     /// is whatever the engine attached at put() (see storageDelta above — unverified
     /// here). Callers must not read this as "the post-state is materialized".
     [[nodiscard]] bool hasState(const bcos::h256& hash) const { return hasBlock(hash); }
-    /// A shared read view, not a copy (review F6): bodies are immutable after put(),
-    /// so a reader takes one pointer under the lock instead of deep-copying the
-    /// header/tx/receipt vectors; the `detached`/`postStateFlat` flags it observes
-    /// are the store's live values at each read (nullptr = unknown hash).
-    [[nodiscard]] std::shared_ptr<const ImportedBlock> get(const bcos::h256& hash) const
+    /// A shared read view, not a copy (review F6): bodies are immutable after put(), so
+    /// a reader takes one pointer under the lock instead of deep-copying the
+    /// header/tx/receipt vectors. The mutable flags are SNAPSHOTTED under that same lock
+    /// (review F61): handing out a live view of `detached`/`postStateFlat` while
+    /// adoptCanonicalHead/prune flip them in-lock is an unsynchronized concurrent access
+    /// to non-atomic members — UB under the class's documented concurrent put/get
+    /// contract (non-atomic bool + shared_ptr). A nullopt return means unknown hash.
+    struct View
+    {
+        std::shared_ptr<const ImportedBlock> block;  ///< immutable body
+        bool detached{false};                        ///< snapshot at get() time
+        bool hasPostState{false};                    ///< snapshot at get() time
+    };
+    [[nodiscard]] std::optional<View> get(const bcos::h256& hash) const
     {
         std::lock_guard lock(m_mutex);
         auto const it = m_blocks.find(hash);
-        return it == m_blocks.end() ? nullptr : it->second;
+        if (it == m_blocks.end())
+        {
+            return std::nullopt;
+        }
+        return View{it->second, it->second->detached, it->second->postStateFlat != nullptr};
     }
     [[nodiscard]] std::size_t size() const
     {
@@ -273,7 +286,16 @@ public:
         {
             if (!block->detached && onCanonicalLineage(blockHash))
             {
-                m_byNumber.insert_or_assign(block->number, blockHash);
+                // review F5: this pass arbitrated by iteration order (insert_or_assign
+                // let the last unordered_map visit win); an on-lineage tie (non-monotonic
+                // staged numbering along the head's parent chain) must use the same
+                // LOWEST-hash rule as the off-lineage pass below, or occupantAt answers
+                // differently across runs and standard libraries.
+                auto const [it, inserted] = m_byNumber.try_emplace(block->number, blockHash);
+                if (!inserted && blockHash < it->second)
+                {
+                    it->second = blockHash;
+                }
             }
         }
         for (auto const& [blockHash, block] : m_blocks)

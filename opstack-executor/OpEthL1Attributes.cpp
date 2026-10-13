@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthL1Attributes.cpp
 /// @brief Implementation of OpEthL1Attributes.h. The calldata layout and the
 ///        sourceHash derivation are ported byte-for-byte from

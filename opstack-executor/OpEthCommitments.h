@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthCommitments.h
 /// @brief The six-way commitment comparison surface on the bcos-evm-free OP
 ///        layer — the counterpart of the pre-cutover OpCommitments.h (commitmentsOf /

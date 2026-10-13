@@ -118,10 +118,18 @@ void bcos::rpc::combineDepositTxResponse(Json::Value& result, const DepositTrans
     result["gas"] = toQuantity(deposit.gas);
     result["value"] = toQuantity(deposit.value);
     result["input"] = toHexStringWithPrefix(deposit.input);
-    // op-geth always emits mint: its decoder materializes a non-nil *big.Int(0) for the
-    // empty item (0x80) and its RPC prints any non-nil pointer, so the L1-attributes deposit
-    // is "0x0" rather than omitted. Mirror that: treat the internal nullopt as zero.
-    result["mint"] = toQuantity(deposit.mint.has_value() ? *deposit.mint : u256{0});
+    // op-geth omits mint when the tx carries none: RPCTransaction tags the field
+    // `json:"mint,omitempty"` and its decoder (rlp:"nil") maps the empty item back to
+    // nil — and even the derived L1-attributes deposit is in this state (op-node builds
+    // it with Mint=big.NewInt(0), which go-ethereum's rlp writes as the empty item), so
+    // op-geth reports NO mint key on the every-block first deposit. Mirror that: emit
+    // mint only when the envelope carried a non-empty item (review F6; verified against
+    // op-geth e8800cff internal/ethapi/api.go:1179/:1221, core/types/deposit_tx.go:37,
+    // rlp/encbuffer.go:150 and op-node/rollup/derive/deposit_source.go:96).
+    if (deposit.mint.has_value())
+    {
+        result["mint"] = toQuantity(*deposit.mint);
+    }
     if (deposit.isSystemTx)
     {
         // op-geth emits isSystemTx only when true.

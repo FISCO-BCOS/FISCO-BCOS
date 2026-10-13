@@ -136,6 +136,14 @@ Json::Value decodeWithdrawalsJson(bcos::bytes raw)
     {
         auto const itemStart = items;
         auto const itemHeader = bcos::codec::rlp::decodeHeader(items);
+        // review F7: the inner head is node-local data too — the deposit decoder bounds
+        // it explicitly (DepositTransaction.cpp) and this walker must match, or a corrupt
+        // row's over-claimed length reads past the buffer in rlpDecode below.
+        if (itemHeader.payloadLength > items.size())
+        {
+            rethrowAsEngineInternalError(
+                "malformed withdrawals sidecar row (item over-claims its length)");
+        }
         auto const itemSize = (itemStart.size() - items.size()) + itemHeader.payloadLength;
         bcos::protocol::EthWithdrawal withdrawal;
         withdrawal.rlpDecode(bcos::bytesConstRef(itemStart.data(), itemSize));
@@ -177,6 +185,14 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
         co_return;
     }
 
+    // review F36: jsoncpp iterates a non-array value as an EMPTY range, so a non-array
+    // params[0] silently answered this node's own caps instead of -32602 — the exact
+    // fail-open the rest of this PR guards against for withdrawals/transactions.
+    if (request.size() < 1 || !request[0u].isArray())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "engine_exchangeCapabilities expects one array parameter"));
+    }
     std::vector<std::string> remoteCaps;
     auto const& capsArray = request[0u];
     for (auto const& cap : capsArray)
@@ -691,7 +707,7 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
         {
             auto const head = co_await ledger::getCurrentBlockNumber(*ledger);
             for (auto number = head;
-                number >= 0 && missing > 0 && head - number < c_getBlobsLedgerScanDepth; --number)
+                 number >= 0 && missing > 0 && head - number < c_getBlobsLedgerScanDepth; --number)
             {
                 auto const entry = co_await storage2::readOne(*stateStorage,
                     executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)});
@@ -705,11 +721,23 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
                 try
                 {
                     auto const outerHead = codec::rlp::decodeHeader(in);
+                    // review F7: the row's outer head is untrusted data too — a corrupt
+                    // row that over-claims its payload walked the loop past the buffer.
+                    if (outerHead.payloadLength > in.size())
+                    {
+                        continue;  // corrupt row: other rows may still match
+                    }
                     bcos::byte* const outerStart = in.data();
                     while (
                         static_cast<std::size_t>(in.data() - outerStart) < outerHead.payloadLength)
                     {
                         auto const itemHead = codec::rlp::decodeHeader(in);
+                        // review F7: same bound one level down, mirroring the deposit
+                        // decoder — an item may not claim more than the row has left.
+                        if (itemHead.payloadLength > in.size())
+                        {
+                            break;  // corrupt item: stop mining this row
+                        }
                         bcos::byte* const itemStart = in.data();
                         bcos::bytes commitment, proof, blob;
                         codec::rlp::decodeItems(in, commitment, proof, blob);

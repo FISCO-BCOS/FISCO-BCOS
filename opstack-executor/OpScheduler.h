@@ -515,16 +515,28 @@ private:
             {
                 auto message = std::string{"Another block is executing!"};
                 OP_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false};
+                // review F2: recoverable CL-side state (a concurrent scheduler call; the
+                // CL retries once the in-flight one drains) — same class as the sibling/
+                // gap/pending branches: tagged so mapDelegateError answers SYNCING, never
+                // an internal -32603. The tag name is historical (see the note above).
+                auto retryError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message);
+                *retryError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(retryError), nullptr, false};
             }
             std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
             if (!commitLock.owns_lock())
             {
                 auto message = std::string{"Another block is committing!"};
                 OP_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false};
+                // review F2: recoverable CL-side state (a concurrent scheduler call; the
+                // CL retries once the in-flight one drains) — same class as the sibling/
+                // gap/pending branches: tagged so mapDelegateError answers SYNCING, never
+                // an internal -32603. The tag name is historical (see the note above).
+                auto retryError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message);
+                *retryError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(retryError), nullptr, false};
             }
 
             // Clear any stale slot before executing a probe: a failed probe must not leave
@@ -666,6 +678,19 @@ private:
                 if (executedHeader->withdrawalsRoot().has_value() !=
                     blockHeader->withdrawalsRoot().has_value())
                 {
+                    // review F3: this presence asymmetry answered OpConsensusError
+                    // (INVALID) for BOTH cells, contradicting the disclosed rationale
+                    // that a scheduler-stamped field is a node fault, never a consensus
+                    // INVALID. The seal's presence is the node's own stamping decision
+                    // (nullopt pre-Canyon per the OpEthCommitments matrix), so the
+                    // executed-missing cell — the one the disclosure retires — is the
+                    // node fault; INVALID stays only for the announcement-driven cell.
+                    if (!executedHeader->withdrawalsRoot().has_value())
+                    {
+                        throw bcos::engine::OpExecutionInternalError(
+                            "OpScheduler: executed header is missing the withdrawalsRoot "
+                            "the announcement carried (node-side stamping, not consensus)");
+                    }
                     throw bcos::evm::OpConsensusError(
                         "OpScheduler: commitment mismatch on field withdrawalsRoot");
                 }
@@ -733,23 +758,40 @@ private:
             {
                 auto message = std::string{"Another block is executing!"};
                 OP_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false};
+                // review F2: recoverable CL-side state (a concurrent scheduler call; the
+                // CL retries once the in-flight one drains) — same class as the sibling/
+                // gap/pending branches: tagged so mapDelegateError answers SYNCING, never
+                // an internal -32603. The tag name is historical (see the note above).
+                auto retryError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message);
+                *retryError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(retryError), nullptr, false};
             }
             std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
             if (!commitLock.owns_lock())
             {
                 auto message = std::string{"Another block is committing!"};
                 OP_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false};
+                // review F2: recoverable CL-side state (a concurrent scheduler call; the
+                // CL retries once the in-flight one drains) — same class as the sibling/
+                // gap/pending branches: tagged so mapDelegateError answers SYNCING, never
+                // an internal -32603. The tag name is historical (see the note above).
+                auto retryError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message);
+                *retryError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(retryError), nullptr, false};
             }
             if (!m_lastProbe)
             {
                 auto message = std::string{"adoptProbeAsPending: no retained probe"};
                 OP_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
-                    nullptr, false};
+                // review F2: recoverable (adopt without a probe / after one was consumed;
+                // the CL retries after a fresh probe) — twin of the tagged height-mismatch
+                // refusal below: tagged so mapDelegateError answers SYNCING.
+                auto retryError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message);
+                *retryError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(retryError), nullptr, false};
             }
             if (m_lastProbe->executedHeader->number() != number)
             {
@@ -825,8 +867,12 @@ private:
                     fmt::format("adoptProbeAsPending: commitment mismatch on field {}", *mismatch);
                 OP_SCHEDULER_LOG(INFO) << message;
                 m_lastProbe.reset();
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
-                    nullptr, false};
+                // review F2: recoverable — the probe is dropped and the CL re-probes/retries;
+                // twins of the tagged commit-lane divergence of the same class.
+                auto retryError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message);
+                *retryError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(retryError), nullptr, false};
             }
             auto const announcedBlockHash = bcos::protocol::canonicalBlockHash(*blockHeader);
             auto const probeHash = bcos::protocol::canonicalBlockHash(*m_lastProbe->executedHeader);
@@ -836,8 +882,12 @@ private:
                     "adoptProbeAsPending: executed header hash does not match the announced hash"};
                 OP_SCHEDULER_LOG(INFO) << message;
                 m_lastProbe.reset();
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
-                    nullptr, false};
+                // review F2: recoverable — the probe is dropped and the CL re-probes/retries;
+                // twins of the tagged commit-lane divergence of the same class.
+                auto retryError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message);
+                *retryError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(retryError), nullptr, false};
             }
             m_multiLayerStorage->pushView(std::move(m_lastProbe->view));
             auto executedHeader = m_lastProbe->executedHeader;
@@ -881,8 +931,14 @@ private:
             {
                 auto message = std::string{"Another block is committing!"};
                 OP_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr};
+                // review F2: recoverable CL-side state (a concurrent scheduler call; the
+                // CL retries once the in-flight one drains) — same class as the sibling/
+                // gap/pending branches: tagged so mapDelegateError answers SYNCING, never
+                // an internal -32603. The tag name is historical (see the note above).
+                auto retryError =
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message);
+                *retryError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(retryError), nullptr};
             }
             if (!m_ledger)
             {

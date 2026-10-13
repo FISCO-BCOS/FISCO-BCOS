@@ -39,7 +39,8 @@
 
 #include <opstack-executor/OpCommon.h>         // OpConsensusError / OpStorageError
 #include <opstack-executor/OpEthBlockSteps.h>  // preBlockOpEthSteps / finalizeOpEthBlockResult
-#include <opstack-executor/OpEthCommitments.h>  // OpEthBlockCommitments / opEthCommitmentsOf / opEthMismatchedFieldOf
+// OpEthBlockCommitments / opEthCommitmentsOf / opEthMismatchedFieldOf
+#include <opstack-executor/OpEthCommitments.h>
 #include <opstack-executor/OpEthDeposit.h>   // decodeOpDepositEnvelope / DepositTx
 #include <opstack-executor/OpEthExecutor.h>  // OpEthExecutor / OpEthBlockContext
 #include <opstack-executor/OpForkSpec.h>     // opForkSpecAt

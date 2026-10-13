@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthBlockSteps.h
 /// @brief The block-level pre/post steps of the OP production execution paths
 ///        (OpScheduler::execute and OpBlockVerifier::verifyAndCommit) on the
@@ -41,7 +43,8 @@
 #include <ethereum-executor/EthereumTransition.h>  // eth::finalizeState
 #include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError / detail conversions
 #include <opstack-executor/OpEthBlockExecute.h>  // buildOpEthBlockInfo / sealOpEthBlock / ...
-#include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult / computeOpEthTransactionsRoot
+// OpEthExecuteBlockResult / computeOpEthTransactionsRoot
+#include <opstack-executor/OpEthCommitments.h>
 #include <opstack-executor/OpEthDeposit.h>         // DepositTx / OP_DEPOSIT_TX_TYPE
 #include <opstack-executor/OpExecutionPolicy.h>    // OpPolicy
 #include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source

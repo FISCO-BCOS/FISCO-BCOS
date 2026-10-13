@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthReceipt.h
 /// @brief OP Stack receipt metadata for the ethereum-executor-based OP path —
 ///        the bcos-evm-free counterpart of OpTransition.cpp's OpReceiptMeta /

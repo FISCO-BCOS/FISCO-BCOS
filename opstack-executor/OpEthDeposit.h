@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthDeposit.h
 /// @brief The OP 0x7E deposit transaction on the ethereum-executor stack —
 ///        the bcos-evm-free counterpart of OpTransition.cpp's runDeposit and
@@ -43,8 +45,9 @@ namespace eth = bcos::executor_v1::eth;
 
 DERIVE_BCOS_EXCEPTION(OpEthDepositValidationFailed);
 
-/// OP 0x7E deposit transaction/receipt type (EIP-2718 typed envelope prefix).
-inline constexpr uint8_t OP_DEPOSIT_TX_TYPE = 0x7e;
+/// OP 0x7E deposit transaction/receipt type (EIP-2718 typed envelope prefix). Kept as
+/// the executor-side name; the VALUE is single-homed in bcos::protocol (review F4).
+inline constexpr uint8_t OP_DEPOSIT_TX_TYPE = bcos::protocol::c_depositTxType;
 
 /// Admissible transaction type byte on the OP admission lanes: legacy RLP lists
 /// (first byte >= 0xc0), EIP-2930 (0x01), EIP-1559 (0x02), EIP-7702 (0x04) and
@@ -55,9 +58,8 @@ inline constexpr uint8_t OP_DEPOSIT_TX_TYPE = 0x7e;
 /// accept/reject divergence between the lanes.
 [[nodiscard]] inline constexpr bool isAdmissibleOpTxTypeByte(uint8_t typeByte) noexcept
 {
-    constexpr uint8_t c_rlpListBase = 0xc0;  // legacy RLP list prefix
-    return typeByte >= c_rlpListBase || typeByte == 0x01 || typeByte == 0x02 ||
-           typeByte == 0x04 || typeByte == OP_DEPOSIT_TX_TYPE;
+    return typeByte >= bcos::codec::rlp::LIST_HEAD_BASE || typeByte == 0x01 ||
+           typeByte == 0x02 || typeByte == 0x04 || typeByte == OP_DEPOSIT_TX_TYPE;
 }
 
 /// 0x7E deposit tx (not a protocol::Transaction). When mint has a value it is added
