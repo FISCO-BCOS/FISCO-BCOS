@@ -26,3 +26,4 @@ jobs:
           sudo apt-get update
           sudo apt-get -y install clang-format
           bash tools/.ci/check-commit.sh
+          bash tools/.ci/check_log_events.sh
