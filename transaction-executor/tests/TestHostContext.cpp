@@ -3,6 +3,7 @@
 #include "TestBytecode.h"
 #include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
@@ -1048,7 +1049,7 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.inner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
         // The block number feeds newEVMAddress(blockNumber, contextID, seq) — the stub's
-        // link address. The executable cache is content-addressed ((address, code hash)),
+        // link address. The executable cache is content-addressed ({code hash, revision}),
         // so a shared address across test cases is no longer a poisoning hazard; the
         // large, odd block number just keeps this case's link address distinct.
         blockHeader.setNumber(1000003);
@@ -1135,6 +1136,56 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
             storage, StateKeyView{bcos::ledger::SYS_TABLES, "/apps/" + linkAddress}));
         co_return;
     }());
+}
+
+// The CREATE2 opcode hook must derive with the CHAIN hasher (0xff||sender||salt||
+// chainHasher(initcode), last 20 bytes): upstream evmone hashes the same preimage with
+// keccak256, which would fork SM-crypto chains whose historical CREATE2 addresses are
+// chain-hash derived. Pinned against frozen literals AND the v1 lane's historical
+// EIP-1014 helper (bcos::newCreate2EVMAddress, the formula pre-upgrade addresses came
+// from). The SM3 cell is the discriminating one — on a keccak chain the hook's output
+// coincides with upstream's, so a revert to keccak derivation turns only the SM3 cell
+// red while the parity assertion stays meaningful for both hashers.
+BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
+{
+    evmc_address sender{};
+    sender.bytes[19] = 0x2a;
+    evmc_bytes32 salt{};
+    salt.bytes[31] = 0x42;
+    static const bcos::bytes initCode{0x60, 0x42, 0x60, 0x00, 0xf3};
+    bytesConstRef initCodeRef{initCode.data(), initCode.size()};
+    const auto senderHex = bcos::toHex(bytesConstRef{sender.bytes, sizeof(sender.bytes)});
+
+    struct HasherCase
+    {
+        const char* name;
+        bcos::crypto::Hash::Ptr hasher;
+        std::string expected;
+    };
+    // Literals frozen from the first run, cross-checked in-test against
+    // bcos::newCreate2EVMAddress (the v1 lane's historical implementation).
+    const std::array<HasherCase, 2> cases{
+        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>(),
+            "cf68986460c687b1295a1ce12b24c5f4abe9d378"},
+        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>(),
+            "741d257ae84fd70ae8ce97a8a02c5672516a519e"},
+    };
+
+    for (auto const& hasherCase : cases)
+    {
+        const evmc_message dummy{};
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, dummy,
+                sender, "", 0, seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, false, 0,
+                bcos::task::syncWait);
+        const auto addr = hostContext.create2AddressForOpcode(sender, salt, initCodeRef);
+        const auto addrHex = bcos::toHex(bytesConstRef{addr.bytes, sizeof(addr.bytes)});
+        BOOST_CHECK_EQUAL(addrHex, hasherCase.expected);
+        // Parity with the v1 lane's historical EIP-1014 helper: same chain hasher,
+        // same preimage, independent implementation site.
+        BOOST_CHECK_EQUAL(addrHex,
+            bcos::newCreate2EVMAddress(hasherCase.hasher, senderHex, initCodeRef, u256(0x42)));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
