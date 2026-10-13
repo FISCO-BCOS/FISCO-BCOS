@@ -199,20 +199,19 @@ BOOST_AUTO_TEST_CASE(attrs_holocene_pairing_matches_op_geth)
 
 BOOST_AUTO_TEST_CASE(op_does_not_advertise_unimplemented_fcu_v4)
 {
-    auto caps = engine_common::op::supportedOpCapabilities();
-    BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_forkchoiceUpdatedV3") != caps.end());
-    BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_forkchoiceUpdatedV4") == caps.end());
-    BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_getPayloadV4") != caps.end());
-    BOOST_CHECK(std::find(caps.begin(), caps.end(), "engine_newPayloadV4") != caps.end());
-    // The OP lane must not advertise methods its own gates deterministically reject:
-    // newPayload is Isthmus-only V4 (-38005 for V1-V3) and getPayloadV1/V2 cannot
-    // render a PayloadV3 build — a pre-Isthmus CL reading them has no sync path back.
-    for (auto const* dead : {"engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3",
-             "engine_getPayloadV1", "engine_getPayloadV2"})
-    {
-        BOOST_CHECK_MESSAGE(std::find(caps.begin(), caps.end(), dead) == caps.end(),
-            "OP caps must not advertise " << dead);
-    }
+    // The exact OP list. Pinned in full so a method cannot slip in or out unnoticed:
+    // the OP lane must not advertise methods its own gates deterministically reject
+    // (newPayload is Isthmus-only V4, -38005 for V1-V3; getPayloadV1/V2 cannot render a
+    // PayloadV3 build; FCU V4 is unimplemented), and it MUST advertise the aux methods
+    // it serves through the shared EngineEndpoint (getPayloadBodiesBy{Hash,Range}V1,
+    // getClientVersionV1), as op-geth's auto-derived caps list does.
+    std::vector<std::string> const expected{"engine_exchangeCapabilities",
+        "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
+        "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5", "engine_newPayloadV4",
+        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
+        "engine_getClientVersionV1"};
+    auto const caps = engine_common::op::supportedOpCapabilities();
+    BOOST_CHECK_EQUAL_COLLECTIONS(caps.begin(), caps.end(), expected.begin(), expected.end());
 }
 
 BOOST_AUTO_TEST_CASE(newpayload_rejects_blob_type_as_fisco_op_policy)

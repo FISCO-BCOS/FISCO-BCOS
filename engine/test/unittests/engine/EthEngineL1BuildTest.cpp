@@ -829,6 +829,20 @@ BOOST_FIXTURE_TEST_CASE(cancunDerivedContextStampsBuiltHeader, EL1BFixture)
         /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0, decoder, stateRootCalc));
     BOOST_CHECK(result.valid);
     BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+
+    // The negative control against the two ethBlockVersion producers diverging: the
+    // build lane stamps the schedule-derived version (finalizeEthBlockHeader) and the
+    // verify lane derives the same value from the fork schedule
+    // (makeExecutionBlockHeader). verifyAndCommit's result.header IS the header whose
+    // encoding prewriteBlockToBuffer would commit (the FakeLedger used here no-ops the
+    // metadata write, so assert on the round-tripped bytes, not on a storage row) — it
+    // must carry CANCUN. If the two derivations ever disagree, this goes red.
+    BOOST_CHECK(result.header->ethBlockVersion() == protocol::EthBlockVersion::CANCUN);
+    bcos::bytes committedBytes;
+    result.header->encode(committedBytes);
+    auto committedHeader = nodeB.blockFactory->blockHeaderFactory()->createBlockHeader(
+        bcos::bytesConstRef(committedBytes.data(), committedBytes.size()));
+    BOOST_CHECK(committedHeader->ethBlockVersion() == protocol::EthBlockVersion::CANCUN);
 }
 
 // A pooled blob transaction whose sidecar never arrived is unbuildable: seal skips it —

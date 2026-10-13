@@ -438,9 +438,11 @@ BOOST_AUTO_TEST_CASE(londonActivationBlockUsesInitialBaseFee)
 BOOST_AUTO_TEST_CASE(excessBlobGasValidation)
 {
     // Parent with blob gas; child recomputes correctly. Prague activates after
-    // the child, so the Cancun schedule (target 3) applies.
+    // the child, so the Cancun schedule (target 3) applies — and the child must
+    // not carry the Prague-only requestsHash (symmetric presence rule).
     auto p = makeValidPair();
     p.config.pragueTime = 1600000002;
+    p.child.requestsHash.reset();
     p.parent.excessBlobGas = u256(200000);
     p.parent.blobGasUsed = u256(2 * kGasPerBlob);
     p.child.excessBlobGas =
@@ -504,6 +506,7 @@ BOOST_AUTO_TEST_CASE(pragueExcessBlobGasRecomputation)
     // The validator picks the schedule by the child header timestamp.
     auto p = makeValidPair();
     p.config.pragueTime = 1600000002;  // still Cancun at the child block
+    p.child.requestsHash.reset();      // Prague-only field must be absent pre-Prague
     p.parent.excessBlobGas = u256(0);
     p.parent.blobGasUsed = u256(5 * kGasPerBlob);
     p.child.excessBlobGas = u256(2 * kGasPerBlob);

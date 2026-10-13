@@ -1733,7 +1733,10 @@ BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
             built->parentBeaconBlockRoot->hexPrefixed());
         auto mismatch = bcos::engine::detail::compareWithBuiltPayload(
             parsed.executionPayload, built->executionPayload);
-        BOOST_CHECK_MESSAGE(!mismatch, label << " wire round-trip diverged: " << *mismatch);
+        // value_or: the message stream is evaluated even when the check passes in this
+        // build (libstdc++ debug assertions abort on a disengaged optional deref).
+        BOOST_CHECK_MESSAGE(
+            !mismatch, label << " wire round-trip diverged: " << mismatch.value_or(""));
     }
 
     // V2 shape: the Shanghai payload drops the Cancun blob fields, but the dialect

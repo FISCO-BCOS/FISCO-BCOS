@@ -25,6 +25,7 @@
  */
 
 #include "Initializer.h"
+#include <bcos-framework/ledger/OpForkScheduleMetadata.h>
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
@@ -55,6 +56,7 @@
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
+#include "opstack-executor/OpAdmissionRollupCost.h"
 #include <TxPool.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hasher/AnyHasher.h>
@@ -731,6 +733,33 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // opstack-el self-sync mode blocks arrive over devp2p and commit through
         // OpBlockVerifier (OpStackSyncInitializer), so no EngineService — and no DA-caps /
         // mempool wiring that exists only to serve it — is built.
+        // The declared-ness diagnostic is hoisted OUT of that split on purpose: the same
+        // preset reaches BOTH lanes — the engine substitutes it into extraData whenever
+        // op-node reports zero params, and the sync validator re-prices pre-Holocene
+        // headers with it (OpStackSyncInitializer::opChainConfig) — so an undeclared OP
+        // chain must hear about it in either mode, not just the engine-driven one.
+        auto const& declaredOpEip1559 = m_nodeConfig->genesisConfig().m_opEip1559;
+        auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
+        if (declaredOpEip1559.has_value())
+        {
+            INITIALIZER_LOG(INFO)
+                << LOG_DESC("OP chain EIP-1559 parameters") << LOG_KV("declared", true)
+                << LOG_KV("elasticity", opEip1559.elasticity)
+                << LOG_KV("denominator", opEip1559.denominator)
+                << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+        }
+        else
+        {
+            // Never silent: this preset is what zero-attribute-params substitution (the
+            // engine lane) and pre-Holocene header re-pricing (the el lane) fall back to,
+            // and the preset need not be this chain's pair.
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("OP chain declares no [op_eip1559]: preset-priced fallback "
+                            "will use the OP-mainnet PRESET")
+                << LOG_KV("elasticity", opEip1559.elasticity)
+                << LOG_KV("denominator", opEip1559.denominator)
+                << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+        }
         if (!m_nodeConfig->opStackELModeEnabled())
         {
             m_daCaps = std::make_shared<bcos::engine::DACaps>();
@@ -738,6 +767,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
                 m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
                 opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+            // NOTE (split): the declaredOpEip1559 wiring into the engine constructor rides
+            // the engine-side PR (the OpEngineService ctor param lands there); this branch
+            // keeps the config-channel reading + boot diagnostics only.
         }
 
         m_opScheduler = opDelegate;
@@ -834,6 +866,99 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                     "on-chain; the effective EVM revision would be a binary-side default. "
                     "Refusing to start — configure executor.evm_revision at genesis, or run "
                     "executor_version 0/1"));
+        }
+    }
+
+    // Boot probe parity for the OP lane's fail-closed rows (review finding T):
+    // applyLedgerConfig throws on a malformed op_eip1559_params / op_fork_schedule row,
+    // and without a boot-side parse a corrupt row would only surface as the per-block
+    // "Execute block failed!" loop plus -32603 on every RPC reader. Parse both rows
+    // here on the OP lane so the failure is an explicit startup refusal, mirroring the
+    // evmc_revision probe above. Absent rows stay legal (pre-existing OP chains). The
+    // same probe refuses a node whose OWN declared material diverges from the chain's
+    // recorded copy — see the two comparisons below.
+    if (ledger::isOpLaneVersion(m_executorVersion))
+    {
+        std::optional<std::string> recordedEip1559Row;
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_eip1559_params))))
+        {
+            // Throws InvalidOpEip1559Config on a malformed row — the exact parse
+            // applyLedgerConfig performs on every snapshot read.
+            (void)ledger::parseOpEip1559Params(std::get<0>(*row));
+            recordedEip1559Row = std::get<0>(*row);
+        }
+        // The recorded triple is genesis-frozen; the triple THIS node prices with
+        // (effectiveOpEip1559 of the local [op_eip1559], the preset when it declares
+        // nothing) must equal it, or header validation and the zero-param substitution
+        // run on constants the chain never recorded.
+        if (auto const problem =
+                ledger::opEip1559BootProbeProblem(recordedEip1559Row, m_nodeConfig->opEip1559()))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
+        }
+
+        std::optional<std::string> recordedScheduleRow;
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_fork_schedule))))
+        {
+            // opForkScheduleFromCanonical throws ledger::InvalidOpForkSchedule on a
+            // malformed canonical row — the exact parse applyLedgerConfig performs.
+            (void)ledger::opForkScheduleFromCanonical(std::get<0>(*row));
+            recordedScheduleRow = std::get<0>(*row);
+        }
+        // SYS_OP_CHAIN_METADATA integrity triple: absent is legal (pre-triple chain);
+        // PRESENT-but-partial/corrupt/mis-bound is an explicit startup refusal — the
+        // triple exists precisely so a tampered schedule cannot survive unnoticed.
+        // Scope note (deliberately conditional, not unconditional): the production Ledger
+        // returns a state storage on both branches of getStateStorage(), but the
+        // LedgerInterface DEFAULT returns nullptr — a non-overriding ledger SKIPS this
+        // check rather than refusing, and that skip is logged loudly below rather than
+        // left silent. The binding target resolves inside the helper: the config's
+        // [eth_genesis_header] hash when declared, else the chain's own block-0 header —
+        // a schedule-carrying genesis built by a direct-API caller (no config section)
+        // boots with its tamper evidence intact instead of being refused (review F5).
+        std::optional<std::string> recordedTripleSchedule;
+        std::optional<crypto::HashType> configGenesisHash;
+        if (auto const& genesisHeader = m_nodeConfig->genesisConfig().m_ethGenesisHeader;
+            genesisHeader.has_value())
+        {
+            configGenesisHash = genesisHeader->m_hash;
+        }
+        if (auto stateStorage = m_ledger->getStateStorage())
+        {
+            if (auto metadata = task::syncWait(ledger::readValidatedOpForkScheduleMetadataForBoot(
+                    *stateStorage, *m_protocolInitializer->blockFactory(), configGenesisHash));
+                metadata.has_value())
+            {
+                recordedTripleSchedule = metadata->schedule;
+            }
+        }
+        else
+        {
+            // Fail-visible rather than fail-open: the tamper check below then runs with
+            // no triple side. The production Ledger never lands here (both getStateStorage
+            // branches return a storage); only a non-overriding LedgerInterface does.
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("OP boot probe: ledger exposes no state storage — the "
+                            "SYS_OP_CHAIN_METADATA integrity triple cannot be read and its "
+                            "tamper check is SKIPPED");
+        }
+        // The schedule this node will actually run comes from WHICHEVER declaration channel
+        // it carries — the canonical [op_fork_schedule] (Optional) or the folded
+        // [op_fork_timestamps] shorthand (Required) — so a shorthand-only chain, which is
+        // legal and populates only the required channel, is compared too. The recorded side
+        // is the row every snapshot reader consumes, else the pre-triple chain's triple, else
+        // nothing to compare against; a node booted with a different schedule than the
+        // chain's recorded one must refuse, or the divergence surfaces only at the next fork
+        // activation.
+        auto const localSchedule = ledger::resolvedLocalOpForkScheduleCanonical(
+            m_nodeConfig->genesisConfig().m_opForkSchedule,
+            m_nodeConfig->genesisConfig().m_opstackForkSchedule);
+        if (auto const problem = ledger::opForkScheduleBootProbeProblem(
+                recordedScheduleRow, recordedTripleSchedule, localSchedule))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
         }
     }
 
@@ -1011,6 +1136,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
             blobPolicy);
         m_memPoolValidator->setScheduler(m_scheduler);
+        // OP lane: the balance also covers the rollup cost (Check::L1Cost). Only this validator
+        // gets the callable: the txpool's cannot serve an OP chain (the OP gate above refuses a
+        // non-engine-driven, non-EL configuration) and opstack-el self-sync builds no mempool
+        // validator. The fork schedule was required when the OP scheduler was built.
+        if (m_executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+        {
+            m_memPoolValidator->setRollupCostFn(
+                bcos::executor_v1::opstack::makeOpAdmissionRollupCost(
+                    m_globalStateStorageInitializer, *m_nodeConfig->opForkSchedule(),
+                    m_protocolInitializer->blockFactory()));
+        }
     }
 
     // init the frontService

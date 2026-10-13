@@ -145,39 +145,11 @@ public:
     {
         const auto gasLimit = eth::effectiveGasLimit(tx, callParams);
 
-        uint32_t flzLen = 0;
-        intx::uint256 l1Cost;
-        std::optional<uint64_t> legacyL1GasUsed;
-        if (m_spec.has_legacy_l1_formula)
-        {
-            // Bedrock–Delta: (txDataGas + overhead) * l1BaseFee * l1FeeScalar / 1e6, with the
-            // +68 phantom non-zero bytes pre-Regolith. m_spec.fork is the ladder-resolved fork,
-            // so the comparison is exactly IsRegolith(blockTime).
-            const auto legacy =
-                computeLegacyL1Cost(m_fee, m_envelope, m_spec.fork >= OpFork::Regolith);
-            l1Cost = legacy.fee;
-            legacyL1GasUsed = legacy.gas_used;
-        }
-        else if (ecotoneParamsUnset(m_fee))
-        {
-            // First-Ecotone-block fallback (op-geth rollup_cost.go NewL1CostFunc selectFunc):
-            // Ecotone is active but the L1Block Ecotone parameters read all-zero, so the
-            // Bedrock legacy formula applies — with isRegolith=true. Checked before the
-            // Ecotone/Fjord split: "the first block of Fjord and Ecotone could be the same
-            // block".
-            const auto legacy = computeLegacyL1Cost(m_fee, m_envelope, /*regolithActive=*/true);
-            l1Cost = legacy.fee;
-            legacyL1GasUsed = legacy.gas_used;
-        }
-        else if (m_spec.has_ecotone_l1_formula)
-        {
-            l1Cost = computeL1Cost(m_fee, m_envelope, m_spec);
-        }
-        else
-        {
-            flzLen = flzCompressLen(m_envelope);
-            l1Cost = computeL1CostFromFlz(m_fee, flzLen, m_spec);
-        }
+        // One fork selection for execution and admission: opL1DataCost.
+        const auto l1 = opL1DataCost(m_fee, m_envelope, m_spec);
+        const auto l1Cost = l1.fee;
+        const auto flzLen = l1.flz_len;
+        const auto legacyL1GasUsed = l1.legacy_l1_gas_used;
         const auto opCost = m_spec.has_operator_fee ?
                                 computeOperatorCost(m_fee, static_cast<uint64_t>(gasLimit), m_spec) :
                                 intx::uint256{0};

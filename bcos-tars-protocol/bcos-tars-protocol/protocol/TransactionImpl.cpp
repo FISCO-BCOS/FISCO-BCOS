@@ -785,6 +785,23 @@ size_t bcostars::protocol::TransactionImpl::size() const
             size += key.size();
         }
     }
+    // EIP-7702 authorization entries: count the variable-length hex strings (address/signer/r/s).
+    // The fixed chainID/nonce/v scalars are excluded, like the other fixed scalars above.
+    for (auto const& entry : m_inner()->data.authorizationList)
+    {
+        size += entry.address.size();
+        size += entry.signer.size();
+        size += entry.r.size();
+        size += entry.s.size();
+    }
+    // EIP-4844 blob commitments: each versioned hash is a 32-byte payload.
+    for (auto const& hash : m_inner()->data.blobVersionedHashes)
+    {
+        size += hash.size();
+    }
+    // The sibling variable-length field of the same 0x03 shape: maxFeePerBlobGas is a
+    // variable-length hex string, same class as the counted maxFeePerGas above.
+    size += m_inner()->data.maxFeePerBlobGas.size();
     size += m_inner()->signature.size();
     size += m_inner()->sender.size();
     size += m_inner()->extraData.size();
@@ -792,6 +809,13 @@ size_t bcostars::protocol::TransactionImpl::size() const
     size += m_inner()->extraTransactionHash.size();
     size += m_inner()->sourceHash.size();
     size += m_inner()->mint.size();
+    // The remaining variable-length envelope fields, completing the "count every
+    // variable-length field" rule: chainID/groupID are hex strings like the counted
+    // value/gasPrice above, and dataHash is a byte payload like the counted
+    // extraTransactionBytes/extraTransactionHash pair it mirrors.
+    size += m_inner()->data.chainID.size();
+    size += m_inner()->data.groupID.size();
+    size += m_inner()->dataHash.size();
     // isSystemTransaction (optional byte) is a fixed-length scalar — excluded from
     // size() like other fixed scalars (type, version, blockLimit).
     return size;

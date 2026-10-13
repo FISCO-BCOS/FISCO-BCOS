@@ -31,7 +31,7 @@ DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 
 namespace
 {
-// Local hex helpers for the opStackMeta tars fields. All 13 fields are hex strings so that
+// Local hex helpers for the opStackMeta tars fields. All 14 fields are hex strings so that
 // explicit zeros ("0x0") survive tars serialization (tars optional scalars have no presence
 // semantics). boost::lexical_cast has no base-argument overload, so the u64 path formats via a
 // fixed-width multiprecision number::str(digits, base). (boost::multiprecision::uint64_t does
@@ -60,7 +60,8 @@ bool opStackMetaEmpty(bcostars::OpStackReceiptMeta const& s)
            s.l1_base_fee_scalar.empty() && s.l1_blob_base_fee_scalar.empty() &&
            s.operator_fee_scalar.empty() && s.operator_fee_constant.empty() &&
            s.da_footprint_gas_scalar.empty() && s.da_footprint.empty() && s.deposit_nonce.empty() &&
-           s.deposit_receipt_version.empty() && s.l1_gas_used.empty() && s.operator_fee.empty();
+           s.deposit_receipt_version.empty() && s.l1_gas_used.empty() && s.operator_fee.empty() &&
+           s.l1_fee_scalar.empty();
 }
 std::optional<bcos::u256> hexToU256(std::string const& s)
 {
@@ -221,7 +222,7 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
         return std::nullopt;
     }
     bcos::protocol::OpStackReceiptMeta out;
-    // all 13 fields are hex strings; a tars optional string uses != "" to mean "present"
+    // all 14 fields are hex strings; a tars optional string uses != "" to mean "present"
     // (0 values are stored "0x0", non-empty, so explicit zeros keep their presence)
     if (!s.l1_gas_price.empty())
         out.l1_gas_price = hexToU256(s.l1_gas_price);
@@ -249,6 +250,8 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
         out.l1_gas_used = hexToU64(s.l1_gas_used);
     if (!s.operator_fee.empty())
         out.operator_fee = hexToU256(s.operator_fee);
+    if (!s.l1_fee_scalar.empty())
+        out.l1_fee_scalar = hexToU256(s.l1_fee_scalar);
     // A legacy receipt (field 8 never set) decodes to an all-empty opStackMeta. Report nullopt so
     // downstream `if (auto m = r.opStackMeta())` does not mistake it for an OP receipt.
     if (out.l1_gas_price == std::nullopt && out.l1_fee == std::nullopt &&
@@ -257,7 +260,7 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
         out.operator_fee_constant == std::nullopt && out.da_footprint_gas_scalar == std::nullopt &&
         out.da_footprint == std::nullopt && out.deposit_nonce == std::nullopt &&
         out.deposit_receipt_version == std::nullopt && out.l1_gas_used == std::nullopt &&
-        out.operator_fee == std::nullopt)
+        out.operator_fee == std::nullopt && out.l1_fee_scalar == std::nullopt)
     {
         return std::nullopt;
     }
@@ -297,6 +300,8 @@ void bcostars::protocol::TransactionReceiptImpl::setOpStackMeta(
         s.l1_gas_used = u64ToHex(*meta.l1_gas_used);
     if (meta.operator_fee)
         s.operator_fee = u256ToHex(*meta.operator_fee);
+    if (meta.l1_fee_scalar)
+        s.l1_fee_scalar = u256ToHex(*meta.l1_fee_scalar);
 }
 const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner() const
 {
@@ -374,6 +379,9 @@ size_t bcostars::protocol::TransactionReceiptImpl::size() const
         size += s.deposit_receipt_version.size();
         size += s.l1_gas_used.size();
         size += s.operator_fee.size();
+        // Bedrock-era FeeScalar: opStackMetaEmpty counts this field too, so size() must
+        // enumerate it or an OP pre-Ecotone receipt under-reports by its hex length.
+        size += s.l1_fee_scalar.size();
     }
     return size;
 }
