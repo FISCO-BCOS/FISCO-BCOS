@@ -74,23 +74,14 @@ jobs:
           # the whole checkout block: `grep -v ci-op-e2e-tests` alone only removed the
           # path: line while the ref: line survived into t8n_pins (the leak the comment
           # above claims to prevent).
+          # review F26: the checkout-block half comes from the ONE parser now —
+          # check-ci-pins.sh --print-pins (same step-block semantics as the CI gate,
+          # loud NO-REF/NO-PATH); the inline awk this replaced flushed only on
+          # name|uses|run and silently dropped ref-less blocks. The composite
+          # action ref stays a plain grep (no step-boundary semantics to get wrong).
           t8n_pins=$( { grep -hoE 'opstack-t8n-regen@[0-9a-f]{40}' $WF_T8N | sed 's/.*@//'; \
-                        sed 's/#.*//' $WF_T8N | awk '
-                            function flush() {
-                                if (repo && path != "" && path !~ /ci-op-e2e-tests/ && ref != "")
-                                    print ref
-                                repo = 0; ref = ""; path = ""
-                            }
-                            /^[[:space:]]*-[[:space:]]*(name|uses|run):/ { flush() }
-                            /repository:[[:space:]]*FISCO-BCOS\/op-stack-e2e-tests/ { repo = 1 }
-                            match($0, /ref:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
-                                ref = substr($0, RSTART, RLENGTH); sub(/^ref:[[:space:]]*/, "", ref)
-                            }
-                            match($0, /path:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
-                                path = substr($0, RSTART, RLENGTH); sub(/^path:[[:space:]]*/, "", path)
-                            }
-                            END { flush() }
-                        '; } | sort -u)
+                        bash tools/.ci/check-ci-pins.sh --print-pins \
+                          | awk '$3 !~ /NO-/ && $2 !~ /ci-op-e2e-tests/ { print $3 }'; } | sort -u)
           # review F24: BOTH C2 entry points carry the harness ref (check-ci-pins
           # Axis 4 requires them equal) — scan the pair so a stale ref in either
           # file is named, not just c2-e2e.yml's.

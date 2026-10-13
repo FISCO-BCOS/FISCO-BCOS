@@ -136,6 +136,18 @@ checkout_pins() {
     '
 }
 
+# review F26: single-source pin extraction. harness-pin-freshness used to carry its
+# own inline awk copy of this parser — flushing only on name|uses|run (the - id:/
+# - if: hazard this parser fixed) and silently dropping ref-less blocks. Any
+# consumer wanting the checkout pin set reads it from here: "file path ref" per
+# corpus checkout block, with the same NO-REF/NO-PATH sentinels and exit code.
+if [ "${1:-}" = "--print-pins" ]; then
+    for f in "$WF" "$WF_NIGHTLY" "$WF_WEEKLY"; do
+        checkout_pins "$f" | awk -v file="${f#"$REPO_ROOT"/}" '{ print file, $0 }'
+    done
+    exit $rc
+fi
+
 if [ -z "$CORPUS_DIR" ]; then
     fail "CORPUS_DIR is required (path to the op-stack-e2e-tests checkout at the CI ref)"
     exit 1
