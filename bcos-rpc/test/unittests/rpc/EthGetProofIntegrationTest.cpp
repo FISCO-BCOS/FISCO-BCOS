@@ -29,9 +29,6 @@
  *        on it.
  */
 #include "transaction-scheduler/tests/FullChainFixture.h"
-// Shared test-asset helper (see bcos-ledger genesis tests): the SystemConfig
-// predeploy alloc must carry the feature_flags Entry slot Ledger verifies.
-#include "../../../../bcos-ledger/test/unittests/ledger/GenesisFeatureFlagsHelper.h"
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-ledger/mpt/Proof.h>
@@ -40,8 +37,8 @@
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
+#include <boost/test/unit_test.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -286,10 +283,6 @@ BOOST_AUTO_TEST_CASE(ScenarioB_AllAllocAccountsProve)
         .nonce = "0",
         .code = "",
         .storage = {}});
-    // The contract sits at the SystemConfig predeploy address: Ledger verifies
-    // the feature_flags Entry slot is IN the alloc (P0: the state root commits
-    // it), so the fixture must carry it like real build-allocs.py output.
-    bcos::test::appendGenesisFeatureFlagsSlot(genesis);
     fixture.buildGenesis(genesis);
 
     Address eoa;

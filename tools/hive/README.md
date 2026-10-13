@@ -135,8 +135,7 @@ The entrypoint:
   empty-alloc genesis publishes the canonical empty-trie root as its stateRoot
   (`Ledger::buildGenesisBlock`, matching geth byte-exactly) — and
   `--genesis2ini` converts an `alloc: {}` genesis instead of rejecting it. The
-  L2/OP lanes still require allocs (the SystemConfig predeploy's feature_flags
-  slot travels in them).
+  L2/OP lanes still require allocs (they carry their predeploys).
 - `engine_forkchoiceUpdatedV4` (Osaka) is not implemented yet.
 - ~~**EthBlockVersion stamping**~~ (fixed): `makeExecutionBlockHeader`
   (EthereumBlockVerifier.h) previously never called `setEthBlockVersion`, so

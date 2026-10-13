@@ -23,7 +23,6 @@
 
 #include "bcos-ledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
-#include "GenesisFeatureFlagsHelper.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
@@ -38,6 +37,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
+#include "bcos-tool/Exceptions.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Bloom.h"
@@ -1779,10 +1779,11 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
+// A v3 (OP lane) alloc set needs no SystemConfig feature_flags slot: flags persist by name in
+// SYS_CONFIG only, so a predeploy alloc with empty storage initializes and restarts.
+BOOST_AUTO_TEST_CASE(genesisV3AllocWithoutFeatureFlagsSlot)
 {
     task::syncWait([this]() -> task::Task<void> {
-        auto hashImpl = std::make_shared<Keccak256>();
         auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
         auto storage = std::make_shared<MockStorage>(memoryStorage);
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
@@ -1796,52 +1797,52 @@ BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        // Ethereum-lane genesis: the lane is the genesis-fixed executor_version,
-        // not a feature flag any more.
-        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
-        // enable an ordinary feature in genesis: its bit must land in the packed word
-        genesisConfig.m_features.push_back(
-            ledger::FeatureSet{.flag = Features::Flag::feature_rpbft_term_weight, .enable = 1});
-        // SystemConfig predeploy at the canonical L2 address (no 0x prefix, 40 hex)
+        genesisConfig.m_executorVersion = bcos::ledger::OPSTACK_EXECUTOR_VERSION;
         genesisConfig.m_allocs.push_back(
             Alloc{.address = "43000000000000000000000000000000000000c0",
                 .balance = {},
                 .nonce = {},
                 .code = "6080604052",
                 .storage = {}});
-        appendGenesisFeatureFlagsSlot(genesisConfig);
 
-        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+        BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
+        BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
+    }());
+}
 
-        // slot = keccak256(utf8("feature_flags") || be32(101))
-        bcos::bytes slotInput;
-        std::string key = "feature_flags";
-        slotInput.insert(slotInput.end(), key.begin(), key.end());
-        bcos::bytes baseSlot(32, 0);
-        baseSlot[31] = 101;
-        slotInput.insert(slotInput.end(), baseSlot.begin(), baseSlot.end());
-        auto slotHash = hashImpl->hash(bcos::ref(slotInput));
+// [features] in config.genesis is held to the same dependency rules as governance: an EVM fork
+// flag needs the previous fork. The check runs before any genesis write, so the fixed config
+// initializes on the same storage.
+BOOST_AUTO_TEST_CASE(genesisFeaturesRequireEvmForkDependencies)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto refused = [this](std::vector<Features::Flag> flags,
+                           std::string_view missing) -> task::Task<void> {
+            auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+            auto storage = std::make_shared<MockStorage>(memoryStorage);
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            LedgerConfig param;
+            GenesisConfig genesisConfig;
+            genesisConfig.m_compatibilityVersion =
+                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_17_0_VERSION);
+            for (auto flag : flags)
+            {
+                genesisConfig.m_features.push_back(ledger::FeatureSet{.flag = flag, .enable = 1});
+            }
+            BOOST_CHECK_EXCEPTION(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param),
+                bcos::tool::InvalidSetFeature, [&](auto const& e) {
+                    auto const* comment = boost::get_error_info<errinfo_comment>(e);
+                    return comment != nullptr && comment->find(missing) != std::string::npos;
+                });
 
-        auto tableName = fmt::format(
-            "{}{}", SYS_DIRECTORY::USER_APPS, "43000000000000000000000000000000000000c0");
-        auto slotView = std::string_view(reinterpret_cast<const char*>(slotHash.data()), 32);
-        auto entry =
-            co_await storage2::readOne(*storage, executor_v1::StateKeyView(tableName, slotView));
-        BOOST_REQUIRE(entry.has_value());
-        auto value = entry->get();
-        BOOST_CHECK_EQUAL(value.size(), 32U);
-
-        // the enabled feature's bit (= its enum value) must be set in the big-endian value
-        auto idx = static_cast<size_t>(Features::Flag::feature_rpbft_term_weight);
-        auto theByte = static_cast<uint8_t>(value[value.size() - 1 - (idx / 8)]);
-        BOOST_CHECK(((theByte >> (idx % 8)) & 1U) == 1U);
-
-        // bit 57 — the removed feature_l2_ethereum_compat, now a reserved tombstone
-        // (Features::Flag::reserved_removed_l2_ethereum_compat) — must NOT be set: the
-        // Ethereum lane comes from executor_version, and nothing packs that bit any more.
-        auto tombIdx = static_cast<size_t>(Features::Flag::reserved_removed_l2_ethereum_compat);
-        auto tombByte = static_cast<uint8_t>(value[value.size() - 1 - (tombIdx / 8)]);
-        BOOST_CHECK(((tombByte >> (tombIdx % 8)) & 1U) == 0U);
+            genesisConfig.m_features.insert(genesisConfig.m_features.begin(),
+                ledger::FeatureSet{
+                    .flag = magic_enum::enum_cast<Features::Flag>(missing).value(), .enable = 1});
+            BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
+        };
+        co_await refused({Features::Flag::feature_evm_prague}, "feature_evm_cancun");
+        co_await refused({Features::Flag::feature_evm_cancun, Features::Flag::feature_evm_osaka},
+            "feature_evm_prague");
     }());
 }
 
@@ -1912,7 +1913,7 @@ BOOST_AUTO_TEST_CASE(genesisEVMCRevision)
 BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
 {
     for (int rev = static_cast<int>(EVMC_FRONTIER); rev <= static_cast<int>(EVMC_MAX_REVISION);
-         ++rev)
+        ++rev)
     {
         auto r = static_cast<evmc_revision>(rev);
         auto name = ledger::evmcRevisionName(r);

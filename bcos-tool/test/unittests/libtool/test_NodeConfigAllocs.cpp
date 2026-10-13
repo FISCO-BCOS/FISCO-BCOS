@@ -127,8 +127,8 @@ BOOST_AUTO_TEST_CASE(EthLaneWithAllocsParsed)
 BOOST_AUTO_TEST_CASE(EthLaneRejectsEmptyAllocs)
 {
     // executor.version >= 2 WITHOUT the EL declaration ([ethereum] mode=el) still
-    // requires a non-empty [alloc.*] section — the L2/OP lanes carry the
-    // SystemConfig predeploy's feature_flags slot in the allocs.
+    // requires a non-empty [alloc.*] section — the L2/OP lanes carry their
+    // predeploys in the allocs.
     auto cfg = makeNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(std::string(kAllocsEthBase))),
         bcos::tool::InvalidConfig, [](auto const& e) {
@@ -158,8 +158,8 @@ BOOST_AUTO_TEST_CASE(ELModeOnOpLaneRejected)
 {
     // mode=el is bound to the L1 EL lane: executor.version=3 (the OP lane) must
     // declare mode=opstack-el instead. Accepting mode=el here would waive the
-    // non-empty-alloc invariant for a chain whose SystemConfig predeploy's
-    // feature_flags slot travels in the allocs.
+    // non-empty-alloc invariant for a chain whose predeploys travel in the
+    // allocs.
     constexpr auto kELDeclarations =
         "[web3]\nchain_id=1\n"
         "[ethereum]\nmode=el\n"

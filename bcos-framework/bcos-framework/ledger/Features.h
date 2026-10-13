@@ -40,141 +40,95 @@ DERIVE_BCOS_EXCEPTION(NoSuchFeatureError);
 class Features
 {
 public:
-    // Use for storage key, do not change the enum name!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // feature_flags (Features::toFlagsNumber) packs each enabled flag at
-    // bit = its EXPLICIT enum value below. Those values are persisted on-chain,
-    // so each value is PERMANENT: never change or reuse a value, never delete a
-    // flag's number. New flags take the next unused number — the declaration
-    // position is free (you may group them anywhere), only the value matters.
-    // magic_enum reflects values in its default range [-128, 127]. The
-    // enum_contains assert catches any flag outside that range at compile time.
-    // The static_assert keeps the max value ≤ 127 (bitset encoding constraint).
+    // Flags persist by NAME only (SYS_CONFIG keys and the genesis pin), so never rename one.
+    // A retired flag keeps its name while existing genesis files may still carry it.
     enum class Flag
     {
-        bugfix_revert = 0,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
-        bugfix_statestorage_hash = 1,
-        bugfix_evm_create2_delegatecall_staticcall_codecopy = 2,
-        bugfix_event_log_order = 3,
-        bugfix_call_noaddr_return = 4,
-        bugfix_precompiled_codehash = 5,
-        bugfix_dmc_revert = 6,
-        bugfix_keypage_system_entry_hash = 7,
-        bugfix_internal_create_redundant_storage = 8,  // perf internal create code and abi storage
-        bugfix_internal_create_permission_denied = 9,
-        bugfix_sharding_call_in_child_executive = 10,
-        bugfix_empty_abi_reset = 11,  // support empty abi reset of same code
-        bugfix_eip55_addr = 12,
-        bugfix_eoa_as_contract = 13,
-        bugfix_eoa_match_failed = 14,
-        bugfix_evm_exception_gas_used = 15,
-        bugfix_dmc_deploy_gas_used = 16,
-        bugfix_staticcall_noaddr_return = 17,
-        bugfix_support_transfer_receive_fallback = 18,
-        bugfix_set_row_with_dirty_flag = 19,
-        bugfix_rpbft_vrf_blocknumber_input = 20,
-        bugfix_delete_account_code = 21,
-        bugfix_policy1_empty_code_address = 22,
-        bugfix_precompiled_gasused = 23,
-        bugfix_nonce_not_increase_when_revert = 24,
-        bugfix_set_contract_nonce_when_create = 25,
-        bugfix_precompiled_gascalc = 26,
-        bugfix_method_auth_sender = 27,
-        bugfix_precompiled_evm_status = 28,
-        bugfix_delegatecall_transfer = 29,
-        bugfix_nonce_initialize = 30,
-        bugfix_v1_timestamp = 31,
-        bugfix_revert_logs = 32,
-        bugfix_auth_check = 33,         // FIB-77/81/82/83: CREATE2 deploy auth check, auth failure
-                                        // revert status, auth table raw-address path, auth table
-                                        // squatting (merged, all activate at V3_17_0)
-        bugfix_v1_error_handling = 34,  // FIB-76/78/79/80/85~92: v1 executor error-path gas
-                                        // accounting, gas_left clamp on fatal error, executive
-                                        // wrapper status/message marshaling (merged)
-        bugfix_gas_payment_balance_precheck = 35,  // FIB-75
-        bugfix_precompiled_feature_gate = 36,      // FIB-84
-        bugfix_evm_storage_status = 37,            // FIB-94
-        bugfix_statestorage_hash_v3_17 = 38,       // FIB-99/105
-        feature_dmc2serial = 39,
-        feature_sharding = 40,
-        feature_rpbft = 41,
-        feature_paillier = 42,
-        feature_balance = 43,
-        feature_balance_precompiled = 44,
-        feature_balance_policy1 = 45,
-        feature_paillier_add_raw = 46,
-        feature_evm_eip2929 = 47,  // EIP-2929 冷热访问 gas 折扣（Berlin+）；影响全局
-                                   // gas，需治理层显式启用
-        feature_evm_cancun = 48,
-        feature_evm_prague = 49,  // EIP-7702、BLS12-381；依赖 feature_evm_cancun
-        feature_evm_osaka = 50,   // EIP-7212 p256verify、EIP-7823/EIP-7883 modexp；依赖
-                                  // feature_evm_prague
-        feature_evm_timestamp = 51,
-        feature_evm_address = 52,
-        feature_rpbft_term_weight = 53,
+        bugfix_revert,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
+        bugfix_statestorage_hash,
+        bugfix_evm_create2_delegatecall_staticcall_codecopy,
+        bugfix_event_log_order,
+        bugfix_call_noaddr_return,
+        bugfix_precompiled_codehash,
+        bugfix_dmc_revert,
+        bugfix_keypage_system_entry_hash,
+        bugfix_internal_create_redundant_storage,  // perf internal create code and abi storage
+        bugfix_internal_create_permission_denied,
+        bugfix_sharding_call_in_child_executive,
+        bugfix_empty_abi_reset,  // support empty abi reset of same code
+        bugfix_eip55_addr,
+        bugfix_eoa_as_contract,
+        bugfix_eoa_match_failed,
+        bugfix_evm_exception_gas_used,
+        bugfix_dmc_deploy_gas_used,
+        bugfix_staticcall_noaddr_return,
+        bugfix_support_transfer_receive_fallback,
+        bugfix_set_row_with_dirty_flag,
+        bugfix_rpbft_vrf_blocknumber_input,
+        bugfix_delete_account_code,
+        bugfix_policy1_empty_code_address,
+        bugfix_precompiled_gasused,
+        bugfix_nonce_not_increase_when_revert,
+        bugfix_set_contract_nonce_when_create,
+        bugfix_precompiled_gascalc,
+        bugfix_method_auth_sender,
+        bugfix_precompiled_evm_status,
+        bugfix_delegatecall_transfer,
+        bugfix_nonce_initialize,
+        bugfix_v1_timestamp,
+        bugfix_revert_logs,
+        bugfix_auth_check,         // FIB-77/81/82/83: CREATE2 deploy auth check, auth failure
+                                   // revert status, auth table raw-address path, auth table
+                                   // squatting (merged, all activate at V3_17_0)
+        bugfix_v1_error_handling,  // FIB-76/78/79/80/85~92: v1 executor error-path gas
+                                   // accounting, gas_left clamp on fatal error, executive
+                                   // wrapper status/message marshaling (merged)
+        bugfix_gas_payment_balance_precheck,  // FIB-75
+        bugfix_precompiled_feature_gate,      // FIB-84
+        bugfix_evm_storage_status,            // FIB-94
+        bugfix_statestorage_hash_v3_17,       // FIB-99/105
+        feature_dmc2serial,
+        feature_sharding,
+        feature_rpbft,
+        feature_paillier,
+        feature_balance,
+        feature_balance_precompiled,
+        feature_balance_policy1,
+        feature_paillier_add_raw,
+        feature_evm_eip2929,  // EIP-2929 冷热访问 gas 折扣（Berlin+）；影响全局
+                              // gas，需治理层显式启用
+        feature_evm_cancun,
+        feature_evm_prague,  // EIP-7702、BLS12-381；依赖 feature_evm_cancun
+        feature_evm_osaka,   // EIP-7212 p256verify、EIP-7823/EIP-7883 modexp；依赖
+                             // feature_evm_prague
+        feature_evm_timestamp,
+        feature_evm_address,
+        feature_rpbft_term_weight,
         // DEPRECATED: the account-table encoding (hex vs binary /apps/ names) is a
         // node-local physical layout, published by the startup detection as
         // ledger::account::nodeAddressTableMode() (ledger/AccountTableName.h) — this flag no
-        // longer drives any behavior. The value 54 stays reserved (feature values are
-        // permanent) and string2Flag still recognizes the name; setting it, through
-        // governance or config.genesis, is accepted with a warning and records an inert
-        // no-op row.
-        feature_raw_address = 54,
-        feature_rpbft_vrf_type_secp256k1 = 55,
-        feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
-        // RESERVED, never reuse. Bit 57 was feature_l2_ethereum_compat on the
-        // release-3.18.0 development line (introduced by #5273 before any release shipped),
-        // the "Ethereum-compatible lane" switch. The lane is now decided by executor_version
-        // alone (ledger::ETHEREUM_EXECUTOR_VERSION / OPSTACK_EXECUTOR_VERSION), so nothing
-        // reads this bit any more. It stays declared because the value is persisted on-chain
-        // and the rule above is "never delete a flag's number". It is deliberately NOT named
-        // feature_l2_ethereum_compat — Features::string2Flag must keep REJECTING that name so
-        // a genesis still carrying `feature_l2_ethereum_compat=1` fails loudly at load instead
-        // of silently enabling nothing.
-        reserved_removed_l2_ethereum_compat = 57,
-        feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
-                                          // Ethereum MPT root from this flag's activation
-                                          // block on (spec 2026-04-24 design3 4.3)
-        // Takes the next unused number per the rule above, rather than the slot next to
-        // bugfix_statestorage_hash_v3_17 it occupies on release-3.17.0: inserting it there would
-        // renumber every feature_ flag after it and silently move their on-chain bits.
-        bugfix_nonce_ordering = 59,  // web3 EOA nonce must be independent of intra-block tx order
-        // RESERVED, never reuse. Bit 60 was feature_op_jovian on release-3.18.0 (introduced by
-        // 63e131920), which selected OP-Stack Jovian semantics chain-wide. The OP lane now
-        // activates forks by L2 block timestamp from the genesis [op_fork_timestamps] schedule
-        // (ledger::OpForkSchedule, opstack-executor/OpForkSpec.h), so nothing reads this bit any
-        // more. It stays declared because the value is persisted on-chain and the rule above is
-        // "never delete a flag's number": #5571 has since numbered
-        // bugfix_eip161_1052_account_semantics at 61 on top of it, so deleting 60 would renumber
-        // that flag and every later one on chains where the bits are already written —
-        // reclaiming 60 is no longer on the table. It is deliberately NOT named feature_op_jovian
-        // — Features::string2Flag must keep REJECTING that name so a genesis still carrying
-        // `feature_op_jovian=true` fails loudly at load instead of silently enabling nothing.
-        reserved_removed_op_jovian = 60,
-        bugfix_eip161_1052_account_semantics = 61,  // #5371/#5372: v1 executor answers
-                                                    // account_exists per EIP-161 (empty == absent)
-                                                    // and EXTCODEHASH per EIP-1052: the chain
-                                                    // hasher's hash("") (keccak on a non-SM
-                                                    // chain) for a code-less live account, 0 for
-                                                    // an absent/empty one; was true / 0.
+        // longer drives any behavior. string2Flag still recognizes the name so existing
+        // config.genesis files load; setting it, through governance or config.genesis, is
+        // accepted with a warning and records an inert no-op row.
+        feature_raw_address,
+        feature_rpbft_vrf_type_secp256k1,
+        feature_balance_policy2,  // 转账白名单 Transfer whitelist
+        feature_mpt_state_root,   // MPT lazy-build: block stateRoot switches to the
+                                  // Ethereum MPT root from this flag's activation
+                                  // block on (spec 2026-04-24 design3 4.3)
+        bugfix_nonce_ordering,    // web3 EOA nonce must be independent of intra-block tx order
+        bugfix_eip161_1052_account_semantics,  // #5371/#5372: v1 executor answers
+                                               // account_exists per EIP-161 (empty == absent)
+                                               // and EXTCODEHASH per EIP-1052: the chain
+                                               // hasher's hash("") (keccak on a non-SM
+                                               // chain) for a code-less live account, 0 for
+                                               // an absent/empty one; was true / 0.
     };
 
-    // feature_flags bit = enum value. Pin the newest flag so a value beyond
-    // magic_enum's default reflection range [-128,127] is caught at compile time.
-    // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
-    // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
-    static_assert(magic_enum::enum_contains(Flag::bugfix_eip161_1052_account_semantics),
-        "newest Flag fell outside magic_enum's reflection range — check enum values");
-    static_assert(magic_enum::enum_integer(
-                      magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,
-        "max Flag value exceeds 127; bitset encoding (bit = enum value) requires values 0..127.");
-    // enum_count is the number of DECLARED enumerators, not the span of the value range —
-    // magic_enum reflects sparse enums too — so this equality is not a tautology: it holds
-    // exactly when the values run 0,1,...,count-1 and fails on the first gap.
-    static_assert(magic_enum::enum_integer(
-                      magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) ==
-                      static_cast<int>(magic_enum::enum_count<Flag>()) - 1,
-        "Flag values must be contiguous from zero: m_flags indexes by declaration position while "
-        "toFlagsNumber packs bit = enum value; a gap desyncs the two encodings.");
+    // magic_enum reflects values in its default range [-128, 127]; a flag past it would drop out
+    // of get/set/string2Flag.
+    static_assert(magic_enum::enum_count<Flag>() <= 128,
+        "Flag count exceeds magic_enum's default reflection range");
 
 private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
@@ -192,12 +146,15 @@ public:
     void validate(std::string_view flag) const;
 
     /// Rejects a feature the governance setSystemConfig path must not turn on: one whose
-    /// dependencies are unmet, and one that is genesis-only. Not called by genesis loading,
-    /// which uses set() directly.
+    /// dependencies (getFeatureDependencies) are not all enabled yet.
     void validate(Flag flag) const;
 
-    /// A deprecated flag is still parsed (its enum value is permanent and string2Flag
-    /// recognizes the name) but drives nothing. Entry points accept it with a warning
+    /// Throws InvalidSetFeature naming the first dependency of @p flag that is not enabled.
+    /// Ledger::buildGenesisBlock calls it on first init; validate() calls it per flag.
+    void validateDependencies(Flag flag) const;
+
+    /// A deprecated flag is still parsed (string2Flag recognizes the name) but drives
+    /// nothing. Entry points accept it with a warning
     /// rather than reject it — rejecting would fail governance transactions and
     /// config.genesis files written before the deprecation, while the flag is an inert
     /// no-op either way. validate() warns on the governance path;
@@ -210,9 +167,8 @@ public:
     bool get(Flag flag) const;
     bool get(std::string_view flag) const { return get(string2Flag(flag)); }
 
-    // DO NOT use now, there is some action after set feature in systemPrecompiled
+    /// The flags that must already be enabled before @p flag can be.
     static std::set<Flag> getFeatureDependencies(Flag flag);
-    void enableDependencyFeatures(Flag flag);
 
     void set(Flag flag);
 
@@ -258,26 +214,6 @@ public:
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return magic_enum::enum_name(flag);
                });
-    }
-
-    // Pack the enabled flags into a 256-bit number: bit = the flag's explicit
-    // enum value (see Flag). m_flags is indexed by position in magic_enum's
-    // VALUE-SORTED reflection order (not by declaration order), so map each set
-    // bit back to its flag and shift by that flag's value — the encoding stays
-    // stable even if flags are later grouped/reordered, as long as each flag
-    // keeps its value. Consumed by L2 genesis to seed SystemConfig's
-    // feature_flags entry.
-    u256 toFlagsNumber() const
-    {
-        u256 result = 0;
-        for (size_t i = 0; i < m_flags.size(); ++i)
-        {
-            if (m_flags[i])
-            {
-                result |= (u256(1) << static_cast<size_t>(magic_enum::enum_value<Flag>(i)));
-            }
-        }
-        return result;
     }
 
     // Storage I/O member templates. Definitions live in FeaturesStorage.h,
