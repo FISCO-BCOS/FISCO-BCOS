@@ -814,23 +814,39 @@ private:
                 m_seq, m_ledgerConfig);
         }
 
-        // evmc ABI 19: evmone derives nested-CREATE addresses from the sender's nonce
-        // (get_nonce -> keccak(rlp(sender, nonce))), so the nonce MUST bump on every
-        // nested create — without it the second new-contract in one tx collides with
-        // the first (same address, observed as createTwice revert). Gated on the EVM
-        // message depth (NOT m_level, which counts scheduler nesting and is nonzero for
-        // depth-0 test/probe messages). Mirrors upstream Host::call ("bump the creator's
-        // nonce, not reverted if the creation fails"). An absent nonce field counts as 0
-        // — same default as the get_nonce callback — because contract accounts on legacy
-        // chains were never nonce-initialized (EVMAccount::increaseNonce would throw
-        // NonceNotInitialized). Legacy non-web3 chains now see nonce writes on creators —
-        // part of the 0.24 nested-create semantics alignment (upgrade-notes R9).
-        if (ref.depth != 0)
+        // evmc ABI 19: when a nested CREATE derives its address from the sender's nonce
+        // (web3 chains — newLegacyEVMAddress(sender, nonce)) the creator's nonce MUST bump
+        // on every nested create, or the second new-contract in one tx collides with the
+        // first (same address, observed as createTwice revert). Mirrors upstream Host::call
+        // ("bump the creator's nonce, not reverted if the creation fails").
+        //
+        // Two shapes, gated on bugfix_nested_create_creator_nonce (PR #5689 review F3):
+        //  - flag ON: the bump runs on the EVM message depth (NOT m_level, which counts
+        //    scheduler nesting and is nonzero for depth-0 test/probe messages) for every
+        //    chain. It counts an absent nonce as 0 — the same default the get_nonce
+        //    callback reports — because contract accounts on legacy chains were never
+        //    nonce-initialized (EVMAccount::increaseNonce throws NonceNotInitialized); the
+        //    missing-nonce case is therefore WRITTEN as 0 rather than rejected, matching
+        //    the accounting the address derivation reads.
+        //  - flag OFF (default; existing chains): the historical gate and semantics stay
+        //    verbatim — web3 tx && m_level != 0 with increaseNonce(), which throws for a
+        //    never-initialized account — so no NONCE row appears on a creator that never
+        //    had one and historical state roots replay identically.
+        if (m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_nested_create_creator_nonce))
+        {
+            if (ref.depth != 0)
+            {
+                auto senderAccount = getAccount(*this, ref.sender);
+                const auto currentNonce = co_await senderAccount.nonce();
+                const auto newNonce = u256(currentNonce.value_or(std::string("0"))) + 1;
+                co_await senderAccount.setNonce(newNonce.convert_to<std::string>());
+            }
+        }
+        else if (m_web3Tx && m_level != 0)
         {
             auto senderAccount = getAccount(*this, ref.sender);
-            const auto currentNonce = co_await senderAccount.nonce();
-            const auto newNonce = u256(currentNonce.value_or(std::string("0"))) + 1;
-            co_await senderAccount.setNonce(newNonce.convert_to<std::string>());
+            co_await senderAccount.increaseNonce();
         }
 
         co_await m_recipientAccount.create();
