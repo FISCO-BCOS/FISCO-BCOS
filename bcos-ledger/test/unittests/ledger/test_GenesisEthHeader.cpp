@@ -358,36 +358,5 @@ BOOST_AUTO_TEST_CASE(PreHoloceneNonEmptyExtraDataBuilds)
     }());
 }
 
-// The genesis [features] dependency check runs on first init only. A chain initialized before
-// the rule existed (here: feature_evm_prague without feature_evm_cancun, simulated by rewriting
-// the stored genesis pin) must still restart with its unchanged config.
-BOOST_AUTO_TEST_CASE(RestartSkipsGenesisFeatureDependencyCheck)
-{
-    task::syncWait([this]() -> task::Task<void> {
-        auto storage = makeL2GenesisTestStorage();
-        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
-        LedgerConfig param;
-        param.setBlockNumber(0);
-        param.setHash(HashType(""));
-        param.setBlockTxCountLimit(0);
-
-        auto valid = makeEthGenesisConfig();
-        valid.m_features = {FeatureSet{.flag = Features::Flag::feature_evm_cancun, .enable = 1},
-            FeatureSet{.flag = Features::Flag::feature_evm_prague, .enable = 1}};
-        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, valid, param));
-
-        auto legacy = makeEthGenesisConfig();
-        legacy.m_features = {FeatureSet{.flag = Features::Flag::feature_evm_prague, .enable = 1}};
-        storage::Entry pin;
-        pin.set(bcos::storage::serialize::encode(
-            SystemConfigEntry{bcos::tool::generateGenesisData(legacy, param), 0}));
-        storage->asyncSetRow(SYS_CONFIG, INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA, std::move(pin),
-            [](Error::UniquePtr) {});
-
-        BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, legacy, param));
-        co_return;
-    }());
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

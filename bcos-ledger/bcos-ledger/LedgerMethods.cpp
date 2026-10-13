@@ -488,7 +488,11 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
         headBaseFee = protocol::blockBaseFee(*block->blockHeader());
     }
     auto blockHash = co_await getBlockHash(ledger, blockNumber);
-    auto features = co_await getFeatures(ledger);
+    Features features;
+    if (executorVersionOf(sysConfig) < ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        features = co_await getFeatures(ledger);
+    }
 
     applyLedgerConfig(ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp,
         std::optional<crypto::HashType>{blockHash}, headBaseFee);

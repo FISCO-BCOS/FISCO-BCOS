@@ -31,8 +31,8 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
-#include <limits>
 #include <evmc/evmc.hpp>
+#include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <optional>
@@ -401,6 +401,14 @@ inline constexpr bool isOpLaneVersion(int executorVersion)
     return executorVersion >= OPSTACK_EXECUTOR_VERSION;
 }
 
+/// The compatibility version of every Ethereum-lane chain (executor_version >= 2). These
+/// lanes fork on the Ethereum / OP schedule only: genesis [version] is ignored, no
+/// compatibility_version row is written, and shared code that still needs a compat number
+/// (block header version, genesis pin, table layout) reads this constant. It is part of the
+/// genesis pin, so it must never move with the binary's MAX_VERSION.
+inline constexpr auto ETHEREUM_LANE_COMPATIBILITY_VERSION =
+    static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION);
+
 /// The highest executor_version a TRANSACTION may set: the newest defined lane, derived
 /// from the ladder above and never hand-copied — wiring a new lane moves the bound with
 /// it. An accepted write above this value would land activation N+1 while every node's
@@ -581,9 +589,8 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
         if (parsed.error == ConfigUint64Error::outOfRange)
         {
             BOOST_THROW_EXCEPTION(
-                InvalidOpEip1559Config()
-                << errinfo_comment(
-                       "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
+                InvalidOpEip1559Config() << errinfo_comment(
+                    "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
         }
         if (!parsed.value.has_value())
         {
@@ -610,9 +617,9 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
     // parser would refuse.
     if (auto const problem = opEip1559ParamsRowProblem(params))
     {
-        BOOST_THROW_EXCEPTION(InvalidOpEip1559Config() << errinfo_comment(
-                                  "op_eip1559_params value carries a " + *problem + ": " +
-                                  std::string(value)));
+        BOOST_THROW_EXCEPTION(
+            InvalidOpEip1559Config() << errinfo_comment(
+                "op_eip1559_params value carries a " + *problem + ": " + std::string(value)));
     }
     return params;
 }

@@ -494,6 +494,15 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(
 task::Task<void> tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger, LedgerConfig& ledgerConfig);
 
+/// The executor_version a SYS_CONFIG snapshot records; 0 (the legacy lane) when absent.
+/// Both getLedgerConfig overloads key on it to skip the Features read on Ethereum lanes,
+/// which fork on the Ethereum / OP schedule only and write no Features rows.
+inline int executorVersionOf(ledger::SystemConfigs const& sysConfig)
+{
+    auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
+    return versionConfig ? boost::lexical_cast<int>(versionConfig->first) : 0;
+}
+
 /// Shared LedgerConfig assembly used by both getLedgerConfig overloads (the
 /// LedgerInterface-based one in LedgerMethods.cpp and the storage2-view one below). The two
 /// call sites only differ in how they fetch their inputs (node list, system configs /
@@ -597,11 +606,16 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
-    int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
+    int const executorVersion = executorVersionOf(sysConfig);
+    if (sysConfig.get(ledger::SystemConfig::executor_version))
     {
-        executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);
+    }
+    if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        // Ethereum lanes write no compatibility_version row; the block header version and
+        // the PBFT/sealer path read the lane constant instead.
+        ledgerConfig.setCompatibilityVersion(ledger::ETHEREUM_LANE_COMPATIBILITY_VERSION);
     }
 
     // EVMC revision — consumed only by the pure-Ethereum EthereumExecutor
@@ -715,7 +729,10 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     }
 
     Features features;
-    co_await readFromStorage(features, storage, blockNumber);
+    if (executorVersionOf(sysConfig) < ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        co_await readFromStorage(features, storage, blockNumber);
+    }
 
     applyLedgerConfig(ledgerConfig, nodeList, sysConfig, features, blockNumber, timestamp,
         blockHash, headBaseFee);

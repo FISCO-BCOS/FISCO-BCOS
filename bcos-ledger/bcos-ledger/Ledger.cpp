@@ -1675,6 +1675,10 @@ bool Ledger::buildGenesisBlock(
         // computeGenesisStateTrie only reads genesis.m_allocs, so it does not
         // depend on the genesis state being written first.
         GenesisStateTrie ethStateTrie = co_await computeGenesisStateTrie(genesis);
+        // Ethereum lanes (v2/v3) run on the Ethereum / OP fork schedule only: their genesis
+        // writes no Features rows, no feature_rpbft and no compatibility_version row, and a
+        // restart never backfills them.
+        bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
         if (genesisBlockHash)
         {
             // genesis block exists, quit
@@ -1733,9 +1737,7 @@ bool Ledger::buildGenesisBlock(
             // non-empty -> empty alloc drift is caught too. Legacy
             // (non-Ethereum-lane) chains carry no allocs and leave the genesis
             // stateRoot zero — the comparison does not apply to them.
-            bool const ethLaneRestart =
-                genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
-            if (existsGenesisData == genesisData && ethLaneRestart &&
+            if (existsGenesisData == genesisData && ethLane &&
                 genesisBlockHeader->stateRoot() != ethStateTrie.root)
             {
                 LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
@@ -1751,6 +1753,10 @@ bool Ledger::buildGenesisBlock(
                         " computed=" + ethStateTrie.root.hex()));
             }
 
+            if (existsGenesisData == genesisData && ethLane)
+            {
+                co_return true;
+            }
             if (existsGenesisData == genesisData)
             {
                 auto version = genesis.m_compatibilityVersion;
@@ -1810,7 +1816,9 @@ bool Ledger::buildGenesisBlock(
         // First-init path only (a restart either returned true above or threw on the
         // pin/stateRoot guards): hold [features] to the governance dependency rules before
         // ANY genesis write, so a refused config leaves the datadir untouched. Running it on
-        // restart would refuse an initialized chain whose genesis predates a rule.
+        // restart would refuse an initialized chain whose genesis predates a rule. Ethereum
+        // lanes ignore [features].
+        if (!ethLane)
         {
             Features genesisFeatures;
             genesisFeatures.setGenesisFeatures(
@@ -1871,7 +1879,6 @@ bool Ledger::buildGenesisBlock(
         // — the FISCO-BCOS native stateRoot for blocks >= 1 is an XOR of
         // per-block state-change hashes, a different domain from this MPT root,
         // so only the (previously empty) genesis block carries it.
-        bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
         if (!genesis.m_allocs.empty() || ethLane)
         {
             // Publish the computed trie root — the same expression the restart
@@ -2022,7 +2029,7 @@ bool Ledger::buildGenesisBlock(
             sysTable->setRow(INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA, std::move(genesisDataEntry));
         }
 
-        if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
+        if (!ethLane && RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
             versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION)
         {
             // rpbft config
@@ -2043,7 +2050,10 @@ bool Ledger::buildGenesisBlock(
             sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
         }
 
-        co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
+        if (!ethLane)
+        {
+            co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
+        }
         co_await importGenesisState(
             genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
 
@@ -2079,15 +2089,19 @@ bool Ledger::buildGenesisBlock(
             SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_leaderSwitchPeriod), 0}));
         sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
-        LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
-                         << LOG_KV("versionNumber", versionNumber);
-        // write compatibility version
-        Entry compatibilityVersionEntry;
-        compatibilityVersionEntry.set(bcos::storage::serialize::encode(
-            SystemConfigEntry{tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
-                                  genesis.m_compatibilityVersion)),
-                0}));
-        sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
+        if (!ethLane)
+        {
+            LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
+                             << LOG_KV("versionNumber", versionNumber);
+            // write compatibility version
+            Entry compatibilityVersionEntry;
+            compatibilityVersionEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
+                                      genesis.m_compatibilityVersion)),
+                    0}));
+            sysTable->setRow(
+                SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
+        }
 
         if (versionCompareTo(versionNumber, BlockVersion::V3_3_VERSION) >= 0)
         {
@@ -2584,32 +2598,25 @@ bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
         // getABI function begin in version 320
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
-        auto [error, entry] =
-            m_stateStorage->getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
-        if (!entry || error)
+        // Ethereum lanes run on the lane constant (same rule as applyLedgerConfig) and write
+        // no compatibility_version row; only v0/v1 read it.
+        uint32_t version = ledger::ETHEREUM_LANE_COMPATIBILITY_VERSION;
+        if (task::syncWait(fetchExecutorVersionAt(0)) < ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(GetStorageError, "Not found compatibilityVersion."));
+            auto [error, entry] = m_stateStorage->getRow(
+                ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
+            if (!entry || error)
+            {
+                BOOST_THROW_EXCEPTION(
+                    BCOS_ERROR(GetStorageError, "Not found compatibilityVersion."));
+            }
+            auto [compatibilityVersionStr, _] =
+                bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+            version = bcos::tool::toVersionNumber(compatibilityVersionStr);
         }
-        auto [compatibilityVersionStr, _] =
-            bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
-        auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
         auto stateStorage = stateStorageFactory.createStateStorage(
             m_stateStorage, version, true, false, keyPageIgnoreTables);
         return stateStorage;
     }
     return std::make_shared<bcos::storage::StateStorage>(m_stateStorage, true);
-}
-
-task::Task<void> Ledger::loadL2Config(protocol::BlockNumber blockNumber, ledger::LedgerConfig& cfg)
-{
-    // No loader configured (non-L2 mode, or PBFT short-circuit before the L2
-    // workflow wires one): nothing to refresh.
-    if (!m_l2Loader)
-    {
-        co_return;
-    }
-    // Delegate to the injected loader. A revert / short return / OOG throws out of
-    // here so the caller aborts the current block — we never swallow it.
-    co_await m_l2Loader->loadIntoLedgerConfig(blockNumber, cfg);
-    co_return;
 }

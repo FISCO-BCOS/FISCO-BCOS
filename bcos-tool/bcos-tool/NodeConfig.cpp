@@ -18,8 +18,8 @@
  * @author: yujiechen
  * @date 2021-06-10
  */
-#include "ChainLaneConfig.h"
 #include "NodeConfig.h"
+#include "ChainLaneConfig.h"
 #include "VersionConverter.h"
 #include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
@@ -66,6 +66,24 @@ using namespace bcos::protocol;
 
 namespace
 {
+bool isEthereumLaneGenesis(boost::property_tree::ptree const& genesis)
+{
+    // A malformed executor.version reads as 0 here; loadExecutorConfig rejects it later.
+    return genesis.get_optional<int>("executor.version").value_or(0) >=
+           ledger::ETHEREUM_EXECUTOR_VERSION;
+}
+
+// v2/v3 ignore genesis [version] and run on ETHEREUM_LANE_COMPATIBILITY_VERSION.
+uint32_t genesisCompatibilityVersion(boost::property_tree::ptree const& genesis)
+{
+    if (isEthereumLaneGenesis(genesis))
+    {
+        return ledger::ETHEREUM_LANE_COMPATIBILITY_VERSION;
+    }
+    return toVersionNumber(
+        genesis.get<std::string>("version.compatibility_version", bcos::protocol::RC4_VERSION_STR));
+}
+
 // Trust-boundary helpers for [alloc.N] parsing. Functions are camelCase; no
 // members so no m_ prefix.
 bool isHex(std::string_view sv)
@@ -137,11 +155,11 @@ uint64_t parseForkTimestamp(
     // not-scheduled sentinel refused. NOTE: the sentinel refusal is shared with the L1
     // [fork_timestamps] ladder (this helper is its parser too) — a deliberate fail-closed
     // widening over the old permissive from_chars, which accepted the all-9s value.
-    auto const parsed = ledger::parseConfigUint64(value,
-        ledger::ConfigUint64Options{.allowHex = true,
-            .maxValue = std::numeric_limits<uint64_t>::max(),
-            .refuseSentinel = true,
-            .sentinel = ledger::c_opForkTimeUnset});
+    auto const parsed =
+        ledger::parseConfigUint64(value, ledger::ConfigUint64Options{.allowHex = true,
+                                             .maxValue = std::numeric_limits<uint64_t>::max(),
+                                             .refuseSentinel = true,
+                                             .sentinel = ledger::c_opForkTimeUnset});
     if (parsed.error == ledger::ConfigUint64Error::sentinel)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -217,8 +235,8 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 
 NodeConfig::NodeConfig() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
 
-void NodeConfig::loadConfig(std::string const& _configPath, bool enforceChainConfig,
-    bool enforceGroupId)
+void NodeConfig::loadConfig(
+    std::string const& _configPath, bool enforceChainConfig, bool enforceGroupId)
 {
     boost::property_tree::ptree iniConfig;
     boost::property_tree::read_ini(_configPath, iniConfig);
@@ -248,8 +266,8 @@ void NodeConfig::loadGenesisConfigFromString(std::string const& _content)
     loadGenesisConfig(genesisConfig);
 }
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceChainConfig,
-    bool _enforceGroupId)
+void NodeConfig::loadConfig(
+    boost::property_tree::ptree const& _pt, bool _enforceChainConfig, bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig || (m_genesisConfig.m_compatibilityVersion <
@@ -283,16 +301,19 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
     // if version >= 3.1.0, genesisBlock include chainConfig
-    auto compatibilityVersion = _genesisConfig.get<std::string>(
-        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
-    m_genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
+    m_genesisConfig.m_compatibilityVersion = genesisCompatibilityVersion(_genesisConfig);
     if (m_genesisConfig.m_compatibilityVersion >=
         (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         loadChainConfig(_genesisConfig, true);
     }
     loadWeb3ChainConfig(_genesisConfig);
-    loadGenesisFeatures(_genesisConfig);
+    // v2/v3 fork on the Ethereum / OP schedule only; their [features] is ignored.
+    m_genesisConfig.m_features.clear();
+    if (!isEthereumLaneGenesis(_genesisConfig))
+    {
+        loadGenesisFeatures(_genesisConfig);
+    }
 
     loadLedgerConfig(_genesisConfig);
     // EL-mode declaration + fork schedule must be parsed BEFORE loadExecutorConfig: its v2
@@ -546,7 +567,7 @@ void NodeConfig::validateL2Invariants()
     // stateRoot is the canonical empty-trie root (Ledger::buildGenesisBlock publishes
     // mpt::emptyRootHash() and block 1's MPT build starts from it), which is a valid
     // Ethereum genesis (hive smoke/genesis, several EEST fixtures). The L2/OP lanes still
-    // require allocs — the SystemConfig predeploy's feature_flags slot travels in them.
+    // require allocs — their predeploys live in them.
     if (ethLane && genesis.m_allocs.empty() && !genesis.m_ethereumELMode)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -559,6 +580,15 @@ void NodeConfig::validateL2Invariants()
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[alloc.*] section requires executor.version >= 2 (the "
                                   "Ethereum lane) in config.genesis"));
+    }
+    // RPBFT lives on the feature_rpbft / epoch rows, which an Ethereum-lane genesis does not
+    // write: an rpbft v2/v3 chain would build an RPBFT engine over a ledger that reports
+    // PBFT and never rotates its candidate sealers.
+    if (ethLane && genesis.m_consensusType == ledger::RPBFT_CONSENSUS_TYPE)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "consensus.consensus_type=rpbft requires executor.version < 2; "
+                                  "the Ethereum lane (executor.version >= 2) runs pbft"));
     }
     // The Ethereum B0 header and the Ethereum lane are bound both ways: a consortium chain
     // with an [eth_genesis_header] section is a mis-assembled config, and an Ethereum-lane
@@ -600,8 +630,8 @@ void NodeConfig::validateL2Invariants()
     // the L1 EL lane (L1 fork schedule, L1 PoS header rules), so it requires the
     // L1 executor version. On the OP lane (executor.version >= 3) the self-sync
     // declaration is mode=opstack-el — accepting mode=el there would also waive
-    // the non-empty-alloc invariant above for a chain whose SystemConfig
-    // predeploy's feature_flags slot travels in the allocs.
+    // the non-empty-alloc invariant above for a chain whose predeploys live in
+    // the allocs.
     if (genesis.m_ethereumELMode &&
         (genesis.m_executorVersion < ledger::ETHEREUM_EXECUTOR_VERSION ||
             genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION))
@@ -798,12 +828,11 @@ void NodeConfig::validateELModeInvariants() const
     if (m_enableEthereumEL && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
         m_mptPruneWindow < m_ethereumReorgWindow)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "storage.mpt_prune_window (" + std::to_string(m_mptPruneWindow) +
-                ") must be -1 (disabled) or >= ethereum.reorg_window (" +
-                std::to_string(m_ethereumReorgWindow) +
-                "): an EL rollback target's trie nodes would already be pruned"));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "storage.mpt_prune_window (" + std::to_string(m_mptPruneWindow) +
+                                  ") must be -1 (disabled) or >= ethereum.reorg_window (" +
+                                  std::to_string(m_ethereumReorgWindow) +
+                                  "): an EL rollback target's trie nodes would already be pruned"));
     }
     // The challenger data plane (debug_dbGet, gated by enable_debug_api on either listener)
     // reads MPT preimages straight out of the node store with no retention guarantee: a block
@@ -1422,9 +1451,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
     if (mode != "none" && mode != "el" && mode != "opstack-el")
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode invalid: \"" + mode +
-                                  "\" (supported: none, el, opstack-el)"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.mode invalid: \"" + mode + "\" (supported: none, el, opstack-el)"));
     }
     const bool enableEL = (mode == "el");
     const bool enableOpStackEL = (mode == "opstack-el");
@@ -1493,10 +1522,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     uint64_t blockTime = _pt.get<uint64_t>("ethereum.op_block_time_seconds", 2);
     if (blockTime == 0 || blockTime > 60)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.op_block_time_seconds must be in [1, 60], got " +
-                std::to_string(blockTime)));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.op_block_time_seconds must be in [1, 60], got " +
+                                  std::to_string(blockTime)));
     }
     m_opBlockTimeSeconds = blockTime;
 
@@ -1510,10 +1538,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     uint64_t syncLag = _pt.get<uint64_t>("ethereum.op_sync_lag_blocks", 64);
     if (syncLag > 10000)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
-                std::to_string(syncLag)));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
+                                  std::to_string(syncLag)));
     }
     m_opSyncLagBlocks = syncLag;
 
@@ -1577,10 +1604,10 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     m_ethereumReorgWindow = _pt.get<int64_t>("ethereum.reorg_window", 256);
     if (m_ethereumReorgWindow < 0 || m_ethereumReorgWindow > 100'000)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.reorg_window must be 0 (disabled) or in "
-                                  "[1, 100000], got " +
-                                  std::to_string(m_ethereumReorgWindow)));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("ethereum.reorg_window must be 0 (disabled) or in "
+                                               "[1, 100000], got " +
+                                               std::to_string(m_ethereumReorgWindow)));
     }
 
     // Engine mempool sizing (EL mode only): capacity in transactions and per-transaction
@@ -1612,8 +1639,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
                          << LOG_KV("reorgWindow", m_ethereumReorgWindow)
                          << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
-                         << LOG_KV("mempoolTxLifetimeMinutes",
-                                m_ethereumMempoolTxLifetimeMinutes)
+                         << LOG_KV("mempoolTxLifetimeMinutes", m_ethereumMempoolTxLifetimeMinutes)
                          << LOG_KV("depositContractAddress",
                                 "0x" + m_ethereumDepositContractAddress.hex())
                          << LOG_KV("opBlockTimeSeconds", m_opBlockTimeSeconds)
@@ -1641,7 +1667,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     m_genesisConfig.m_ethereumELMode = false;
     m_genesisConfig.m_opStackELMode = false;
     m_genesisConfig.m_ethereumForkSchedule.reset();
-    m_ethereumChainId = 0;  // reassigned by validateL2Invariants when EL is declared
+    m_ethereumChainId = 0;     // reassigned by validateL2Invariants when EL is declared
     m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
 
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
@@ -1786,19 +1812,18 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         return;
     }
     // The ladder's entries, in fork order (Bedrock has no entry — it is genesis).
-    std::array<std::pair<std::string_view, uint64_t ledger::OpForkSchedule::*>, 10> const
-        keys{{
-            {"regolith_time", &ledger::OpForkSchedule::m_regolithTime},
-            {"canyon_time", &ledger::OpForkSchedule::m_canyonTime},
-            {"delta_time", &ledger::OpForkSchedule::m_deltaTime},
-            {"ecotone_time", &ledger::OpForkSchedule::m_ecotoneTime},
-            {"fjord_time", &ledger::OpForkSchedule::m_fjordTime},
-            {"granite_time", &ledger::OpForkSchedule::m_graniteTime},
-            {"holocene_time", &ledger::OpForkSchedule::m_holoceneTime},
-            {"isthmus_time", &ledger::OpForkSchedule::m_isthmusTime},
-            {"jovian_time", &ledger::OpForkSchedule::m_jovianTime},
-            {"karst_time", &ledger::OpForkSchedule::m_karstTime},
-        }};
+    std::array<std::pair<std::string_view, uint64_t ledger::OpForkSchedule::*>, 10> const keys{{
+        {"regolith_time", &ledger::OpForkSchedule::m_regolithTime},
+        {"canyon_time", &ledger::OpForkSchedule::m_canyonTime},
+        {"delta_time", &ledger::OpForkSchedule::m_deltaTime},
+        {"ecotone_time", &ledger::OpForkSchedule::m_ecotoneTime},
+        {"fjord_time", &ledger::OpForkSchedule::m_fjordTime},
+        {"granite_time", &ledger::OpForkSchedule::m_graniteTime},
+        {"holocene_time", &ledger::OpForkSchedule::m_holoceneTime},
+        {"isthmus_time", &ledger::OpForkSchedule::m_isthmusTime},
+        {"jovian_time", &ledger::OpForkSchedule::m_jovianTime},
+        {"karst_time", &ledger::OpForkSchedule::m_karstTime},
+    }};
     // Every key is optional, so a misspelled one (jovain_time=0) would otherwise be read as
     // "not scheduled" and the chain would run the wrong fork rules without a word — the
     // failure validateL2Invariants' presence check exists to prevent. Reject anything but
@@ -1806,8 +1831,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     // guarantees at least one recognised entry.
     for (auto const& [key, _] : *section)
     {
-        bool known = std::any_of(keys.begin(), keys.end(),
-            [&](auto const& entry) { return entry.first == key; });
+        bool known = std::any_of(
+            keys.begin(), keys.end(), [&](auto const& entry) { return entry.first == key; });
         if (!known)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -1844,9 +1869,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(
-                    "[op_fork_timestamps]." + std::string(key) + " (" +
-                    std::to_string(time) + ") is earlier than " + std::string(prevKey) + " (" +
-                    std::to_string(prevTime) +
+                    "[op_fork_timestamps]." + std::string(key) + " (" + std::to_string(time) +
+                    ") is earlier than " + std::string(prevKey) + " (" + std::to_string(prevTime) +
                     "): fork activation times must be non-decreasing"));
         }
         prevKey = key;
@@ -1917,9 +1941,9 @@ void NodeConfig::loadOpForkSchedule(boost::property_tree::ptree const& _genesisC
     {
         if (entry.first != "canonical")
         {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[op_fork_schedule] has an unrecognised key \"" +
-                                      entry.first + "\" (supported: canonical)"));
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[op_fork_schedule] has an unrecognised key \"" +
+                                                   entry.first + "\" (supported: canonical)"));
         }
     }
     auto canonical = section->get_optional<std::string>("canonical");
@@ -1978,9 +2002,9 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
         // row bound is NOT checked here — the assembled triple goes through the shared
         // opEip1559ParamsRowProblem below, the same rule set the SYS_CONFIG reader and the
         // genesis writer enforce.
-        auto const parsed = ledger::parseConfigUint64(text,
-            ledger::ConfigUint64Options{.allowHex = true,
-                .maxValue = std::numeric_limits<uint64_t>::max()});
+        auto const parsed =
+            ledger::parseConfigUint64(text, ledger::ConfigUint64Options{.allowHex = true,
+                                                .maxValue = std::numeric_limits<uint64_t>::max()});
         if (!parsed.value.has_value())
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -2019,12 +2043,12 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
     // encodes each field as u32 — one rule set instead of a loader-local copy.
     if (auto const problem = ledger::opEip1559ParamsRowProblem(params))
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[op_eip1559] triple carries a " + *problem +
-                                  ": elasticity=" + std::to_string(params.elasticity) +
-                                  " denominator=" + std::to_string(params.denominator) +
-                                  " denominator_canyon=" +
-                                  std::to_string(params.denominatorCanyon)));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[op_eip1559] triple carries a " + *problem +
+                ": elasticity=" + std::to_string(params.elasticity) +
+                " denominator=" + std::to_string(params.denominator) +
+                " denominator_canyon=" + std::to_string(params.denominatorCanyon)));
     }
     m_genesisConfig.m_opEip1559 = params;
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEip1559") << LOG_KV("elasticity", params.elasticity)
@@ -2791,10 +2815,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
         m_genesisConfig.m_excessBlobGas = boost::lexical_cast<uint64_t>(excessBlobGasStr);
     }
     // the compatibility version
-    auto compatibilityVersion = _genesisConfig.get<std::string>(
-        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
-    m_genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
+    m_genesisConfig.m_compatibilityVersion = genesisCompatibilityVersion(_genesisConfig);
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
     if (consensusNodeList.empty())
@@ -3054,22 +3076,6 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                                   "[ethereum] mode=el with a [fork_timestamps] section (Ethereum "
                                   "L1 EL mode) so the EVM revision is recorded on-chain; refusing "
                                   "to run with an implicit binary-side default"));
-    }
-    // A v2 chain must ALSO be able to persist that revision: Ledger::buildGenesisBlock only
-    // writes evmc_revision for compatibility_version >= V3_18_0 (and executor_version for
-    // >= V3_15_0). Below 3.18.0 the operator would be forced to write a value that is then
-    // ignored (the chain runs the binary default); below 3.15.0 executor_version is not
-    // persisted either, so getLedgerConfig never injects a revision and every transaction
-    // throws EvmcRevisionNotConfigured. Reject both ranges up front.
-    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
-        m_genesisConfig.m_compatibilityVersion <
-            static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "executor.version=2 requires compatibility_version >= 3.18.0: below that "
-                "Ledger::buildGenesisBlock cannot persist evmc_revision, so the EVM revision "
-                "would not be recorded on-chain"));
     }
     // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
     // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
@@ -4122,8 +4128,8 @@ std::string bcos::tool::generateGenesisData(
                 {"jovian_time", opSchedule.m_jovianTime},
                 {"karst_time", opSchedule.m_karstTime},
             }};
-            bool const anyGenesisActive = std::any_of(pinned.begin(), pinned.end(),
-                [](auto const& entry) { return entry.second == 0; });
+            bool const anyGenesisActive = std::any_of(
+                pinned.begin(), pinned.end(), [](auto const& entry) { return entry.second == 0; });
             if (anyGenesisActive)
             {
                 ss << "[opForkTimestamps]" << '\n';
