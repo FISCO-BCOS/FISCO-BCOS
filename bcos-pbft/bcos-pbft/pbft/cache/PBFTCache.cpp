@@ -42,9 +42,11 @@ void PBFTCache::onCheckPointTimeout()
     {
         m_committedIndexNotifier(m_config->committedProposal()->index());
     }
-    PBFT_LOG(WARNING) << LOG_DESC("onCheckPointTimeout: resend the checkpoint message package")
+    ++m_checkPointResendCount;
+    PBFT_LOG(WARNING) << LOG_DESC("CheckpointResend")
                       << LOG_KV("index", m_checkpointProposal->index())
                       << LOG_KV("hash", m_checkpointProposal->hash().abridged())
+                      << LOG_KV("resendCount", m_checkPointResendCount)
                       << m_config->printCurrentState();
     auto checkPointMsg = m_config->pbftMessageFactory()->populateFrom(PacketType::CheckPoint,
         m_config->pbftMsgDefaultVersion(), m_config->view(), utcTime(), m_config->nodeIndex(),
@@ -172,7 +174,12 @@ void PBFTCache::intoPrecommit()
     auto precommitProposalWithoutData =
         m_config->pbftMessageFactory()->populateFrom(m_precommit->consensusProposal(), false);
     m_precommitWithoutData->setConsensusProposal(precommitProposalWithoutData);
-    PBFT_LOG(INFO) << LOG_DESC("intoPrecommit") << printPBFTMsgInfo(m_precommit)
+    PBFT_LOG(INFO) << LOG_DESC("PrepareQuorum") << LOG_KV("index", m_precommit->index())
+                   << LOG_KV("hash", m_precommit->hash().abridged())
+                   << LOG_KV("view", m_precommit->view())
+                   << LOG_KV("weight", m_prepareReqWeight[m_precommit->hash()])
+                   << LOG_KV(
+                          "signatureSize", m_precommit->consensusProposal()->signatureProofSize())
                    << m_config->printCurrentState();
 }
 
@@ -184,9 +191,6 @@ void PBFTCache::setSignatureList(PBFTProposalInterface::Ptr _proposal, Collectio
     {
         _proposal->appendSignatureProof(it.first, it.second->consensusProposal()->signature());
     }
-    PBFT_LOG(INFO) << LOG_DESC("setSignatureList")
-                   << LOG_KV("signatureSize", _proposal->signatureProofSize())
-                   << printPBFTProposal(_proposal);
 }
 
 bool PBFTCache::conflictWithPrecommitReq(PBFTMessageInterface::Ptr _prePrepareMsg)
@@ -238,10 +242,9 @@ bool PBFTCache::checkAndPreCommit()
     // add the commitReq to local cache
     addCommitCache(commitReq);
     // broadcast the commitReq
-    PBFT_LOG(INFO) << LOG_DESC("checkAndPreCommit: broadcast commitMsg")
-                   << LOG_KV("Idx", m_config->nodeIndex())
-                   << LOG_KV("hash", commitReq->hash().abridged())
-                   << LOG_KV("index", commitReq->index());
+    PBFT_LOG(DEBUG) << LOG_DESC("CommitSent") << LOG_KV("index", commitReq->index())
+                    << LOG_KV("hash", commitReq->hash().abridged())
+                    << LOG_KV("Idx", m_config->nodeIndex());
     auto encodedData = m_config->codec()->encode(commitReq, m_config->pbftMsgDefaultVersion());
     // only broadcast message to consensus nodes
     // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
@@ -277,9 +280,6 @@ bool PBFTCache::checkAndCommit()
     {
         return false;
     }
-    PBFT_LOG(INFO) << LOG_DESC("checkAndCommit")
-                   << printPBFTProposal(m_precommit->consensusProposal())
-                   << m_config->printCurrentState();
     m_submitted.store(true);
     return true;
 }
@@ -297,18 +297,18 @@ void PBFTCache::resetCache(ViewType _curView)
 {
     m_submitted = false;
     m_precommitted = false;
-    PBFT_LOG(INFO) << LOG_DESC("resetCache") << LOG_KV("precommit", m_precommit ? "true" : "false")
-                   << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
-                   << LOG_KV("prepareView", m_prePrepare ? m_prePrepare->view() : 0)
-                   << LOG_KV("curView", _curView)
-                   << ((m_prePrepare && m_prePrepare->consensusProposal()) ?
-                              printPBFTProposal(m_prePrepare->consensusProposal()) :
-                              "consensusProposal is null");
+    PBFT_LOG(DEBUG) << LOG_DESC("resetCache") << LOG_KV("precommit", m_precommit ? "true" : "false")
+                    << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
+                    << LOG_KV("prepareView", m_prePrepare ? m_prePrepare->view() : 0)
+                    << LOG_KV("curView", _curView)
+                    << ((m_prePrepare && m_prePrepare->consensusProposal()) ?
+                               printPBFTProposal(m_prePrepare->consensusProposal()) :
+                               "consensusProposal is null");
     if (!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
         m_prePrepare->view() < _curView)
     {
-        PBFT_LOG(INFO) << LOG_DESC("resetCache : asyncResetTxsFlag")
-                       << printPBFTProposal(m_prePrepare->consensusProposal());
+        PBFT_LOG(DEBUG) << LOG_DESC("resetCache : asyncResetTxsFlag")
+                        << printPBFTProposal(m_prePrepare->consensusProposal());
         // reset the sealingManager, in case of the same block has been sealed twice
         m_config->notifyResetSealing(m_prePrepare->consensusProposal()->index());
         // reset the exceptioned txs to unsealed
@@ -338,14 +338,14 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
     for (auto exceptionPrePrepare = m_exceptionPrePrepareList.begin();
         exceptionPrePrepare != m_exceptionPrePrepareList.end();)
     {
-        PBFT_LOG(INFO) << LOG_DESC("resetCache: asyncResetTxsFlag exceptionPrePrepare")
-                       << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
-                       << LOG_KV("curView", _curView)
-                       << (m_precommit ? printPBFTProposal(m_precommit) : "precommit is null")
-                       << ((m_prePrepare && m_prePrepare->consensusProposal()) ?
-                                  printPBFTProposal(m_prePrepare->consensusProposal()) :
-                                  "consensusProposal is null")
-                       << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
+        PBFT_LOG(DEBUG) << LOG_DESC("resetCache: asyncResetTxsFlag exceptionPrePrepare")
+                        << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")
+                        << LOG_KV("curView", _curView)
+                        << (m_precommit ? printPBFTProposal(m_precommit) : "precommit is null")
+                        << ((m_prePrepare && m_prePrepare->consensusProposal()) ?
+                                   printPBFTProposal(m_prePrepare->consensusProposal()) :
+                                   "consensusProposal is null")
+                        << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
         auto validPrePrepare = (m_precommit || (m_prePrepare && m_prePrepare->consensusProposal() &&
                                                    m_prePrepare->view() >= _curView));
         if (validPrePrepare &&
@@ -367,8 +367,8 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
         }
         else
         {
-            PBFT_LOG(INFO) << LOG_DESC("resetCache: asyncResetTxsFlag exceptionPrePrepare")
-                           << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
+            PBFT_LOG(DEBUG) << LOG_DESC("resetCache: asyncResetTxsFlag exceptionPrePrepare")
+                            << printPBFTProposal((*exceptionPrePrepare)->consensusProposal());
             auto block = m_config->blockFactory().createBlock(
                 (*exceptionPrePrepare)->consensusProposal()->data(), false, false);
             m_config->validator()->asyncResetTxsFlag(*block, false);
@@ -440,9 +440,9 @@ bool PBFTCache::checkAndCommitStableCheckPoint()
     }
     setSignatureList(m_checkpointProposal, m_checkpointCacheList);
     m_stableCommitted = true;
-    PBFT_LOG(INFO) << LOG_DESC("checkAndCommitStableCheckPoint")
-                   << LOG_KV("index", m_checkpointProposal->index())
+    PBFT_LOG(INFO) << LOG_DESC("CheckpointQuorum") << LOG_KV("index", m_checkpointProposal->index())
                    << LOG_KV("hash", m_checkpointProposal->hash().abridged())
+                   << LOG_KV("weight", m_checkpointCacheWeight[m_checkpointProposal->hash()])
                    << m_config->printCurrentState();
     if (m_config->committedProposal()->index() >= m_checkpointProposal->index())
     {

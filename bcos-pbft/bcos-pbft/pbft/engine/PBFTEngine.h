@@ -27,6 +27,8 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
+#include <optional>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -194,7 +196,11 @@ protected:
     virtual void onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal);
     virtual void onLoadAndVerifyProposalFinish(
         bool _verifyResult, Error::Ptr const& _error, PBFTProposalInterface::Ptr const& _proposal);
-    virtual void triggerTimeout(bool _incTimeout = true);
+    /// _waitedMs: how long the node waited before giving up on the current leader (-1 when the
+    /// trigger is not a timer expiry)
+    virtual void triggerTimeout(bool _incTimeout, ViewChangeReason _reason, int64_t _waitedMs = -1);
+    /// the reason of the most recent triggerTimeout() on this engine (test hook)
+    std::optional<ViewChangeReason> lastViewChangeReason() const { return m_lastViewChangeReason; }
 
     void handleRecoverResponse(PBFTMessageInterface::Ptr _recoverResponse);
     void handleRecoverRequest(PBFTMessageInterface::Ptr _request);
@@ -231,6 +237,17 @@ protected:
 private:
     // utility functions
     void switchToRPBFT(const ledger::LedgerConfig::Ptr& _ledgerConfig);
+    // one LOG_DESC per event name; severity is a runtime value so each rejection site keeps its
+    // original level
+    void logPrePrepareRejected(bcos::LogLevel _level, std::string_view _reason,
+        PBFTMessageInterface::Ptr const& _prePrepareMsg, std::string const& _extra = {});
+    void logViewChangeRejected(bcos::LogLevel _level, std::string_view _reason,
+        ViewChangeMsgInterface::Ptr const& _viewChangeMsg, std::string const& _extra = {});
+    void logNewViewRejected(bcos::LogLevel _level, std::string_view _reason,
+        NewViewMsgInterface::Ptr const& _newViewMsg, std::string const& _extra = {});
+    void countReceivedPacket(PacketType _type, size_t _bytes);
+
+    std::optional<ViewChangeReason> m_lastViewChangeReason;
 
 protected:
     // PBFT configuration class
