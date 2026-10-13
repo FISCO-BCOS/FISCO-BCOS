@@ -2233,6 +2233,9 @@ BOOST_AUTO_TEST_CASE(RejectExecutorSurface)
             "currentGasLimit": "0x989680", "currentBaseFee": "0x3b9aca00",
             "currentCoinbase": "0x0000000000000000000000000000000000000000",
             "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            // review F44: the inline JSON vectors below carry fixed-width 32-byte
+            // literals inside a raw string; reflowing would change the JSON content,
+            // so these 11 lines stay over the 100-column limit by exception.
             "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
             "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
         },

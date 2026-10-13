@@ -55,10 +55,9 @@
 #include <optional>
 #include <string_view>
 
-
-using opstack_test::TrivialCheckpointStorage;
 namespace bcos::engine::eth_test
 {
+using opstack_test::TrivialCheckpointStorage;  // review F46: scoped, not global
 
 using RealGlobalStateMutableStorage = bcos::storage2::memory_storage::MemoryStorage<
     bcos::executor_v1::StateKey, bcos::executor_v1::StateValue,
