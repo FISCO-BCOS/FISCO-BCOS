@@ -144,6 +144,39 @@ std::string statusForDaFootprintRemote(uint64_t remote)
     return statusForDaFootprintRemoteAndGasLimit(remote, std::nullopt);
 }
 
+/// review F16: the same funnel, surfacing WHICH gate rejected. The DA cap and the
+/// deposit-fit gate answer the same INVALID status with DIFFERENT messages, and
+/// that difference is the only observable of the DA cap's ==Σ boundary on this
+/// vector (its deposit declares 1M gas, so the deposit-fit gate fires at ==Σ).
+std::string daFootprintRejectionMessageAt(uint64_t remote, std::optional<uint64_t> gasLimit)
+{
+    auto sample = w6test::loadVectorSample("jovian_da_mix");
+    auto params = w6test::makeParamsJson(sample);
+    params[0u]["blobGasUsed"] = w6test::quantityOf(bcos::u256(remote));
+    if (gasLimit.has_value())
+    {
+        params[0u]["gasLimit"] = w6test::quantityOf(bcos::u256(*gasLimit));
+    }
+    auto fixture = std::make_unique<OpE2eFixture>(/*jovian=*/true);
+    auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
+    opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    auto const goldenHeader = w6test::decodeGoldenHeader(sample);
+    registerParentForNewPayload(fixture->multiLayerStorage, fixture->blockFactory, sample.vector,
+        /*jovian=*/true, goldenHeader->parentInfo().blockHash);
+    auto const txRoot =
+        EngineOpScheduler::computeTxRoot(rawEnvelopesFromPayload(request.executionPayload));
+    auto header = bcos::engine::engine_common::op::rebuildOpEthHeader(
+        fixture->blockFactory->blockHeaderFactory(), request.executionPayload, txRoot,
+        request.parentBeaconBlockRoot.value_or(bcos::h256{}));
+    request.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
+    auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+    if (status.status != bcos::engine::PayloadValidationStatus::Invalid)
+    {
+        return "VALID";
+    }
+    return status.validationError ? *status.validationError : std::string();
+}
+
 /// Local Σ of the Jovian DA footprint for the jovian_da_mix fixture, via the production
 /// accumulator bcos::evm::opstack::daFootprintOfEnvelopes (OpBlockExecute.cpp) — the same
 /// function the engine's F-A2 equality gate calls. It is NOT read back out of the golden
@@ -316,6 +349,23 @@ BOOST_AUTO_TEST_CASE(JovianDaFootprintBelowBoundaryRejected,
     auto const local = localDaFootprintOfGoldenVector();
     BOOST_CHECK(
         statusForDaFootprintWithGasLimit(/*local=*/local, /*gasLimit=*/local - 1) == "INVALID");
+}
+
+// review F16: op-geth's cap is a strict '>' (block_validator.go:131), so gasLimit ==
+// Σ is admissible by the DA cap. On this vector that cell is observable only through
+// WHICH gate rejects: at ==Σ the deposit-fit gate fires first (the vector deposit
+// declares 1M gas), so pin that the rejection message names the deposit-fit rule and
+// NOT the DA cap — a '>=' regression flips the message to the DA-cap one and fails
+// here. The strictly-below cell is the contrast arm.
+BOOST_AUTO_TEST_CASE(JovianDaFootprintAtCapPassesTheDACapGate,
+    * boost::unit_test::label("fork-jovian"))
+{
+    auto const local = localDaFootprintOfGoldenVector();
+    auto const atCap = daFootprintRejectionMessageAt(/*remote=*/local, /*gasLimit=*/local);
+    BOOST_CHECK(atCap.find("DA footprint") == std::string::npos);
+    BOOST_CHECK_NE(atCap.find("block gas limit reached"), std::string::npos);
+    auto const belowCap = daFootprintRejectionMessageAt(/*remote=*/local, /*gasLimit=*/local - 1);
+    BOOST_CHECK_NE(belowCap.find("DA footprint"), std::string::npos);
 }
 
 // The accept direction of `daFootprint > gasLimit -> INVALID` (op-geth block_validator.go:131):
