@@ -579,10 +579,15 @@ evmc_revision forkNameToRevision(std::string const& forkName)
         return EVMC_SPURIOUS_DRAGON;
     if (lower == "byzantium")
         return EVMC_BYZANTIUM;
-    // evmone 0.23 removed the Constantinople revision; EEST fixtures naming it run
-    // under Petersburg (identical EVM semantics — Constantinople minus reverted
-    // EIP-1283).
-    if (lower == "constantinople" || lower == "constantinoplefix" || lower == "petersburg")
+    // evmone 0.23 removed the Constantinople revision. EEST fixtures naming it are
+    // SKIPPED, not retargeted to Petersburg: Petersburg is Constantinople minus the
+    // reverted EIP-1283 (SSTORE net gas metering), so running those fixtures under
+    // Petersburg charges different gas and yields a wrong post-state. Refusing the name
+    // here makes the fixture parser drop the case with its usual warning.
+    if (lower == "constantinople" || lower == "constantinoplefix")
+        throw std::invalid_argument(
+            "Constantinople fixtures are skipped: EIP-1283 metering differs from Petersburg");
+    if (lower == "petersburg")
         return EVMC_PETERSBURG;
     if (lower == "istanbul")
         return EVMC_ISTANBUL;

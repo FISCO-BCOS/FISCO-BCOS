@@ -427,10 +427,14 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_SPURIOUS_DRAGON;
     if (n == "byzantium")
         return EVMC_BYZANTIUM;
-    if (n == "constantinople" || n == "petersburg" || n == "constantinoplefix")
-        // evmone 0.23 removed the Constantinople revision (its opcodes retarget to
-        // Petersburg, which is Constantinople minus the reverted EIP-1283 — identical
-        // EVM semantics); accept the legacy name for old persisted configs.
+    // evmone 0.23 removed the Constantinople revision and retargets its opcodes to
+    // Petersburg. The two do NOT have identical EVM semantics: EIP-1283 (SSTORE net gas
+    // metering) is reverted in Petersburg, so the same SSTORE is charged differently. A
+    // persisted `constantinople` row would therefore execute under a different gas
+    // schedule on this binary than on 3.17.x — the silent mixed-binary fork this
+    // parser's halt-loudly policy below exists to prevent. Refuse the legacy spellings so
+    // an operator must name `petersburg` explicitly.
+    if (n == "petersburg")
         return EVMC_PETERSBURG;
     if (n == "istanbul" || n == "muirglacier" || n == "muir glacier")
         return EVMC_ISTANBUL;
@@ -448,8 +452,13 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_PRAGUE;
     if (n == "osaka")
         return EVMC_OSAKA;
-    if (n == "amsterdam")
-        return EVMC_AMSTERDAM;
+    // `amsterdam` is deliberately NOT accepted: the revision's EIP-8037/8038 state_gas
+    // dimension has no consumer in this binary (state_gas is written as {} at every
+    // message construction site and read nowhere), so accepting the name would run a
+    // chain under a revision this binary cannot price — exactly the silent mixed-binary
+    // outcome the halt-loudly policy below rejects unknown names to prevent. The name is
+    // still emitted by evmcRevisionName so that the no-default total switch there keeps
+    // being a compile-time guard; re-add this arm in the PR that wires state_gas.
     if (n == "experimental")
         return EVMC_EXPERIMENTAL;
     return std::nullopt;
@@ -494,6 +503,9 @@ inline std::string_view evmcRevisionName(evmc_revision rev)
     case EVMC_OSAKA:
         return "osaka";
     case EVMC_AMSTERDAM:
+        // Nameable but NOT config-selectable in this binary (state_gas is unwired, so
+        // evmcRevisionFromName refuses the name); the arm stays so this no-default switch
+        // remains total.
         return "amsterdam";
     case EVMC_EXPERIMENTAL:
         return "experimental";

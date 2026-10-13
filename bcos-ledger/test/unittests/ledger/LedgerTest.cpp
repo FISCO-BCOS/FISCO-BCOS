@@ -1919,6 +1919,17 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
         // evmcRevisionName is a total switch, so it must always yield a non-empty name.
         BOOST_REQUIRE(!name.empty());
         auto decoded = ledger::evmcRevisionFromName(name);
+        // EVMC_AMSTERDAM is nameable (evmcRevisionName stays a total switch, so a future
+        // evmc bump still breaks the build there) but is deliberately not config-selectable
+        // in this binary: its EIP-8037/8038 state_gas dimension has no consumer here, so
+        // accepting the name would price the chain under a revision this binary cannot
+        // execute. Pin that asymmetry instead of round-tripping it.
+        if (r == EVMC_AMSTERDAM)
+        {
+            BOOST_CHECK_MESSAGE(!decoded.has_value(),
+                "evmcRevisionFromName must refuse \"amsterdam\" until state_gas is wired");
+            continue;
+        }
         BOOST_REQUIRE_MESSAGE(decoded.has_value(),
             "evmcRevisionName(" << rev << ") = \"" << name
                                 << "\" is not accepted by evmcRevisionFromName");
