@@ -57,9 +57,12 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
         // evmc ABI 19: evmc_message no longer carries create2_salt. Nested CREATE2
         // messages arrive with recipient already computed by evmone (keccak of
         // 0xff||sender||salt||initcode-hash) — only transaction-level messages
-        // (recipient empty, salt historically always zero) take this branch.
-        if (!concepts::bytebuffer::equalTo(
-                message.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+        // (recipient empty, salt historically always zero) take this branch. The
+        // depth != 0 guard mirrors the CREATE arm: a depth-0 message may carry a
+        // decorative recipient (precompile wrappers, eip2929 probes) that this
+        // branch must overwrite, not honour.
+        if (message.depth != 0 && !concepts::bytebuffer::equalTo(
+                                      message.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
         {
             message.code_address = message.recipient;
             break;
