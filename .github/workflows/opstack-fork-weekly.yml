@@ -9,6 +9,7 @@ concurrency:
 jobs:
   fork-matrix:
     runs-on: ubuntu-24.04
+    timeout-minutes: 150
     permissions:
       contents: read
       issues: write
@@ -76,12 +77,13 @@ jobs:
           # OpHeaderFieldSetBaselineSuite) exist in no source file and the fourth
           # is compiled; the deferral text was stale and the step ran nothing.
           bash tools/.ci/check-fork-labels.sh build/opstack-executor/tests/opstack-executor-block-tests
-      - name: Run the built suites (review F25 — this schedule built four binaries
-          and executed none)
+      - name: Run the built suites (review F25/F54 — this schedule built four binaries
+          and executed three)
         run: |
           cd build
           ./opstack-executor/tests/opstack-executor-block-tests
           ./opstack-executor/tests/opstack-executor-tests
+          ./bcos-ledger/test/test-bcos-ledger
           ./engine/test/test-bcos-engine
       - name: conformance status placeholder (Plan D not started)
         # Block scalar: the value's inner "execution: ..." colon-space is not valid

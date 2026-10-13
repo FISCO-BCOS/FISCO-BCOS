@@ -3,12 +3,24 @@ on:
   schedule:
     - cron: "0 3 * * *"   # 03:00 UTC daily
   workflow_dispatch:
+    inputs:
+      sepolia_rpc:
+        description: "OP-Sepolia JSON-RPC endpoint for the M5a replay (empty: the public node)"
+        required: false
+        default: ""
+      sepolia_genesis:
+        # review F56: workflow_dispatch inputs are not env vars, so the case's
+        # OP_SEPOLIA_REPLAY_GENESIS had no supported way in; exported below.
+        description: "Runner-workspace path to the OP-Sepolia config.genesis (empty: the case skips)"
+        required: false
+        default: ""
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   fork-matrix:
     runs-on: ubuntu-24.04
+    timeout-minutes: 150
     permissions:
       contents: read
       issues: write
@@ -77,20 +89,25 @@ jobs:
           # is compiled; the deferral text was stale and the step ran nothing.
           bash tools/.ci/check-fork-labels.sh build/opstack-executor/tests/opstack-executor-block-tests
       - name: Run the built suites (the label gate alone executes nothing)
-        # review F25: this schedule used to only compile test-bcos-engine and
+        # review F25/F53: this schedule used to only compile test-bcos-engine and
         # opstack-executor-block-tests and list their labels — a runtime regression
-        # with its decorator intact was invisible to the nightly. The corpus is
-        # symlinked above, so the real replay runs here.
+        # with its decorator intact was invisible to the nightly. All three built
+        # binaries run here now (the Sepolia acceptance case self-skips without its
+        # env; the corpus is symlinked above, so the real replay runs).
         run: |
           cd build
           ./opstack-executor/tests/opstack-executor-block-tests
+          ./opstack-executor/tests/opstack-executor-scheduler-tests
           ./engine/test/test-bcos-engine
       - name: M5a Sepolia acceptance replay (manual dispatch only)
-        # review F9: OpSepoliaReplaySuite's skip env finally has a consumer — a
-        # workflow_dispatch run against a public OP-Sepolia RPC. Scheduled runs keep
-        # skipping (network-gated acceptance); bring your own genesis via
-        # OP_SEPOLIA_REPLAY_GENESIS or the case skips with its documented warning.
+        # review F9/F56: OpSepoliaReplaySuite's envs finally have a supported way in —
+        # the dispatch inputs above are exported here (workflow_dispatch inputs are
+        # not env vars by themselves). Set both inputs, or the case skips with its
+        # documented warning as scheduled runs do (network-gated acceptance).
         if: github.event_name == 'workflow_dispatch'
+        env:
+          OP_SEPOLIA_RPC: ${{ inputs.sepolia_rpc }}
+          OP_SEPOLIA_REPLAY_GENESIS: ${{ inputs.sepolia_genesis }}
         run: |
           cd build
           OP_SEPOLIA_REPLAY_RPC="${OP_SEPOLIA_RPC:-https://optimism-sepolia-rpc.publicnode.com}" \

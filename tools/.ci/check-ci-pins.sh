@@ -83,7 +83,8 @@ DIVERGENCES="$REPO_ROOT/opstack-executor/tests/da-matrix/DIVERGENCES.md"
 # docs/2*-*.md, docs/plans/ — so EXPECTED_OP_REVM_REVISION below is the operative record;
 # the doc:line citations are provenance for whoever has the archive, not a tree path):
 #   docs/2026-09-12-opstack-fork-allforks-delta-audit.md:13  "op-revm ... @ 5f90f749ca"
-#   docs/plans/2026-09-12-plan-e-spike-notes.md:8            "5f90f749caea14398554afb75062f7111b1fc554"
+#   docs/plans/2026-09-12-plan-e-spike-notes.md:8
+#                                                            "5f90f749caea14398554afb75062f7111b1fc554"
 # The value is pinned here: when the doc is present in the tree it is cross-checked
 # too; when docs/ is not committed the doc axis is skipped (::notice:: below).
 readonly EXPECTED_OP_REVM_REVISION="5f90f749caea14398554afb75062f7111b1fc554"
@@ -167,7 +168,8 @@ v_regen=""
 oracle="$REPO_ROOT/bcos-evm/test/opstack/op_geth_oracle.json"
 v_oracle=""
 [ -f "$oracle" ] && v_oracle="$(python3 -c \
-    'import json,sys;print(json.load(open(sys.argv[1]))["source"]["commit"])' "$oracle" 2>/dev/null)"
+    'import json,sys;print(json.load(open(sys.argv[1]))["source"]["commit"])' \
+    "$oracle" 2>/dev/null)"
 
 extract="$REPO_ROOT/tools/op-geth-oracle/extract.sh"
 v_extract=""
@@ -216,7 +218,8 @@ done
 revm_oracle="$REPO_ROOT/bcos-evm/test/opstack/op_revm_oracle.json"
 v_revm=""
 [ -f "$revm_oracle" ] && v_revm="$(python3 -c \
-    'import json,sys;print(json.load(open(sys.argv[1]))["source"]["revision"])' "$revm_oracle" 2>/dev/null)"
+    'import json,sys;print(json.load(open(sys.argv[1]))["source"]["revision"])' \
+    "$revm_oracle" 2>/dev/null)"
 
 echo "== op-revm revision axis =="
 if [ -z "$v_revm" ]; then
@@ -251,7 +254,9 @@ if [ -n "$no_ref_checkouts" ]; then
     # fetches and asserts the ref parsed from workflow.yml, adding no fourth place to
     # bump. Any OTHER ref-less corpus checkout would be pinned by nobody: eyeball the
     # list against that one known-good pattern.
-    echo "::warning::corpus checkout(s) without an inline ref: $(echo $no_ref_checkouts | tr '\n' ' ') — legitimate only for the ci_pins clone whose next step pins the parsed ref; anything else silently tracks the default branch"
+    echo "::warning::corpus checkout(s) without an inline ref: $(echo $no_ref_checkouts | tr '\n' ' ')" \
+        "— legitimate only for the ci_pins clone whose next step pins the parsed ref;" \
+        "anything else silently tracks the default branch"
 fi
 wf_refs="$(for f in "$WF" "$WF_NIGHTLY" "$WF_WEEKLY"; do checkout_pins "$f"; done \
     | awk '$1 != ".ci-op-e2e-tests" && $2 != "NO-REF" { print $2 }' | sort -u)"
@@ -351,15 +356,23 @@ else
             fail "$wname: no .ci-op-e2e-tests harness checkout found"
             continue
         fi
+        if [ "$refs" = "NO-REF" ] || [ "$refs" = "NO-PATH" ]; then
+            # The parser emits NO-REF/NO-PATH for a ref-less/path-less block; the
+            # sentinel must not masquerade as a pinned harness ref (review F1).
+            fail "$wname: .ci-op-e2e-tests checkout block is missing its ref ($refs) — a ref-less block tracks the default branch"
+            continue
+        fi
         if [ "$count" -ne 1 ]; then
-            fail "$wname: $count .ci-op-e2e-tests harness refs ($(echo $refs | tr '\n' ' ')); the C2 harness must be pinned exactly once"
+            fail "$wname: $count .ci-op-e2e-tests harness refs ($(echo $refs | tr '\n' ' '));" \
+                "the C2 harness must be pinned exactly once"
             continue
         fi
         echo "  $wname harness ref = $refs"
         if [ -z "$c2_ref" ]; then
             c2_ref="$refs"
         elif [ "$refs" != "$c2_ref" ]; then
-            fail "C2 harness refs disagree: $wname pins $refs, the other entry point pins $c2_ref — bump both together (this divergence is how PR #5615's C2 job got a stale versions.json)"
+            fail "C2 harness refs disagree: $wname pins $refs, the other entry point pins $c2_ref — bump both together" \
+                "(this divergence is how PR #5615's C2 job got a stale versions.json)"
         fi
     done
 fi
@@ -374,13 +387,16 @@ if [ -n "$c2_ref" ] && [ "$c2_ref" = "$corpus_ref" ] && [ -f "$v_versions_file" 
     case "$monorepo_pin" in
         "") fail "versions.json at $c2_ref: no op_monorepo.commit found" ;;
         "$EXPECTED_OP_REVM_REVISION")
-            fail "versions.json at $c2_ref pins op_monorepo.commit = $monorepo_pin, which is the op-revm oracle revision — that object does not exist in ethereum-optimism/optimism and the C2 checkout dies on 'not our ref'; bump the C2 harness ref past the versions.json fix"
+            fail "versions.json at $c2_ref pins op_monorepo.commit = $monorepo_pin, which is the op-revm oracle revision" \
+                "— that object does not exist in ethereum-optimism/optimism and the C2 checkout dies on 'not our ref';" \
+                "bump the C2 harness ref past the versions.json fix"
             ;;
         *)
             if [ "${#monorepo_pin}" -eq 40 ]; then
                 echo "  OK versions.json at the shared ref pins op_monorepo.commit = $monorepo_pin"
             else
-                fail "versions.json at $c2_ref: op_monorepo.commit '$monorepo_pin' is not a 40-hex sha"
+                fail "versions.json at $c2_ref: op_monorepo.commit '$monorepo_pin'" \
+                    "is not a 40-hex sha"
             fi
             ;;
     esac
@@ -388,7 +404,8 @@ elif [ -f "$v_versions_file" ]; then
     monorepo_pin="$(sed -n '/"op_monorepo"/,/}/p' "$v_versions_file" \
         | sed -nE 's/.*"commit"[[:space:]]*:[[:space:]]*"([0-9a-zA-Z]+)".*/\1/p' | head -1)"
     if [ "$monorepo_pin" = "$EXPECTED_OP_REVM_REVISION" ]; then
-        echo "  ::notice::corpus-ref versions.json still pins op_monorepo.commit = $monorepo_pin (the op-revm revision); harmless while C2 uses its own harness ref $c2_ref, but do not point C2 here"
+        echo "  ::notice::corpus-ref versions.json still pins op_monorepo.commit = $monorepo_pin (the op-revm revision);" \
+            "harmless while C2 uses its own harness ref $c2_ref, but do not point C2 here"
     fi
 fi
 
@@ -448,7 +465,8 @@ else
         # continue-on-error, so a third-party outage must surface here as a notice,
         # not as a citation-resolution failure (which misattributes the cause).
         if [ -z "${SPECS_DIR:-}" ] || [ ! -d "$SPECS_DIR" ]; then
-            echo "  ::notice::unverified $cite (SPECS_DIR unset or checkout missing at '${SPECS_DIR:-}'; supply a specs checkout to enforce)"
+            echo "  ::notice::unverified $cite (SPECS_DIR unset or checkout missing at '${SPECS_DIR:-}';" \
+                "supply a specs checkout to enforce)"
             continue
         fi
         path="${cite%:*}"; line="${cite##*:}"

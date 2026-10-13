@@ -22,6 +22,7 @@ jobs:
     # ubuntu-26.04-static is a build CONFIGURATION, not a runner label: it runs
     # on the ubuntu-26.04 runner with -DBUILD_STATIC=ON (see the matrix comment)
     runs-on: ${{ matrix.os == 'ubuntu-26.04-static' && 'ubuntu-26.04' || matrix.os }}
+    timeout-minutes: 180
     permissions:
       contents: write
     strategy:
@@ -162,9 +163,10 @@ jobs:
         # opstack-genesis link did not land.
         #
         # Before replacing: surface in-tree vs corpus drift as a notice. This step shadows
-        # the tracked tools/opstack-genesis with the pinned corpus checkout, so in-tree-only
-        # genesis-toolchain changes are never exercised by this pipeline — the drift must
-        # be visible, not silent.
+        # the tracked tools/opstack-genesis with the pinned corpus checkout, so THIS
+        # pipeline runs the corpus copy only; the in-tree copy's consumer is the
+        # nightly/weekly fork schedules (they run the pytest suites in place, review F57).
+        # The two copies are one toolchain, and the drift must be visible, not silent.
         run: |
           if ! diff -rq "$GITHUB_WORKSPACE/tools/opstack-genesis" \
                         "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" >/dev/null 2>&1; then
@@ -173,7 +175,7 @@ jobs:
             # tools/opstack-genesis), bump the checkout+action pins to the merge commit,
             # then flip this ::notice:: to ::error::+exit 1. Until the pins move, an error
             # would block every PR on the drift it takes a merge to clear.
-            echo "::notice::in-tree tools/opstack-genesis differs from the pinned corpus copy; this pipeline runs the corpus copy, so in-tree-only genesis-toolchain changes are not exercised here. Sync is prepared: op-stack-e2e-tests#8 (merge, bump pin, then escalate this check to error)."
+            echo "::notice::in-tree tools/opstack-genesis differs from the pinned corpus copy; this pipeline runs the corpus copy, so in-tree-only genesis changes are exercised only by the nightly/weekly fork schedules. Sync is prepared: op-stack-e2e-tests#8 (merge, bump pin, then escalate this check to error)."
           fi
           rm -rf "$GITHUB_WORKSPACE/tools/op-e2e" \
             "$GITHUB_WORKSPACE/tools/opstack-genesis" \
@@ -371,6 +373,7 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-26.04
+    timeout-minutes: 120
     env:
       # Surfaced as an env var so the upload step can be skipped when no token is
       # present. Fork PRs (pull_request event) receive NO secrets, so a tokenless
@@ -545,6 +548,7 @@ jobs:
   l2_unit_suites:
     name: L2 unit suites
     runs-on: ubuntu-26.04
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -654,6 +658,7 @@ jobs:
   ci_pins:
     name: CI pin gates
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -697,6 +702,19 @@ jobs:
           CORPUS_DIR: ${{ github.workspace }}/e2e-tests
           SPECS_DIR: ${{ github.workspace }}/ci-specs
         run: bash tools/.ci/check-ci-pins.sh
+      - name: opstack-genesis python suites (the ladder pin runs on the PR gate)
+        # review F28: the five suites — including the only EL_FORKS <-> c_opForkLadder
+        # cross-language pin — ran nightly-only; a rung rename merged green and failed
+        # the nightly hours later. This job checks out the in-tree copy (no corpus
+        # symlink here), which is exactly the copy a PR edits.
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest \
+            tools/opstack-genesis/test_gen_official_genesis.py \
+            tools/opstack-genesis/test_gen_rollup_config.py \
+            tools/opstack-genesis/test_gen_eth_header_fixture.py \
+            tools/opstack-genesis/test_mpt_state_root.py \
+            tools/opstack-genesis/test_build_allocs.py -q
 
   # Full-stack C2 devnet e2e. Reuses the fisco-bcos binary built by
   # l2_unit_suites (artifact) so this job skips vcpkg configure + C++ build.
