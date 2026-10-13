@@ -588,7 +588,7 @@ BOOST_AUTO_TEST_CASE(executableCacheIsContentAddressed)
     // A cache fill bound to fakeCode's hash must not be served while state holds no code at
     // the address — the key only matches once state carries that code.
     task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(),
-        hostcontext::ExecutableCacheKey{cachedAddress, fakeCodeHash}, poisoned));
+        hostcontext::ExecutableCacheKey{fakeCodeHash, EVMC_CANCUN}, poisoned));
 
     auto plainView = multiLayerStorage.fork();
     plainView.newMutable();
@@ -636,9 +636,9 @@ BOOST_AUTO_TEST_CASE(executableCacheIsContentAddressed)
 
     // Clean up the global cache so no other test sees these entries.
     task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
-        hostcontext::ExecutableCacheKey{cachedAddress, fakeCodeHash}));
+        hostcontext::ExecutableCacheKey{fakeCodeHash, EVMC_CANCUN}));
     task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
-        hostcontext::ExecutableCacheKey{cachedAddress, otherCodeHash}));
+        hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_CANCUN}));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
