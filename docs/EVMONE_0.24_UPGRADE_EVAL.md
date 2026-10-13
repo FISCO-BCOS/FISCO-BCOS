@@ -246,3 +246,37 @@ rebase 时确认:`bcos-evm/bcos-evm/eth/Eip7702Recover.h` 是 eth 与 opstack �
 
 ### 交付状态
 分支 `eval/evmone-0.24.0` 六个提交(a128e5c42…668ac2c91):port rebase + ABI 19 适配 + vendored state rebase + 全树构建与回归修复 + 两轮报告。**建议合入前**:CI 全矩阵(含 mac/win)、t8n 语料再生成、Karst 语义评审(R3/R9/R12 签字)、e2e。
+
+## 12. 遗留问题清零记录(提交 cc040108a、a47dc5344)
+
+### 12.1 bcos-executor 两例“无法解释”失败 → 已定位并修复(R13)
+新鲜 0.21 基线(merge-base 5f0bc54d0 全新构建)证实两例为**真实升级回归**。根因链:
+1. fixture 的 `deployAuthSolidity` 在 `set_logging_enabled(false)` 下运行——"零 EVM 帧"证据是盲区;临时打开后真相浮现;
+2. 委员会(AUTH_COMMITTEE@0x10001)构造器嵌套创建子合约后 STATICCALL 回读——0.24 中 CREATE 压栈地址由 VM 以 nonce 预计算,而 executive 把合约存到 FISCO 公式地址,错位即 "Error contract address";
+3. **深层根因(R13)**:旧 lane 是 DMC 重放式调度(每跳 fresh VM 重放整个帧)——nonce 地址**跨重放不稳定**(每跳重算出不同地址),0.21 靠“host 算公式地址 + result.create_address 回传”保持稳定,该通道被 ABI 18 删除。
+
+**修复**:fisco-sm3.patch 新增 `create_address_fn` 钩子(与 SM3 hash_fn 同款模式):设置时 create_impl 向宿主索要 CREATE 地址(CREATE2 的 0xff 方案本就确定,不动)。bcos-executor 接到 `HostContext::createAddressForOpcode()`:feature_evm_address 链返回 keccak(rlp(sender,nonce))(钩子参数,与上游推导同值),legacy 链返回重放稳定的 FISCO 公式 hash(blockNumber, contextID, seq+1)(与 externalCall 完全同源);externalRequest 把 recipient 透传给 externalCall(其本就支持非空 receiveAddress 作为创建地址),取代被删除的回传通道。
+
+### 12.2 顺序依赖两例(delegateCall/nestConstructor)→ 自然转绿
+evmone 重建链接后全矩阵 transaction-executor rc=0(十套件实证)。
+
+### 12.3 t8n 语料文案期差 → 本地全绿验证 + 机械化改名清单
+对语料缓存副本应用下表改名 + 树内三处期望同步后,`opstack-executor-block-tests` **rc=0 零失败**——证明语料差异**纯属文案**,所有金值/状态根完全匹配,语料无需再生成、只需按下表机械改名(外部仓库 FISCO-BCOS/op-stack-e2e-tests 更新 pin):
+
+| 旧(0.21 散文) | 新(0.24) |
+|---|---|
+| intrinsic gas too low | TransactionException.INTRINSIC_GAS_TOO_LOW |
+| insufficient funds for gas * price + value | TransactionException.INSUFFICIENT_ACCOUNT_FUNDS |
+| max fee per gas less than block base fee | TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS |
+| max priority fee per gas higher than max fee per gas | TransactionException.PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS |
+| sender not an eoa | TransactionException.SENDER_NOT_EOA |
+| nonce too low / nonce too high | TransactionException.NONCE_MISMATCH_TOO_LOW / _TOO_HIGH(OP 层码) |
+| empty authorization list | TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST(OP 层码) |
+
+注:nonce/empty-auth 两类在 0.24 下由 OP 层前置拦截产生 FISCO 自己的错误码(不再抵达 evmone 的对应检查)。
+
+### 12.4 最终测试矩阵(全部真实运行)
+**十一套件全绿**:bcos-evm eth+opstack(222)、opstack-executor tests/receipt/scheduler/detail/**block(改名语料下)**、engine、ethereum-executor state-smoke、transaction-executor、bcos-executor(含基线上也失败的 testSM3AndKeccak256)。唯余:使用未改名原始语料时 block-tests 的 15 个已分类文案失败(语料 pin 更新后即零)。
+
+### 风险登记册增补
+- **R13(P0,已修复,机制记录)**:DMC 重放调度 × 0.24 nonce 地址推导不兼容;任何未来把嵌套创建地址改回 nonce 推导的尝试都会复现。钩子(`create_address_fn`)是该 lane 的永久性结构依赖,与 SM3 hash_fn 同级维护。
