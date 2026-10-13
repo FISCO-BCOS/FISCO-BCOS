@@ -94,31 +94,44 @@ public:
             // "for a later re-FCU or re-import"): clear the flag and re-key the
             // height so occupantAt/put's guard see it live again. A live block is
             // an idempotent no-op.
-            if (it->second.detached)
+            if (it->second->detached)
             {
-                it->second.detached = false;
+                it->second->detached = false;
                 // The caller's voucher describes the OCCUPANT, not this re-livened
                 // block, so the re-key arbitrates (lowest hash among live) rather than
                 // handing the height to whichever copy arrived last.
-                rekeyOccupantLocked(it->second.number, it->first, /*vouchedCanonical=*/false);
+                rekeyOccupantLocked(it->second->number, it->first, /*vouchedCanonical=*/false);
             }
             return true;
         }
-        for (auto const& [hash, existing] : m_blocks)
+        // Descendant guard over the height/children indexes (review F6): the old
+        // shape scanned every stored block for same-height live occupants and then
+        // every block again for their children (O(blocks^2) per import). Blocks are
+        // never erased from this store — detached is a flag — so both indexes only
+        // grow at emplace and liveness is read live through m_blocks at probe time.
+        // Semantics are the previous loop's, verbatim: reject when a LIVE occupant
+        // of this height has a LIVE stored child, unless that occupant is vouched.
+        for (auto const& occupantHash : m_byHeight[block.number])
         {
-            if (existing.number != block.number || existing.detached)
+            auto const& occupant = *m_blocks.at(occupantHash);
+            if (occupant.detached)
             {
                 continue;
             }
-            for (auto const& [childHash, child] : m_blocks)
+            auto const children = m_children.find(occupantHash);
+            if (children == m_children.end())
             {
-                if (child.detached)
+                continue;
+            }
+            for (auto const& childHash : children->second)
+            {
+                if (m_blocks.at(childHash)->detached)
                 {
                     // A de-canonicalized branch's links are already orphaned by the
                     // switch; they must not block the new chain (review N3).
                     continue;
                 }
-                if (child.parent == hash && vouchedCanonicalOccupant != hash)
+                if (vouchedCanonicalOccupant != occupantHash)
                 {
                     return false;
                 }
@@ -134,7 +147,10 @@ public:
         // ancestor-sibling shape the engine drives.
         rekeyOccupantLocked(
             block.number, block.hash, /*vouchedCanonical=*/vouchedCanonicalOccupant.has_value());
-        m_blocks.emplace(block.hash, std::move(block));
+        auto entry = std::make_shared<ImportedBlock>(std::move(block));
+        m_children[entry->parent].push_back(entry->hash);
+        m_byHeight[entry->number].push_back(entry->hash);
+        m_blocks.emplace(entry->hash, std::move(entry));
         return true;
     }
 
@@ -160,15 +176,15 @@ public:
     /// is whatever the engine attached at put() (see storageDelta above — unverified
     /// here). Callers must not read this as "the post-state is materialized".
     [[nodiscard]] bool hasState(const bcos::h256& hash) const { return hasBlock(hash); }
-    [[nodiscard]] std::optional<ImportedBlock> get(const bcos::h256& hash) const
+    /// A shared read view, not a copy (review F6): bodies are immutable after put(),
+    /// so a reader takes one pointer under the lock instead of deep-copying the
+    /// header/tx/receipt vectors; the `detached`/`postStateFlat` flags it observes
+    /// are the store's live values at each read (nullptr = unknown hash).
+    [[nodiscard]] std::shared_ptr<const ImportedBlock> get(const bcos::h256& hash) const
     {
         std::lock_guard lock(m_mutex);
         auto const it = m_blocks.find(hash);
-        if (it == m_blocks.end())
-        {
-            return std::nullopt;
-        }
-        return it->second;
+        return it == m_blocks.end() ? nullptr : it->second;
     }
     [[nodiscard]] std::size_t size() const
     {
@@ -200,12 +216,12 @@ public:
         {
             if (blockHash == hash)
             {
-                block.detached = false;
+                block->detached = false;
                 continue;
             }
-            if (block.number >= number)
+            if (block->number >= number)
             {
-                block.detached = !descendsFrom(blockHash, hash);
+                block->detached = !descendsFrom(blockHash, hash);
             }
             else if (!headStaged)
             {
@@ -217,7 +233,7 @@ public:
                 // ancestor — fall back to the number rule and detach. Bodies stay
                 // hash-addressable, and a later re-FCU/re-import re-livens whatever
                 // turns out to be canonical (reversible by construction).
-                block.detached = true;
+                block->detached = true;
             }
             else
             {
@@ -226,8 +242,8 @@ public:
                 // sparse or cyclic staged range leaves the question open, and falsely
                 // detaching a live canonical ancestor re-opens the SYNCING-forever
                 // shape this fix closes (review N3/R1).
-                block.detached =
-                    ancestryDecidableFromHead(hash, block.number) && !descendsFrom(hash, blockHash);
+                block->detached = ancestryDecidableFromHead(hash, block->number) &&
+                                  !descendsFrom(hash, blockHash);
             }
         }
         // Heights above the new head have no canonical occupant; below/at it, a
@@ -238,7 +254,7 @@ public:
                 return true;
             }
             auto const it = m_blocks.find(item.second);
-            return it == m_blocks.end() || it->second.detached;
+            return it == m_blocks.end() || it->second->detached;
         });
         // Rebuild the index from liveness, not just the head: a block re-livened by
         // this pass (switch-back onto a still-stored chain) must regain its entry, or
@@ -255,18 +271,18 @@ public:
         };
         for (auto const& [blockHash, block] : m_blocks)
         {
-            if (!block.detached && onCanonicalLineage(blockHash))
+            if (!block->detached && onCanonicalLineage(blockHash))
             {
-                m_byNumber.insert_or_assign(block.number, blockHash);
+                m_byNumber.insert_or_assign(block->number, blockHash);
             }
         }
         for (auto const& [blockHash, block] : m_blocks)
         {
-            if (block.detached || onCanonicalLineage(blockHash))
+            if (block->detached || onCanonicalLineage(blockHash))
             {
                 continue;
             }
-            auto const [it, inserted] = m_byNumber.try_emplace(block.number, blockHash);
+            auto const [it, inserted] = m_byNumber.try_emplace(block->number, blockHash);
             if (!inserted && !onCanonicalLineage(it->second) && blockHash < it->second)
             {
                 it->second = blockHash;
@@ -293,9 +309,9 @@ public:
         std::lock_guard lock(m_mutex);
         for (auto& [hash, block] : m_blocks)
         {
-            if (block.number > tipNumber)
+            if (block->number > tipNumber)
             {
-                block.postStateFlat.reset();
+                block->postStateFlat.reset();
             }
         }
     }
@@ -308,9 +324,9 @@ public:
         std::lock_guard lock(m_mutex);
         for (auto& [hash, block] : m_blocks)
         {
-            if (block.number <= finalizedNumber)
+            if (block->number <= finalizedNumber)
             {
-                block.postStateFlat.reset();
+                block->postStateFlat.reset();
             }
         }
     }
@@ -337,15 +353,18 @@ private:
             return;
         }
         auto best = hash;
-        for (auto const& [blockHash, block] : m_blocks)
+        if (auto const height = m_byHeight.find(number); height != m_byHeight.end())
         {
-            if (blockHash == hash || block.number != number || block.detached)
+            for (auto const& blockHash : height->second)
             {
-                continue;
-            }
-            if (blockHash < best)
-            {
-                best = blockHash;
+                if (blockHash == hash || m_blocks.at(blockHash)->detached)
+                {
+                    continue;
+                }
+                if (blockHash < best)
+                {
+                    best = blockHash;
+                }
             }
         }
         m_byNumber.insert_or_assign(number, best);
@@ -368,15 +387,15 @@ private:
             {
                 return false;  // left the staged chain ABOVE the candidate's height — a hole
             }
-            if (it->second.number <= candidateNumber)
+            if (it->second->number <= candidateNumber)
             {
                 return true;  // passed the candidate's height inside the staged chain
             }
-            if (it->second.parent == cursor)
+            if (it->second->parent == cursor)
             {
                 return false;  // self-loop: undecidable
             }
-            cursor = it->second.parent;
+            cursor = it->second->parent;
         }
         return false;  // >=2-cycle: undecidable
     }
@@ -395,17 +414,23 @@ private:
                 return true;
             }
             auto const it = m_blocks.find(cursor);
-            if (it == m_blocks.end() || it->second.parent == cursor)
+            if (it == m_blocks.end() || it->second->parent == cursor)
             {
                 return false;
             }
-            cursor = it->second.parent;
+            cursor = it->second->parent;
         }
         return false;
     }
 
     mutable std::mutex m_mutex;
-    std::unordered_map<bcos::h256, ImportedBlock> m_blocks;
+    std::unordered_map<bcos::h256, std::shared_ptr<ImportedBlock>> m_blocks;
     std::unordered_map<bcos::protocol::BlockNumber, bcos::h256> m_byNumber;
+    // Grow-only side indexes (review F6): entries are never erased from m_blocks
+    // (detached is a flag), so both are appended exactly once per emplace and their
+    // vectors never dangle. Liveness is NOT cached here — probes read the live
+    // `detached` flag through m_blocks.
+    std::unordered_map<bcos::h256, std::vector<bcos::h256>> m_children;
+    std::unordered_map<bcos::protocol::BlockNumber, std::vector<bcos::h256>> m_byHeight;
 };
 }  // namespace bcos::engine

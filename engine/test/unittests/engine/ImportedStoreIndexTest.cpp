@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(CyclicParentWalkKeepsUndecidableAncestor)
     // A's liveness cannot be decided (its own walk cycles; the head walk hits the
     // unstaged B) — the store must keep it: body hash-addressable, height kept.
     auto const gotA = store.get(hashOf('A'));
-    BOOST_REQUIRE(gotA.has_value());
+    BOOST_REQUIRE(gotA);
     BOOST_CHECK(!gotA->detached);
     BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
 }
@@ -185,7 +185,7 @@ BOOST_AUTO_TEST_CASE(CanonicalAncestorWinsHeightOverLiveSibling)
     BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
     BOOST_CHECK_EQUAL(*store.occupantAt(102), hashOf('C'));
     BOOST_CHECK(store.hasBlock(hashOf('S')));  // still hash-addressable for re-import
-    BOOST_REQUIRE(store.get(hashOf('S')).has_value());
+    BOOST_REQUIRE(store.get(hashOf('S')));
     BOOST_CHECK(store.get(hashOf('S'))->detached);  // decided non-ancestor of the head
 }
 
@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(BelowHeadOldBranchBlockDetachedWhenDecided)
     // height 100 without finding A, so A's liveness was DECIDED false and the flag
     // must be set — occupantAt(100)==D would hold even if the detach no-oped (the
     // canonical-lineage pass writes D regardless; hasBlock is addressability only).
-    BOOST_REQUIRE(store.get(hashOf('A')).has_value());
+    BOOST_REQUIRE(store.get(hashOf('A')));
     BOOST_CHECK(store.get(hashOf('A'))->detached);
 }
 
@@ -271,7 +271,7 @@ BOOST_AUTO_TEST_CASE(SameHashReimportRelivensAndRekeys)
 
     // Re-import C itself: the same-hash path re-livens the body and re-keys height 2.
     BOOST_CHECK(store.put(block('C', 'B', 2)));
-    BOOST_REQUIRE(store.get(hashOf('C')).has_value());
+    BOOST_REQUIRE(store.get(hashOf('C')));
     BOOST_CHECK(!store.get(hashOf('C'))->detached);
     BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('C'));
 }
@@ -314,7 +314,7 @@ BOOST_AUTO_TEST_CASE(AdoptWithUnstagedHeadDetachesBelowAndSkipsIndex)
     BOOST_CHECK(!store.hasBlock(hashOf('Z')));
     BOOST_CHECK(!store.occupantAt(2).has_value());  // bodyless head is not indexed
     BOOST_CHECK(!store.occupantAt(1).has_value());  // A detached by the number rule
-    BOOST_REQUIRE(store.get(hashOf('A')).has_value());
+    BOOST_REQUIRE(store.get(hashOf('A')));
     BOOST_CHECK(store.get(hashOf('A'))->detached);
     // Re-importing the real block at 2 is legal again (A is detached, not guarding).
     BOOST_CHECK(store.put(block('B', 'A', 2)));
