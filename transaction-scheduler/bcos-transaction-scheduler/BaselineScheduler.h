@@ -14,6 +14,7 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/MPTDeltaLayer.h"
+#include <bcos-utilities/BlockStat.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
@@ -49,7 +50,8 @@ class Hash;
 
 namespace bcos::scheduler_v1
 {
-#define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
+#define BASELINE_SCHEDULER_LOG(LEVEL) \
+    BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
 DERIVE_BCOS_EXCEPTION(NotFoundTransactionError);
 
@@ -122,6 +124,8 @@ private:
     int64_t m_lastExecutedBlockNumber{-1};
     std::mutex m_executeMutex;
     int64_t m_lastCommittedBlockNumber{-1};
+    /// elapsed ms of the last successful executeBlock; BlockStat prints it at commit
+    std::atomic<int64_t> m_lastExecuteMs{-1};
     std::mutex m_commitMutex;
     tbb::task_group m_asyncGroup;
 

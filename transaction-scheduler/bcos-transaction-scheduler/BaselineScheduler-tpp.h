@@ -146,8 +146,21 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         [&]() {
             block.clearReceipts();
             totalGasUsed = protocol::normalizeReceipts(receipts);
+            auto transactionIt = ::ranges::begin(transactions);
+            auto const transactionEnd = ::ranges::end(transactions);
             for (auto const& receipt : receipts)
             {
+                // one DEBUG line per tx (the handbook's TxExecuted stage, baseline lane)
+                if (transactionIt != transactionEnd)
+                {
+                    BASELINE_SCHEDULER_LOG(DEBUG)
+                        << LOG_DESC("TxExecuted")
+                        << LOG_KV("tx", (*transactionIt)->hash().abridged())
+                        << LOG_KV("number", block.blockHeader()->number())
+                        << LOG_KV("status", receipt->status())
+                        << LOG_KV("gasUsed", receipt->gasUsed());
+                    ++transactionIt;
+                }
                 block.appendReceipt(receipt);
             }
         },
@@ -449,6 +462,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
             << " | receiptRoot: " << executedBlockHeader->receiptsRoot()
             << " | gasUsed: " << executedBlockHeader->gasUsed() << " | sysBlock: " << sysBlock
             << " | elapsed: " << (current() - now) << "ms";
+        m_lastExecuteMs.store(static_cast<int64_t>(current() - now), std::memory_order_relaxed);
 
         co_return {nullptr, std::move(executedBlockHeader), sysBlock};
     }
@@ -659,6 +673,14 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
 
         BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                      << " | elapsed: " << (current() - now) << "ms";
+        if (bcos::BlockStat::enabled())
+        {
+            BASELINE_SCHEDULER_LOG(INFO)
+                << METRIC << LOG_DESC("BlockStat") << LOG_KV("number", header->number())
+                << LOG_KV("txs", result->m_receipts.size())
+                << LOG_KV("execMs", m_lastExecuteMs.load(std::memory_order_relaxed))
+                << LOG_KV("commitMs", current() - now);
+        }
         commitLock.unlock();
 
         m_asyncGroup.run([&, result = std::move(result), blockHash = ledgerConfig->hash(),
