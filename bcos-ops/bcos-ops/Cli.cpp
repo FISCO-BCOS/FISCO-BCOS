@@ -19,6 +19,7 @@
 #include "Connect.h"
 #include "OpsError.h"
 #include "Output.h"
+#include <boost/log/core.hpp>
 #include <cstdlib>
 #include <iostream>
 
@@ -127,6 +128,10 @@ int runOps(std::vector<std::string> const& _args, std::ostream& _out, std::ostre
 
 int runOps(int argc, const char* argv[])
 {
+    // The CLI never initialises a log sink, and Boost.Log prints records to the console when no
+    // sink is registered; the SDK's ABI codec logs at TRACE. Silence the core so command output
+    // stays machine-readable.
+    boost::log::core::get()->set_logging_enabled(false);
     std::vector<std::string> args;
     args.reserve(static_cast<size_t>(argc));
     for (int i = 0; i < argc; ++i)
