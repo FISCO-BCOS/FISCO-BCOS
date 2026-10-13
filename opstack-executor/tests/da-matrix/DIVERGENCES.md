@@ -95,9 +95,11 @@ ends by design:
 
 ## `solidity_l1_uint32_overflow` — GasPriceOracle.getL1Fee panics on extreme scalars
 
-- **Grid cases:** `max_isthmus_scalars`, `max_jovian_scalars`,
-  `overflow_isthmus`, `overflow_jovian` (all carry `baseFeeScalar ==
-  0xffffffff`).
+- **Grid cases:** none. The four extreme-scalar rows (`max_isthmus_scalars`,
+  `max_jovian_scalars`, `overflow_isthmus`, `overflow_jovian`, all `baseFeeScalar ==
+  0xffffffff`) deliberately carry `"known_divergence": null` — see the disposition
+  below (FISCO and the reference ends agree on them; tagging them would wrongly
+  exempt their l1_cost comparison).
 - **Status:** NEW finding from Task 5 four-source comparison — a latent bug in
   the **real Solidity contract**, not in the FISCO implementation.
 - **What happens:** `GasPriceOracle._fjordL1Cost` and `_getL1FeeEcotone`

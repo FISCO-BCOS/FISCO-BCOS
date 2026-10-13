@@ -57,7 +57,7 @@ jobs:
             -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
             -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
           cmake --build . --target test-bcos-engine opstack-executor-block-tests \
-            -j 4
+            opstack-executor-scheduler-tests -j 4
       - name: Fork-label gate (all nine fork-* labels present)
         run: |
           set -euo pipefail
@@ -70,6 +70,25 @@ jobs:
           # OpHeaderFieldSetBaselineSuite) exist in no source file and the fourth
           # is compiled; the deferral text was stale and the step ran nothing.
           bash tools/.ci/check-fork-labels.sh build/opstack-executor/tests/opstack-executor-block-tests
+      - name: Run the built suites (the label gate alone executes nothing)
+        # review F25: this schedule used to only compile test-bcos-engine and
+        # opstack-executor-block-tests and list their labels — a runtime regression
+        # with its decorator intact was invisible to the nightly. The corpus is
+        # symlinked above, so the real replay runs here.
+        run: |
+          cd build
+          ./opstack-executor/tests/opstack-executor-block-tests
+          ./engine/test/test-bcos-engine
+      - name: M5a Sepolia acceptance replay (manual dispatch only)
+        # review F9: OpSepoliaReplaySuite's skip env finally has a consumer — a
+        # workflow_dispatch run against a public OP-Sepolia RPC. Scheduled runs keep
+        # skipping (network-gated acceptance); bring your own genesis via
+        # OP_SEPOLIA_REPLAY_GENESIS or the case skips with its documented warning.
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          cd build
+          OP_SEPOLIA_REPLAY_RPC="${OP_SEPOLIA_RPC:-https://optimism-sepolia-rpc.publicnode.com}" \
+            ./opstack-executor/tests/opstack-executor-scheduler-tests --run_test='OpSepoliaReplaySuite'
       - name: Set up Python 3.11 (pytest runner for the sweep)
         uses: actions/setup-python@v5
         with:
@@ -90,6 +109,10 @@ jobs:
         run: python -m pytest tools/opstack-genesis/test_gen_official_genesis.py -q
       - name: opstack-genesis python suites (the four the registry sweep does not cover)
         run: python -m pytest tools/opstack-genesis/test_gen_rollup_config.py tools/opstack-genesis/test_gen_eth_header_fixture.py tools/opstack-genesis/test_mpt_state_root.py tools/opstack-genesis/test_build_allocs.py -q
+      - name: gen_trieroot_golden self-check (declared judge; review F30)
+        # The docstring names this run as the check that every computed root equals
+        # the C++ pin — give the declared judge a CI consumer.
+        run: python3 tools/opstack-genesis/gen_trieroot_golden.py
       - name: route failure to an issue, do not block PRs
         if: failure()
         run: |

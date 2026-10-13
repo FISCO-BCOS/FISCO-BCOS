@@ -70,6 +70,13 @@ jobs:
           # OpHeaderFieldSetBaselineSuite) exist in no source file and the fourth
           # is compiled; the deferral text was stale and the step ran nothing.
           bash tools/.ci/check-fork-labels.sh build/opstack-executor/tests/opstack-executor-block-tests
+      - name: Run the built suites (review F25 — this schedule built four binaries
+          and executed none)
+        run: |
+          cd build
+          ./opstack-executor/tests/opstack-executor-block-tests
+          ./opstack-executor/tests/opstack-executor-tests
+          ./engine/test/test-bcos-engine
       - name: conformance status placeholder (Plan D not started)
         # Block scalar: the value's inner "execution: ..." colon-space is not valid
         # inside a YAML plain scalar (the plan snippet's one syntax bug).

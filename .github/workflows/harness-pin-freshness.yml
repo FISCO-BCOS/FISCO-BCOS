@@ -91,8 +91,11 @@ jobs:
                             }
                             END { flush() }
                         '; } | sort -u)
+          # review F24: BOTH C2 entry points carry the harness ref (check-ci-pins
+          # Axis 4 requires them equal) — scan the pair so a stale ref in either
+          # file is named, not just c2-e2e.yml's.
           c2_pin=$(grep -hoE 'ref: [0-9a-f]{40}' .github/workflows/c2-e2e.yml \
-            | awk '{print $2}' | sort -u)
+            .github/workflows/workflow.yml | awk '{print $2}' | sort -u)
           # Each distinct t8n pin is checked against the blessed pipeline head.
           for pin in $t8n_pins; do
             check_class "t8n-corpus" "$pin" "$T8N_BLESSED"
