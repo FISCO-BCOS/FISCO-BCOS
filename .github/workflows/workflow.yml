@@ -371,7 +371,12 @@ jobs:
 
   coverage:
     name: Coverage
-    runs-on: ubuntu-26.04
+    # arm64 runner: this is the longest job in the workflow (~87 min) and its cost is almost
+    # entirely the C++ build, which runs 1.67x faster on the arm64 pool than on x64 (paired
+    # same-run measurements, n=39: x64 median 2253s vs arm 1358s), with far less spread
+    # (p90/p10 1.17 vs 1.68). Nothing here is architecture-specific: gcov/lcov, gcc-16 and
+    # the arm64-linux-release triplet are all available on the arm image.
+    runs-on: ubuntu-26.04-arm
     env:
       # Surfaced as an env var so the upload step can be skipped when no token is
       # present. Fork PRs (pull_request event) receive NO secrets, so a tokenless
@@ -403,6 +408,12 @@ jobs:
         with:
           cmakeVersion: 3.28.3
           ninjaVersion: 1.12.1
+      - name: Initialize vcpkg submodule
+        run: git submodule update --init --recursive -- vcpkg
+      - name: Compute vcpkg revision
+        id: vcpkg-revision
+        shell: bash
+        run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Restore vcpkg cache
         uses: actions/cache/restore@v4
         id: vcpkg-cache
@@ -414,7 +425,11 @@ jobs:
             !${{ github.workspace }}/vcpkg/buildtrees
             !${{ github.workspace }}/vcpkg/packages
             !${{ github.workspace }}/vcpkg/downloads
-          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+          # Deliberately the SAME key the arm build leg installs under: this job needs the same
+          # triplet (arm64-linux-release) from the same manifest, so sharing one entry avoids a
+          # cold dependency build here (~43 minutes of vcpkg) and keeps a second near-identical
+          # ~230MB entry out of the repository's 10GB budget.
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-arm-cache-key-v4
       - name: Restore ccache
         uses: actions/cache/restore@v4
         with:
@@ -441,7 +456,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=arm64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -540,7 +555,10 @@ jobs:
             !${{ github.workspace }}/vcpkg/buildtrees
             !${{ github.workspace }}/vcpkg/packages
             !${{ github.workspace }}/vcpkg/downloads
-          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+          # Must stay byte-identical to the Restore step above, otherwise this writes an entry
+          # nothing reads (and the shared key means the arm build leg may have written it
+          # already, in which case the save is skipped).
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-arm-cache-key-v4
       - name: Save ccache
         if: github.event_name != 'pull_request' && success()
         uses: actions/cache/save@v4
@@ -559,7 +577,11 @@ jobs:
   # itself when the A8 devnet is absent).
   l2_unit_suites:
     name: L2 unit suites
-    runs-on: ubuntu-26.04
+    # arm64, like the Coverage job: the job is a full C++ build plus the L2 suites, and the
+    # arm64 pool builds the same tree 1.67x faster (paired same-run measurements, n=39).
+    # The produced fisco-bcos is therefore an arm64 binary - the c2_e2e job that consumes it
+    # moves to the same runner label (see there).
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     env:
@@ -591,7 +613,10 @@ jobs:
         with:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-arm-cache-key-v4
+          # Same key as the arm build leg installs under: identical triplet and manifest, so
+          # this job reuses that entry instead of paying a cold dependency build (~43 min)
+          # after the move to arm64 changed runner.arch.
       - name: Restore ccache
         uses: actions/cache/restore@v4
         with:
@@ -619,7 +644,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=arm64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -648,7 +673,9 @@ jobs:
       - name: Upload fisco-bcos for C2 e2e
         uses: actions/upload-artifact@v4
         with:
-          name: fisco-bcos-l2-ubuntu
+          # arm64 in the name on purpose: the c2_e2e consumer must run on the matching
+          # runner, and a silent arch mismatch here fails deep inside the harness.
+          name: fisco-bcos-l2-ubuntu-arm64
           path: build/fisco-bcos-air/fisco-bcos
           retention-days: 1
       # Save split from restore: PRs never write, only base-branch push/release refresh.
@@ -658,7 +685,7 @@ jobs:
         with:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-arm-cache-key-v4
       - name: Save ccache
         if: github.event_name != 'pull_request' && success()
         uses: actions/cache/save@v4
@@ -677,7 +704,10 @@ jobs:
     name: C2 deposit/withdraw e2e
     needs: [l2_unit_suites]
     if: needs.l2_unit_suites.result == 'success'
-    runs-on: ubuntu-26.04
+    # Same runner as l2_unit_suites: the artifact it downloads is that job's fisco-bcos, and
+    # the harness runs it as a host process (Go-built OP binaries + forge, no Docker), so the
+    # consumer has to match the producer's architecture.
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 45
     permissions:
       contents: read
@@ -704,7 +734,7 @@ jobs:
       - name: Download fisco-bcos from L2 unit job
         uses: actions/download-artifact@v4
         with:
-          name: fisco-bcos-l2-ubuntu
+          name: fisco-bcos-l2-ubuntu-arm64
           path: build/fisco-bcos-air
 
       - name: Ensure fisco-bcos executable
@@ -716,7 +746,7 @@ jobs:
           sudo apt install -y --no-install-recommends \
             wget python3-dev python3-pip git curl ca-certificates jq zip
           sudo wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_${{ runner.arch == 'ARM64' && 'arm64' || 'amd64' }}
           sudo chmod +x /usr/local/bin/yq
 
       - name: Install Foundry (optimism contracts-bedrock pin)
