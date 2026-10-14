@@ -598,8 +598,10 @@ TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
     {
         if (ptr->submitCallback() && !accessor.value()->submitCallback())
         {
-            // another submission of this tx won the race past txpoolStorageCheck: this one only
-            // lends its callback, nothing new entered the pool
+            // the tx is already pooled and this copy only lends its callback, nothing new entered
+            // the pool. Reached by a concurrent submission that also passed txpoolStorageCheck
+            // (with signature checking off: on, the nonce reservation refuses the second copy
+            // first) and by enforceSubmitTransaction for a tx another path pooled meanwhile
             accessor.value()->setSubmitCallback(ptr->submitCallback());
             return TransactionStatus::AlreadyInTxPoolAndAccept;
         }
