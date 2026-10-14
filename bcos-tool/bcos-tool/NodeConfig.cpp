@@ -805,6 +805,22 @@ void NodeConfig::validateELModeInvariants() const
                 std::to_string(m_ethereumReorgWindow) +
                 "): an EL rollback target's trie nodes would already be pruned"));
     }
+    // The challenger data plane (debug_dbGet, gated by enable_debug_api on either listener)
+    // reads MPT preimages straight out of the node store with no retention guarantee: a block
+    // still inside a dispute game's challenge window can have its trie nodes pruned, and
+    // kona-host then receives an indistinguishable -32000 "not found" (debug_dbGet is keyed by
+    // content hash, not by block, so it cannot produce eth_getProof's "State pruned" diagnostic).
+    // The dispute window is a chain/contract parameter, not a node config, so the enforceable
+    // invariant is the archive one: a node serving preimages must not bound MPT disk growth.
+    if ((m_enableDebugApi || m_enableOpEngineDebugApi) && m_mptPruneWindow != -1)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "enable_debug_api requires storage.mpt_prune_window = -1 "
+                                  "(archive): the challenger data plane reads MPT preimages with "
+                                  "no retention guarantee, and a pruned block still inside a "
+                                  "dispute game's challenge window would answer -32000 \"not "
+                                  "found\" indistinguishable from an unknown hash"));
+    }
     // Same two-way binding for opstack-el: the per-node mode must be backed by the
     // chain-level declaration (which validateL2Invariants binds to the OP lane, the
     // fork schedule and the L2 genesis shape), and an opstack-el-declaring genesis
@@ -1160,6 +1176,15 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; listener only; the op-engine (8551) listener has its own [op_engine_rpc]
         ; enable_miner_api. Keep this port private if you set it — never expose it publicly.
         ; enable_miner_api=false
+        ; The geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload) is off
+        ; unless enabled here: it serves the fault-proof preimage oracle (kona-host), not general
+        ; clients. This key scopes the namespace to THIS web3 listener only; the op-engine (8551)
+        ; listener has its own [op_engine_rpc] enable_debug_api.
+        ; Enabling it also REQUIRES storage.mpt_prune_window=-1 (archive): the namespace reads
+        ; MPT preimages with no retention guarantee, so a pruned block still inside a dispute
+        ; game's challenge window would answer an indistinguishable -32000. The node refuses to
+        ; boot otherwise, and archive mode means MPT disk growth is unbounded — size for it.
+        ; enable_debug_api=false
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
@@ -1205,6 +1230,9 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     // Default off: on an OP node the DA caps exist, so without this gate the method would be
     // reachable from every caller of this listener (see the [web3_rpc] doc block).
     m_enableMinerApi = _pt.get<bool>("web3_rpc.enable_miner_api", false);
+    // Default off: the debug namespace serves the fault-proof preimage oracle, not general
+    // clients — expose it only on a listener that opts in (see the [web3_rpc] doc block).
+    m_enableDebugApi = _pt.get<bool>("web3_rpc.enable_debug_api", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
@@ -1247,11 +1275,17 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; batcher/conductor port. [web3_rpc] enable_miner_api scopes it to the web3 listener
         ; only; neither key reaches the other port.
         ; enable_miner_api=false
+        ; scopes the geth debug namespace to THIS listener only (default off); [web3_rpc]
+        ; enable_debug_api scopes it to the web3 listener. Neither key reaches the other port.
+        ; Enabling it on either port requires storage.mpt_prune_window=-1 (archive), for the
+        ; same reason as [web3_rpc] enable_debug_api above.
+        ; enable_debug_api=false
     */
     const auto config = parseEngineRpcSection(_pt, "op_engine_rpc", "conf/op-engine/jwt.hex");
     // test-only escape hatch, see Initializer's executor-version guard
     const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
     const bool enableMinerApi = _pt.get<bool>("op_engine_rpc.enable_miner_api", false);
+    const bool enableDebugApi = _pt.get<bool>("op_engine_rpc.enable_debug_api", false);
 
     m_enableOpEngineRpc = config.enable;
     // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
@@ -1281,6 +1315,7 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     m_opEngineClockSkewSecs = config.clockSkewSecs;
     m_opEngineAllowV1Executor = allowV1Executor;
     m_enableOpEngineMinerApi = enableMinerApi;
+    m_enableOpEngineDebugApi = enableDebugApi;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
                          << LOG_KV("enableOpEngineRpc", m_enableOpEngineRpc)
@@ -3556,6 +3591,16 @@ bool NodeConfig::enableMinerApi() const
 bool NodeConfig::enableOpEngineMinerApi() const
 {
     return m_enableOpEngineMinerApi;
+}
+
+bool NodeConfig::enableDebugApi() const
+{
+    return m_enableDebugApi;
+}
+
+bool NodeConfig::enableOpEngineDebugApi() const
+{
+    return m_enableOpEngineDebugApi;
 }
 
 bool NodeConfig::opEngineAllowV1Executor() const
