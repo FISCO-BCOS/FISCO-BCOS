@@ -32,7 +32,7 @@ jobs:
       - name: configure
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DWITH_LIGHTNODE=ON -DWITH_TARS_SERVICES=ON
       - name: compile
-        run: make -j2 && make tar
+        run: make -j2 && make BcosRpcService-tar BcosNodeService-tar
       - name: tar BcosBuilder
         run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
       - name: tar fisco-bcos for macOS
