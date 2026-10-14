@@ -196,31 +196,22 @@ void SerialBlockExecutive::serialExecute(
         if (tx->to().empty())
         {
             auto newSeq = tx->seq();
-            if (tx->createSalt())
+            std::string address;
+            if (m_scheduler->ledgerConfig().features().get(
+                    ledger::Features::Flag::feature_evm_address))
             {
-                // TODO: Add sender in this process(consider compat with ethereum)
-                tx->setTo(bcos::newCreate2EVMAddress(
-                    m_scheduler->getHashImpl(), tx->from(), tx->data(), *(tx->createSalt())));
+                // EOA create contract
+                auto const sender = tx->origin();
+                Address senderAddress(sender, Address::FromHex);
+                address = bcos::newLegacyEVMAddressString(senderAddress.ref(), tx->nonce());
             }
             else
             {
-                std::string address;
-                if (m_scheduler->ledgerConfig().features().get(
-                        ledger::Features::Flag::feature_evm_address))
-                {
-                    // EOA create contract
-                    auto const sender = tx->origin();
-                    Address senderAddress(sender, Address::FromHex);
-                    address = bcos::newLegacyEVMAddressString(senderAddress.ref(), tx->nonce());
-                }
-                else
-                {
-                    address = bcos::newEVMAddress(m_scheduler->getHashImpl(),
-                        m_block->blockHeader()->number(), tx->contextID(), newSeq);
-                }
-
-                tx->setTo(std::move(address));
+                address = bcos::newEVMAddress(m_scheduler->getHashImpl(),
+                    m_block->blockHeader()->number(), tx->contextID(), newSeq);
             }
+
+            tx->setTo(std::move(address));
         }
 
         updateWeb3NonceMap(tx);

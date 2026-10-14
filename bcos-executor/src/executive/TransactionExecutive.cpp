@@ -144,24 +144,18 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     // a new address
     if (isCreate && std::empty(input->receiveAddress))
     {
-        if (input->createSalt)
+        // contract create contract (nested CREATE2 rides a pre-derived receiveAddress since
+        // evmc ABI 19 removed evmc_message::create2_salt — the executor no longer carries a
+        // salt here, so this branch only derives opcode-less internal creates)
+        if (m_blockContext.features().get(ledger::Features::Flag::feature_evm_address))
         {
-            newAddress = bcos::newCreate2EVMAddress(m_hashImpl, input->senderAddress,
-                bytesConstRef(input->data.data(), input->data.size()), *(input->createSalt));
+            auto senderBytes = fromHex(input->senderAddress);
+            newAddress = bcos::newLegacyEVMAddressString(ref(senderBytes), input->nonce);
         }
         else
         {
-            // contract create contract
-            if (m_blockContext.features().get(ledger::Features::Flag::feature_evm_address))
-            {
-                auto senderBytes = fromHex(input->senderAddress);
-                newAddress = bcos::newLegacyEVMAddressString(ref(senderBytes), input->nonce);
-            }
-            else
-            {
-                newAddress =
-                    bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
-            }
+            newAddress =
+                bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
         }
 
         input->receiveAddress = newAddress;

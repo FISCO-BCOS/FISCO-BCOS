@@ -435,17 +435,9 @@ void DmcExecutor::handleCreateMessage(
         if (message->to().empty())
         {
             auto newSeq = currentSeq;
-            if (message->createSalt())
-            {
-                message->setTo(
-                    newCreate2EVMAddress(message->from(), message->data(), *(message->createSalt())));
-            }
-            else
-            {
-                // Note: no need to compatible with EIP-86, because dmc not compatible to eth
-                message->setTo(
-                    newEVMAddress(m_block->blockHeader()->number(), contextID, newSeq));
-            }
+            // Note: no need to compatible with EIP-86, because dmc not compatible to eth
+            message->setTo(
+                newEVMAddress(m_block->blockHeader()->number(), contextID, newSeq));
         }
         break;
     }
@@ -795,8 +787,3 @@ std::string DmcExecutor::newEVMAddress(int64_t blockNumber, int64_t contextID, i
     return bcos::newEVMAddress(m_hashImpl, blockNumber, contextID, seq);
 }
 
-std::string DmcExecutor::newCreate2EVMAddress(
-    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
-{
-    return bcos::newCreate2EVMAddress(m_hashImpl, _sender, _init, _salt);
-}

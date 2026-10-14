@@ -2543,10 +2543,6 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setCreate(params->create);
     message->setInternalCreate(params->internalCreate);
     message->setInternalCall(params->internalCall);
-    if (params->createSalt)
-    {
-        message->setCreateSalt(*params->createSalt);
-    }
 
     message->setEvmStatus(params->evmStatus);
     message->setStatus(params->status);

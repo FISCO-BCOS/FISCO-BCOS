@@ -67,7 +67,6 @@ struct CallParameters
 
     std::string message;                               // by response, readable format
     std::vector<bcos::protocol::LogEntry> logEntries;  // by response
-    std::optional<u256> createSalt;                    // by response
     std::string newEVMContractAddress;                 // by response, readable format
 
     int32_t status = 0;  // by response
