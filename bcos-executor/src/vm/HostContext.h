@@ -154,7 +154,7 @@ public:
     /// feature_evm_address chains, the legacy replay-stable FISCO formula
     /// otherwise (both mirroring TransactionExecutive::externalCall).
     evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const;
-    /// CREATE2 counterpart (PR #5689 review F2): the chain hasher over
+    /// CREATE2 counterpart: the chain hasher over
     /// 0xff || sender || salt || hash(initcode) — newCreate2EVMAddress's formula, kept
     /// host-side so the opcode pushes the chain's own address (keccak256 upstream would
     /// fork SM-crypto chains).

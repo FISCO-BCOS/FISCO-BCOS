@@ -18,9 +18,12 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
     {
     case EVMC_CREATE:
     {
-        // evmc ABI 19: nested creates (depth != 0) arrive with recipient already computed
-        // by evmone (keccak(rlp(sender, get_nonce(sender)))) and the CREATE instruction
-        // pushes THAT address onto the EVM stack. Overwriting it with the FISCO formula
+        // evmc ABI 19: nested creates (depth != 0) arrive with recipient already
+        // computed — evmone derives it through this lane's create_address_fn hook
+        // (HostContext::createAddressForOpcode: the FISCO
+        // hash("<block>_<ctx>_<seq>") formula, or keccak(rlp(sender, nonce)) on
+        // web3Tx chains) — and the CREATE instruction pushes THAT address onto the
+        // EVM stack. Overwriting it with a different derivation
         // would split the account address from the stack address — the constructor's
         // stored address then points at nothing and every later call misses (observed as
         // contractDeploy revert). Depth-0 (transaction-level) creates keep the legacy
@@ -55,11 +58,16 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
     case EVMC_CREATE2:
     {
         // evmc ABI 19: evmc_message no longer carries create2_salt. Nested CREATE2
-        // messages arrive with recipient already computed by evmone (keccak of
-        // 0xff||sender||salt||initcode-hash) — only transaction-level messages
-        // (recipient empty, salt historically always zero) take this branch.
-        if (!concepts::bytebuffer::equalTo(
-                message.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+        // messages arrive with recipient already computed — evmone derives it through
+        // this lane's create2_address_fn hook (HostContext::create2AddressForOpcode:
+        // the chain hasher over 0xff||sender||salt||chainHasher(initcode)) — only
+        // transaction-level messages (recipient empty, salt historically always zero)
+        // take this branch. The
+        // depth != 0 guard mirrors the CREATE arm: a depth-0 message may carry a
+        // decorative recipient (precompile wrappers, eip2929 probes) that this
+        // branch must overwrite, not honour.
+        if (message.depth != 0 && !concepts::bytebuffer::equalTo(
+                                      message.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
         {
             message.code_address = message.recipient;
             break;

@@ -566,8 +566,8 @@ BOOST_AUTO_TEST_CASE(callAtBlockRefusalPaths)
     BOOST_CHECK(!zeroRootReceipt);
 }
 
-// getExecutable serves and fills a content-addressed cache: the key carries the code hash
-// alongside the address, so an entry can never be served for code the state does not hold
+// getExecutable serves and fills a content-addressed cache: the key is the code hash
+// plus the revision, so an entry can never be served for code the state does not hold
 // (no address-only poisoning), replacing the code at an address builds a fresh executable
 // instead of serving a stale analysis, and historical lookups can share the cache safely.
 BOOST_AUTO_TEST_CASE(executableCacheIsContentAddressed)

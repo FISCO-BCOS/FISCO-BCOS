@@ -109,7 +109,7 @@ using Account = ledger::account::EVMAccount<Storage>;
 /// code per case), and the stale analysis then executes the OLD code. The key is the
 /// account's STORED CODE_HASH row plus the execution revision — the same shape as
 /// bcos-executor's EvmCodeCacheKey (vm/VMFactory.h), which keys its analysis cache this
-/// way (review F6: no address component, so identical code shares one entry instead of
+/// way (no address component, so identical code shares one entry instead of
 /// splitting the LRU per deployment, and no per-call keccak of the runtime body).
 struct ExecutableCacheKey
 {
@@ -128,9 +128,11 @@ struct ExecutableCacheKeyHash
     }
 };
 
-/// Fallback identity for rows whose CODE_HASH is missing (legacy/corrupt state): a fixed
-/// keccak of the body, computed ONCE per such load and never on the hot path. Not a
-/// consensus value.
+/// Content identity of a code body: a fixed keccak (not the chain hasher, not a
+/// consensus value). getExecutable caches only under the account's STORED
+/// CODE_HASH row — without one, the key is unknowable before the code read, so
+/// no cache fill happens for such accounts; this helper is the identity used by
+/// tests and by callers that must materialise a key for hash-less code.
 inline h256 executableCodeKey(bytesConstRef code)
 {
     crypto::Keccak256 hasher;
@@ -154,8 +156,7 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
 {
     Account<std::decay_t<decltype(storage)>> account(storage, address, addressTableMode);
     // Read the account's stored CODE_HASH row first: a cache hit then costs one row read
-    // and skips the code-body read entirely (review F6 — the probe used to sit behind
-    // account.code(), and the key hashed the whole body per call).
+    // and skips the code-body read entirely.
     auto const storedHash = co_await account.codeHash();
     if (storedHash != h256{})
     {
@@ -170,10 +171,16 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
     {
         co_return {};
     }
-    auto const codeHash = storedHash != h256{} ? storedHash : executableCodeKey(codeEntry->get());
     auto executable = std::make_shared<Executable>(std::move(*codeEntry));
-    co_await storage2::writeOne(
-        getCacheExecutables(), ExecutableCacheKey{codeHash, revision}, executable);
+    // Fill only under a key a later lookup can actually probe: without a stored
+    // CODE_HASH row the key is unknowable before the code read, so a fallback-keyed
+    // entry would be write-only — every call for such an account re-reads and
+    // re-analyses anyway, and the analysis cost is the price of the absent row.
+    if (storedHash != h256{})
+    {
+        co_await storage2::writeOne(
+            getCacheExecutables(), ExecutableCacheKey{storedHash, revision}, executable);
+    }
     co_return executable;
 }
 
@@ -320,7 +327,7 @@ public:
     constexpr evmc_message& mutableMessage() & { return m_message; }
     constexpr ledger::LedgerConfig const& ledgerConfig() const& { return m_ledgerConfig.get(); }
 
-    /// PR #5689 review F1/F2 — this lane's own create-address derivations, installed on the
+    /// This lane's own create-address derivations, installed on the
     /// VM through VMInstance::execute so the CREATE/CREATE2 opcodes push exactly the address
     /// the executor stores. getMessage resolves depth-0 messages the same way.
     evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const
@@ -893,7 +900,7 @@ private:
         // first (same address, observed as createTwice revert). Mirrors upstream Host::call
         // ("bump the creator's nonce, not reverted if the creation fails").
         //
-        // Two shapes, gated on bugfix_nested_create_creator_nonce (PR #5689 review F3):
+        // Two shapes, gated on bugfix_nested_create_creator_nonce:
         //  - flag ON: the bump runs on the EVM message depth (NOT m_level, which counts
         //    scheduler nesting and is nonzero for depth-0 test/probe messages) for every
         //    chain. It counts an absent nonce as 0 — the same default the get_nonce

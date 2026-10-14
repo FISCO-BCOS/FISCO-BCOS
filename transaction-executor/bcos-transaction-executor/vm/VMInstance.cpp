@@ -28,7 +28,7 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     evmc::VM evm{evmc_create_evmone()};
     auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
     evmoneVm->hash_fn = hostcontext::evm_hash_fn;
-    // PR #5689 review F1/F2: without these, evmone derives nested CREATE/CREATE2 addresses
+    // Without these, evmone derives nested CREATE/CREATE2 addresses
     // with keccak(rlp(sender,nonce)) / keccak256 — a different address than this lane stores
     // (and, on SM-crypto chains, a different hasher).
     evmoneVm->create_address_fn = createAddressFn;
