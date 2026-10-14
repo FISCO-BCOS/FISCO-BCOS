@@ -147,8 +147,6 @@ process_simple_target() {
 
 # ---- BcosBuilder example tomls: compatibility_version = "x.y.z" ----
 for toml in \
-    "tools/BcosBuilder/max/conf/config-build-example.toml" \
-    "tools/BcosBuilder/max/conf/config-deploy-example.toml" \
     "tools/BcosBuilder/pro/conf/config-build-example.toml" \
     "tools/BcosBuilder/pro/conf/config-deploy-example.toml"; do
     process_simple_target "${REPO_ROOT}/${toml}" \
