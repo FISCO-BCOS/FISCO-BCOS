@@ -36,8 +36,16 @@ constexpr int64_t c_blockLimitRange = 500;  // same as the SDK's Service::getBlo
 
 constexpr size_t c_maxValueHexDigits = 64;  // uint256
 
-/// "" → ""; "0x1f"/"0X1f" → "0x1f"; "31" → "0x1f"; more than 256 bits or anything else throws
-/// OpsError{1} (u256 is unchecked: 2^256 would wrap to 0 and the node's hex2u truncates too)
+/// "007" → "7", "000" → "0"
+std::string withoutLeadingZeros(std::string const& _digits)
+{
+    auto first = _digits.find_first_not_of('0');
+    return first == std::string::npos ? "0" : _digits.substr(first);
+}
+
+/// "" → ""; "0x1f"/"0X1f"/"0x001f" → "0x1f"; "31"/"031" → "0x1f"; more than 256 bits or anything
+/// else throws OpsError{1} (u256 is unchecked: 2^256 would wrap to 0 and the node's hex2u
+/// truncates too). Leading zeros never count: the bound is on the value, not the digit count.
 std::string hexValue(std::string const& _value)
 {
     if (_value.empty())
@@ -52,6 +60,7 @@ std::string hexValue(std::string const& _value)
         {
             throw OpsError(c_exitUsage, "value is not a number: " + _value);
         }
+        digits = withoutLeadingZeros(digits);
         if (digits.size() > c_maxValueHexDigits)
         {
             throw OpsError(c_exitUsage, "value exceeds 256 bits: " + _value);
@@ -63,8 +72,10 @@ std::string hexValue(std::string const& _value)
     {
         throw OpsError(c_exitUsage, "value is not a decimal or 0x number: " + _value);
     }
-    // 2^256 has 78 decimal digits; parse through the checked cpp_int, not the modular u256
-    boost::multiprecision::cpp_int number(_value);
+    // 2^256 has 78 decimal digits; parse through the checked cpp_int, not the modular u256. Its
+    // string constructor reads a leading 0 as an octal prefix ("010" would be 8, "08" throws a
+    // runtime_error), so the zeros go first
+    boost::multiprecision::cpp_int number(withoutLeadingZeros(_value));
     if (number >= (boost::multiprecision::cpp_int(1) << 256))
     {
         throw OpsError(c_exitUsage, "value exceeds 256 bits: " + _value);
