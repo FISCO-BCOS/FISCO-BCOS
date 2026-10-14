@@ -8,7 +8,7 @@
 info|2026-10-09 14:02:11.031|io-0x16e293000|[CONSENSUS][PBFT]ViewChangeTriggered,reason=consensus_timeout,waitingIndex=129,waitedMs=3001,view=3,toView=4,changeCycle=1,leaderIdx=0
 ```
 
-四段用 `|` 分隔：级别、时间、线程、消息。消息 = 连续的 `[badge]` + 事件名 + `,k=v` 序列。事件名是 badge 后第一个词，全仓唯一（`tools/.ci/check_log_events.sh` 在 CI 里对本手册每个事件名核 `LOG_DESC` 恰好一处）。三个装饰符保留在事件名前面：`^^^^^^^^Report`、`++++++++++++++++ PrePrepareSent`、`######## CommitQuorum`；`[blk-N]` 与 `[METRIC]` 这两个 badge 也原样保留。
+四段用 `|` 分隔：级别、时间、线程、消息。消息 = 连续的 `[badge]` + 事件名 + `,k=v` 序列。事件名是 badge 后第一个词，在它的 channel 内唯一。两个名字由多个模块各打一份：`BlockCommitted`（PBFT 落账本、块同步落账本）与 `BlockStat`（每个模块一行），下表写成 `CHANNEL:名字`，靠 badge 区分，grep 时带上 badge（如 `'\[BLOCK SYNC\].*BlockCommitted'`）。`tools/.ci/check_log_events.sh` 在 CI 里逐行核本手册：不带前缀的名字在全部模块目录里 `LOG_DESC` 恰好一处，带前缀的在该模块目录里恰好一处。三个装饰符保留在事件名前面：`^^^^^^^^Report`、`++++++++++++++++ PrePrepareSent`、`######## CommitQuorum`；`[blk-N]` 与 `[METRIC]` 这两个 badge 也原样保留。
 
 `grep <事件名> log/log_*.log` 就是精确查询。
 
@@ -21,14 +21,16 @@ info|2026-10-09 14:02:11.031|io-0x16e293000|[CONSENSUS][PBFT]ViewChangeTriggered
 | channel | badge 文本 | 宏 |
 |---|---|---|
 | PBFT | `[CONSENSUS][PBFT]`、`[CONSENSUS][PBFT][STORAGE]`、`[CONSENSUS][Core]`、`[CONSENSUS][SEALER]` | `PBFT_LOG`、`PBFT_STORAGE_LOG`、`CONSENSUS_LOG`、`SEAL_LOG` |
-| TXPOOL | `[TXPOOL]`、`[SYNC]`（交易同步）、`[TXPOOL][NonceChecker]`、`[TXVALIDATOR]` | `TXPOOL_LOG`、`SYNC_LOG`、`NONCECHECKER_LOG`、`TX_VALIDATOR_LOG` |
-| SYNC | `[BLOCK SYNC]`、`[SYNCTREE]` | `BLKSYNC_LOG`、`SYNCTREE_LOG` |
-| SCHEDULER | `[SCHEDULER]` 及派生 | `SCHEDULER_LOG`、`SCHEDULER_BLK_LOG`、`DMC_LOG` |
-| EXECUTOR | `[EXECUTOR]` 及派生 | `EXECUTOR_LOG`、`EXECUTIVE_LOG`、`PARA_LOG`、`PRECOMPILED_LOG` |
+| TXPOOL | `[TXPOOL]`、`[TXPOOL][NonceChecker]`、`[TXVALIDATOR]` | `TXPOOL_LOG`、`NONCECHECKER_LOG`、`TX_VALIDATOR_LOG` |
+| SYNC | `[BLOCK SYNC]`、`[SYNCTREE]`、`[SYNC]`（交易同步，代码在 bcos-txpool） | `BLKSYNC_LOG`、`SYNCTREE_LOG`、`SYNC_LOG` |
+| SCHEDULER | `[SCHEDULER]` 及派生、`[BASELINE_SCHEDULER]`、`[SERIAL_SCHEDULER]`、`[PARALLEL_SCHEDULER]`、`[EXECUTOR_MANAGER]`、`[TARS_EXECUTOR_MANAGER]` | `SCHEDULER_LOG`、`SCHEDULER_BLK_LOG`、`DMC_LOG`、`BASELINE_SCHEDULER_LOG`、`SERIAL_SCHEDULER_LOG`、`PARALLEL_SCHEDULER_LOG`、`EXECUTOR_MANAGER_LOG`、`TARS_EXECUTOR_MANAGER_LOG` |
+| EXECUTOR | `[EXECUTOR]` 及派生、`[TRANSACTION_EXECUTOR]`、`[PRECOMPILE]`、`[HOST_CONTEXT]`、`[EXECUTIVE_WRAPPER]` | `EXECUTOR_LOG`、`EXECUTIVE_LOG`、`PARA_LOG`、`PRECOMPILED_LOG`、`TRANSACTION_EXECUTOR_LOG`、`PRECOMPILE_LOG`、`HOST_CONTEXT_LOG`、`EXECUTIVE_WRAPPER` |
 | LEDGER | `[LEDGER]`、`[LEDGER2]`、`[MPT_PRUNER]` | `LEDGER_LOG`、`LEDGER2_LOG`、`MPT_PRUNER_LOG` |
-| RPC | `[RPC]`、`[RPC][JSONRPC]`、`[RPC][WEB3]`、`[EVENT]`、`[FILTER]` | `RPC_LOG`、`RPC_IMPL_LOG`、`WEB3_LOG`、`EVENT_*`、`FILTER_LOG` |
+| RPC | `[RPC]`、`[RPC][JSONRPC]`、`[RPC][WEB3]`、`[EVENT]`、`[FILTER]`、`[AMOPClient]` | `RPC_LOG`、`RPC_IMPL_LOG`、`WEB3_LOG`、`EVENT_*`、`FILTER_LOG`、`AMOP_CLIENT_LOG` |
 | GATEWAY | `[Gateway][*]`、`[P2PService][*]`、`[NETWORK]`、`[SESSION]`、`[AMOP]` | `GATEWAY_LOG` 等全部网关宏 |
 | FRONT | `[FrontService]` | `FRONT_LOG` |
+
+这些模块里少数不经宏、直接写 `BCOS_LOG(TRACE) << LOG_BADGE(...)` 的行（如 `bcos-executor/src/dag/Abi.cpp`、`ScaleUtils.cpp`）只跟随全局级别，不受 channel 级别控制。
 
 每个 channel 有自己的级别表项，缺省继承 `[log] level`；本 PR 提供的是 `bcos-utilities/BoostLog.h` 的 `setModuleLogLevel` / `resetModuleLogLevel` / `moduleLogLevels` 这层 API。运行时改一个 channel 而不动文件的命令由后续 PR（运维工具 `fisco-bcos log-level`，经节点目录下的本机 socket 调 `admin_setLogLevel`）提供：
 
@@ -62,8 +64,8 @@ info|2026-10-09 14:02:11.031|io-0x16e293000|[CONSENSUS][PBFT]ViewChangeTriggered
 | `CheckpointSent` | `[CONSENSUS][PBFT]` | INFO | index,hash | 执行完成后广播 checkpoint |
 | `CheckpointReceived` | `[CONSENSUS][PBFT]` | DEBUG | index,fromIdx,weight,minRequiredWeight | 每条 checkpoint 消息一行 |
 | `CheckpointQuorum` | `[CONSENSUS][PBFT]` | INFO | index,hash,weight | checkpoint 法定数达成，提交账本 |
-| `PBFT:BlockCommitted` | `[CONSENSUS][PBFT][STORAGE]` | INFO | index,hash,txs,commitMs,commitPerTx | 块落账本 |
-| `Report` | `[CONSENSUS][PBFT][METRIC]`，前缀 `^^^^^^^^` | INFO | sealer,txs,committedIndex,consNum,committedHash,view,toView,changeCycle,expectedCheckPoint,Idx,sealUntil,…,roundMs | 一轮结束；roundMs = prePrepare 入缓存到 committed 的耗时，取不到为 -1。**行为变化**：整理前同步来的块不打 `sealer=`/`txs=`，现在所有块都打，同步来的块为 `sealer=-1,txs=-1`（脚本按 `sealer=[0-9]` 过滤即可保留旧口径） |
+| `PBFT:BlockCommitted` | `[CONSENSUS][PBFT][STORAGE][METRIC]` | INFO | index,hash,txs,commitMs,commitPerTx | 块落账本 |
+| `Report` | `[CONSENSUS][PBFT][METRIC]`，前缀 `^^^^^^^^` | INFO | sealer,txs,committedIndex,consNum,committedHash,view,toView,changeCycle,expectedCheckPoint,Idx,sealUntil,…,roundMs | 一轮结束；roundMs = prePrepare 入缓存到 committed 的耗时，取不到为 -1。**行为变化**：整理前同步来的块不打 `sealer=`/`txs=`，现在所有块都打，同步来的块（以及启动时加载的账本配置）为 `sealer=-1,txs=-1`，由 `PBFTConfig::resetConfig` 按 `_syncedBlock` 决定（脚本按 `sealer=[0-9]` 过滤即只剩本节点共识出的块） |
 
 ```
 n=129; grep -h "index=$n," log/log_*.log | grep '\[PBFT\]'
@@ -119,7 +121,7 @@ grep -h 'SealSkipped\|SealResumed' log/log_*.log | tail -5
 | `TxExecuted` | `[SCHEDULER]` | DEBUG | tx,number,status,gasUsed | 回执生成（旧调度器 `BlockExecutive`，executor_version=1） |
 | `BASELINE:TxExecuted` | `[BASELINE_SCHEDULER]` | DEBUG | tx,number,status,gasUsed | 回执生成（baseline 调度器，AIR 默认） |
 | `TxRemoved` | `[TXPOOL]` | DEBUG | tx,number,reason | reason：committed、expired |
-| `TxsFetched` | `[TXPOOL]` | INFO | 现有键 | 一次封装取走的交易批 |
+| `TxsFetched` | `[TXPOOL][METRIC]` | INFO | 现有键 | 一次封装取走的交易批 |
 | `TxsRemoved` | `[TXPOOL][METRIC]` | INFO | 现有键,number | 块提交后批量移出 |
 | `TxsExpired` | `[TXPOOL]` | INFO | 现有键 | 定时清理过期交易 |
 | `TxPoolFull` | `[TXPOOL]` | INFO | pending,limit | 池满，状态翻转时一次 |
@@ -136,7 +138,7 @@ h=0x9c…; grep -h "tx=$h" log/log_*.log
 
 | 事件 | badge | 级别 | 键 | 含义 |
 |---|---|---|---|---|
-| `ProposalVerified` | `[TXPOOL]` | INFO | 现有键 | 提案校验完成 |
+| `ProposalVerified` | `[TXPOOL][METRIC]` | INFO | 现有键 | 提案校验完成 |
 | `ProposalTxsMissing` | `[TXPOOL]` | INFO | number,hash,missed,total,verifyT | 提案里有本地没有的交易（missed=0 时为 DEBUG 的 batchVerifyProposal 行） |
 | `TxsRequested` | `[SYNC]` | INFO | number,hash,peer,count | 向 leader 索取缺失交易 |
 | `TxsReceived` | `[SYNC][METRIC]` | INFO | number,hash,peer,count,decodeT,importT,costMs | 取到并导入 |
@@ -152,8 +154,8 @@ grep -h 'ProposalTxsMissing\|TxsRequested\|TxsReceived\|TxsRequestFailed' log/lo
 |---|---|---|---|---|
 | `SyncStarted` | `[BLOCK SYNC]` | INFO | number,highest,lag,peers | 从空闲进入下载 |
 | `BlockRequested` | `[BLOCK SYNC]` | DEBUG | from,to,peer | 发出一批块请求 |
-| `BlockApplied` | `[BLOCK SYNC]` | INFO | 现有键 | 下载块执行完成 |
-| `SYNC:BlockCommitted` | `[BLOCK SYNC]` | INFO | 现有键 | 下载块落账本 |
+| `BlockApplied` | `[BLOCK SYNC][METRIC][Download]` | INFO | 现有键 | 下载块执行完成 |
+| `SYNC:BlockCommitted` | `[BLOCK SYNC][blk-N][METRIC]` | INFO | 现有键 | 下载块落账本 |
 | `SyncFinished` | `[BLOCK SYNC]` | INFO | number,costMs,blocks,reason | 回到空闲，reason：finished、timeout |
 | `PeerStatus` | `[BLOCK SYNC]` | DEBUG | peer,number,hash | 收到 peer 状态包 |
 
@@ -205,7 +207,7 @@ grep -h 'BlockStat,number=129,' log/log_*.log
 
 | 消费者 | 依赖的行 / 键 |
 |---|---|
-| `tools/BcosAirBuilder/build_chain.sh` `generate_mtail_scripts`（随每条链发布的 Prometheus 采集规则） | `[CONSENSUS][PBFT]ProposalExecuted,…,execMs=`（块执行耗时）；`[CONSENSUS][PBFT][STORAGE]BlockCommitted,…,commitMs=`（块提交耗时）；`[LEDGER][METRIC]asyncPrewriteBlock,number=`（块高）；`[TXPOOL]TxsFetched,…,pendingTxs=`（交易池待处理数）；`p2p_session_actived` 等网关行未改 |
+| `tools/BcosAirBuilder/build_chain.sh` `generate_mtail_scripts`（随每条链发布的 Prometheus 采集规则） | `[CONSENSUS][PBFT]ProposalExecuted,…,execMs=`（块执行耗时）；`[CONSENSUS][PBFT][STORAGE][METRIC]BlockCommitted,…,commitMs=`（块提交耗时）；`[LEDGER][METRIC]asyncPrewriteBlock,number=`（块高）；`[TXPOOL][METRIC]TxsFetched,…,pendingTxs=`（交易池待处理数）；`p2p_session_actived` 等网关行未改 |
 | `tools/summary.sh` | `PrePrepareReceived,index=N,`（起始行）；`Report.*committedIndex=N,`（结束行）；`TxsRemoved,…,timecost=`；`ProposalExecuted,…,execMs=`；`Report,sealer=[0-9]`（只统计本节点共识出的块，`sealer=-1` 是同步来的）、其 `txs=`/`committedIndex=`/`consNum=`/`view=` 列序；`Generate proposal`；`ExecuteBlock request.*waitT`、`CommitBlock success`、`GetTableHashes success`（旧调度器行，baseline 通道下为空） |
 | `tools/log_extract.sh` | `[blk-N]ExecuteBlock request`、`ExecuteBlock success`（旧调度器行，未改名） |
 | `tools/.ci/ci_check_air.sh`、`ci_check_pro.sh`、`ci_check_baseline.sh` `check_consensus` | `NewViewReached`（进入新 view；启动恢复路径仍是 `checkAndTryToRecoverView: reachNewView`，脚本两者都认） |

@@ -424,7 +424,8 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
                 .m_executedBlockHeader = executedBlockHeader,
                 .m_block = std::move(block),
                 .m_sysBlock = sysBlock,
-                .m_mptDelta = std::move(mptDelta)});
+                .m_mptDelta = std::move(mptDelta),
+                .m_executeMs = static_cast<int64_t>(current() - now)});
 
         // FIB-103 / FIB-104: Commit the execution result in a strict order:
         // push the view first (so we have a rollback target), then push the
@@ -462,7 +463,6 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
             << " | receiptRoot: " << executedBlockHeader->receiptsRoot()
             << " | gasUsed: " << executedBlockHeader->gasUsed() << " | sysBlock: " << sysBlock
             << " | elapsed: " << (current() - now) << "ms";
-        m_lastExecuteMs.store(static_cast<int64_t>(current() - now), std::memory_order_relaxed);
 
         co_return {nullptr, std::move(executedBlockHeader), sysBlock};
     }
@@ -677,8 +677,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         {
             BASELINE_SCHEDULER_LOG(INFO)
                 << METRIC << LOG_DESC("BlockStat") << LOG_KV("number", header->number())
-                << LOG_KV("txs", result->m_receipts.size())
-                << LOG_KV("execMs", m_lastExecuteMs.load(std::memory_order_relaxed))
+                << LOG_KV("txs", result->m_receipts.size()) << LOG_KV("execMs", result->m_executeMs)
                 << LOG_KV("commitMs", current() - now);
         }
         commitLock.unlock();

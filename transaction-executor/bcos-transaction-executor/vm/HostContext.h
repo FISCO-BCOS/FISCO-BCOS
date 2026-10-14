@@ -76,7 +76,7 @@
 namespace bcos::executor_v1::hostcontext
 {
 
-#define HOST_CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("HOST_CONTEXT")
+#define HOST_CONTEXT_LOG(LEVEL) BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("HOST_CONTEXT")
 
 // clang-format off
 struct NotFoundCodeError : public bcos::Error {};

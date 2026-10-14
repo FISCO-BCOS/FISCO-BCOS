@@ -23,20 +23,6 @@
 #include <string_view>
 
 
-namespace
-{
-// per-block counters behind log.enable_block_stat; read and reset at CommitBlock success
-enum SchedulerStatSlot : size_t
-{
-    ExecMs = 0,
-    Count
-};
-bcos::BlockStatCounters<SchedulerStatSlot::Count>& schedulerBlockStat()
-{
-    static bcos::BlockStatCounters<SchedulerStatSlot::Count> counters;
-    return counters;
-}
-}  // namespace
 using namespace bcos::scheduler;
 
 const __itt_domain* const ITT_DOMAIN_SCHEDULER_EXECUTE = __itt_domain_create("scheduler.execute");
@@ -529,7 +515,6 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
                         << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("timeCost", utcTime() - startTime)
                         << LOG_KV("blockVersion", header->version());
-                    schedulerBlockStat().add(SchedulerStatSlot::ExecMs, utcTime() - startTime);
 
                     m_lastExecuteFinishTime = utcTime();
                     executeLock->unlock();
@@ -756,7 +741,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                                 ++failed;
                             }
                         }
-                        auto execMs = schedulerBlockStat().takeAndReset(SchedulerStatSlot::ExecMs);
+                        // the committed block's own executive: several blocks can execute
+                        // before the front one commits, so no shared accumulator
+                        auto execMs = blockExecutive->executeMs();
                         SCHEDULER_LOG(INFO)
                             << METRIC << LOG_DESC("BlockStat") << LOG_KV("number", blockNumber)
                             << LOG_KV("txs", txs) << LOG_KV("failed", failed)

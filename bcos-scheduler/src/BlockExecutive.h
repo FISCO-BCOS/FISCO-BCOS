@@ -72,6 +72,8 @@ public:
 
     bool isCall();
     bool sysBlock() const;
+    /// execute + hash time of this block (ms), recorded by onExecuteFinish and the hash step
+    int64_t executeMs() const { return (m_executeElapsed + m_hashElapsed).count(); }
 
     void start();
     void stop();
@@ -162,9 +164,9 @@ protected:
 
     std::chrono::system_clock::time_point m_currentTimePoint;
 
-    std::chrono::milliseconds m_executeElapsed;
-    std::chrono::milliseconds m_hashElapsed;
-    std::chrono::milliseconds m_commitElapsed;
+    std::chrono::milliseconds m_executeElapsed{0};
+    std::chrono::milliseconds m_hashElapsed{0};
+    std::chrono::milliseconds m_commitElapsed{0};
 
     bcos::protocol::Block::Ptr m_block;
     bcos::protocol::BlockHeader::ConstPtr m_blockHeader;
