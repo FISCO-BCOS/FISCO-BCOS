@@ -1,7 +1,0 @@
-
-module bcostars {
-struct ExecutorStatus
-{
-    1 require long seq;
-};
-};
