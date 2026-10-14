@@ -13,9 +13,8 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief source selection shared by status / tx / attach / log-level:
- *        --rpc host:port → WebSocket; else --node-dir → local socket when it exists and
- *        connects (source=attach), else that node's plaintext RPC (source=rpc); TLS → exit 1.
+ * @brief source selection shared by the subcommands: --rpc host:port → WebSocket; else
+ *        --node-dir → that node's plaintext RPC (source=rpc); an RPC port with TLS → exit 1.
  * @file Connect.h
  */
 #pragma once
@@ -23,6 +22,7 @@
 #include "Args.h"
 #include "RpcCall.h"
 #include <optional>
+#include <set>
 #include <string>
 
 namespace bcos::ops
@@ -33,10 +33,11 @@ struct ConnectOptions
     std::optional<std::string> rpc;  // host:port
     int connectTimeoutMs = 3000;
     int requestTimeoutMs = 15000;
-    bool allowIpc = true;
-    bool allowRpc = true;
 };
 
+/// the option names connectOptionsFrom reads; every command accepts them
+inline std::set<std::string> const c_connectOptions = {
+    "node-dir", "rpc", "connect-timeout", "timeout"};
 ConnectOptions connectOptionsFrom(Args const& _args);
 /// Keeps a transport alive for the rest of the process. The SDK's WsService cannot be torn down
 /// from the main thread while its io thread is still draining callbacks (closing the socket there

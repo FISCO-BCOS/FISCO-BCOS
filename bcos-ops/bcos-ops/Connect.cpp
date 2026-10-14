@@ -89,13 +89,6 @@ Connection connect(ConnectOptions const& _options)
         return connection;
     }
     auto node = NodeDir::load(_options.nodeDir);
-    // the local socket (PR-03) is tried first when present; fall back to the node's RPC
-    if (!_options.allowRpc)
-    {
-        throw OpsError(c_exitUsage, "local socket " + node.ipcPath() +
-                                        " is not available; is the node running with "
-                                        "[rpc] ipc_enable=true?");
-    }
     if (node.tls())
     {
         throw OpsError(c_exitUsage, "RPC port " + node.rpcEndpoint() +

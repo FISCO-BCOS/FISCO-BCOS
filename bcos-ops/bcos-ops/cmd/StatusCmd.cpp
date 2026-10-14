@@ -24,6 +24,7 @@
 #include "bcos-ops/collect/RpcCollector.h"
 #include <chrono>
 #include <ostream>
+#include <type_traits>
 
 namespace bcos::ops
 {
@@ -140,6 +141,10 @@ void renderStatus(
     {
         summary = std::to_string(failed) + " fail: " + failedNames;
     }
+    else if (!anyEvaluated(_checks))
+    {
+        summary = "none evaluated";
+    }
     else
     {
         summary = std::to_string(_checks.size() - skippedCount) + " ok";
@@ -154,7 +159,7 @@ void renderStatus(
     {
         for (auto const& [field, reason] : _status.reasons)
         {
-            _out << "  " << field << ": " << reason << '\n';
+            _out << "  " << field << ": " << sanitizeForTerminal(reason) << '\n';
         }
     }
 }
@@ -172,7 +177,7 @@ int runStatusOn(
         collectFromRpc(_connection.call, _connection.group, _connection.source, fallbacks);
     auto checks = evaluate(status, _thresholds, nowMs());
     renderStatus(_out, status, checks, _json);
-    return anyFailed(checks) ? c_exitChecksFailed : c_exitOk;
+    return anyFailed(checks) || !anyEvaluated(checks) ? c_exitChecksFailed : c_exitOk;
 }
 
 namespace
@@ -192,6 +197,6 @@ void registerStatusCommand()
         Command{"print the node status snapshot and run the health checks",
             "[--node-dir <dir> | --rpc <host:port>] [--json] [--stall-factor 2] [--max-lag 10] "
             "[--timeout 15000]",
-            {}, runStatus});
+            {}, runStatus, {"stall-factor", "max-lag", "viewchange-window-ms"}});
 }
 }  // namespace bcos::ops
