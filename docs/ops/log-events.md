@@ -8,7 +8,7 @@
 info|2026-10-09 14:02:11.031|io-0x16e293000|[CONSENSUS][PBFT]ViewChangeTriggered,reason=consensus_timeout,waitingIndex=129,waitedMs=3001,view=3,toView=4,changeCycle=1,leaderIdx=0
 ```
 
-四段用 `|` 分隔：级别、时间、线程、消息。消息 = 连续的 `[badge]` + 事件名 + `,k=v` 序列。事件名是 badge 后第一个词，在它的 channel 内唯一。两个名字由多个模块各打一份：`BlockCommitted`（PBFT 落账本、块同步落账本）与 `BlockStat`（每个模块一行），下表写成 `CHANNEL:名字`，靠 badge 区分，grep 时带上 badge（如 `'\[BLOCK SYNC\].*BlockCommitted'`）。`tools/.ci/check_log_events.sh` 在 CI 里逐行核本手册：不带前缀的名字在全部模块目录里 `LOG_DESC` 恰好一处，带前缀的在该模块目录里恰好一处。三个装饰符保留在事件名前面：`^^^^^^^^Report`、`++++++++++++++++ PrePrepareSent`、`######## CommitQuorum`；`[blk-N]` 与 `[METRIC]` 这两个 badge 也原样保留。
+四段用 `|` 分隔：级别、时间、线程、消息。消息 = 连续的 `[badge]` + 事件名 + `,k=v` 序列。事件名是 badge 后第一个词，同一组 badge 下唯一。三个名字由多处各打一份：`BlockCommitted`（PBFT 落账本、块同步落账本）、`BlockStat`（每个模块一行）、`TxExecuted`（旧调度器与 baseline 调度器），靠 badge 区分，grep 时带上 badge（如 `'\[BLOCK SYNC\].*BlockCommitted'`）。下表把它们写成 `前缀:名字`，前缀是 `tools/.ci/check_log_events.sh` 里 `MODULE_DIRS` 的模块目录键，不是 channel：`BASELINE` 指 `transaction-scheduler/` 目录，那里的行走 SCHEDULER channel。`tools/.ci/check_log_events.sh` 在 CI 里逐行核本手册：不带前缀的名字在全部模块目录里 `LOG_DESC` 恰好一处，带前缀的在该模块目录里恰好一处。三个装饰符保留在事件名前面：`^^^^^^^^Report`、`++++++++++++++++ PrePrepareSent`、`######## CommitQuorum`；`[blk-N]` 与 `[METRIC]` 这两个 badge 也原样保留。
 
 `grep <事件名> log/log_*.log` 就是精确查询。
 
@@ -30,7 +30,7 @@ info|2026-10-09 14:02:11.031|io-0x16e293000|[CONSENSUS][PBFT]ViewChangeTriggered
 | GATEWAY | `[Gateway][*]`、`[P2PService][*]`、`[NETWORK]`、`[SESSION]`、`[AMOP]` | `GATEWAY_LOG` 等全部网关宏 |
 | FRONT | `[FrontService]` | `FRONT_LOG` |
 
-这些模块里少数不经宏、直接写 `BCOS_LOG(TRACE) << LOG_BADGE(...)` 的行（如 `bcos-executor/src/dag/Abi.cpp`、`ScaleUtils.cpp`）只跟随全局级别，不受 channel 级别控制。
+这些模块目录里还有约五十处不经宏、直接写 `BCOS_LOG(<级别>)` 的行（各级别都有，如 `bcos-executor/src/dag/Abi.cpp`、`ScaleUtils.cpp`），它们只跟随全局级别，不受 channel 级别控制，本 PR 不改。
 
 每个 channel 有自己的级别表项，缺省继承 `[log] level`；本 PR 提供的是 `bcos-utilities/BoostLog.h` 的 `setModuleLogLevel` / `resetModuleLogLevel` / `moduleLogLevels` 这层 API。运行时改一个 channel 而不动文件的命令由后续 PR（运维工具 `fisco-bcos log-level`，经节点目录下的本机 socket 调 `admin_setLogLevel`）提供：
 
@@ -65,7 +65,7 @@ info|2026-10-09 14:02:11.031|io-0x16e293000|[CONSENSUS][PBFT]ViewChangeTriggered
 | `CheckpointReceived` | `[CONSENSUS][PBFT]` | DEBUG | index,fromIdx,weight,minRequiredWeight | 每条 checkpoint 消息一行 |
 | `CheckpointQuorum` | `[CONSENSUS][PBFT]` | INFO | index,hash,weight | checkpoint 法定数达成，提交账本 |
 | `PBFT:BlockCommitted` | `[CONSENSUS][PBFT][STORAGE][METRIC]` | INFO | index,hash,txs,commitMs,commitPerTx | 块落账本 |
-| `Report` | `[CONSENSUS][PBFT][METRIC]`，前缀 `^^^^^^^^` | INFO | sealer,txs,committedIndex,consNum,committedHash,view,toView,changeCycle,expectedCheckPoint,Idx,sealUntil,…,roundMs | 一轮结束；roundMs = prePrepare 入缓存到 committed 的耗时，取不到为 -1。**行为变化**：整理前同步来的块不打 `sealer=`/`txs=`，现在所有块都打，同步来的块（以及启动时加载的账本配置）为 `sealer=-1,txs=-1`，由 `PBFTConfig::resetConfig` 按 `_syncedBlock` 决定（脚本按 `sealer=[0-9]` 过滤即只剩本节点共识出的块） |
+| `Report` | `[CONSENSUS][PBFT][METRIC]`，前缀 `^^^^^^^^` | INFO | sealer,txs,committedIndex,consNum,committedHash,view,toView,changeCycle,expectedCheckPoint,Idx,sealUntil,…,roundMs | 一轮结束；roundMs = prePrepare 入缓存到 committed 的耗时，取不到为 -1。**行为变化**：整理前同步来的块不打 `sealer=`/`txs=`，现在所有块都打，同步来的块为 `sealer=-1,txs=-1`（`PBFTConfig::resetConfig` 按 `_syncedBlock` 打出）；启动时加载账本配置的那一行也是 -1，来自 `LedgerConfig` 的默认值。脚本按 `sealer=[0-9]` 过滤即只剩本节点共识出的块 |
 
 ```
 n=129; grep -h "index=$n," log/log_*.log | grep '\[PBFT\]'
@@ -192,8 +192,8 @@ grep -h 'PeerConnected\|PeerDisconnected\|HandshakeFailed' log/log_*.log | tail 
 | `PBFT:BlockStat` | `[CONSENSUS][PBFT][METRIC]` | number,prePrepareRecv,prepareRecv,commitRecv,checkpointRecv,viewChangeRecv,rejected,bytesRecv |
 | `TXPOOL:BlockStat` | `[TXPOOL][METRIC]` | number,pending,sealed,added,removed,expired,rejected,rejectNonce,rejectBlockLimit,rejectSignature,rejectDuplicate,rejectFull,rejectOther |
 | `SYNC:BlockStat` | `[BLOCK SYNC][METRIC]` | number,downloaded,applied,requests,lag,peers |
-| `SCHEDULER:BlockStat` | `[SCHEDULER][METRIC]` | number,txs,failed,execMs,commitMs,execPerTxUs（旧调度器，executor_version=1） |
-| `BASELINE:BlockStat` | `[BASELINE_SCHEDULER][METRIC]` | number,txs,execMs,commitMs（baseline 调度器，AIR 默认） |
+| `SCHEDULER:BlockStat` | `[SCHEDULER][METRIC]` | number,txs,failed,execMs,commitMs,execPerTxUs（旧调度器，executor_version=1；execMs 取该块 `BlockExecutive` 的执行加哈希耗时，含 prepare，不含排队等 executeLock） |
+| `BASELINE:BlockStat` | `[BASELINE_SCHEDULER][METRIC]` | number,txs,execMs,commitMs（baseline 调度器，AIR 默认；execMs 是该块自己的执行耗时，记在它的执行结果上） |
 
 ```
 grep -h 'BlockStat,number=129,' log/log_*.log
