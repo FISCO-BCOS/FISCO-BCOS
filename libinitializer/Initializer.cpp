@@ -121,6 +121,9 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     std::string const& _privateKeyPath, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
+    // AirNodeInitializer creates the shared pool for an AIR node; a Pro NodeService process
+    // creates its own before init() hands it to the front, ledger and scheduler
+    m_ioServicePool = std::make_shared<bcos::IOServicePool>(m_nodeConfig->ioThreadCount(), "io");
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
