@@ -96,7 +96,8 @@ enum LogLevel
     FATAL = boost::log::trivial::severity_level::fatal,
 };
 
-extern LogLevel c_fileLogLevel;
+// atomic: admin_setLogLevel (IPC) changes it while every logging thread reads it
+extern std::atomic<LogLevel> c_fileLogLevel;
 extern LogLevel c_statLogLevel;
 
 constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
@@ -108,9 +109,9 @@ constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
 void setFileLogLevel(LogLevel const& _level);
 void setStatLogLevel(LogLevel const& _level);
 
-#define BCOS_LOG(level)                                \
-    if (bcos::LogLevel::level >= bcos::c_fileLogLevel) \
-    BOOST_LOG_SEV(                                     \
+#define BCOS_LOG(level)                                                                \
+    if (bcos::LogLevel::level >= bcos::c_fileLogLevel.load(std::memory_order_relaxed)) \
+    BOOST_LOG_SEV(                                                                     \
         bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
 
 /// Per-module (channel) log level. A module is the subsystem slot a log macro is wired to; the
@@ -137,8 +138,9 @@ inline bool moduleLogEnabled(LogModule _module, LogLevel _level)
 {
     auto configured =
         c_moduleLogLevel[static_cast<size_t>(_module)].load(std::memory_order_relaxed);
-    auto threshold =
-        configured == c_inheritGlobalLogLevel ? static_cast<int>(c_fileLogLevel) : configured;
+    auto threshold = configured == c_inheritGlobalLogLevel ?
+                         static_cast<int>(c_fileLogLevel.load(std::memory_order_relaxed)) :
+                         configured;
     return static_cast<int>(_level) >= threshold;
 }
 
