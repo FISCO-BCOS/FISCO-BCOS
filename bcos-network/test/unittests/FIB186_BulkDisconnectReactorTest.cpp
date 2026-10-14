@@ -14,9 +14,7 @@
  *  limitations under the License.
  *
  * @brief Mechanism confirmation for FIB-186 vector D (persistent bulk-disconnect halts consensus,
- *        never recovers), re-expressed for the pull-mode receive path. CertiK re-test of the
- *        merged admission-control fix (18f48cc7) found A/B (connect-close churn) fixed but D
- *        still permanently halting consensus.
+ *        never recovers), re-expressed for the pull-mode receive path.
  * @file FIB186_BulkDisconnectReactorTest.cpp
  * @date 2026-07-14
  *
@@ -45,96 +43,50 @@
  *       closed with;
  *   (2) a validator-delivery task submitted to the shared pool while the disconnect wake-ups
  *       are queued or running is NOT starved.
+ *
+ * Migrated from bcos-gateway/test/unittests/FIB186_BulkDisconnectReactorTest.cpp: the whole
+ * mechanism under test is bcos-network (drop / recv channel / host pool), so the suite lives
+ * with the library now.
  */
 
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-network/ASIOInterface.h"
-#include "bcos-network/Host.h"
-#include "bcos-gateway/libp2p/Message.h"
-#include "bcos-gateway/libp2p/P2PDecoder.h"
-#include "bcos-task/Wait.h"
-#include "bcos-utilities/IOServicePool.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <chrono>
+#include "unittests/utils/TestAsioInterface.h"
+#include "unittests/utils/TestFraming.h"
+#include "unittests/utils/TestSessionSocket.h"
+#include <bcos-network/ASIOInterface.h>
+#include <bcos-network/Host.h>
+#include <bcos-network/Session.h>
+#include <bcos-task/Wait.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <thread>
 #include <vector>
 
 using namespace bcos;
-using namespace bcos::gateway;
-using namespace bcos::test;
-using namespace bcos::crypto;
+using namespace bcos::network;
+using namespace bcos::network::test;
 
-namespace ba = boost::asio;
-namespace bi = boost::asio::ip;
-
-BOOST_FIXTURE_TEST_SUITE(FIB186_BulkDisconnectReactorTest, TestPromptFixture)
+BOOST_AUTO_TEST_SUITE(FIB186_BulkDisconnectReactorTest)
 
 namespace
 {
-// Minimal ASIO fake: the disconnect flood never runs a socket read, so no handler is needed.
-class FakeASIO_Reactor : public bcos::network::ASIOInterface
-{
-public:
-    // Two delivery threads: the disconnect wake-ups and the delivery task share this pool. Wide
-    // enough that a single stuck wake-up cannot explain a starved delivery, narrow enough that
-    // per-session teardown WORK enqueued here (the push-mode regression) would visibly delay the
-    // delivery task.
-    FakeASIO_Reactor()
-      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(2, "FIB186Reactor"), "0.0.0.0", 0)
-    {}
-    ~FakeASIO_Reactor() noexcept = default;
-};
-
-// Socket fake backed by a real SSL stream so drop()/closeSocket() can call sslref(); starts
-// disconnected so closeSocket() early-returns (this test exercises only the recv-channel path).
-class FakeSocket_Reactor
-{
-public:
-    FakeSocket_Reactor()
-      : m_ioContext(std::make_shared<ba::io_context>()),
-        m_sslContext(ba::ssl::context::tlsv12),
-        m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
-    {}
-    bool isConnected() const { return m_connected; }
-    void close() { m_connected = false; }
-    bi::tcp::endpoint remoteEndpoint(boost::system::error_code = {}) { return {}; }
-    bi::tcp::endpoint localEndpoint(boost::system::error_code = {}) { return {}; }
-    bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
-    // ASIOInterface dispatches reads/writes on stream(); the raw TCP socket keeps this fake's
-    // IO plaintext (this test never performs real IO — the socket stays disconnected).
-    bi::tcp::socket& stream() { return ref(); }
-    const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint) {}
-    ba::io_context& ioService() { return *m_ioContext; }
-
-    bool m_connected{false};
-
-private:
-    std::shared_ptr<ba::io_context> m_ioContext;
-    ba::ssl::context m_sslContext;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
-    NodeIPEndpoint m_nodeIPEndpoint;
-};
-
 // Host subclass with the network marked up (m_run = true), so Session::drop() takes the
 // live-network path: the recv-channel poster posts each parked consumer's wake-up to the shared
 // pool instead of running it inline (haveNetwork() == false would run the wake inline on the
 // dropping thread).
-class FakeHost_Reactor : public bcos::network::Host<P2PDecoder, FakeSocket_Reactor>
+class FakeHost_Reactor : public bcos::network::Host<TestFrameDecoder, TestSessionSocket>
 {
 public:
     FakeHost_Reactor(std::shared_ptr<bcos::network::ASIOInterface> asioInterface)
-      : bcos::network::Host<P2PDecoder, FakeSocket_Reactor>(std::move(asioInterface), nullptr)
+      : bcos::network::Host<TestFrameDecoder, TestSessionSocket>(std::move(asioInterface), nullptr)
     {
         this->m_run = true;
     }
 };
 
-using Session_Reactor = bcos::network::BasicSession<P2PDecoder, FakeSocket_Reactor>;
+using Session_Reactor = bcos::network::BasicSession<TestFrameDecoder, TestSessionSocket>;
 
 // Shared state, held by shared_ptr so a coroutine or task that outlives the test body never
 // dangles.
@@ -152,10 +104,13 @@ struct ReactorProbe
 // starve consensus message delivery on that same pool.
 BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
 {
-    // The pool width is pinned by FakeASIO_Reactor's own IOServicePool(2) rather than by a
-    // process-global control, so "the disconnect wake-ups and the delivery task share this pool"
-    // is deterministic and independent of the host core count.
-    auto fakeAsio = std::make_shared<FakeASIO_Reactor>();
+    // Two delivery threads: the disconnect wake-ups and the delivery task share this pool. Wide
+    // enough that a single stuck wake-up cannot explain a starved delivery, narrow enough that
+    // per-session teardown WORK enqueued here (the push-mode regression) would visibly delay the
+    // delivery task. The pool width is pinned here rather than by a process-global control, so
+    // "the disconnect wake-ups and the delivery task share this pool" is deterministic and
+    // independent of the host core count.
+    auto fakeAsio = std::make_shared<TestAsioInterface>(/*poolSize*/ 2, "FIB186Reactor");
     auto fakeHost = std::make_shared<FakeHost_Reactor>(fakeAsio);
 
     auto probe = std::make_shared<ReactorProbe>();
@@ -168,7 +123,9 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     sessions.reserve(floodCount);
     for (int i = 0; i < floodCount; ++i)
     {
-        auto socket = std::make_shared<FakeSocket_Reactor>();
+        // starts disconnected so closeSocket() early-returns (this test exercises only the
+        // recv-channel path)
+        auto socket = std::make_shared<TestSessionSocket>(/*connected*/ false);
         auto session = std::make_shared<Session_Reactor>(socket, *fakeHost, 1024, true);
         task::wait([](Session_Reactor::Ptr _session,
                        std::shared_ptr<ReactorProbe> _probe) -> task::Task<void> {

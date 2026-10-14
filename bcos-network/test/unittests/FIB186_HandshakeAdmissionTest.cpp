@@ -17,44 +17,33 @@
  *        cannot starve the shared I/O pool that also delivers consensus messages.
  * @file FIB186_HandshakeAdmissionTest.cpp
  * @date 2026-07-07
+ *
+ * Migrated from bcos-gateway/test/unittests/FIB186_HandshakeAdmissionTest.cpp: the admission
+ * caps (pending-handshake cap, its RAII guard, the accept-rate token bucket) are bcos-network
+ * Host mechanisms. No session is ever created in these tests, so the decoder stays a bare
+ * template argument and no socket fake is needed beyond the production default.
  */
 
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-network/ASIOInterface.h"
-#include "bcos-network/Host.h"
-#include "bcos-gateway/libp2p/P2PDecoder.h"
-#include "bcos-utilities/IOServicePool.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
-
+#include "unittests/utils/TestAsioInterface.h"
+#include "unittests/utils/TestFraming.h"
+#include <bcos-network/ASIOInterface.h>
+#include <bcos-network/Host.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
+
 using namespace bcos;
-using namespace bcos::gateway;
-using namespace bcos::test;
-using namespace bcos::crypto;
+using namespace bcos::network;
+using namespace bcos::network::test;
 
-namespace ba = boost::asio;
+BOOST_AUTO_TEST_SUITE(FIB186_HandshakeAdmissionTest)
 
-BOOST_FIXTURE_TEST_SUITE(FIB186_HandshakeAdmissionTest, TestPromptFixture)
-
-class FakeASIO_FIB186 : public bcos::network::ASIOInterface
-{
-public:
-    // ASIOInterface now owns its IOServicePool and is stopped by ~IOServicePool; the
-    // strandPost / stop virtuals this fake used to override no longer exist.
-    FakeASIO_FIB186()
-      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB186"), "0.0.0.0", 0)
-    {}
-    ~FakeASIO_FIB186() noexcept {}
-};
-
-// Exposes the protected handshake-admission helpers for direct testing, mirroring the FIB-184
-// session-cap test harness. No session is ever created in these tests, so the default SocketT
-// (the production Socket) is fine.
-class FakeHost_FIB186 : public bcos::network::Host<P2PDecoder>
+// Exposes the protected handshake-admission helpers for direct testing. No session is ever
+// created in these tests, so the default SocketT (the production Socket) is fine.
+class FakeHost_FIB186 : public bcos::network::Host<TestFrameDecoder>
 {
 public:
     explicit FakeHost_FIB186(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface)
-      : bcos::network::Host<P2PDecoder>(std::move(_asioInterface), nullptr)
+      : bcos::network::Host<TestFrameDecoder>(std::move(_asioInterface), nullptr)
     {
         this->m_run = true;
     }
@@ -68,7 +57,7 @@ public:
 // one IP to a handful while risking false rejections of legitimate peers behind a shared egress IP.
 BOOST_AUTO_TEST_CASE(GlobalHandshakeCapIsEnforced)
 {
-    auto fakeAsio = std::make_shared<FakeASIO_FIB186>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB186>(fakeAsio);
 
     fakeHost->setMaxPendingHandshakes(2);
@@ -89,7 +78,7 @@ BOOST_AUTO_TEST_CASE(GlobalHandshakeCapIsEnforced)
 // frame destruction, which is what this drives).
 BOOST_AUTO_TEST_CASE(GuardReleasesSlotExactlyOnce)
 {
-    auto fakeAsio = std::make_shared<FakeASIO_FIB186>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB186>(fakeAsio);
 
     {
@@ -117,7 +106,7 @@ BOOST_AUTO_TEST_CASE(GuardReleasesSlotExactlyOnce)
 // FIB-186: releasing an unknown / already-drained address never underflows the global counter.
 BOOST_AUTO_TEST_CASE(ReleaseNeverUnderflows)
 {
-    auto fakeAsio = std::make_shared<FakeASIO_FIB186>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB186>(fakeAsio);
 
     fakeHost->callReleaseHandshakeSlot();  // release with no slot held
@@ -135,7 +124,7 @@ BOOST_AUTO_TEST_CASE(ReleaseNeverUnderflows)
 // not.
 BOOST_AUTO_TEST_CASE(ConnectionRateLimitBoundsAcceptBurst)
 {
-    auto fakeAsio = std::make_shared<FakeASIO_FIB186>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB186>(fakeAsio);
 
     // unlimited: every accept passes

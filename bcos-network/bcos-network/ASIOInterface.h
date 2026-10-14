@@ -136,7 +136,7 @@ public:
     auto awaitableResolveConnect(const std::shared_ptr<SocketT>& socket)
     {
         return task::makeFireAwaitable<boost::system::error_code>(
-            [this, socket](auto handler) { resolveConnect(socket, std::move(handler)); },
+            [this, socket](auto handler) { this->resolveConnect(socket, std::move(handler)); },
             boost::asio::error::operation_aborted);
     }
 
@@ -155,6 +155,9 @@ public:
                     // Plain socket: no TLS layer, so the handshake is an immediate success.
                     // Post the completion so it runs on the socket's io thread like every
                     // other asio completion (total completion, see the class comment above).
+                    // (type stays unused on this compile-time branch; the TLS instantiation
+                    // above passes it to async_handshake.)
+                    static_cast<void>(type);
                     boost::asio::post(socket->ioService(), [handler = std::move(handler)]() mutable {
                         handler(boost::system::error_code{});
                     });
@@ -167,7 +170,7 @@ public:
     auto awaitableWrite(const std::shared_ptr<SocketT>& socket, auto buffers)
     {
         return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
-            [this, socket, buffers = std::move(buffers)](auto handler) mutable {
+            [socket, buffers = std::move(buffers)](auto handler) mutable {
                 auto& ioService = socket->ioService();
                 if (socket->isConnected())
                 {
@@ -197,7 +200,7 @@ public:
     auto awaitableRead(const std::shared_ptr<SocketT>& socket, boost::asio::mutable_buffer buffers)
     {
         return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
-            [this, socket, buffers](auto handler) mutable {
+            [socket, buffers](auto handler) mutable {
                 auto& ioService = socket->ioService();
                 if (socket->isConnected())
                 {

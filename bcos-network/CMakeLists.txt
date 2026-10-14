@@ -39,6 +39,13 @@ target_include_directories(bcos-network PUBLIC
 # PUBLIC: the public headers include bcos-task/bcos-utilities/range-v3/Boost headers.
 target_link_libraries(bcos-network PUBLIC bcos-utilities bcos-task OpenSSL::SSL OpenSSL::Crypto range-v3::range-v3 Boost::filesystem)
 
+# ut — standalone: the suite links only this library, so it runs in configurations without the
+# gateway (FULLNODE=OFF + TESTS=ON included).
+if(TESTS)
+    enable_testing()
+    add_subdirectory(test)
+endif()
+
 include(GNUInstallDirs)
 install(TARGETS bcos-network EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-network" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

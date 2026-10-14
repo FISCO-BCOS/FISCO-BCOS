@@ -16,78 +16,34 @@
  * @brief Regression tests for FIB-184: cap sessions and bound per-session recv buffer
  * @file FIB184_SessionResourceCapTest.cpp
  * @date 2026-06-15
+ *
+ * Migrated from bcos-gateway/test/unittests/FIB184_SessionResourceCapTest.cpp: the caps, the
+ * lazy recv-buffer sizing and the lifetime guard are all bcos-network (Host/BasicSession)
+ * mechanisms — no session here ever decodes a frame, so the test decoder is only a template
+ * argument.
  */
 
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-network/ASIOInterface.h"
-#include "bcos-network/Host.h"
-#include "bcos-gateway/libp2p/P2PDecoder.h"
-#include "bcos-utilities/IOServicePool.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
-
+#include "unittests/utils/TestAsioInterface.h"
+#include "unittests/utils/TestFraming.h"
+#include "unittests/utils/TestSessionSocket.h"
+#include <bcos-network/ASIOInterface.h>
+#include <bcos-network/Host.h>
+#include <bcos-network/Session.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
+
 using namespace bcos;
-using namespace bcos::gateway;
-using namespace bcos::test;
-using namespace bcos::crypto;
+using namespace bcos::network;
+using namespace bcos::network::test;
 
-namespace ba = boost::asio;
-namespace bi = boost::asio::ip;
-
-BOOST_FIXTURE_TEST_SUITE(FIB184_SessionResourceCapTest, TestPromptFixture)
-
-class FakeASIO_FIB184 : public bcos::network::ASIOInterface
-{
-public:
-    // ASIOInterface now owns its IOServicePool and is stopped by ~IOServicePool; the
-    // strandPost / stop virtuals this fake used to override no longer exist.
-    FakeASIO_FIB184()
-      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB184"), "0.0.0.0", 0)
-    {}
-    ~FakeASIO_FIB184() noexcept {}
-};
-
-class FakeSocket_FIB184
-{
-public:
-    FakeSocket_FIB184()
-      : m_ioContext(std::make_shared<ba::io_context>()),
-        m_sslContext(ba::ssl::context::tlsv12),
-        m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
-    {}
-    ~FakeSocket_FIB184() = default;
-
-    bool isConnected() const { return m_connected; }
-    void close() { m_connected = false; }
-    bi::tcp::endpoint remoteEndpoint(boost::system::error_code = {}) { return {}; }
-    bi::tcp::endpoint localEndpoint(boost::system::error_code = {}) { return {}; }
-    bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
-    // ASIOInterface dispatches reads/writes on stream(); the raw TCP socket keeps this fake's
-    // IO plaintext (the read-loop tests inject completions via the fake read policy anyway).
-    bi::tcp::socket& stream() { return ref(); }
-    const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint)
-    {
-        m_nodeIPEndpoint = std::move(_nodeIPEndpoint);
-    }
-    ba::io_context& ioService() { return *m_ioContext; }
-
-    bool m_connected{true};
-
-private:
-    std::shared_ptr<ba::io_context> m_ioContext;
-    ba::ssl::context m_sslContext;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
-    NodeIPEndpoint m_nodeIPEndpoint;
-};
+BOOST_AUTO_TEST_SUITE(FIB184_SessionResourceCapTest)
 
 // Exposes the protected session-cap helpers for direct testing.
-class FakeHost_FIB184 : public bcos::network::Host<P2PDecoder, FakeSocket_FIB184>
+class FakeHost_FIB184 : public bcos::network::Host<TestFrameDecoder, TestSessionSocket>
 {
 public:
     explicit FakeHost_FIB184(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface)
-      : bcos::network::Host<P2PDecoder, FakeSocket_FIB184>(std::move(_asioInterface), nullptr)
+      : bcos::network::Host<TestFrameDecoder, TestSessionSocket>(std::move(_asioInterface), nullptr)
     {
         this->m_run = true;
     }
@@ -95,20 +51,20 @@ public:
     void callReleaseSessionSlot(std::string const& addr) { releaseSessionSlot(addr); }
 };
 
-using Session_FIB184 = bcos::network::BasicSession<P2PDecoder, FakeSocket_FIB184>;
+using Session_FIB184 = bcos::network::BasicSession<TestFrameDecoder, TestSessionSocket>;
 
 // FIB-184 Fix 2: a forced-size session uses exactly the requested recv buffer size, not the
 // 512KB floor that was unconditionally applied before.
 BOOST_AUTO_TEST_CASE(ForcedSmallRecvBufferIsHonored)
 {
-    auto fakeSocket = std::make_shared<FakeSocket_FIB184>();
-    auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
+    auto fakeSocket = std::make_shared<TestSessionSocket>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     auto session = std::make_shared<Session_FIB184>(fakeSocket, *fakeHost, /*size*/ 2, /*forceSize*/ true);
     BOOST_CHECK_EQUAL(session->recvBuffer().recvBufferSize(), 2u);
     // grow ceiling is still the 512KB minimum
-    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session::MIN_SESSION_RECV_BUFFER_SIZE);
+    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session_FIB184::MIN_SESSION_RECV_BUFFER_SIZE);
 
     session->setSocket(nullptr);
     fakeSocket->close();
@@ -118,17 +74,17 @@ BOOST_AUTO_TEST_CASE(ForcedSmallRecvBufferIsHonored)
 // it starts at the (much smaller) lazy initial size and relies on the grow path.
 BOOST_AUTO_TEST_CASE(DefaultRecvBufferStartsSmall)
 {
-    auto fakeSocket = std::make_shared<FakeSocket_FIB184>();
-    auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
+    auto fakeSocket = std::make_shared<TestSessionSocket>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     auto session = std::make_shared<Session_FIB184>(fakeSocket, *fakeHost);
     BOOST_CHECK_EQUAL(
-        session->recvBuffer().recvBufferSize(), Session::INITIAL_SESSION_RECV_BUFFER_SIZE);
-    BOOST_CHECK_LT(
-        Session::INITIAL_SESSION_RECV_BUFFER_SIZE, Session::MIN_SESSION_RECV_BUFFER_SIZE);
+        session->recvBuffer().recvBufferSize(), Session_FIB184::INITIAL_SESSION_RECV_BUFFER_SIZE);
+    BOOST_CHECK_LT(Session_FIB184::INITIAL_SESSION_RECV_BUFFER_SIZE,
+        Session_FIB184::MIN_SESSION_RECV_BUFFER_SIZE);
     // the grow ceiling stays at the 512KB minimum so large messages still fit after growth
-    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session::MIN_SESSION_RECV_BUFFER_SIZE);
+    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session_FIB184::MIN_SESSION_RECV_BUFFER_SIZE);
 
     session->setSocket(nullptr);
     fakeSocket->close();
@@ -140,8 +96,8 @@ BOOST_AUTO_TEST_CASE(DefaultRecvBufferStartsSmall)
 // heap-exhaustion crash source). This is the production path the two tests above do not cover.
 BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
 {
-    auto fakeSocket = std::make_shared<FakeSocket_FIB184>();
-    auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
+    auto fakeSocket = std::make_shared<TestSessionSocket>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     constexpr size_t k64MB =
@@ -151,7 +107,7 @@ BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
 
     // initial allocation is the lazy 16KB, NOT the 64MB ceiling
     BOOST_CHECK_EQUAL(
-        session->recvBuffer().recvBufferSize(), Session::INITIAL_SESSION_RECV_BUFFER_SIZE);
+        session->recvBuffer().recvBufferSize(), Session_FIB184::INITIAL_SESSION_RECV_BUFFER_SIZE);
     // the grow ceiling still reflects the requested 64MB so large messages fit after growth
     BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), k64MB);
 
@@ -163,7 +119,7 @@ BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
 // makes room again.
 BOOST_AUTO_TEST_CASE(PerIPSessionCapIsEnforced)
 {
-    auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     fakeHost->setMaxSessionsPerIP(3);
@@ -192,7 +148,7 @@ BOOST_AUTO_TEST_CASE(PerIPSessionCapIsEnforced)
 // distinct source IPs.
 BOOST_AUTO_TEST_CASE(GlobalSessionCapIsEnforced)
 {
-    auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     fakeHost->setMaxConcurrentSessions(2);
@@ -212,8 +168,8 @@ BOOST_AUTO_TEST_CASE(GlobalSessionCapIsEnforced)
 // FIB-184 Fix 1: the lifetime guard releases the slot exactly when the session is destroyed.
 BOOST_AUTO_TEST_CASE(LifetimeGuardReleasesSlotOnSessionDestruction)
 {
-    auto fakeSocket = std::make_shared<FakeSocket_FIB184>();
-    auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
+    auto fakeSocket = std::make_shared<TestSessionSocket>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
     auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     const std::string ip = "9.9.9.9";
