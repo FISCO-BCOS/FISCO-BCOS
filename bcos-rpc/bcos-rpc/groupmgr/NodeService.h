@@ -92,7 +92,7 @@ public:
         return m_engineService;
     }
 
-    /// Single-node consensus mode (config [consensus] enable_single_node_consensus): the
+    /// The DebugSelfProduce driver (config.ini [debug] enable) and the Engine driver: the
     /// in-process mempool that sendRawTransaction routes to instead of txpool. Owned by the
     /// Initializer, which outlives this NodeService, so a raw pointer is safe. Unset
     /// (nullptr) in normal mode and on tars-built nodes.
@@ -202,9 +202,9 @@ public:
     void setMPTPruneWindow(std::int64_t _window) noexcept { m_mptPruneWindow = _window; }
     std::int64_t mptPruneWindow() const noexcept { return m_mptPruneWindow; }
 
-    /// Ethereum L1 EL mode (executor.version=2 under the Engine driver): blob transactions arrive
-    /// in their network wrapper and carry a sidecar (KZG-checked at the RPC entry), and EL-only
-    /// gossip keys on this flag. Wired by AirNodeInitializer::initNodeService from the node config.
+    /// A genesis executor.version=2 node (the Engine driver, or [debug] enable): blob
+    /// transactions arrive in their network wrapper and carry a sidecar (KZG-checked at the RPC
+    /// entry). Wired by AirNodeInitializer::initNodeService from the node config.
     /// Blob ADMISSION keys on the executor version (see setExecutorVersion), not on this flag.
     void setEthereumELMode(bool _enabled) noexcept { m_ethereumELMode = _enabled; }
     bool ethereumELMode() const noexcept { return m_ethereumELMode; }

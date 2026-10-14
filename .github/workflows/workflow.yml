@@ -263,9 +263,9 @@ jobs:
           pip3 install --break-system-packages --quiet eth-account requests 2>/dev/null || true
           bash tools/.ci/ci_check_eth_executor.sh
       - name: Single-node consensus mode integration test
-        # Built-in single-node consensus mode ([consensus] enable_single_node_consensus):
-        # builds a single-node AIR chain, patches config.ini to enable the mode (no
-        # pbft/sealer/txpool), and drives eth_sendRawTransaction -> receipt / block reads.
+        # Built-in single-node driver (hidden config.ini [debug] enable): builds a
+        # single-node AIR chain, patches config.ini to enable it (no pbft/sealer/txpool),
+        # and drives eth_sendRawTransaction -> receipt / block reads.
         if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-static'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.

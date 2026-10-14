@@ -3,10 +3,9 @@
 #
 # Integration test for the pure-Ethereum executor (executor_version=2):
 #   1. build a single-node AIR chain (secp256k1 consensus key via build_chain.sh)
-#   2. patch config.genesis for executor_version=2 + evmc revision + L2 alloc funding
-#   3. start the node under the built-in single-node driver (executor_version=2 with an
-#      on-chain evm_revision and no [fork_timestamps]; the Engine driver needs the
-#      L1 fork schedule and an external consensus client)
+#   2. patch config.genesis for executor_version=2 + [fork_timestamps] + L2 alloc funding
+#   3. start the node under the built-in single-node driver (config.ini [debug] enable;
+#      the Engine driver needs an external consensus client)
 #   4. run an RPC test that reuses an EEST state-test fixture (sender secretKey,
 #      recipient, value) to sign a simple legacy value-transfer and drive it
 #      through eth_sendRawTransaction / eth_getTransactionReceipt / eth_getBalance
@@ -68,7 +67,22 @@ cd "${WORK_DIR}"
 perl -p -i -e 's/version=1/version=2/' config.genesis
 # executor version 2 takes its chain id from [chain] chain_id (a decimal), not [web3]
 perl -p -i -e 's/chain_id=chain0/chain_id=20200/' config.genesis
-# evmc revision (cancun from genesis; the v2 executor needs an EVMC revision)
+# The v2 fork schedule: the block driver derives the EVM revision and the header rules per
+# block timestamp from it. Cancun from genesis; Prague stays in the future (a Prague block
+# runs the EIP-7002/7251 system calls, whose contracts this single-alloc genesis does not
+# carry).
+cat >> config.genesis <<'GENESIS_EOF'
+
+[fork_timestamps]
+london_time=0
+paris_time=0
+shanghai_time=0
+cancun_time=0
+prague_time=4102444800
+merge_block=0
+GENESIS_EOF
+# The RPC dry-run path (eth_call / eth_estimateGas) still reads the EVM revision from the
+# on-chain evmc_revision row, which only evm_revision writes; keep it, matching the schedule.
 perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' config.genesis
 
 # executor_version=2 (patched above) already puts the chain on the Ethereum lane, so
@@ -132,9 +146,9 @@ GENESIS_EOF
 # enable web3_rpc (eth_*) on port 8545
 perl -p -i -e 'if (/\[web3_rpc\]/) { $f=1 } elsif ($f && s/enable\s*=\s*false/enable=true/) { $f=0 }' config.ini
 # executor_version=2 is driven over the Engine API unless the node produces its own blocks:
-# select the built-in single-node driver
-perl -p -i -e 's/^\[consensus\]\s*$/[consensus]\n    enable_single_node_consensus=true\n/' config.ini
-grep -q 'enable_single_node_consensus=true' config.ini || fail "single-node consensus not set in config.ini"
+# select the built-in single-node driver ([debug] is a hidden section no template carries)
+grep -q '^\[debug\]' config.ini && fail "config.ini already has a [debug] section"
+printf '\n[debug]\n    enable=true\n' >> config.ini
 
 # ---- 3. start node and wait for RPC ----
 log "starting node"
@@ -166,19 +180,22 @@ python3 "${REPO_ROOT}/tools/.ci/eth_executor_rpc_test.py" \
     --sender "0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0" \
     || fail "eth_executor_rpc_test.py failed"
 
-# ---- 5. pin the effective EVMC revision ----
-# Without this the test can never go red on a revision-config regression: the transfer
-# executes under whatever revision the binary defaults to, so an evm_revision that never
-# reached on-chain state would still pass. getLedgerConfig logs evmcRevision=<config>
-# (e.g. "0:cancun") for executor_version=2; assert it is cancun after block production.
-log "pinning EVMC revision (expect cancun)"
-for i in $(seq 1 15); do
-    if grep -qE "evmcRevision=.*cancun" "${WORK_DIR}"/log/*.log 2>/dev/null; then
-        log "EVMC revision pinned to cancun"
-        break
-    fi
-    sleep 2
-    [ "$i" -eq 15 ] && fail "node log does not show evmc_revision=cancun (effective revision not pinned)"
-done
+# ---- 5. pin the fork the blocks are built under ----
+# Without this the test can never go red on a fork-schedule regression: a value transfer
+# executes the same under every fork. The block driver derives the header era from
+# [fork_timestamps], so block 1 must carry the Cancun header fields (blob gas, beacon root)
+# and no Prague requestsHash.
+log "pinning the block header era (expect cancun)"
+python3 - "${RPC_URL}" <<'PYEOF' || fail "block 1 is not a Cancun-era header"
+import json, sys, urllib.request
+req = urllib.request.Request(sys.argv[1], json.dumps({"jsonrpc": "2.0", "id": 1,
+    "method": "eth_getBlockByNumber", "params": ["0x1", False]}).encode(),
+    {"Content-Type": "application/json"})
+block = json.load(urllib.request.urlopen(req))["result"]
+for field in ("blobGasUsed", "excessBlobGas", "parentBeaconBlockRoot", "withdrawalsRoot"):
+    assert field in block, f"block 1 lacks {field}: {block}"
+assert "requestsHash" not in block, f"block 1 carries the Prague requestsHash: {block}"
+print("block 1 header era: cancun")
+PYEOF
 
 log "PASS: executor_version=2 integration test"

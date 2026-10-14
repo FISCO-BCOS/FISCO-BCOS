@@ -207,7 +207,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "only the PBFT block driver is supported on Pro/tars "
                                   "deployments; the Engine API, EL sync, [debug] follow_devp2p "
-                                  "and single-node consensus drivers need an AIR node"));
+                                  "and [debug] enable drivers need an AIR node"));
     }
 
     // The account-table migration rewrites the state RocksDB directly; on TiKV the chain
@@ -339,19 +339,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_frontServiceInitializer->front(), ledger, *m_ioServicePool->getIOService(),
         m_ioServicePool, m_ledgerConfigState);
     // executor_version==2 (the pure-Ethereum executor): the mempool runs the L1 fee market —
-    // blob transactions admitted, fee-ordered sealing, fee-bump replacement. EL mode
-    // (the Engine driver on executor_version==2) additionally sizes the pool (capacity, lifetime)
-    // and resolves the per-transaction blob limit dynamically: the EIP-7840 schedule evaluated at
-    // the chain head's timestamp — LedgerConfigState is republished with every committed block
-    // (MultiVersionScheduler's commitBlock wrapper, the engine services' commit lanes, and
-    // the devp2p sync loop in EthereumSyncInitializer) and carries the head header's
+    // blob transactions admitted, fee-ordered sealing, fee-bump replacement. A v2 genesis
+    // (either v2 driver: Engine or [debug] enable) additionally sizes the pool (capacity,
+    // lifetime) and resolves the per-transaction blob limit dynamically: the EIP-7840 schedule
+    // evaluated at the chain head's timestamp — LedgerConfigState is republished with every
+    // committed block (MultiVersionScheduler's commitBlock wrapper, the engine services' commit
+    // lanes, and the devp2p sync loop in EthereumSyncInitializer) and carries the head header's
     // millisecond timestamp. Every other version keeps the L2 pool defaults (no fee market,
     // blobs refused).
     bcos::txpool::MemPoolConfig memPoolConfig;
     if (m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         memPoolConfig.chainKind = bcos::txpool::ChainKind::L1;
-        if (m_nodeConfig->ethereumELModeEnabled())
+        if (m_nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
             auto const forkSchedule = EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig);
             memPoolConfig.capacity = m_nodeConfig->ethereumMempoolCapacity();
@@ -510,33 +510,34 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. It is built when something drives it: the
-        // DebugSelfProduce driver (enable_single_node_consensus) or the Engine driver (EL
-        // mode: the [engine_rpc] listener next to devp2p sync). The legacy txpool/PBFT
-        // pipeline is never initialized or started under either (the blockDriver guards
-        // below and in start()).
+        // DebugSelfProduce driver ([debug] enable) or the Engine driver (EL mode: the
+        // [engine_rpc] listener next to devp2p sync). The legacy txpool/PBFT pipeline is
+        // never initialized or started under either (the blockDriver guards below and in
+        // start()).
         if (!engineApiForV1Only && !opStackMode &&
             (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce ||
                 m_nodeConfig->servesEngineApi()))
         {
-            // EL mode (the Engine driver): ONE verifier instance serves both the Engine API
-            // external newPayload lane (through the type-erased adapter) and the devp2p
-            // sync loop (AirNodeInitializer forwards elBlockVerifier() to
+            // Both v2 drivers build every block through ONE EthereumBlockVerifier behind the
+            // external payload verifier (the L1 dialect: the EVM revision and the header
+            // rules per block timestamp from [fork_timestamps]). Under EL mode (the Engine
+            // driver) the same instance also serves the external newPayload lane and the
+            // devp2p sync loop (AirNodeInitializer forwards elBlockVerifier() to
             // EthereumSyncInitializer) — the verifier's m_commitMutex serializes the two
-            // commit lanes.
+            // commit lanes. DebugSelfProduce has no devp2p loop, so no ClSyncCoordination.
+            m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
+                scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
+                *m_ethereumSerialScheduler, *ethereumExecutor,
+                *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
+                m_nodeConfig->ethereumReorgWindow());
             std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
-                externalPayloadVerifier;
-            if (blockDriver == bcos::tool::BlockDriver::Engine)
-            {
-                m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
-                    scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
-                    *m_ethereumSerialScheduler, *ethereumExecutor,
-                    *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
-                    m_nodeConfig->ethereumReorgWindow());
                 externalPayloadVerifier =
                     std::make_shared<ExternalPayloadVerifierImpl<GlobalStateStorage>>(
                         m_elBlockVerifier, ledger, m_protocolInitializer->blockFactory(),
                         EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig),
                         m_nodeConfig->ethereumChainId(), m_nodeConfig->ethereumMergeBlock());
+            if (blockDriver == bcos::tool::BlockDriver::Engine)
+            {
                 // One coordination instance shared with the devp2p sync loop
                 // (AirNodeInitializer forwards clSyncCoordination() to
                 // EthereumSyncInitializer): the first served forkchoiceUpdated latches
@@ -586,25 +587,26 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce ||
                 m_nodeConfig->servesEngineApi()))
         {
-            // EL mode (the Engine driver): ONE verifier instance serves both the Engine API
-            // external newPayload lane (through the type-erased adapter) and the devp2p
-            // sync loop (AirNodeInitializer forwards elBlockVerifier() to
+            // Both v2 drivers build every block through ONE EthereumBlockVerifier behind the
+            // external payload verifier (the L1 dialect: the EVM revision and the header
+            // rules per block timestamp from [fork_timestamps]). Under EL mode (the Engine
+            // driver) the same instance also serves the external newPayload lane and the
+            // devp2p sync loop (AirNodeInitializer forwards elBlockVerifier() to
             // EthereumSyncInitializer) — the verifier's m_commitMutex serializes the two
-            // commit lanes.
+            // commit lanes. DebugSelfProduce has no devp2p loop, so no ClSyncCoordination.
+            m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
+                scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
+                *m_ethereumSerialScheduler, *ethereumExecutor,
+                *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
+                m_nodeConfig->ethereumReorgWindow());
             std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
-                externalPayloadVerifier;
-            if (blockDriver == bcos::tool::BlockDriver::Engine)
-            {
-                m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
-                    scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
-                    *m_ethereumSerialScheduler, *ethereumExecutor,
-                    *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
-                    m_nodeConfig->ethereumReorgWindow());
                 externalPayloadVerifier =
                     std::make_shared<ExternalPayloadVerifierImpl<GlobalStateStorage>>(
                         m_elBlockVerifier, ledger, m_protocolInitializer->blockFactory(),
                         EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig),
                         m_nodeConfig->ethereumChainId(), m_nodeConfig->ethereumMergeBlock());
+            if (blockDriver == bcos::tool::BlockDriver::Engine)
+            {
                 // One coordination instance shared with the devp2p sync loop
                 // (AirNodeInitializer forwards clSyncCoordination() to
                 // EthereumSyncInitializer): the first served forkchoiceUpdated latches
@@ -781,13 +783,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     multiVersionScheduler->setVersion(m_executorVersion, {});
     m_scheduler = std::move(multiVersionScheduler);
 
-    // Parse and log the effective EVMC revision once at startup (v2). It is fixed at genesis
-    // (NodeConfig requires an explicit evm_revision for executor_version=2), so a one-time
-    // INFO line is accurate and stays off the per-block / per-RPC getLedgerConfig hot path.
-    // The CI integration test greps this line to pin the effective revision.
-    // Ethereum L1 EL mode (the Engine driver) is exempt: its EVMC revision is derived from the
-    // per-block timestamp via the [fork_timestamps] schedule (EthereumBlockVerifier's
-    // fillExecutionLedgerConfig), never from an on-chain evmc_revision row.
+    // Parse and log the effective EVMC revision once at startup when the ledger runs
+    // executor_version 2 under a genesis of another lane (a runtime switch to v2): only the
+    // on-chain evmc_revision row can name its revision. A v2 genesis is exempt under both of
+    // its drivers (Engine and [debug] enable): block building and verification derive the EVMC
+    // revision from the per-block timestamp via the [fork_timestamps] schedule
+    // (EthereumBlockVerifier's fillExecutionLedgerConfig), not from the row. (The RPC dry-run
+    // path, eth_call / eth_estimateGas, still reads the row and fails without it.)
     //
     // The OP lane is outside this probe: NodeConfig rejects an explicit revision there and
     // Ledger::buildGenesisBlock therefore writes no evmc_revision row, because OpScheduler
@@ -795,7 +797,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // absence is the expected shape, not the runtime-switch hazard this guard targets.
     if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION &&
         m_executorVersion < scheduler_v1::OPSTACK_EXECUTOR_VERSION &&
-        !m_nodeConfig->ethereumELModeEnabled())
+        m_nodeConfig->executorVersion() != bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))
@@ -1018,7 +1020,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         });
     }
     // init the txpool / pbft.
-    // Engine-driven modes ([consensus] enable_single_node_consensus or the Engine driver)
+    // Engine-driven modes ([debug] enable or the Engine driver)
     // bypass the legacy txpool/pbft/sealer lifecycle: PBFTInitializer is still constructed
     // above so groupInfo / NodeService wiring stays intact, but txpool and pbft (and the
     // sealer and block sync inside pbft) are never initialized or started — block production
@@ -1067,9 +1069,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         auto web3NonceChecker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger);
         // executor_version==2 (the pure-Ethereum executor): admission must match the pool —
-        // blob transactions are let through instead of refused. EL mode additionally bounds
-        // them by the same schedule the mempool enforces; a consensus-sealed v2 chain (the
-        // EEST replay topology) keeps the Cancun default.
+        // blob transactions are let through instead of refused. A v2 genesis additionally
+        // bounds them by the same schedule the mempool enforces; executor_version 2 under
+        // another lane's genesis keeps the Cancun default.
         bcos::txvalidator::BlobPolicy blobPolicy;
         if (m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
@@ -1099,22 +1101,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
 
-    // Single-node consensus mode: build the built-in single-node consensus driver that
+    // The DebugSelfProduce driver ([debug] enable): the built-in single-node driver that
     // produces blocks on a timer by driving the EngineService interface like an external CL
     // (forkchoiceUpdated -> getPayload -> newPayload), bypassing txpool/sealer/pbft. The
     // EngineService owns the mempool/scheduler/commit, so the driver only needs it plus the
-    // ledger (to resolve the initial head). It is always built in this mode — for
-    // executor_version < 2 on the v1 scheduler, and for executor_version >= 2 on the
-    // EthereumExecutor scheduler — so this is also the in-process CL path for the Engine API.
+    // ledger (to resolve the initial head). The EngineService is the v1 one on
+    // executor_version 1, and the v2 one (with the L1 payload verifier, as under the Engine
+    // driver) on executor_version 2.
     //
-    // The OP lane has no such driver: NodeConfig::blockDriver refuses single-node consensus
-    // on executor.version >= 3.
+    // The OP lane has no such driver: NodeConfig::blockDriver refuses [debug] enable on
+    // executor.version >= 3.
     if (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce)
     {
-        // prevRandao: explicit 32-byte hex from config ([consensus] prev_randao), else a
+        // prevRandao: explicit 32-byte hex from config ([debug] prev_randao), else a
         // deterministic hash of a fixed seed (for EEST the harness pins it to the fixture's
         // currentRandom so block.prevrandao matches).
-        auto const& prevRandaoCfg = m_nodeConfig->singleNodeConsensusPrevRandao();
+        auto const& prevRandaoCfg = m_nodeConfig->debugPrevRandao();
         auto prevRandao = [&]() -> bcos::crypto::HashType {
             if (!prevRandaoCfg.empty())
             {
@@ -1126,16 +1128,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }();
         if (!m_engineServiceInitializer)
         {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "enable_single_node_consensus requires the EngineService to be built"));
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[debug] enable requires the EngineService to be built"));
         }
         m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
             *m_engineServiceInitializer->engineService(), m_ledger,
-            m_nodeConfig->singleNodeConsensusBlockInterval(),
-            m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
-            m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp());
+            m_nodeConfig->debugBlockInterval(), m_nodeConfig->debugProduceEmptyBlocks(), prevRandao,
+            m_nodeConfig->debugFeeRecipient(), m_nodeConfig->debugFixedTimestamp(),
+            /*_l1Dialect=*/m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
     }
 
 #ifdef TOOLS

@@ -116,10 +116,12 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     nodeService->setSafeBlockDepth(nodeConfig->web3SafeBlockDepth());
     nodeService->setFinalizedBlockDepth(nodeConfig->web3FinalizedBlockDepth());
 
-    // Ethereum L1 EL mode (executor.version=2 under the Engine driver): the blob sidecar (network
-    // wrapper, KZG checks) and tx-gossip handling key on this flag. The blob ADMISSION gate keys on
-    // the executor version below instead.
-    nodeService->setEthereumELMode(nodeConfig->ethereumELModeEnabled());
+    // A v2 genesis (the Engine driver, or [debug] enable): eth_sendRawTransaction takes a blob
+    // transaction in its network wrapper and KZG-checks the sidecar, which the L1 payload
+    // builder needs to assemble the blobsBundle under either driver. The blob ADMISSION gate
+    // keys on the executor version below instead.
+    nodeService->setEthereumELMode(
+        nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
 
     // The chain's executor_version, resolved from the ledger at boot: the RPC blob admission
     // gate keys on it (RpcChainPolicy admits blob transactions only on executor_version == 2).

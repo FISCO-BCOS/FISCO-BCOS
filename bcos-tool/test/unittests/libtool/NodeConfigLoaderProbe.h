@@ -44,7 +44,6 @@ struct LoaderProbe : public bcos::tool::NodeConfig
     using bcos::tool::NodeConfig::loadRpcConfig;
     using bcos::tool::NodeConfig::loadSealerConfig;
     using bcos::tool::NodeConfig::loadSecurityConfig;
-    using bcos::tool::NodeConfig::loadSingleNodeConsensusConfig;
     using bcos::tool::NodeConfig::loadStorageConfig;
     using bcos::tool::NodeConfig::loadStorageSecurityConfig;
     using bcos::tool::NodeConfig::loadSyncConfig;

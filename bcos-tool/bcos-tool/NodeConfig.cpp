@@ -289,7 +289,6 @@ void NodeConfig::loadConfig(
     loadDebugConfig(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
-    loadSingleNodeConsensusConfig(_pt);
     loadTxPoolConfig(_pt);
     // loadSecurityConfig before loadStorageSecurityConfig for deciding whether to use HSM
     loadSecurityConfig(_pt);
@@ -738,16 +737,17 @@ void NodeConfig::validateELModeInvariants() const
 {
     auto const driver = blockDriver();
     auto const lane = laneForExecutorVersion(m_genesisConfig.m_executorVersion);
-    // The v2 Engine driver verifies and builds every block through EthereumBlockVerifier,
-    // which derives the EVM revision and the header rules from the block timestamp against
-    // [fork_timestamps]; without the schedule it has nothing to derive them from.
-    if (lane == ChainLane::Eth && driver == BlockDriver::Engine &&
-        !m_genesisConfig.m_ethereumForkSchedule.has_value())
+    // Both v2 drivers (Engine and DebugSelfProduce) build and verify every block through
+    // EthereumBlockVerifier (Initializer injects it into the EngineService), which derives the
+    // EVM revision and the header rules from the block timestamp against [fork_timestamps];
+    // without the schedule it has nothing to derive them from.
+    if (lane == ChainLane::Eth && !m_genesisConfig.m_ethereumForkSchedule.has_value())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.version=2 (the L1 EL lane) is driven over the Engine "
-                                  "API and requires a [fork_timestamps] section in config.genesis "
-                                  "(the L1 fork schedule)"));
+                                  "executor.version=2 (the L1 EL lane) requires a "
+                                  "[fork_timestamps] section in config.genesis (the L1 fork "
+                                  "schedule): its Engine and [debug] enable block drivers derive "
+                                  "the EVM revision from it"));
     }
     // Refused ahead of the MPT pruner's boot-time init (Initializer::init): that init walks
     // the window's state roots and, with storage.mpt_prune_sweep_garbage on, deletes
@@ -1278,10 +1278,37 @@ void NodeConfig::loadDebugConfig(boost::property_tree::ptree const& _pt)
     // Hidden development/test section: written into no template or runbook example. The
     // lane checks live in blockDriver(), which needs config.genesis too.
     //   [debug]
+    //       ; executor.version 1 or 2 only: produce blocks in-process (the DebugSelfProduce
+    //       ; driver) instead of PBFT (v1) or a consensus client over the Engine API (v2)
+    //       enable=false
     //       ; OP lane only: follow an OP chain's op-geth peers over devp2p (bootnodes and
     //       ; sync knobs in [ethereum]) instead of being driven by op-node
     //       follow_devp2p=false
+    //       ; DebugSelfProduce block parameters
+    //       block_interval=1000
+    //       produce_empty_blocks=true
+    //       fee_recipient=0x0000000000000000000000000000000000000000
+    //       ; 32-byte hex; empty = the hash of a fixed seed
+    //       prev_randao=
+    //       ; seconds; 0 = wall clock
+    //       fixed_timestamp=0
+    m_debugEnable = _pt.get<bool>("debug.enable", false);
     m_debugFollowDevp2p = _pt.get<bool>("debug.follow_devp2p", false);
+    m_debugBlockInterval = _pt.get<uint64_t>("debug.block_interval", 1000);
+    m_debugProduceEmptyBlocks = _pt.get<bool>("debug.produce_empty_blocks", true);
+    m_debugFeeRecipient =
+        _pt.get<std::string>("debug.fee_recipient", "0x0000000000000000000000000000000000000000");
+    m_debugPrevRandao = _pt.get<std::string>("debug.prev_randao", "");
+    m_debugFixedTimestamp = _pt.get<std::uint64_t>("debug.fixed_timestamp", 0);
+    if (m_debugEnable)
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+                                       "[debug] enable=true: the node produces its own blocks, "
+                                       "debug mode, not for production")
+                                << LOG_KV("blockInterval", m_debugBlockInterval)
+                                << LOG_KV("produceEmptyBlocks", m_debugProduceEmptyBlocks)
+                                << LOG_KV("feeRecipient", m_debugFeeRecipient);
+    }
     if (m_debugFollowDevp2p)
     {
         NodeConfig_LOG(WARNING) << LOG_DESC(
@@ -2247,31 +2274,6 @@ void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
                                   "Please set consensus.min_seal_time between 1 and 600000!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
-}
-
-void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const& _pt)
-{
-    /*
-    [consensus]
-        enable_single_node_consensus=false
-        block_interval=1000
-        produce_empty_blocks=true
-        fee_recipient=0x0
-    */
-    // Selects the DebugSelfProduce driver (blockDriver()), which replaces the Engine API
-    // listener on executor.version=2: one driver per node, so nothing to exclude here.
-    m_enableSingleNodeConsensus = _pt.get<bool>("consensus.enable_single_node_consensus", false);
-    m_singleNodeConsensusBlockInterval = _pt.get<uint64_t>("consensus.block_interval", 1000);
-    m_singleNodeConsensusProduceEmptyBlocks = _pt.get<bool>("consensus.produce_empty_blocks", true);
-    m_singleNodeConsensusFeeRecipient = _pt.get<std::string>(
-        "consensus.fee_recipient", "0x0000000000000000000000000000000000000000");
-    m_singleNodeConsensusPrevRandao = _pt.get<std::string>("consensus.prev_randao", "");
-    m_singleNodeConsensusFixedTimestamp = _pt.get<std::uint64_t>("consensus.fixed_timestamp", 0);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadSingleNodeConsensusConfig")
-                         << LOG_KV("enableSingleNodeConsensus", m_enableSingleNodeConsensus)
-                         << LOG_KV("blockInterval", m_singleNodeConsensusBlockInterval)
-                         << LOG_KV("produceEmptyBlocks", m_singleNodeConsensusProduceEmptyBlocks)
-                         << LOG_KV("feeRecipient", m_singleNodeConsensusFeeRecipient);
 }
 
 void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _pt)
@@ -3385,25 +3387,38 @@ bool NodeConfig::web3SyncTransaction() const
 
 BlockDriver NodeConfig::blockDriver() const
 {
-    auto const lane = laneForExecutorVersion(m_genesisConfig.m_executorVersion);
+    auto const version = m_genesisConfig.m_executorVersion;
+    auto const lane = laneForExecutorVersion(version);
+    if (m_debugEnable && m_debugFollowDevp2p)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[debug] enable and [debug] follow_devp2p are mutually "
+                                  "exclusive: each is a block driver; set at most one"));
+    }
     if (m_debugFollowDevp2p && lane != ChainLane::Op)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[debug] follow_devp2p requires executor.version >= 3 (the OP "
                                   "lane): it follows an OP chain's op-geth peers over devp2p"));
     }
+    if (m_debugEnable && lane == ChainLane::Op)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[debug] enable: executor.version >= 3 (the OP lane) does not "
+                                  "support self-production; an OP chain is driven by op-node "
+                                  "over [engine_rpc]"));
+    }
+    if (m_debugEnable && version < 1)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[debug] enable requires executor.version 1 or 2: "
+                                  "executor.version=0 does not support self-production"));
+    }
     if (lane == ChainLane::Op)
     {
-        if (m_enableSingleNodeConsensus)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "consensus.enable_single_node_consensus is not supported "
-                                      "on executor.version >= 3 (the OP lane): an OP chain is "
-                                      "driven by op-node over [engine_rpc]"));
-        }
         return m_debugFollowDevp2p ? BlockDriver::DebugFollowDevp2p : BlockDriver::Engine;
     }
-    if (m_enableSingleNodeConsensus)
+    if (m_debugEnable)
     {
         return BlockDriver::DebugSelfProduce;
     }
@@ -3443,34 +3458,29 @@ bool NodeConfig::enableDebugApi() const
     return m_enableDebugApi;
 }
 
-bool NodeConfig::enableSingleNodeConsensus() const
+uint64_t NodeConfig::debugBlockInterval() const
 {
-    return m_enableSingleNodeConsensus;
+    return m_debugBlockInterval;
 }
 
-uint64_t NodeConfig::singleNodeConsensusBlockInterval() const
+bool NodeConfig::debugProduceEmptyBlocks() const
 {
-    return m_singleNodeConsensusBlockInterval;
+    return m_debugProduceEmptyBlocks;
 }
 
-bool NodeConfig::singleNodeConsensusProduceEmptyBlocks() const
+const std::string& NodeConfig::debugFeeRecipient() const
 {
-    return m_singleNodeConsensusProduceEmptyBlocks;
+    return m_debugFeeRecipient;
 }
 
-const std::string& NodeConfig::singleNodeConsensusFeeRecipient() const
+const std::string& NodeConfig::debugPrevRandao() const
 {
-    return m_singleNodeConsensusFeeRecipient;
+    return m_debugPrevRandao;
 }
 
-const std::string& NodeConfig::singleNodeConsensusPrevRandao() const
+std::uint64_t NodeConfig::debugFixedTimestamp() const
 {
-    return m_singleNodeConsensusPrevRandao;
-}
-
-std::uint64_t NodeConfig::singleNodeConsensusFixedTimestamp() const
-{
-    return m_singleNodeConsensusFixedTimestamp;
+    return m_debugFixedTimestamp;
 }
 
 const std::string& NodeConfig::p2pListenIP() const

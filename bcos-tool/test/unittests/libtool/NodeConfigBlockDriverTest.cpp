@@ -43,8 +43,7 @@ constexpr auto c_forkTimestamps =
     "prague_time=0\nmerge_block=0\n";
 
 // v2 genesis variants: the L1 fork schedule (the shape every v2 driver accepts), or only an
-// on-chain executor.evm_revision (accepted by the genesis loader, refused by the Engine
-// driver).
+// on-chain executor.evm_revision (accepted by the genesis loader, refused by both v2 drivers).
 enum class V2Fork
 {
     Timestamps,
@@ -109,7 +108,9 @@ void refuses(int version, std::string const& ini, std::string const& reason,
 
 constexpr auto c_followDevp2p = "[debug]\nfollow_devp2p=true\n";
 constexpr auto c_followOffLane = "[debug] follow_devp2p requires executor.version >= 3";
-constexpr auto c_selfProduce = "[consensus]\nenable_single_node_consensus=true\n";
+constexpr auto c_selfProduce = "[debug]\nenable=true\n";
+constexpr auto c_selfProduceOnV3 =
+    "[debug] enable: executor.version >= 3 (the OP lane) does not support self-production";
 }  // namespace
 
 // v3 with no driver key at all: op-node drives it over the Engine API, which listens on the
@@ -163,20 +164,20 @@ BOOST_AUTO_TEST_CASE(v2WithNothingIsTheL1El)
     BOOST_CHECK_EQUAL(cfg->ethereumChainId(), 11155420u);
 }
 
-// The v2 Engine driver derives the EVM revision from [fork_timestamps]; a v2 genesis that
-// carries only executor.evm_revision has none, so the node refuses to start under it.
-// single-node consensus (the DebugSelfProduce driver) still runs on that genesis.
-BOOST_AUTO_TEST_CASE(v2EngineDriverRequiresForkTimestamps)
+// Both v2 drivers derive the EVM revision from [fork_timestamps]; a v2 genesis that carries
+// only executor.evm_revision has none, so the node refuses to start under either.
+BOOST_AUTO_TEST_CASE(v2RequiresForkTimestampsUnderEitherDriver)
 {
-    refuses(2, "",
-        "executor.version=2 (the L1 EL lane) is driven over the Engine API and requires a "
-        "[fork_timestamps] section",
-        V2Fork::EvmRevisionOnly);
-    auto selfProduce = starts(2, c_selfProduce, V2Fork::EvmRevisionOnly);
-    BOOST_CHECK(selfProduce->blockDriver() == BlockDriver::DebugSelfProduce);
+    for (auto const* ini : {"", c_selfProduce})
+    {
+        refuses(2, ini,
+            "executor.version=2 (the L1 EL lane) requires a [fork_timestamps] section in "
+            "config.genesis",
+            V2Fork::EvmRevisionOnly);
+    }
 }
 
-// single-node consensus on v2 replaces the Engine driver: no Engine API, no EL mode.
+// [debug] enable on v2 replaces the Engine driver: no Engine API, no EL mode.
 BOOST_AUTO_TEST_CASE(v2SelfProduceServesNoEngineApi)
 {
     auto cfg = starts(2, c_selfProduce);
@@ -203,8 +204,8 @@ BOOST_AUTO_TEST_CASE(followDevp2pOnV0V1V2Refused)
     }
 }
 
-// v0/v1 offer no Engine API: PBFT without a driver key, [engine_rpc] (any enable value) is
-// not read, and single-node consensus is the only other driver.
+// v0/v1 offer no Engine API: PBFT without a driver key, and [engine_rpc] (any enable value)
+// is not read.
 BOOST_AUTO_TEST_CASE(v0V1ServeNoEngineApi)
 {
     for (int version : {0, 1})
@@ -217,11 +218,75 @@ BOOST_AUTO_TEST_CASE(v0V1ServeNoEngineApi)
         auto engineRpc = starts(version, "[engine_rpc]\nenable=true\nlisten_port=9551\n");
         BOOST_CHECK(engineRpc->blockDriver() == BlockDriver::PBFT);
         BOOST_CHECK(!engineRpc->servesEngineApi());
-
-        auto selfProduce = starts(version, c_selfProduce);
-        BOOST_CHECK(selfProduce->blockDriver() == BlockDriver::DebugSelfProduce);
-        BOOST_CHECK(!selfProduce->servesEngineApi());
     }
+}
+
+// [debug] enable x lane: the DebugSelfProduce driver on v1 and v2 (no Engine API on either),
+// refused on v0 and on v3, each refusal naming why.
+BOOST_AUTO_TEST_CASE(debugEnableLaneMatrix)
+{
+    refuses(0, c_selfProduce,
+        "[debug] enable requires executor.version 1 or 2: executor.version=0 does not support "
+        "self-production");
+    for (int version : {1, 2})
+    {
+        auto cfg = starts(version, c_selfProduce);
+        BOOST_CHECK(cfg->blockDriver() == BlockDriver::DebugSelfProduce);
+        BOOST_CHECK(!cfg->servesEngineApi());
+        BOOST_CHECK(!cfg->ethereumELModeEnabled());
+    }
+    refuses(3, c_selfProduce, c_selfProduceOnV3);
+}
+
+// [debug] enable and follow_devp2p together are refused on every lane: each is a block driver.
+BOOST_AUTO_TEST_CASE(debugEnableWithFollowDevp2pRefused)
+{
+    for (int version : {0, 1, 2, 3})
+    {
+        refuses(version, "[debug]\nenable=true\nfollow_devp2p=true\n",
+            "[debug] enable and [debug] follow_devp2p are mutually exclusive");
+    }
+}
+
+// The DebugSelfProduce parameters are read from [debug], with their defaults when absent.
+BOOST_AUTO_TEST_CASE(debugSelfProduceParameters)
+{
+    auto defaults = starts(1, c_selfProduce);
+    BOOST_CHECK_EQUAL(defaults->debugBlockInterval(), 1000u);
+    BOOST_CHECK(defaults->debugProduceEmptyBlocks());
+    BOOST_CHECK_EQUAL(defaults->debugFeeRecipient(), "0x0000000000000000000000000000000000000000");
+    BOOST_CHECK(defaults->debugPrevRandao().empty());
+    BOOST_CHECK_EQUAL(defaults->debugFixedTimestamp(), 0u);
+
+    auto const randao = "0x" + std::string(64, 'a');
+    auto set = starts(2, std::string(c_selfProduce) +
+                             "block_interval=250\nproduce_empty_blocks=false\n"
+                             "fee_recipient=0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba\n"
+                             "prev_randao=" +
+                             randao + "\nfixed_timestamp=1700000000\n");
+    BOOST_CHECK(set->blockDriver() == BlockDriver::DebugSelfProduce);
+    BOOST_CHECK_EQUAL(set->debugBlockInterval(), 250u);
+    BOOST_CHECK(!set->debugProduceEmptyBlocks());
+    BOOST_CHECK_EQUAL(set->debugFeeRecipient(), "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
+    BOOST_CHECK_EQUAL(set->debugPrevRandao(), randao);
+    BOOST_CHECK_EQUAL(set->debugFixedTimestamp(), 1700000000u);
+}
+
+// The self-production keys under [consensus] are no longer read: enable_single_node_consensus
+// selects no driver, so v1 stays PBFT and v2 stays Engine, and the block parameters there do
+// not reach the [debug] getters.
+BOOST_AUTO_TEST_CASE(consensusSelfProduceKeysAreNotRead)
+{
+    constexpr auto c_old =
+        "[consensus]\nenable_single_node_consensus=true\nblock_interval=250\n"
+        "produce_empty_blocks=false\nfixed_timestamp=1700000000\n";
+    auto v1 = starts(1, c_old);
+    BOOST_CHECK(v1->blockDriver() == BlockDriver::PBFT);
+    BOOST_CHECK_EQUAL(v1->debugBlockInterval(), 1000u);
+    BOOST_CHECK(v1->debugProduceEmptyBlocks());
+    BOOST_CHECK_EQUAL(v1->debugFixedTimestamp(), 0u);
+    BOOST_CHECK(starts(2, c_old)->blockDriver() == BlockDriver::Engine);
+    BOOST_CHECK(starts(3, c_old)->blockDriver() == BlockDriver::Engine);
 }
 
 // [ethereum] mode is not read in either file: config.ini mode=el does not make a v1 node an
@@ -266,16 +331,6 @@ BOOST_AUTO_TEST_CASE(eestReplayModeRequiresV2)
     BOOST_CHECK(starts(2, std::string(c_eest) + c_selfProduce)->eestReplayMode());
 }
 
-// single-node consensus is refused on v3 rather than ignored: it would leave the node with a
-// different block producer than the operator configured.
-BOOST_AUTO_TEST_CASE(v3RefusesSelfProduce)
-{
-    refuses(
-        3, c_selfProduce, "enable_single_node_consensus is not supported on executor.version >= 3");
-    // follow_devp2p does not lift the refusal.
-    refuses(3, std::string(c_followDevp2p) + c_selfProduce,
-        "enable_single_node_consensus is not supported on executor.version >= 3");
-}
 
 // [ethereum] mode=opstack-el is gone from both files; each refusal names the replacement.
 BOOST_AUTO_TEST_CASE(opstackElModeRefusedWithItsReplacement)

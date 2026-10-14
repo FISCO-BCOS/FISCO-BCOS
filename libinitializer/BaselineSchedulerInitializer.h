@@ -66,11 +66,12 @@ public:
         }
         else
         {
-            // Single-node consensus mode ([consensus] enable_single_node_consensus): the legacy
-            // txpool is bypassed and never initialized, so a commit that fires the transaction
-            // notifier must not dereference it (asyncNotifyBlockResult on an uninitialized pool
-            // segfaults in MemoryStorage::batchRemoveSealedTxs). sendRawTransaction returns the
-            // tx hash immediately in this mode, so no one is waiting on a notify anyway.
+            // Every driver but PBFT (e.g. [debug] enable, the in-process single-node driver):
+            // the legacy txpool is bypassed and never initialized, so a commit that fires the
+            // transaction notifier must not dereference it (asyncNotifyBlockResult on an
+            // uninitialized pool segfaults in MemoryStorage::batchRemoveSealedTxs).
+            // sendRawTransaction returns the tx hash immediately in this mode, so no one is
+            // waiting on a notify anyway.
             baselineScheduler->registerTransactionNotifier(
                 [](bcos::protocol::BlockNumber /*blockNumber*/,
                     bcos::protocol::TransactionSubmitResultsPtr /*result*/,

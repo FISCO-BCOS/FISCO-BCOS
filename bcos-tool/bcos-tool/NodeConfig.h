@@ -244,11 +244,11 @@ public:
     size_t tbbThreadCount() const;
 
     // Who decides the next block. OP lane (executor.version >= 3): Engine, or
-    // DebugFollowDevp2p under [debug] follow_devp2p. v2: DebugSelfProduce under [consensus]
-    // enable_single_node_consensus, else Engine. v0/v1: DebugSelfProduce under the same key,
-    // else PBFT. Throws InvalidConfig for a combination the lane refuses (follow_devp2p off
-    // the OP lane; single-node consensus on the OP lane). Reads both files: call it after
-    // both are loaded.
+    // DebugFollowDevp2p under [debug] follow_devp2p. v2: DebugSelfProduce under [debug]
+    // enable, else Engine. v1: DebugSelfProduce under [debug] enable, else PBFT. v0: PBFT.
+    // Throws InvalidConfig for a combination the lane refuses ([debug] enable off v1/v2,
+    // follow_devp2p off the OP lane, both together). Reads both files: call it after both are
+    // loaded.
     BlockDriver blockDriver() const;
 
     // Engine API listener: runs whenever blockDriver() is Engine and reads [engine_rpc].
@@ -268,13 +268,15 @@ public:
     bool engineApiDebugApi() const;
     bool enableDebugApi() const;
 
-    // single-node consensus configurations
-    bool enableSingleNodeConsensus() const;
-    uint64_t singleNodeConsensusBlockInterval() const;
-    bool singleNodeConsensusProduceEmptyBlocks() const;
-    const std::string& singleNodeConsensusFeeRecipient() const;
-    const std::string& singleNodeConsensusPrevRandao() const;
-    std::uint64_t singleNodeConsensusFixedTimestamp() const;
+    // The DebugSelfProduce driver's block parameters, from the hidden [debug] section:
+    // block_interval (ms, default 1000), produce_empty_blocks (default true), fee_recipient
+    // (default the zero address), prev_randao (32-byte hex; empty = the hash of a fixed seed),
+    // fixed_timestamp (seconds; 0 = wall clock). [debug] enable selects the driver itself.
+    uint64_t debugBlockInterval() const;
+    bool debugProduceEmptyBlocks() const;
+    const std::string& debugFeeRecipient() const;
+    const std::string& debugPrevRandao() const;
+    std::uint64_t debugFixedTimestamp() const;
 
     // Ethereum L1 EL mode: executor.version=2 under the Engine driver (derived from
     // blockDriver(), nothing configures it). The node is an Ethereum execution-layer client:
@@ -454,7 +456,6 @@ protected:
     virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadSingleNodeConsensusConfig(boost::property_tree::ptree const& _pt);
     virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSyncConfig(boost::property_tree::ptree const& _pt);
     virtual void loadEthereumConfig(boost::property_tree::ptree const& _pt);
@@ -664,18 +665,16 @@ private:
     bool m_enableDebugApi = false;
     EngineRpcConfig m_engineRpc;
 
-    // config for the hidden [debug] section (blockDriver())
+    // config for the hidden [debug] section (blockDriver() and the DebugSelfProduce driver)
+    bool m_debugEnable = false;
     bool m_debugFollowDevp2p = false;
-
-    // config for single-node consensus
-    bool m_enableSingleNodeConsensus = false;
-    uint64_t m_singleNodeConsensusBlockInterval = 1000;
-    bool m_singleNodeConsensusProduceEmptyBlocks = true;
-    std::string m_singleNodeConsensusFeeRecipient = "0x0000000000000000000000000000000000000000";
+    uint64_t m_debugBlockInterval = 1000;
+    bool m_debugProduceEmptyBlocks = true;
+    std::string m_debugFeeRecipient = "0x0000000000000000000000000000000000000000";
     // 32-byte hex prevRandao; empty means derive deterministically from a seed.
-    std::string m_singleNodeConsensusPrevRandao;
+    std::string m_debugPrevRandao;
     // fixed block timestamp in seconds; 0 = wall clock.
-    std::uint64_t m_singleNodeConsensusFixedTimestamp = 0;
+    std::uint64_t m_debugFixedTimestamp = 0;
 
     // config for gateway
     std::string m_p2pListenIP;

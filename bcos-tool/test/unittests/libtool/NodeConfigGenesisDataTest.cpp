@@ -525,8 +525,8 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
             [](auto const& e) { return errinfoContains(e, "[chain].chain_id must fit uint64"); });
     }
     // v2 genesis without the schedule (evm_revision only): the getter still carries the
-    // Ethereum lane's [chain] chain_id — it is copied on every lane >= 2; the Engine driver
-    // refuses this genesis (NodeConfigBlockDriverTest), single-node consensus runs on it.
+    // Ethereum lane's [chain] chain_id — it is copied on every lane >= 2 at genesis load.
+    // Both v2 drivers refuse this genesis at startup (NodeConfigBlockDriverTest).
     {
         NodeConfig cfg(keyFactory);
         const std::string plainGenesis =
@@ -542,10 +542,6 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
             "version=2\nevm_revision=cancun\n" +
             ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
-        BOOST_REQUIRE_NO_THROW(
-            cfg.loadConfigFromString("[consensus]\nenable_single_node_consensus=true\n"));
-        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
-        BOOST_CHECK(!cfg.ethereumELModeEnabled());
         BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 7u);
     }
     // Tools order (config.ini BEFORE config.genesis): pure parsing, no genesis
