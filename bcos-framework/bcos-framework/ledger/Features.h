@@ -150,7 +150,8 @@ public:
     void validate(Flag flag) const;
 
     /// Throws InvalidSetFeature naming the first dependency of @p flag that is not enabled.
-    /// Ledger::buildGenesisBlock calls it on first init; validate() calls it per flag.
+    /// Ledger::buildGenesisBlock calls it on first init of a compatibility_version >= 3.18.0
+    /// genesis; validate() calls it per flag.
     void validateDependencies(Flag flag) const;
 
     /// A deprecated flag is still parsed (string2Flag recognizes the name) but drives

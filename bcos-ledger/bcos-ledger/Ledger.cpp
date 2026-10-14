@@ -1815,10 +1815,14 @@ bool Ledger::buildGenesisBlock(
 
         // First-init path only (a restart either returned true above or threw on the
         // pin/stateRoot guards): hold [features] to the governance dependency rules before
-        // ANY genesis write, so a refused config leaves the datadir untouched. Running it on
-        // restart would refuse an initialized chain whose genesis predates a rule. Ethereum
-        // lanes ignore [features].
-        if (!ethLane)
+        // ANY genesis write, so a refused config leaves the datadir untouched. The first-init
+        // path is also taken by a NEW node joining an existing chain (empty datadir), so the
+        // check only applies from compatibility_version 3.18.0, which no released chain
+        // carries: an older genesis that predates a rule (e.g. feature_balance_precompiled
+        // without feature_balance) keeps initializing as it always did. Ethereum lanes ignore
+        // [features].
+        if (!ethLane && genesis.m_compatibilityVersion >=
+                            static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
         {
             Features genesisFeatures;
             genesisFeatures.setGenesisFeatures(

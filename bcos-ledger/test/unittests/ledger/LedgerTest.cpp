@@ -1810,9 +1810,9 @@ BOOST_AUTO_TEST_CASE(genesisV3AllocWithoutFeatureFlagsSlot)
     }());
 }
 
-// [features] in config.genesis is held to the same dependency rules as governance: an EVM fork
-// flag needs the previous fork. The check runs before any genesis write, so the fixed config
-// initializes on the same storage.
+// [features] in a compatibility_version >= 3.18.0 config.genesis is held to the same dependency
+// rules as governance: an EVM fork flag needs the previous fork. The check runs before any
+// genesis write, so the fixed config initializes on the same storage.
 BOOST_AUTO_TEST_CASE(genesisFeaturesRequireEvmForkDependencies)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -1824,7 +1824,7 @@ BOOST_AUTO_TEST_CASE(genesisFeaturesRequireEvmForkDependencies)
             LedgerConfig param;
             GenesisConfig genesisConfig;
             genesisConfig.m_compatibilityVersion =
-                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_17_0_VERSION);
+                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_18_0_VERSION);
             for (auto flag : flags)
             {
                 genesisConfig.m_features.push_back(ledger::FeatureSet{.flag = flag, .enable = 1});
