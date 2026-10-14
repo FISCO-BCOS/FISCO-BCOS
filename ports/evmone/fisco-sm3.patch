@@ -175,8 +175,10 @@ diff --color -ruN a/lib/evmone/baseline_execution.cpp b/lib/evmone/baseline_exec
 diff --color -ruN a/lib/evmone/execution_state.hpp b/lib/evmone/execution_state.hpp
 --- a/lib/evmone/execution_state.hpp	2026-09-23 23:07:43
 +++ b/lib/evmone/execution_state.hpp	2026-10-13 20:36:08
-@@ -163,6 +163,21 @@
-     /// This is the last field to make other fields' offsets of reasonable values.
+@@ -163,6 +163,22 @@
+-    /// This is the last field to make other fields' offsets of reasonable values.
++    /// This is the last core field; only FISCO hook pointers follow it, so the
++    /// offsets of the fields above are unchanged.
      StackSpace stack_space;
  
 +    /// FISCO-BCOS: optional host-provided hash for KECCAK256 (SM3), carried by evmone::VM.
