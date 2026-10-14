@@ -18,5 +18,8 @@
  */
 #define BOOST_TEST_MODULE BcosLeaderElectionTest
 #define BOOST_TEST_MAIN
-#include <boost/test/included/unit_test.hpp>
+// Library mode: the target links Boost::unit_test_framework, which provides the framework
+// and main(). Including the header-only implementation as well defines the same symbols a
+// second time, which lld rejects (GNU ld only tolerated it because it never pulled the
+// archive member). See bcos-devp2p/test/main.cpp.
 #include <boost/test/unit_test.hpp>

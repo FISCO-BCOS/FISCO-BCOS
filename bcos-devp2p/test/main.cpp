@@ -19,5 +19,11 @@
 #define BOOST_TEST_MODULE FISCO_BCOS_Tests
 #define BOOST_TEST_MAIN
 
-#include <boost/test/included/unit_test.hpp>
+// Library mode, like the other 25 test mains in this repository: the target links
+// Boost::unit_test_framework, which provides the framework and main(). Including
+// <boost/test/included/unit_test.hpp> as well defines the whole framework in this
+// translation unit too, so both sides carry the same symbols. GNU ld hid that by never
+// pulling the archive member; lld rejects it ("duplicate symbol:
+// boost::unit_test::framework::..."), and the header-only implementation is also the
+// slowest way to compile a test main.
 #include <boost/test/unit_test.hpp>

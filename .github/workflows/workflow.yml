@@ -25,14 +25,27 @@ jobs:
     permissions:
       contents: write
     env:
-      # ccache lives under the workspace so actions/cache can persist it. The cap is sized
-      # per entry, not per leg: the key carries the run id so a base-branch push/release WRITES
-      # a fresh entry (restore is split from save below — PRs only read, never write), and the
-      # sum over the legs must stay well inside the repo-level 10GB budget (over it GitHub evicts
-      # LRU, which would take the far costlier vcpkg entries first). 4 non-Windows legs x 200M
-      # is ~0.8GB.
+      # ccache lives under the workspace so actions/cache can persist it.
+      # Sized from measurement: compiling all 325 translation units of this project with
+      # the CI's MinSizeRel flags fills 103 MB of ccache (~0.32 MB per TU, ~115 MB for the
+      # ~360 TUs a leg builds). So the 200M the legs used to carry already held about two
+      # revisions' worth; the reason runs were cold is not the cap but that the entries do
+      # not survive - see the Save step for how the write rate is bounded.
+      # 300M keeps room for two or three revisions of every object without competing with
+      # the vcpkg trees for the repository's 10GB budget.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 200M
+      CCACHE_MAXSIZE: 300M
+      # ccache mixes the absolute working directory into its hash, and a fresh checkout
+      # re-stamps every mtime; both differ between runs even when sources are identical.
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_SLOPPINESS: time_macros,include_file_ctime
+      CCACHE_COMPRESS: "true"
+      CCACHE_COMPRESSLEVEL: "1"
+      # One cache per toolchain rather than per matrix entry: the static leg compiles the
+      # exact same objects as the plain x64 leg (BUILD_STATIC only changes archiving and
+      # linking - verified by diffing the two configures' compile commands), so it should
+      # read that leg's entry instead of maintaining a near-identical copy.
+      CCACHE_SCOPE: ${{ matrix.os == 'ubuntu-26.04-static' && 'ubuntu-26.04' || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -41,10 +54,13 @@ jobs:
             ubuntu-26.04,
             ubuntu-26.04-arm,
             # static leg: same gcc-16 toolchain as ubuntu-26.04 but configured with
-            # -DBUILD_STATIC=ON (see "Compute build flags"), so the fully-static
-            # link path used for the release assets is gated by PR CI with the
-            # full unit-test + integration suites instead of being exercised only
-            # on release events
+            # -DBUILD_STATIC=ON and TESTS=OFF (see "Compute build flags"), so the
+            # fully-static link path used for the release assets is gated on every
+            # PR - binaries are built, linked and smoke-tested with the air
+            # integration test - without recompiling the ~250 test translation
+            # units that the other three legs already build and run. The full
+            # static + unit-test gate still runs on release events, where
+            # ubuntu-26.04 itself builds with -DBUILD_STATIC=ON and TESTS=ON.
             ubuntu-26.04-static,
             macos-26,
             windows-2025,
@@ -80,19 +96,29 @@ jobs:
       # warm cache reuses .o across runs and only recompiles the files that actually changed.
       # The key is compiler/OS/arch-scoped (a .o is not portable across those) and deliberately
       # does NOT bind the source tree: ccache already misses on any content change.
-      # The run id makes the PRIMARY key unique per run, so a base-branch push/release always
-      # writes a fresh entry (save is split from restore; PRs only restore). A constant key would
-      # be written once by the first run and then restored, frozen, forever. restore-keys' "v1-"
-      # prefix matches across runs (most recent wins), so a PR warms from the base branch's most
-      # recent entry while the base branch's own save refreshes it.
+      # The bucket is the UTC date: a base-branch push writes at most one entry per scope per
+      # day (save is skipped when the key already exists), instead of a fresh immutable entry
+      # per run per leg. That write rate is what fills the repository's 10GB budget and evicts
+      # the far costlier vcpkg trees; restore-keys' prefix picks up the newest entry whatever
+      # its bucket, so a run still warms from the previous day's cache.
+      - name: Compute ccache bucket
+        id: ccache-bucket
+        if: matrix.os != 'windows-2025'
+        shell: bash
+        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
       - name: Restore ccache
+        id: ccache
         if: matrix.os != 'windows-2025'
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ccache-${{ matrix.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          # The prefix is also scoped by branch: a push writes under its own branch name and a
+          # PR reads under its base branch (github.base_ref), so a master push and a
+          # release-3.18.0 PR stop sharing one baseline. ccache hashes content and flags, so
+          # an entry from the "wrong" branch could only ever be a miss, never a bad object.
+          key: ccache-${{ github.base_ref || github.ref_name }}-${{ env.CCACHE_SCOPE }}-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
           restore-keys: |
-            ccache-${{ matrix.os }}-${{ runner.arch }}-v1-
+            ccache-${{ github.base_ref || github.ref_name }}-${{ env.CCACHE_SCOPE }}-${{ runner.arch }}-v1-
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2025'
         uses: actions/setup-node@v4
@@ -104,7 +130,7 @@ jobs:
           sudo apt update
           sudo apt install -y --no-install-recommends \
               lcov wget python3-dev python3-pip git curl zip unzip tar \
-              clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
+              clang make build-essential libssl-dev zlib1g-dev ca-certificates lld autoconf \
               flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16 ccache
       - name: Install macOS dependencies
         if: matrix.os == 'macos-26'
@@ -135,6 +161,15 @@ jobs:
           if [[ "${GITHUB_EVENT_NAME}" == "release" || "${{ matrix.os }}" == "ubuntu-26.04-static" ]]; then
             EXTRA_FLAGS="-DBUILD_STATIC=ON"
           fi
+          # The static leg gates the LINK path, not the test suite: the same test sources
+          # already compile and run on the three other legs, and compiling ~250 test
+          # translation units cost ~2000s per run to re-verify identical code. TESTS=OFF
+          # leaves the static binaries (fisco-bcos + lightnode) and the air integration test
+          # in place; release events still build the shipped static binaries WITH the full
+          # suites via the ubuntu-26.04 leg (see the release branch of the condition above).
+          if [[ "${{ matrix.os }}" == "ubuntu-26.04-static" ]]; then
+            EXTRA_FLAGS="${EXTRA_FLAGS} -DTESTS=OFF"
+          fi
           # The hive gate job (hive_smoke) reuses this leg's artifact and also
           # needs eth-sync-check (genesis2ini); tools are off by default.
           if [[ "${{ matrix.os }}" == "ubuntu-26.04" ]]; then
@@ -146,13 +181,13 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
         if: matrix.os == 'ubuntu-26.04-arm'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
         if: matrix.os == 'macos-26'
         run: |
@@ -178,8 +213,25 @@ jobs:
         # failed or timed-out build is exactly the run whose numbers are wanted.
         if: always() && matrix.os != 'windows-2025'
         run: ccache --show-stats
+      # Save ccache right after the steps that fill it: nothing later writes to .ccache, and
+      # leaving the save at the end of the job put it behind six E2E gates (EEST, RpcApi,
+      # air, eth-executor, single-node consensus, Engine API) - any one of them flaking would
+      # freeze the baseline cache. The vcpkg save stays at the end of the job because
+      # "Reduce vcpkg cache size" has to strip that tree first.
+      # always() on purpose: ccache entries are content-addressed, so a cache written by a
+      # build that later failed is still valid, and it is the failed runs whose cache we most
+      # want to keep. Only non-PR events write (see the Restore step for the key scoping), and
+      # the static leg never writes: it shares the x64 leg's scope, so writing from both would
+      # put two near-identical entries under one prefix on every push.
+      - name: Save ccache
+        if: always() && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static' && github.event_name != 'pull_request' && steps.ccache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
       - name: Test
-        if: matrix.os != 'windows-2025'
+        # the static leg builds with TESTS=OFF (see "Compute build flags")
+        if: matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
@@ -196,7 +248,8 @@ jobs:
             mv fixtures_stable fixtures
           fi
       - name: Run EEST fixture tests
-        if: matrix.os != 'windows-2025'
+        # the eest-runner is a test target; the static leg builds with TESTS=OFF
+        if: matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
         run: |
           # pipefail so a runner crash (not just a low pass rate) fails the job.
           set -o pipefail
@@ -355,6 +408,7 @@ jobs:
       # never writes: only push (merge to the base branch) and release refresh the entries, and
       # a PR's restore falls back to the base branch's most recent entry via the key prefix.
       # success() keeps a failed build from clobbering a good cache with a partial one.
+      # (The ccache save is earlier, right after the Build step: see there for why.)
       - name: Save vcpkg cache
         if: github.event_name != 'pull_request' && success()
         uses: actions/cache/save@v4
@@ -362,12 +416,6 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.os }}-cache-key-v4
-      - name: Save ccache
-        if: github.event_name != 'pull_request' && matrix.os != 'windows-2025' && success()
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ccache-${{ matrix.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
 
   coverage:
     name: Coverage
@@ -380,10 +428,17 @@ jobs:
       # push event on the base branch (and on a fork that sets the secret).
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
-      # The one job that keeps a large cap: --coverage instrumented objects plus -g are several
-      # times the size of the MinSizeRel objects the other legs cache, and there is a single
-      # coverage key (no matrix fan-out), so it cannot swamp the shared 10GB budget by itself.
-      CCACHE_MAXSIZE: 2G
+      # --coverage instrumented objects plus -g are several times the size of the
+      # MinSizeRel objects the build legs cache, so this job legitimately needs more room
+      # than the 300M the other legs use. 2G was more than a working set can use, though:
+      # each entry came out ~1.4GB and two of them alone held 2.83GB of the shared 10GB
+      # budget, the single largest consumer. With the daily bucket below the job also
+      # writes at most one entry per day instead of one per push.
+      CCACHE_MAXSIZE: 1G
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_SLOPPINESS: time_macros,include_file_ctime
+      CCACHE_COMPRESS: "true"
+      CCACHE_COMPRESSLEVEL: "1"
     steps:
       - uses: actions/checkout@v3
         with:
@@ -403,23 +458,37 @@ jobs:
         with:
           cmakeVersion: 3.28.3
           ninjaVersion: 1.12.1
+      - name: Initialize vcpkg submodule
+        run: git submodule update --init --recursive -- vcpkg
+      - name: Compute vcpkg revision
+        id: vcpkg-revision
+        shell: bash
+        run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Restore vcpkg cache
         uses: actions/cache/restore@v4
         id: vcpkg-cache
         with:
+          # Only the installed tree, like the build legs. Caching the whole vcpkg checkout as
+          # well made this entry 1.58GB instead of ~230MB, and because the old key ignored the
+          # vcpkg revision and ports/**, it could be restored after a baseline or custom-port
+          # change while the unchanged key kept the save from ever refreshing it. Three live
+          # versions of that entry were holding 4.76GB of the repository's 10GB budget, which
+          # evicted other legs' vcpkg entries (a miss costs a ~43 minute dependency rebuild).
           path: |
-            ${{ github.workspace }}/vcpkg
             ${{ github.workspace }}/build/vcpkg_installed
-            !${{ github.workspace }}/vcpkg/.git
-            !${{ github.workspace }}/vcpkg/buildtrees
-            !${{ github.workspace }}/vcpkg/packages
-            !${{ github.workspace }}/vcpkg/downloads
-          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-coverage-cache-key-v2
+      - name: Compute ccache bucket
+        id: ccache-bucket
+        shell: bash
+        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
       - name: Restore ccache
+        id: ccache
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-${{ github.run_id }}
+          # Daily bucket + prefix restore, same as the build matrix: at most one entry per
+          # day, warming from the previous day's otherwise.
+          key: ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
           restore-keys: |
             ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-
       - name: Set up Node.js 20
@@ -431,7 +500,7 @@ jobs:
           sudo apt update
           sudo apt install -y --no-install-recommends \
               lcov wget python3-dev python3-pip git curl zip unzip tar \
-              clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
+              clang make build-essential libssl-dev zlib1g-dev ca-certificates lld autoconf \
               flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16 ccache
       - uses: actions-rs/toolchain@v1
         with:
@@ -441,7 +510,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -529,24 +598,21 @@ jobs:
             build/pr-number.txt
           retention-days: 7
       # Save split from restore: PRs never write, only base-branch push/release refresh.
+      # Keep these two keys byte-identical to the Restore steps above, otherwise the save
+      # writes an entry nothing ever reads.
       - name: Save vcpkg cache
         if: github.event_name != 'pull_request' && success()
         uses: actions/cache/save@v4
         with:
           path: |
-            ${{ github.workspace }}/vcpkg
             ${{ github.workspace }}/build/vcpkg_installed
-            !${{ github.workspace }}/vcpkg/.git
-            !${{ github.workspace }}/vcpkg/buildtrees
-            !${{ github.workspace }}/vcpkg/packages
-            !${{ github.workspace }}/vcpkg/downloads
-          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-coverage-cache-key-v2
       - name: Save ccache
-        if: github.event_name != 'pull_request' && success()
+        if: always() && github.event_name != 'pull_request' && steps.ccache.outputs.cache-primary-key != ''
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-${{ github.run_id }}
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
 
   # Dedicated, lightweight leg for the OP-Stack L2 mode. Kept OUT of the 5-OS
   # `build` matrix on purpose: multiplying that matrix by an l2 dimension would
@@ -563,10 +629,14 @@ jobs:
     permissions:
       contents: read
     env:
-      # Same per-run sizing as the build matrix: 200M x (4 legs) + 200M (here) + 2G (coverage)
-      # stays well inside the 10GB repo budget.
+      # Same sizing as the build matrix: 300M holds two or three revisions of the whole
+      # project (measured working set: 103 MB for 325 TUs).
       CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 200M
+      CCACHE_MAXSIZE: 300M
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_SLOPPINESS: time_macros,include_file_ctime
+      CCACHE_COMPRESS: "true"
+      CCACHE_COMPRESSLEVEL: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -592,11 +662,19 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+      - name: Compute ccache bucket
+        id: ccache-bucket
+        shell: bash
+        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
       - name: Restore ccache
+        id: ccache
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-${{ github.run_id }}
+          # Deliberately NOT branch-scoped, unlike the build matrix: c2-e2e.yml warms the
+          # same prefix, so the nightly run keeps seeding this job's cache. Daily bucket, so
+          # the two of them together still write at most one entry per scope per day.
+          key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
           restore-keys: |
             ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-
       - name: Install linux dependencies
@@ -604,7 +682,7 @@ jobs:
           sudo apt update
           sudo apt install -y --no-install-recommends \
               wget python3-dev python3-pip git curl zip unzip tar \
-              clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
+              clang make build-essential libssl-dev zlib1g-dev ca-certificates lld autoconf \
               flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16 ccache
       - name: Install Foundry
         # WITH_L2_CONTRACTS=ON does find_program(FORGE forge REQUIRED) at
@@ -619,7 +697,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -660,11 +738,11 @@ jobs:
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
       - name: Save ccache
-        if: github.event_name != 'pull_request' && success()
+        if: always() && github.event_name != 'pull_request' && steps.ccache.outputs.cache-primary-key != ''
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-${{ github.run_id }}
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
 
   # Full-stack C2 devnet e2e. Reuses the fisco-bcos binary built by
   # l2_unit_suites (artifact) so this job skips vcpkg configure + C++ build.

@@ -32,7 +32,9 @@ jobs:
       - name: configure
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
       - name: compile
-        run: make -j2 && make tar
+        # -j2 left most of the runner idle: this job is a Release (-O3) build of the whole
+        # project, so use every core the runner has.
+        run: make -j"$(sysctl -n hw.ncpu)" && make tar
       - name: tar BcosBuilder
         run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
       - name: tar fisco-bcos for macOS
