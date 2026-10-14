@@ -41,8 +41,9 @@ consensus_role()
 }
 
 # wait_status_ok <node_dir> <seconds>: poll `status` until it exits 0 with every check ok;
-# an idle chain flaps consensus_stable for a few seconds around each consensus-timeout view
-# change, so one failing snapshot is not a verdict
+# a fresh chain stays in timeout until its first block, and until #5643 every block is followed
+# by one consensus-timeout view change about one timeout later, so one failing snapshot is not a
+# verdict
 wait_status_ok()
 {
     local node_dir="${1}"
