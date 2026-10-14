@@ -42,7 +42,7 @@ scenario_4_block_tx()
     assert_jq "${proofs}" '.proofs[0].receiptProof | length > 0' "--proof receiptProof" || return 1
 
     local group code abi
-    group=$(chain_group_id "${node_dir}")
+    group=$(chain_group_id "${node_dir}") || return 1
     code=$(ops "${node_dir}" attach getCode "[\"${group}\",\"\",\"${contract}\"]") || return 1
     assert_jq "${code}" 'startswith("0x") and length > 2' "getCode of HelloWorld" || return 1
     abi=$(ops "${node_dir}" attach getABI "[\"${group}\",\"\",\"${contract}\"]") || return 1

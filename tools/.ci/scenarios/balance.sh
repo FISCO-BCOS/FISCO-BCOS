@@ -24,10 +24,12 @@ scenario_8_balance()
     features=$(ops "${node_dir}" sysconfig features) || return 1
     assert_jq "${features}" 'map(select(.name == "feature_balance" or .name == "feature_balance_precompiled") | .enabled) == [true, true]' \
         "feature_balance and feature_balance_precompiled on" || return 1
-    local other
+    local other created
     local sm_flag=""
     [[ "${chain}" == "sm" ]] && sm_flag="--sm"
-    other=$("${fisco_bcos_path}" account new ${sm_flag} --out "$(dirname "${node_dir}")/../scenario8-acct" --json | jq -r .address) || return 1
+    # capture, then parse: in a pipe the exit code is jq's, which is 0 on empty input
+    created=$("${fisco_bcos_path}" account new ${sm_flag} --out "$(dirname "${node_dir}")/../scenario8-acct" --json) || return 1
+    other=$(jq -r .address <<<"${created}")
     # a system config value applies from the block after the one that set it, and a read-only
     # call runs against the current head: the first transaction (add) lands in a block where
     # both flags are on, the list-caller call after it sees the registered precompiled
