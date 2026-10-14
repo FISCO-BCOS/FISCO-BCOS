@@ -30,7 +30,7 @@ jobs:
       - name: install macOS dependencies
         run: brew install ccache libomp gmp
       - name: configure
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DWITH_LIGHTNODE=ON -DWITH_TARS_SERVICES=ON
       - name: compile
         run: make -j2 && make tar
       - name: tar BcosBuilder
@@ -70,6 +70,11 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosGatewayService binaries to release
+        # Disabled: the appleclang build of BcosGatewayService crashes in static init (tarscpp's
+        # TC_Logger<>::LN is constant-initialized into a read-only section by
+        # GatewayInitializer.cpp while libtarsservant.a initializes it dynamically). Re-enable
+        # once that is fixed.
+        if: false
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
