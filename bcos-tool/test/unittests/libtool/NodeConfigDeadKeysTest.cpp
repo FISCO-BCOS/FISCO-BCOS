@@ -15,7 +15,7 @@
  *
  * @file NodeConfigDeadKeysTest.cpp
  * @brief keys that no longer have an effect: the node starts and NodeConfig::deadKeys() lists
- * each present key once; keys a lane merely does not use are not listed.
+ * each present key once; config.ini keys a lane merely does not use are not listed.
  */
 
 #include "EthLaneGenesisFixture.h"
@@ -39,9 +39,9 @@ using Keys = std::vector<std::string>;
 
 std::string genesisFor(int version, std::string const& compat = "3.18.0")
 {
+    // [version] is a v0/v1 key; v2/v3 list it as dead
     std::string genesis =
-        "[version]\ncompatibility_version=" + compat +
-        "\n"
+        (version < 2 ? "[version]\ncompatibility_version=" + compat + "\n" : std::string()) +
         "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=" +
         std::string(version >= 2 ? "11155420" : "chain0") +
         "\n"
@@ -161,12 +161,49 @@ BOOST_AUTO_TEST_CASE(genesisDeadKeysAreListedOnTheirLanes)
                         "config.genesis [executor] evm_revision_forks",
                         "config.genesis [op_fork_schedule]"}));
     }
-    // v0/v1 never had the 3.18 keys: ignored without a WARN.
+    // v0/v1 no longer read evm_revision: listed. [ethereum] mode and [op_fork_schedule] stay
+    // silent.
     auto v1 = starts(timeout(genesisFor(1)) + c_evmRevision + c_removed, "");
-    BOOST_CHECK(v1->deadKeys() == Keys{"config.genesis [consensus] consensus_timeout"});
+    BOOST_CHECK(v1->deadKeys() == (Keys{"config.genesis [consensus] consensus_timeout",
+                                      "config.genesis [executor] evm_revision",
+                                      "config.genesis [executor] evm_revision_forks"}));
 }
 
-// Keys another lane reads are silently ignored on a lane without a use for them: no entry.
+// v2/v3 genesis: the v0/v1 sections a migrated config.genesis still carries are listed.
+BOOST_AUTO_TEST_CASE(v01GenesisSectionsAreListedOnEthLanes)
+{
+    for (int version : {2, 3})
+    {
+        auto cfg = starts("[version]\ncompatibility_version=3.18.0\n" + genesisFor(version) +
+                              laneSections(version) +
+                              "[web3]\nchain_id=20200\n[features]\nfeature_evm_cancun=1\n",
+            "");
+        BOOST_CHECK(cfg->deadKeys() == (Keys{"config.genesis [web3]", "config.genesis [version]",
+                                           "config.genesis [features]"}));
+    }
+}
+
+// [debug] block parameters without [debug] enable=true are listed; with it they are live.
+BOOST_AUTO_TEST_CASE(debugSelfProduceKeysNeedEnable)
+{
+    constexpr auto c_params =
+        "block_interval=500\nproduce_empty_blocks=false\n"
+        "fee_recipient=0x0000000000000000000000000000000000000001\nprev_randao=\n"
+        "fixed_timestamp=1\n";
+    BOOST_CHECK(starts(genesisFor(1), std::string("[debug]\n") + c_params)->deadKeys() ==
+                (Keys{"config.ini [debug] block_interval",
+                    "config.ini [debug] produce_empty_blocks", "config.ini [debug] fee_recipient",
+                    "config.ini [debug] prev_randao", "config.ini [debug] fixed_timestamp"}));
+    for (int version : {1, 2})
+    {
+        auto cfg = starts(genesisFor(version) + laneSections(version),
+            std::string("[debug]\nenable=true\n") + c_params);
+        BOOST_CHECK(cfg->deadKeys().empty());
+        BOOST_CHECK_EQUAL(cfg->debugBlockInterval(), 500U);
+    }
+}
+
+// config.ini keys another lane reads are silently ignored on a lane without a use for them.
 BOOST_AUTO_TEST_CASE(laneMismatchKeysAreNotListed)
 {
     // v1: the Engine API listener and the v2/v3 devp2p network keys
@@ -185,15 +222,6 @@ BOOST_AUTO_TEST_CASE(laneMismatchKeysAreNotListed)
         "[ethereum]\ndeposit_contract_address=0x7f02c3e3c98b133055b8b348b2ac625669182295\n")
             ->deadKeys()
             .empty());
-    // v2/v3 genesis: [web3], [features] and [version] belong to v0/v1
-    for (int version : {2, 3})
-    {
-        BOOST_CHECK(starts(genesisFor(version) + laneSections(version) +
-                               "[web3]\nchain_id=20200\n[features]\nfeature_evm_cancun=1\n",
-            "")
-                ->deadKeys()
-                .empty());
-    }
 }
 
 // [web3_rpc] enable_miner_api is not dead: op-batcher reaches miner_setMaxDASize through the

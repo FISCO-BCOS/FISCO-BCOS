@@ -215,8 +215,10 @@ uint64_t parseForkTimestamp(
 }
 
 // Keys a stored config may still carry that no code reads any more. Each one present gets one
-// WARN at load (recordDeadKeys) and the node starts. Keys a lane does not use but another lane
-// does are NOT here: they are silently ignored on the lane that has no use for them.
+// WARN at load (recordDeadKeys) and the node starts. config.ini keys a lane does not use but
+// another lane does are NOT here: one config.ini template serves every lane, so they are
+// silently ignored on the lane that has no use for them. config.genesis is per chain, so its
+// other-lane keys are listed (c_deadEthLaneGenesisKeys, c_deadV01LaneGenesisKeys).
 struct DeadKey
 {
     std::string_view section;
@@ -266,12 +268,33 @@ constexpr std::array c_deadGenesisKeys{
     DeadKey{"consensus", "consensus_timeout", "config.ini [consensus] checkpoint_timeout"},
 };
 
-// config.genesis keys of the 3.18 development line that v2/v3 no longer read.
+constexpr auto c_ethLaneForkReplacement = "[fork_timestamps] (v2) / [op_fork_timestamps] (v3)";
+
+// config.genesis keys v2/v3 do not read: the 3.18 development-line keys and the v0/v1 sections.
 constexpr std::array c_deadEthLaneGenesisKeys{
     DeadKey{"ethereum", "mode", c_ethereumModeReplacement},
-    DeadKey{"executor", "evm_revision", "[fork_timestamps] (v2) / [op_fork_timestamps] (v3)"},
-    DeadKey{"executor", "evm_revision_forks", "[fork_timestamps] (v2) / [op_fork_timestamps] (v3)"},
+    DeadKey{"executor", "evm_revision", c_ethLaneForkReplacement},
+    DeadKey{"executor", "evm_revision_forks", c_ethLaneForkReplacement},
     DeadKey{"op_fork_schedule", "", "[op_fork_timestamps]"},
+    DeadKey{"web3", "", "[chain] chain_id"},
+    DeadKey{"version", "", "none: v2/v3 run on a fixed compatibility version"},
+    DeadKey{"features", "", c_ethLaneForkReplacement},
+};
+
+// config.genesis keys the 3.18 development line parsed (and pinned) on every lane; v0/v1 no
+// longer read them.
+constexpr std::array c_deadV01LaneGenesisKeys{
+    DeadKey{"executor", "evm_revision", "none: v0/v1 follow [version] and [features]"},
+    DeadKey{"executor", "evm_revision_forks", "none: v0/v1 follow [version] and [features]"},
+};
+
+// [debug] block parameters that only the DebugSelfProduce driver reads.
+constexpr std::array c_debugSelfProduceKeys{
+    DeadKey{"debug", "block_interval", "[debug] enable=true"},
+    DeadKey{"debug", "produce_empty_blocks", "[debug] enable=true"},
+    DeadKey{"debug", "fee_recipient", "[debug] enable=true"},
+    DeadKey{"debug", "prev_randao", "[debug] enable=true"},
+    DeadKey{"debug", "fixed_timestamp", "[debug] enable=true"},
 };
 
 // WARN once for each key of `table` present in `pt`; returns them as "<file> [section] key".
@@ -421,12 +444,10 @@ void NodeConfig::loadConfig(
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
     m_deadGenesisKeys = recordDeadKeys(_genesisConfig, c_deadGenesisKeys, "config.genesis");
-    if (isEthereumLaneGenesis(_genesisConfig))
-    {
-        auto ethLaneKeys =
-            recordDeadKeys(_genesisConfig, c_deadEthLaneGenesisKeys, "config.genesis");
-        m_deadGenesisKeys.insert(m_deadGenesisKeys.end(), ethLaneKeys.begin(), ethLaneKeys.end());
-    }
+    auto laneKeys = isEthereumLaneGenesis(_genesisConfig) ?
+                        recordDeadKeys(_genesisConfig, c_deadEthLaneGenesisKeys, "config.genesis") :
+                        recordDeadKeys(_genesisConfig, c_deadV01LaneGenesisKeys, "config.genesis");
+    m_deadGenesisKeys.insert(m_deadGenesisKeys.end(), laneKeys.begin(), laneKeys.end());
     // if version >= 3.1.0, genesisBlock include chainConfig
     m_genesisConfig.m_compatibilityVersion = genesisCompatibilityVersion(_genesisConfig);
     if (m_genesisConfig.m_compatibilityVersion >=
@@ -1381,6 +1402,11 @@ void NodeConfig::loadDebugConfig(boost::property_tree::ptree const& _pt)
         _pt.get<std::string>("debug.fee_recipient", "0x0000000000000000000000000000000000000000");
     m_debugPrevRandao = _pt.get<std::string>("debug.prev_randao", "");
     m_debugFixedTimestamp = _pt.get<std::uint64_t>("debug.fixed_timestamp", 0);
+    if (!m_debugEnable)
+    {
+        auto unused = recordDeadKeys(_pt, c_debugSelfProduceKeys, "config.ini");
+        m_deadConfigKeys.insert(m_deadConfigKeys.end(), unused.begin(), unused.end());
+    }
     if (m_debugEnable)
     {
         NodeConfig_LOG(WARNING) << LOG_DESC(

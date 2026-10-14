@@ -54,8 +54,9 @@ enum class V2Fork
 
 std::string genesisFor(int version, V2Fork v2Fork = V2Fork::Timestamps)
 {
+    // [version] is a v0/v1 key; v2/v3 list it as dead
     std::string genesis =
-        "[version]\ncompatibility_version=3.18.0\n"
+        std::string(version < 2 ? "[version]\ncompatibility_version=3.18.0\n" : "") +
         "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=" +
         std::string(version >= 2 ? "11155420" : "chain0") +
         "\n"

@@ -167,5 +167,5 @@ if [ -d /blocks ] && [ -n "$(ls -A /blocks 2>/dev/null)" ]; then
 fi
 
 # ------------------------------------------------------------------- exec ----
-echo "starting fisco-bcos (chain id ${CHAIN_ID})" >&2
+echo "starting fisco-bcos" >&2
 exec fisco-bcos -c config.ini -g config.genesis
