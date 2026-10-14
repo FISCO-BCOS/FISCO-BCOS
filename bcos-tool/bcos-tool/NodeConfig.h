@@ -49,11 +49,10 @@ enum class BlockDriver : std::uint8_t
     DebugFollowDevp2p,  // OP lane only: download, verify and commit op-geth blocks over devp2p
 };
 
-/// Field set of an authenticated Engine API listener section ([engine_rpc]; [op_engine_rpc]
-/// on executor.version < 3 until the v2 Engine paths merge).
+/// Field set of the authenticated Engine API listener section ([engine_rpc]). It has no enable
+/// key: the listener runs whenever blockDriver() is Engine.
 struct EngineRpcConfig
 {
-    bool enable = false;
     std::string listenIP = "127.0.0.1";
     int listenPort = 8551;
     int requestBodySizeLimit = 10485760;
@@ -86,7 +85,6 @@ public:
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadEngineRpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadDebugConfig(boost::property_tree::ptree const& _pt);
 
@@ -246,17 +244,15 @@ public:
     size_t tbbThreadCount() const;
 
     // Who decides the next block. OP lane (executor.version >= 3): Engine, or
-    // DebugFollowDevp2p under [debug] follow_devp2p. v0..v2 (unchanged until the v2 Engine
-    // paths merge): DebugSelfProduce under [consensus] enable_single_node_consensus, Engine
-    // under [op_engine_rpc] enable or [ethereum] mode=el, else PBFT. Throws InvalidConfig for
-    // a combination the lane refuses (follow_devp2p off the OP lane; single-node consensus or
-    // [op_engine_rpc] on the OP lane). Reads both files: call it after both are loaded.
+    // DebugFollowDevp2p under [debug] follow_devp2p. v2: DebugSelfProduce under [consensus]
+    // enable_single_node_consensus, else Engine. v0/v1: DebugSelfProduce under the same key,
+    // else PBFT. Throws InvalidConfig for a combination the lane refuses (follow_devp2p off
+    // the OP lane; single-node consensus on the OP lane). Reads both files: call it after
+    // both are loaded.
     BlockDriver blockDriver() const;
 
-    // Engine API listener. servesEngineApi(): the OP lane runs it whenever the driver is
-    // Engine; v0..v2 run it under [op_engine_rpc] enable or [engine_rpc] enable.
-    // engineApiListener() is the section it reads: [engine_rpc] on the OP lane; on v0..v2
-    // [op_engine_rpc] when that is enabled, else [engine_rpc].
+    // Engine API listener: runs whenever blockDriver() is Engine and reads [engine_rpc].
+    // The lane decides the method set it serves (v2: the L1 Engine API, v3: OpEngineService).
     bool servesEngineApi() const;
     EngineRpcConfig const& engineApiListener() const;
     // the OP miner namespace (miner_setMaxDASize) on the Engine API listener: [engine_rpc]
@@ -266,23 +262,11 @@ public:
     bool enableMinerApi() const;
     // the geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload), scoped
     // per listener like miner. Off by default: it serves the fault-proof preimage oracle
-    // (kona-host), not general clients. engineApiDebugApi() gates the Engine API listener:
-    // [engine_rpc] enable_debug_api on the OP lane, [op_engine_rpc] enable_debug_api on
-    // v0..v2 when that listener is enabled. enableDebugApi() gates the web3 listener
-    // ([web3_rpc] enable_debug_api); neither reaches the other port.
+    // (kona-host), not general clients. engineApiDebugApi() gates the Engine API listener
+    // ([engine_rpc] enable_debug_api), enableDebugApi() the web3 listener ([web3_rpc]
+    // enable_debug_api); neither reaches the other port.
     bool engineApiDebugApi() const;
     bool enableDebugApi() const;
-    // the parsed sections as written, for the v0..v2 assembly gates and the loader tests
-    EngineRpcConfig const& engineRpcConfig() const;
-    EngineRpcConfig const& opEngineRpcConfig() const;
-    bool enableOpEngineRpc() const;
-    // test-only escape hatch: allow [op_engine_rpc] to serve the v1 EngineService on
-    // executor_version < 2 (the v1 Engine API integration harness drives it over this
-    // endpoint); production configs must never set it
-    bool opEngineAllowV1Executor() const;
-    // [engine_rpc] enable: read on v0..v2, where it requires ethereum.mode=el; the OP lane's
-    // [engine_rpc] has no enable key
-    bool enableEngineRpc() const;
 
     // single-node consensus configurations
     bool enableSingleNodeConsensus() const;
@@ -292,10 +276,11 @@ public:
     const std::string& singleNodeConsensusPrevRandao() const;
     std::uint64_t singleNodeConsensusFixedTimestamp() const;
 
-    // Ethereum L1 EL-mode (self-sync) configurations ([ethereum] in config.ini).
-    // mode=el runs the node as an Ethereum execution-layer client: it downloads blocks
-    // from RLPx bootnodes, verifies them with EthereumBlockVerifier and commits them
-    // locally — no FISCO gateway / PBFT / txpool pipeline.
+    // Ethereum L1 EL mode: executor.version=2 under the Engine driver (derived from
+    // blockDriver(), nothing configures it). The node is an Ethereum execution-layer client:
+    // devp2p sync ([ethereum] network keys; no bootnodes = no peers) and the Engine API run
+    // side by side, both committing through EthereumBlockVerifier — no FISCO gateway / PBFT /
+    // txpool pipeline.
     bool ethereumELModeEnabled() const;
     // [ethereum] op_block_time_seconds: the OP chain's block cadence in seconds (rollup.json
     // block_time; 2 on every superchain chain). Feeds the header validator's soft
@@ -514,11 +499,11 @@ private:
     void validateL2Invariants();
 
 public:
-    // Cross-file invariants: blockDriver()'s lane refusals, the lane-dependent [engine_rpc]
-    // enable and OP-lane mpt_prune_window gates, and config.ini ethereum.mode=el backed by
-    // the genesis [ethereum] mode=el declaration. Reads BOTH files' members, so the node
-    // initializers call it after both are loaded — deliberately NOT part of the config.ini
-    // loaders, because tools load config.ini before config.genesis.
+    // Cross-file invariants: blockDriver()'s lane refusals, the v2 Engine driver's
+    // [fork_timestamps], the OP-lane mpt_prune_window gate, eest_replay_mode's lane and the EL
+    // reorg/prune window pairing. Reads BOTH files' members, so the node initializers call it
+    // after both are loaded — deliberately NOT part of the config.ini loaders, because tools
+    // load config.ini before config.genesis.
     void validateELModeInvariants() const;
 
 private:
@@ -674,11 +659,9 @@ private:
     size_t m_ioThreadCount{};
     size_t m_tbbThreadCount{};
 
-    // config for the Engine API listener sections
-    EngineRpcConfig m_opEngineRpc;
+    // config for the Engine API listener ([engine_rpc])
     bool m_enableMinerApi = false;
     bool m_enableDebugApi = false;
-    bool m_opEngineAllowV1Executor = false;
     EngineRpcConfig m_engineRpc;
 
     // config for the hidden [debug] section (blockDriver())
@@ -707,7 +690,6 @@ private:
     std::uint32_t m_treeWidth = 3;
 
     // config for Ethereum L1 EL-mode self-sync ([ethereum] in config.ini)
-    bool m_enableEthereumEL = false;
     uint64_t m_opBlockTimeSeconds = 2;
     uint64_t m_opSyncLagBlocks = 64;
     std::string m_ethereumBootnodesFile = "./bootnodes.json";

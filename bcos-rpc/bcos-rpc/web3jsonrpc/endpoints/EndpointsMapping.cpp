@@ -51,7 +51,7 @@ void EndpointsMapping::addHandlers(bool enableOPEngine, bool enableMinerApi, boo
     addNetHandlers();
     addWeb3Handlers();
     // The debug namespace serves the fault-proof preimage oracle and is opt-in per listener
-    // ([op_engine_rpc] / [web3_rpc] enable_debug_api), mirroring the miner-namespace gate.
+    // ([engine_rpc] / [web3_rpc] enable_debug_api), mirroring the miner-namespace gate.
     if (enableDebugApi)
     {
         addDebugHandlers();

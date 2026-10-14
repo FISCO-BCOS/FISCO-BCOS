@@ -49,9 +49,9 @@ public:
 
     virtual void init(std::string const& _configFilePath, std::string const& _genesisFile);
     virtual void init(bcos::initializer::Params const& _params);
-    // Validate the command-line EL-mode mirrors against the loaded NodeConfig (config file is
-    // the source of truth): --el must agree with [ethereum].mode and --bootnodes must agree
-    // with [ethereum].bootnodes_file. Throws on conflict.
+    // Validate the command-line --bootnodes mirror against the loaded NodeConfig (config file
+    // is the source of truth): it must agree with [ethereum].bootnodes_file. Throws on
+    // conflict.
     virtual void validateEthereumELParams(
         bcos::initializer::Params const& _params, bcos::tool::NodeConfig const& _nodeConfig);
     virtual void start();
@@ -62,8 +62,8 @@ public:
     /// caller exits 0 and the entrypoint starts the node normally, or exits 1
     /// when nothing could be imported on a fresh ledger (imported == 0,
     /// skipped > 0, head never advanced past genesis). Throws on hard
-    /// errors (bad path, malformed RLP framing, non-EL config); per-block failures
-    /// are logged and skipped. Ethereum L1 EL mode (executor v2) only.
+    /// errors (bad path, malformed RLP framing, executor.version != 2); per-block
+    /// failures are logged and skipped. executor.version=2 (the L1 EL lane) only.
     virtual bcos::initializer::BlockImportSummary importEthereumBlocks(std::string const& _path);
     virtual bcos::initializer::Initializer::Ptr nodeInitializer() { return m_nodeInitializer; }
 
@@ -87,7 +87,8 @@ private:
     std::optional<std::string> m_tarsConfig;
     std::optional<std::thread> m_tarsThread;
 
-    // Ethereum L1 EL-mode self-sync driver (only set when [ethereum] mode=el).
+    // Ethereum L1 EL-mode self-sync driver (only set in EL mode: executor.version=2
+    // under the Engine driver).
     std::shared_ptr<bcos::initializer::EthereumSyncInitializer> m_ethereumSync;
     // The NodeService built in init(config, genesis), kept weak so the EL wiring in
     // init(params) — which runs AFTER that — can still hang the tx-gossip announce hook

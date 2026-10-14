@@ -105,7 +105,6 @@ NodeConfig loadGenesis(std::string const& genesis)
 BOOST_AUTO_TEST_CASE(opGenesisLoadsWithoutADriverDeclaration)
 {
     auto cfg = loadGenesis(opStackELGenesis());
-    BOOST_CHECK(!cfg.genesisConfig().m_ethereumELMode);
     BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 11155420u);
 
     BOOST_REQUIRE(cfg.ledgerConfig());
@@ -151,7 +150,7 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresEthLaneGenesisShape)
         [](auto const& e) { return errinfoContains(e, "requires a non-empty [alloc.*] section"); });
 }
 
-// Same rule as mode=el: no silent mainnet fallback for the chain id the fork-id
+// Same rule as the L1 EL lane: no silent mainnet fallback for the chain id the fork-id
 // handshake and EIP-1559 validation key on.
 BOOST_AUTO_TEST_CASE(opStackELRequiresChainId)
 {
@@ -174,31 +173,15 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresChainId)
         [](auto const& e) { return errinfoContains(e, "[chain].chain_id must fit uint64"); });
 }
 
-// Invalid mode values fail fast like every neighbouring parse; opstack-el is no longer a
-// value (NodeConfigBlockDriverTest asserts its replacement message).
-BOOST_AUTO_TEST_CASE(opStackELInvalidModeRejected)
-{
-    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(
-        cfg.loadGenesisConfigFromString(opStackELGenesis() + "[ethereum]\nmode=opstack\n"),
-        InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "[ethereum].mode invalid: \"opstack\" (supported: none, el)");
-        });
-    NodeConfig iniCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(iniCfg.loadConfigFromString("[ethereum]\nmode=opstack\n"), InvalidConfig,
-        [](auto const& e) { return errinfoContains(e, "ethereum.mode invalid"); });
-}
-
-// config.ini ethereum.mode=el on an OP genesis: an el declaration needs an el genesis, and
-// the OP lane's genesis cannot carry one (mode=el requires executor.version=2).
-BOOST_AUTO_TEST_CASE(elModeIniOnOpGenesisRejected)
+// [ethereum] mode is not read: config.ini mode=el on an OP genesis leaves the node on the OP
+// Engine driver, not the L1 EL mode.
+BOOST_AUTO_TEST_CASE(elModeIniOnOpGenesisNotRead)
 {
     auto cfg = loadGenesis(opStackELGenesis());
     BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=el\n"));
-    BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-        return errinfoContains(
-            e, "ethereum.mode=el requires config.genesis to declare [ethereum] mode=el");
-    });
+    BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+    BOOST_CHECK(cfg.blockDriver() == BlockDriver::Engine);
+    BOOST_CHECK(!cfg.ethereumELModeEnabled());
 }
 
 // [ethereum] op_block_time_seconds: the OP chain's block cadence, default 2 (every

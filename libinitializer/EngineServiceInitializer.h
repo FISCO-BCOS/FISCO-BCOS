@@ -36,11 +36,11 @@ namespace bcos::initializer
 {
 /// Wires the Engine API (forkchoiceUpdated / getPayload / newPayload) to a scheduler +
 /// executor pipeline. Called from Initializer when engine-driven block production is enabled:
-///   * build(...)   → EthEngineService (executor_version==2 + single-node consensus or
-///   op_engine_rpc, and also the executor_version<2 engineApiForV1Only escape, which boots
-///   the same service over the v1 TransactionExecutorImpl)
+///   * build(...)   → EthEngineService (executor_version==2 under the Engine driver or
+///   single-node consensus; also built on executor_version<2 over the v1
+///   TransactionExecutorImpl, where only single-node consensus drives it)
 ///   * buildOp(...) → OpEngineService (executor_version==3, the genesis-frozen OPSTACK slot)
-/// executor_version alone does not enable the Engine API on v2 chains. Both lanes bypass
+/// Both lanes bypass
 /// MultiVersionScheduler's publishing wrapper, so each keeps the LedgerConfigState holder
 /// current itself — transaction admission reads it and nowhere else: build() hands the holder
 /// to EthEngineService, which republishes after every durable commit; buildOp() does not take

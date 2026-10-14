@@ -25,7 +25,7 @@
 #   /genesis.json  (mandatory) geth-format genesis
 #   /chain.rlp     (optional)  concatenated RLP blocks to import before startup
 #   /blocks/       (optional)  directory of *.rlp blocks, imported in name order
-#   /jwtsecret     (optional)  Engine API JWT secret; presence enables 8551
+#   /jwtsecret     (optional)  Engine API JWT secret for 8551 (a random one when absent)
 set -u
 
 # The EL executor's stackless-coroutine await chain accumulates one resume
@@ -112,15 +112,13 @@ if [ ! -f node.rlpx.key ]; then
 fi
 
 # --------------------------------------------------------------- bootnodes ----
-# validateNodeConfig requires a non-empty enode list; with no HIVE_BOOTNODE a
-# syntactically valid but unreachable placeholder keeps the (autonomous) sync
-# loop idle — connection failures are transient and only log WARNINGs.
+# With no HIVE_BOOTNODE the list is empty: devp2p runs with no peers and the
+# Engine API alone drives the chain.
 if [ -n "${HIVE_BOOTNODE:-}" ]; then
     BOOTNODES=$(printf '%s' "${HIVE_BOOTNODE}" | tr -s ' ,' '\n' | grep -v '^$' \
         | jq -R . | jq -s .)
 else
-    # secp256k1 generator point as pubkey, port 1 = unreachable
-    BOOTNODES='["enode://79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8@127.0.0.1:1"]'
+    BOOTNODES='[]'
 fi
 printf '%s\n' "${BOOTNODES}" > bootnodes.json
 
@@ -134,16 +132,16 @@ case "${HIVE_LOGLEVEL:-3}" in
     *) LOG_LEVEL=trace ;;
 esac
 
-# Engine API: enabled when the simulator mounted a JWT secret (engine suites).
-ENGINE_ENABLED=false
+# Engine API: always served; the simulator's secret when it mounted one (engine
+# suites), else a random one nobody holds.
 if [ -f /jwtsecret ]; then
     tr -d '[:space:]' < /jwtsecret > conf/engine/jwt.hex
-    ENGINE_ENABLED=true
+else
+    openssl rand -hex 32 > conf/engine/jwt.hex
 fi
 
 sed -e "s/__CHAIN_ID__/${CHAIN_ID}/g" \
     -e "s/__LOG_LEVEL__/${LOG_LEVEL}/g" \
-    -e "s/__ENGINE_ENABLED__/${ENGINE_ENABLED}/g" \
     /bcos/config.ini.tpl > /bcos/config.ini
 
 echo '{"nodes":[]}' > nodes.json
@@ -173,5 +171,5 @@ if [ -d /blocks ] && [ -n "$(ls -A /blocks 2>/dev/null)" ]; then
 fi
 
 # ------------------------------------------------------------------- exec ----
-echo "starting fisco-bcos (chain id ${CHAIN_ID}, engine api: ${ENGINE_ENABLED})" >&2
+echo "starting fisco-bcos (chain id ${CHAIN_ID})" >&2
 exec fisco-bcos -c config.ini -g config.genesis

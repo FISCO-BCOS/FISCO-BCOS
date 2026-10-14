@@ -2,7 +2,7 @@
 
 This directory contains the [hive](https://github.com/ethereum/hive) client
 definition for running the FISCO-BCOS Ethereum L1 EL-mode node
-(`[ethereum] mode=el`, executor v2) against the official Ethereum cross-client
+(config.genesis `[executor] version=2`) against the official Ethereum cross-client
 test suites.
 
 ## Layout
@@ -88,10 +88,10 @@ The entrypoint:
    `eth-sync-check --genesis2ini` (alloc MPT state root and the
    `[eth_genesis_header]` hash are computed by the tool and verified by the
    node on load);
-2. maps `HIVE_BOOTNODE` onto the devp2p bootnodes file (a placeholder enode
-   keeps the autonomous sync loop idle when no peer is injected);
-3. enables the Engine API listener (8551, JWT) when the simulator mounted
-   `/jwtsecret`;
+2. maps `HIVE_BOOTNODE` onto the devp2p bootnodes file (an empty list when no
+   peer is injected: devp2p then has no peers);
+3. writes the Engine API listener's JWT secret (8551, always served): the
+   simulator's `/jwtsecret` when mounted, else a random one;
 4. imports `/chain.rlp` then `/blocks/` via
    `fisco-bcos --import-blocks <path>` — invalid blocks are skipped, so the
    best block after startup is the last valid imported block. The import
@@ -131,7 +131,7 @@ The entrypoint:
   genesis fixtures are served byte-exactly — only executing pre-London blocks
   is unsupported (the EVM revision floor is London).
 - ~~**Empty alloc**~~ (fixed): `NodeConfig::validateL2Invariants` now exempts the
-  L1 EL lane (`[ethereum] mode=el`) from the non-empty-alloc invariant — an
+  L1 EL lane (`[executor] version=2`) from the non-empty-alloc invariant — an
   empty-alloc genesis publishes the canonical empty-trie root as its stateRoot
   (`Ledger::buildGenesisBlock`, matching geth byte-exactly) — and
   `--genesis2ini` converts an `alloc: {}` genesis instead of rejecting it. The

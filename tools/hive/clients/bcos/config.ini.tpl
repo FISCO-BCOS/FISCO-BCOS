@@ -1,7 +1,8 @@
 ; ============================================================================
-; FISCO-BCOS hive client node configuration (config.ini) — Ethereum L1 EL mode.
-; Instantiated by bcos.sh: __CHAIN_ID__, __LOG_LEVEL__, __ENGINE_ENABLED__
-; are substituted from the hive environment before the node starts.
+; FISCO-BCOS hive client node configuration (config.ini) — Ethereum L1 EL mode
+; (config.genesis executor.version=2: devp2p sync and the Engine API both run).
+; Instantiated by bcos.sh: __CHAIN_ID__ and __LOG_LEVEL__ are substituted from
+; the hive environment before the node starts.
 ;
 ; DISPOSABLE TEST PROFILE: RPC and the Engine API bind to 0.0.0.0 with
 ; wide-open CORS and no authentication — correct inside a throwaway hive
@@ -14,10 +15,8 @@
     gateway=chain0
 
 [ethereum]
-    mode=el
-    ; written by bcos.sh from HIVE_BOOTNODE (placeholder enode when unset —
-    ; validateNodeConfig requires a non-empty list; hive testnets inject peers
-    ; via the simulator instead)
+    ; written by bcos.sh from HIVE_BOOTNODE (an empty list when unset: devp2p
+    ; then has no peers; hive testnets inject peers via the simulator instead)
     bootnodes_file=./bootnodes.json
     node_key_file=./node.rlpx.key
     max_batch_size=192
@@ -37,8 +36,8 @@
     chain_id=__CHAIN_ID__
 
 [engine_rpc]
-    ; enabled by bcos.sh when the simulator mounted a JWT secret at /jwtsecret
-    enable=__ENGINE_ENABLED__
+    ; always served on executor.version=2; bcos.sh writes the simulator's
+    ; /jwtsecret here (or a random secret when none is mounted)
     listen_ip=0.0.0.0
     listen_port=8551
     jwt_secret_file=conf/engine/jwt.hex

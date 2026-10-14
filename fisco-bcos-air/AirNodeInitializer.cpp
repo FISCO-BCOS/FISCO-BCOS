@@ -30,6 +30,7 @@
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
+#include <bcos-tool/ChainLaneConfig.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -59,8 +60,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
     nodeConfig->loadGenesisConfig(_genesisFile);
     nodeConfig->loadConfig(_configFilePath);
-    // Cross-file EL-mode invariants (config.ini ethereum.mode=el must be backed by the
-    // genesis EL declaration) — checkable only after BOTH files are loaded.
+    // Cross-file invariants (config.ini settings whose legality depends on the genesis
+    // lane) — checkable only after BOTH files are loaded.
     nodeConfig->validateELModeInvariants();
 
     m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
@@ -115,9 +116,9 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     nodeService->setSafeBlockDepth(nodeConfig->web3SafeBlockDepth());
     nodeService->setFinalizedBlockDepth(nodeConfig->web3FinalizedBlockDepth());
 
-    // Ethereum L1 EL mode (ethereum.mode=el): the blob sidecar (network wrapper, KZG checks)
-    // and tx-gossip handling key on this flag. The blob ADMISSION gate keys on the executor
-    // version below instead.
+    // Ethereum L1 EL mode (executor.version=2 under the Engine driver): the blob sidecar (network
+    // wrapper, KZG checks) and tx-gossip handling key on this flag. The blob ADMISSION gate keys on
+    // the executor version below instead.
     nodeService->setEthereumELMode(nodeConfig->ethereumELModeEnabled());
 
     // The chain's executor_version, resolved from the ledger at boot: the RPC blob admission
@@ -176,8 +177,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
 void AirNodeInitializer::init(bcos::initializer::Params const& _params)
 {
-    // The config file is the source of truth for Ethereum L1 EL mode; the command-line
-    // flags only mirror it and any conflict is a hard error (fail fast, never silently
+    // The config file is the source of truth for the devp2p network; the command-line
+    // --bootnodes only mirrors it and any conflict is a hard error (fail fast, never silently
     // prefer one side).
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
@@ -260,22 +261,6 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
 void AirNodeInitializer::validateEthereumELParams(
     bcos::initializer::Params const& _params, bcos::tool::NodeConfig const& _nodeConfig)
 {
-    if (_params.ethereumEL.has_value())
-    {
-        bool const wantEL = *_params.ethereumEL;
-        bool const configuredEL =
-            _nodeConfig.ethereumELModeEnabled() ||
-            _nodeConfig.blockDriver() == bcos::tool::BlockDriver::DebugFollowDevp2p;
-        if (wantEL && !configuredEL)
-        {
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "command-line --el requests EL self-sync mode but " + _params.configFilePath +
-                    " sets neither [ethereum] mode=el nor [debug] "
-                    "follow_devp2p=true; the config file is the source of "
-                    "truth — set one of them or drop --el"));
-        }
-    }
     if (_params.ethereumBootnodesFile.has_value())
     {
         auto const& configured = _nodeConfig.ethereumBootnodesFile();
@@ -302,13 +287,14 @@ bcos::initializer::BlockImportSummary AirNodeInitializer::importEthereumBlocks(
 {
     auto initializer = m_nodeInitializer;
     auto nodeConfig = initializer->nodeConfig();
-    // The import drives the EL-mode pipeline (v2 scheduler + EthereumExecutor +
-    // EthereumBlockVerifier), so it is only meaningful on an EL-mode node.
-    if (!nodeConfig->ethereumELModeEnabled())
+    // The import drives the L1 EL pipeline (v2 scheduler + EthereumExecutor +
+    // EthereumBlockVerifier), so it is only meaningful on an executor.version=2 node.
+    if (bcos::tool::laneForExecutorVersion(nodeConfig->executorVersion()) !=
+        bcos::tool::ChainLane::Eth)
     {
         BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                  "--import-blocks requires Ethereum L1 EL mode; set "
-                                  "[ethereum] mode=el in config.ini"));
+                                  "--import-blocks requires executor.version=2 (the L1 EL lane) "
+                                  "in config.genesis"));
     }
     bcos::initializer::EthereumBlockImporter importer(nodeConfig, initializer->ledger(),
         initializer->protocolInitializer()->blockFactory(), initializer->ethereumSerialScheduler(),
@@ -336,7 +322,7 @@ void AirNodeInitializer::start()
         m_nodeInitializer->start();
     }
 
-    // EL self-sync modes (ethereum.mode=el / opstack-el): the node is a pure execution-layer
+    // EL modes (L1 EL mode / [debug] follow_devp2p): the node is a pure execution-layer
     // client — the FISCO gateway/P2P network is not part of the Ethereum/OP stack, so it
     // stays dormant. The self-sync driver (bootnode download -> verify -> commit) is what
     // moves the chain.

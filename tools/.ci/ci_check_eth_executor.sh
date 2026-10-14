@@ -4,7 +4,9 @@
 # Integration test for the pure-Ethereum executor (executor_version=2):
 #   1. build a single-node AIR chain (secp256k1 consensus key via build_chain.sh)
 #   2. patch config.genesis for executor_version=2 + evmc revision + L2 alloc funding
-#   3. start the node, wait for it to reach consensus
+#   3. start the node under the built-in single-node driver (executor_version=2 with an
+#      on-chain evm_revision and no [fork_timestamps]; the Engine driver needs the
+#      L1 fork schedule and an external consensus client)
 #   4. run an RPC test that reuses an EEST state-test fixture (sender secretKey,
 #      recipient, value) to sign a simple legacy value-transfer and drive it
 #      through eth_sendRawTransaction / eth_getTransactionReceipt / eth_getBalance
@@ -129,6 +131,10 @@ GENESIS_EOF
 
 # enable web3_rpc (eth_*) on port 8545
 perl -p -i -e 'if (/\[web3_rpc\]/) { $f=1 } elsif ($f && s/enable\s*=\s*false/enable=true/) { $f=0 }' config.ini
+# executor_version=2 is driven over the Engine API unless the node produces its own blocks:
+# select the built-in single-node driver
+perl -p -i -e 's/^\[consensus\]\s*$/[consensus]\n    enable_single_node_consensus=true\n/' config.ini
+grep -q 'enable_single_node_consensus=true' config.ini || fail "single-node consensus not set in config.ini"
 
 # ---- 3. start node and wait for RPC ----
 log "starting node"

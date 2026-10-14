@@ -38,7 +38,20 @@ BOOST_AUTO_TEST_SUITE(NodeConfigBlockDriverTest)
 
 namespace
 {
-std::string genesisFor(int version)
+constexpr auto c_forkTimestamps =
+    "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=0\ncancun_time=0\n"
+    "prague_time=0\nmerge_block=0\n";
+
+// v2 genesis variants: the L1 fork schedule (the shape every v2 driver accepts), or only an
+// on-chain executor.evm_revision (accepted by the genesis loader, refused by the Engine
+// driver).
+enum class V2Fork
+{
+    Timestamps,
+    EvmRevisionOnly,
+};
+
+std::string genesisFor(int version, V2Fork v2Fork = V2Fork::Timestamps)
 {
     std::string genesis =
         "[version]\ncompatibility_version=3.18.0\n"
@@ -56,7 +69,9 @@ std::string genesisFor(int version)
         std::to_string(version) + "\n";
     if (version == 2)
     {
-        genesis += "evm_revision=prague\n" + ethLaneGenesisSections();
+        genesis += (v2Fork == V2Fork::Timestamps ? std::string(c_forkTimestamps) :
+                                                   std::string("evm_revision=prague\n")) +
+                   ethLaneGenesisSections();
     }
     if (version >= 3)
     {
@@ -65,32 +80,36 @@ std::string genesisFor(int version)
     return genesis;
 }
 
-std::unique_ptr<NodeConfig> loadBoth(int version, std::string const& ini)
+std::unique_ptr<NodeConfig> loadBoth(
+    int version, std::string const& ini, V2Fork v2Fork = V2Fork::Timestamps)
 {
     auto cfg = std::make_unique<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_REQUIRE_NO_THROW(cfg->loadGenesisConfigFromString(genesisFor(version)));
+    BOOST_REQUIRE_NO_THROW(cfg->loadGenesisConfigFromString(genesisFor(version, v2Fork)));
     BOOST_REQUIRE_NO_THROW(cfg->loadConfigFromString(ini));
     return cfg;
 }
 
 // The node starts with this config pair; returns the started config.
-std::unique_ptr<NodeConfig> starts(int version, std::string const& ini)
+std::unique_ptr<NodeConfig> starts(
+    int version, std::string const& ini, V2Fork v2Fork = V2Fork::Timestamps)
 {
-    auto cfg = loadBoth(version, ini);
+    auto cfg = loadBoth(version, ini, v2Fork);
     BOOST_REQUIRE_NO_THROW(cfg->validateELModeInvariants());
     return cfg;
 }
 
 // The node refuses to start with this config pair, naming @p reason.
-void refuses(int version, std::string const& ini, std::string const& reason)
+void refuses(int version, std::string const& ini, std::string const& reason,
+    V2Fork v2Fork = V2Fork::Timestamps)
 {
-    auto cfg = loadBoth(version, ini);
+    auto cfg = loadBoth(version, ini, v2Fork);
     BOOST_CHECK_EXCEPTION(cfg->validateELModeInvariants(), InvalidConfig,
         [&](auto const& e) { return errinfoContains(e, reason); });
 }
 
 constexpr auto c_followDevp2p = "[debug]\nfollow_devp2p=true\n";
 constexpr auto c_followOffLane = "[debug] follow_devp2p requires executor.version >= 3";
+constexpr auto c_selfProduce = "[consensus]\nenable_single_node_consensus=true\n";
 }  // namespace
 
 // v3 with no driver key at all: op-node drives it over the Engine API, which listens on the
@@ -107,26 +126,63 @@ BOOST_AUTO_TEST_CASE(v3WithNothingRunsEngineOnEngineRpcDefaults)
     BOOST_CHECK(!cfg->engineApiMinerApi());
 }
 
-// v3 with only [engine_rpc]: the listener takes its values. An enable key is not read on
-// this lane, so neither value stops the listener nor trips the v0..v2 "requires
-// ethereum.mode=el" gate.
-BOOST_AUTO_TEST_CASE(v3WithOnlyEngineRpcServesItsListener)
+// v2 and v3 with only [engine_rpc]: the listener takes its values. [engine_rpc] has no
+// enable key, so neither value stops the listener.
+BOOST_AUTO_TEST_CASE(v2V3WithOnlyEngineRpcServeItsListener)
 {
-    for (auto const* enable : {"", "enable=false\n", "enable=true\n"})
+    for (int version : {2, 3})
     {
-        auto cfg = starts(3, std::string("[engine_rpc]\n") + enable +
-                                 "listen_ip=0.0.0.0\nlisten_port=9551\n"
-                                 "jwt_secret_file=jwt.hex\nclock_skew_secs=30\n"
-                                 "batch_request_size_limit=16\n");
-        BOOST_CHECK(cfg->blockDriver() == BlockDriver::Engine);
-        BOOST_CHECK(cfg->servesEngineApi());
-        auto const& listener = cfg->engineApiListener();
-        BOOST_CHECK_EQUAL(listener.listenIP, "0.0.0.0");
-        BOOST_CHECK_EQUAL(listener.listenPort, 9551);
-        BOOST_CHECK_EQUAL(listener.jwtSecretFile, "jwt.hex");
-        BOOST_CHECK_EQUAL(listener.clockSkewSecs, 30);
-        BOOST_CHECK_EQUAL(listener.batchRequestSizeLimit, 16);
+        for (auto const* enable : {"", "enable=false\n", "enable=true\n"})
+        {
+            auto cfg = starts(version, std::string("[engine_rpc]\n") + enable +
+                                           "listen_ip=0.0.0.0\nlisten_port=9551\n"
+                                           "jwt_secret_file=jwt.hex\nclock_skew_secs=30\n"
+                                           "batch_request_size_limit=16\n");
+            BOOST_CHECK(cfg->blockDriver() == BlockDriver::Engine);
+            BOOST_CHECK(cfg->servesEngineApi());
+            auto const& listener = cfg->engineApiListener();
+            BOOST_CHECK_EQUAL(listener.listenIP, "0.0.0.0");
+            BOOST_CHECK_EQUAL(listener.listenPort, 9551);
+            BOOST_CHECK_EQUAL(listener.jwtSecretFile, "jwt.hex");
+            BOOST_CHECK_EQUAL(listener.clockSkewSecs, 30);
+            BOOST_CHECK_EQUAL(listener.batchRequestSizeLimit, 16);
+        }
     }
+}
+
+// v2 with no mode declaration in either file is the L1 EL: the Engine driver, the Engine
+// API on the [engine_rpc] defaults, and EL mode (devp2p sync next to it).
+BOOST_AUTO_TEST_CASE(v2WithNothingIsTheL1El)
+{
+    auto cfg = starts(2, "");
+    BOOST_CHECK(cfg->blockDriver() == BlockDriver::Engine);
+    BOOST_CHECK(cfg->servesEngineApi());
+    BOOST_CHECK(cfg->ethereumELModeEnabled());
+    BOOST_CHECK_EQUAL(cfg->engineApiListener().listenPort, 8551);
+    BOOST_CHECK_EQUAL(cfg->engineApiListener().jwtSecretFile, "conf/engine/jwt.hex");
+    BOOST_CHECK_EQUAL(cfg->ethereumChainId(), 11155420u);
+}
+
+// The v2 Engine driver derives the EVM revision from [fork_timestamps]; a v2 genesis that
+// carries only executor.evm_revision has none, so the node refuses to start under it.
+// single-node consensus (the DebugSelfProduce driver) still runs on that genesis.
+BOOST_AUTO_TEST_CASE(v2EngineDriverRequiresForkTimestamps)
+{
+    refuses(2, "",
+        "executor.version=2 (the L1 EL lane) is driven over the Engine API and requires a "
+        "[fork_timestamps] section",
+        V2Fork::EvmRevisionOnly);
+    auto selfProduce = starts(2, c_selfProduce, V2Fork::EvmRevisionOnly);
+    BOOST_CHECK(selfProduce->blockDriver() == BlockDriver::DebugSelfProduce);
+}
+
+// single-node consensus on v2 replaces the Engine driver: no Engine API, no EL mode.
+BOOST_AUTO_TEST_CASE(v2SelfProduceServesNoEngineApi)
+{
+    auto cfg = starts(2, c_selfProduce);
+    BOOST_CHECK(cfg->blockDriver() == BlockDriver::DebugSelfProduce);
+    BOOST_CHECK(!cfg->servesEngineApi());
+    BOOST_CHECK(!cfg->ethereumELModeEnabled());
 }
 
 // [debug] follow_devp2p on v3: the devp2p follow driver, and no Engine API listener.
@@ -147,54 +203,77 @@ BOOST_AUTO_TEST_CASE(followDevp2pOnV0V1V2Refused)
     }
 }
 
-// v0..v2 keep their drivers until the v2 Engine paths merge: PBFT without a driver key, and
-// [engine_rpc] without enable runs no listener.
-BOOST_AUTO_TEST_CASE(v1V2DriversUnchanged)
+// v0/v1 offer no Engine API: PBFT without a driver key, [engine_rpc] (any enable value) is
+// not read, and single-node consensus is the only other driver.
+BOOST_AUTO_TEST_CASE(v0V1ServeNoEngineApi)
 {
-    for (int version : {1, 2})
+    for (int version : {0, 1})
     {
         auto plain = starts(version, "");
         BOOST_CHECK(plain->blockDriver() == BlockDriver::PBFT);
         BOOST_CHECK(!plain->servesEngineApi());
+        BOOST_CHECK(!plain->ethereumELModeEnabled());
 
-        auto engineRpcOnly = starts(version, "[engine_rpc]\nlisten_port=9551\n");
-        BOOST_CHECK(engineRpcOnly->blockDriver() == BlockDriver::PBFT);
-        BOOST_CHECK(!engineRpcOnly->servesEngineApi());
+        auto engineRpc = starts(version, "[engine_rpc]\nenable=true\nlisten_port=9551\n");
+        BOOST_CHECK(engineRpc->blockDriver() == BlockDriver::PBFT);
+        BOOST_CHECK(!engineRpc->servesEngineApi());
 
-        auto selfProduce = starts(version, "[consensus]\nenable_single_node_consensus=true\n");
+        auto selfProduce = starts(version, c_selfProduce);
         BOOST_CHECK(selfProduce->blockDriver() == BlockDriver::DebugSelfProduce);
         BOOST_CHECK(!selfProduce->servesEngineApi());
     }
-    // [engine_rpc] enable on v0..v2 still requires EL mode.
-    refuses(2, "[engine_rpc]\nenable=true\n", "engine_rpc.enable requires ethereum.mode=el");
 }
 
-// v2 [op_engine_rpc] stays as it was in this step: the Engine driver, listening on that
-// section; its enable_miner_api has no effect off the OP lane.
-BOOST_AUTO_TEST_CASE(v2OpEngineRpcUnchanged)
+// [ethereum] mode is not read in either file: config.ini mode=el does not make a v1 node an
+// EL, and a v2 genesis that still carries mode=el loads as any v2 genesis does.
+BOOST_AUTO_TEST_CASE(ethereumModeElIsNotRead)
 {
-    auto cfg = starts(2,
-        "[op_engine_rpc]\nenable=true\nlisten_port=9552\nenable_miner_api=true\n"
-        "[engine_rpc]\nlisten_port=9551\n");
-    BOOST_CHECK(cfg->blockDriver() == BlockDriver::Engine);
-    BOOST_CHECK(cfg->servesEngineApi());
-    BOOST_CHECK_EQUAL(cfg->engineApiListener().listenPort, 9552);
-    BOOST_CHECK_EQUAL(cfg->engineApiListener().jwtSecretFile, "conf/op-engine/jwt.hex");
-    BOOST_CHECK(!cfg->engineApiMinerApi());
+    auto v1 = starts(1, "[ethereum]\nmode=el\n");
+    BOOST_CHECK(v1->blockDriver() == BlockDriver::PBFT);
+    BOOST_CHECK(!v1->ethereumELModeEnabled());
+
+    NodeConfig v2(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_REQUIRE_NO_THROW(v2.loadGenesisConfigFromString(genesisFor(2) + "[ethereum]\nmode=el\n"));
+    BOOST_REQUIRE_NO_THROW(v2.loadConfigFromString("[ethereum]\nmode=none\n"));
+    BOOST_REQUIRE_NO_THROW(v2.validateELModeInvariants());
+    BOOST_CHECK(v2.ethereumELModeEnabled());
 }
 
-// The v3 driver keys of other lanes are refused rather than ignored: each would leave the
-// node with a different block producer than the operator configured.
-BOOST_AUTO_TEST_CASE(v3RefusesOtherDriverKeys)
+// [op_engine_rpc] is removed: enable=true refuses to start on every lane (config.ini alone
+// decides it) and names [engine_rpc]; the section without enable=true is not read.
+BOOST_AUTO_TEST_CASE(opEngineRpcEnableRefused)
 {
-    refuses(3, "[op_engine_rpc]\nenable=true\n",
-        "[op_engine_rpc] is not read on executor.version >= 3");
-    refuses(3, "[consensus]\nenable_single_node_consensus=true\n",
-        "enable_single_node_consensus is not supported on executor.version >= 3");
-    // follow_devp2p does not lift either refusal.
-    refuses(3, std::string(c_followDevp2p) + "[op_engine_rpc]\nenable=true\n",
-        "[op_engine_rpc] is not read on executor.version >= 3");
-    refuses(3, std::string(c_followDevp2p) + "[consensus]\nenable_single_node_consensus=true\n",
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_CHECK_EXCEPTION(
+        cfg.loadConfigFromString("[op_engine_rpc]\nenable=true\nlisten_port=9552\n"), InvalidConfig,
+        [](auto const& e) {
+            return errinfoContains(e, "[op_engine_rpc] is removed: move its keys to [engine_rpc]");
+        });
+    auto ignored = starts(2, "[op_engine_rpc]\nenable=false\nlisten_port=9552\n");
+    BOOST_CHECK_EQUAL(ignored->engineApiListener().listenPort, 8551);
+}
+
+// executor.eest_replay_mode drops balance and nonce-window admission checks; the fixtures are
+// Ethereum state tests, so it is refused on every lane but v2 (under either v2 driver).
+BOOST_AUTO_TEST_CASE(eestReplayModeRequiresV2)
+{
+    constexpr auto c_eest = "[executor]\neest_replay_mode=true\n";
+    for (int version : {0, 1, 3})
+    {
+        refuses(version, c_eest, "executor.eest_replay_mode requires executor.version=2");
+    }
+    BOOST_CHECK(starts(2, c_eest)->eestReplayMode());
+    BOOST_CHECK(starts(2, std::string(c_eest) + c_selfProduce)->eestReplayMode());
+}
+
+// single-node consensus is refused on v3 rather than ignored: it would leave the node with a
+// different block producer than the operator configured.
+BOOST_AUTO_TEST_CASE(v3RefusesSelfProduce)
+{
+    refuses(
+        3, c_selfProduce, "enable_single_node_consensus is not supported on executor.version >= 3");
+    // follow_devp2p does not lift the refusal.
+    refuses(3, std::string(c_followDevp2p) + c_selfProduce,
         "enable_single_node_consensus is not supported on executor.version >= 3");
 }
 
@@ -238,20 +317,19 @@ BOOST_AUTO_TEST_CASE(engineRpcMinerApiIsOpLaneOnly)
     BOOST_CHECK(starts(3, "[web3_rpc]\nenable_miner_api=true\n")->enableMinerApi());
     BOOST_CHECK(!starts(3, "[engine_rpc]\nenable_miner_api=true\n")->enableMinerApi());
     BOOST_CHECK(!starts(1, "[engine_rpc]\nenable_miner_api=true\n")->engineApiMinerApi());
+    BOOST_CHECK(!starts(2, "[engine_rpc]\nenable_miner_api=true\n")->engineApiMinerApi());
 }
 
-// The debug namespace on the Engine API listener follows the section that listener reads:
-// [engine_rpc] on the OP lane, an enabled [op_engine_rpc] below v3. The web3 key stays on the
-// web3 listener.
+// The debug namespace on the Engine API listener is [engine_rpc] enable_debug_api on every lane
+// that serves the Engine API (v2 and v3); the web3 key stays on the web3 listener.
 BOOST_AUTO_TEST_CASE(engineApiDebugApiFollowsTheListenerSection)
 {
     BOOST_CHECK(starts(3, "[engine_rpc]\nenable_debug_api=true\n")->engineApiDebugApi());
     BOOST_CHECK(!starts(3, "[engine_rpc]\nenable_debug_api=true\n")->enableDebugApi());
     BOOST_CHECK(!starts(3, "[web3_rpc]\nenable_debug_api=true\n")->engineApiDebugApi());
     BOOST_CHECK(starts(3, "[web3_rpc]\nenable_debug_api=true\n")->enableDebugApi());
-    BOOST_CHECK(
-        starts(2, "[op_engine_rpc]\nenable=true\nenable_debug_api=true\n")->engineApiDebugApi());
-    BOOST_CHECK(!starts(2, "[op_engine_rpc]\nenable_debug_api=true\n")->engineApiDebugApi());
+    BOOST_CHECK(starts(2, "[engine_rpc]\nenable_debug_api=true\n")->engineApiDebugApi());
+    BOOST_CHECK(!starts(2, "[web3_rpc]\nenable_debug_api=true\n")->engineApiDebugApi());
     refuses(3,
         "[engine_rpc]\nenable_debug_api=true\n[debug]\nfollow_devp2p=true\n"
         "[storage]\nmpt_prune_window=1000\n",

@@ -1,6 +1,6 @@
 ; ============================================================================
 ; FISCO-BCOS Ethereum L1 EL-mode genesis configuration (config.genesis)
-; Used with [ethereum] mode=el in config.ini. Values below are the REAL Sepolia
+; Used with config.ini.el. Values below are the REAL Sepolia
 ; genesis (chain id 11155111) — the node verifies blocks from this anchor.
 ;
 ; TRUST MODEL: the node commits the chain its bootnodes serve as long as it is

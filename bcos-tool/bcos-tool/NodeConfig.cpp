@@ -232,25 +232,6 @@ uint64_t readOptionalForkTimestamp(boost::property_tree::ptree const& section,
     }
     return std::numeric_limits<uint64_t>::max();
 }
-
-// Shared parser of the authenticated Engine API listener sections ([engine_rpc] and
-// [op_engine_rpc]).
-EngineRpcConfig parseEngineRpcSection(boost::property_tree::ptree const& _pt,
-    std::string const& _section, std::string _defaultJwtSecretFile)
-{
-    EngineRpcConfig config;
-    config.enable = _pt.get<bool>(_section + ".enable", false);
-    config.listenIP = _pt.get<std::string>(_section + ".listen_ip", "127.0.0.1");
-    config.listenPort = _pt.get<int>(_section + ".listen_port", 8551);
-    config.requestBodySizeLimit = _pt.get<int>(_section + ".request_body_size_limit", 10485760);
-    config.batchRequestSizeLimit = _pt.get<int>(_section + ".batch_request_size_limit", 8);
-    config.jwtSecretFile =
-        _pt.get<std::string>(_section + ".jwt_secret_file", std::move(_defaultJwtSecretFile));
-    config.clockSkewSecs = _pt.get<int32_t>(_section + ".clock_skew_secs", 60);
-    config.enableMinerApi = _pt.get<bool>(_section + ".enable_miner_api", false);
-    config.enableDebugApi = _pt.get<bool>(_section + ".enable_debug_api", false);
-    return config;
-}
 }  // namespace
 
 NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
@@ -304,7 +285,6 @@ void NodeConfig::loadConfig(
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
     loadWeb3RpcConfig(_pt);
-    loadOpEngineRpcConfig(_pt);
     loadEngineRpcConfig(_pt);
     loadDebugConfig(_pt);
     loadGatewayConfig(_pt);
@@ -349,9 +329,8 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     }
 
     loadLedgerConfig(_genesisConfig);
-    // EL-mode declaration + fork schedule must be parsed BEFORE loadExecutorConfig: its v2
-    // EVMC-revision / auth_admin_account guards exempt chains that declare EL mode
-    // ([ethereum] mode=el, with its mandatory [fork_timestamps] section).
+    // The fork schedule must be parsed BEFORE loadExecutorConfig: its v2 EVMC-revision guard
+    // accepts a [fork_timestamps] section in place of executor.evm_revision.
     loadForkTimestamps(_genesisConfig);
     loadOpForkTimestamps(_genesisConfig);
     loadOpForkSchedule(_genesisConfig);
@@ -596,17 +575,18 @@ void NodeConfig::validateL2Invariants()
     // ETHEREUM_EXECUTOR_VERSION; there is no separate chain_mode or feature flag.
     // allocs and the lane must agree.
     bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
-    // An empty alloc set is legal only on the L1 EL lane ([ethereum] mode=el): its genesis
+    auto const lane = laneForExecutorVersion(genesis.m_executorVersion);
+    // An empty alloc set is legal only on the L1 EL lane (executor.version=2): its genesis
     // stateRoot is the canonical empty-trie root (Ledger::buildGenesisBlock publishes
     // mpt::emptyRootHash() and block 1's MPT build starts from it), which is a valid
-    // Ethereum genesis (hive smoke/genesis, several EEST fixtures). The L2/OP lanes still
-    // require allocs — their predeploys live in them.
-    if (ethLane && genesis.m_allocs.empty() && !genesis.m_ethereumELMode)
+    // Ethereum genesis (hive smoke/genesis, several EEST fixtures). The OP lane still
+    // requires allocs — its predeploys live in them.
+    if (lane == ChainLane::Op && genesis.m_allocs.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.version >= 2 (the Ethereum lane) requires a "
-                                  "non-empty [alloc.*] section in config.genesis (only "
-                                  "[ethereum] mode=el may run an empty-alloc genesis)"));
+                                  "executor.version >= 3 (the OP lane) requires a non-empty "
+                                  "[alloc.*] section in config.genesis (only executor.version=2 "
+                                  "may run an empty-alloc genesis)"));
     }
     if (!ethLane && !genesis.m_allocs.empty())
     {
@@ -642,36 +622,13 @@ void NodeConfig::validateL2Invariants()
                 "section in config.genesis (all 22 fields from the merged genesis artifact); "
                 "an Ethereum-lane chain without it would build a non-Ethereum genesis block"));
     }
-    // EL mode ([ethereum] mode=el) and its [fork_timestamps] schedule are bound both ways:
-    // the schedule only makes sense on a chain that declares EL mode — otherwise an ordinary
-    // executor-v2 chain could waive the evmc_revision / auth_admin_account guards by pasting
-    // in a section nothing reads — and an EL chain without a schedule cannot derive its EVM
-    // revision. Both live in config.genesis, so the pairing is part of the genesis pin.
-    if (!genesis.m_ethereumELMode && genesis.m_ethereumForkSchedule.has_value())
+    // [fork_timestamps] is the L1 fork schedule (L1 PoS header rules, the L1 EVM revision
+    // ladder): only the L1 EL lane reads it. The OP lane forks on [op_fork_timestamps].
+    if (lane != ChainLane::Eth && genesis.m_ethereumForkSchedule.has_value())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[fork_timestamps] section requires [ethereum] mode=el in "
-                                  "config.genesis (Ethereum L1 EL mode)"));
-    }
-    if (genesis.m_ethereumELMode && !genesis.m_ethereumForkSchedule.has_value())
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[ethereum] mode=el requires a [fork_timestamps] section in "
-                                  "config.genesis (the EL-mode fork schedule)"));
-    }
-    // The lane binding: mode=el is the L1 EL lane (L1 fork schedule, L1 PoS header
-    // rules), so it requires the L1 executor version. On the OP lane (executor.version
-    // >= 3) devp2p self-follow is config.ini [debug] follow_devp2p — accepting mode=el
-    // there would also waive the non-empty-alloc invariant above for a chain whose
-    // predeploys live in the allocs.
-    if (genesis.m_ethereumELMode &&
-        (genesis.m_executorVersion < ledger::ETHEREUM_EXECUTOR_VERSION ||
-            genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION))
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[ethereum] mode=el requires executor.version=2 (the L1 EL "
-                                  "lane) in config.genesis; the OP lane (executor.version >= 3) "
-                                  "follows devp2p under config.ini [debug] follow_devp2p"));
+                                  "[fork_timestamps] section requires executor.version=2 (the "
+                                  "L1 EL lane) in config.genesis"));
     }
     // EL-sync's EIP-155 signature validation and geth's EIP-2124 fork-id handshake
     // (parts 7-9) key on the CHAIN id. On the Ethereum lanes that id is [chain] chain_id,
@@ -712,7 +669,6 @@ void NodeConfig::validateL2Invariants()
     // A section's presence reads the parsed GenesisConfig member NAMED by the rule
     // (LaneKeyRule.presenceMember) — one hook per rule, so a new row is enforced by
     // construction and a rule without a hook fails closed rather than reading "absent".
-    auto const lane = laneForExecutorVersion(genesis.m_executorVersion);
     auto const sectionPresent = [&](LaneKeyRule const& rule) {
         if (rule.presenceMember == "m_opstackForkSchedule")
         {
@@ -772,27 +728,26 @@ void NodeConfig::validateL2Invariants()
     }
 }
 
-// Cross-file EL-mode invariant: config.ini's ethereum.mode=el must be backed by the
-// chain-level declaration in config.genesis (which itself binds [fork_timestamps] and
-// [chain] chain_id — validateL2Invariants). This hook reads BOTH files' members, so it
-// must run after both are loaded: the node initializers call it explicitly. It is NOT
-// done inside loadEthereumConfig because tools (archive-tool, storage-tool) load
-// config.ini before config.genesis and must not trip on the not-yet-loaded genesis.
-// The lane-dependent config.ini checks live here for the same reason, starting with
-// blockDriver(), so a driver combination the lane refuses fails at startup.
+// Cross-file invariants: config.ini settings whose legality depends on the lane
+// (config.genesis executor.version) or on genesis sections. This hook reads BOTH files'
+// members, so it must run after both are loaded: the node initializers call it explicitly.
+// It is NOT done inside the config.ini loaders because tools (archive-tool, storage-tool)
+// load config.ini before config.genesis and must not trip on the not-yet-loaded genesis.
+// It starts with blockDriver(), so a driver combination the lane refuses fails at startup.
 void NodeConfig::validateELModeInvariants() const
 {
     auto const driver = blockDriver();
     auto const lane = laneForExecutorVersion(m_genesisConfig.m_executorVersion);
-    // [engine_rpc] enable is a v0..v2 key: there it is the EL-mode Engine API listener, and
-    // without EL mode nothing drives or serves the EngineService it exposes. The OP lane's
-    // [engine_rpc] has no enable key (the listener always runs under the Engine driver).
-    if (lane != ChainLane::Op && m_engineRpc.enable && !m_enableEthereumEL)
+    // The v2 Engine driver verifies and builds every block through EthereumBlockVerifier,
+    // which derives the EVM revision and the header rules from the block timestamp against
+    // [fork_timestamps]; without the schedule it has nothing to derive them from.
+    if (lane == ChainLane::Eth && driver == BlockDriver::Engine &&
+        !m_genesisConfig.m_ethereumForkSchedule.has_value())
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "engine_rpc.enable requires ethereum.mode=el: the engine RPC listener serves "
-                "the EL-mode EngineService"));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "executor.version=2 (the L1 EL lane) is driven over the Engine "
+                                  "API and requires a [fork_timestamps] section in config.genesis "
+                                  "(the L1 fork schedule)"));
     }
     // Refused ahead of the MPT pruner's boot-time init (Initializer::init): that init walks
     // the window's state roots and, with storage.mpt_prune_sweep_garbage on, deletes
@@ -807,32 +762,23 @@ void NodeConfig::validateELModeInvariants() const
                 "[debug] follow_devp2p=true: the Engine API OP commit path has no MPT pruning "
                 "observer"));
     }
-    if (m_enableEthereumEL && !m_genesisConfig.m_ethereumELMode)
+    // EEST fixture replay (loadOthersConfig): refused off the L1 EL lane rather than ignored.
+    // A FISCO-lane chain produces blocks through consensus and admits transactions from
+    // peers, and a node that stopped checking balances would fill its pool with
+    // transactions the leader cannot execute. The fixtures are Ethereum state tests, so the
+    // switch belongs to executor.version=2 only.
+    if (m_eestReplayMode && lane != ChainLane::Eth)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode=el requires config.genesis to declare "
-                                  "[ethereum] mode=el: the EL-mode declaration is part of "
-                                  "the genesis pin"));
-    }
-    // The symmetric direction: the genesis EL declaration waives the on-chain
-    // executor.evm_revision (loadExecutorConfig) on the premise that the EL
-    // verifier derives the revision from the block timestamp — which only EL
-    // mode does. A node booting an EL-declaring genesis with ethereum.mode=none
-    // would run executor v2 through the FISCO pipeline with an implicit
-    // binary-side revision and diverge from its EL peers on the first block.
-    if (m_genesisConfig.m_ethereumELMode && !m_enableEthereumEL)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "config.genesis declares [ethereum] mode=el but config.ini "
-                                  "has ethereum.mode=none: an EL chain has no on-chain "
-                                  "evmc_revision, so every node must run in EL mode"));
+                                  "executor.eest_replay_mode requires executor.version=2 (the L1 "
+                                  "EL lane) in config.genesis"));
     }
     // Phase 3 shallow reorg (EthereumChainRollback.h) vs MPT pruning: a rollback target's
     // state root must stay fully resolvable on disk. A node row deleted at block b was
     // obsoleted at b - mpt_prune_window, so with prune_window >= reorg_window every node a
     // rollback target (>= head - reorg_window) references is still present. Pruning
     // disabled (-1) is always safe. Only EL mode rolls back, so only EL mode is gated.
-    if (m_enableEthereumEL && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
+    if (ethereumELModeEnabled() && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
         m_mptPruneWindow < m_ethereumReorgWindow)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -848,8 +794,7 @@ void NodeConfig::validateELModeInvariants() const
     // content hash, not by block, so it cannot produce eth_getProof's "State pruned" diagnostic).
     // The dispute window is a chain/contract parameter, not a node config, so the enforceable
     // invariant is the archive one: a node serving preimages must not bound MPT disk growth.
-    if ((m_enableDebugApi || m_opEngineRpc.enableDebugApi || engineApiDebugApi()) &&
-        m_mptPruneWindow != -1)
+    if ((m_enableDebugApi || engineApiDebugApi()) && m_mptPruneWindow != -1)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "enable_debug_api requires storage.mpt_prune_window = -1 "
@@ -1196,8 +1141,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; The geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload) is off
         ; unless enabled here: it serves the fault-proof preimage oracle (kona-host), not general
         ; clients. This key scopes the namespace to THIS web3 listener only; the Engine API (8551)
-        ; listener has its own key ([engine_rpc] enable_debug_api on the OP lane,
-        ; [op_engine_rpc] enable_debug_api below v3).
+        ; listener has its own [engine_rpc] enable_debug_api.
         ; Enabling it also REQUIRES storage.mpt_prune_window=-1 (archive): the namespace reads
         ; MPT preimages with no retention guarantee, so a pruned block still inside a dispute
         ; game's challenge window would answer an indistinguishable -32000. The node refuses to
@@ -1278,67 +1222,12 @@ uint32_t NodeConfig::web3FinalizedBlockDepth() const
     return m_web3FinalizedBlockDepth;
 }
 
-void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
-{
-    /*
-    [op_engine_rpc]
-        ; read on executor.version < 3 only; the OP lane serves the Engine API from
-        ; [engine_rpc] and refuses enable=true here (blockDriver())
-        enable=false
-        listen_ip=127.0.0.1
-        listen_port=8551
-        request_body_size_limit=10485760
-        batch_request_size_limit=8
-        jwt_secret_file=conf/op-engine/jwt.hex
-        clock_skew_secs=60
-        ; scopes the geth debug namespace to THIS listener only (default off); [web3_rpc]
-        ; enable_debug_api scopes it to the web3 listener. Neither key reaches the other port.
-        ; Enabling it on either port requires storage.mpt_prune_window=-1 (archive), for the
-        ; same reason as [web3_rpc] enable_debug_api above.
-        ; enable_debug_api=false
-    */
-    m_opEngineRpc = parseEngineRpcSection(_pt, "op_engine_rpc", "conf/op-engine/jwt.hex");
-    // test-only escape hatch, see Initializer's executor-version guard
-    m_opEngineAllowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
-
-    // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
-    // two loaders runs second fires the guard, so it holds regardless of loadConfig's loader
-    // order and also when a loader is invoked on its own.
-    if (m_opEngineRpc.enable && m_enableSingleNodeConsensus)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
-                "exclusive: both drive the same EngineService; enable at most one"));
-    }
-    // Symmetric with loadEngineRpcConfig: the EL-mode [engine_rpc] listener and the
-    // [op_engine_rpc] listener serve the same EngineService slot.
-    if (m_opEngineRpc.enable && m_engineRpc.enable)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "op_engine_rpc.enable and engine_rpc.enable are mutually exclusive: both "
-                "configure the same Engine API listener; enable at most one"));
-    }
-
-    NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
-                         << LOG_KV("enableOpEngineRpc", m_opEngineRpc.enable)
-                         << LOG_KV("listenIP", m_opEngineRpc.listenIP)
-                         << LOG_KV("listenPort", m_opEngineRpc.listenPort)
-                         << LOG_KV("requestBodySizeLimit", m_opEngineRpc.requestBodySizeLimit)
-                         << LOG_KV("batchRequestSizeLimit", m_opEngineRpc.batchRequestSizeLimit)
-                         << LOG_KV("jwtSecretFile", m_opEngineRpc.jwtSecretFile)
-                         << LOG_KV("clockSkewSecs", m_opEngineRpc.clockSkewSecs)
-                         << LOG_KV("unsafeAllowV1Executor", m_opEngineAllowV1Executor);
-}
-
 void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
 {
     /*
     [engine_rpc]
-        ; the OP lane (executor.version >= 3) always runs this listener and has no enable
-        ; key; executor.version < 3 reads enable, which requires ethereum.mode=el
-        enable=false
+        ; the authenticated Engine API listener. No enable key: it runs whenever the block
+        ; driver is Engine (executor.version >= 2), and executor.version < 2 never reads it
         listen_ip=127.0.0.1
         listen_port=8551
         request_body_size_limit=10485760
@@ -1349,30 +1238,31 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; DA-throttle handshake) on THIS listener. [web3_rpc] enable_miner_api scopes it to the
         ; web3 listener only; neither key reaches the other port.
         ; enable_miner_api=false
-        ; OP lane only: scopes the geth debug namespace to THIS listener (default off);
-        ; [web3_rpc] enable_debug_api scopes it to the web3 listener. Requires
+        ; scopes the geth debug namespace to THIS listener (default off); [web3_rpc]
+        ; enable_debug_api scopes it to the web3 listener. Requires
         ; storage.mpt_prune_window=-1 (archive), for the same reason as [web3_rpc]
         ; enable_debug_api above.
         ; enable_debug_api=false
     */
-    m_engineRpc = parseEngineRpcSection(_pt, "engine_rpc", "conf/engine/jwt.hex");
-    if (m_engineRpc.enable && m_opEngineRpc.enable)
+    // [op_engine_rpc] was the second spelling of this section; its listener is gone.
+    if (_pt.get<bool>("op_engine_rpc.enable", false))
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "engine_rpc.enable and op_engine_rpc.enable are mutually exclusive: both "
-                "configure the same Engine API listener; enable at most one"));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[op_engine_rpc] is removed: move its keys to [engine_rpc] "
+                                  "(no enable key; the Engine API listener runs on "
+                                  "executor.version >= 2)"));
     }
-    if (m_engineRpc.enable && m_enableSingleNodeConsensus)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "engine_rpc.enable and consensus.enable_single_node_consensus are mutually "
-                "exclusive: both expose the same EngineService; enable at most one"));
-    }
+    m_engineRpc.listenIP = _pt.get<std::string>("engine_rpc.listen_ip", "127.0.0.1");
+    m_engineRpc.listenPort = _pt.get<int>("engine_rpc.listen_port", 8551);
+    m_engineRpc.requestBodySizeLimit = _pt.get<int>("engine_rpc.request_body_size_limit", 10485760);
+    m_engineRpc.batchRequestSizeLimit = _pt.get<int>("engine_rpc.batch_request_size_limit", 8);
+    m_engineRpc.jwtSecretFile =
+        _pt.get<std::string>("engine_rpc.jwt_secret_file", "conf/engine/jwt.hex");
+    m_engineRpc.clockSkewSecs = _pt.get<int32_t>("engine_rpc.clock_skew_secs", 60);
+    m_engineRpc.enableMinerApi = _pt.get<bool>("engine_rpc.enable_miner_api", false);
+    m_engineRpc.enableDebugApi = _pt.get<bool>("engine_rpc.enable_debug_api", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadEngineRpcConfig")
-                         << LOG_KV("enableEngineRpc", m_engineRpc.enable)
                          << LOG_KV("listenIP", m_engineRpc.listenIP)
                          << LOG_KV("listenPort", m_engineRpc.listenPort)
                          << LOG_KV("requestBodySizeLimit", m_engineRpc.requestBodySizeLimit)
@@ -1403,13 +1293,11 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
 {
     /*
     [ethereum]
-        ; EL-mode self-sync. mode=el runs the node as an Ethereum L1
-        ; execution-layer client (download via RLPx -> verify -> commit), with no
-        ; FISCO gateway / PBFT / txpool pipeline. mode=none (or absent section)
-        ; leaves the node in the normal FISCO mode. The OP lane's devp2p
-        ; self-follow is [debug] follow_devp2p, which reads the network keys below.
-        mode=none
-        ; geth-style enode:// list; path relative to the working directory.
+        ; devp2p network keys. An executor.version=2 node runs devp2p sync next to the
+        ; Engine API (ethereumELModeEnabled()); the OP lane's devp2p self-follow is
+        ; [debug] follow_devp2p. There is no mode key: the lane decides.
+        ; geth-style enode:// list; path relative to the working directory. On
+        ; executor.version=2 an absent file or an empty list means no peers.
         ; Under [debug] follow_devp2p these must be op-geth EL serving peers of the
         ; OP chain (e.g. op-sepolia bootnodes).
         bootnodes_file=./bootnodes.json
@@ -1441,49 +1329,20 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; finality boundary. Range [0, 10000]; 0 = download up to the tip.
         op_sync_lag_blocks=64
     */
-    const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
-    if (mode == "opstack-el")
+    // ethereum.mode is removed: the lane (genesis executor.version) decides. The opstack-el
+    // spelling still names its replacement.
+    if (_pt.get<std::string>("ethereum.mode", "") == "opstack-el")
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("ethereum.mode=opstack-el is replaced by [debug] "
                                                "follow_devp2p=true (executor.version >= 3 only)"));
     }
-    if (mode != "none" && mode != "el")
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode invalid: \"" + mode + "\" (supported: none, el)"));
-    }
-    const bool enableEL = (mode == "el");
-    // EL mode is a self-contained sync client: mutually exclusive with the op-stack Engine
-    // API driver and the single-node consensus driver (both drive block production through
-    // the EngineService; EL mode drives it through devp2p download).
-    if (enableEL && m_opEngineRpc.enable)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.mode=el and op_engine_rpc.enable are mutually exclusive: "
-                "EL mode self-syncs from bootnodes; op_engine_rpc is driven by an "
-                "external op-node"));
-    }
-    if (enableEL && m_enableSingleNodeConsensus)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.mode=el and consensus.enable_single_node_consensus are mutually "
-                "exclusive: EL mode self-syncs from bootnodes; single-node consensus "
-                "produces its own blocks"));
-    }
-    m_enableEthereumEL = enableEL;
     // NOTE: this loader deliberately stays PURE parsing of the config.ini
     // [ethereum] section — it must NOT read m_genesisConfig members: tools
     // (archive-tool, storage-tool) call loadConfig BEFORE loadGenesisConfig, so
     // a genesis-reading guard here would fail them on EL-mode nodes. The
-    // cross-file requirements live in two order-independent places instead:
-    // genesis-side pairing (EL declaration <-> [fork_timestamps] <-> [chain]
-    // chain_id) in validateL2Invariants, and the config.ini->config.genesis
-    // direction (plus the lane-dependent [engine_rpc] enable gate) in
-    // validateELModeInvariants, which the node initializers call after BOTH files
-    // are loaded.
+    // cross-file requirements live in validateELModeInvariants, which the node
+    // initializers call after BOTH files are loaded.
     m_ethereumBootnodesFile = _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
     m_ethereumTxGossip = _pt.get<bool>("ethereum.tx_gossip", true);
     m_ethereumNodeKeyFile = _pt.get<std::string>("ethereum.node_key_file", "");
@@ -1619,7 +1478,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_ethereumMempoolTxLifetimeMinutes = mempoolLifetime;
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig") << LOG_KV("mode", mode)
+    NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig")
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
@@ -1640,39 +1499,24 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
 // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis). L1 PoS chains
 // fork on timestamps rather than block heights (unlike op-stack L2's
 // executor.evm_revision_forks). A zero timestamp means "active from genesis".
-// Also parses the chain-level EL-mode declaration ([ethereum] mode=el in config.genesis):
-// that is the PINNED statement the executor-v2 guard exemptions key on, so a node in EL
-// mode and its fork schedule are bound together in the genesis config, not coupled to the
-// per-node [ethereum] section of config.ini.
 void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig)
 {
     // Reload is a supported shape (loadAllocs opens with m_allocs.clear()): a second genesis
-    // load without the EL declaration / schedule must not keep the previous values. A stale
-    // m_ethereumELMode would waive both the executor.evm_revision and the auth_admin_account
-    // guards; a stale schedule would leak into the genesis pin of a chain that has none.
-    m_genesisConfig.m_ethereumELMode = false;
+    // load without the schedule must not keep the previous values. A stale schedule would
+    // waive the executor.evm_revision guard and leak into the genesis pin of a chain that
+    // has none.
     m_genesisConfig.m_ethereumForkSchedule.reset();
-    m_ethereumChainId = 0;     // reassigned by validateL2Invariants when EL is declared
+    m_ethereumChainId = 0;     // reassigned by validateL2Invariants on executor.version >= 2
     m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
 
-    if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
+    // config.genesis [ethereum] mode is removed (the lane decides); the opstack-el spelling
+    // still names its replacement.
+    if (_genesisConfig.get<std::string>("ethereum.mode", "") == "opstack-el")
     {
-        auto mode = ethSection->get<std::string>("mode", "none");
-        if (mode == "opstack-el")
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "config.genesis [ethereum].mode=opstack-el is no longer a "
-                    "chain-level declaration: remove it and set config.ini "
-                    "[debug] follow_devp2p=true on the nodes that follow devp2p"));
-        }
-        if (mode != "none" && mode != "el")
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment("config.genesis [ethereum].mode invalid: \"" +
-                                                   mode + "\" (supported: none, el)"));
-        }
-        m_genesisConfig.m_ethereumELMode = (mode == "el");
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "config.genesis [ethereum].mode=opstack-el is no longer a "
+                                  "chain-level declaration: remove it and set config.ini "
+                                  "[debug] follow_devp2p=true on the nodes that follow devp2p"));
     }
 
     auto section = _genesisConfig.get_child_optional("fork_timestamps");
@@ -2414,27 +2258,9 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
         produce_empty_blocks=true
         fee_recipient=0x0
     */
+    // Selects the DebugSelfProduce driver (blockDriver()), which replaces the Engine API
+    // listener on executor.version=2: one driver per node, so nothing to exclude here.
     m_enableSingleNodeConsensus = _pt.get<bool>("consensus.enable_single_node_consensus", false);
-    // Mutual exclusion with [op_engine_rpc].enable: the built-in single-node driver and an
-    // external op-node would both drive the same EngineService forkchoice/payload state.
-    // Refuse the combination at startup instead of leaving two block producers reachable by
-    // configuration. The check is symmetric (loadOpEngineRpcConfig carries the same guard),
-    // so it does not depend on the order the two loaders run in loadConfig.
-    if (m_enableSingleNodeConsensus && m_opEngineRpc.enable)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
-                "exclusive: both drive the same EngineService; enable at most one"));
-    }
-    // Symmetric with loadEngineRpcConfig (the EL-mode Engine API listener).
-    if (m_enableSingleNodeConsensus && m_engineRpc.enable)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "consensus.enable_single_node_consensus and engine_rpc.enable are mutually "
-                "exclusive: both expose the same EngineService; enable at most one"));
-    }
     m_singleNodeConsensusBlockInterval = _pt.get<uint64_t>("consensus.block_interval", 1000);
     m_singleNodeConsensusProduceEmptyBlocks = _pt.get<bool>("consensus.produce_empty_blocks", true);
     m_singleNodeConsensusFeeRecipient = _pt.get<std::string>(
@@ -2658,20 +2484,10 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     // admission to the context that drops the balance and nonce-window checks -- and NOTHING
     // else: the check set for that context is defined in the routing table, not here.
     //
-    // Refused outside engine-driven block production rather than ignored. A chain that produces
-    // blocks through consensus admits transactions from peers, and a node that stopped checking
-    // balances would fill its pool with transactions the leader cannot execute. Making it a
-    // startup failure means the mistake is found once, at the node that made it, instead of
-    // being discovered later as unexplained pool behaviour.
+    // Refused off executor.version=2 rather than ignored (validateELModeInvariants: the lane
+    // lives in config.genesis), so the mistake is found once, at the node that made it,
+    // instead of being discovered later as unexplained pool behaviour.
     m_eestReplayMode = _pt.get<bool>("executor.eest_replay_mode", false);
-    if (m_eestReplayMode && !m_enableSingleNodeConsensus && !m_opEngineRpc.enable)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.eest_replay_mode requires engine-driven block "
-                                  "production ([consensus] enable_single_node_consensus or "
-                                  "[op_engine_rpc] enable); it cannot be used on a chain that "
-                                  "produces blocks through consensus"));
-    }
     if (m_eestReplayMode)
     {
         NodeConfig_LOG(WARNING) << LOG_DESC(
@@ -3035,14 +2851,11 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     // hard fork (replay/resync would diverge and a mixed-version network could split, without
     // either side erroring). Requiring it here makes the effective revision part of the
     // genesis config and therefore of the on-chain state.
-    // EL mode (Ethereum L1 self-sync) is the exception: its fork schedule is timestamp-based
-    // ([fork_timestamps], loaded by loadForkTimestamps) and EthereumBlockVerifier derives the
-    // EVMC revision from the block timestamp via fillExecutionLedgerConfig — the revision is
-    // never read from on-chain state in this mode, so an executor.evm_revision is not
-    // required. The exemption is gated on the PINNED declaration ([ethereum] mode=el in
-    // config.genesis, loaded by loadForkTimestamps), not on the mere presence of a
-    // [fork_timestamps] section — validateL2Invariants binds the two together, so an
-    // ordinary v2 chain cannot waive this guard by pasting in a schedule nothing reads.
+    // A [fork_timestamps] section is the exception: under the Engine driver (EL mode)
+    // EthereumBlockVerifier derives the EVMC revision from the block timestamp via
+    // fillExecutionLedgerConfig — the revision is never read from on-chain state there, so an
+    // executor.evm_revision is not required (validateELModeInvariants requires the section
+    // for that driver). The section is part of the genesis pin, so it is chain-level.
     // The REQUIRED part of the schedule IS part of the genesis pin: loadForkTimestamps
     // stores it on the GenesisConfig and generateGenesisData emits the london..prague
     // ladder, so nodes holding different required schedules fail the genesis comparison.
@@ -3056,14 +2869,13 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
         m_genesisConfig.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION &&
         !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty() &&
-        !m_genesisConfig.m_ethereumELMode)
+        !m_genesisConfig.m_ethereumForkSchedule.has_value())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.version=2 (ethereum-executor) requires an explicit "
-                                  "executor.evm_revision (or executor.evm_revision_forks), or "
-                                  "[ethereum] mode=el with a [fork_timestamps] section (Ethereum "
-                                  "L1 EL mode) so the EVM revision is recorded on-chain; refusing "
-                                  "to run with an implicit binary-side default"));
+                                  "executor.version=2 (ethereum-executor) requires a "
+                                  "[fork_timestamps] section (Ethereum L1 EL mode) or an explicit "
+                                  "executor.evm_revision (or executor.evm_revision_forks); "
+                                  "refusing to run with an implicit binary-side default"));
     }
     // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
     // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
@@ -3078,15 +2890,14 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     {
         m_genesisConfig.m_authAdminAccount =
             _genesisConfig.get<std::string>("executor.auth_admin_account", "");
-        // Ethereum L1 EL mode ([ethereum] mode=el in config.genesis) is a pure Ethereum
-        // execution layer: it has no FISCO system-contract auth, so the auth_admin_account
-        // requirement (normally enforced from compatibility_version 3.3.0) does not apply.
-        // Gated on the pinned EL declaration (validateL2Invariants binds it to the fork
-        // schedule), so a stray [fork_timestamps] section cannot waive the requirement.
+        // The L1 EL lane (executor.version=2) is a pure Ethereum execution layer: it has no
+        // FISCO system-contract auth, so the auth_admin_account requirement (normally
+        // enforced from compatibility_version 3.3.0) does not apply.
         if (m_genesisConfig.m_authAdminAccount.empty() &&
             (m_genesisConfig.m_isAuthCheck ||
                 m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
-            !m_genesisConfig.m_ethereumELMode) [[unlikely]]
+            laneForExecutorVersion(m_genesisConfig.m_executorVersion) != ChainLane::Eth)
+            [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is empty, "
@@ -3097,7 +2908,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     {
         if ((m_genesisConfig.m_isAuthCheck ||
                 m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
-            !m_genesisConfig.m_ethereumELMode)
+            laneForExecutorVersion(m_genesisConfig.m_executorVersion) != ChainLane::Eth)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
@@ -3590,42 +3401,24 @@ BlockDriver NodeConfig::blockDriver() const
                                       "on executor.version >= 3 (the OP lane): an OP chain is "
                                       "driven by op-node over [engine_rpc]"));
         }
-        if (m_opEngineRpc.enable)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[op_engine_rpc] is not read on executor.version >= 3 (the "
-                                      "OP lane): move its keys to [engine_rpc], which has no "
-                                      "enable key"));
-        }
         return m_debugFollowDevp2p ? BlockDriver::DebugFollowDevp2p : BlockDriver::Engine;
     }
     if (m_enableSingleNodeConsensus)
     {
         return BlockDriver::DebugSelfProduce;
     }
-    if (m_opEngineRpc.enable || m_enableEthereumEL)
-    {
-        return BlockDriver::Engine;
-    }
-    return BlockDriver::PBFT;
+    // The L1 EL lane is driven by a consensus client over the Engine API; the FISCO lanes by
+    // their own consensus.
+    return lane == ChainLane::Eth ? BlockDriver::Engine : BlockDriver::PBFT;
 }
 
 bool NodeConfig::servesEngineApi() const
 {
-    if (laneForExecutorVersion(m_genesisConfig.m_executorVersion) == ChainLane::Op)
-    {
-        return blockDriver() == BlockDriver::Engine;
-    }
-    return m_opEngineRpc.enable || m_engineRpc.enable;
+    return blockDriver() == BlockDriver::Engine;
 }
 
 EngineRpcConfig const& NodeConfig::engineApiListener() const
 {
-    if (laneForExecutorVersion(m_genesisConfig.m_executorVersion) != ChainLane::Op &&
-        m_opEngineRpc.enable)
-    {
-        return m_opEngineRpc;
-    }
     return m_engineRpc;
 }
 
@@ -3640,43 +3433,14 @@ bool NodeConfig::enableMinerApi() const
     return m_enableMinerApi;
 }
 
-EngineRpcConfig const& NodeConfig::engineRpcConfig() const
+bool NodeConfig::engineApiDebugApi() const
 {
-    return m_engineRpc;
-}
-
-EngineRpcConfig const& NodeConfig::opEngineRpcConfig() const
-{
-    return m_opEngineRpc;
-}
-
-bool NodeConfig::enableOpEngineRpc() const
-{
-    return m_opEngineRpc.enable;
+    return m_engineRpc.enableDebugApi;
 }
 
 bool NodeConfig::enableDebugApi() const
 {
     return m_enableDebugApi;
-}
-
-bool NodeConfig::engineApiDebugApi() const
-{
-    if (laneForExecutorVersion(m_genesisConfig.m_executorVersion) == ChainLane::Op)
-    {
-        return m_engineRpc.enableDebugApi;
-    }
-    return m_opEngineRpc.enable && m_opEngineRpc.enableDebugApi;
-}
-
-bool NodeConfig::opEngineAllowV1Executor() const
-{
-    return m_opEngineAllowV1Executor;
-}
-
-bool NodeConfig::enableEngineRpc() const
-{
-    return m_engineRpc.enable;
 }
 
 bool NodeConfig::enableSingleNodeConsensus() const
@@ -4041,24 +3805,21 @@ std::string bcos::tool::generateGenesisData(
                 ss << feature.flag << ":" << feature.enable << '\n';
             }
         }
-        // The EL-mode fork schedule's REQUIRED ladder drives the EVM revision in EL
-        // mode, so it is part of the genesis pin for the same reason evmRevision is.
-        // Emitted only when present (mirroring the [ethGenesisHeader] pattern) so every
-        // legacy chain's genesis string stays byte-identical. The chain-level EL-mode
-        // declaration ([ethereum] mode=el) precedes it, so a node whose genesis
-        // declares EL mode but is missing the schedule fails the genesis comparison
-        // instead of silently running a different EVM schedule. Emitted AFTER the
-        // [executor]-owned keys (epochSealerNum/epochBlockNum, [features]) so those
-        // no-section-header keys keep following [executor] on every chain instead of
-        // being split off under [forkTimestamps] on an EL chain.
-        if (genesisConfig.m_ethereumELMode)
+        // The L1 fork schedule's REQUIRED ladder drives the EVM revision in EL mode, so it
+        // is part of the genesis pin for the same reason evmRevision is. Emitted only when
+        // present (mirroring the [ethGenesisHeader] pattern) so every legacy chain's genesis
+        // string stays byte-identical. Emitted AFTER the [executor]-owned keys
+        // (epochSealerNum/epochBlockNum, [features]) so those no-section-header keys keep
+        // following [executor] on every chain instead of being split off under
+        // [forkTimestamps] on an EL chain.
+        if (bcos::tool::laneForExecutorVersion(genesisConfig.m_executorVersion) ==
+            bcos::tool::ChainLane::Eth)
         {
-            // The EIP-155 / EIP-2124 chain id is validated as part of the EL
-            // declaration (validateL2Invariants), so it belongs to the pin too:
-            // emitted next to the declaration (gated the same way, so legacy
-            // chains stay byte-identical) — an operator editing [chain] chain_id
-            // after init now fails the genesis comparison on restart. (The "[web3]"
-            // label below is the pin's historical spelling.)
+            // The EIP-155 / EIP-2124 chain id ([chain] chain_id, validateL2Invariants)
+            // belongs to the pin: an operator editing it after init fails the genesis
+            // comparison on restart. Gated on the L1 EL lane, so legacy chains stay
+            // byte-identical. "[ethereum] mode:el" and the "[web3]" label are the pin's
+            // historical spelling of this block (the mode key itself is gone).
             ss << "[ethereum]" << '\n'
                << "mode:el" << '\n'
                << "[web3]" << '\n'
@@ -4237,7 +3998,8 @@ std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::ev
 }
 bool bcos::tool::NodeConfig::ethereumELModeEnabled() const
 {
-    return m_enableEthereumEL;
+    return laneForExecutorVersion(m_genesisConfig.m_executorVersion) == ChainLane::Eth &&
+           blockDriver() == BlockDriver::Engine;
 }
 uint64_t bcos::tool::NodeConfig::opBlockTimeSeconds() const
 {

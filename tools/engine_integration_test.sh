@@ -200,14 +200,13 @@ enable=true
 listen_ip=0.0.0.0
 listen_port=$((RPC_PORT + 1))
 
-[op_engine_rpc]
-enable=true
+[engine_rpc]
+; executor_version=2 (below) always serves the Engine API here, driven by a consensus client
+; (this script's mock CL); there is no enable key.
 listen_ip=0.0.0.0
 listen_port=${RPC_PORT}
 jwt_secret_file=${WORK_DIR}/jwt.hex
 clock_skew_secs=300
-; The Karst Engine API surface is served by the v2 pure-Ethereum executor (executor_version=2
-; + executor.evm_revision=cancun below), matching the production [op_engine_rpc] configuration.
 
 [p2p]
 listen_ip=0.0.0.0
@@ -227,11 +226,9 @@ multi_ca_path=multiCaPath
 [certificate_whitelist]
 
 [executor]
-; executor_version=2 selects the pure-Ethereum EthereumExecutor; the header-fork derivation
-; in buildPayload keys off the chain's EVM revision, so an explicit evm_revision is required
-; (a missing one would fail closed rather than hash under an assumed fork).
+; executor_version=2 is the L1 EL lane: the EthereumExecutor, with the EVM revision and the
+; header fork derived per block from [fork_timestamps] below.
 version=2
-evm_revision=cancun
 is_auth_check=false
 auth_admin_account=0x3443d6866e757893e6862f451f5d1b7976c54594
 is_serial_execute=true
@@ -250,11 +247,18 @@ enable=true
 log_path=./
 level=debug
 
-# The Ethereum lane (executor_version >= 2) REQUIRES a non-empty [alloc.*] section
-# unless the chain declares [ethereum] mode=el (the L1 EL lane, where an
-# empty-alloc genesis publishes the canonical empty-trie root), and an
-# [eth_genesis_header] section (NodeConfig::validateL2Invariants): the node
-# cross-checks state_root against the MPT root it derives from the [alloc.*] sections
+[fork_timestamps]
+london_time=0
+paris_time=0
+shanghai_time=0
+cancun_time=0
+; Prague stays in the future: a Prague block runs the EIP-7002/7251 system calls, whose
+; contracts this single-alloc genesis does not carry.
+prague_time=4102444800
+merge_block=0
+
+# The Ethereum lane (executor_version >= 2) REQUIRES an [eth_genesis_header] section
+# (NodeConfig::validateL2Invariants): the node cross-checks state_root against the MPT root it derives from the [alloc.*] sections
 # and hash against keccak256(rlp(header)) of the other 21 fields.
 # The values below are the same single-alloc fixture tools/.ci/ci_check_eth_executor.sh
 # uses; state_root/hash are valid only for exactly this one alloc — regenerate both
@@ -558,18 +562,19 @@ else
     log_fail "No head hash available"
 fi
 
-# 3.5 engine_getPayloadV5 + engine_newPayloadV4
-log_test "engine_getPayloadV5 + engine_newPayloadV4"
+# 3.5 engine_getPayloadV3 + engine_newPayloadV3 (the Cancun methods: the L1 Engine API
+# serves each fork's payload through that fork's method version only)
+log_test "engine_getPayloadV3 + engine_newPayloadV3"
 if [ -n "${PAYLOAD_ID:-}" ]; then
     # getPayload
-    GET_RESP=$(rpc_call "engine_getPayloadV5" "[\"${PAYLOAD_ID}\"]")
+    GET_RESP=$(rpc_call "engine_getPayloadV3" "[\"${PAYLOAD_ID}\"]")
     if echo "${GET_RESP}" | grep -q '"blockHash"'; then
-        # V5 response shape: executionRequests must be present.
-        if ! echo "${GET_RESP}" | grep -q '"executionRequests"'; then
-            log_fail "getPayloadV5 response missing executionRequests: ${GET_RESP}"
+        # V3 response shape: blobsBundle must be present.
+        if ! echo "${GET_RESP}" | grep -q '"blobsBundle"'; then
+            log_fail "getPayloadV3 response missing blobsBundle: ${GET_RESP}"
         fi
-        # Extract payload and feed to newPayloadV4 with the required
-        # [payload, [], beaconRoot, []] parameter shape. Use a temp file to
+        # Extract payload and feed to newPayloadV3 with the required
+        # [payload, [], beaconRoot] parameter shape. Use a temp file to
         # avoid shell quoting issues with the multi-KB JSON.
         NEW_REQ_FILE="${WORK_DIR}/newPayload_req.json"
         echo "${GET_RESP}" | python3 -c "
@@ -577,7 +582,7 @@ import sys,json
 d=json.load(sys.stdin)['result']
 p=d['executionPayload'] if 'executionPayload' in d else d
 root=d.get('parentBeaconBlockRoot','${ZERO_ROOT}')
-print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV4','params':[p,[],root,[]]}))
+print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV3','params':[p,[],root]}))
 " 2>/dev/null > "${NEW_REQ_FILE}"
         NEW_RESP=$(curl -s -X POST "${RPC_URL}" \
             -H "Content-Type: application/json" \
@@ -586,11 +591,11 @@ print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV4','params'
         NEW_STATUS=$(json_val "${NEW_RESP}" "status")
         # VALID only: ACCEPTED means the node acknowledged the block without validating or
         # storing it, the escape M9 removed. Accepting it here would hide its return.
-        log_info "newPayloadV4 status = ${NEW_STATUS}"
+        log_info "newPayloadV3 status = ${NEW_STATUS}"
         if [ "${NEW_STATUS}" = "VALID" ]; then
             log_pass
         else
-            log_fail "newPayloadV4 did not answer VALID: ${NEW_RESP}"
+            log_fail "newPayloadV3 did not answer VALID: ${NEW_RESP}"
         fi
 
         # The Engine boundary speaks Unix seconds; block headers store milliseconds. The
@@ -628,24 +633,21 @@ else
     log_pass
 fi
 
-# 3.6 pre-Karst surface on a chain whose fork outruns V2: forkchoiceUpdatedV2 is refused
-# with -38005 Unsupported fork. The harness chain runs executor_version=2 with
-# evm_revision=cancun (the production [op_engine_rpc] configuration), so the header-fork
-# derivation keys off CANCUN; a V2 attribute shape cannot express CANCUN
-# (parentBeaconBlockRoot), so the service answers the same Unsupported fork error geth
-# gives for this CL/chain mismatch. The V2 build/fetch/submit loop itself is covered by
-# the engine unit tests on a SHANGHAI fixture.
-log_test "engine_forkchoiceUpdatedV2 answers -38005 (chain fork outruns V2)"
+# 3.6 forkchoiceUpdatedV2 with a Cancun timestamp: the V2 attribute shape cannot carry
+# parentBeaconBlockRoot, so the L1 Engine API refuses it as -38003 Invalid payload
+# attributes. (geth answers -38005 Unsupported fork for this CL/chain mismatch; this pins
+# the node's current answer.)
+log_test "engine_forkchoiceUpdatedV2 answers -38003 (Cancun timestamp needs V3 attributes)"
 V2_HEAD=$(json_val "$(rpc_call "eth_getBlockByNumber" '["latest",false]')" "hash")
 V2_TS_SECS=$((TS_SECS + 12))
 V2_TS_HEX=$(printf '0x%x' "${V2_TS_SECS}")
 if [ -n "${V2_HEAD}" ]; then
     RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
         "[{\"headBlockHash\":\"${V2_HEAD}\",\"safeBlockHash\":\"${V2_HEAD}\",\"finalizedBlockHash\":\"${V2_HEAD}\"},{\"timestamp\":\"${V2_TS_HEX}\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[]}]")
-    if echo "${RESP}" | grep -q '\-38005'; then
+    if echo "${RESP}" | grep -q '\-38003'; then
         log_pass
     else
-        log_fail "expected forkchoiceUpdatedV2 to be refused as -38005 Unsupported fork, got: ${RESP}"
+        log_fail "expected forkchoiceUpdatedV2 to be refused as -38003 Invalid payload attributes, got: ${RESP}"
     fi
 else
     log_fail "Cannot get head hash"
@@ -670,11 +672,9 @@ if [ -f "${PYTHON_SCRIPT}" ]; then
     python3 -c "import requests" 2>/dev/null || \
         pip3 install --quiet requests 2>/dev/null || \
         pip3 install --break-system-packages --quiet requests 2>/dev/null || true
-    # --deposit-rejected: this harness chain runs executor_version=2 (the Eth lane),
-    # where a 0x7e deposit envelope in payloadAttributes is a terminal INVALID
-    # (deposits are an OP-lane extension). The mock then runs its block flow without
-    # the forced deposit and pins the rejection with a dedicated negative case.
-    if python3 "${PYTHON_SCRIPT}" "${RPC_URL}" "${WORK_DIR}/jwt.hex" --deposit-rejected 2>&1; then
+    # --eth-lane: this harness chain runs executor_version=2, the L1 Engine API (Cancun
+    # methods, no OP attributes; a 0x7e deposit envelope is a terminal INVALID).
+    if python3 "${PYTHON_SCRIPT}" "${RPC_URL}" "${WORK_DIR}/jwt.hex" --eth-lane 2>&1; then
         log_info "Python tests passed"
         log_pass
     else

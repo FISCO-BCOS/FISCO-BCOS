@@ -17,8 +17,8 @@
  * @brief Ethereum L1 EL-mode self-sync driver: connect to RLPx bootnodes, download
  *        blocks with BlockExchange (PoS header validation), verify + commit each block
  *        with EthereumBlockVerifier (execute -> roots -> MPT state root -> ledger), in
- *        a dedicated background thread. Wired from AirNodeInitializer when
- *        [ethereum] mode=el; the config file is the source of truth.
+ *        a dedicated background thread. Wired from AirNodeInitializer on every
+ *        executor.version=2 node under the Engine driver (NodeConfig::ethereumELModeEnabled).
  * @date 2026/8/19
  */
 #pragma once
@@ -165,7 +165,7 @@ public:
     /// [eth_genesis_header].hash). Throws InvalidConfig on failure.
     void validateConfig() const { validateNodeConfig(*m_nodeConfig); }
 
-    /// NodeConfig-only validation of the EL-mode prerequisites (mode, executor version,
+    /// NodeConfig-only validation of the EL-mode prerequisites (driver, executor version,
     /// [eth_genesis_header] presence and hash, bootnode file). Static on purpose: every
     /// check reads only NodeConfig, so AirNodeInitializer runs this BEFORE the core node
     /// init — which performs the MPT pruner's boot-time window walk and, with
@@ -177,7 +177,8 @@ public:
         if (!nodeConfig.ethereumELModeEnabled())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "EthereumSyncInitializer: [ethereum].mode != el"));
+                                      "EthereumSyncInitializer: not an Ethereum L1 EL-mode node "
+                                      "(executor.version=2 under the Engine driver)"));
         }
         if (nodeConfig.executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
         {
@@ -208,14 +209,26 @@ public:
                     ethGenesisHeader->m_hash.hex() +
                     " does not match the re-computed genesis hash " + projectedHash.hex()));
         }
-        // Bootnode file must exist and parse (validates the enode list eagerly).
-        auto nodes = bcos::devp2p::sync::loadBootnodes(nodeConfig.ethereumBootnodesFile());
-        if (nodes.empty())
+        // A present bootnode file must parse (validates the enode list eagerly). No file or
+        // an empty list is legal: devp2p then runs with no peers, as geth does without
+        // bootnodes, and the Engine API alone drives the chain.
+        if (configuredBootnodes(nodeConfig).empty())
         {
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "Ethereum L1 EL mode: no bootnodes in " + nodeConfig.ethereumBootnodesFile()));
+            INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: no bootnodes, devp2p has no peers")
+                                  << LOG_KV("bootnodesFile", nodeConfig.ethereumBootnodesFile());
         }
+    }
+
+    /// [ethereum] bootnodes_file's enode list; an absent file is an empty list.
+    static std::vector<bcos::devp2p::rlpx::PeerConfig> configuredBootnodes(
+        bcos::tool::NodeConfig const& nodeConfig)
+    {
+        auto const& path = nodeConfig.ethereumBootnodesFile();
+        if (!std::filesystem::exists(path))
+        {
+            return {};
+        }
+        return bcos::devp2p::sync::loadBootnodes(path);
     }
 
     /// Start the background sync loop. No-op if already started. Throws if the node
@@ -726,8 +739,14 @@ private:
                     continue;
                 }
                 auto devp2pConfig = devp2pChainConfig();
-                auto bootnodes =
-                    bcos::devp2p::sync::loadBootnodes(m_nodeConfig->ethereumBootnodesFile());
+                auto bootnodes = configuredBootnodes(*m_nodeConfig);
+                if (bootnodes.empty())
+                {
+                    // no peers to sync from; poll on the caught-up cadence for a bootnode
+                    // file an operator adds later
+                    std::this_thread::sleep_for(c_caughtUpBackoff);
+                    continue;
+                }
                 // Round progress tracking: a caught-up round (no peer offered a safe
                 // download window) backs off to c_caughtUpBackoff and stays quiet; a
                 // round with a download — or with peer failures, which already log a
@@ -1386,9 +1405,8 @@ private:
                     static_cast<uint64_t>(resume.anchor.timestamp));
                 return config;
             };
-        m_txGossip->start(*m_localKey,
-            bcos::devp2p::sync::loadBootnodes(m_nodeConfig->ethereumBootnodesFile()),
-            std::move(configFactory));
+        m_txGossip->start(
+            *m_localKey, configuredBootnodes(*m_nodeConfig), std::move(configFactory));
     }
 
     std::atomic_bool m_running{false};

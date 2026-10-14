@@ -619,8 +619,8 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // An empty (or absent) alloc is a valid EL-mode genesis: the alloc loop
         // below emits no [alloc.*] sections and computeGenesisStateTrie returns
         // the canonical empty-trie root, matching geth's empty-alloc stateRoot.
-        // (NodeConfig::validateL2Invariants exempts [ethereum] mode=el from the
-        // non-empty-alloc invariant; the L2/OP lanes still require allocs.)
+        // (NodeConfig::validateL2Invariants exempts executor.version=2 from the
+        // non-empty-alloc invariant; the OP lane still requires allocs.)
         if (!root.isMember("config") || !root["config"].isObject())
         {
             throw std::runtime_error("genesis.json is missing the config object");
@@ -956,8 +956,6 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             << "    is_auth_check=false\n"
             << "    auth_admin_account=0x0000000000000000000000000000000000000000\n"
             << "    is_serial_execute=true\n\n"
-            << "[ethereum]\n"
-            << "    mode=el\n\n"
             << "[fork_timestamps]\n";
         for (auto const& warning : warnings)
         {

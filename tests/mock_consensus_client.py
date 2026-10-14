@@ -15,12 +15,15 @@ mock_consensus_client.py — FISCO-BCOS Engine API Smoke Test (Karst dialect)
 
 用法:
     pip install requests
-    python3 mock_consensus_client.py [RPC_URL] [JWT_SECRET_FILE] [--deposit-rejected]
+    python3 mock_consensus_client.py [RPC_URL] [JWT_SECRET_FILE] [--eth-lane]
 
-  --deposit-rejected  目标链跑 Eth 车道（executor_version=2）。0x7e deposit 是 OP 车道
-                      扩展，Eth 构建路径把它当 undecodable，FCU 终态 INVALID
-                      （updateForkchoice 的 fcInvalidIfUndecodable 语义）。此模式下
-                      出块流程不再注入 deposit，并新增"注入 deposit 必须被拒"的负测。
+  --eth-lane  目标链跑 Eth 车道（executor_version=2，L1 Engine API，Cancun 链）。出块流程
+              改走 Cancun 方法（getPayloadV3 / newPayloadV3），不带 OP 属性
+              （eip1559Params / minBaseFee / gasLimit），也不注入 deposit：0x7e deposit 是
+              OP 车道扩展，Eth 构建路径把它当 undecodable，FCU 终态 INVALID
+              （updateForkchoice 的 fcInvalidIfUndecodable 语义），由单独的负测钉住。
+              只属于 OP 方言的用例（eip1559Params/minBaseFee 版本门、extraData 篡改、
+              gasLimit 已知缺口）在此模式下不跑。
 
 退出码: 0 = 全部通过, 1 = 有测试失败
 """
@@ -79,12 +82,12 @@ UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4",)
 # node currently IGNORES it and takes the gas limit from its own SystemConfig.
 ATTRS_GAS_LIMIT = "0x1c9c380"
 
-# Set by --deposit-rejected: the target chain runs the Eth lane (executor_version=2),
-# where a 0x7e deposit envelope in payloadAttributes.transactions is answered with a
-# terminal INVALID (deposits are an OP-lane extension). Under this
-# flag the block flow injects no forced deposit and a dedicated negative case pins the
-# rejection instead.
-DEPOSIT_REJECTED = False
+# Set by --eth-lane: the target chain runs the Eth lane (executor_version=2), the L1
+# Engine API on a Cancun chain. The block flow uses the Cancun methods and no OP
+# attributes, and injects no deposit: a 0x7e deposit envelope in
+# payloadAttributes.transactions is answered with a terminal INVALID (deposits are an
+# OP-lane extension), pinned by a dedicated negative case instead.
+ETH_LANE = False
 
 # ---- Minimal RLP encoder (enough for the deposit fixture) ----
 
@@ -262,15 +265,17 @@ def next_timestamp() -> str:
 def run_karst_block_flow(no_tx_pool: bool, forced_deposit: bool = True) -> bool:
     """One op-node-shaped block: FCU V3 (deposit injected) -> getPayloadV5 -> newPayloadV4.
 
-    With forced_deposit=False (Eth lane, --deposit-rejected) the attributes carry no
-    transactions and the deposit-specific assertions are skipped: the payload is built
-    from the txpool instead, and the injected-deposit rejection is pinned separately by
-    test_deposit_envelope_is_rejected_on_eth_lane.
+    On the Eth lane (--eth-lane, forced_deposit=False) it is one L1 Cancun block instead:
+    FCU V3 without OP attributes or transactions -> getPayloadV3 -> newPayloadV3. The
+    payload is built from the txpool, and the injected-deposit rejection is pinned
+    separately by test_deposit_envelope_is_rejected_on_eth_lane.
     """
     label = f"noTxPool={str(no_tx_pool).lower()}"
     if not forced_deposit:
         label += ", no forced deposit (Eth lane)"
-    _log_test(f"FCU V3 + getPayloadV5 + newPayloadV4 ({label})")
+    get_method = "engine_getPayloadV3" if ETH_LANE else "engine_getPayloadV5"
+    new_method = "engine_newPayloadV3" if ETH_LANE else "engine_newPayloadV4"
+    _log_test(f"FCU V3 + {get_method} + {new_method} ({label})")
 
     head_hash = get_head_hash()
     fc_state = {
@@ -286,13 +291,14 @@ def run_karst_block_flow(no_tx_pool: bool, forced_deposit: bool = True) -> bool:
         "suggestedFeeRecipient": FEE_RECIPIENT,
         "withdrawals": [],
         "parentBeaconBlockRoot": ZERO_HASH,
+    }
+    if not ETH_LANE:
         # Holocene Bytes8 wire shape: an 8-byte hex string, u32 BE denominator in
         # [0:4] and u32 BE elasticity in [4:8] (op-service/eth/types.go:521,
         # EIP1559Params *Bytes8, v1.19.3). All-zero means "SystemConfig has not set
         # the params"; the EL translates 0,0 to the Canyon constants (250, 6) in the
         # built extraData.
-        "eip1559Params": "0x0000000000000000",
-    }
+        payload_attrs["eip1559Params"] = "0x0000000000000000"
     if forced_deposit:
         payload_attrs["transactions"] = [DEPOSIT_RAW]
         payload_attrs["noTxPool"] = no_tx_pool
@@ -310,29 +316,33 @@ def run_karst_block_flow(no_tx_pool: bool, forced_deposit: bool = True) -> bool:
         _log_fail(f"FCU did not build a payload: status={status}, payloadId={payload_id}")
         return False
 
-    result = rpc_result("engine_getPayloadV5", [payload_id])
+    result = rpc_result(get_method, [payload_id])
 
-    # V5 response shape (op-node expectation).
-    for field in (
-        "executionPayload",
-        "blockValue",
-        "blobsBundle",
-        "shouldOverrideBuilder",
-        "executionRequests",
-    ):
+    # Response shape: V5 (op-node expectation) or, on the Eth lane, V3 (Cancun).
+    fields = ["executionPayload", "blockValue", "blobsBundle", "shouldOverrideBuilder"]
+    if not ETH_LANE:
+        fields.append("executionRequests")
+    for field in fields:
         if field not in result:
-            _log_fail(f"getPayloadV5 response missing '{field}': {sorted(result.keys())}")
+            _log_fail(f"{get_method} response missing '{field}': {sorted(result.keys())}")
             return False
     bundle = result["blobsBundle"]
     if any(bundle.get(k) != [] for k in ("commitments", "proofs", "blobs")):
         _log_fail(f"blobsBundle must be three empty arrays, got {bundle}")
         return False
-    if result["executionRequests"] != [] or result["shouldOverrideBuilder"] is not False:
-        _log_fail("executionRequests must be [] and shouldOverrideBuilder false")
+    if result["shouldOverrideBuilder"] is not False:
+        _log_fail("shouldOverrideBuilder must be false")
+        return False
+    if not ETH_LANE and result["executionRequests"] != []:
+        _log_fail("executionRequests must be []")
         return False
 
     payload = result["executionPayload"]
-    if "withdrawalsRoot" not in payload:
+    if ETH_LANE:
+        if payload.get("withdrawals") != []:
+            _log_fail(f"executionPayload withdrawals must be [] (Cancun V3 shape): {payload}")
+            return False
+    elif "withdrawalsRoot" not in payload:
         _log_fail("executionPayload missing withdrawalsRoot (Isthmus V4 shape)")
         return False
 
@@ -344,7 +354,7 @@ def run_karst_block_flow(no_tx_pool: bool, forced_deposit: bool = True) -> bool:
     got_seconds = int(payload["timestamp"], 16)
     if abs(got_seconds - sent_seconds) > 1:
         _log_fail(
-            f"getPayloadV5 timestamp is not the Unix seconds we sent: "
+            f"{get_method} timestamp is not the Unix seconds we sent: "
             f"sent {sent_seconds}, got {got_seconds}"
         )
         return False
@@ -372,13 +382,14 @@ def run_karst_block_flow(no_tx_pool: bool, forced_deposit: bool = True) -> bool:
         _log_info(f"no forced deposit; payload carries {len(txs)} txpool tx(s)")
 
     beacon_root = result.get("parentBeaconBlockRoot", ZERO_HASH)
-    new_status = rpc_result("engine_newPayloadV4", [payload, [], beacon_root, []])
+    new_params = [payload, [], beacon_root] if ETH_LANE else [payload, [], beacon_root, []]
+    new_status = rpc_result(new_method, new_params)
     # VALID only. ACCEPTED would mean the node acknowledged the block without validating
     # or storing it, which is exactly the escape M9 removed — accepting it here would let
     # that regression back in silently.
-    _log_info(f"newPayloadV4 status = {new_status['status']}")
+    _log_info(f"{new_method} status = {new_status['status']}")
     if new_status["status"] != "VALID":
-        _log_fail(f"newPayloadV4 did not answer VALID for the built payload: {new_status}")
+        _log_fail(f"{new_method} did not answer VALID for the built payload: {new_status}")
         return False
 
     # Wait for the committed block to become the eth_* head (ledger rows are written
@@ -434,9 +445,6 @@ def test_deposit_envelope_is_rejected_on_eth_lane() -> None:
         "parentBeaconBlockRoot": ZERO_HASH,
         "transactions": [DEPOSIT_RAW],
         "noTxPool": True,
-        "gasLimit": ATTRS_GAS_LIMIT,
-        "minBaseFee": 0,
-        "eip1559Params": "0x0000000000000000",
     }
 
     fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
@@ -449,14 +457,14 @@ def test_deposit_envelope_is_rejected_on_eth_lane() -> None:
 
 
 def run_v2_block_flow() -> None:
-    """V2 FCU on the CANCUN harness chain is refused as Unsupported fork (-38005).
+    """V2 FCU on a CANCUN harness chain is refused.
 
-    The harness chain runs executor_version=2 with evm_revision=cancun (the production
-    [op_engine_rpc] configuration), so buildPayload's chain-derived header fork is CANCUN.
     A V2 forkchoiceUpdated cannot express the CANCUN attribute shape
-    (parentBeaconBlockRoot), so it is refused with -38005 — the same answer geth gives
-    for a CL/chain fork mismatch. The pre-Karst V2 build loop itself is covered by the
-    engine unit tests on a SHANGHAI fixture.
+    (parentBeaconBlockRoot). The OP dialect refuses it with -38005 Unsupported fork, the
+    answer geth gives for a CL/chain fork mismatch; the Eth lane's L1 Engine API refuses
+    it with -38003 Invalid payload attributes (the node's current answer, not geth's).
+    The pre-Karst V2 build loop itself is covered by the engine unit tests on a SHANGHAI
+    fixture.
     """
     _log_test("FCU V2 + getPayloadV2 + newPayloadV2 (pre-Karst surface)")
 
@@ -473,7 +481,9 @@ def run_v2_block_flow() -> None:
         "withdrawals": [],
     }
 
-    expect_error_code("engine_forkchoiceUpdatedV2", [fc_state, payload_attrs], -38005)
+    expect_error_code(
+        "engine_forkchoiceUpdatedV2", [fc_state, payload_attrs], -38003 if ETH_LANE else -38005
+    )
     _log_pass()
 
 
@@ -742,10 +752,10 @@ def generate_jwt(secret_file: str) -> str:
 
 
 def main() -> int:
-    global RPC_URL, DEPOSIT_REJECTED
+    global RPC_URL, ETH_LANE
 
     positional = [a for a in sys.argv[1:] if not a.startswith("--")]
-    DEPOSIT_REJECTED = "--deposit-rejected" in sys.argv[1:]
+    ETH_LANE = "--eth-lane" in sys.argv[1:]
     if positional:
         RPC_URL = positional[0]
     if len(positional) > 1:
@@ -768,9 +778,9 @@ def main() -> int:
 
         # 3./4./5. Full block flow(s). On the OP lane the noTxPool rotation asserts the
         # forced deposit is the whole payload under true and still leads it under false.
-        # On the Eth lane (--deposit-rejected) deposits are refused, so a single
-        # deposit-free flow runs and the rejection is pinned by its own negative case.
-        if DEPOSIT_REJECTED:
+        # On the Eth lane (--eth-lane) deposits are refused, so a single deposit-free
+        # Cancun flow runs and the rejection is pinned by its own negative case.
+        if ETH_LANE:
             if run_karst_block_flow(no_tx_pool=True, forced_deposit=False):
                 test_deposit_envelope_is_rejected_on_eth_lane()
         elif run_karst_block_flow(no_tx_pool=True):
@@ -779,14 +789,16 @@ def main() -> int:
         # 6. The pre-Karst surface is still live.
         run_v2_block_flow()
 
-        # 7. Holocene/Jovian attribute fields are forkchoiceUpdatedV3-only.
-        test_eip1559_fields_are_v3_only()
+        # 7.-9. OP-dialect attributes; the L1 Engine API has none of them.
+        if not ETH_LANE:
+            # 7. Holocene/Jovian attribute fields are forkchoiceUpdatedV3-only.
+            test_eip1559_fields_are_v3_only()
 
-        # 8. Commit-side extraData gates: altered / malformed shapes are not VALID.
-        test_new_payload_rejects_tampered_extra_data()
+            # 8. Commit-side extraData gates: altered / malformed shapes are not VALID.
+            test_new_payload_rejects_tampered_extra_data()
 
-        # 9. Known gap: attributes.gasLimit does not reach the built block.
-        test_attributes_gas_limit_is_ignored()
+            # 9. Known gap: attributes.gasLimit does not reach the built block.
+            test_attributes_gas_limit_is_ignored()
 
         # 10. Error semantics.
         test_negative_cases()

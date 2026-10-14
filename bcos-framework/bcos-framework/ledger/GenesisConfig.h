@@ -213,14 +213,6 @@ public:
     /// nothing at all, which is what keeps a pre-existing chain's pin text unchanged.
     std::optional<OpEip1559Params> m_opEip1559;
 
-    // True iff config.genesis declares "[ethereum] mode=el" — the chain is an
-    // Ethereum L1 EL-sync chain. Chain-level (part of the genesis pin), NOT the
-    // per-node [ethereum] section of config.ini: the executor-v2 evmc_revision /
-    // auth_admin_account guard exemptions are gated on this declaration, so a
-    // [fork_timestamps] section pasted into an ordinary v2 genesis cannot waive
-    // them. validateL2Invariants binds it to m_ethereumForkSchedule both ways.
-    bool m_ethereumELMode = false;
-
     // Canonical OP fork schedule. Parsed from genesis [op_fork_schedule]
     // canonical and persisted into s_op_chain_metadata at genesis when set; not
     // part of LedgerConfig / generateGenesisData.

@@ -35,11 +35,9 @@ struct Params
     std::string genesisFilePath;
     std::string snapshotPath;  // import from or export to
     float txSpeed;
-    // Ethereum L1 EL-mode overrides (--el / --bootnodes). The config file is the
-    // source of truth; command-line flags only mirror it. A conflict between the two
-    // (e.g. --el while [ethereum].mode != el, or a --bootnodes path that differs from
-    // [ethereum].bootnodes_file) is a hard error — see initAirNodeCommandLine.
-    std::optional<bool> ethereumEL;
+    // devp2p override (--bootnodes). The config file is the source of truth; the flag only
+    // mirrors it. A --bootnodes path that differs from [ethereum].bootnodes_file is a hard
+    // error — see AirNodeInitializer::validateEthereumELParams.
     std::optional<std::string> ethereumBootnodesFile;
     enum class operation : int
     {

@@ -328,11 +328,12 @@ BOOST_AUTO_TEST_CASE(reloadWithoutSectionDropsTheSchedule)
 }
 
 // Node admission compares genesis strings byte for byte, so a v2 chain's pin shape must not
-// drift. A v2 chain now necessarily carries the Ethereum-lane sections ([alloc.*] +
+// drift. A v2 chain necessarily carries the Ethereum-lane sections ([alloc.*] +
 // [eth_genesis_header], bound to executor.version >= 2 by validateL2Invariants); allocs stay
-// out of the pin, but the header is pinned, so the expected string below includes the
-// [ethGenesisHeader] block and still contains no [opForkTimestamps] emission.
-BOOST_AUTO_TEST_CASE(legacyV2GenesisStringUnchanged)
+// out of the pin, but the header is pinned, and so is the L1 EL lane's chain-id block
+// ("[ethereum] mode:el" / "[web3] chain_id", emitted on every executor.version=2 genesis).
+// The expected string contains no [opForkTimestamps] emission.
+BOOST_AUTO_TEST_CASE(v2GenesisStringShape)
 {
     auto cfg = loadOk(opGenesis("version=2\nevm_revision=prague\n", ""));
     auto data = bcos::tool::generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
@@ -349,7 +350,8 @@ BOOST_AUTO_TEST_CASE(legacyV2GenesisStringUnchanged)
         "[tx]\ngaslimit:3000000000\n"
         "[executor]\niswasm: 0\nisAuthCheck:0\n"
         "authAdminAccount:0x0000000000000000000000000000000000000001\nisSerialExecute:0\n"
-        "evmRevision:0:prague\nepochSealerNum:4\nepochBlockNum:1000\n" +
+        "evmRevision:0:prague\nepochSealerNum:4\nepochBlockNum:1000\n"
+        "[ethereum]\nmode:el\n[web3]\nchain_id:1\n" +
         ethLaneGenesisPinSection() + "node.0:" + node + ",1\n";
     BOOST_CHECK_EQUAL(data, expected);
 }

@@ -7,10 +7,8 @@
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
-// Tests for the [engine_rpc] section on executor.version < 3 (the EL-mode Engine API
-// listener): parsing, and the assembly gates that bind its enable key to ethereum.mode=el
-// and keep it off the single-node / [op_engine_rpc] drivers. The OP lane, where the section
-// has no enable key, is NodeConfigBlockDriverTest.
+// Tests for the config.ini loaders of the Engine API listener ([engine_rpc]) and the
+// [ethereum] network keys. Which lanes run the listener is NodeConfigBlockDriverTest.
 
 #include "ExceptionCheck.h"
 #include "NodeConfigLoaderProbe.h"
@@ -27,90 +25,53 @@ BOOST_AUTO_TEST_CASE(engineRpcDefaults)
 {
     LoaderProbe probe;
     probe.loadEngineRpcConfig({});
-    BOOST_CHECK(!probe.enableEngineRpc());
-    BOOST_CHECK_EQUAL(probe.engineRpcConfig().listenIP, "127.0.0.1");
-    BOOST_CHECK_EQUAL(probe.engineRpcConfig().listenPort, 8551);
-    BOOST_CHECK_EQUAL(probe.engineRpcConfig().jwtSecretFile, "conf/engine/jwt.hex");
-    BOOST_CHECK(!probe.engineRpcConfig().enableMinerApi);
+    BOOST_CHECK_EQUAL(probe.engineApiListener().listenIP, "127.0.0.1");
+    BOOST_CHECK_EQUAL(probe.engineApiListener().listenPort, 8551);
+    BOOST_CHECK_EQUAL(probe.engineApiListener().jwtSecretFile, "conf/engine/jwt.hex");
+    BOOST_CHECK(!probe.engineApiListener().enableMinerApi);
 }
 
 BOOST_AUTO_TEST_CASE(engineRpcPopulated)
 {
     LoaderProbe probe;
     auto pt = fromIni(
-        "[engine_rpc]\nenable=true\nlisten_ip=0.0.0.0\nlisten_port=9551\n"
+        "[engine_rpc]\nlisten_ip=0.0.0.0\nlisten_port=9551\n"
         "jwt_secret_file=conf/custom-jwt.hex\nclock_skew_secs=30\n");
     probe.loadEngineRpcConfig(pt);
-    BOOST_CHECK(probe.enableEngineRpc());
-    BOOST_CHECK_EQUAL(probe.engineRpcConfig().listenIP, "0.0.0.0");
-    BOOST_CHECK_EQUAL(probe.engineRpcConfig().listenPort, 9551);
-    BOOST_CHECK_EQUAL(probe.engineRpcConfig().jwtSecretFile, "conf/custom-jwt.hex");
-    BOOST_CHECK_EQUAL(probe.engineRpcConfig().clockSkewSecs, 30);
+    BOOST_CHECK_EQUAL(probe.engineApiListener().listenIP, "0.0.0.0");
+    BOOST_CHECK_EQUAL(probe.engineApiListener().listenPort, 9551);
+    BOOST_CHECK_EQUAL(probe.engineApiListener().jwtSecretFile, "conf/custom-jwt.hex");
+    BOOST_CHECK_EQUAL(probe.engineApiListener().clockSkewSecs, 30);
 }
 
-BOOST_AUTO_TEST_CASE(engineRpcWithELModeAccepted)
+// The OP miner namespace (miner_setMaxDASize) is opt-in: it writes the node-wide DA caps, so
+// a listener that has not enabled it must not register it at all. Default off is load-bearing —
+// an OP node creates the caps, so the runtime MethodNotFound guard would not stop a public caller.
+BOOST_AUTO_TEST_CASE(minerApiDefaultsOff)
 {
-    // Same load order as NodeConfig::loadConfig: [engine_rpc] first, [ethereum] second.
     LoaderProbe probe;
-    auto pt = fromIni("[engine_rpc]\nenable=true\n[ethereum]\nmode=el\n");
-    probe.loadEngineRpcConfig(pt);
-    BOOST_CHECK_NO_THROW(probe.loadEthereumConfig(pt));
-    BOOST_CHECK(probe.enableEngineRpc());
-    BOOST_CHECK(probe.ethereumELModeEnabled());
+    probe.loadWeb3RpcConfig(fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\n"));
+    BOOST_CHECK(!probe.enableMinerApi());
 }
 
-// The gate reads the lane, so it runs in the startup hook (here on the probe's default
-// executor.version 0; the v2 case is NodeConfigBlockDriverTest).
-BOOST_AUTO_TEST_CASE(engineRpcWithoutELModeRejected)
+// The two listeners configure the miner namespace independently: the [engine_rpc] key must
+// not touch the web3 (8545) switch and vice versa — enabling the batcher handshake on the
+// private port can never expose it on the public one. (That the [engine_rpc] key takes
+// effect on the OP lane only is NodeConfigBlockDriverTest.)
+BOOST_AUTO_TEST_CASE(minerApiScopedPerListener)
 {
     LoaderProbe probe;
-    auto pt = fromIni("[engine_rpc]\nenable=true\n");
-    probe.loadEngineRpcConfig(pt);
-    BOOST_REQUIRE_NO_THROW(probe.loadEthereumConfig(pt));
-    BOOST_CHECK_EXCEPTION(probe.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-        return errinfoContains(e, "engine_rpc.enable requires ethereum.mode=el");
-    });
-}
-
-BOOST_AUTO_TEST_CASE(engineRpcAndOpEngineRpcRejected)
-{
-    LoaderProbe probe;
-    auto pt = fromIni("[engine_rpc]\nenable=true\n[op_engine_rpc]\nenable=true\n");
-    probe.loadEngineRpcConfig(pt);
-    BOOST_CHECK_THROW(probe.loadOpEngineRpcConfig(pt), InvalidConfig);
-
-    // Reverse load order: the symmetric check in loadEngineRpcConfig fires.
-    LoaderProbe probe2;
-    probe2.loadOpEngineRpcConfig(pt);
-    BOOST_CHECK_THROW(probe2.loadEngineRpcConfig(pt), InvalidConfig);
-}
-
-BOOST_AUTO_TEST_CASE(engineRpcAndSingleNodeConsensusRejected)
-{
-    LoaderProbe probe;
-    auto pt =
-        fromIni("[engine_rpc]\nenable=true\n[consensus]\nenable_single_node_consensus=true\n");
-    probe.loadEngineRpcConfig(pt);
-    BOOST_CHECK_THROW(probe.loadSingleNodeConsensusConfig(pt), InvalidConfig);
+    probe.loadEngineRpcConfig(fromIni("[engine_rpc]\nenable_miner_api=true\n"));
+    probe.loadWeb3RpcConfig(fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\n"));
+    BOOST_CHECK(probe.engineApiListener().enableMinerApi);
+    BOOST_CHECK(!probe.enableMinerApi());
 
     LoaderProbe probe2;
-    probe2.loadSingleNodeConsensusConfig(pt);
-    BOOST_CHECK_THROW(probe2.loadEngineRpcConfig(pt), InvalidConfig);
-}
-
-BOOST_AUTO_TEST_CASE(elModeWithOpEngineRpcStillRejected)
-{
-    // Opening EL mode to [engine_rpc] must not loosen the existing EL <-> op_engine_rpc and
-    // EL <-> single-node-consensus exclusions.
-    LoaderProbe probe;
-    auto pt = fromIni("[ethereum]\nmode=el\n[op_engine_rpc]\nenable=true\n");
-    probe.loadOpEngineRpcConfig(pt);
-    BOOST_CHECK_THROW(probe.loadEthereumConfig(pt), InvalidConfig);
-
-    LoaderProbe probe2;
-    auto pt2 = fromIni("[ethereum]\nmode=el\n[consensus]\nenable_single_node_consensus=true\n");
-    probe2.loadSingleNodeConsensusConfig(pt2);
-    BOOST_CHECK_THROW(probe2.loadEthereumConfig(pt2), InvalidConfig);
+    probe2.loadEngineRpcConfig({});
+    probe2.loadWeb3RpcConfig(
+        fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\nenable_miner_api=true\n"));
+    BOOST_CHECK(probe2.enableMinerApi());
+    BOOST_CHECK(!probe2.engineApiListener().enableMinerApi);
 }
 
 BOOST_AUTO_TEST_CASE(ethereumDepositContractAddress)
@@ -119,13 +80,13 @@ BOOST_AUTO_TEST_CASE(ethereumDepositContractAddress)
     constexpr std::string_view c_mainnetDeposit = "00000000219ab540356cbb839cbe05303d7705fa";
     {
         LoaderProbe probe;
-        auto pt = fromIni("[ethereum]\nmode=none\n");
+        auto pt = fromIni("[ethereum]\n");
         BOOST_CHECK_NO_THROW(probe.loadEthereumConfig(pt));
         BOOST_CHECK_EQUAL(probe.ethereumDepositContractAddress().hex(), c_mainnetDeposit);
     }
     {
         LoaderProbe probe;
-        auto pt = fromIni("[ethereum]\nmode=el\ndeposit_contract_address=\n");
+        auto pt = fromIni("[ethereum]\ndeposit_contract_address=\n");
         BOOST_CHECK_NO_THROW(probe.loadEthereumConfig(pt));
         BOOST_CHECK_EQUAL(probe.ethereumDepositContractAddress().hex(), c_mainnetDeposit);
     }
@@ -133,7 +94,7 @@ BOOST_AUTO_TEST_CASE(ethereumDepositContractAddress)
     {
         LoaderProbe probe;
         auto pt = fromIni(
-            "[ethereum]\nmode=el\ndeposit_contract_address="
+            "[ethereum]\ndeposit_contract_address="
             "0x7f02c3E3c98b133055b8b348b2ac625669182295\n");
         BOOST_CHECK_NO_THROW(probe.loadEthereumConfig(pt));
         BOOST_CHECK_EQUAL(probe.ethereumDepositContractAddress().hex(),
@@ -143,14 +104,14 @@ BOOST_AUTO_TEST_CASE(ethereumDepositContractAddress)
     {
         LoaderProbe probe;
         auto pt = fromIni(
-            "[ethereum]\nmode=el\ndeposit_contract_address="
+            "[ethereum]\ndeposit_contract_address="
             "0xzz02c3e3c98b133055b8b348b2ac625669182295\n");
         BOOST_CHECK_THROW(probe.loadEthereumConfig(pt), InvalidConfig);
     }
     {
         LoaderProbe probe;
-        auto pt = fromIni(
-            "[ethereum]\nmode=el\ndeposit_contract_address=0x7f02c3e3c98b133055b8b348b2ac6256\n");
+        auto pt =
+            fromIni("[ethereum]\ndeposit_contract_address=0x7f02c3e3c98b133055b8b348b2ac6256\n");
         BOOST_CHECK_THROW(probe.loadEthereumConfig(pt), InvalidConfig);
     }
 }

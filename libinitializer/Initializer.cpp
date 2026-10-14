@@ -144,8 +144,8 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     m_nodeConfig = std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     m_nodeConfig->loadGenesisConfig(_genesisFile);
     m_nodeConfig->loadConfig(_configFilePath);
-    // Cross-file EL-mode invariants (config.ini ethereum.mode=el must be backed by the
-    // genesis EL declaration) — checkable only after BOTH files are loaded.
+    // Cross-file invariants (config.ini settings whose legality depends on the genesis
+    // lane) — checkable only after BOTH files are loaded.
     m_nodeConfig->validateELModeInvariants();
 
     // init the protocol
@@ -340,9 +340,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_ioServicePool, m_ledgerConfigState);
     // executor_version==2 (the pure-Ethereum executor): the mempool runs the L1 fee market —
     // blob transactions admitted, fee-ordered sealing, fee-bump replacement. EL mode
-    // (ethereum.mode=el) additionally sizes the pool (capacity, lifetime) and resolves the
-    // per-transaction blob limit dynamically: the EIP-7840 schedule evaluated at the chain
-    // head's timestamp — LedgerConfigState is republished with every committed block
+    // (the Engine driver on executor_version==2) additionally sizes the pool (capacity, lifetime)
+    // and resolves the per-transaction blob limit dynamically: the EIP-7840 schedule evaluated at
+    // the chain head's timestamp — LedgerConfigState is republished with every committed block
     // (MultiVersionScheduler's commitBlock wrapper, the engine services' commit lanes, and
     // the devp2p sync loop in EthereumSyncInitializer) and carries the head header's
     // millisecond timestamp. Every other version keeps the L2 pool defaults (no fee market,
@@ -421,35 +421,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // init below. L1 EL mode is supported: the devp2p sync commit path
     // (EthereumBlockVerifier::verifyAndCommit) feeds the same CommitObserver hooks as the
     // PBFT and Engine API paths (wired through EthereumSyncInitializer).
-
-    // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
-    // endpoint would silently serve EthEngineService over the v1 TransactionExecutorImpl
-    // built below, and an external op-node — which trusts the EL and never cross-checks
-    // state roots — would drive a chain with v1 (non-Ethereum) semantics. Fail fast
-    // instead. The only exception is the explicit test-only escape hatch
-    // unsafe_allow_v1_executor, which the former v1 Engine API integration harness
-    // (tools/engine_integration_test.sh) set. The harness now runs executor_version=2 +
-    // evm_revision=cancun like production, and payload building in any case requires an
-    // on-chain EVM revision (buildPayload fails closed without one), so the escape hatch
-    // can no longer build payloads; production configs must never set it.
-    if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
-    {
-        if (!m_nodeConfig->opEngineAllowV1Executor())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "op_engine_rpc requires executor_version >= " +
-                    std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
-                    " (the pure-Ethereum executor): on executor_version < 2 the endpoint "
-                    "would serve v1 semantics that diverge from an OP Stack chain. For the "
-                    "v1 Engine API test harness only, set [op_engine_rpc] "
-                    "unsafe_allow_v1_executor=true"));
-        }
-        INITIALIZER_LOG(WARNING) << LOG_DESC(
-            "op_engine_rpc on executor_version < 2 serves EthEngineService over the v1 "
-            "TransactionExecutorImpl (unsafe_allow_v1_executor=true): test-harness mode, "
-            "never drive this endpoint with a production op-node");
-    }
 
     // MPT pruning (storage.mpt_prune_window; pathdb spec §4.8): ONE pruner instance shared by
     // every baseline scheduler variant built below — MultiVersionScheduler activates exactly
@@ -539,23 +510,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. It is built when something drives it: the
-        // DebugSelfProduce driver (enable_single_node_consensus) or the Engine API
-        // listener ([op_engine_rpc] enable, or EL mode's [engine_rpc] enable). Under the
-        // first two the EngineService is the sole block producer — the legacy txpool/PBFT
-        // pipeline is never initialized or started (the blockDriver guards below and in
-        // start()); under EL mode block import also stays with devp2p sync.
+        // DebugSelfProduce driver (enable_single_node_consensus) or the Engine driver (EL
+        // mode: the [engine_rpc] listener next to devp2p sync). The legacy txpool/PBFT
+        // pipeline is never initialized or started under either (the blockDriver guards
+        // below and in start()).
         if (!engineApiForV1Only && !opStackMode &&
             (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce ||
                 m_nodeConfig->servesEngineApi()))
         {
-            // EL mode ([engine_rpc]): ONE verifier instance serves both the Engine API
+            // EL mode (the Engine driver): ONE verifier instance serves both the Engine API
             // external newPayload lane (through the type-erased adapter) and the devp2p
             // sync loop (AirNodeInitializer forwards elBlockVerifier() to
             // EthereumSyncInitializer) — the verifier's m_commitMutex serializes the two
             // commit lanes.
             std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
                 externalPayloadVerifier;
-            if (m_nodeConfig->enableEngineRpc())
+            if (blockDriver == bcos::tool::BlockDriver::Engine)
             {
                 m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
                     scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
@@ -611,21 +581,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 ethereumExecutor, m_mptCommitObserver,
                 blockDriver == bcos::tool::BlockDriver::PBFT);
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
-        // branch above. executor_version=2 alone does NOT enable the Engine API: one of
-        // [consensus] enable_single_node_consensus, [op_engine_rpc] enable or (in EL mode)
-        // [engine_rpc] enable must be set.
+        // branch above.
         if (!engineApiForV1Only && !opStackMode &&
             (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce ||
                 m_nodeConfig->servesEngineApi()))
         {
-            // EL mode ([engine_rpc]): ONE verifier instance serves both the Engine API
+            // EL mode (the Engine driver): ONE verifier instance serves both the Engine API
             // external newPayload lane (through the type-erased adapter) and the devp2p
             // sync loop (AirNodeInitializer forwards elBlockVerifier() to
             // EthereumSyncInitializer) — the verifier's m_commitMutex serializes the two
             // commit lanes.
             std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
                 externalPayloadVerifier;
-            if (m_nodeConfig->enableEngineRpc())
+            if (blockDriver == bcos::tool::BlockDriver::Engine)
             {
                 m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
                     scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
@@ -817,7 +785,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // (NodeConfig requires an explicit evm_revision for executor_version=2), so a one-time
     // INFO line is accurate and stays off the per-block / per-RPC getLedgerConfig hot path.
     // The CI integration test greps this line to pin the effective revision.
-    // Ethereum L1 EL mode (ethereum.mode=el) is exempt: its EVMC revision is derived from the
+    // Ethereum L1 EL mode (the Engine driver) is exempt: its EVMC revision is derived from the
     // per-block timestamp via the [fork_timestamps] schedule (EthereumBlockVerifier's
     // fillExecutionLedgerConfig), never from an on-chain evmc_revision row.
     //
@@ -1050,22 +1018,21 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         });
     }
     // init the txpool / pbft.
-    // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc])
+    // Engine-driven modes ([consensus] enable_single_node_consensus or the Engine driver)
     // bypass the legacy txpool/pbft/sealer lifecycle: PBFTInitializer is still constructed
     // above so groupInfo / NodeService wiring stays intact, but txpool and pbft (and the
     // sealer and block sync inside pbft) are never initialized or started — block production
     // is driven instead through the EngineService (by the built-in single-node driver or by
-    // an external op-node), and sendRawTransaction routes to the mempool. Skipping both
+    // an external consensus client), and sendRawTransaction routes to the mempool. Skipping both
     // keeps the EngineService the sole block producer; otherwise PBFT and the engine driver
     // would write blocks to the same global storage concurrently. The front service is
     // still wired for gateway bookkeeping, but its dispatchers are inert with no peers.
     //
-    // Ethereum L1 EL mode (ethereum.mode=el) and the OP devp2p follow driver
-    // ([debug] follow_devp2p) skip them for the same reason, one level further out:
-    // blocks arrive over devp2p download (EthereumSyncInitializer / OpStackSyncInitializer)
-    // and there is no local block production at all, so the txpool's ledger reads at init
-    // and the consensus/sync handlers pbft->init() registers would serve nothing. start()
-    // below skips them under the same condition: every driver but PBFT.
+    // Ethereum L1 EL mode and the OP devp2p follow driver ([debug] follow_devp2p) also take
+    // blocks over devp2p download (EthereumSyncInitializer / OpStackSyncInitializer), so the
+    // txpool's ledger reads at init and the consensus/sync handlers pbft->init() registers
+    // would serve nothing. start() below skips them under the same condition: every driver
+    // but PBFT.
     if (blockDriver == bcos::tool::BlockDriver::PBFT)
     {
         // init the txpool
@@ -1075,19 +1042,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // txpool init finished
         m_pbftInitializer->init();
     }
-    else if (m_nodeConfig->ethereumELModeEnabled() ||
-             blockDriver == bcos::tool::BlockDriver::DebugFollowDevp2p)
-    {
-        INITIALIZER_LOG(INFO) << LOG_DESC(
-            "EL self-sync mode (ethereum.mode=el or [debug] follow_devp2p): skip "
-            "txpool/pbft/sealer init (blocks arrive via devp2p download; no local block "
-            "production)");
-    }
     else
     {
-        INITIALIZER_LOG(INFO) << LOG_DESC(
-            "EngineDrivenBlockProduction: skip txpool/pbft/sealer init (block production via "
-            "EngineService + mempool; driver = single-node consensus or external op-node)");
+        INITIALIZER_LOG(INFO) << LOG_DESC("skip txpool/pbft/sealer init: block driver is not PBFT")
+                              << LOG_KV("driver", magic_enum::enum_name(blockDriver));
     }
 
     // Admission for the mempool path: the DebugSelfProduce driver, or any node serving the
@@ -1378,7 +1336,7 @@ void Initializer::start()
 {
     // Every driver but PBFT keeps txpool/pbft (and the sealer inside pbft) dormant: the
     // Engine and DebugSelfProduce drivers produce through the EngineService; EL mode and
-    // DebugFollowDevp2p download blocks from bootnodes (EthereumSyncInitializer /
+    // DebugFollowDevp2p also download blocks from bootnodes (EthereumSyncInitializer /
     // OpStackSyncInitializer), never from FISCO consensus/txpool.
     if (m_nodeConfig->blockDriver() == bcos::tool::BlockDriver::PBFT)
     {
