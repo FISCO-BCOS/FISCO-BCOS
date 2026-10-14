@@ -201,6 +201,8 @@ protected:
     virtual void triggerTimeout(bool _incTimeout, ViewChangeReason _reason, int64_t _waitedMs = -1);
     /// the reason of the most recent triggerTimeout() on this engine (test hook)
     std::optional<ViewChangeReason> lastViewChangeReason() const { return m_lastViewChangeReason; }
+    /// the waitedMs of the most recent triggerTimeout() on this engine (test hook)
+    int64_t lastViewChangeWaitedMs() const { return m_lastViewChangeWaitedMs; }
 
     void handleRecoverResponse(PBFTMessageInterface::Ptr _recoverResponse);
     void handleRecoverRequest(PBFTMessageInterface::Ptr _request);
@@ -248,6 +250,7 @@ private:
     void countReceivedPacket(PacketType _type, size_t _bytes);
 
     std::optional<ViewChangeReason> m_lastViewChangeReason;
+    int64_t m_lastViewChangeWaitedMs = -1;
 
 protected:
     // PBFT configuration class

@@ -23,7 +23,9 @@
 #include <bcos-utilities/BoostLog.h>
 #include <tbb/parallel_for.h>
 
-#define SYNC_LOG(LEVEL) BCOS_MODULE_LOG(TXPOOL, LEVEL) << LOG_BADGE("SYNC")
+// transaction sync lives in the txpool but badges [SYNC]; it follows the SYNC channel so that
+// `--module SYNC` covers every [SYNC]-badged line
+#define SYNC_LOG(LEVEL) BCOS_MODULE_LOG(SYNC, LEVEL) << LOG_BADGE("SYNC")
 namespace bcos::sync
 {
 enum class TxsSyncPacketType : int32_t
