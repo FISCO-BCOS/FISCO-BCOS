@@ -20,17 +20,22 @@ if(CMAKE_HOST_APPLE)
         endif()
     endif()
 endif()
-if(CMAKE_OSX_SYSROOT)
-    set(BLST_CC "${BLST_CC} ${CMAKE_C_SYSROOT_FLAG} ${CMAKE_OSX_SYSROOT}")
-endif()
 if(CMAKE_C_OSX_DEPLOYMENT_TARGET_FLAG AND CMAKE_OSX_DEPLOYMENT_TARGET)
     set(BLST_CC "${BLST_CC} ${CMAKE_C_OSX_DEPLOYMENT_TARGET_FLAG}${CMAKE_OSX_DEPLOYMENT_TARGET}")
 endif()
 
 find_program(BASH_COMMAND NAMES bash REQUIRED)
 
+# CFLAGS is exported only when set: blst's build.sh uses ${CFLAGS:-default}, so an
+# empty-but-set value would be fine, but a non-Apple host has no business passing the
+# variable at all.
+set(_blst_env "CC='${BLST_CC}' AR='${CMAKE_AR}' RANLIB='${CMAKE_RANLIB}' ")
+if(BLST_CFLAGS)
+    string(PREPEND _blst_env "CFLAGS='${BLST_CFLAGS}' ")
+endif()
+
 vcpkg_execute_build_process(
-    COMMAND "${BASH_COMMAND}" "-lc" "CFLAGS='${BLST_CFLAGS}' CC='${BLST_CC}' AR='${CMAKE_AR}' RANLIB='${CMAKE_RANLIB}' ./build.sh"
+    COMMAND "${BASH_COMMAND}" "-lc" "${_blst_env}./build.sh"
     WORKING_DIRECTORY "${SOURCE_PATH}"
     LOGNAME "build-${TARGET_TRIPLET}"
 )

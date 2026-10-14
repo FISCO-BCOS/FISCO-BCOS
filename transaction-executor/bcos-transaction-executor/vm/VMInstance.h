@@ -49,13 +49,14 @@ public:
     // createAddressFn/create2AddressFn are the host's own CREATE /
     // CREATE2 derivations; the caller supplies them because HostContext is a class template
     // and the VM hook must stay a plain C function pointer. Installed on the fresh VM
-    // alongside hash_fn; nullptr keeps upstream's keccak/nonce-derived addresses.
+    // alongside hash_fn. Deliberately NO defaults (round-2 F3): a defaulted nullptr would
+    // silently re-derive evmone's keccak/nonce-derived addresses — the exact omission that
+    // round-1 F1 was. An omitted hook must be a compile error.
     EVMCResult execute(const struct evmc_host_interface* host, struct evmc_host_context* context,
         evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize,
-        evmc_address (*createAddressFn)(
-            struct evmc_host_context*, const evmc_address*, uint64_t) = nullptr,
+        evmc_address (*createAddressFn)(struct evmc_host_context*, const evmc_address*, uint64_t),
         evmc_address (*create2AddressFn)(struct evmc_host_context*, const evmc_address*,
-            const evmc_bytes32*, const uint8_t*, size_t) = nullptr);
+            const evmc_bytes32*, const uint8_t*, size_t));
 
     void enableDebugOutput();
 

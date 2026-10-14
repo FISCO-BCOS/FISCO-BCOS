@@ -525,11 +525,12 @@ BOOST_AUTO_TEST_CASE(externalCall)
     // Clear the key lock to avoid effect
     result2->setKeyLocks({});
 
-    // Second nested create in the same tx: same derivation, and the creator's nonce is
-    // still 0 — the nonce bump on creators is the flag-gated behaviour
+    // This line re-reads result2->to() — still create #1's address, now carried into the
+    // next scheduler hop (create #2's derivation is not asserted here). The creator's
+    // nonce is still 0 because the nonce bump is flag-gated
     // (bugfix_nested_create_creator_nonce / bugfix_set_contract_nonce_when_create), off in
-    // this fixture, so both creates intentionally land on ONE address. Pin that too: the
-    // old size check let the collision pass silently.
+    // this fixture, so both hops intentionally carry ONE address; the old size check let
+    // that pass silently.
     std::string addressString2{result2->to()};
     BOOST_CHECK_EQUAL(addressString2, expectedCreateA);
 
@@ -734,6 +735,114 @@ BOOST_AUTO_TEST_CASE(externalCall)
         BOOST_CHECK(nonceEntry);
         BOOST_CHECK_EQUAL(nonceEntry->get(), "1");
     }
+}
+
+// The same flow as externalCall but WITHOUT feature_evm_address (no SYS_CONFIG row): the
+// create_address_fn hook's legacy branch — newEVMAddress(hashHandler, blockNumber,
+// contextID, seq + 1) — is what every chain without that feature executes, and it had
+// zero coverage in either lane (round-2 F4). Pin the exact address: deleting the hook
+// leaves evmone's nonce-derived compute_create_address in charge, which produces a
+// different value and turns this red.
+BOOST_AUTO_TEST_CASE(externalCallLegacyCreateFormula)
+{
+    std::string ABin =
+        "608060405234801561001057600080fd5b5061037f806100206000396000f3fe60806040523480156100105760"
+        "0080fd5b506004361061002b5760003560e01c80635b975a7314610030575b600080fd5b61005c600480360360"
+        "2081101561004657600080fd5b8101908080359060200190929190505050610072565b60405180828152602001"
+        "91505060405180910390f35b600081604051610081906101c7565b808281526020019150506040518091039060"
+        "00f0801580156100a7573d6000803e3d6000fd5b506000806101000a81548173ffffffffffffffffffffffffff"
+        "ffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055507fd8e189e965"
+        "f1ff506594c5c65110ea4132cee975b58710da78ea19bc094414ae826040518082815260200191505060405180"
+        "910390a16000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffff"
+        "ffffffffffffffffffffffffffff16633fa4f2456040518163ffffffff1660e01b815260040160206040518083"
+        "038186803b15801561018557600080fd5b505afa158015610199573d6000803e3d6000fd5b505050506040513d"
+        "60208110156101af57600080fd5b81019080805190602001909291905050509050919050565b610175806101d5"
+        "8339019056fe608060405234801561001057600080fd5b50604051610175380380610175833981810160405260"
+        "2081101561003357600080fd5b8101908080519060200190929190505050806000819055507fdc509bfccbee28"
+        "6f248e0904323788ad0c0e04e04de65c04b482b056acb1a0658160405180828152602001915050604051809103"
+        "90a15060e4806100916000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e0"
+        "1c80633fa4f245146037578063a16fe09b146053575b600080fd5b603d605b565b604051808281526020019150"
+        "5060405180910390f35b60596064565b005b60008054905090565b6000808154600101919050819055507f052f"
+        "6b9dfac9e4e1257cb5b806b7673421c54730f663c8ab02561743bb23622d600054604051808281526020019150"
+        "5060405180910390a156fea264697066735822122006eea3bbe24f3d859a9cb90efc318f26898aeb4dffb31cac"
+        "e105776a6c272f8464736f6c634300060a0033a2646970667358221220b441da8ba792a40e444d0ed767a4417"
+        "e";
+
+    bytes input;
+    boost::algorithm::unhex(ABin, std::back_inserter(input));
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(300), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(300);
+    params->setSeq(3000);
+    params->setDepth(0);
+    params->setFrom(std::string(sender));
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    params->setTo(addressCreate.hex().substr(0, 40));
+    params->setOrigin(std::string(sender));
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    blockHeader->setNumber(1);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    std::promise<ExecutionMessage::UniquePtr> deployPromise;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            deployPromise.set_value(std::move(result));
+        });
+    auto deployResult = deployPromise.get_future().get();
+    auto contractAddress = std::string(deployResult->newEVMContractAddress());
+    BOOST_CHECK_GT(contractAddress.size(), 0);
+
+    auto params2 = std::make_unique<NativeExecutionMessage>();
+    params2->setContextID(301);
+    params2->setSeq(4001);
+    params2->setDepth(0);
+    params2->setFrom(std::string(sender));
+    params2->setTo(contractAddress);
+    params2->setOrigin(std::string(sender));
+    params2->setStaticCall(false);
+    params2->setGasAvailable(gas);
+    bcos::u256 value(1);
+    params2->setData(codec->encodeWithSig("createAndCallB(int256)", value));
+    params2->setType(NativeExecutionMessage::MESSAGE);
+
+    std::promise<ExecutionMessage::UniquePtr> executePromise;
+    executor->dmcExecuteTransaction(std::move(params2),
+        [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result2 = executePromise.get_future().get();
+    BOOST_CHECK_EQUAL(result2->contextID(), 301);
+    BOOST_CHECK_EQUAL(result2->seq(), 4001);
+    BOOST_CHECK_EQUAL(result2->create(), true);
+
+    // The legacy branch's exact value — block 1, context 301, seq 4001 + 1. Without the
+    // hook this address is evmone's keccak(rlp(sender, nonce)) instead, so the pin fails.
+    BOOST_CHECK_EQUAL(result2->to(), bcos::newEVMAddress(hashImpl, 1, 301, 4002));
 }
 
 BOOST_AUTO_TEST_CASE(performance)

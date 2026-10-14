@@ -131,8 +131,8 @@ struct ExecutableCacheKeyHash
 /// Content identity of a code body: a fixed keccak (not the chain hasher, not a
 /// consensus value). getExecutable caches only under the account's STORED
 /// CODE_HASH row — without one, the key is unknowable before the code read, so
-/// no cache fill happens for such accounts; this helper is the identity used by
-/// tests and by callers that must materialise a key for hash-less code.
+/// no cache fill happens for such accounts; this helper is the test-side
+/// identity (TestEthCallHistory) for that shape, with no production caller.
 inline h256 executableCodeKey(bytesConstRef code)
 {
     crypto::Keccak256 hasher;
@@ -332,24 +332,21 @@ public:
     /// the executor stores. getMessage resolves depth-0 messages the same way.
     evmc_address createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const
     {
-        evmc_address out{};
         if (!m_web3Tx)
         {
-            // Historical v2 derivation (pre-0.24 getMessage): the chain hasher over
-            // "<blockNumber>_<contextID>_<seq>", first 20 bytes. externalCall increments
-            // m_seq BEFORE constructing the nested HostContext, so the child's seq — the
-            // value its own getMessage resolves with, and the one the eip2929 create pin
-            // uses — is m_seq + 1. The hook runs inside the creator's VM before that
-            // increment, hence the +1 here: replay-stable under the DMC per-hop frame
-            // replay, unlike evmone's nonce-derived compute_create_address.
-            std::string key = std::to_string(m_blockHeader.get().number()) + "_" +
-                              std::to_string(m_contextID) + "_" + std::to_string(m_seq + 1);
-            auto hash = m_hashImpl.get().hash(key);
-            std::copy_n(hash.data(), sizeof(out.bytes), out.bytes);
-            return out;
+            // Historical v2 derivation (pre-0.24 getMessage): bcos::newEVMAddress over
+            // "<blockNumber>_<contextID>_<seq>". externalCall increments m_seq BEFORE
+            // constructing the nested HostContext, so the child's seq — the value its own
+            // getMessage resolves with, and the one the eip2929 create pin uses — is
+            // m_seq + 1. The hook runs inside the creator's VM before that increment,
+            // hence the +1 here: replay-stable under the DMC per-hop frame replay, unlike
+            // evmone's nonce-derived compute_create_address.
+            return unhexAddress(bcos::newEVMAddress(
+                m_hashImpl.get(), m_blockHeader.get().number(), m_contextID, m_seq + 1));
         }
         auto legacyAddr =
             newLegacyEVMAddress(bytesConstRef(sender.bytes, sizeof(sender.bytes)), nonce);
+        evmc_address out{};
         std::copy(legacyAddr.begin(), legacyAddr.end(), out.bytes);
         return out;
     }
@@ -359,21 +356,19 @@ public:
     {
         // Historical v2 derivation (pre-0.24 getMessage's EVMC_CREATE2 case): the chain
         // hasher over 0xff || sender || salt || chainHasher(initcode), last 20 bytes —
-        // the same formula as bcos::newCreate2EVMAddress. Upstream's
-        // compute_create2_address hashes with keccak256, which forks SM-crypto chains.
-        std::array<bcos::byte,
-            1 + sizeof(sender.bytes) + sizeof(salt.bytes) + crypto::HashType::SIZE>
-            buffer;
-        uint8_t* ptr = buffer.data();
-        *ptr++ = 0xff;
-        ptr = std::uninitialized_copy_n(sender.bytes, sizeof(sender.bytes), ptr);
-        ptr = std::uninitialized_copy_n(salt.bytes, sizeof(salt.bytes), ptr);
-        auto inputHash = m_hashImpl.get().hash(initCode);
-        ptr = std::uninitialized_copy(inputHash.begin(), inputHash.end(), ptr);
-        auto addressHash = m_hashImpl.get().hash(bytesConstRef(buffer.data(), buffer.size()));
+        // bcos::newCreate2EVMAddress's formula. Upstream's compute_create2_address hashes
+        // with keccak256, which forks SM-crypto chains.
+        return unhexAddress(bcos::newCreate2EVMAddress(m_hashImpl.get(),
+            bcos::toHex(bytesConstRef(sender.bytes, sizeof(sender.bytes))), initCode,
+            fromEvmC(salt)));
+    }
 
+    /// The shared helpers spell addresses as hex strings; the VM hooks need bytes.
+    static evmc_address unhexAddress(std::string const& hexAddress)
+    {
         evmc_address out{};
-        std::copy_n(addressHash.begin() + 12, sizeof(out.bytes), out.bytes);
+        auto bytes = bcos::fromHex(hexAddress);
+        std::copy_n(bytes.begin(), sizeof(out.bytes), out.bytes);
         return out;
     }
 
@@ -902,8 +897,10 @@ private:
         //
         // Two shapes, gated on bugfix_nested_create_creator_nonce:
         //  - flag ON: the bump runs on the EVM message depth (NOT m_level, which counts
-        //    scheduler nesting and is nonzero for depth-0 test/probe messages) for every
-        //    chain. It counts an absent nonce as 0 — the same default the get_nonce
+        //    scheduler nesting and is nonzero for depth-0 test/probe messages), still only
+        //    for web3 txs — a non-web3 chain's nested-CREATE address never reads the
+        //    nonce, so a creator row there would be a state-root change with no
+        //    behavioural purpose. It counts an absent nonce as 0 — the same default the get_nonce
         //    callback reports — because contract accounts on legacy chains were never
         //    nonce-initialized (EVMAccount::increaseNonce throws NonceNotInitialized); the
         //    missing-nonce case is therefore WRITTEN as 0 rather than rejected, matching
@@ -915,7 +912,7 @@ private:
         if (m_ledgerConfig.get().features().get(
                 ledger::Features::Flag::bugfix_nested_create_creator_nonce))
         {
-            if (ref.depth != 0)
+            if (m_web3Tx && ref.depth != 0)
             {
                 auto senderAccount = getAccount(*this, ref.sender);
                 const auto currentNonce = co_await senderAccount.nonce();

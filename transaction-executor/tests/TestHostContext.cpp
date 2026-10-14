@@ -1188,4 +1188,55 @@ BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
     }
 }
 
+// The CREATE opcode hook must derive the lane's own historical formulas per branch: a
+// FISCO-native (non-web3) tx uses newEVMAddress("<block>_<ctx>_<seq+1>") — the +1 because
+// externalCall increments the shared seq counter BEFORE constructing the nested
+// HostContext — and a web3 tx uses newLegacyEVMAddress(sender, nonce) like upstream. The
+// non-web3 branch is the negative control for the hook itself (round-2 F4): without
+// create_address_fn installed, evmone derives keccak(rlp(sender, nonce)) and this pin goes
+// red. The SM3 cell discriminates the hasher as well.
+BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
+{
+    static const evmc_message dummy{};
+    const u256 nonce{7};
+    evmc_address sender{};
+    sender.bytes[19] = 0x2a;
+
+    struct HasherCase
+    {
+        const char* name;
+        bcos::crypto::Hash::Ptr hasher;
+    };
+    const std::array<HasherCase, 2> cases{
+        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>()},
+        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>()},
+    };
+
+    for (auto const& hasherCase : cases)
+    {
+        // Non-web3: the legacy (block, context, seq+1) formula — the branch every
+        // executor_version=2 chain without feature_evm_address executes.
+        int64_t seq = 41;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> nonWeb3(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, dummy, sender, "", 0,
+            seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, false, 0,
+            bcos::task::syncWait);
+        const auto legacyAddr =
+            nonWeb3.createAddressForOpcode(sender, nonce.convert_to<uint64_t>());
+        BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{legacyAddr.bytes, sizeof(legacyAddr.bytes)}),
+            bcos::newEVMAddress(*hasherCase.hasher, blockHeader.number(), 0, 42));
+
+        // Web3: the nonce-derived EIP branch, matching upstream's own derivation.
+        int64_t web3Seq = 41;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> web3(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, dummy, sender, "", 0,
+            web3Seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, true, nonce,
+            bcos::task::syncWait);
+        const auto eipAddr = web3.createAddressForOpcode(sender, nonce.convert_to<uint64_t>());
+        BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{eipAddr.bytes, sizeof(eipAddr.bytes)}),
+            bcos::newLegacyEVMAddressString(
+                bytesConstRef{sender.bytes, sizeof(sender.bytes)}, nonce));
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -72,21 +72,15 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
             message.code_address = message.recipient;
             break;
         }
+        // Same helper the CREATE2 hook uses (review F1, round 2): the chain hasher over
+        // 0xff || sender || salt || chainHasher(initcode), via bcos::newCreate2EVMAddress.
         constexpr evmc_bytes32 zero_salt{};
-        std::array<bcos::byte,
-            1 + sizeof(message.sender.bytes) + sizeof(zero_salt) + crypto::HashType::SIZE>
-            buffer;
-        uint8_t* ptr = buffer.data();
-        *ptr++ = 0xff;
-        ptr = std::uninitialized_copy_n(message.sender.bytes, sizeof(message.sender.bytes), ptr);
-        auto salt = toBigEndian(fromEvmC(zero_salt));
-        ptr = std::uninitialized_copy(salt.begin(), salt.end(), ptr);
-        auto inputHash = hashImpl.hash(bytesConstRef(message.input_data, message.input_size));
-        ptr = std::uninitialized_copy(inputHash.begin(), inputHash.end(), ptr);
-        auto addressHash = hashImpl.hash(bytesConstRef(buffer.data(), buffer.size()));
-
-        std::copy_n(addressHash.begin() + 12, sizeof(message.code_address.bytes),
-            message.code_address.bytes);
+        auto addressHex = bcos::newCreate2EVMAddress(hashImpl,
+            bcos::toHex(bytesConstRef(message.sender.bytes, sizeof(message.sender.bytes))),
+            bytesConstRef(message.input_data, message.input_size), fromEvmC(zero_salt));
+        auto addressBytes = bcos::fromHex(addressHex);
+        std::copy_n(
+            addressBytes.begin(), sizeof(message.code_address.bytes), message.code_address.bytes);
         message.recipient = message.code_address;
         break;
     }

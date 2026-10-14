@@ -429,11 +429,10 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_BYZANTIUM;
     // evmone 0.23 removed the Constantinople revision and retargets its opcodes to
     // Petersburg. The two do NOT have identical EVM semantics: EIP-1283 (SSTORE net gas
-    // metering) is reverted in Petersburg, so the same SSTORE is charged differently. A
-    // persisted `constantinople` row would therefore execute under a different gas
-    // schedule on this binary than on 3.17.x — the silent mixed-binary fork this
-    // parser's halt-loudly policy below exists to prevent. Refuse the legacy spellings so
-    // an operator must name `petersburg` explicitly.
+    // metering) is reverted in Petersburg, so the same SSTORE is charged differently —
+    // and this binary has no EIP-1283 metering to run. Accepting the name would silently
+    // retarget a persisted row instead of letting the operator choose; refuse the legacy
+    // spellings so `petersburg` is explicit.
     if (n == "petersburg")
         return EVMC_PETERSBURG;
     if (n == "istanbul" || n == "muirglacier" || n == "muir glacier")
