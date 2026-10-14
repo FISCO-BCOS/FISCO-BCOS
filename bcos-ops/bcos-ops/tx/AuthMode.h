@@ -31,6 +31,7 @@ namespace bcos::ops
 /// other RPC errors propagate
 bool chainUsesProposals(
     RpcCall const& _call, std::string const& _group, std::optional<NodeDir> const& _nodeDir);
-/// per-command cache of chainUsesProposals for the Connection
+/// chainUsesProposals on the connection's call / group / node dir; one RPC per call, no cache
+/// (tui::Sender memoizes it in m_proposals)
 bool chainUsesProposals(Connection const& _connection);
 }  // namespace bcos::ops

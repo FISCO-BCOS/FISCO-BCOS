@@ -16,7 +16,8 @@
  * @brief the one static table of governance / precompiled / HelloWorld calls that the CLI
  *        groups (consensus, sysconfig, balance, auth, committee) and the TUI send page both
  *        read: contract address, method signature, parameter names, output types, who may call
- *        it, and the CommitteeManager proposal that replaces it on an auth chain.
+ *        it (documentation only, see Access), and the CommitteeManager proposal that replaces it
+ *        on an auth chain.
  * @file Presets.h
  */
 #pragma once
@@ -29,7 +30,10 @@
 
 namespace bcos::ops
 {
-/// who the precompiled lets through (read from the executor sources, see Presets.cpp)
+/// who the precompiled lets through (read from the executor sources, see Presets.cpp).
+/// Informational only: no send path checks it -- the CLI and the TUI sign with whatever key is
+/// loaded, and an unauthorised write fails on the chain (precompiled code or node refusal).
+/// PresetsTest pins the table against the executor.
 enum class Access
 {
     Anyone,
