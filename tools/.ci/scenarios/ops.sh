@@ -48,8 +48,14 @@ ops_log_status_across_stopped_peer()
     peer="$(dirname "${node_dir}")/node3"
     [[ -f "${peer}/stop.sh" ]] || peer="$(dirname "${node_dir}")/node1"
     bash "${peer}/stop.sh" >/dev/null 2>&1 || { scenario_fail "stop ${peer}"; return 1; }
-    local after
-    after=$(ops "${node_dir}" log status) || { (( $? == 2 )) || { bash "${peer}/start.sh" >/dev/null 2>&1; return 1; }; }
+    local after rc
+    after=$(ops "${node_dir}" log status) && rc=0 || rc=$?
+    # with a peer down a check may fail (exit 2); exit 2 with no check evaluated is still a failure
+    if ! (( rc == 0 )) && ! { (( rc == 2 )) && jq -e '[.checks[] | select(.state != "skipped")] | length > 0' >/dev/null 2>&1 <<<"${after}"; }; then
+        bash "${peer}/start.sh" >/dev/null 2>&1
+        scenario_fail "log status with $(basename "${peer}") down: exit ${rc}"
+        return 1
+    fi
     bash "${peer}/start.sh" >/dev/null 2>&1 || { scenario_fail "restart ${peer}"; return 1; }
     local field
     for field in nodeID version chainId groupId smCrypto authCheck mode; do
