@@ -1943,6 +1943,27 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
         BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
         BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(0)), rev);
     }
+
+    // The constantinople spellings cannot be reached through the loop above (ABI 19 has
+    // no EVMC_CONSTANTINOPLE value), so pin their refusal explicitly: Constantinople's
+    // EIP-1283 SSTORE metering differs from Petersburg's, and ConstantinopleFix names
+    // the same schedule as Petersburg — accepting either would silently retarget a
+    // persisted row under different gas pricing. Re-acceptance here must turn this red.
+    for (auto const* refused : {"constantinople", "constantinoplefix", "amsterdam"})
+    {
+        BOOST_CHECK_MESSAGE(!ledger::evmcRevisionFromName(refused),
+            "evmcRevisionFromName must refuse the spelling: " << refused);
+    }
+    // And the refusal is halt-loudly where a persisted row would consume it: the
+    // apply path throws instead of retargeting to petersburg.
+    for (auto const* refused : {"constantinople", "constantinoplefix"})
+    {
+        // A persisted row naming the refused spelling (100000:<name>) must throw
+        // instead of retargeting the chain onto the petersburg schedule.
+        auto encoded = std::to_string(100000) + ':' + refused;
+        LedgerConfig parsed;
+        BOOST_CHECK_THROW(ledger::applyEVMCRevisionConfig(parsed, encoded), std::exception);
+    }
 }
 
 // Unknown revision NAMES must fail closed instead of being silently skipped. Before
