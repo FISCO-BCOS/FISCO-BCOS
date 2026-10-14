@@ -241,6 +241,13 @@ BOOST_AUTO_TEST_CASE(featuresRawAndCustomBuildTheirRequests)
     BOOST_CHECK_EQUAL(rows[2].second, "set(string,uint256)");
     BOOST_CHECK_EQUAL(rows[3].second, "hi, 7");
     BOOST_CHECK_EQUAL(rows[4].second, "5");
+    // nine arguments do not fit the eight inputs: refused, never sent with the ninth dropped
+    form.customSig = "f(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)";
+    form.fields.fill("1");
+    BOOST_CHECK_EXCEPTION(tui::sendFormRequest(form, context), OpsError, [](OpsError const& e) {
+        return std::string(e.what()).find("at most 8 arguments") != std::string::npos;
+    });
+    form.customSig = "set(string,uint256)";
     // hello set needs the deployed address
     form.tree.selected = 2;
     form.entryKey.clear();
