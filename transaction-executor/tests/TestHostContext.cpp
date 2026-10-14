@@ -1234,4 +1234,179 @@ BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
     }
 }
 
+// bugfix_nested_create_creator_nonce (bit 62) ON, web3 tx: the nested-CREATE derivation
+// reads the creator's nonce, so the per-create bump is what keeps the second create off
+// the first one's address. The ON path bumps on the EVM message depth (not m_level) and
+// counts an absent nonce row as 0 — all three pinned here with the created accounts.
+BOOST_AUTO_TEST_CASE(creatorNonceFlagBumpsPerNestedCreate)
+{
+    auto features = ledgerConfig.features();
+    features.set(ledger::Features::Flag::bugfix_nested_create_creator_nonce);
+    ledgerConfig.setFeatures(features);
+
+    evmc_address creator{};
+    creator.bytes[19] = 0xC0;
+
+    auto makeParent = [&]() {
+        evmc_message parent{};
+        parent.kind = EVMC_CALL;
+        parent.depth = 0;
+        parent.gas = 10'000'000;
+        parent.recipient = creator;
+        parent.sender = creator;
+        parent.code_address = creator;
+        return HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, parent, creator, "",
+            0, seq, *precompiledManager, ledgerConfig, *hashImpl, /*web3Tx=*/true, 0,
+            bcos::task::syncWait);
+    };
+
+    auto nonceRowOf = [&](const evmc_address& address) -> std::string {
+        ledger::account::EVMAccount<decltype(rollbackableStorage)> account(
+            rollbackableStorage, address, ledger::account::nodeAddressTableMode());
+        auto nonceStr = syncWait(account.nonce());
+        return nonceStr.value_or("<absent>");
+    };
+
+    auto host = makeParent();
+    auto runNestedCreate = [&](int64_t depth) {
+        evmc_message nested{};
+        nested.kind = EVMC_CREATE;
+        nested.depth = depth;
+        nested.gas = 500000;
+        nested.sender = creator;
+        return syncWait(host.externalCall(nested));
+    };
+
+    auto first = runNestedCreate(1);
+    BOOST_REQUIRE_EQUAL(first.status_code, EVMC_SUCCESS);
+    // An absent nonce row counts as 0 and is written as 0+1 — the documented ON-path
+    // accounting (the OFF path's increaseNonce would have thrown here instead).
+    BOOST_CHECK_EQUAL(nonceRowOf(creator), "1");
+
+    auto second = runNestedCreate(1);
+    BOOST_REQUIRE_EQUAL(second.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(nonceRowOf(creator), "2");
+
+    // The derivations read the pre-bump nonce: create #1 sits on legacy(creator, 0) and
+    // create #2 on legacy(creator, 1), each with its own created-contract nonce row —
+    // the bump is what keeps the second create off the first one's address.
+    auto addressOf = [&](std::array<bcos::byte, 20> derived) {
+        evmc_address addr{};
+        std::copy(derived.begin(), derived.end(), addr.bytes);
+        return addr;
+    };
+    auto addr0 = addressOf(
+        newLegacyEVMAddress(bytesConstRef{creator.bytes, sizeof(creator.bytes)}, u256(0)));
+    auto addr1 = addressOf(
+        newLegacyEVMAddress(bytesConstRef{creator.bytes, sizeof(creator.bytes)}, u256(1)));
+    BOOST_CHECK(std::memcmp(addr0.bytes, addr1.bytes, sizeof(addr0.bytes)) != 0);
+    BOOST_CHECK_EQUAL(nonceRowOf(addr0), "1");
+    BOOST_CHECK_EQUAL(nonceRowOf(addr1), "1");
+
+    // The bump keys on the EVM message depth, not m_level: a depth-0 nested create must
+    // not touch the creator's nonce.
+    auto third = runNestedCreate(0);
+    BOOST_REQUIRE_EQUAL(third.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(nonceRowOf(creator), "2");
+}
+
+// CREATE2 through the VM itself (not a direct hook call): a creator contract executes the
+// CREATE2 opcode and the deployed account must sit at the hook-derived address on both a
+// keccak and an SM3 chain. The SM3 cell is the discriminating one — with the hook wiring
+// (patch arm or VMInstance assignment) absent, the opcode pushes upstream's keccak256
+// address and only the keccak cell, whose derivation coincides, would stay green.
+BOOST_AUTO_TEST_CASE(create2OpcodeDeploysAtTheHookAddress)
+{
+    // Inner init: PUSH1 0x2a PUSH1 0 MSTORE PUSH1 0x20 PUSH1 0 RETURN — returns a 32-byte
+    // runtime, so the deployed account's code size is observable.
+    static const bcos::bytes innerInit{0x60, 0x2a, 0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3};
+    evmc_bytes32 salt{};
+    salt.bytes[31] = 0x42;
+
+    struct HasherCase
+    {
+        const char* name;
+        bcos::crypto::Hash::Ptr hasher;
+    };
+    const std::array<HasherCase, 2> cases{
+        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>()},
+        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>()},
+    };
+
+    int64_t hasherIndex = 0;
+    for (auto const& hasherCase : cases)
+    {
+        // Distinct seq per hasher: depth-0 deploy addresses derive from
+        // hash("<block>_<ctx>_<seq>"), so an unchanged seq would land the creator on the
+        // fixture's helloworld address and the call would execute helloworld's code.
+        seq = 700 + hasherIndex;
+
+        // Creator runtime: CODECOPY the inner init into memory, then CREATE2. CODECOPY
+        // pops size, codeOffset, destOffset; evmone's create_impl pops value, offset,
+        // size, salt — so the CREATE2 args are pushed salt (deepest), size, offset,
+        // value (top). The runtime begins at deploy-init offset 12 and the inner init
+        // sits at runtime offset 49 (0x31).
+        bcos::bytes runtime{
+            0x60, 0x0a, 0x60, 0x31, 0x60, 0x00, 0x39,  // PUSH1 10 PUSH1 0x31 PUSH1 0 CODECOPY
+            0x7f};                                     // PUSH32 <salt>
+        runtime.resize(runtime.size() + 32, 0x00);
+        runtime.back() = 0x42;
+        runtime.insert(runtime.end(), {
+            0x60, 0x0a,                                // size
+            0x60, 0x00,                                // offset
+            0x60, 0x00,                                // value (top)
+            0xf5, 0x50, 0x00});                        // CREATE2 POP STOP
+        runtime.insert(runtime.end(), innerInit.begin(), innerInit.end());
+        BOOST_REQUIRE_EQUAL(runtime.size(), 59);
+
+        // Deploy init: copy the 59-byte runtime to memory and return it.
+        bcos::bytes deployInit{0x60, 0x3b, 0x60, 0x0c, 0x60, 0x00, 0x39,  // CODECOPY
+            0x60, 0x3b, 0x60, 0x00, 0xf3};                                // RETURN
+        deployInit.insert(deployInit.end(), runtime.begin(), runtime.end());
+
+        evmc_message deploy{};
+        deploy.kind = EVMC_CREATE;
+        deploy.depth = 0;
+        deploy.gas = 5'000'000;
+        deploy.input_data = deployInit.data();
+        deploy.input_size = deployInit.size();
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            deployHost(rollbackableStorage, rollbackableTransientStorage, blockHeader, deploy, {},
+                "", 0, seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, false, 0,
+                bcos::task::syncWait);
+        syncWait(deployHost.prepare());
+        auto deployed = syncWait(deployHost.execute());
+        BOOST_REQUIRE_EQUAL(deployed.status_code, EVMC_SUCCESS);
+        auto const creatorAddr = deployHost.message().recipient;
+        // The call target holds the 59-byte creator runtime, not a fixture collision.
+        BOOST_REQUIRE_EQUAL(syncWait(deployHost.codeSizeAt(creatorAddr)), 59u);
+
+        // Call the creator: its runtime runs CREATE2 and deploys through the hook.
+        evmc_message callMsg{};
+        callMsg.kind = EVMC_CALL;
+        callMsg.depth = 0;
+        callMsg.gas = 5'000'000;
+        callMsg.recipient = creatorAddr;
+        callMsg.sender = creatorAddr;
+        callMsg.code_address = creatorAddr;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            callHost(rollbackableStorage, rollbackableTransientStorage, blockHeader, callMsg, {},
+                "", 0, seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, false, 0,
+                bcos::task::syncWait);
+        syncWait(callHost.prepare());
+        auto result = syncWait(callHost.execute());
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+
+        // The account the opcode deployed is the one the hook derived: the created
+        // contract holds the 32-byte runtime the inner init returned.
+        auto const expected =
+            callHost.create2AddressForOpcode(creatorAddr, salt,
+                bytesConstRef{innerInit.data(), innerInit.size()});
+        auto size = syncWait(callHost.codeSizeAt(expected));
+        BOOST_CHECK_EQUAL(size, 32u);
+        ++hasherIndex;
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
