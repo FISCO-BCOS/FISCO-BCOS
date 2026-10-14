@@ -222,7 +222,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "reserved_removed_op_jovian",
         // bugfix_eip161_1052_account_semantics = 61 (#5371/#5372), next unused value.
         "bugfix_eip161_1052_account_semantics",
-        // bugfix_nested_create_creator_nonce = 62 (PR #5689 review F3): v2 nested-CREATE
+        // bugfix_nested_create_creator_nonce = 62: v2 nested-CREATE
         // creator-nonce bump, opt-in so existing chains keep the historical gate.
         "bugfix_nested_create_creator_nonce",
     };

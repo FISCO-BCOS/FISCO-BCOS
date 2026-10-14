@@ -584,7 +584,11 @@ std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
     // reverted EIP-1283 (SSTORE net gas metering), so running those fixtures under
     // Petersburg charges different gas and yields a wrong post-state. nullopt is the
     // skip signal — an exception here aborted the whole runner (exit 134) wherever the
-    // call was not wrapped in a try/catch, which is most call sites.
+    // call was not wrapped in a try/catch, which is most call sites. Names merely
+    // EMBEDDING a refused fork (transition names like PragueToConstantinopleFixAtTime5)
+    // are caught in configureFork's transition parser, which skips the fixture when
+    // either endpoint is unresolvable; genuinely unknown names still take the
+    // EVMC_OSAKA default documented in the header.
     if (lower == "constantinople" || lower == "constantinoplefix")
         return std::nullopt;
     if (lower == "petersburg")
@@ -837,10 +841,18 @@ public:
                 }
                 auto const from = test::forkNameToRevision(fromFork);
                 auto const to = test::forkNameToRevision(toFork);
-                if (from && to)
+                if (!from || !to)
                 {
-                    m_forkTransition = ForkTransition{*from, *to, transitionTime};
+                    // A transition endpoint with no executable revision (e.g.
+                    // ...ToConstantinopleFixAtTime5) must skip the fixture the same
+                    // way the plain name does: falling through would silently run the
+                    // whole case at the default revision with no transition — the
+                    // wrong-schedule execution the refusal exists to prevent (a probe
+                    // fixture named this way executed and bogusly passed under Osaka
+                    // rules before this branch existed).
+                    return false;
                 }
+                m_forkTransition = ForkTransition{*from, *to, transitionTime};
             }
             catch (...)
             {
