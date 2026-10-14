@@ -1,11 +1,25 @@
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL "https://github.com/supranational/blst.git"
-    REF 52cc60d78591a56abb2f3d0bd1cdafc6ba242997
+    REF 54e6e55674722fc2797ebb4bbb71b26d881eb4b8
 )
 
 # Build using build.sh (blst's native build system)
 set(BLST_CC "${CMAKE_C_COMPILER}")
+# build.sh honours ${CFLAGS} on every compile, but NOT the CMake sysroot variables (they
+# are empty in a port's scope, so a bare ${CC} compiles without the macOS SDK and
+# blst>=0.3.17's C23 includes fail with 'stdlib.h' file not found). Pass the sysroot the
+# way the runner resolves it instead.
+if(CMAKE_HOST_APPLE)
+    find_program(BLST_XCRUN_TOOL xcrun)
+    if(BLST_XCRUN_TOOL)
+        execute_process(COMMAND xcrun --show-sdk-path
+            OUTPUT_VARIABLE BLST_SDK_PATH OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if(BLST_SDK_PATH)
+            set(BLST_CFLAGS "-isysroot ${BLST_SDK_PATH}")
+        endif()
+    endif()
+endif()
 if(CMAKE_OSX_SYSROOT)
     set(BLST_CC "${BLST_CC} ${CMAKE_C_SYSROOT_FLAG} ${CMAKE_OSX_SYSROOT}")
 endif()
@@ -16,7 +30,7 @@ endif()
 find_program(BASH_COMMAND NAMES bash REQUIRED)
 
 vcpkg_execute_build_process(
-    COMMAND "${BASH_COMMAND}" "-lc" "CC='${BLST_CC}' AR='${CMAKE_AR}' RANLIB='${CMAKE_RANLIB}' ./build.sh"
+    COMMAND "${BASH_COMMAND}" "-lc" "CFLAGS='${BLST_CFLAGS}' CC='${BLST_CC}' AR='${CMAKE_AR}' RANLIB='${CMAKE_RANLIB}' ./build.sh"
     WORKING_DIRECTORY "${SOURCE_PATH}"
     LOGNAME "build-${TARGET_TRIPLET}"
 )
