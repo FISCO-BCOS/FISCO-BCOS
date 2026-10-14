@@ -40,6 +40,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
+#include "vm/EVMHostInterface.h"
 #include "vm/HostContext.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/hex.hpp>
@@ -527,14 +528,15 @@ BOOST_AUTO_TEST_CASE(externalCall)
     result2->setKeyLocks({});
 
     // This line re-reads result2->to() — create #1's address, carried into the next
-    // scheduler hop, where the DMC replay re-derives the CREATE. The re-derivation reads
-    // the creator's nonce again, so the two hops keep ONE address only while that nonce
-    // stays put: this lane's creator-bump gate is feature_evm_address plus the
-    // origin/create predicates in TransactionExecutive (the EOA-origin/contract-internal
-    // shape of this fixture does not bump), NOT the v2-lane nonce flags. The invariant
+    // scheduler hop, where the DMC replay re-derives the CREATE. TransactionExecutive's
+    // bump predicates (origin != sender && create && !internalCreate, or under
+    // feature_evm_address the create predicate alone) DO match this fixture's shape, but
+    // the bump runs inside the executive AFTER externalCall derived the address from the
+    // pre-bump nonce row, and DMC hops re-derive from the same base view — so the two
+    // hops keep ONE address despite the bump, not because no bump happened. The invariant
     // is pinned below: hop 2's FINISHED result must report the created contract at the
-    // SAME address (result3->newEVMContractAddress() == addressString2) — a bump between
-    // the hops would split them.
+    // SAME address (result3->newEVMContractAddress() == addressString2) — a hop-visible
+    // bump between the derivations would split them.
     std::string addressString2{result2->to()};
     BOOST_CHECK_EQUAL(addressString2, expectedCreateA);
 
@@ -898,6 +900,23 @@ BOOST_AUTO_TEST_CASE(preBugfixCreate2HookAnswersTheZeroAddress)
     auto expected = bcos::newCreate2EVMAddress(hashImpl,
         bcos::toHex(bytesConstRef{sender.bytes, sizeof(sender.bytes)}), initRef, fromEvmC(salt));
     BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{derived.bytes, sizeof(derived.bytes)}), expected);
+}
+
+// The noexcept call() host callback must translate its throwing paths into failed
+// evmc_results instead of letting them escape (an exception out of a noexcept callback
+// is std::terminate). The negative-gas arm is the pinning cell: it fires before the
+// context is touched, so the fnTable slot can be exercised directly.
+BOOST_AUTO_TEST_CASE(negativeGasCallFailsClosedInsteadOfTerminating)
+{
+    auto const* host = bcos::executor::getHostInterface();
+    BOOST_REQUIRE(host && host->call);
+
+    evmc_message msg{};
+    msg.kind = EVMC_CALL;
+    msg.gas = -1;  // u256->int64 overflow shape the arm exists for
+    auto result = host->call(nullptr, &msg);
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_OUT_OF_GAS);
+    BOOST_CHECK_EQUAL(result.gas_left, 0);
 }
 
 BOOST_AUTO_TEST_CASE(performance)

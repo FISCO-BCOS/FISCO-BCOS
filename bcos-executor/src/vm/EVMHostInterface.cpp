@@ -310,18 +310,32 @@ evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
 
 evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
 {
-    // gas maybe smaller than 0 since outside gas is u256 and evmc_message is
-    // int64_t so gas maybe smaller than 0 in some extreme cases
-    // * origin code: assert(_msg->gas >= 0)
-    if (_msg->gas < 0)
+    // This callback is noexcept (the evmc host interface requires it): an exception
+    // escaping it is std::terminate, so every throwing path inside must be translated
+    // into a failed evmc_result — the same fail-closed shape getNonce below uses.
+    try
     {
-        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
-        BOOST_THROW_EXCEPTION(protocol::GasOverflow());
+        // gas maybe smaller than 0 since outside gas is u256 and evmc_message is
+        // int64_t so gas maybe smaller than 0 in some extreme cases
+        // * origin code: assert(_msg->gas >= 0)
+        if (_msg->gas < 0)
+        {
+            EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
+            return evmc_result{.status_code = EVMC_OUT_OF_GAS, .gas_left = 0};
+        }
+
+        auto& hostContext = *reinterpret_cast<HostContext*>(_context);
+
+        return hostContext.externalRequest(_msg);
     }
-
-    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-
-    return hostContext.externalRequest(_msg);
+    catch (...)
+    {
+        // externalRequest reads storage and parses the stored nonce string (both can
+        // throw); returning a failure lets evmone fail the create/call frame instead
+        // of terminating the node mid-block.
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVM host call failed closed");
+        return evmc_result{.status_code = EVMC_INTERNAL_ERROR, .gas_left = 0};
+    }
 }
 
 /// function table
