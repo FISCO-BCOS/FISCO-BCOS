@@ -1,7 +1,6 @@
 #include "HostContext.h"
 #include "VMFactory.h"
 #include "bcos-crypto/ChecksumAddress.h"
-#include <fmt/format.h>
 
 evmc_bytes32 bcos::executor_v1::hostcontext::evm_hash_fn(
     evmc_host_context* /*context*/, const uint8_t* data, size_t size)
@@ -41,10 +40,13 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
         {
             if (!web3Tx)
             {
-                auto address = fmt::format("{}_{}_{}", blockNumber, contextID, seq);
-                auto hash = hashImpl.hash(address);
-                std::copy_n(
-                    hash.data(), sizeof(message.code_address.bytes), message.code_address.bytes);
+                // Same helper the CREATE hook resolves nested creates with: the chain hasher
+                // over "<block>_<ctx>_<seq>", first 20 bytes — one implementation of the
+                // formula, not two (bcos::newEVMAddress formats the same decimal key).
+                auto addressHex = bcos::newEVMAddress(hashImpl, blockNumber, contextID, seq);
+                auto addressBytes = bcos::fromHex(addressHex);
+                std::copy_n(addressBytes.begin(), sizeof(message.code_address.bytes),
+                    message.code_address.bytes);
             }
             else
             {
