@@ -114,5 +114,18 @@ BOOST_AUTO_TEST_CASE(timeoutAndFPlusOnePathsCarryTheirReason)
     BOOST_CHECK(*engine->lastViewChangeReason() == ViewChangeReason::FPlusOneHigherView);
 }
 
+BOOST_AUTO_TEST_CASE(timerExpiryReportsTheAdjustedWait)
+{
+    auto fixture = makeFixture();
+    auto engine = fixture->pbftEngine();
+    // base 1000 ms, two cycles in: the timer that expired ran for 1000 * 1.5^2 = 2250 ms
+    fixture->pbftConfig()->setConsensusTimeout(1000);
+    fixture->pbftConfig()->timer()->updateChangeCycle(2);
+    engine->onTimeout();
+    BOOST_REQUIRE(engine->lastViewChangeReason().has_value());
+    BOOST_CHECK(*engine->lastViewChangeReason() == ViewChangeReason::ConsensusTimeout);
+    BOOST_CHECK_EQUAL(engine->lastViewChangeWaitedMs(), 2250);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
