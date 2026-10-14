@@ -27,7 +27,6 @@ class NodeConfigGenerator:
         self.config = config
         self.genesis_tpl_config = ConfigInfo.genesis_config_tpl_path
         self.node_tpl_config = ConfigInfo.node_config_tpl_path
-        self.executor_tpl_config = ConfigInfo.executor_config_tpl_path
         self.node_pem_file = "node.pem"
         self.node_id_file = "node.nodeid"
         self.output_dir = output_dir
@@ -93,55 +92,19 @@ class NodeConfigGenerator:
         utilities.log_info("* generate_genesis_config_nodeid success")
         return config_content
 
-    def generate_executor_config(self, group_config, node_config, node_name):
-        """
-        generate the config.ini for executorService
-        """
-        executor_ini_config = configparser.ConfigParser(
-            comment_prefixes='/', allow_no_value=True)
-        executor_ini_config.read(self.executor_tpl_config)
-        # chain config
-        self.__update_chain_info(executor_ini_config, node_config)
-        # service config
-        service_section = "service"
-        executor_ini_config[service_section]['without_tars_framework'] = "true" if self.is_build_opr else "false"
-        executor_ini_config[service_section]['tars_proxy_conf'] = 'conf/tars_proxy.ini'
-        executor_ini_config[service_section]["node_name"] = node_name
-        executor_ini_config[service_section]["scheduler"] = self.config.chain_id + \
-                                                            "." + node_config.scheduler_service_name
-        executor_ini_config[service_section]["txpool"] = self.config.chain_id + \
-                                                         "." + node_config.txpool_service_name
-        # executor config
-        self.__update_storage_info(
-            executor_ini_config, node_config, self.node_type)
-        return executor_ini_config
-
-    def generate_node_config(self, group_config, node_config, node_name, node_type):
+    def generate_node_config(self, group_config, node_config, node_name):
         """
         generate node config: config.ini.tmp
         """
         ini_config = configparser.ConfigParser(
             comment_prefixes='/', allow_no_value=True)
         ini_config.read(self.node_tpl_config)
-        # self.__update_chain_info(ini_config, node_config)
         self.__update_service_info(ini_config, node_config, node_name)
-        # set storage config
-        self.__update_storage_info(ini_config, node_config, node_type)
         # set storage_security config
         # access key_center to encrypt the certificates and the private keys
-        self.__update_storage_security_info(ini_config, node_config, node_type)
+        self.__update_storage_security_info(ini_config, node_config)
         self.__update_hsm_info(ini_config, node_config)
         return ini_config
-
-    def __update_chain_info(self, ini_config, node_config):
-        """
-        update chain info
-        """
-        chain_section = "chain"
-        ini_config[chain_section]["sm_crypto"] = utilities.convert_bool_to_str(
-            node_config.sm_crypto)
-        ini_config[chain_section]["group_id"] = node_config.group_id
-        ini_config[chain_section]["chain_id"] = node_config.chain_id
 
     def __update_service_info(self, ini_config, node_config, node_name):
         """
@@ -155,29 +118,12 @@ class NodeConfigGenerator:
                                              "." + node_config.agency_config.rpc_service_name
         ini_config[service_section]["gateway"] = self.config.chain_id + \
                                                  "." + node_config.agency_config.gateway_service_name
-        if hasattr(node_config, 'executor_service'):
-            ini_config[service_section]["executor"] = self.config.chain_id + \
-                                                      "." + node_config.executor_service.service_name
 
-    def __update_storage_info(self, ini_config, node_config, node_type):
-        if node_type != "max":
-            return
-        storage_section = "storage"
-        if ini_config.has_option(storage_section, "data_path"):
-            ini_config.remove_option(storage_section, "data_path")
-        ini_config[storage_section]["key_page_size"] = str(
-            node_config.key_page_size)
-
-    def __update_storage_security_info(self, ini_config, node_config, node_type):
+    def __update_storage_security_info(self, ini_config, node_config):
         """
         update the storage_security for config.ini
         """
         section = "storage_security"
-        # not support storage_security for max-node
-        if node_type == "max":
-            if ini_config.has_section(section):
-                ini_config.remove_section(section)
-            return
         ini_config[section]["enable"] = utilities.convert_bool_to_str(
             node_config.enable_storage_security)
         ini_config[section]["key_center_url"] = node_config.key_center_url
@@ -326,7 +272,7 @@ class NodeConfigGenerator:
 
     def generate_all_config(self, enforce_genesis_exists):
         """
-        generate all config for max-node
+        generate all config for the nodes
         """
         for group_config in self.config.group_list.values():
             utilities.print_badge(
@@ -345,7 +291,7 @@ class NodeConfigGenerator:
 
     def generate_all_genesis_config(self, group_config, enforce_genesis_exists):
         """
-        generate the genesis config for all max_nodes
+        generate the genesis config for all nodes
         """
         (ret, genesis_config_content) = self.generate_genesis_config(
             group_config, enforce_genesis_exists)
@@ -432,17 +378,17 @@ class NodeConfigGenerator:
                 agency_name = node_config.agency_config.name
                 tars_proxy_conf = os.path.join(self.output_dir, node_config.agency_config.chain_id,
                                                agency_name + "_tars_proxy.ini")
-                executor_dir = self.get_and_generate_install_package_path(group_config, node_config, node_config.deploy_ip,
-                                                                            'node')
-                shutil.copy(tars_proxy_conf, os.path.join(executor_dir, 'conf', 'tars_proxy.ini'))
-                utilities.log_info("* copy node tars_proxy.ini: " + tars_proxy_conf + " ,dir: " + executor_dir)
+                node_dir = self.get_and_generate_install_package_path(group_config, node_config, node_config.deploy_ip,
+                                                                        'node')
+                shutil.copy(tars_proxy_conf, os.path.join(node_dir, 'conf', 'tars_proxy.ini'))
+                utilities.log_info("* copy node tars_proxy.ini: " + tars_proxy_conf + " ,dir: " + node_dir)
 
     def __generate_and_store_ini_config(self, node_config, group_config):
         """
         generate and store ini config for given node
         """
         ini_config_content = self.generate_node_config(
-            group_config, node_config, node_config.node_service.service_name, self.node_type)
+            group_config, node_config, node_config.node_service.service_name)
         node_path = self.__get_and_generate_node_base_path(node_config)
 
         if os.path.exists(node_path) is False:

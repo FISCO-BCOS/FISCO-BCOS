@@ -82,22 +82,6 @@ jobs:
           asset_name: BcosGatewayService-macOS-arm.tgz
           tag: ${{ github.ref }}
           overwrite: true
-      - name: Upload BcosMaxNodeService binaries to release
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
-          asset_name: BcosMaxNodeService-macOS-arm.tgz
-          tag: ${{ github.ref }}
-          overwrite: true
-      - name: Upload BcosExecutorService binaries to release
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosExecutorService.tgz
-          asset_name: BcosExecutorService-macOS-arm.tgz
-          tag: ${{ github.ref }}
-          overwrite: true
       - name: Upload build_chain.sh
         uses: svenstaro/upload-release-action@v1-release
         with:
