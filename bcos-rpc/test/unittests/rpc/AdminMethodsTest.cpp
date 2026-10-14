@@ -120,6 +120,11 @@ BOOST_AUTO_TEST_CASE(invalidLevelOrModuleIsInvalidParams)
     auto badModule = viaIpc(*jsonRpc,
         R"({"jsonrpc":"2.0","id":8,"method":"admin_setLogLevel","params":["debug","NOPE"]})");
     BOOST_CHECK_EQUAL(badModule["error"]["code"].asInt(), -32602);
+    // [level, module] at most: a trailing argument is refused, not ignored
+    auto extra = viaIpc(*jsonRpc,
+        R"({"jsonrpc":"2.0","id":10,"method":"admin_setLogLevel","params":["debug","PBFT","x"]})");
+    BOOST_CHECK_EQUAL(extra["error"]["code"].asInt(), -32602);
+    BOOST_CHECK(moduleLogLevels().empty());
     auto noParams =
         viaIpc(*jsonRpc, R"({"jsonrpc":"2.0","id":9,"method":"admin_setLogLevel","params":[]})");
     BOOST_CHECK_EQUAL(noParams["error"]["code"].asInt(), -32602);
