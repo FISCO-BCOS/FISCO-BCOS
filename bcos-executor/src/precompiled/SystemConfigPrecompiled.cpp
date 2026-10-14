@@ -133,8 +133,9 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             // a chain replaying blocks that predate 3.18.0 must keep whatever the old binary
             // accepted, or resync diverges. The gate is the on-chain compatibility version, not
             // the binary's, so a chain still at < 3.18.0 running a 3.18.0 binary is NOT covered
-            // here; there the boot refusals in Initializer::init (no [op_fork_timestamps], no
-            // [op_engine_rpc]) are what stop such a node, fail-stop rather than a second lane.
+            // here; there the boot refusals in Initializer::init (the OP slot: no Engine or
+            // follow_devp2p block driver, no [op_fork_timestamps]; slot 2: no evmc_revision row)
+            // are what stop such a node, fail-stop rather than a second lane.
             if (versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0 &&
                 _value >= ledger::ETHEREUM_EXECUTOR_VERSION) [[unlikely]]
             {
@@ -405,8 +406,7 @@ int64_t SystemConfigPrecompiled::validate(
     // lane. Versioned on V3_18_0_VERSION for the same replay reason as the refusal above.
     constexpr std::string_view c_executorVersionKey =
         magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version);
-    if (key == c_executorVersionKey &&
-        configuredValue < bcos::ledger::ETHEREUM_EXECUTOR_VERSION &&
+    if (key == c_executorVersionKey && configuredValue < bcos::ledger::ETHEREUM_EXECUTOR_VERSION &&
         versionCompareTo(blockVersion, BlockVersion::V3_18_0_VERSION) >= 0)
     {
         auto const currentRow = getSysConfigByKey(_executive, key);
@@ -426,16 +426,15 @@ int64_t SystemConfigPrecompiled::validate(
         }
         if (currentExecutorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError{} << errinfo_comment(
-                    "executor_version " + std::to_string(configuredValue) + " cannot replace " +
-                    std::to_string(currentExecutorVersion) + ": the Ethereum lane " +
-                    "(executor_version >= " +
-                    std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION) +
-                    ") is a genesis property, so a running chain cannot be "
-                    "moved off it by governance; the node keeps executing the "
-                    "lane it booted with and the next start would derive the "
-                    "other one from this row"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                      "executor_version " + std::to_string(configuredValue) +
+                                      " cannot replace " + std::to_string(currentExecutorVersion) +
+                                      ": the Ethereum lane " + "(executor_version >= " +
+                                      std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION) +
+                                      ") is a genesis property, so a running chain cannot be "
+                                      "moved off it by governance; the node keeps executing the "
+                                      "lane it booted with and the next start would derive the "
+                                      "other one from this row"));
         }
     }
     return configuredValue;

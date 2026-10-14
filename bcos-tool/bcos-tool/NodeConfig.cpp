@@ -131,15 +131,17 @@ void requireHexField(std::string const& section, std::string const& field, std::
     }
 }
 
-void requireDecimalField(
-    std::string const& section, std::string const& field, std::string const& value)
+/// @p why, when non-empty, is inserted into the error before the offending value.
+void requireDecimalField(std::string const& section, std::string const& field,
+    std::string const& value, std::string_view why = {})
 {
     if (value.empty() || !std::all_of(value.begin(), value.end(),
                              [](unsigned char c) { return std::isdigit(c) != 0; }))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "[" + section + "]." + field + " must be decimal digits: " + value));
+                "[" + section + "]." + field + " must be decimal digits" +
+                (why.empty() ? std::string() : " " + std::string(why)) + ": " + value));
     }
 }
 
@@ -155,7 +157,9 @@ std::string ethLaneChainId(boost::property_tree::ptree const& genesis)
                                   "config.genesis (the Ethereum chain id, e.g. 11155111 for "
                                   "Sepolia); [web3] chain_id is not read on this lane"));
     }
-    requireDecimalField("chain", "chain_id", *chainId);
+    requireDecimalField("chain", "chain_id", *chainId,
+        "on executor.version >= 2 (the Ethereum chain id, e.g. 11155111; a v0/v1 chain name "
+        "such as chain0 does not apply)");
     auto const parsed = ledger::parseConfigUint64(*chainId, ledger::ConfigUint64Options{});
     if (!parsed.value)
     {
@@ -571,8 +575,9 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("[" + std::string(sectionName) + "]." + key +
-                                                   " is required (all 22 eth genesis header "
-                                                   "fields must come from the genesis artifact)"));
+                                                   " is required (every header field that is "
+                                                   "not fork-gated, and hash, must come from "
+                                                   "the genesis artifact)"));
         }
         return *value;
     };
@@ -637,7 +642,7 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
     // Fork-gated fields are OPTIONAL: a pre-Cancun chain (e.g. Sepolia's
     // London-era genesis) omits the keys, which makes the corresponding RLP
     // field absent — that is exactly what lets Ledger re-encode the header
-    // byte-for-byte. An L2 artifact always emits all 21 keys, so the
+    // byte-for-byte. An L2 artifact always emits all six, so its full
     // 21-field encoding is unchanged. Only an ABSENT key means "field omitted":
     // a present-but-empty key is a config typo and must fail loudly in
     // requireHexField, not silently decode to the omitted-field encoding.
@@ -733,7 +738,8 @@ void NodeConfig::validateL2Invariants()
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "executor.version >= 2 (the Ethereum lane) requires an [eth_genesis_header] "
-                "section in config.genesis (all 22 fields from the merged genesis artifact); "
+                "section in config.genesis (the 21 header fields plus hash, from the merged "
+                "genesis artifact); "
                 "an Ethereum-lane chain without it would build a non-Ethereum genesis block"));
     }
     // [fork_timestamps] is the L1 fork schedule (L1 PoS header rules, the L1 EVM revision

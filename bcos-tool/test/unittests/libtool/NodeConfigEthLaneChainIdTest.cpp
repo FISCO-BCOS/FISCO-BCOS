@@ -115,7 +115,8 @@ BOOST_AUTO_TEST_CASE(ethLaneRefusesBadChainId)
         std::string reason;
     };
     const Case cases[] = {
-        {"chain0", std::nullopt, "[chain].chain_id must be decimal"},
+        {"chain0", std::nullopt,
+            "[chain].chain_id must be decimal digits on executor.version >= 2"},
         {"0x385", std::nullopt, "[chain].chain_id must be decimal"},
         {"0", std::nullopt, "[chain].chain_id must be non-zero"},
         {"000", std::nullopt, "[chain].chain_id must be non-zero"},

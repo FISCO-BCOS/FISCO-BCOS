@@ -25,9 +25,9 @@
 // validateELModeInvariants, libinitializer and transaction-scheduler), so a new lane-specific
 // key had no defined home. This suite pins the OP section family's contract as a table.
 
+#include "EthLaneGenesisFixture.h"
 #include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include "EthLaneGenesisFixture.h"
 #include <bcos-tool/ChainLaneConfig.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
@@ -100,8 +100,8 @@ BOOST_AUTO_TEST_CASE(laneMatrixCoversTheOpSectionFamily)
         BOOST_CHECK(rule->lane == ChainLane::Op);
         BOOST_CHECK(rule->presence == expected_rule.presence);
         BOOST_CHECK_EQUAL(rule->pinned, expected_rule.pinned);
-        BOOST_CHECK_MESSAGE(!rule->reason.empty(),
-            expected_rule.section << " must cite its provenance");
+        BOOST_CHECK_MESSAGE(
+            !rule->reason.empty(), expected_rule.section << " must cite its provenance");
         BOOST_CHECK_EQUAL(rule->rejectMessage, expected_rule.rejectMessage);
         // A Required rule must carry the absence message too (validateL2Invariants throws it).
         if (rule->presence == KeyPresence::Required)
@@ -123,7 +123,6 @@ BOOST_AUTO_TEST_CASE(opSectionOnANonOpLaneIsRejectedByTheMatrix)
             std::string(
                 "[version]\ncompatibility_version=3.18.0\n"
                 "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-                "[web3]\nchain_id=1\n"
                 "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
                 "leader_period=1\nnode.0=") +
             std::string(128, '1') +
@@ -146,24 +145,22 @@ BOOST_AUTO_TEST_CASE(opSectionOnANonOpLaneIsRejectedByTheMatrix)
 BOOST_AUTO_TEST_CASE(opLaneWithoutTheRequiredSectionThrowsTheTableMessage)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    auto const genesis =
-        std::string(
-            "[version]\ncompatibility_version=3.18.0\n"
-            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-            "[web3]\nchain_id=1\n"
-            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
-            "leader_period=1\nnode.0=") +
-        std::string(128, '1') +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-        "version=3\n" +
-        ethLaneGenesisSections();
-    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
-        [](auto const& e) {
-            return errinfoContains(e,
-                "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
+    auto const genesis = std::string(
+                             "[version]\ncompatibility_version=3.18.0\n"
+                             "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+                             "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
+                             "leader_period=1\nnode.0=") +
+                         std::string(128, '1') +
+                         ":1:1\n"
+                         "[tx]\ngas_limit=3000000000\n"
+                         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+                         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+                         "version=3\n" +
+                         ethLaneGenesisSections();
+    BOOST_CHECK_EXCEPTION(
+        cfg.loadGenesisConfigFromString(genesis), InvalidConfig, [](auto const& e) {
+            return errinfoContains(
+                e, "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
         });
 }
 
@@ -197,7 +194,6 @@ BOOST_AUTO_TEST_CASE(pinnedRulesActuallyReachTheGenesisPin)
             std::string(
                 "[version]\ncompatibility_version=3.18.0\n"
                 "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-                "[web3]\nchain_id=1\n"
                 "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
                 "leader_period=1\nnode.0=") +
             std::string(128, '1') +

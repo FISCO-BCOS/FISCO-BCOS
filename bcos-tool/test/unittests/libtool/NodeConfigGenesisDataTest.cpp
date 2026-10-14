@@ -164,7 +164,6 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     const std::string base =
         "[version]\ncompatibility_version=3.18.0\n"
         "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
         "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
         "node.0=" +
         node +
@@ -458,7 +457,6 @@ BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
     const std::string genesis =
         "[version]\ncompatibility_version=3.18.0\n"
         "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=11155111\n"
         "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
         "node.0=" +
         node +
@@ -609,7 +607,6 @@ BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
     const std::string base =
         "[version]\ncompatibility_version=3.18.0\n"
         "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
         "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
         "node.0=" +
         node +
@@ -647,7 +644,6 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
     const std::string base =
         "[version]\ncompatibility_version=3.18.0\n"
         "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
         "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
         "node.0=" +
         node +
@@ -707,7 +703,6 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
     const std::string head =
         "[version]\ncompatibility_version=3.18.0\n"
         "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
         "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
         "node.0=" +
         node +
@@ -770,7 +765,6 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
     const std::string base =
         "[version]\ncompatibility_version=3.18.0\n"
         "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
         "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
         "node.0=" +
         node +
@@ -823,7 +817,6 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
         const std::string plain =
             "[version]\ncompatibility_version=3.18.0\n"
             "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-            "[web3]\nchain_id=1\n"
             "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
             "node.0=" +
             node +

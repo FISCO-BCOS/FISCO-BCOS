@@ -121,7 +121,6 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresOpForkSchedule)
     const std::string genesis =
         "[version]\ncompatibility_version=3.18.0\n"
         "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=11155420\n"
         "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
         "node.0=" +
         kNode +

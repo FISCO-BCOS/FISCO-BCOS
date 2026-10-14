@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file test_NodeConfigEthGenesisHeader.cpp
- * @brief [eth_genesis_header] parsing: 22-field mapping + per-field fail-fast (A3)
+ * @brief [eth_genesis_header] parsing: 21 header fields + hash mapping, per-field fail-fast (A3)
  */
 #include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(EachMissingRequiredFieldFailsFast)
         BOOST_CHECK_EXCEPTION(
             cfg->loadGenesisConfig(parseEthIni(ethLaneConfig(ethHeaderSection(key)))),
             bcos::tool::InvalidConfig, [](auto const& e) {
-                return bcos::test::errinfoContains(e, "is required (all 22 eth genesis header");
+                return bcos::test::errinfoContains(e, "is required (every header field that is");
             });
     }
 }
