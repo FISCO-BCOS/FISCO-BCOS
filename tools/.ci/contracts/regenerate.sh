@@ -36,7 +36,7 @@ names=()
 for arg in "$@"; do
     case "${arg}" in
         --check) check_mode=true ;;
-        -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) names+=("${arg}") ;;
     esac
 done
