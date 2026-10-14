@@ -242,6 +242,35 @@ BOOST_AUTO_TEST_CASE(valueIsBoundedTo256Bits)
     BOOST_CHECK_EQUAL(flagsSentTx(rpc, 1)->data.value, "0x" + std::string(64, 'f'));
 }
 
+BOOST_AUTO_TEST_CASE(valueLeadingZerosAreDecimalAndDoNotCountTowardsTheBound)
+{
+    FakeRpc rpc;
+    rpc.set("sendTransaction", flagsReceipt());
+    std::ostringstream out;
+    // cpp_int's string constructor reads "010" as octal 8 and throws on "08"
+    std::string const maxValue =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+    std::vector<std::pair<std::string, std::string>> const cases = {{"010", "0xa"}, {"08", "0x8"},
+        {"000", "0x0"}, {"0" + maxValue, "0x" + std::string(64, 'f')},
+        {"0x" + std::string(64, '0') + "1", "0x1"},
+        {"0x00" + std::string(64, 'f'), "0x" + std::string(64, 'f')}};
+    for (size_t i = 0; i < cases.size(); ++i)
+    {
+        runTxOn(flagsConnection(rpc),
+            flagsArgs(
+                {"send", "0xa1", "--abi", flagsAbiFile(), "set", "hi", "--value", cases[i].first}),
+            out);
+        BOOST_CHECK_EQUAL(flagsSentTx(rpc, i)->data.value, cases[i].second);
+    }
+    BOOST_CHECK_EXCEPTION(runTxOn(flagsConnection(rpc),
+                              flagsArgs({"send", "0xa1", "--abi", flagsAbiFile(), "set", "hi",
+                                  "--value", "0x001" + std::string(64, '0')}),
+                              out),
+        OpsError, [](OpsError const& e) {
+            return std::string(e.what()).find("256 bits") != std::string::npos;
+        });
+}
+
 BOOST_AUTO_TEST_CASE(sendWithoutValueKeepsTheVersion0Shape)
 {
     FakeRpc rpc;
