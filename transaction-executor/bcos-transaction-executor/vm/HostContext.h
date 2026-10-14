@@ -172,17 +172,28 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
     {
         co_return {};
     }
-    // Hash-less accounts (old-version contracts whose code lives in the table's CODE field)
-    // have no stored CODE_HASH to key on — key those on a fixed keccak of the body instead,
-    // so they are cached like any other account rather than re-analysed on every call. That
-    // key is only computable after the code read, so the fallback path probes the cache once
+    // The cache is content-addressed on the code the state actually holds. A non-empty
+    // CODE_HASH row normally names the body in SYS_CODE_BINARY — but code() above also
+    // falls back to the account's CODE field when that row is not backed (legacy
+    // contracts and internal precompiles), and the fetched body then need not match the
+    // row. Keying such a fill on the row would let two accounts sharing an unbacked row
+    // value (e.g. the constant emptyCodeHash row the EIP-7702 clear path writes) share
+    // one executable, so any fill whose row SYS_CODE_BINARY does not back — including
+    // every hash-less account — keys on the body itself (a fixed keccak). That key is
+    // only computable after the code read, so the fallback path probes the cache once
     // more here.
-    auto const key = (storedHash != h256{}) ?
-        ExecutableCacheKey{storedHash, revision} :
-        ExecutableCacheKey{executableCodeKey(bytesConstRef(
-                               reinterpret_cast<const byte*>(codeEntry->data()), codeEntry->size())),
-            revision};
-    if (storedHash == h256{})
+    const bool rowBacked =
+        storedHash != h256{} &&
+        co_await storage2::existsOne(
+            storage, executor_v1::StateKeyView{ledger::SYS_CODE_BINARY,
+                         std::string_view{(const char*)storedHash.data(), crypto::HashType::SIZE}});
+    auto const key =
+        rowBacked ? ExecutableCacheKey{storedHash, revision} :
+                    ExecutableCacheKey{
+                        executableCodeKey(bytesConstRef(
+                            reinterpret_cast<const byte*>(codeEntry->data()), codeEntry->size())),
+                        revision};
+    if (!rowBacked)
     {
         if (auto cached = co_await storage2::readOne(getCacheExecutables(), key))
         {
@@ -225,6 +236,9 @@ private:
     bool m_enableTransfer = false;
     int64_t m_level;
     bool m_web3Tx;
+    /// Set when executeCreate() ran the flag-ON creator-nonce bump in this frame, so
+    /// the failure path can re-apply exactly that bump after the frame's rollback.
+    bool m_creatorNonceBumped = false;
 
     // EIP-2929/2930 access tracking (shared Eip2929AccessState; see accessAccount/accessStorage)
     std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
@@ -609,6 +623,7 @@ public:
         const auto* ref = std::addressof(message());
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute level: " << m_level << " " << *ref;
 
+        m_creatorNonceBumped = false;
         auto savepoint = m_rollbackableStorage.get().current();
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
@@ -757,6 +772,17 @@ public:
             co_await m_rollbackableStorage.get().rollback(savepoint);
             co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
             m_logs.clear();
+            // The bump's contract (mirrored from upstream Host::call): "bump the
+            // creator's nonce, not reverted if the creation fails". The rollback above
+            // just undid the bump executeCreate wrote into this frame, so re-apply it —
+            // a failed nested create still advances the nonce, and the next create in
+            // the same tx derives a fresh address instead of landing on the failed
+            // one's. The re-read observes the rolled-back (pre-bump) value, so this is
+            // the same single bump, written outside the failed frame.
+            if (m_creatorNonceBumped)
+            {
+                co_await bumpCreatorNonce(ref->sender);
+            }
         }
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
@@ -870,6 +896,16 @@ private:
         m_executable = std::make_shared<Executable>(createCode);
     }
 
+    // Flag-ON creator-nonce bump: an absent row counts as 0 (the get_nonce default)
+    // because legacy contract accounts were never nonce-initialized.
+    task::Task<void> bumpCreatorNonce(const evmc_address& sender)
+    {
+        auto senderAccount = getAccount(*this, sender);
+        const auto currentNonce = co_await senderAccount.nonce();
+        const auto newNonce = u256(currentNonce.value_or(std::string("0"))) + 1;
+        co_await senderAccount.setNonce(newNonce.convert_to<std::string>());
+    }
+
     task::Task<EVMCResult> executeCreate()
     {
         auto& ref = message();
@@ -924,10 +960,8 @@ private:
         {
             if (m_web3Tx && ref.depth != 0)
             {
-                auto senderAccount = getAccount(*this, ref.sender);
-                const auto currentNonce = co_await senderAccount.nonce();
-                const auto newNonce = u256(currentNonce.value_or(std::string("0"))) + 1;
-                co_await senderAccount.setNonce(newNonce.convert_to<std::string>());
+                co_await bumpCreatorNonce(ref.sender);
+                m_creatorNonceBumped = true;
             }
         }
         else if (m_web3Tx && m_level != 0)

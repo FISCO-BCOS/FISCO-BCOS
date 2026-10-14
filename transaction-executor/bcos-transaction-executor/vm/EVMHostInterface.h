@@ -30,6 +30,7 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include <evmc/evmc.h>
+#include <limits>
 
 namespace bcos::executor_v1
 {
@@ -124,7 +125,17 @@ struct EVMHostInterface
     static uint64_t getNonce(evmc_host_context* context, const evmc_address* addr) noexcept
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        return syncWait(hostContext.nonce(*addr));
+        try
+        {
+            return syncWait(hostContext.nonce(*addr));
+        }
+        catch (...)
+        {
+            // The body reads storage and parses the stored nonce string, both of which
+            // can throw; an exception escaping this noexcept callback is std::terminate.
+            // Fail closed per EIP-2681 instead: MAX_NONCE makes evmone reject the CREATE.
+            return std::numeric_limits<uint64_t>::max();
+        }
     }
 
     static size_t getCodeSize(evmc_host_context* context, const evmc_address* addr) noexcept

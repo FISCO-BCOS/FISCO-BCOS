@@ -21,7 +21,7 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     evmc_address (*create2AddressFn)(struct evmc_host_context*, const evmc_address*,
         const evmc_bytes32*, const uint8_t*, size_t))
 {
-    // Required parameters (round-2 F3): an omitted hook must be a compile error, not a
+    // Required parameters: an omitted hook must be a compile error, not a
     // silent state-root divergence.
     assert(createAddressFn != nullptr && create2AddressFn != nullptr);
     (void)code;  // execute uses pre-analyzed m_analysis

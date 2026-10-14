@@ -74,7 +74,7 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
             message.code_address = message.recipient;
             break;
         }
-        // Same helper the CREATE2 hook uses (review F1, round 2): the chain hasher over
+        // Same helper the CREATE2 hook uses: the chain hasher over
         // 0xff || sender || salt || chainHasher(initcode), via bcos::newCreate2EVMAddress.
         constexpr evmc_bytes32 zero_salt{};
         auto addressHex = bcos::newCreate2EVMAddress(hashImpl,

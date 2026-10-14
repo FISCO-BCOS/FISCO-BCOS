@@ -622,6 +622,14 @@ BOOST_AUTO_TEST_CASE(executableCacheIsContentAddressed)
     BOOST_REQUIRE(freshResult);
     BOOST_CHECK(freshResult.get() != poisoned.get());
 
+    // Cross-revision cell: the same code analysed under another revision must be a
+    // distinct entry — a key that ignored the revision half would serve the CANCUN
+    // analysis here (same shared_ptr).
+    auto pragueResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, cachedAddress, EVMC_PRAGUE, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(pragueResult);
+    BOOST_CHECK(pragueResult.get() != freshResult.get());
+
     // Historical lookups resolve against the root they are pinned to — this address has no
     // leaf at the block-1 root, so its code resolves to nothing regardless of the cache.
     auto latestView = multiLayerStorage.fork();
@@ -634,16 +642,28 @@ BOOST_AUTO_TEST_CASE(executableCacheIsContentAddressed)
         cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
     BOOST_CHECK(!historicalResult);
 
-    // Clean up the global cache so no other test sees these entries.
+    // Clean up the global cache so no other test sees these entries, then verify the
+    // removal by reading back every key this case could have filled.
+    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_PRAGUE}));
     task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
         hostcontext::ExecutableCacheKey{fakeCodeHash, EVMC_CANCUN}));
     task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
         hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_CANCUN}));
+    for (auto const& spent : {hostcontext::ExecutableCacheKey{fakeCodeHash, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_PRAGUE}})
+    {
+        BOOST_CHECK(!task::syncWait(storage2::readOne(hostcontext::getCacheExecutables(), spent)));
+    }
 }
 
-// Accounts without a stored CODE_HASH row (old-version contracts whose code lives in the
-// table's CODE field) cache under the content key: the second lookup serves the same
-// executable instead of re-analysing, and no other address's entry can collide with it.
+// Accounts whose code the CODE_HASH row does not name in SYS_CODE_BINARY — hash-less
+// accounts (old-version contracts whose code lives in the table's CODE field) and
+// accounts whose stored row SYS_CODE_BINARY does not back — cache under the content key:
+// the second lookup serves the same executable instead of re-analysing, and a second
+// account with a different body (whether hash-less or sharing the same unbacked row
+// value) never collides with the first one's entry.
 BOOST_AUTO_TEST_CASE(executableCacheCoversHashlessAccounts)
 {
     // A unique address so this test owns its global-cache entry.
@@ -658,12 +678,12 @@ BOOST_AUTO_TEST_CASE(executableCacheCoversHashlessAccounts)
     // Old-version shape: a CODE row in the contract table and no CODE_HASH row. setCode
     // would write the hash row, so seed the raw row here.
     bytes legacyCode{0x60, 0x02, 0x60, 0x02, 0xF3};
-    auto const tableName = ledger::account::accountTableName(
-        hashlessAddress, ledger::account::AddressTableMode::Hex);
+    auto const tableName =
+        ledger::account::accountTableName(hashlessAddress, ledger::account::AddressTableMode::Hex);
     {
         storage::Entry codeEntry;
-        codeEntry.set(std::string_view{
-            reinterpret_cast<const char*>(legacyCode.data()), legacyCode.size()});
+        codeEntry.set(
+            std::string_view{reinterpret_cast<const char*>(legacyCode.data()), legacyCode.size()});
         task::syncWait(storage2::writeOne(plainRollbackable,
             executor_v1::StateKey{tableName, ledger::ACCOUNT_TABLE_FIELDS::CODE},
             std::move(codeEntry)));
@@ -678,11 +698,83 @@ BOOST_AUTO_TEST_CASE(executableCacheCoversHashlessAccounts)
     // Served from the content key — same shared_ptr, no re-analysis.
     BOOST_CHECK_EQUAL(second.get(), first.get());
 
-    // Clean up the global cache so no other test sees this entry.
-    auto const contentKey = hostcontext::executableCodeKey(
-        bytesConstRef{legacyCode.data(), legacyCode.size()});
-    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
-        hostcontext::ExecutableCacheKey{contentKey, EVMC_CANCUN}));
+    // A second hash-less address with a different body must get its own executable —
+    // content keying, not "some hash-less account" keying.
+    evmc_address secondHashless{};
+    secondHashless.bytes[0] = 0xAD;
+    secondHashless.bytes[19] = 0x03;
+    bytes secondCode{0x60, 0x03, 0x60, 0x03, 0xF3};
+    {
+        storage::Entry secondEntry;
+        secondEntry.set(
+            std::string_view{reinterpret_cast<const char*>(secondCode.data()), secondCode.size()});
+        task::syncWait(storage2::writeOne(plainRollbackable,
+            executor_v1::StateKey{ledger::account::accountTableName(
+                                      secondHashless, ledger::account::AddressTableMode::Hex),
+                ledger::ACCOUNT_TABLE_FIELDS::CODE},
+            std::move(secondEntry)));
+    }
+    auto secondResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, secondHashless, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(secondResult);
+    BOOST_CHECK(secondResult.get() != first.get());
+
+    // Unbacked-row shape: the account carries a CODE_HASH row whose SYS_CODE_BINARY
+    // entry does not exist (legacy migrations, or the constant emptyCodeHash row the
+    // EIP-7702 clear path writes) while the real body sits in the CODE field. Two such
+    // accounts SHARING the row value with different bodies must not share an executable
+    // — the fill keys on the fetched body, not on the row.
+    bytes unrelatedCode{0x60, 0x04, 0x60, 0x04, 0xF3};
+    auto const unbackedRow =
+        hostcontext::executableCodeKey(bytesConstRef{unrelatedCode.data(), unrelatedCode.size()});
+    auto seedUnbacked = [&](evmc_address const& addr, bytes const& body) {
+        auto const table =
+            ledger::account::accountTableName(addr, ledger::account::AddressTableMode::Hex);
+        storage::Entry hashRow;
+        hashRow.set(std::string_view{(const char*)unbackedRow.data(), crypto::HashType::SIZE});
+        task::syncWait(storage2::writeOne(plainRollbackable,
+            executor_v1::StateKey{table, ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH},
+            std::move(hashRow)));
+        storage::Entry bodyRow;
+        bodyRow.set(std::string_view{(const char*)body.data(), body.size()});
+        task::syncWait(storage2::writeOne(plainRollbackable,
+            executor_v1::StateKey{table, ledger::ACCOUNT_TABLE_FIELDS::CODE}, std::move(bodyRow)));
+    };
+    evmc_address unbackedA{};
+    unbackedA.bytes[0] = 0xAD;
+    unbackedA.bytes[19] = 0x04;
+    evmc_address unbackedB{};
+    unbackedB.bytes[0] = 0xAD;
+    unbackedB.bytes[19] = 0x05;
+    bytes bodyA{0x60, 0x05, 0x60, 0x05, 0xF3};
+    bytes bodyB{0x60, 0x06, 0x60, 0x06, 0xF3};
+    seedUnbacked(unbackedA, bodyA);
+    seedUnbacked(unbackedB, bodyB);
+    auto unbackedExA = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, unbackedA, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(unbackedExA);
+    auto unbackedExB = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, unbackedB, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(unbackedExB);
+    BOOST_CHECK(unbackedExA.get() != unbackedExB.get());
+
+    // Clean up every entry this case could have filled — both the content keys and the
+    // (never-filled, but candidate) row key — then verify the removal by reading back.
+    auto const contentKey =
+        hostcontext::executableCodeKey(bytesConstRef{legacyCode.data(), legacyCode.size()});
+    auto const secondKey =
+        hostcontext::executableCodeKey(bytesConstRef{secondCode.data(), secondCode.size()});
+    auto const keyA = hostcontext::executableCodeKey(bytesConstRef{bodyA.data(), bodyA.size()});
+    auto const keyB = hostcontext::executableCodeKey(bytesConstRef{bodyB.data(), bodyB.size()});
+    for (auto const& spent : {hostcontext::ExecutableCacheKey{contentKey, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{secondKey, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{keyA, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{keyB, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{unbackedRow, EVMC_CANCUN}})
+    {
+        task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(), spent));
+        BOOST_CHECK(!task::syncWait(storage2::readOne(hostcontext::getCacheExecutables(), spent)));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

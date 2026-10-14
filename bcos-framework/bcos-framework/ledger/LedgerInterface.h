@@ -224,7 +224,7 @@ public:
 
     /// Read ONE feature flag's enabled state at @p _blockNumber. The default implementation
     /// derives it from fetchAllFeatures (correct but reads every feature key); production
-    /// Ledger overrides with a single SYS_CONFIG read (round-2 Finding E: the historical
+    /// Ledger overrides with a single SYS_CONFIG read (the historical
     /// state-read path needs exactly one flag (e.g. feature_mpt_state_root), not a ~60-key scan).
     virtual task::Task<bool> fetchFeature(
         bcos::ledger::Features::Flag _flag, protocol::BlockNumber _blockNumber)
