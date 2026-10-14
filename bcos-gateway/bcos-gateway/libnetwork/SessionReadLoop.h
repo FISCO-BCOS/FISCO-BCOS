@@ -13,6 +13,8 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include <bcos-task/Wait.h>
+#include <boost/asio/error.hpp>
+#include <boost/asio/ssl/error.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 
 namespace bcos::gateway
@@ -73,16 +75,19 @@ task::Task<void> Session::readLoop()
             std::size_t readSize =
                 (writeBuffer.size() > m_maxReadDataSize ? m_maxReadDataSize : writeBuffer.size());
             auto [ec, bytesTransferred] =
-                co_await m_server.get().asioInterface()
-                    ->template awaitableReadSome<ReadPolicy>(
-                        m_socket, boost::asio::buffer((void*)writeBuffer.data(), readSize));
+                co_await m_server.get().asioInterface()->template awaitableReadSome<ReadPolicy>(
+                    m_socket, boost::asio::buffer((void*)writeBuffer.data(), readSize));
 
             if (ec)
             {
-                SESSION_LOG(INFO) << LOG_DESC("readLoop failed")
-                                  << LOG_KV("endpoint", nodeIPEndpoint())
-                                  << LOG_KV("message", ec.message());
-                drop(TCPError);
+                SESSION_LOG(DEBUG)
+                    << LOG_DESC("readLoop failed") << LOG_KV("endpoint", nodeIPEndpoint())
+                    << LOG_KV("message", ec.message());
+                // eof / reset / truncated stream: the peer closed the connection
+                bool remoteClosed = (ec == boost::asio::error::eof) ||
+                                    (ec == boost::asio::error::connection_reset) ||
+                                    (ec == boost::asio::ssl::error::stream_truncated);
+                drop(remoteClosed ? ClientQuit : TCPError);
                 co_return;
             }
 

@@ -19,6 +19,8 @@
  * @date 2021-04-12
  */
 #include "PBFTConfig.h"
+#include "bcos-pbft/pbft/utilities/SealStall.h"
+#include <bcos-utilities/BlockStat.h>
 #include <chrono>
 #include <unordered_set>
 
@@ -72,22 +74,31 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // reset the timer
     freshTimer();
 
-    if (_ledgerConfig->sealerId() == -1)
+    auto roundMs = takeRoundMs(_ledgerConfig->blockNumber(), utcSteadyTime());
+    // one site for the one event; sealer=-1 marks a block that arrived through sync
+    PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report")
+                   << LOG_KV("sealer", _ledgerConfig->sealerId())
+                   << LOG_KV("txs", _ledgerConfig->txsSize()) << printCurrentState()
+                   << LOG_KV("roundMs", roundMs);
+    if (bcos::BlockStat::enabled())
     {
-        PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report") << printCurrentState();
-    }
-    else
-    {
-        PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report")
-                       << LOG_KV("sealer", _ledgerConfig->sealerId())
-                       << LOG_KV("txs", _ledgerConfig->txsSize()) << printCurrentState();
+        PBFT_LOG(INFO)
+            << METRIC << LOG_DESC("BlockStat") << LOG_KV("number", _ledgerConfig->blockNumber())
+            << LOG_KV("prePrepareRecv", m_blockStat.takeAndReset(PBFTStatSlot::PrePrepareRecv))
+            << LOG_KV("prepareRecv", m_blockStat.takeAndReset(PBFTStatSlot::PrepareRecv))
+            << LOG_KV("commitRecv", m_blockStat.takeAndReset(PBFTStatSlot::CommitRecv))
+            << LOG_KV("checkpointRecv", m_blockStat.takeAndReset(PBFTStatSlot::CheckpointRecv))
+            << LOG_KV("viewChangeRecv", m_blockStat.takeAndReset(PBFTStatSlot::ViewChangeRecv))
+            << LOG_KV("rejected", m_blockStat.takeAndReset(PBFTStatSlot::Rejected))
+            << LOG_KV("bytesRecv", m_blockStat.takeAndReset(PBFTStatSlot::BytesRecv));
     }
     if (m_compatibilityVersion != _ledgerConfig->compatibilityVersion())
     {
-        PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
-                       << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
-                       << LOG_KV("updatedVersion", (bcos::protocol::BlockVersion)(
-                                                       _ledgerConfig->compatibilityVersion()));
+        PBFT_LOG(INFO)
+            << LOG_DESC("compatibilityVersion updated")
+            << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
+            << LOG_KV("updatedVersion",
+                   (bcos::protocol::BlockVersion)(_ledgerConfig->compatibilityVersion()));
         m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
         if (m_versionNotification && m_asMasterNode)
         {
@@ -306,11 +317,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
         {
             break;
         }
-        PBFT_LOG(INFO) << LOG_DESC("tryTriggerFastViewChange for the faulty leader")
-                       << LOG_KV("leaderIndex", currentLeader)
-                       << LOG_KV("leader", leaderNodeInfo->nodeID->shortHex())
-                       << printCurrentState();
-        m_fastViewChangeHandler();
+        m_fastViewChangeHandler(ViewChangeReason::FaultyLeader);
         triggered = true;
         // advance to the next candidate leader
         currentLeader = leaderIndexInNewViewPeriod(m_toView);
@@ -326,12 +333,21 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
     {
+        noteSealSkipped(SealSkipReason::NotLeader, _progressedIndex, -1);
         return;
     }
     if (!canHandleNewProposal())
     {
-        PBFT_LOG(INFO) << LOG_DESC(
-            "Not notify the sealer to sealing for not reach waitResealUntil/waitToSeal limit");
+        // waitSealUntil: a system proposal is in flight; waitResealUntil: re-handled proposals
+        // from a NewView must commit first
+        if (m_waitSealUntil >= m_waitResealUntil)
+        {
+            noteSealSkipped(SealSkipReason::SysProposalPending, _progressedIndex, m_waitSealUntil);
+        }
+        else
+        {
+            noteSealSkipped(SealSkipReason::WaitReseal, _progressedIndex, m_waitResealUntil);
+        }
         return;
     }
 
@@ -384,11 +400,10 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     }
     if (m_validator->resettingProposalSize() > 0 && (startSealIndex > (committedIndex + 1)))
     {
-        PBFT_LOG(INFO) << LOG_DESC(
-                              "Not notify the sealer to sealing for txs of some proposals have not "
-                              "been reset success")
-                       << LOG_KV("resettingProposalSize", m_validator->resettingProposalSize())
-                       << LOG_KV("startSealIndex", startSealIndex) << printCurrentState();
+        noteSealSkipped(SealSkipReason::PrevExecuting, startSealIndex, committedIndex + 1);
+        PBFT_LOG(DEBUG) << LOG_DESC("notifySealer: wait for txs of previous proposals to be reset")
+                        << LOG_KV("resettingProposalSize", m_validator->resettingProposalSize())
+                        << LOG_KV("startSealIndex", startSealIndex) << printCurrentState();
         // Note: must unlock here, otherwise deadlock will happen
         lock.unlock();
         // notify the leader to seal when all txs of all proposals have been reset
