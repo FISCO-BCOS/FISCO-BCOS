@@ -630,7 +630,8 @@ BOOST_AUTO_TEST_CASE(blobTransactionBeforeCancunIsRejected)
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::TxTypeNotSupported);
 }
 
-// evmone routes the blob type through the eip1559 hierarchy for TIP_GT_FEE_CAP, so the admission
+// evmone routes the blob type through the eip1559 hierarchy for
+// INSUFFICIENT_MAX_FEE_PER_BLOB_GAS, so the admission
 // column carries TipNotAboveCap too -- admission stricter or weaker than execution is the failure
 // this module exists to prevent.
 BOOST_AUTO_TEST_CASE(blobTransactionWithTipAboveTheFeeCapIsRejected)

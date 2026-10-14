@@ -242,6 +242,9 @@ BOOST_AUTO_TEST_CASE(feature)
 BOOST_AUTO_TEST_CASE(retiredOpJovianBitIsReservedNotReusable)
 {
     BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::reserved_removed_op_jovian), 60);
+    // Same pin for the newly added consensus bit: the enum value IS the on-chain
+    // feature_flags bit position.
+    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::bugfix_nested_create_creator_nonce), 62);
     BOOST_CHECK(!Features::contains("feature_op_jovian"));
     BOOST_CHECK_THROW(Features::string2Flag("feature_op_jovian"), std::exception);
 

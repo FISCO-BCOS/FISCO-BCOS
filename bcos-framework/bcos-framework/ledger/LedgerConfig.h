@@ -428,11 +428,13 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
     if (n == "byzantium")
         return EVMC_BYZANTIUM;
     // evmone 0.23 removed the Constantinople revision and retargets its opcodes to
-    // Petersburg. The two do NOT have identical EVM semantics: EIP-1283 (SSTORE net gas
-    // metering) is reverted in Petersburg, so the same SSTORE is charged differently —
-    // and this binary has no EIP-1283 metering to run. Accepting the name would silently
-    // retarget a persisted row instead of letting the operator choose; refuse the legacy
-    // spellings so `petersburg` is explicit.
+    // Petersburg. Constantinople and Petersburg do NOT have identical EVM semantics:
+    // EIP-1283 (SSTORE net gas metering) is active in Constantinople and reverted in
+    // Petersburg, so the same SSTORE is charged differently — and this binary has no
+    // EIP-1283 metering to run. ConstantinopleFix names the same schedule as Petersburg;
+    // accepting either legacy spelling would still silently retarget a persisted row
+    // instead of letting the operator choose, so both spellings are refused and
+    // `petersburg` stays explicit.
     if (n == "petersburg")
         return EVMC_PETERSBURG;
     if (n == "istanbul" || n == "muirglacier" || n == "muir glacier")

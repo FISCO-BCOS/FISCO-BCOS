@@ -53,7 +53,8 @@ inline EvmcBytes toEvmcBE(bcos::u256 const& val)
 }
 
 /// Load a 32-byte big-endian evmc value as a bcos::u256.
-inline bcos::u256 fromEvmcBE(auto const& be) requires(sizeof(be.bytes) == 32)
+inline bcos::u256 fromEvmcBE(auto const& be)
+    requires(sizeof(be.bytes) == 32)
 {
     return bcos::fromBigEndian<bcos::u256>(be.bytes);
 }
@@ -72,7 +73,8 @@ inline evmc::bytes32 keccak256(evmc::bytes_view data) noexcept
     return std::bit_cast<evmc::bytes32>(ethash::keccak256(data.data(), data.size()));
 }
 
-// ---- Transaction validation error codes (mirrors bcos-evm eth/state/errors.hpp BY VALUE;
+// ---- Transaction validation error codes (originally copied from the retired bcos-evm
+// eth/state/errors.hpp; now kept in lockstep with evmone 0.24's test/state/errors.hpp BY VALUE;
 // evmone 0.24 renamed entries and inserted INVALID_CHAIN_ID/INVALID_ENCODING/INVALID_SIGNATURE
 // before UNKNOWN_ERROR — keep this enum in lockstep or status mapping silently misclassifies) ----
 
