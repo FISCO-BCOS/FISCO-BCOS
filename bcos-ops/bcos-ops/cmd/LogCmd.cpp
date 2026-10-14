@@ -220,6 +220,14 @@ int runLog(Args const& _args, std::ostream& _out, std::ostream& _err)
     {
         throw OpsError(c_exitUsage, "unknown log subcommand: " + sub);
     }
+    // every log subcommand reads the files under --node-dir; only `log tx` also asks a node (the
+    // on-chain lookup). Anywhere else --rpc would be ignored and the local log read instead.
+    if (sub != "tx" && _args.option("rpc"))
+    {
+        throw OpsError(c_exitUsage, "log " + sub +
+                                        " reads the node's own log files (--node-dir); --rpc only "
+                                        "applies to the on-chain lookup of log tx");
+    }
     // status reads one line per kind (the last Report, the last SyncStarted, ...), so it keeps
     // only those; the traces need every line of their thread
     auto input = loadEvents(_args, namedEvents(names->second), sub == "status");
