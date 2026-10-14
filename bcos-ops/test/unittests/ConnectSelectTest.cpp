@@ -38,7 +38,8 @@ namespace
 {
 /// minimal stand-in for the node's IpcServer (async accept + read loop on one io thread):
 /// getBlockNumber → 128, getConsensusStatus → a string-wrapped object, getGroupInfo → echoes its
-/// params, getTerminalTrap → a string carrying escape sequences, anything else → -32601.
+/// params, getTerminalTrap → a string carrying escape sequences, admin_* → {method, params},
+/// anything else → -32601.
 /// `delayNextReplyMs` holds the next reply back that long; `wrongIdOnce` answers the next
 /// request under another id (a stream that got out of step).
 class FakeIpcNode
@@ -110,6 +111,11 @@ private:
                     else if (request["method"].asString() == "getGroupInfo")
                     {
                         response["result"] = request["params"];
+                    }
+                    else if (request["method"].asString().starts_with("admin_"))
+                    {
+                        response["result"]["method"] = request["method"];
+                        response["result"]["params"] = request["params"];
                     }
                     else if (request["method"].asString() == "getTerminalTrap")
                     {
@@ -358,6 +364,35 @@ BOOST_AUTO_TEST_CASE(attachTextOutputIsSanitized)
     }
     BOOST_REQUIRE_MESSAGE(code == c_exitOk, err.str());
     BOOST_CHECK_EQUAL(out.str(), "]0;owned[2Jvalue\n");
+}
+
+// the accepted forms reach the socket as the admin call they name
+BOOST_AUTO_TEST_CASE(logLevelSendsTheAdminCallItNames)
+{
+    TempNode node;
+    FakeIpcNode fake(node.socketPath());
+    struct Case
+    {
+        std::vector<std::string> words;
+        std::string method;
+        std::string params;
+    };
+    for (auto const& c : std::vector<Case>{{{"get"}, "admin_getLogLevel", "[]"},
+             {{"set", "debug", "--module", "PBFT"}, "admin_setLogLevel", R"(["debug","PBFT"])"},
+             {{"set", "inherit"}, "admin_setLogLevel", R"(["inherit"])"}})
+    {
+        std::vector<std::string> args{"fisco-bcos", "log-level"};
+        args.insert(args.end(), c.words.begin(), c.words.end());
+        args.insert(args.end(), {"--node-dir", node.dir.string()});
+        std::ostringstream out;
+        std::ostringstream err;
+        BOOST_REQUIRE_MESSAGE(runOps(args, out, err) == c_exitOk, err.str());
+        auto echoed = parseJson(out.str(), "log-level");
+        BOOST_CHECK_EQUAL(echoed["method"].asString(), c.method);
+        Json::StreamWriterBuilder writer;
+        writer["indentation"] = "";
+        BOOST_CHECK_EQUAL(Json::writeString(writer, echoed["params"]), c.params);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(logLevelRefusesExtraWords)
