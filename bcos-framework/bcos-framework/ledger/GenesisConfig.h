@@ -173,12 +173,6 @@ public:
     bool m_isSerialExecute = true;
     int m_executorVersion = 0;
 
-    // EVMC revision config (consumed by ethereum-executor, executor_version=2).
-    // m_evmcRevision: explicit single revision applied to all blocks (when set).
-    // m_evmcRevisionForks: block height -> revision fork transitions.
-    std::optional<evmc_revision> m_evmcRevision;
-    std::map<protocol::BlockNumber, evmc_revision> m_evmcRevisionForks;
-
     // rpbft config
     int64_t m_epochSealerNum = 4;
     int64_t m_epochBlockNum = 1000;
@@ -212,11 +206,6 @@ public:
     /// 250" and "omitted canyon" pin the same string, while omitting the WHOLE section pins
     /// nothing at all, which is what keeps a pre-existing chain's pin text unchanged.
     std::optional<OpEip1559Params> m_opEip1559;
-
-    // Canonical OP fork schedule. Parsed from genesis [op_fork_schedule]
-    // canonical and persisted into s_op_chain_metadata at genesis when set; not
-    // part of LedgerConfig / generateGenesisData.
-    std::optional<std::string> m_opstackForkSchedule;
 
 };  // namespace genesisConfig
 }  // namespace bcos::ledger

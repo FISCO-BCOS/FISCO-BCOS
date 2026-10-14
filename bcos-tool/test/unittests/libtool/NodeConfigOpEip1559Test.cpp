@@ -69,7 +69,7 @@ std::string opGenesis(std::string const& executorTail, std::string const& opSect
            executorTail + opSections + ethLaneGenesisSections();
 }
 
-/// The OP lane's accepted [executor] tail: version 3, no evm_revision.
+/// The OP lane's accepted [executor] tail: version 3.
 std::string opExecutor()
 {
     return "version=3\n";
@@ -243,9 +243,8 @@ BOOST_AUTO_TEST_CASE(valuesExceedingUint32Rejected)
 BOOST_AUTO_TEST_CASE(sectionWithoutOpLaneRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(
-        cfg.loadGenesisConfigFromString(opGenesis(
-            "version=2\nevm_revision=prague\n", "[op_eip1559]\nelasticity=2\ndenominator=8\n")),
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
+                              "version=2\n", "[op_eip1559]\nelasticity=2\ndenominator=8\n")),
         InvalidConfig, [](auto const& e) {
             return errinfoContains(e, "[op_eip1559] requires executor.version >= 3 (OP lane)");
         });

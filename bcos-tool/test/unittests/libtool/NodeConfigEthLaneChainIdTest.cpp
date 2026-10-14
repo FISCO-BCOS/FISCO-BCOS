@@ -64,7 +64,7 @@ std::string genesisWith(int executorVersion, std::optional<std::string> const& c
         "auth_admin_account=0x0000000000000000000000000000000000000001\n";
     if (executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION)
     {
-        return genesis + "version=2\nevm_revision=cancun\n" + ethLaneGenesisSections();
+        return genesis + "version=2\n" + ethLaneGenesisSections();
     }
     if (executorVersion == ledger::OPSTACK_EXECUTOR_VERSION)
     {

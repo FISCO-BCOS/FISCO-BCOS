@@ -117,8 +117,7 @@ constexpr static std::string_view INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA = "eth_ge
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS =
     magic_enum::enum_name(SystemConfig::op_eip1559_params);
 // OP lane: the RESOLVED canonical fork schedule ("0:isthmus,1000:karst" form), written at
-// genesis for both declaration channels ([op_fork_schedule] verbatim, [op_fork_timestamps]
-// folded) so the snapshot read (getLedgerConfig -> RPC estimate gas-cap gate) keys on the
+// genesis from the folded [op_fork_timestamps] so the snapshot read (getLedgerConfig -> RPC estimate gas-cap gate) keys on the
 // chain's own schedule rather than a binary default (M1). The snapshot EXTRACTOR keeps the
 // jovian/karst activations only — the pair that gate keys on — so the row carries the full
 // ladder while a reader of the extract sees that pair alone (opForkScheduleFromCanonical).

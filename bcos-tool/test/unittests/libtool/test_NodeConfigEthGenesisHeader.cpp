@@ -56,9 +56,7 @@ constexpr auto kEthBase =
     "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n";
 
 // Ethereum-lane base: executor.version=2 signals the lane (there is no feature
-// flag anymore). compatibility_version must be >= 3.18.0 (below it the EVM
-// revision cannot be persisted on-chain) and a v2 chain must pin an explicit
-// executor.evm_revision.
+// flag anymore).
 constexpr auto kEthLaneBase =
     "[chain]\nsm_crypto=0\nchain_id=1\ngroup_id=g\n"
     "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
@@ -66,7 +64,7 @@ constexpr auto kEthLaneBase =
     "[version]\ncompatibility_version=3.18.0\n"
     "[tx]\ngas_limit=300000000\n"
     "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n"
-    "version=2\nevm_revision=cancun\n";
+    "version=2\n";
 
 constexpr auto kEthAlloc0 =
     "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"

@@ -57,9 +57,7 @@ constexpr auto kBase =
     "[tx]\ngas_limit=300000000\n"
     "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n";
 
-// Ethereum-lane base: executor.version=2 signals the lane. compatibility_version
-// must be >= 3.18.0 (below it Ledger::buildGenesisBlock cannot persist the EVM
-// revision) and a v2 chain must pin an explicit executor.evm_revision.
+// Ethereum-lane base: executor.version=2 signals the lane.
 constexpr auto kAllocsEthBase =
     "[chain]\nsm_crypto=0\nchain_id=1\ngroup_id=g\n"
     "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
@@ -67,7 +65,7 @@ constexpr auto kAllocsEthBase =
     "[version]\ncompatibility_version=3.18.0\n"
     "[tx]\ngas_limit=300000000\n"
     "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n"
-    "version=2\nevm_revision=cancun\n";
+    "version=2\n";
 
 constexpr auto kAlloc0 =
     "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"

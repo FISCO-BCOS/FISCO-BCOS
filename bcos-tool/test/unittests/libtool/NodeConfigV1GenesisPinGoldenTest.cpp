@@ -40,9 +40,10 @@
 //   compat >= 3.5 print the defaults 4/1000, because the loader reads the epoch keys only for
 //   rpbft.
 //
-// Left out deliberately: executor.evm_revision(_forks), tx.gas_price and tx.excess_blob_gas reach
-// a sectioned pin, but no released binary (3.16.0-3.17.1) emits them for a FISCO chain, so no
-// existing v0/v1 pin contains them. is_wasm=true is rejected at load. v2/v3 pins are out of scope.
+// Left out deliberately: tx.gas_price and tx.excess_blob_gas reach a sectioned pin, but no
+// released binary (3.16.0-3.17.1) emits them for a FISCO chain, so no existing v0/v1 pin
+// contains them. executor.evm_revision(_forks) is no longer read on any lane. is_wasm=true is
+// rejected at load. v2/v3 pins are out of scope.
 
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/LedgerConfig.h>

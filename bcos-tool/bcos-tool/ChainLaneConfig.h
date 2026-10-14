@@ -91,19 +91,10 @@ struct LaneKeyRule
 /// NodeConfig::validateL2Invariants. TODO (deliberately NOT in this change): the
 /// remaining pairs —
 /// [eth_genesis_header] <-> feature_l2_ethereum_compat, [alloc.*] <-> the same feature,
-/// [fork_timestamps] -> executor.version=2, OP lane forbids executor.evm_revision — still
-/// live where they were.
+/// [fork_timestamps] -> executor.version=2 — still live where they were.
 [[nodiscard]] inline std::vector<LaneKeyRule> const& laneKeyRules()
 {
     static std::vector<LaneKeyRule> const rules{
-        {.section = "op_fork_schedule",
-            .lane = ChainLane::Op,
-            .presence = KeyPresence::Optional,
-            .pinned = false,
-            .rejectMessage = "[op_fork_schedule] requires executor.version >= 3 (OP lane)",
-            .requiredMessage = {},
-            .presenceMember = "m_opstackForkSchedule",
-            .reason = "NodeConfig.cpp loadOpForkSchedule + validateL2Invariants"},
         {.section = "op_fork_timestamps",
             .lane = ChainLane::Op,
             .presence = KeyPresence::Required,

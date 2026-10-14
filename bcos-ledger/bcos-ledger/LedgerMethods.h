@@ -618,20 +618,16 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
         ledgerConfig.setCompatibilityVersion(ledger::ETHEREUM_LANE_COMPATIBILITY_VERSION);
     }
 
-    // EVMC revision — consumed only by the pure-Ethereum EthereumExecutor
-    // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
-    // so a non-v2 chain is left untouched (no implicit default injection, which would be an
-    // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
-    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock).
-    // A v2 chain WITHOUT one stays UNCONFIGURED here (no binary-side default injected): the
-    // consumers fail closed — EthereumExecutor throws EvmcRevisionNotConfigured and
-    // EngineService buildPayload throws UnsupportedFork — rather than hash state or block
-    // headers under a fork the chain never configured. The initializer already refuses to
-    // boot such a chain, so this branch only fires on corrupt/legacy state.
+    // EVMC revision row — read on executor_version >= 2 only. No genesis writes it any more:
+    // a v2 genesis derives the revision from [fork_timestamps] (the block verifier stamps it
+    // per block; the dry run and admission get ledger::EvmcRevisionSchedule), and the OP lane
+    // from [op_fork_timestamps]. The row is still parsed when a datadir carries one (the
+    // Initializer's runtime-switch probe, engine tests that seed it). Absent, the revision
+    // stays UNCONFIGURED here (no binary-side default injected): a consumer with no other
+    // source fails closed — EthereumExecutor throws EvmcRevisionNotConfigured and
+    // EngineService buildPayload throws UnsupportedFork.
     //
     // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
-    // The effective revision is parsed and logged once at startup (Initializer), which the
-    // CI pins and where a corrupt value becomes a boot refusal.
     if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)

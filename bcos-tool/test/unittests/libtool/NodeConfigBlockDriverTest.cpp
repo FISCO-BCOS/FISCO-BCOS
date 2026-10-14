@@ -43,7 +43,8 @@ constexpr auto c_forkTimestamps =
     "prague_time=0\nmerge_block=0\n";
 
 // v2 genesis variants: the L1 fork schedule (the shape every v2 driver accepts), or only an
-// on-chain executor.evm_revision (accepted by the genesis loader, refused by both v2 drivers).
+// executor.evm_revision, which nothing reads (accepted by the genesis loader, refused by both v2
+// drivers for the missing schedule).
 enum class V2Fork
 {
     Timestamps,
@@ -164,8 +165,8 @@ BOOST_AUTO_TEST_CASE(v2WithNothingIsTheL1El)
     BOOST_CHECK_EQUAL(cfg->ethereumChainId(), 11155420u);
 }
 
-// Both v2 drivers derive the EVM revision from [fork_timestamps]; a v2 genesis that carries
-// only executor.evm_revision has none, so the node refuses to start under either.
+// Both v2 drivers derive the EVM revision from [fork_timestamps] alone; a v2 genesis that carries
+// executor.evm_revision instead has no schedule, so the node refuses to start under either.
 BOOST_AUTO_TEST_CASE(v2RequiresForkTimestampsUnderEitherDriver)
 {
     for (auto const* ini : {"", c_selfProduce})

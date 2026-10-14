@@ -2142,19 +2142,6 @@ bool Ledger::buildGenesisBlock(
                 balanceTransfer);
         }
 
-        // Write EVMC revision config (consumed by ethereum-executor, executor_version=2).
-        // Only written when explicitly configured in the genesis config; otherwise
-        // getLedgerConfig falls back to the latest revision from genesis.
-        if (versionNumber >= BlockVersion::V3_18_0_VERSION &&
-            (genesis.m_evmcRevision || !genesis.m_evmcRevisionForks.empty()))
-        {
-            Entry evmcRevisionEntry;
-            evmcRevisionEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{
-                encodeEVMCRevisionConfig(genesis.m_evmcRevision, genesis.m_evmcRevisionForks), 0}));
-            co_await storage2::writeOne(*m_stateStorage,
-                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EVMC_REVISION), evmcRevisionEntry);
-        }
-
         // Write excess blob gas config (consumed by ethereum-executor, executor_version=2,
         // for EIP-4844 blob base fee). Only written when explicitly configured in the genesis
         // config; otherwise getLedgerConfig leaves excessBlobGas unset (executor uses 0).
@@ -2201,29 +2188,13 @@ bool Ledger::buildGenesisBlock(
         // the RPC estimate gas-cap gate (M1) among them — keys fork activation on the
         // chain's own schedule in every deployment. The SYS_OP_CHAIN_METADATA triple is the
         // integrity-bound copy the Initializer's boot probe validates (absent = legal;
-        // partial/corrupt/mis-bound = startup refusal). Both declaration channels resolve
-        // through the ONE resolver the boot probe also compares against
-        // ([op_fork_schedule] canonicalized verbatim, else the [op_fork_timestamps]
-        // shorthand folded by the rule the executor applies), so the writer and the probe
-        // cannot disagree about what this node declares — and the NORMALIZED canonical is
-        // what gets bound ("0:Isthmus" persists as "0:isthmus").
+        // partial/corrupt/mis-bound = startup refusal). Both are generated from the
+        // [op_fork_timestamps] shorthand through the ONE resolver the boot probe also compares
+        // against, so the writer and the probe cannot disagree about what this node declares.
         std::optional<std::string> resolvedOpSchedule;
-        // A dual declaration must agree before this branch resolves it: the loader refuses a
-        // divergent pair (NodeConfig), and a direct GenesisConfig caller (tooling, tests, a
-        // future genesis wizard) must not be able to persist the canonical side while the
-        // executor runs the differing shorthand — the exact state the loader then refuses to
-        // read. Same rule set as the loader, one helper.
-        if (auto const problem = opForkScheduleDualDeclarationProblem(
-                genesis.m_opstackForkSchedule, genesis.m_opForkSchedule))
-        {
-            throwInvalidOpForkSchedule(*problem);
-        }
-        if (auto const resolved = resolvedLocalOpForkScheduleCanonical(
-                genesis.m_opForkSchedule, genesis.m_opstackForkSchedule);
+        if (auto const resolved = resolvedLocalOpForkScheduleCanonical(genesis.m_opForkSchedule);
             resolved.has_value())
         {
-            // Same integrity triple for either channel (both persist identical triples; a
-            // chain declared via [op_fork_timestamps] must not lack the integrity-bound copy).
             // The binding target is header->hash() — block 0's own hash — so the boot probe
             // validates it against the config's [eth_genesis_header] when the node declares
             // one, and against this stored genesis header itself when it does not (the

@@ -441,10 +441,6 @@ public:
     bool preStoreBackpressureEnabled() const;
     size_t preStoreMaxInflight() const;
     int executorVersion() const;
-    /// EVMC revision config (ethereum-executor, executor_version=2): explicit single
-    /// revision applied to all blocks, plus block-height fork transitions.
-    std::optional<evmc_revision> evmcRevision() const;
-    std::map<protocol::BlockNumber, evmc_revision> const& evmcRevisionForks() const;
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
@@ -471,9 +467,6 @@ protected:
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
     // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis)
     void loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
-    // OP-Stack canonical fork schedule ([op_fork_schedule] in config.genesis).
-    // Missing section leaves m_opstackForkSchedule unset (legacy via feature_op_jovian).
-    void loadOpForkSchedule(boost::property_tree::ptree const& _genesisConfig);
     // OP-lane fork schedule ([op_fork_timestamps] in config.genesis)
     void loadOpForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
     // OP-lane chain EIP-1559 parameters ([op_eip1559] in config.genesis)

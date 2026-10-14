@@ -797,17 +797,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_scheduler = std::move(multiVersionScheduler);
 
     // Parse and log the effective EVMC revision once at startup when the ledger runs
-    // executor_version 2 under a genesis of another lane (a runtime switch to v2): only the
-    // on-chain evmc_revision row can name its revision. A v2 genesis is exempt under both of
-    // its drivers (Engine and [debug] enable): block building and verification derive the EVMC
-    // revision from the per-block timestamp via the [fork_timestamps] schedule
-    // (EthereumBlockVerifier's fillExecutionLedgerConfig), not from the row, and so do the
-    // eth_call / eth_estimateGas dry run and admission (evmcRevisionSchedule above).
+    // executor_version 2 under a genesis of another lane (a runtime switch to v2): only an
+    // on-chain evmc_revision row could name its revision, and no genesis writes one any more,
+    // so such a node refuses to start unless an older datadir carries the row. A v2 genesis is
+    // exempt: every reader derives the revision from the block timestamp via [fork_timestamps]
+    // (the block verifier's fillExecutionLedgerConfig, and evmcRevisionSchedule above for the
+    // eth_call / eth_estimateGas dry run and admission).
     //
-    // The OP lane is outside this probe: NodeConfig rejects an explicit revision there and
-    // Ledger::buildGenesisBlock therefore writes no evmc_revision row, because OpScheduler
-    // derives it per block from [op_fork_timestamps] (via opstack-executor/OpForkSpec.h). Its
-    // absence is the expected shape, not the runtime-switch hazard this guard targets.
+    // The OP lane is outside this probe: it has no evmc_revision row either, because
+    // OpScheduler derives the revision per block from [op_fork_timestamps] (via
+    // opstack-executor/OpForkSpec.h). Its absence is the expected shape, not the
+    // runtime-switch hazard this guard targets.
     if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION &&
         m_executorVersion < scheduler_v1::OPSTACK_EXECUTOR_VERSION &&
         m_nodeConfig->executorVersion() != bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
@@ -825,17 +825,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
         else
         {
-            // v2 with no evmc_revision row: the effective revision would fall back to a
-            // binary-side default (EVMC_REVISION_DEFAULT), tying consensus to the binary.
-            // A fresh v2 chain always has the row, so reaching here means a runtime switch
-            // to v2 without genesis config. Refuse to start (node-local policy — no block
-            // semantics touched) instead of defaulting.
+            // executor_version 2 under another lane's genesis with no evmc_revision row: the
+            // effective revision would fall back to a binary-side default
+            // (EVMC_REVISION_DEFAULT), tying consensus to the binary. Refuse to start
+            // (node-local policy — no block semantics touched) instead of defaulting.
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(
                     "executor_version >= 2 but no evmc_revision system config is recorded "
                     "on-chain; the effective EVM revision would be a binary-side default. "
-                    "Refusing to start — configure executor.evm_revision at genesis, or run "
-                    "executor_version 0/1"));
+                    "Refusing to start — run an executor.version=2 genesis with "
+                    "[fork_timestamps], or executor_version 0/1"));
         }
     }
 
@@ -914,17 +913,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 "SYS_OP_CHAIN_METADATA integrity triple cannot be read and its "
                 "tamper check is SKIPPED");
         }
-        // The schedule this node will actually run comes from WHICHEVER declaration channel
-        // it carries — the canonical [op_fork_schedule] (Optional) or the folded
-        // [op_fork_timestamps] shorthand (Required) — so a shorthand-only chain, which is
-        // legal and populates only the required channel, is compared too. The recorded side
-        // is the row every snapshot reader consumes, else the pre-triple chain's triple, else
-        // nothing to compare against; a node booted with a different schedule than the
-        // chain's recorded one must refuse, or the divergence surfaces only at the next fork
-        // activation.
+        // The schedule this node will actually run is its [op_fork_timestamps] shorthand,
+        // resolved exactly as the genesis writer persisted it. The recorded side is the row
+        // every snapshot reader consumes, else the pre-triple chain's triple, else nothing to
+        // compare against; a node booted with a different schedule than the chain's recorded
+        // one must refuse, or the divergence surfaces only at the next fork activation.
         auto const localSchedule = ledger::resolvedLocalOpForkScheduleCanonical(
-            m_nodeConfig->genesisConfig().m_opForkSchedule,
-            m_nodeConfig->genesisConfig().m_opstackForkSchedule);
+            m_nodeConfig->genesisConfig().m_opForkSchedule);
         if (auto const problem = ledger::opForkScheduleBootProbeProblem(
                 recordedScheduleRow, recordedTripleSchedule, localSchedule))
         {

@@ -60,7 +60,7 @@ std::string laneGenesis(
         "auth_admin_account=0x0000000000000000000000000000000000000001\n";
     if (executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION)
     {
-        genesis += "version=2\nevm_revision=cancun\n";
+        genesis += "version=2\n";
     }
     else
     {

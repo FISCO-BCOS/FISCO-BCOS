@@ -167,75 +167,19 @@ struct OpForkScheduleMetadataRows
            canonicalOpForkSchedule(parseOpForkSchedule(*genesisCanonical));
 }
 
-/// The schedule THIS node will actually run, resolved from whichever declaration channel it
-/// carries: the canonical [op_fork_schedule] (canonicalized), else the [op_fork_timestamps]
-/// shorthand folded through the one fold rule — byte-for-byte the resolution the genesis
-/// writer persists (Ledger::buildGenesisBlock). nullopt when neither channel is declared.
-/// Both channels are legal ([op_fork_schedule] is Optional, [op_fork_timestamps] Required),
-/// so a caller that only looked at the canonical one would skip every shorthand-only chain.
+/// The schedule THIS node will actually run: the [op_fork_timestamps] shorthand folded through
+/// the one fold rule — byte-for-byte what the genesis writer persists
+/// (Ledger::buildGenesisBlock) and what the boot probe compares. nullopt when the section is not
+/// declared.
 [[nodiscard]] inline std::optional<std::string> resolvedLocalOpForkScheduleCanonical(
-    std::optional<OpForkSchedule> const& shorthand,
-    std::optional<std::string> const& canonicalDeclared)
+    std::optional<OpForkSchedule> const& shorthand)
 {
-    if (canonicalDeclared.has_value())
-    {
-        return canonicalOpForkSchedule(parseOpForkSchedule(*canonicalDeclared));
-    }
     if (shorthand.has_value())
     {
         return canonicalOpForkSchedule(
             foldOpForkShorthand(shorthand->m_jovianTime, shorthand->m_karstTime));
     }
     return std::nullopt;
-}
-
-/// The dual-declaration check as one rule set: when BOTH channels are declared they must
-/// normalize to the SAME schedule — compared as whole record lists, not just the
-/// (jovian, karst) pair, so a canonical channel describing a replay ladder while the
-/// shorthand declares the isthmus baseline is refused even when the two rungs every
-/// current consumer keys on agree (the executor runs the shorthand struct while the
-/// canonical side feeds the stored row — a lower-rung divergence would only surface at
-/// those rungs' activation). The loader refuses such a config before genesis and the
-/// genesis writer must not resolve the same conflict silently (a direct GenesisConfig
-/// caller would otherwise persist one channel while the executor runs the other).
-/// Returns the violation text naming both sides, or nullopt when only one channel is
-/// declared or the two already agree.
-[[nodiscard]] inline std::optional<std::string> opForkScheduleDualDeclarationProblem(
-    std::optional<std::string> const& canonicalDeclared,
-    std::optional<OpForkSchedule> const& shorthand)
-{
-    if (!canonicalDeclared.has_value() || !shorthand.has_value())
-    {
-        return std::nullopt;
-    }
-    auto const canonicalRecords = parseOpForkSchedule(*canonicalDeclared);
-    auto const shorthandRecords =
-        foldOpForkShorthand(shorthand->m_jovianTime, shorthand->m_karstTime);
-    if (canonicalOpForkSchedule(canonicalRecords) == canonicalOpForkSchedule(shorthandRecords))
-    {
-        return std::nullopt;
-    }
-    // Name the two rungs current consumers key on, plus the full texts for the rest.
-    auto const activationOf = [](std::vector<OpForkActivationRecord> const& records,
-                                  std::string_view fork) {
-        for (auto const& record : records)
-        {
-            if (record.forkName == fork)
-            {
-                return record.timestamp;
-            }
-        }
-        return c_opForkTimeUnset;
-    };
-    return "[op_fork_schedule] (" + canonicalOpForkSchedule(canonicalRecords) +
-           ") and [op_fork_timestamps] (" + canonicalOpForkSchedule(shorthandRecords) +
-           ") declare different schedules (jovian/karst at (" +
-           std::to_string(activationOf(canonicalRecords, "jovian")) + "/" +
-           std::to_string(activationOf(canonicalRecords, "karst")) + ") vs (" +
-           std::to_string(activationOf(shorthandRecords, "jovian")) + "/" +
-           std::to_string(activationOf(shorthandRecords, "karst")) +
-           ")): the canonical channel feeds the stored row while the executor runs the "
-           "shorthand — declare one channel, or make them agree";
 }
 
 /// The OP-lane boot probe's schedule comparison, as one rule set: the recorded SYS_CONFIG row

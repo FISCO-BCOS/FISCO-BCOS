@@ -336,20 +336,18 @@ private:
     std::map<bcos::protocol::BlockNumber, evmc_revision> m_forkTransitions;
 };
 
-/// The latest EVM revision supported by the ethereum-executor. This is a fallback only:
-/// NodeConfig::loadExecutorConfig requires an explicit evm_revision for executor_version>=2,
-/// so a fresh v2 chain always persists its revision on-chain, and the startup path refuses
-/// to boot a v2 chain whose row is absent (no binary-side default). The constant applies
-/// solely on the (defensive) v2-missing-config path in getLedgerConfig, plus test /
-/// EEST-runner convenience.
+/// The base revision encodeEVMCRevisionConfig writes when a fork list has no block-0 entry.
+/// No genesis writes an evmc_revision row any more (a v2 chain derives its revision from
+/// [fork_timestamps], see EvmcRevisionSchedule); the codec stays for rows already on disk and
+/// for tests.
 inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 
 /// executor_version=2 (the L1 EL lane): the EVM revision of a block with @p timestampSeconds
-/// and @p difficulty (0 = PoS), as the genesis [fork_timestamps] schedule assigns it. The block
-/// verifier stamps the revision per block itself (fillExecutionLedgerConfig); every other
-/// reader (the eth_call / eth_estimateGas dry run, transaction admission) is handed this
-/// function by the Initializer, built over scheduler_v1::evmcRevisionForTimestamp, instead of
-/// reading the evmc_revision row. Empty on every other lane.
+/// and @p difficulty (0 = PoS), as the genesis [fork_timestamps] schedule assigns it. The lane
+/// records no evmc_revision row; the block verifier stamps the revision per block itself
+/// (fillExecutionLedgerConfig), and every other reader (the eth_call / eth_estimateGas dry
+/// run, transaction admission) is handed this function by the Initializer, built over
+/// scheduler_v1::evmcRevisionForTimestamp. Empty on every other lane.
 using EvmcRevisionSchedule =
     std::function<evmc_revision(int64_t timestampSeconds, u256 const& difficulty)>;
 

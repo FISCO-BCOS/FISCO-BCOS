@@ -55,8 +55,8 @@ enum class SystemConfig
     /// with the chain's own parameters; the engine gets the same values via boot
     /// injection, also in part B — no RPC/engine consumer is wired at this head.
     op_eip1559_params,
-    /// OP lane: the resolved canonical fork schedule, written at genesis from either
-    /// declaration channel ([op_fork_schedule] or [op_fork_timestamps]). Read into the
+    /// OP lane: the resolved canonical fork schedule, written at genesis from
+    /// [op_fork_timestamps]. Read into the
     /// LedgerConfig snapshot so the RPC estimate gas-cap gate (part B) can apply EIP-7825
     /// only where the chain has actually activated Osaka (Karst) at the target block.
     op_fork_schedule,

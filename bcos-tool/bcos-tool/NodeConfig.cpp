@@ -328,11 +328,8 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     }
 
     loadLedgerConfig(_genesisConfig);
-    // The fork schedule must be parsed BEFORE loadExecutorConfig: its v2 EVMC-revision guard
-    // accepts a [fork_timestamps] section in place of executor.evm_revision.
     loadForkTimestamps(_genesisConfig);
     loadOpForkTimestamps(_genesisConfig);
-    loadOpForkSchedule(_genesisConfig);
     loadOpEip1559(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
@@ -644,20 +641,6 @@ void NodeConfig::validateL2Invariants()
     // be a section nothing reads (and, worse, one an operator would reasonably expect
     // to change execution); an OP chain without one has no way to say when Jovian or
     // Karst activate, and would silently run Isthmus forever.
-    // On the OP lane the EVM revision is a FUNCTION of the fork schedule: OpScheduler feeds
-    // the executor the fork spec resolved from (schedule, blockTime), so a configured
-    // executor.evm_revision is
-    // never read for execution and can only disagree with what the chain actually runs (a
-    // prague pin on a Karst block, say). Reject the pair instead of carrying a value that
-    // lies.
-    if (genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION &&
-        (genesis.m_evmcRevision.has_value() || !genesis.m_evmcRevisionForks.empty()))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "the OP lane derives the EVM revision from [op_fork_timestamps]; remove "
-                "executor.evm_revision / evm_revision_forks"));
-    }
     // The OP-only config sections are bound to the OP lane from the declarative rule
     // table (ChainLaneConfig.h laneKeyRules — the SAME table the lane matrix test
     // asserts against; presence is resolved through each rule's presenceMember hook, so
@@ -669,10 +652,6 @@ void NodeConfig::validateL2Invariants()
     // (LaneKeyRule.presenceMember) — one hook per rule, so a new row is enforced by
     // construction and a rule without a hook fails closed rather than reading "absent".
     auto const sectionPresent = [&](LaneKeyRule const& rule) {
-        if (rule.presenceMember == "m_opstackForkSchedule")
-        {
-            return genesis.m_opstackForkSchedule.has_value();
-        }
         if (rule.presenceMember == "m_opForkSchedule")
         {
             return genesis.m_opForkSchedule.has_value();
@@ -709,21 +688,6 @@ void NodeConfig::validateL2Invariants()
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(std::string(rule.rejectMessage)));
         }
-    }
-    // A dual declaration must agree on WHEN Jovian and Karst activate: those are the
-    // only rungs any consumer keys on across BOTH channels — the canonical
-    // [op_fork_schedule] text is stored as the SYS_CONFIG row whose snapshot readers
-    // (opForkScheduleFromCanonical) extract exactly the jovian/karst seconds, while the
-    // executor, the devp2p validator and the genesis pin run the [op_fork_timestamps]
-    // shorthand. A divergence on those two rungs would make one node price and admit
-    // against a different activation than it executes; lower rungs of the canonical row
-    // are carried verbatim but read by nobody today. The comparison lives in
-    // OpForkScheduleMetadata.h so the genesis writer resolves the same conflict by the
-    // same rule instead of silently preferring one channel.
-    if (auto const problem = ledger::opForkScheduleDualDeclarationProblem(
-            genesis.m_opstackForkSchedule, genesis.m_opForkSchedule))
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(*problem));
     }
 }
 
@@ -1523,15 +1487,15 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                                     "none");
 }
 
-// EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis). L1 PoS chains
-// fork on timestamps rather than block heights (unlike op-stack L2's
-// executor.evm_revision_forks). A zero timestamp means "active from genesis".
+// The L1 EL lane's fork schedule ([fork_timestamps] in config.genesis), the only source of a v2
+// chain's EVM revision: L1 PoS chains fork on timestamps rather than block heights. A zero
+// timestamp means "active from genesis".
 void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig)
 {
     // Reload is a supported shape (loadAllocs opens with m_allocs.clear()): a second genesis
     // load without the schedule must not keep the previous values. A stale schedule would
-    // waive the executor.evm_revision guard and leak into the genesis pin of a chain that
-    // has none.
+    // satisfy the v2 [fork_timestamps] requirement and leak into the genesis pin of a chain
+    // that has none.
     m_genesisConfig.m_ethereumForkSchedule.reset();
     m_ethereumChainId = 0;     // reassigned by validateL2Invariants on executor.version >= 2
     m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
@@ -1779,51 +1743,6 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
                          << LOG_KV("isthmus", schedule.m_isthmusTime)
                          << LOG_KV("jovian", schedule.m_jovianTime)
                          << LOG_KV("karst", schedule.m_karstTime);
-}
-
-void NodeConfig::loadOpForkSchedule(boost::property_tree::ptree const& _genesisConfig)
-{
-    // Reload must not keep a previous schedule: an absent section means "legacy via
-    // feature_op_jovian", and a stale optional would pin the wrong canonical.
-    m_genesisConfig.m_opstackForkSchedule.reset();
-    auto section = _genesisConfig.get_child_optional("op_fork_schedule");
-    if (!section)
-    {
-        return;
-    }
-    // Same unknown-key policy as the sibling [op_fork_timestamps] / [op_eip1559] loaders:
-    // this section carries exactly one key, and a stray one (schedule syntax pasted from
-    // another section, a misspelling) would otherwise be silently ignored — the canonical
-    // text is genesis-frozen into the SYS_CONFIG row, so the chain would boot a schedule
-    // that never saw the intended change, with no diagnostic at all.
-    for (auto const& entry : *section)
-    {
-        if (entry.first != "canonical")
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment("[op_fork_schedule] has an unrecognised key \"" +
-                                                   entry.first + "\" (supported: canonical)"));
-        }
-    }
-    auto canonical = section->get_optional<std::string>("canonical");
-    if (!canonical)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("[op_fork_schedule].canonical is required"));
-    }
-    try
-    {
-        m_genesisConfig.m_opstackForkSchedule =
-            ledger::canonicalOpForkSchedule(ledger::parseOpForkSchedule(*canonical));
-    }
-    catch (ledger::InvalidOpForkSchedule const& e)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                std::string("[op_fork_schedule].canonical invalid: ") + e.what()));
-    }
-    NodeConfig_LOG(INFO) << LOG_DESC("loadOpForkSchedule")
-                         << LOG_KV("canonical", *m_genesisConfig.m_opstackForkSchedule);
 }
 
 void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig)
@@ -2737,148 +2656,6 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                                   "executor.is_auth_check/"
                                   "executor.is_serial_execute is null, please set it!"));
     }
-    // EVMC revision config — consumed by ethereum-executor (executor_version=2):
-    //   executor.evm_revision       = explicit single revision for all blocks, e.g. "cancun"
-    //   executor.evm_revision_forks = comma-separated "block:revision" fork transitions,
-    //                                 e.g. "0:cancun,100000:osaka"
-    // If neither is set, the ethereum-executor defaults to the latest revision from genesis.
-    // Reset first (same reason as loadForkTimestamps): on a reload, a previous genesis's
-    // revision must not survive into validateL2Invariants' OP-lane check.
-    m_genesisConfig.m_evmcRevision.reset();
-    m_genesisConfig.m_evmcRevisionForks.clear();
-    try
-    {
-        auto evmcRevisionStr = _genesisConfig.get<std::string>("executor.evm_revision", "");
-        if (!evmcRevisionStr.empty())
-        {
-            if (auto rev = ledger::evmcRevisionFromName(evmcRevisionStr); rev)
-            {
-                if (*rev == EVMC_EXPERIMENTAL)
-                {
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "executor.evm_revision=experimental is not a released fork: evmone's "
-                            "semantics for it change between versions, which would tie consensus "
-                            "to the binary"));
-                }
-                m_genesisConfig.m_evmcRevision = *rev;
-            }
-            else
-            {
-                BOOST_THROW_EXCEPTION(
-                    InvalidConfig() << errinfo_comment(
-                        "executor.evm_revision is invalid: " + evmcRevisionStr +
-                        ", supported revisions: frontier/homestead/tangerinewhistle/"
-                        "spuriousdragon/byzantium/constantinople/petersburg/istanbul/berlin/"
-                        "london/paris/shanghai/cancun/prague/osaka"));
-            }
-        }
-
-        auto evmcForksStr = _genesisConfig.get<std::string>("executor.evm_revision_forks", "");
-        if (!evmcForksStr.empty())
-        {
-            auto trim = [](std::string_view s) -> std::string_view {
-                auto b = s.find_first_not_of(" \t\r\n");
-                if (b == std::string_view::npos)
-                {
-                    return {};
-                }
-                auto e = s.find_last_not_of(" \t\r\n");
-                return s.substr(b, e - b + 1);
-            };
-            std::stringstream ss(evmcForksStr);
-            std::string token;
-            while (std::getline(ss, token, ','))
-            {
-                auto entry = trim(token);
-                if (entry.empty())
-                {
-                    continue;
-                }
-                auto colon = entry.find(':');
-                if (colon == std::string_view::npos)
-                {
-                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                              "executor.evm_revision_forks invalid entry (expected "
-                                              "\"block:revision\"): " +
-                                              std::string(entry)));
-                }
-                auto blockStr = trim(entry.substr(0, colon));
-                auto name = trim(entry.substr(colon + 1));
-                auto block = boost::lexical_cast<protocol::BlockNumber>(blockStr);
-                if (block < 0)
-                {
-                    // A negative fork height would otherwise become the block-0 baseline
-                    // (encodeEVMCRevisionConfig picks forks.begin()->second when no 0: entry
-                    // exists) — an operator typing -5 instead of 5 would silently get a
-                    // different fork schedule. Reject it here.
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "executor.evm_revision_forks block height must be >= 0, got " +
-                            std::to_string(block) + " in entry: " + std::string(entry)));
-                }
-                auto rev = ledger::evmcRevisionFromName(name);
-                if (!rev)
-                {
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "executor.evm_revision_forks invalid revision \"" + std::string(name) +
-                            "\" in entry: " + std::string(entry)));
-                }
-                if (*rev == EVMC_EXPERIMENTAL)
-                {
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "executor.evm_revision_forks revision \"experimental\" is not a "
-                            "released fork (evmone semantics change between versions); entry: " +
-                            std::string(entry)));
-                }
-                m_genesisConfig.m_evmcRevisionForks[block] = *rev;
-            }
-        }
-    }
-    catch (InvalidConfig const& e)
-    {
-        throw;  // already carries a precise message
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "Invalid executor.evm_revision config: " + std::string(e.what())));
-    }
-    // A v2 chain (executor_version >= 2 selects the ethereum-executor) MUST pin its EVMC
-    // revision explicitly. Unlike v0/v1 the revision is consumed on every block, and a
-    // binary-side default would be recorded nowhere on-chain — tying "upgrade the binary" to a
-    // hard fork (replay/resync would diverge and a mixed-version network could split, without
-    // either side erroring). Requiring it here makes the effective revision part of the
-    // genesis config and therefore of the on-chain state.
-    // A [fork_timestamps] section is the exception: under the Engine driver (EL mode)
-    // EthereumBlockVerifier derives the EVMC revision from the block timestamp via
-    // fillExecutionLedgerConfig — the revision is never read from on-chain state there, so an
-    // executor.evm_revision is not required (validateELModeInvariants requires the section
-    // for that driver). The section is part of the genesis pin, so it is chain-level.
-    // The REQUIRED part of the schedule IS part of the genesis pin: loadForkTimestamps
-    // stores it on the GenesisConfig and generateGenesisData emits the london..prague
-    // ladder, so nodes holding different required schedules fail the genesis comparison.
-    // The post-Prague tail (osaka/bpo1/bpo2) is intentionally NOT pinned — those forks
-    // activate after genesis, so updating them must not trip the restart comparison
-    // (EIP-2124 fork-id handshake covers divergence).
-    // The OP lane (executor.version >= 3) is the second exemption: it derives the revision
-    // from the OP fork schedule ([op_fork_timestamps]) per block, exactly as EL mode derives
-    // it from [fork_timestamps]. validateL2Invariants goes further there and REJECTS an
-    // explicit revision on that lane, so the value can never be both required and ignored.
-    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
-        m_genesisConfig.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION &&
-        !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty() &&
-        !m_genesisConfig.m_ethereumForkSchedule.has_value())
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.version=2 (ethereum-executor) requires a "
-                                  "[fork_timestamps] section (Ethereum L1 EL mode) or an explicit "
-                                  "executor.evm_revision (or executor.evm_revision_forks); "
-                                  "refusing to run with an implicit binary-side default"));
-    }
     // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
     // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
     if (_genesisConfig.get<bool>("executor.is_wasm", false))
@@ -3765,9 +3542,9 @@ std::string bcos::tool::generateGenesisData(
            // v2 execution (base fee / blob base fee), so they must be part of the genesis pin
            // the guard at Ledger::buildGenesisBlock compares on restart — otherwise two nodes
            // configured identically except for these keys pass the genesis-mismatch check and
-           // diverge on the first block. Emit them only when non-default (mirroring the
-           // evmRevision pattern) so a default-configured chain's genesis string is byte-
-           // identical to before this change and existing chains are unaffected.
+           // diverge on the first block. Emit them only when non-default so a
+           // default-configured chain's genesis string is byte-identical to before this
+           // change and existing chains are unaffected.
            << (genesisConfig.m_txGasPrice != "0x0" ?
                       "gasprice:" + genesisConfig.m_txGasPrice + "\n" :
                       "")
@@ -3777,11 +3554,10 @@ std::string bcos::tool::generateGenesisData(
            << (genesisConfig.m_opEip1559.has_value() ?
                       [&genesisConfig] {
                           // The chain's EIP-1559 parameters price every pre-Holocene block, so
-                          // they are part of the genesis pin for the same reason evmRevision
-                          // is. Emitted only when DECLARED so a chain without [op_eip1559]
-                          // keeps the byte-identical pin it had before this key existed; the
-                          // value is the EFFECTIVE triple (effectiveOpEip1559), so "explicitly
-                          // 250" and "omitted canyon" pin the same string.
+                          // they are part of the genesis pin. Emitted only when DECLARED so a chain
+                          // without [op_eip1559] keeps the byte-identical pin it had before this
+                          // key existed; the value is the EFFECTIVE triple (effectiveOpEip1559), so
+                          // "explicitly 250" and "omitted canyon" pin the same string.
                           auto const params =
                               bcos::engine::effectiveOpEip1559(genesisConfig.m_opEip1559);
                           return "eip1559:" + std::to_string(params.elasticity) + ',' +
@@ -3794,13 +3570,6 @@ std::string bcos::tool::generateGenesisData(
            << "isAuthCheck:" << genesisConfig.m_isAuthCheck << '\n'
            << "authAdminAccount:" << genesisConfig.m_authAdminAccount << '\n'
            << "isSerialExecute:" << genesisConfig.m_isSerialExecute << '\n';
-        if (genesisConfig.m_evmcRevision || !genesisConfig.m_evmcRevisionForks.empty())
-        {
-            ss << "evmRevision:"
-               << ledger::encodeEVMCRevisionConfig(
-                      genesisConfig.m_evmcRevision, genesisConfig.m_evmcRevisionForks)
-               << '\n';
-        }
         if (genesisConfig.m_compatibilityVersion >=
             (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
         {
@@ -3815,8 +3584,8 @@ std::string bcos::tool::generateGenesisData(
                 ss << feature.flag << ":" << feature.enable << '\n';
             }
         }
-        // The L1 fork schedule's REQUIRED ladder drives the EVM revision in EL mode, so it
-        // is part of the genesis pin for the same reason evmRevision is. Emitted only when
+        // The L1 fork schedule's REQUIRED ladder drives the EVM revision on the L1 EL lane, so
+        // it is part of the genesis pin. Emitted only when
         // present (mirroring the [ethGenesisHeader] pattern) so every legacy chain's genesis
         // string stays byte-identical. Emitted AFTER the [executor]-owned keys
         // (epochSealerNum/epochBlockNum, [features]) so those no-section-header keys keep
@@ -3996,15 +3765,6 @@ bool bcos::tool::NodeConfig::checkParallelConflict() const
 int bcos::tool::NodeConfig::executorVersion() const
 {
     return m_genesisConfig.m_executorVersion;
-}
-std::optional<evmc_revision> bcos::tool::NodeConfig::evmcRevision() const
-{
-    return m_genesisConfig.m_evmcRevision;
-}
-std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::evmcRevisionForks()
-    const
-{
-    return m_genesisConfig.m_evmcRevisionForks;
 }
 bool bcos::tool::NodeConfig::ethereumELModeEnabled() const
 {

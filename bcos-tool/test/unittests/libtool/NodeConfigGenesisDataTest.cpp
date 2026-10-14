@@ -63,208 +63,65 @@ BOOST_AUTO_TEST_CASE(modernSectionedFormat)
     BOOST_CHECK(data.find("node.0") != std::string::npos);          // node loop ran
 }
 
-// EVMC revision config (ethereum-executor, executor_version=2): parses the
-// explicit revision and the block-height fork transitions from the genesis
-// config, and the serialized form shows up in the generated genesis data.
-BOOST_AUTO_TEST_CASE(evmcRevisionConfig)
+// executor.evm_revision / evm_revision_forks are no longer read on any lane: a v2 chain's EVM
+// revision comes from [fork_timestamps] alone, and no released binary (3.16.0-3.17.1) read
+// them on v0/v1. Present -- even with a value the old parser refused -- they change neither
+// the load result nor the genesis pin.
+BOOST_AUTO_TEST_CASE(evmRevisionKeysAreIgnored)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     const std::string node =
         "1234567890123456789012345678901234567890123456789012345678901234"
         "1234567890123456789012345678901234567890123456789012345678901234";
-    std::string genesis =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-        "evm_revision=cancun\n"
-        "evm_revision_forks=0:cancun, 100000:osaka\n";
+    auto genesis = [&](std::string const& version, std::string const& executorExtra,
+                       std::string const& sections) {
+        return "[version]\ncompatibility_version=3.18.0\n"
+               "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+               "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+               "node.0=" +
+               node +
+               ":1:1\n"
+               "[tx]\ngas_limit=3000000000\n"
+               "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+               "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+               "version=" +
+               version + "\n" + executorExtra + sections;
+    };
+    const std::string schedule =
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=0\ncancun_time=0\n"
+        "prague_time=1746612311\nmerge_block=0\n";
+    auto pinOf = [&](std::string const& text) {
+        NodeConfig cfg(keyFactory);
+        cfg.loadGenesisConfigFromString(text);
+        return bcos::tool::generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
+    };
 
+    for (auto const* keys : {"evm_revision=cancun\nevm_revision_forks=0:cancun,100000:osaka\n",
+             "evm_revision=experimental\n", "evm_revision=notafork\nevm_revision_forks=-5:x\n"})
+    {
+        // v2: the [fork_timestamps] schedule decides; the keys leave no trace in the pin.
+        auto const v2Sections = schedule + ethLaneGenesisSections();
+        std::string v2Pin;
+        BOOST_REQUIRE_NO_THROW(v2Pin = pinOf(genesis("2", keys, v2Sections)));
+        BOOST_CHECK_EQUAL(v2Pin, pinOf(genesis("2", "", v2Sections)));
+        BOOST_CHECK(v2Pin.find("evmRevision") == std::string::npos);
+
+        // v1: same, so a v1 genesis carrying the keys pins like one without them.
+        std::string v1Pin;
+        BOOST_REQUIRE_NO_THROW(v1Pin = pinOf(genesis("1", keys, "")));
+        BOOST_CHECK_EQUAL(v1Pin, pinOf(genesis("1", "", "")));
+        BOOST_CHECK(v1Pin.find("evmRevision") == std::string::npos);
+    }
+
+    // evm_revision is no substitute for the schedule: a v2 genesis without [fork_timestamps]
+    // still loads (the genesis loader has no v2 revision guard any more), and the node
+    // refuses it in validateELModeInvariants.
     NodeConfig cfg(keyFactory);
-    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
-    BOOST_REQUIRE(cfg.ledgerConfig());
-
-    auto const& gc = cfg.genesisConfig();
-    BOOST_REQUIRE(gc.m_evmcRevision.has_value());
-    BOOST_CHECK_EQUAL(*gc.m_evmcRevision, EVMC_CANCUN);
-    BOOST_REQUIRE_EQUAL(gc.m_evmcRevisionForks.size(), 2u);
-    BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(0), EVMC_CANCUN);
-    BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(100000), EVMC_OSAKA);
-
-    auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig());
-    BOOST_CHECK(data.find("evmRevision:0:cancun,100000:osaka") != std::string::npos);
-}
-
-// A v2 chain (ethereum-executor) MUST pin its EVMC revision explicitly: the revision is
-// consumed on every block, and a binary-side default would be recorded nowhere on-chain
-// (an implicit hard fork on binary upgrade). loadExecutorConfig rejects executor.version=2
-// without evm_revision / evm_revision_forks. v0/v1 are unaffected.
-BOOST_AUTO_TEST_CASE(executorV2RequiresEvmcRevision)
-{
-    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n";
-
-    // version=2 with neither [fork_timestamps] nor an EVMC revision -> rejected
-    // (loadExecutorConfig's v2 guard fires before validateL2Invariants' lane binding, so no
-    // lane sections are needed here).
-    {
-        NodeConfig cfg(keyFactory);
-        std::string genesis = base + "version=2\n";
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(genesis), InvalidConfig, [](auto const& e) {
-                return errinfoContains(e,
-                    "requires a [fork_timestamps] section (Ethereum L1 EL mode) or an explicit "
-                    "executor.evm_revision");
-            });
-    }
-
-    // version=2 with an explicit single revision -> accepted. The v2 lane also requires
-    // the [alloc.*] + [eth_genesis_header] sections (validateL2Invariants binds them to
-    // executor.version >= 2 both ways).
-    {
-        NodeConfig cfg(keyFactory);
-        std::string genesis = base + "version=2\nevm_revision=cancun\n" + ethLaneGenesisSections();
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
-    }
-
-    // version=2 with fork transitions (no single revision) -> accepted.
-    {
-        NodeConfig cfg(keyFactory);
-        std::string genesis = base + "version=2\nevm_revision_forks=0:cancun,100000:osaka\n" +
-                              ethLaneGenesisSections();
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
-    }
-
-    // version=1 with no EVMC revision -> unaffected (v0/v1 never consume it).
-    {
-        NodeConfig cfg(keyFactory);
-        std::string genesis = base + "version=1\n";
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
-    }
-}
-
-// evm_revision_forks edge cases (review test suggestion): out-of-order entries are
-// normalized by the map (ascending), a negative block height is rejected, and an
-// unknown revision name is rejected.
-BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
-{
-    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-        "version=2\n";
-
-    // Out-of-order entries: accepted, normalized (map is key-ordered). The v2 lane binding
-    // needs the [alloc.*] + [eth_genesis_header] sections; the rejected cases below throw in
-    // loadExecutorConfig, before that binding runs.
-    {
-        NodeConfig cfg(keyFactory);
-        std::string genesis =
-            base + "evm_revision_forks=100000:osaka, 0:cancun\n" + ethLaneGenesisSections();
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
-        auto const& gc = cfg.genesisConfig();
-        BOOST_REQUIRE_EQUAL(gc.m_evmcRevisionForks.size(), 2u);
-        BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(0), EVMC_CANCUN);
-        BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(100000), EVMC_OSAKA);
-        auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig());
-        BOOST_CHECK(data.find("0:cancun,100000:osaka") != std::string::npos);
-    }
-
-    // Negative fork height -> rejected. (Without a 0: entry it would otherwise become the
-    // block-0 baseline — an operator typing -5 instead of 5 would silently get a different
-    // fork schedule.)
-    {
-        NodeConfig cfg(keyFactory);
-        std::string genesis = base + "evm_revision_forks=-5:cancun,100000:osaka\n";
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "block height must be >= 0"); });
-    }
-
-    // Unknown revision name -> rejected.
-    {
-        NodeConfig cfg(keyFactory);
-        std::string genesis = base + "evm_revision_forks=0:notafork\n";
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "invalid revision"); });
-    }
-}
-
-// EVMC_EXPERIMENTAL is evmone's bucket for in-development EIPs (semantics change between
-// releases), not a released fork. Pinning a v2 chain to it would tie consensus to the
-// binary, so it must be rejected at config load in both the single-revision and the
-// fork-transition forms (the round-trip helper still accepts it — the two name tables
-// agree; this is a config-policy decision).
-BOOST_AUTO_TEST_CASE(evmcExperimentalRejected)
-{
-    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-        "version=2\n";
-
-    // Single revision = experimental -> rejected.
-    {
-        NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "evm_revision=experimental\n"),
-            InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "evm_revision=experimental"); });
-    }
-    // Fork transition to experimental -> rejected.
-    {
-        NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(base + "evm_revision_forks=0:experimental\n"),
-            InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "evm_revision_forks revision \"experimental\"");
-            });
-    }
-    // Control: a released revision is still accepted (with the lane-mandatory sections).
-    {
-        NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
-            base + "evm_revision=cancun\n" + ethLaneGenesisSections()));
-    }
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
+        genesis("2", "evm_revision=cancun\n", ethLaneGenesisSections())));
+    BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
+        return errinfoContains(e, "requires a [fork_timestamps] section in config.genesis");
+    });
 }
 
 // A compatibilityVersion below V3.1 takes the legacy dash-joined branch.
@@ -399,20 +256,19 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     // The EL chain-id line follows [chain] chain_id, not just the chainID line.
     BOOST_CHECK(data4.find("[web3]\nchain_id:11155111\n") != std::string::npos);
 
-    // No [fork_timestamps] section -> no [forkTimestamps] emission; an explicit evm_revision
-    // satisfies the v2 genesis guard instead. The lane-gated chain-id block is still pinned.
+    // No [fork_timestamps] section -> no [forkTimestamps] emission (the genesis loads; the
+    // node refuses it in validateELModeInvariants). The lane-gated chain-id block is still
+    // pinned.
     NodeConfig cfg3(keyFactory);
-    BOOST_REQUIRE_NO_THROW(cfg3.loadGenesisConfigFromString(
-        base + "evm_revision=cancun\n" + ethLaneGenesisSections()));
+    BOOST_REQUIRE_NO_THROW(cfg3.loadGenesisConfigFromString(base + ethLaneGenesisSections()));
     BOOST_CHECK(!cfg3.genesisConfig().m_ethereumForkSchedule.has_value());
     auto data3 = bcos::tool::generateGenesisData(cfg3.genesisConfig(), *cfg3.ledgerConfig());
     BOOST_CHECK(data3.find("[forkTimestamps]") == std::string::npos);
     BOOST_CHECK(data3.find("[ethereum]\nmode:el\n[web3]\nchain_id:1\n") != std::string::npos);
 }
 
-// [fork_timestamps] is the L1 fork schedule and belongs to executor.version=2 only; there it
-// replaces executor.evm_revision for the v2 genesis guard, and a v2 genesis needs one of the
-// two. [ethereum] mode in the genesis is not read.
+// [fork_timestamps] is the L1 fork schedule and belongs to executor.version=2 only, where the
+// node requires it (validateELModeInvariants). [ethereum] mode in the genesis is not read.
 BOOST_AUTO_TEST_CASE(forkTimestampsBelongToTheL1ElLane)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -444,16 +300,15 @@ BOOST_AUTO_TEST_CASE(forkTimestampsBelongToTheL1ElLane)
             cfg.loadGenesisConfigFromString(genesis("2", schedule + ethLaneGenesisSections())));
         BOOST_CHECK(cfg.genesisConfig().m_ethereumForkSchedule.has_value());
     }
-    // v2 with neither the schedule nor an evm_revision: rejected by the v2 genesis guard.
+    // v2 without the schedule: the genesis loads, the node refuses it.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(genesis("2", ethLaneGenesisSections())), InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e,
-                    "executor.version=2 (ethereum-executor) requires a "
-                    "[fork_timestamps] section");
-            });
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(genesis("2", ethLaneGenesisSections())));
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
+            return errinfoContains(
+                e, "executor.version=2 (the L1 EL lane) requires a [fork_timestamps] section");
+        });
     }
     // [fork_timestamps] on a FISCO lane: rejected by validateL2Invariants.
     {
@@ -494,7 +349,6 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
         "version=2\n"
-        "evm_revision=cancun\n"
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
         "cancun_time=1710338135\nprague_time=1746612311\n"
         "merge_block=0\n" +
@@ -524,7 +378,7 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
             cfg.loadGenesisConfigFromString(head + "99999999999999999999999" + tail), InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "[chain].chain_id must fit uint64"); });
     }
-    // v2 genesis without the schedule (evm_revision only): the getter still carries the
+    // v2 genesis without the schedule: the getter still carries the
     // Ethereum lane's [chain] chain_id — it is copied on every lane >= 2 at genesis load.
     // Both v2 drivers refuse this genesis at startup (NodeConfigBlockDriverTest).
     {
@@ -539,7 +393,7 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
             "[tx]\ngas_limit=3000000000\n"
             "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
             "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=2\nevm_revision=cancun\n" +
+            "version=2\n" +
             ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
         BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 7u);
@@ -745,7 +599,7 @@ BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
 }
 
 // Reload is a supported shape: a second loadGenesisConfig without the fork schedule must
-// clear the previous one (a stale schedule would waive the executor.evm_revision guard).
+// clear the previous one (a stale schedule would satisfy the v2 [fork_timestamps] rule).
 BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -763,8 +617,7 @@ BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
         "[tx]\ngas_limit=3000000000\n"
         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-        "version=2\n"
-        "evm_revision=cancun\n";
+        "version=2\n";
 
     NodeConfig cfg(keyFactory);
     // First load: fork schedule (+ the lane-mandatory sections: every config in this test is
@@ -926,7 +779,6 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
         "version=2\n"
-        "evm_revision=cancun\n"
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
         "cancun_time=1710338135\nprague_time=1746612311\n";
 
@@ -979,7 +831,7 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
             "[tx]\ngas_limit=3000000000\n"
             "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
             "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=2\nevm_revision=cancun\n" +
+            "version=2\n" +
             ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plain));
         BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 0u);
