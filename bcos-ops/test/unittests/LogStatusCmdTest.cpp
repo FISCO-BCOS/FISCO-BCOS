@@ -47,5 +47,16 @@ BOOST_AUTO_TEST_CASE(logWithoutAnyCheckableEventIsNotHealthy)
     BOOST_CHECK(out.str().find("\"state\" : \"ok\"") == std::string::npos);
 }
 
+// log reads local files: a --rpc that would be ignored is refused instead
+BOOST_AUTO_TEST_CASE(rpcOutsideLogTxIsUsageError)
+{
+    std::ostringstream out;
+    std::ostringstream err;
+    auto code = runOps({"fisco-bcos", "log", "status", "--rpc", "10.0.0.1:20200"}, out, err);
+    BOOST_CHECK_EQUAL(code, c_exitUsage);
+    BOOST_CHECK(
+        err.str().find("--rpc only applies to the on-chain lookup of log tx") != std::string::npos);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::ops::test
