@@ -26,7 +26,7 @@
 
 namespace bcos::ops
 {
-/// true when stdout is a terminal (the caller passes the stream it will write to)
+/// true when STDOUT_FILENO is a terminal
 bool stdoutIsTty();
 /// --json wins; otherwise JSON when stdout is not a TTY
 bool wantJson(bool _jsonFlag);

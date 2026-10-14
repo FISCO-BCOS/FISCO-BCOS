@@ -46,5 +46,7 @@ struct Check
 std::vector<Check> evaluate(
     NodeStatus const& _status, Thresholds const& _thresholds, int64_t _nowMs);
 bool anyFailed(std::vector<Check> const& _checks);
+/// false when every check was skipped: nothing was verified, which is not a healthy node
+bool anyEvaluated(std::vector<Check> const& _checks);
 Json::Value checksToJson(std::vector<Check> const& _checks);
 }  // namespace bcos::ops
