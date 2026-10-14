@@ -25,6 +25,7 @@
 #include "bcos-ops/collect/RpcCollector.h"
 #include <chrono>
 #include <ostream>
+#include <type_traits>
 
 namespace bcos::ops
 {
@@ -152,6 +153,10 @@ void renderStatus(
     {
         summary = std::to_string(failed) + " fail: " + failedNames;
     }
+    else if (!anyEvaluated(_checks))
+    {
+        summary = "none evaluated";
+    }
     else
     {
         summary = std::to_string(_checks.size() - skippedCount) + " ok";
@@ -166,7 +171,7 @@ void renderStatus(
     {
         for (auto const& [field, reason] : _status.reasons)
         {
-            _out << "  " << field << ": " << reason << '\n';
+            _out << "  " << field << ": " << sanitizeForTerminal(reason) << '\n';
         }
     }
 }
@@ -184,7 +189,7 @@ int runStatusOn(
         _connection.call, _connection.group, _connection.source, fallbacks, _connection.mode);
     auto checks = evaluate(status, _thresholds, nowMs());
     renderStatus(_out, status, checks, _json);
-    return anyFailed(checks) ? c_exitChecksFailed : c_exitOk;
+    return anyFailed(checks) || !anyEvaluated(checks) ? c_exitChecksFailed : c_exitOk;
 }
 
 namespace
@@ -209,6 +214,6 @@ void registerStatusCommand()
                       "consensus_stable and quorum_connected until --mode none is given. "
                       "`attach getConsensusStatus` is not gated; op_engine_rpc and single-node "
                       "non-PBFT setups are not recognised as EL",
-                      {}, runStatus});
+                      {}, runStatus, {"stall-factor", "max-lag", "viewchange-window-ms"}});
 }
 }  // namespace bcos::ops

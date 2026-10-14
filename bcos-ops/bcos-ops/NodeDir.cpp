@@ -62,9 +62,12 @@ NodeDir NodeDir::load(std::string const& _dir)
         {
             boost::property_tree::read_ini(genesisPath, genesis);
         }
-        catch (std::exception const&)
+        catch (std::exception const& e)
         {
-            // chain section falls back to config.ini below
+            // a present but unreadable genesis must not fall back to config.ini's chain/group:
+            // the tool would sign for, or attach to, the wrong chain
+            throw OpsError(
+                c_exitUsage, std::string("cannot read ") + genesisPath + ": " + e.what());
         }
     }
     // [chain] lives in config.genesis since 3.1; older nodes keep it in config.ini

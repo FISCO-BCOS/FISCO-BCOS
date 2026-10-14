@@ -320,10 +320,13 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                       << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
                       << LOG_KV("failedCount", failedCount);
 
-    // total transaction count
-    asyncGetTotalTransactionCount([storage, block, &setRowCallback, &totalCount, &failedCount,
-                                      &writeReceiptsTime, &writeTxsTime](Error::Ptr error,
-                                      int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
+    // total transaction count. Everything is captured by value: asyncGetTotalTransactionCount
+    // reaches this callback through task::wait, which does not wait, so the callback can run
+    // after this function has returned and its locals are gone.
+    asyncGetTotalTransactionCount([storage, block, setRowCallback, totalCount = totalCount.load(),
+                                      failedCount = failedCount.load(), writeReceiptsTime,
+                                      writeTxsTime](Error::Ptr error, int64_t total, int64_t failed,
+                                      bcos::protocol::BlockNumber) {
         if (error)
         {
             setRowCallback(std::make_unique<Error>(*error), 2);

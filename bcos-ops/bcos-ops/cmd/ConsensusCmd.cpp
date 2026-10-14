@@ -146,6 +146,6 @@ void registerConsensusCommand()
             "remove <nodeId> | set-weight <nodeId> <weight> | set-term-weight <nodeId> <weight>   "
             "[--account <key-file>] [--yes] [--direct] [--interval <blocks>] [--node-dir <dir> | "
             "--rpc <host:port>] [--json]",
-            {"yes", "direct"}, runConsensus});
+            {"yes", "direct"}, runConsensus, {"account", "interval", "term-weight"}, true});
 }
 }  // namespace bcos::ops

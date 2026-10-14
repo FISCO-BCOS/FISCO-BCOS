@@ -1401,12 +1401,16 @@ void PBFTEngine::onTimeout()
         m_config->timer()->restart();
         return;
     }
-    triggerTimeout(true, ViewChangeReason::ConsensusTimeout, m_config->timer()->timeout());
+    // the wait that expired is the adjusted one (base timeout scaled by the change cycle), read
+    // before triggerTimeout bumps the cycle
+    triggerTimeout(true, ViewChangeReason::ConsensusTimeout,
+        static_cast<int64_t>(m_config->timer()->adjustTimeout()));
 }
 
 void PBFTEngine::triggerTimeout(bool _incTimeout, ViewChangeReason _reason, int64_t _waitedMs)
 {
     m_lastViewChangeReason = _reason;
+    m_lastViewChangeWaitedMs = _waitedMs;
     auto waitingIndex = m_config->committedProposal()->index() + 1;
     auto fromView = m_config->view();
     m_config->resetTimeoutState(_incTimeout);

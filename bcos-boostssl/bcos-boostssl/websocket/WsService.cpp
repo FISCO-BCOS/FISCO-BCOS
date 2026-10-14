@@ -29,7 +29,6 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
-#include <iterator>
 #include <memory>
 #include <random>
 #include <string>
@@ -304,48 +303,40 @@ void WsService::syncConnectToEndpoints(EndPointsPtr _peers)
 
     auto vPromise = asyncConnectToEndpoints(_peers);
 
-    for (std::size_t i = 0; i < vPromise->size(); ++i)
+    // asyncConnectToEndpoints pushes one promise per peer in _peers order
+    auto peer = _peers->begin();
+    for (std::size_t i = 0; i < vPromise->size(); ++i, ++peer)
     {
         auto fut = (*vPromise)[i]->get_future();
-
-        auto status = fut.wait_for(std::chrono::milliseconds(m_waitConnectFinishTimeout));
-        if (status != std::future_status::ready)
+        bool const last = i == vPromise->size() - 1;
+        if (fut.wait_for(std::chrono::milliseconds(m_waitConnectFinishTimeout)) !=
+            std::future_status::ready)
         {
             // do not block on get(): the connector keeps the promise until beast's own handshake
             // timeout fires, which would stretch this wait far past m_waitConnectFinishTimeout
-            auto const& peer = *std::next(_peers->begin(), static_cast<std::ptrdiff_t>(i));
-            errorMsg += genConnectError("connection timeout",
-                peer.address() + ":" + std::to_string(peer.port()), i == vPromise->size() - 1);
+            errorMsg += genConnectError(
+                "connection timeout", peer->address() + ":" + std::to_string(peer->port()), last);
             continue;
         }
-        auto [errCode, errMsg, endpoint] = fut.get();
-        switch (status)
+        try
         {
-        case std::future_status::deferred:
-        case std::future_status::timeout:
-            break;
-        case std::future_status::ready:
-
-            try
+            auto [errCode, errMsg, endpoint] = fut.get();
+            if (errCode)
             {
-                if (errCode)
-                {
-                    errorMsg += genConnectError(
-                        errMsg.empty() ? errCode.message() : errMsg + " " + errCode.message(),
-                        endpoint, i == vPromise->size() - 1);
-                }
-                else
-                {
-                    sucCount++;
-                }
+                errorMsg += genConnectError(
+                    errMsg.empty() ? errCode.message() : errMsg + " " + errCode.message(), endpoint,
+                    last);
             }
-            catch (std::exception& _e)
+            else
             {
-                WEBSOCKET_SERVICE(WARNING)
-                    << LOG_BADGE("syncConnectToEndpoints") << LOG_DESC("future get throw exception")
-                    << LOG_KV("e", _e.what());
+                sucCount++;
             }
-            break;
+        }
+        catch (std::exception& _e)
+        {
+            WEBSOCKET_SERVICE(WARNING)
+                << LOG_BADGE("syncConnectToEndpoints") << LOG_DESC("future get throw exception")
+                << LOG_KV("e", _e.what());
         }
     }
 

@@ -23,6 +23,7 @@
 #include "Args.h"
 #include "RpcCall.h"
 #include <optional>
+#include <set>
 #include <string>
 
 namespace bcos::ops
@@ -39,6 +40,9 @@ struct ConnectOptions
     bool allowRpc = true;
 };
 
+/// the option names connectOptionsFrom reads; every command accepts them
+inline std::set<std::string> const c_connectOptions = {
+    "node-dir", "rpc", "connect-timeout", "timeout", "mode", "web3"};
 ConnectOptions connectOptionsFrom(Args const& _args);
 /// Keeps a transport alive for the rest of the process. The SDK's WsService cannot be torn down
 /// from the main thread while its io thread is still draining callbacks (closing the socket there

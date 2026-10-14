@@ -16,6 +16,7 @@
  * @file Cli.cpp
  */
 #include "Cli.h"
+#include "Connect.h"
 #include "OpsError.h"
 #include "Output.h"
 #include <boost/log/core.hpp>
@@ -81,7 +82,8 @@ void printUsage(std::ostream& _out)
          << "  --rpc <host:port>  connect to a plaintext RPC port instead of --node-dir\n"
          << "  --json             force JSON output (default when stdout is not a TTY)\n"
          << "\nexit codes: 0 ok; 1 usage or connection error; 2 node reachable but a check "
-            "failed or the node refused the request; 3 accepted but still pending (EL tx raw)\n";
+            "failed, none could be evaluated or the node refused the request; 3 accepted but still "
+            "pending (EL tx raw)\n";
 }
 
 int runOps(std::vector<std::string> const& _args, std::ostream& _out, std::ostream& _err)
@@ -107,15 +109,21 @@ int runOps(std::vector<std::string> const& _args, std::ostream& _out, std::ostre
     auto const& command = it->second;
     auto booleanFlags = command.booleanFlags;
     booleanFlags.insert({"json", "help", "h"});
-    Args args(std::vector<std::string>(_args.begin() + 2, _args.end()), booleanFlags);
-    if (args.help())
-    {
-        _out << "usage: fisco-bcos " << name << ' ' << command.usage << "\n\n"
-             << command.summary << '\n';
-        return c_exitOk;
-    }
+    auto options = command.options;
+    options.insert(c_connectOptions.begin(), c_connectOptions.end());
     try
     {
+        Args args(std::vector<std::string>(_args.begin() + 2, _args.end()), booleanFlags, options);
+        if (args.help())
+        {
+            _out << "usage: fisco-bcos " << name << ' ' << command.usage << "\n\n"
+                 << command.summary << '\n';
+            return c_exitOk;
+        }
+        if (!command.positionals && !args.positionals().empty())
+        {
+            throw OpsError(c_exitUsage, "unexpected argument: " + args.positionals()[0]);
+        }
         return command.run(args, _out, _err);
     }
     catch (OpsError const& e)

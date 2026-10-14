@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <iomanip>
 #include <ostream>
 #include <sstream>
 
@@ -179,11 +180,11 @@ int runSmokeCmd(Connection const& _connection, Args const& _args, std::ostream& 
         {
             _out << std::left << std::setw(8) << step.name << std::setw(16)
                  << (step.txHash.empty() ? "-" : abridged(step.txHash, 4))
-                 << (step.ok ? "ok   " : "FAIL ") << step.detail << '\n';
+                 << (step.ok ? "ok   " : "FAIL ") << sanitizeForTerminal(step.detail) << '\n';
         }
         if (!result.ok)
         {
-            _out << "smoke failed: reason=" << result.reason << '\n';
+            _out << "smoke failed: reason=" << sanitizeForTerminal(result.reason) << '\n';
         }
     }
     return result.exitCode();
@@ -426,9 +427,11 @@ int runCallOrSend(
     }
     else
     {
-        _out << (receipt.ok() ? decoded :
-                                "call failed, status " + std::to_string(receipt.status) + " " +
-                                    receipt.message)
+        // decoded output and the receipt message are chain data: sanitize like printRows does
+        _out << sanitizeForTerminal(receipt.ok() ?
+                                        decoded :
+                                        "call failed, status " + std::to_string(receipt.status) +
+                                            " " + receipt.message)
              << '\n';
     }
     return receipt.ok() ? c_exitOk : c_exitChecksFailed;
@@ -567,6 +570,7 @@ void registerTxCommand()
             "[--account <pem|hex-key>] "
             "[--mode none|el|opstack-el] [--web3 host:port] [--node-dir "
             "<dir> | --rpc <host:port>] [--json]",
-            {"proof"}, runTx});
+            {"proof"}, runTx, {"account", "abi", "value", "link", "nonce", "block-limit", "wait"},
+            true});
 }
 }  // namespace bcos::ops

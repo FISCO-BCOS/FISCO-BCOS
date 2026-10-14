@@ -57,6 +57,11 @@ inline std::string_view sealSkipReasonName(SealSkipReason _reason)
 
 namespace detail
 {
+// One state per process, on purpose: the sealer and PBFT report the same stall and hold no common
+// object besides the process (Sealer only sees the consensus through ConsensusInterface), and a
+// node process runs exactly one of each -- Initializer::init builds one m_pbftInitializer
+// (PBFTInitializer or ProPBFTInitializer) for its one group. Several PBFT instances in one process
+// only exist in unit tests, where the cost is a deduplicated log line.
 struct SealStallState
 {
     std::mutex mutex;

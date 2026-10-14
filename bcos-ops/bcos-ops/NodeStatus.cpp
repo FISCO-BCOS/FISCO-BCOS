@@ -16,6 +16,7 @@
  * @file NodeStatus.cpp
  */
 #include "NodeStatus.h"
+#include <type_traits>
 
 namespace bcos::ops
 {

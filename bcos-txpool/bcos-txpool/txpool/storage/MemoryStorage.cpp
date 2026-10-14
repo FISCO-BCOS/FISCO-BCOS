@@ -377,7 +377,8 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 
     auto txHasSeal = _tx->sealed();
     _tx->setSealed(true);  // must set seal before insert
-    if (auto status = insert(_tx); status != TransactionStatus::None)
+    if (auto status = insert(_tx);
+        status != TransactionStatus::None && status != TransactionStatus::AlreadyInTxPoolAndAccept)
     {
         _tx->setSealed(txHasSeal);
         Transaction::Ptr tx;
@@ -597,8 +598,10 @@ TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
     {
         if (ptr->submitCallback() && !accessor.value()->submitCallback())
         {
+            // another submission of this tx won the race past txpoolStorageCheck: this one only
+            // lends its callback, nothing new entered the pool
             accessor.value()->setSubmitCallback(ptr->submitCallback());
-            return TransactionStatus::None;
+            return TransactionStatus::AlreadyInTxPoolAndAccept;
         }
         return TransactionStatus::AlreadyInTxPool;
     }
@@ -1023,6 +1026,7 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
         }
 
         TXPOOL_LOG(DEBUG) << LOG_DESC("removeInvalidTxs") << LOG_KV("size", txCnt);
+        checkPoolFullTransition();
     }
     catch (std::exception const& e)
     {

@@ -169,6 +169,6 @@ void registerBalanceCommand()
             "<amount> | register-caller <acct> | unregister-caller <acct> | list-caller | enable   "
             "[--account <key-file>] [--yes] [--interval <blocks>] [--node-dir <dir> | "
             "--rpc <host:port>] [--json]",
-            {"yes", "direct"}, runBalance});
+            {"yes", "direct"}, runBalance, {"account", "interval"}, true});
 }
 }  // namespace bcos::ops

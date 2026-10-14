@@ -15,17 +15,20 @@
  *
  * @brief minimal argv parser shared by every subcommand: `--k v`, `--k=v`, boolean flags,
  *        positionals. Every command declares which flags are boolean so `--json 0x..` is not
- *        swallowed as a value.
+ *        swallowed as a value, and which options take a value so a typo or a missing value is a
+ *        usage error instead of a silent fallback.
  * @file Args.h
  */
 #pragma once
 
 #include "OpsError.h"
+#include <cctype>
 #include <map>
 #include <optional>
 #include <set>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace bcos::ops
@@ -33,33 +36,49 @@ namespace bcos::ops
 class Args
 {
 public:
-    /// _argv excludes the program name and the subcommand name(s) already consumed
-    Args(std::vector<std::string> _argv, std::set<std::string> _booleanFlags)
+    /// _argv excludes the program name and the subcommand name(s) already consumed.
+    /// _booleanFlags take no value (`--json`, `--json=true|false|1|0`). When _valueOptions is given
+    /// it lists every other accepted name and an unknown name throws; without it (tests, nested
+    /// dispatch) any other name is a value option. A value option with no value throws.
+    Args(std::vector<std::string> _argv, std::set<std::string> const& _booleanFlags,
+        std::optional<std::set<std::string>> const& _valueOptions = std::nullopt)
     {
         for (size_t i = 0; i < _argv.size(); ++i)
         {
             auto const& token = _argv[i];
-            if (token.size() < 2 || token[0] != '-' ||
-                std::isdigit(static_cast<unsigned char>(token[1])))  // -5 is a value
+            if (!isOption(token))
             {
                 m_positionals.push_back(token);
                 continue;
             }
             auto name = token.substr(token[1] == '-' ? 2 : 1);
-            auto eq = name.find('=');
-            if (eq != std::string::npos)
+            std::optional<std::string> inlineValue;
+            if (auto eq = name.find('='); eq != std::string::npos)
             {
-                m_options[name.substr(0, eq)] = name.substr(eq + 1);
+                inlineValue = name.substr(eq + 1);
+                name.resize(eq);
+            }
+            if (_booleanFlags.contains(name))
+            {
+                if (!inlineValue || *inlineValue == "true" || *inlineValue == "1")
+                {
+                    m_flags.insert(name);
+                }
+                else if (*inlineValue != "false" && *inlineValue != "0")
+                {
+                    throw OpsError(c_exitUsage, "--" + name + " takes no value");
+                }
                 continue;
             }
-            if (_booleanFlags.contains(name) || i + 1 >= _argv.size() ||
-                (_argv[i + 1].size() > 1 && _argv[i + 1][0] == '-' &&
-                    !std::isdigit(static_cast<unsigned char>(_argv[i + 1][1]))))
+            if (_valueOptions && !_valueOptions->contains(name))
             {
-                m_flags.insert(name);
-                continue;
+                throw OpsError(c_exitUsage, "unknown option --" + name);
             }
-            m_options[name] = _argv[++i];
+            if (!inlineValue && (i + 1 >= _argv.size() || isOption(_argv[i + 1])))
+            {
+                throw OpsError(c_exitUsage, "--" + name + " needs a value");
+            }
+            m_options[name] = inlineValue ? *inlineValue : _argv[++i];
         }
     }
 
@@ -113,6 +132,13 @@ public:
     }
 
 private:
+    // -5 is a value, not an option
+    static bool isOption(std::string const& _token)
+    {
+        return _token.size() >= 2 && _token[0] == '-' &&
+               !std::isdigit(static_cast<unsigned char>(_token[1]));
+    }
+
     std::map<std::string, std::string> m_options;
     std::set<std::string> m_flags;
     std::vector<std::string> m_positionals;

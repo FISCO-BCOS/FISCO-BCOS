@@ -67,6 +67,6 @@ void registerAccountCommand()
     registerCommand("account",
         Command{"new: generate an account key pair in console's accounts/ layout (replaces "
                 "console's get_account.sh / get_gm_account.sh)",
-            "new [--sm] [--out <dir>] [--json]", {"sm"}, runAccount});
+            "new [--sm] [--out <dir>] [--json]", {"sm"}, runAccount, {"out"}, true});
 }
 }  // namespace bcos::ops

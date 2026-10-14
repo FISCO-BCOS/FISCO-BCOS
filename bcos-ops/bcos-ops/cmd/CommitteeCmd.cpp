@@ -292,6 +292,6 @@ void registerCommitteeCommand()
             "<true|false> | revoke <id>   [--interval <blocks from now, default 1000>] [--account "
             "<key-file>] [--yes] "
             "[--node-dir <dir> | --rpc <host:port>] [--json]",
-            {"yes", "direct"}, runCommittee});
+            {"yes", "direct"}, runCommittee, {"account", "interval", "last"}, true});
 }
 }  // namespace bcos::ops

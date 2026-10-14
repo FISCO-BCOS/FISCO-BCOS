@@ -234,10 +234,14 @@ void Service::onConnect(
     }
     if (e.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
-                             << LOG_KV("p2pid", printShortP2pID(p2pID))
-                             << LOG_KV("nodeName", p2pInfo.nodeName) << LOG_KV("endpoint", peer)
-                             << LOG_KV("message", e.what());
+        // DEBUG: every error path in Host::connect has already logged its cause
+        // (PeerConnectFailed, rate limited per endpoint; HandshakeFailed; the session-cap
+        // WARNING; the client-connect exception ERROR), and the heartbeat retries a down static
+        // peer every few seconds
+        SERVICE_LOG(DEBUG) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
+                           << LOG_KV("p2pid", printShortP2pID(p2pID))
+                           << LOG_KV("nodeName", p2pInfo.nodeName) << LOG_KV("endpoint", peer)
+                           << LOG_KV("message", e.what());
 
         return;
     }
