@@ -743,8 +743,13 @@ private:
                 if (bootnodes.empty())
                 {
                     // no peers to sync from; poll on the caught-up cadence for a bootnode
-                    // file an operator adds later
-                    std::this_thread::sleep_for(c_caughtUpBackoff);
+                    // file an operator adds later, in 1s slices so stop() joins promptly
+                    for (std::chrono::seconds waited{0};
+                        waited < c_caughtUpBackoff && m_running.load();
+                        waited += std::chrono::seconds{1})
+                    {
+                        std::this_thread::sleep_for(std::chrono::seconds{1});
+                    }
                     continue;
                 }
                 // Round progress tracking: a caught-up round (no peer offered a safe

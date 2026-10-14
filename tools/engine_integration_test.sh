@@ -175,7 +175,10 @@ log_info "Work dir: ${WORK_DIR}"
 rm -rf "${WORK_DIR}"
 mkdir -p "${WORK_DIR}"
 
-# Generate genesis config
+# config.genesis: the chain itself (chain id, consensus nodes, executor lane, forks, allocs,
+# genesis header). config.ini: this node's listeners, p2p, certs, storage and log. From
+# compatibility 3.1 on a node reads [chain] from config.genesis only, so one merged file passed
+# as both -c and -g would log a "config.ini [chain]" no-effect WARN.
 cat > "${WORK_DIR}/config.genesis" << GENESIS_EOF
 [chain]
 ; executor version 2 takes its chain id from here (a non-zero decimal)
@@ -186,41 +189,6 @@ consensus_type=pbft
 block_tx_count_limit=1000
 leader_period=1
 node.0=__NODE_ID_PLACEHOLDER__:1
-[rpc]
-listen_ip=0.0.0.0
-listen_port=20210
-disable_ssl=true
-sm_ssl=false
-
-[web3_rpc]
-enable=true
-listen_ip=0.0.0.0
-listen_port=$((RPC_PORT + 1))
-
-[engine_rpc]
-; executor_version=2 (below) always serves the Engine API here, driven by a consensus client
-; (this script's mock CL); there is no enable key.
-listen_ip=0.0.0.0
-listen_port=${RPC_PORT}
-jwt_secret_file=${WORK_DIR}/jwt.hex
-clock_skew_secs=300
-
-[p2p]
-listen_ip=0.0.0.0
-listen_port=31300
-sm_ssl=false
-nodes_path=./
-nodes_file=nodes.json
-
-[cert]
-ca_path=./
-ca_cert=ca.crt
-node_key=ssl.key
-node_cert=ssl.crt
-multi_ca_path=multiCaPath
-
-[certificate_blacklist]
-[certificate_whitelist]
 
 [executor]
 ; executor_version=2 is the L1 EL lane: the EthereumExecutor, with the EVM revision and the
@@ -235,14 +203,6 @@ notify_rotate_flag=false
 
 [tx]
 gas_limit=3000000000
-
-[storage]
-type=RocksDB
-
-[log]
-enable=true
-log_path=./
-level=debug
 
 [fork_timestamps]
 london_time=0
@@ -290,6 +250,53 @@ parent_beacon_block_root=0x00000000000000000000000000000000000000000000000000000
 requests_hash=0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 hash=0xf66beef79256c0b3f1fd2852040413c5dffa1ff44f0f78421ae17cf8f397a1a5
 GENESIS_EOF
+
+cat > "${WORK_DIR}/config.ini" << INI_EOF
+[rpc]
+listen_ip=0.0.0.0
+listen_port=20210
+disable_ssl=true
+sm_ssl=false
+
+[web3_rpc]
+enable=true
+listen_ip=0.0.0.0
+listen_port=$((RPC_PORT + 1))
+
+[engine_rpc]
+; executor_version=2 (config.genesis) with no [debug] section: the block driver is Engine, so
+; the node serves the Engine API here to a consensus client (this script's mock CL); there is
+; no enable key.
+listen_ip=0.0.0.0
+listen_port=${RPC_PORT}
+jwt_secret_file=${WORK_DIR}/jwt.hex
+clock_skew_secs=300
+
+[p2p]
+listen_ip=0.0.0.0
+listen_port=31300
+sm_ssl=false
+nodes_path=./
+nodes_file=nodes.json
+
+[cert]
+ca_path=./
+ca_cert=ca.crt
+node_key=ssl.key
+node_cert=ssl.crt
+multi_ca_path=multiCaPath
+
+[certificate_blacklist]
+[certificate_whitelist]
+
+[storage]
+type=RocksDB
+
+[log]
+enable=true
+log_path=./
+level=debug
+INI_EOF
 
 # Generate minimal certs (use existing from repo if available, otherwise generate self-signed)
 mkdir -p "${WORK_DIR}/conf"
@@ -402,7 +409,7 @@ cd "${WORK_DIR}"
 # Binary daemonizes: nohup only captures parent's brief version output.
 # The child writes to a timestamped log file — we must watch that instead.
 rm -f log_*.log 2>/dev/null
-nohup "${ABS_BINARY}" -c config.genesis -g config.genesis > nohup.out 2>&1 &
+nohup "${ABS_BINARY}" -c config.ini -g config.genesis > nohup.out 2>&1 &
 NODE_PID=$!
 sleep 1
 

@@ -833,8 +833,11 @@ ChainView readChainView(ledger::LedgerConfigState const& configState, Check chec
     {
         // Judged against the block it would execute in, which is the next one. On the L1 EL
         // lane that block is not built yet: it is judged by the head's revision under the
-        // fork schedule, as geth's pool judges by head.Time (the builder seals PoS blocks
-        // only, hence difficulty 0). The snapshot's timestamp is the head's, in milliseconds.
+        // fork schedule, as geth's pool judges by head.Time. The snapshot's timestamp is the
+        // head's, in milliseconds. Difficulty only decides LONDON vs PARIS before paris_time
+        // (a devp2p-synced pre-merge head is PoW, difficulty > 0), and no admission rule
+        // tells those two apart: every revision gate here is <= LONDON or >= SHANGHAI. So 0
+        // is exact for the PoS blocks the builder seals and harmless on a PoW head.
         view.revision =
             revisionSchedule ?
                 std::optional<evmc_revision>(revisionSchedule(view.config->timestamp() / 1000, 0)) :

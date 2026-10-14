@@ -249,7 +249,8 @@ constexpr std::array c_deadConfigKeys{
     DeadKey{"consensus", "fixed_timestamp", "[debug] fixed_timestamp"},
     DeadKey{"op_engine_rpc", "", "[engine_rpc] (no enable key)"},
     DeadKey{"engine_rpc", "enable",
-        "none: the Engine API listener runs whenever executor.version >= 2"},
+        "none: the Engine API listener runs whenever the block driver is Engine "
+        "(v2/v3 without a [debug] driver)"},
     DeadKey{"ethereum", "mode", c_ethereumModeReplacement},
     // [web3_rpc] enable_miner_api stays live: op-batcher's --l2-eth-rpc (no JWT) is the web3
     // listener, and it sends miner_setMaxDASize there.

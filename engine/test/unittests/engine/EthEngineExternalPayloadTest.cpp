@@ -89,8 +89,9 @@ public:
         co_return l1Context;
     }
     std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
-        int64_t /*timestampSeconds*/) const override
+        int64_t timestampSeconds) const override
     {
+        forkVersionAtCalls.push_back(timestampSeconds);
         return l1Context.forkVersion;
     }
     task::Task<engine_common::ExternalBuildResult> buildL1Block(
@@ -114,6 +115,7 @@ public:
     engine_common::ExternalL1Context l1Context{.baseFee = 7,
         .excessBlobGas = 0,
         .forkVersion = bcos::protocol::EthBlockVersion::CANCUN};
+    mutable std::vector<int64_t> forkVersionAtCalls;
     unsigned buildCalls = 0;
     std::optional<engine_common::ExternalBuildBlock> lastBuild;
     engine_common::ExternalBuildResult buildResult;
@@ -715,6 +717,43 @@ BOOST_FIXTURE_TEST_CASE(fcuAttributesRollbackRefusedAnswersSyncing, ExternalPayl
     BOOST_CHECK_EQUAL(mockVerifier->rollbackCalls, 1u);
     BOOST_REQUIRE(mockVerifier->lastRollbackTarget.has_value());
     BOOST_CHECK_EQUAL(*mockVerifier->lastRollbackTarget, c_headNumber - 2);
+}
+
+// newPayload for a payload this node built, whose parent is no longer the forkchoice head
+// (another block at the same height was committed and became the head after the build): the
+// miss path reconstructs the block hash at the era forkVersionAt assigns to the payload
+// timestamp in SECONDS, then answers SYNCING. A different era reconstructs a different hash,
+// so the returned era is the one checked.
+BOOST_FIXTURE_TEST_CASE(builtPayloadParentUnknownReadsEraFromForkSchedule, ExternalPayloadFixture)
+{
+    seedHead();
+    auto attributes = makePayloadAttributesV3();
+    ForkchoiceState head{c_headHash, h256{}, h256{}};
+    auto built = task::syncWait(service.updateForkchoice(head, &attributes, 3));
+    BOOST_REQUIRE(built.payloadId.has_value());
+    auto payload = task::syncWait(service.getPayload(*built.payloadId, 3));
+    BOOST_REQUIRE(payload);
+
+    auto const otherHash = h256("4444444444444444444444444444444444444444444444444444444444444444");
+    seedHead(otherHash, c_headNumber + 1);
+    ForkchoiceState moved{otherHash, h256{}, h256{}};
+    auto movedResult = task::syncWait(service.updateForkchoice(moved, nullptr, 3));
+    BOOST_REQUIRE(movedResult.payloadStatus.status == PayloadValidationStatus::Valid);
+
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    // The built header committed to the attributes' beacon root.
+    request.parentBeaconBlockRoot = attributes.parentBeaconBlockRoot;
+    auto status = task::syncWait(service.newPayload(request, 3));
+    BOOST_CHECK(status.status == PayloadValidationStatus::Syncing);
+    BOOST_REQUIRE_EQUAL(mockVerifier->forkVersionAtCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(mockVerifier->forkVersionAtCalls[0],
+        static_cast<int64_t>(payload->executionPayload.timestamp / 1000));
+    BOOST_CHECK_EQUAL(mockVerifier->calls, 0U);
+
+    mockVerifier->l1Context.forkVersion = bcos::protocol::EthBlockVersion::PRAGUE;
+    auto mismatched = task::syncWait(service.newPayload(request, 3));
+    BOOST_CHECK(mismatched.status == PayloadValidationStatus::InvalidBlockHash);
+    BOOST_CHECK_EQUAL(mockVerifier->forkVersionAtCalls.size(), 2U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
