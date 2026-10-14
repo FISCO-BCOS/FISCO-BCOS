@@ -28,6 +28,7 @@
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <string>
+#include <vector>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -305,18 +306,20 @@ BOOST_AUTO_TEST_CASE(ethereumModeElIsNotRead)
     BOOST_CHECK(v2.ethereumELModeEnabled());
 }
 
-// [op_engine_rpc] is removed: enable=true refuses to start on every lane (config.ini alone
-// decides it) and names [engine_rpc]; the section without enable=true is not read.
-BOOST_AUTO_TEST_CASE(opEngineRpcEnableRefused)
+// [op_engine_rpc] is removed: on every lane the node starts with the section recorded as a dead
+// key, and nothing in it reaches the Engine API listener.
+BOOST_AUTO_TEST_CASE(opEngineRpcIsADeadKey)
 {
-    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(
-        cfg.loadConfigFromString("[op_engine_rpc]\nenable=true\nlisten_port=9552\n"), InvalidConfig,
-        [](auto const& e) {
-            return errinfoContains(e, "[op_engine_rpc] is removed: move its keys to [engine_rpc]");
-        });
-    auto ignored = starts(2, "[op_engine_rpc]\nenable=false\nlisten_port=9552\n");
-    BOOST_CHECK_EQUAL(ignored->engineApiListener().listenPort, 8551);
+    constexpr auto c_opEngineRpc = "[op_engine_rpc]\nenable=true\nlisten_port=9552\n";
+    BOOST_CHECK(starts(1, c_opEngineRpc)->blockDriver() == BlockDriver::PBFT);
+    for (int version : {1, 2, 3})
+    {
+        auto cfg = starts(version, c_opEngineRpc);
+        BOOST_CHECK(cfg->deadKeys() == std::vector<std::string>{"config.ini [op_engine_rpc]"});
+    }
+    auto v3 = starts(3, c_opEngineRpc);
+    BOOST_CHECK(v3->blockDriver() == BlockDriver::Engine);
+    BOOST_CHECK_EQUAL(v3->engineApiListener().listenPort, 8551);
 }
 
 // executor.eest_replay_mode drops balance and nonce-window admission checks; the fixtures are
@@ -333,21 +336,21 @@ BOOST_AUTO_TEST_CASE(eestReplayModeRequiresV2)
 }
 
 
-// [ethereum] mode=opstack-el is gone from both files; each refusal names the replacement.
-BOOST_AUTO_TEST_CASE(opstackElModeRefusedWithItsReplacement)
+// [ethereum] mode=opstack-el is gone from both files: the node starts on the Engine driver
+// (follow_devp2p is [debug]'s now) and records the key as dead in the file that carries it.
+BOOST_AUTO_TEST_CASE(opstackElModeIsADeadKey)
 {
-    NodeConfig ini(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(ini.loadConfigFromString("[ethereum]\nmode=opstack-el\n"), InvalidConfig,
-        [](auto const& e) {
-            return errinfoContains(
-                e, "ethereum.mode=opstack-el is replaced by [debug] follow_devp2p=true");
-        });
+    auto ini = starts(3, "[ethereum]\nmode=opstack-el\n");
+    BOOST_CHECK(ini->blockDriver() == BlockDriver::Engine);
+    BOOST_CHECK(ini->deadKeys() == std::vector<std::string>{"config.ini [ethereum] mode"});
+
     NodeConfig genesis(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(
-        genesis.loadGenesisConfigFromString(genesisFor(3) + "[ethereum]\nmode=opstack-el\n"),
-        InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "set config.ini [debug] follow_devp2p=true");
-        });
+    BOOST_REQUIRE_NO_THROW(
+        genesis.loadGenesisConfigFromString(genesisFor(3) + "[ethereum]\nmode=opstack-el\n"));
+    BOOST_REQUIRE_NO_THROW(genesis.loadConfigFromString(""));
+    BOOST_REQUIRE_NO_THROW(genesis.validateELModeInvariants());
+    BOOST_CHECK(genesis.blockDriver() == BlockDriver::Engine);
+    BOOST_CHECK(genesis.deadKeys() == std::vector<std::string>{"config.genesis [ethereum] mode"});
 }
 
 // mpt_prune_window > 0 on v3: the Engine API commit path has no pruning observer, the

@@ -51,6 +51,7 @@
 #include <cstdint>
 #include <limits>
 #include <set>
+#include <span>
 #include <string_view>
 #include <thread>
 #include <utility>
@@ -209,6 +210,109 @@ uint64_t parseForkTimestamp(
     return *parsed.value;
 }
 
+// Keys a stored config may still carry that no code reads any more. Each one present gets one
+// WARN at load (recordDeadKeys) and the node starts. Keys a lane does not use but another lane
+// does are NOT here: they are silently ignored on the lane that has no use for them.
+struct DeadKey
+{
+    std::string_view section;
+    // empty: the whole section; a trailing '*': every key of the section with that prefix
+    std::string_view key;
+    // what to write instead; empty when nothing replaces the key
+    std::string_view replacement;
+};
+
+constexpr auto c_ethereumModeReplacement =
+    "none: genesis executor.version decides; opstack-el -> config.ini [debug] follow_devp2p=true "
+    "(executor.version >= 3)";
+
+constexpr std::array c_deadConfigKeys{
+    DeadKey{"web3_rpc", "http_body_size_limit", "[web3_rpc] request_body_size_limit"},
+    DeadKey{"executor", "baseline_scheduler", ""},
+    DeadKey{"storage", "pd_ssl_*", ""},
+    DeadKey{"redis", "", ""},
+    DeadKey{"flow_control", "enable_distributed_ratelimit", ""},
+    DeadKey{"flow_control", "enable_distributed_ratelimit_cache", ""},
+    DeadKey{"flow_control", "distributed_ratelimit_cache_percent", ""},
+    DeadKey{"security", "hsm_public_key_file_path", ""},
+    DeadKey{"experimental", "check_parallel_conflict", ""},
+    // 3.18 keys this release removes
+    DeadKey{"consensus", "enable_single_node_consensus", "[debug] enable"},
+    DeadKey{"consensus", "block_interval", "[debug] block_interval"},
+    DeadKey{"consensus", "produce_empty_blocks", "[debug] produce_empty_blocks"},
+    DeadKey{"consensus", "fee_recipient", "[debug] fee_recipient"},
+    DeadKey{"consensus", "prev_randao", "[debug] prev_randao"},
+    DeadKey{"consensus", "fixed_timestamp", "[debug] fixed_timestamp"},
+    DeadKey{"op_engine_rpc", "", "[engine_rpc] (no enable key)"},
+    DeadKey{"engine_rpc", "enable",
+        "none: the Engine API listener runs whenever executor.version >= 2"},
+    DeadKey{"ethereum", "mode", c_ethereumModeReplacement},
+    // [web3_rpc] enable_miner_api stays live: op-batcher's --l2-eth-rpc (no JWT) is the web3
+    // listener, and it sends miner_setMaxDASize there.
+};
+
+// config.ini sections that config.genesis carries from compatibility_version 3.1 on.
+constexpr std::array c_deadConfigChainSections{
+    DeadKey{"chain", "", "config.genesis [chain]"},
+    DeadKey{"web3", "", "config.genesis [web3] (v0/v1) / [chain] chain_id (v2/v3)"},
+};
+
+constexpr std::array c_deadGenesisKeys{
+    DeadKey{"consensus", "consensus_timeout", "config.ini [consensus] checkpoint_timeout"},
+};
+
+// config.genesis keys of the 3.18 development line that v2/v3 no longer read.
+constexpr std::array c_deadEthLaneGenesisKeys{
+    DeadKey{"ethereum", "mode", c_ethereumModeReplacement},
+    DeadKey{"executor", "evm_revision", "[fork_timestamps] (v2) / [op_fork_timestamps] (v3)"},
+    DeadKey{"executor", "evm_revision_forks", "[fork_timestamps] (v2) / [op_fork_timestamps] (v3)"},
+    DeadKey{"op_fork_schedule", "", "[op_fork_timestamps]"},
+};
+
+// WARN once for each key of `table` present in `pt`; returns them as "<file> [section] key".
+std::vector<std::string> recordDeadKeys(
+    boost::property_tree::ptree const& pt, std::span<DeadKey const> table, std::string_view file)
+{
+    std::vector<std::string> found;
+    for (auto const& dead : table)
+    {
+        auto section = pt.get_child_optional(std::string(dead.section));
+        if (!section)
+        {
+            continue;
+        }
+        auto const sectionName = std::string(file) + " [" + std::string(dead.section) + "]";
+        std::vector<std::string> names;
+        if (dead.key.empty())
+        {
+            names.push_back(sectionName);
+        }
+        else if (dead.key.ends_with('*'))
+        {
+            auto const prefix = dead.key.substr(0, dead.key.size() - 1);
+            for (auto const& entry : *section)
+            {
+                if (entry.first.starts_with(prefix))
+                {
+                    names.push_back(sectionName + " " + entry.first);
+                }
+            }
+        }
+        else if (section->find(std::string(dead.key)) != section->not_found())
+        {
+            names.push_back(sectionName + " " + std::string(dead.key));
+        }
+        for (auto& name : names)
+        {
+            NodeConfig_LOG(WARNING)
+                << LOG_DESC("this key has no effect") << LOG_KV("key", name)
+                << LOG_KV("replacement", dead.replacement.empty() ? "none" : dead.replacement);
+            found.push_back(std::move(name));
+        }
+    }
+    return found;
+}
+
 /// Required key: absent is a config error.
 uint64_t readForkTimestamp(boost::property_tree::ptree const& section,
     std::string const& sectionName, std::string const& key)
@@ -274,6 +378,14 @@ void NodeConfig::loadGenesisConfigFromString(std::string const& _content)
 void NodeConfig::loadConfig(
     boost::property_tree::ptree const& _pt, bool _enforceChainConfig, bool _enforceGroupId)
 {
+    m_deadConfigKeys = recordDeadKeys(_pt, c_deadConfigKeys, "config.ini");
+    // From compat 3.1 the chain identity lives in config.genesis (loadGenesisConfig runs first)
+    if (!_enforceChainConfig && m_genesisConfig.m_compatibilityVersion >=
+                                    (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        auto chainSections = recordDeadKeys(_pt, c_deadConfigChainSections, "config.ini");
+        m_deadConfigKeys.insert(m_deadConfigKeys.end(), chainSections.begin(), chainSections.end());
+    }
     // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig || (m_genesisConfig.m_compatibilityVersion <
                                        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
@@ -287,7 +399,6 @@ void NodeConfig::loadConfig(
     loadWeb3RpcConfig(_pt);
     loadEngineRpcConfig(_pt);
     loadDebugConfig(_pt);
-    loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
     // loadSecurityConfig before loadStorageSecurityConfig for deciding whether to use HSM
@@ -304,6 +415,13 @@ void NodeConfig::loadConfig(
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
+    m_deadGenesisKeys = recordDeadKeys(_genesisConfig, c_deadGenesisKeys, "config.genesis");
+    if (isEthereumLaneGenesis(_genesisConfig))
+    {
+        auto ethLaneKeys =
+            recordDeadKeys(_genesisConfig, c_deadEthLaneGenesisKeys, "config.genesis");
+        m_deadGenesisKeys.insert(m_deadGenesisKeys.end(), ethLaneKeys.begin(), ethLaneKeys.end());
+    }
     // if version >= 3.1.0, genesisBlock include chainConfig
     m_genesisConfig.m_compatibilityVersion = genesisCompatibilityVersion(_genesisConfig);
     if (m_genesisConfig.m_compatibilityVersion >=
@@ -1208,14 +1326,6 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; enable_debug_api above.
         ; enable_debug_api=false
     */
-    // [op_engine_rpc] was the second spelling of this section; its listener is gone.
-    if (_pt.get<bool>("op_engine_rpc.enable", false))
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[op_engine_rpc] is removed: move its keys to [engine_rpc] "
-                                  "(no enable key; the Engine API listener runs on "
-                                  "executor.version >= 2)"));
-    }
     m_engineRpc.listenIP = _pt.get<std::string>("engine_rpc.listen_ip", "127.0.0.1");
     m_engineRpc.listenPort = _pt.get<int>("engine_rpc.listen_port", 8551);
     m_engineRpc.requestBodySizeLimit = _pt.get<int>("engine_rpc.request_body_size_limit", 10485760);
@@ -1320,14 +1430,6 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; finality boundary. Range [0, 10000]; 0 = download up to the tip.
         op_sync_lag_blocks=64
     */
-    // ethereum.mode is removed: the lane (genesis executor.version) decides. The opstack-el
-    // spelling still names its replacement.
-    if (_pt.get<std::string>("ethereum.mode", "") == "opstack-el")
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("ethereum.mode=opstack-el is replaced by [debug] "
-                                               "follow_devp2p=true (executor.version >= 3 only)"));
-    }
     // NOTE: this loader deliberately stays PURE parsing of the config.ini
     // [ethereum] section — it must NOT read m_genesisConfig members: tools
     // (archive-tool, storage-tool) call loadConfig BEFORE loadGenesisConfig, so
@@ -1499,16 +1601,6 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     m_genesisConfig.m_ethereumForkSchedule.reset();
     m_ethereumChainId = 0;     // reassigned by validateL2Invariants on executor.version >= 2
     m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
-
-    // config.genesis [ethereum] mode is removed (the lane decides); the opstack-el spelling
-    // still names its replacement.
-    if (_genesisConfig.get<std::string>("ethereum.mode", "") == "opstack-el")
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "config.genesis [ethereum].mode=opstack-el is no longer a "
-                                  "chain-level declaration: remove it and set config.ini "
-                                  "[debug] follow_devp2p=true on the nodes that follow devp2p"));
-    }
 
     auto section = _genesisConfig.get_child_optional("fork_timestamps");
     if (!section)
@@ -1837,33 +1929,6 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
 std::optional<ledger::OpEip1559Params> const& NodeConfig::opEip1559() const
 {
     return m_genesisConfig.m_opEip1559;
-}
-
-void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
-{
-    /*
-    [p2p]
-    listen_ip=0.0.0.0
-    listen_port=30300
-    sm_ssl=false
-    nodes_path=./
-    nodes_file=nodes.json
-    */
-    std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
-    int listenPort = _pt.get<int>("p2p.listen_port", 30300);
-    std::string nodesDir = _pt.get<std::string>("p2p.nodes_path", "./");
-    std::string nodesFile = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
-    bool smSsl = _pt.get<bool>("p2p.sm_ssl", false);
-
-    m_p2pListenIP = listenIP;
-    m_p2pListenPort = listenPort;
-    m_p2pNodeDir = nodesDir;
-    m_p2pSmSsl = smSsl;
-    m_p2pNodeFileName = nodesFile;
-
-    NodeConfig_LOG(INFO) << LOG_DESC("loadGatewayConfig") << LOG_KV("listenIP", listenIP)
-                         << LOG_KV("listenPort", listenPort) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("smSsl", smSsl) << LOG_KV("nodesFile", nodesFile);
 }
 
 void NodeConfig::loadCertConfig(boost::property_tree::ptree const& _pt)
@@ -2416,7 +2481,6 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     }
 
     m_checkTransactionSignature = _pt.get<bool>("experimental.check_transaction_signature", true);
-    m_checkParallelConflict = _pt.get<bool>("experimental.check_parallel_conflict", true);
     m_singlePointConsensus = _pt.get<bool>("experimental.single_point_consensus", false);
     if (auto forceSender = _pt.get<std::string>("experimental.force_sender", {});
         !forceSender.empty())
@@ -2430,7 +2494,6 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("tbbThreadCount", m_tbbThreadCount)
                          << LOG_KV("checkTransactionSignature", m_checkTransactionSignature)
                          << LOG_KV("eestReplayMode", m_eestReplayMode)
-                         << LOG_KV("checkParallelConflict", m_checkParallelConflict)
                          << LOG_KV("singlePointConsensus", m_singlePointConsensus)
                          << LOG_KV("enableAuth", toHex(m_forceSender));
 }
@@ -3260,31 +3323,6 @@ std::uint64_t NodeConfig::debugFixedTimestamp() const
     return m_debugFixedTimestamp;
 }
 
-const std::string& NodeConfig::p2pListenIP() const
-{
-    return m_p2pListenIP;
-}
-
-uint16_t NodeConfig::p2pListenPort() const
-{
-    return m_p2pListenPort;
-}
-
-bool NodeConfig::p2pSmSsl() const
-{
-    return m_p2pSmSsl;
-}
-
-const std::string& NodeConfig::p2pNodeDir() const
-{
-    return m_p2pNodeDir;
-}
-
-const std::string& NodeConfig::p2pNodeFileName() const
-{
-    return m_p2pNodeFileName;
-}
-
 const std::string& NodeConfig::certPath()
 {
     return m_certPath;
@@ -3500,21 +3538,6 @@ size_t NodeConfig::ioThreadCount() const
 size_t NodeConfig::tbbThreadCount() const
 {
     return m_tbbThreadCount;
-}
-
-void NodeConfig::loadAlloc(boost::property_tree::ptree const& ptree)
-{
-    if (auto node = ptree.get_child_optional("alloc"))
-    {
-        for (const auto& it : *node)
-        {
-            auto flag = it.first;
-            auto enableNumber = it.second.get_value<bool>();
-            m_genesisConfig.m_features.emplace_back(
-                ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
-                    .enable = static_cast<int>(enableNumber)});
-        }
-    }
 }
 
 std::string bcos::tool::generateGenesisData(
@@ -3758,9 +3781,11 @@ bool bcos::tool::NodeConfig::checkTransactionSignature() const
 {
     return m_checkTransactionSignature;
 }
-bool bcos::tool::NodeConfig::checkParallelConflict() const
+std::vector<std::string> bcos::tool::NodeConfig::deadKeys() const
 {
-    return m_checkParallelConflict;
+    auto keys = m_deadGenesisKeys;
+    keys.insert(keys.end(), m_deadConfigKeys.begin(), m_deadConfigKeys.end());
+    return keys;
 }
 int bcos::tool::NodeConfig::executorVersion() const
 {

@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
 namespace bcos::tool
@@ -107,6 +108,10 @@ public:
     virtual void loadConfig(boost::property_tree::ptree const& _pt,
         bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
+
+    // Keys that have no effect any more, found by the last loadGenesisConfig and loadConfig
+    // (genesis first), each spelled "<file> [section] key" and logged as one WARN at load.
+    std::vector<std::string> deadKeys() const;
 
     // the txpool configurations
     size_t txpoolLimit() const;
@@ -349,13 +354,6 @@ public:
     size_t ethereumMempoolCapacity() const;
     std::int64_t ethereumMempoolTxLifetimeMinutes() const;
 
-    // the gateway configurations
-    const std::string& p2pListenIP() const;
-    uint16_t p2pListenPort() const;
-    bool p2pSmSsl() const;
-    const std::string& p2pNodeDir() const;
-    const std::string& p2pNodeFileName() const;
-
     // config for cert
     const std::string& certPath();
     void setCertPath(const std::string& _certPath);
@@ -429,7 +427,6 @@ public:
     /// [executor] eest_replay_mode. Node-local and NOT part of the genesis config: it changes
     /// which checks admission runs on this node, never what the chain agrees on.
     bool eestReplayMode() const { return m_eestReplayMode; }
-    bool checkParallelConflict() const;
     bool singlePointConsensus() const;
     const bytes& forceSender() const;
 
@@ -447,7 +444,6 @@ protected:
     virtual void loadWeb3ChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
     virtual void loadWeb3RpcConfig(boost::property_tree::ptree const& _pt);
-    virtual void loadGatewayConfig(boost::property_tree::ptree const& _pt);
     virtual void loadCertConfig(boost::property_tree::ptree const& _pt);
     virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
@@ -485,8 +481,6 @@ protected:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
 
 private:
-    void loadAlloc(boost::property_tree::ptree const& ptree);
-
     // A6.5: Ethereum-lane genesis alloc parsing (the lane is gated by executor.version >= 2)
     void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
     void loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig);
@@ -669,13 +663,6 @@ private:
     // fixed block timestamp in seconds; 0 = wall clock.
     std::uint64_t m_debugFixedTimestamp = 0;
 
-    // config for gateway
-    std::string m_p2pListenIP;
-    uint16_t m_p2pListenPort{};
-    bool m_p2pSmSsl{};
-    std::string m_p2pNodeDir;
-    std::string m_p2pNodeFileName;
-
     // config for sync
     bool m_enableSendBlockStatusByTree = false;
     bool m_enableSendTxByTree = false;
@@ -739,9 +726,11 @@ private:
     // experimental
     bool m_checkTransactionSignature = true;
     bool m_eestReplayMode = false;
-    bool m_checkParallelConflict = true;
     bool m_singlePointConsensus = false;
     bytes m_forceSender;
+
+    std::vector<std::string> m_deadConfigKeys;
+    std::vector<std::string> m_deadGenesisKeys;
 };
 
 std::string generateGenesisData(
