@@ -589,6 +589,8 @@ void registerTuiCommand()
             "nodes exit): with a bare --rpc pass --mode none to see view / leader / quorum. "
             "`attach getConsensusStatus` is not gated; op_engine_rpc and single-node non-PBFT "
             "setups are not recognised as EL",
-            {"version-check"}, runTui});
+            {"version-check"}, runTui,
+            {"account", "key", "filter", "snapshot-dir", "stall-factor", "max-lag",
+                "viewchange-window-ms"}});
 }
 }  // namespace bcos::ops
