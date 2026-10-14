@@ -343,5 +343,20 @@ BOOST_AUTO_TEST_CASE(attachTextOutputIsSanitized)
     BOOST_CHECK_EQUAL(out.str(), "]0;owned[2Jvalue\n");
 }
 
+BOOST_AUTO_TEST_CASE(logLevelRefusesExtraWords)
+{
+    for (std::vector<std::string> args :
+        {std::vector<std::string>{"fisco-bcos", "log-level", "set", "debug", "extra"},
+            std::vector<std::string>{"fisco-bcos", "log-level", "get", "foo"},
+            std::vector<std::string>{"fisco-bcos", "log-level", "get", "--module", "PBFT"},
+            std::vector<std::string>{"fisco-bcos", "log-level", "set"}})
+    {
+        std::ostringstream out;
+        std::ostringstream err;
+        BOOST_CHECK_EQUAL(runOps(args, out, err), c_exitUsage);
+        BOOST_CHECK(err.str().find("usage: log-level") != std::string::npos);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::ops::test
