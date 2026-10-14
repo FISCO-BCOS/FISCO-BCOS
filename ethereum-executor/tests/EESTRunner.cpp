@@ -589,9 +589,23 @@ std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
     // ByzantiumToConstantinopleFixAt5 carry no "AtTime" marker, so configureFork's
     // transition parser never runs on them and they would otherwise fall through to the
     // EVMC_OSAKA default and execute with no transition. No surviving revision contains
-    // the substring, so this cannot refuse a fixture we could have run.
+    // the constantinople substring, so this cannot refuse a fixture we could have run.
     if (lower == "constantinople" || lower == "constantinoplefix" ||
         lower.find("constantinople") != std::string::npos)
+        return std::nullopt;
+    // `amsterdam` is refused for the same reason the parser refuses it (LedgerConfig):
+    // this binary has no state_gas (EIP-8037/8038) pricing, so a fixture naming it —
+    // plain, embedded in a transition name, or as a transition endpoint (the parser
+    // below resolves the endpoint through this same function, so a nullopt here makes
+    // the endpoint guard skip the fixture) — must skip instead of executing under the
+    // EVMC_OSAKA default.
+    if (lower == "amsterdam" || lower.find("amsterdam") != std::string::npos)
+        return std::nullopt;
+    // Legacy transition names that carry no AtTime marker (e.g. FrontierToHomesteadAt5)
+    // never reach the transition parser and would likewise run whole-case at the OSAKA
+    // default with no transition installed — skip them too. Plain fork names contain no
+    // "to" substring, so this only catches transition-shaped names.
+    if (lower.find("to") != std::string::npos && lower.find("attime") == std::string::npos)
         return std::nullopt;
     if (lower == "petersburg")
         return EVMC_PETERSBURG;
