@@ -322,7 +322,15 @@ SendRequest sendFormRequest(SendForm const& _form, SendContext const& _context)
             throw OpsError(c_exitUsage, "missing to or signature");
         }
         auto types = signatureInputTypes(_form.customSig);
-        for (size_t i = 0; i < types.size() && i < c_sendMaxFields; ++i)
+        // the form has c_sendMaxFields inputs; sending fewer arguments than the signature
+        // declares would revert or hit another overload, so refuse instead of truncating
+        if (types.size() > c_sendMaxFields)
+        {
+            throw OpsError(c_exitUsage, "custom calls here take at most " +
+                                            std::to_string(c_sendMaxFields) +
+                                            " arguments; use `fisco-bcos tx send` for more");
+        }
+        for (size_t i = 0; i < types.size(); ++i)
         {
             if (_form.fields[i].empty())
             {
