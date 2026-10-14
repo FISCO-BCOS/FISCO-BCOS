@@ -40,6 +40,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
+#include "vm/HostContext.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -525,12 +526,15 @@ BOOST_AUTO_TEST_CASE(externalCall)
     // Clear the key lock to avoid effect
     result2->setKeyLocks({});
 
-    // This line re-reads result2->to() — still create #1's address, now carried into the
-    // next scheduler hop (create #2's derivation is not asserted here). The creator's
-    // nonce is still 0 because the nonce bump is flag-gated
-    // (bugfix_nested_create_creator_nonce / bugfix_set_contract_nonce_when_create), off in
-    // this fixture, so both hops intentionally carry ONE address; the old size check let
-    // that pass silently.
+    // This line re-reads result2->to() — create #1's address, carried into the next
+    // scheduler hop, where the DMC replay re-derives the CREATE. The re-derivation reads
+    // the creator's nonce again, so the two hops keep ONE address only while that nonce
+    // stays put: this lane's creator-bump gate is feature_evm_address plus the
+    // origin/create predicates in TransactionExecutive (the EOA-origin/contract-internal
+    // shape of this fixture does not bump), NOT the v2-lane nonce flags. The invariant
+    // is pinned below: hop 2's FINISHED result must report the created contract at the
+    // SAME address (result3->newEVMContractAddress() == addressString2) — a bump between
+    // the hops would split them.
     std::string addressString2{result2->to()};
     BOOST_CHECK_EQUAL(addressString2, expectedCreateA);
 
@@ -740,7 +744,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
 // The same flow as externalCall but WITHOUT feature_evm_address (no SYS_CONFIG row): the
 // create_address_fn hook's legacy branch — newEVMAddress(hashHandler, blockNumber,
 // contextID, seq + 1) — is what every chain without that feature executes, and it had
-// zero coverage in either lane (round-2 F4). Pin the exact address: deleting the hook
+// zero coverage in either lane. Pin the exact address: deleting the hook
 // leaves evmone's nonce-derived compute_create_address in charge, which produces a
 // different value and turns this red.
 BOOST_AUTO_TEST_CASE(externalCallLegacyCreateFormula)
@@ -843,6 +847,57 @@ BOOST_AUTO_TEST_CASE(externalCallLegacyCreateFormula)
     // The legacy branch's exact value — block 1, context 301, seq 4001 + 1. Without the
     // hook this address is evmone's keccak(rlp(sender, nonce)) instead, so the pin fails.
     BOOST_CHECK_EQUAL(result2->to(), bcos::newEVMAddress(hashImpl, 1, 301, 4002));
+}
+
+// Pre-bugfix chains reject the CREATE2 request outright, and the value the opcode
+// pushed historically was 0x0: evmone 0.21 echoed the host's result.create_address,
+// which the rejection path left empty. ABI 19 removed that echo and evmone now pushes
+// its own derivation, so the create2_address_fn hook must answer the zero address while
+// bugfix_evm_create2_delegatecall_staticcall_codecopy is off — pinned here at the hook
+// itself (the only place the answer is observable: the reject arm never forwards a
+// recipient, so the spawned message cannot discriminate).
+BOOST_AUTO_TEST_CASE(preBugfixCreate2HookAnswersTheZeroAddress)
+{
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+    auto ledgerCache = std::make_shared<LedgerCache>(ledger);
+    bcos::executor::BlockContext blockContext(lruStorage, ledgerCache, hashImpl,
+        /*blockNumber=*/1, h256(1), /*timestamp=*/0,
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION,
+        /*isAuthCheck=*/false, backend);
+
+    auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    callParameters->senderAddress = "ff6f30856ad3bae00b1169808488502786a13e3c";
+    callParameters->receiveAddress = callParameters->senderAddress;
+    callParameters->codeAddress = callParameters->senderAddress;
+    auto tableName = std::string("/apps/") + callParameters->senderAddress;
+    auto executive = std::make_shared<TransactionExecutive>(
+        blockContext, callParameters->senderAddress, /*contextID=*/1, /*seq=*/1);
+    bcos::executor::HostContext host(
+        std::move(callParameters), std::move(executive), std::move(tableName));
+
+    evmc_address sender{};
+    sender.bytes[19] = 0x2a;
+    evmc_bytes32 salt{};
+    salt.bytes[31] = 0x42;
+    bytes initCode{0x60, 0x42, 0x60, 0x00, 0xf3};
+    bytesConstRef initRef{initCode.data(), initCode.size()};
+
+    // Flag OFF (the default this BlockContext carries): the historical zero answer.
+    auto zeroAnswer = host.create2AddressForOpcode(sender, salt, initRef);
+    BOOST_CHECK(std::all_of(zeroAnswer.bytes, zeroAnswer.bytes + sizeof(zeroAnswer.bytes),
+        [](byte b) { return b == 0; }));
+
+    // Flag ON: the chain-hashed formula address, not zero, and equal to the shared
+    // helper over the same inputs.
+    auto features = ledger::Features{};
+    features.set(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
+    blockContext.setFeatures(std::move(features));
+    auto derived = host.create2AddressForOpcode(sender, salt, initRef);
+    BOOST_CHECK(!std::all_of(
+        derived.bytes, derived.bytes + sizeof(derived.bytes), [](byte b) { return b == 0; }));
+    auto expected = bcos::newCreate2EVMAddress(hashImpl,
+        bcos::toHex(bytesConstRef{sender.bytes, sizeof(sender.bytes)}), initRef, fromEvmC(salt));
+    BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{derived.bytes, sizeof(derived.bytes)}), expected);
 }
 
 BOOST_AUTO_TEST_CASE(performance)

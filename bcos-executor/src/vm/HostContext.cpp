@@ -851,6 +851,16 @@ evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uin
 evmc_address HostContext::create2AddressForOpcode(
     const evmc_address& sender, const evmc_bytes32& salt, bytesConstRef initCode) const
 {
+    // Pre-bugfix chains reject the CREATE2 request outright, and the value the opcode
+    // pushed historically was 0x0: evmone 0.21 echoed the host's result.create_address,
+    // which the rejection path left empty. ABI 19 removed that echo and evmone now
+    // pushes its own derivation, so the hook must answer the zero address here or the
+    // rejected create pushes a derived address where history recorded zero.
+    if (!m_executive->blockContext().features().get(
+            ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
+    {
+        return {};
+    }
     // The exact formula TransactionExecutive::externalCall's CREATE2 branch stored
     // (bcos::newCreate2EVMAddress): the chain hasher over
     // 0xff || sender || salt || chainHasher(initcode), last 20 bytes. Kept host-side so

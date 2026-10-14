@@ -34,6 +34,7 @@
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
+#include <limits>
 
 using namespace std;
 
@@ -151,7 +152,17 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
 uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr) noexcept
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    return hostContext.getNonce(_addr);
+    try
+    {
+        return hostContext.getNonce(_addr);
+    }
+    catch (...)
+    {
+        // The body reads storage and parses the stored nonce string, both of which can
+        // throw; an exception escaping this noexcept callback is std::terminate. Fail
+        // closed per EIP-2681 instead: MAX_NONCE makes evmone reject the CREATE.
+        return std::numeric_limits<uint64_t>::max();
+    }
 }
 
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
