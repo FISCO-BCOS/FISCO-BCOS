@@ -22,6 +22,7 @@
 #include <functional>
 #include <iosfwd>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,11 @@ struct Command
     std::string usage;
     std::set<std::string> booleanFlags;
     std::function<int(Args const&, std::ostream& out, std::ostream& err)> run;
+    /// options that take a value, besides c_connectOptions which every command accepts; any
+    /// other name is a usage error
+    std::set<std::string> options = {};
+    /// false: a positional argument is a usage error
+    bool positionals = false;
 };
 
 /// the registry, filled once on first use by the explicit register*Command functions below

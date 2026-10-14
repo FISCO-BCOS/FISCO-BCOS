@@ -200,7 +200,7 @@ bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs)
 Connection makeWsRpcCall(
     std::string const& _hostOrName, uint16_t _port, int _connectTimeoutMs, int _requestTimeoutMs)
 {
-    auto [_host, resolvedPort] = resolveHost(_hostOrName, _port, _connectTimeoutMs);
+    auto const _host = resolveHost(_hostOrName, _port, _connectTimeoutMs).first;
     auto endpoint = _hostOrName + ":" + std::to_string(_port);
     if (probeTls(_host, _port, _connectTimeoutMs))
     {

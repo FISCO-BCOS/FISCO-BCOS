@@ -98,9 +98,15 @@ BOOST_AUTO_TEST_CASE(syncCaughtUp)
     BOOST_CHECK(find(evaluate(status, Thresholds{}, c_now), "sync_caught_up").failed());
     status.lag = 9;
     BOOST_CHECK(find(evaluate(status, Thresholds{}, c_now), "sync_caught_up").ok());
+    // behind but not downloading: an idle node that stopped following its peers still fails,
+    // height_advancing would pass it whenever the txpool is empty
     status.lag = 50;
-    status.isSyncing = false;  // behind but not syncing: height check owns that case
-    BOOST_CHECK(find(evaluate(status, Thresholds{}, c_now), "sync_caught_up").ok());
+    status.isSyncing = false;
+    auto idle = find(evaluate(status, Thresholds{}, c_now), "sync_caught_up");
+    BOOST_CHECK(idle.failed());
+    BOOST_CHECK_EQUAL(idle.detail, "not syncing and 50 blocks behind");
+    status.isSyncing.reset();  // lag alone decides
+    BOOST_CHECK(find(evaluate(status, Thresholds{}, c_now), "sync_caught_up").failed());
     Thresholds strict;
     strict.maxLag = 1;
     status.isSyncing = true;
