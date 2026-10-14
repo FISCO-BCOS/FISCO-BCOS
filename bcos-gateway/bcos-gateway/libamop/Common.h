@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "bcos-gateway/libnetwork/Common.h"
+#include <bcos-utilities/BoostLog.h>
 #include <chrono>
 #include <ctime>
 #include <memory>
@@ -26,11 +27,10 @@
 #include <set>
 #include <string>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
 
-#define TOPIC_LOG(LEVEL) BCOS_LOG(LEVEL) << "[AMOP][TOPIC]"
-#define AMOP_MSG_LOG(LEVEL) BCOS_LOG(LEVEL) << "[AMOP][MSG]"
-#define AMOP_LOG(LEVEL) BCOS_LOG(LEVEL) << "[AMOP][AMOP]"
+#define TOPIC_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[AMOP][TOPIC]"
+#define AMOP_MSG_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[AMOP][MSG]"
+#define AMOP_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[AMOP][AMOP]"
 namespace bcos
 {
 namespace amop

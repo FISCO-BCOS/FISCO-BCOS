@@ -20,12 +20,13 @@
  */
 #pragma once
 #include <bcos-tool/TreeTopology.h>
-#include <utility>
 #include <bcos-utilities/BoostLog.h>
+#include <utility>
 
-#define SYNCTREE_LOG(LEVEL)                                                      \
-    BCOS_LOG(LEVEL) << LOG_BADGE("SYNCTREE") << LOG_KV("nodeIndex", m_nodeIndex) \
-                    << LOG_KV("consIndex", m_consIndex) << LOG_KV("nodeId", m_nodeId->shortHex())
+#define SYNCTREE_LOG(LEVEL)                                                                   \
+    BCOS_MODULE_LOG(SYNC, LEVEL) << LOG_BADGE("SYNCTREE") << LOG_KV("nodeIndex", m_nodeIndex) \
+                                 << LOG_KV("consIndex", m_consIndex)                          \
+                                 << LOG_KV("nodeId", m_nodeId->shortHex())
 
 namespace bcos::sync
 {

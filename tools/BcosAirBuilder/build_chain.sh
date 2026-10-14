@@ -1109,23 +1109,23 @@ gauge p2p_session_actived by host , node
 }
 
 gauge block_exec_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]ProposalExecuted,.*?execMs=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 }
 
 histogram block_exec_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]ProposalExecuted,.*?execMs=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
 gauge block_commit_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]BlockCommitted,.*?commitMs=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 }
 
 
 histogram block_commit_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]BlockCommitted,.*?commitMs=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
@@ -1135,7 +1135,7 @@ gauge ledger_block_height by chain , group , host , node
 }
 
 gauge txpool_pending_tx_size by chain , group , host , node
-/\[TXPOOL\]\[METRIC\]batchFetchTxs success,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
+/\[TXPOOL\]\[METRIC\]TxsFetched,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
   txpool_pending_tx_size[chain][group][host][node] = \$pendingTxs
 }
 EOF
@@ -2449,7 +2449,33 @@ check_auth_account()
   fi
 }
 
-generate_auth_account()
+# the fisco-bcos binary that generates the admin account: the file -e points at (air; the pro/max
+# binary directory holds tars services only), or one on PATH
+find_fisco_bcos_for_account()
+{
+  if [[ -n "${binary_path}" && -f "${binary_path}" && -x "${binary_path}" ]]; then
+      echo "${binary_path}"
+      return 0
+  fi
+  if command -v fisco-bcos >/dev/null 2>&1; then
+      command -v fisco-bcos
+      return 0
+  fi
+  return 1
+}
+
+# Released binaries before 3.18 (build_chain's default download, v3.16.0) and their docker images
+# have no `account new` and exit 0 on unknown arguments, so the probe reads the help text.
+fisco_bcos_has_account_new()
+{
+  "$@" account --help 2>&1 | grep -q 'account new'
+}
+
+# Pre-3.18 path, kept only for binaries without `account new`: console's get_account.sh /
+# get_gm_account.sh. The node needs a valid admin address on every chain from
+# compatibility_version 3.3.0 even with auth off (bcos-tool NodeConfig.cpp
+# executor.auth_admin_account check), and build_chain has no keccak tool to derive one locally.
+generate_auth_account_with_console_script()
 {
   local account_script="get_account.sh"
   if ${sm_mode}; then
@@ -2458,9 +2484,7 @@ generate_auth_account()
   if [ ! -f "${HOME}/.fisco/${account_script}" ];then
         local Download_Link="${cdn_link_header}/FISCO-BCOS/tools/${account_script}"
         local github_link="https://github.com/FISCO-BCOS/console/raw/master/tools/${account_script}"
-        # the binary can obtained from the cos
         if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
-            # try cdn_link
             LOG_INFO "Downloading ${account_script} from ${Download_Link}..."
             curl -#LO "${Download_Link}"
         else
@@ -2470,44 +2494,78 @@ generate_auth_account()
         chmod u+x ${account_script}
         mv ${account_script} "${HOME}/.fisco/"
   fi
-  # NOTE: this account-script patch block is duplicated in
-  # tools/.ci/ci_check_pro.sh's generate_auth_account (build_chain.sh is a
-  # standalone release asset, so the logic cannot be factored into a shared
-  # helper); any change here must be mirrored there.
-  # The console get_*_account.sh scripts probe the arch with the non-portable
-  # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04);
-  # rewrite those probes to `uname -m` and fail loudly if any probe survives
+  # the console scripts probe the arch with the non-portable `uname -p` ("unknown" on newer
+  # coreutils) and download tassl without retries; patch both
   sed -i.bak "s/\$(uname -p)/\$(uname -m)/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
-  # The script downloads tassl from gitee, which is flaky from CI runners
-  # (transient "Connection reset by peer"); add retries to its curl calls.
-  # --retry-all-errors requires curl >= 7.71 (2020-06); this script also runs on
-  # older operator hosts whose curl would abort on the unknown option, so probe
-  # for support first and fall back to plain --retry
   local curl_retry_opts="--retry 5 --retry-delay 3"
   if curl --help all 2>/dev/null | grep -q -- "--retry-all-errors"; then
     curl_retry_opts="--retry 5 --retry-all-errors"
   fi
   sed -i.bak "s/curl -#LO/curl -#L ${curl_retry_opts} -O/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
-  if grep -qF "\$(uname -p)" "${HOME}/.fisco/${account_script}"; then
-      LOG_FATAL "${HOME}/.fisco/${account_script} still contains a non-portable \`uname -p\` arch probe; please update or patch the script manually"
-  fi
   auth_admin_account=$(bash ${HOME}/.fisco/${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
-  # fail fast: a broken account script run (e.g. its tassl download failed)
-  # yields an empty/garbage address; deploying with it surfaces only minutes
-  # later as an obscure expand-node timeout
   if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
-      LOG_FATAL "Failed to generate a valid auth admin account (got '${auth_admin_account}'); check the ${account_script} output above (e.g. tassl download failure)"
+      LOG_FATAL "Failed to generate a valid admin account (got '${auth_admin_account}'); check the ${account_script} output above (e.g. tassl download failure)"
+  fi
+  if [[ ${chain_version} == "air" ]];then
+      mv accounts* "${ca_dir}" || LOG_FATAL "moving the generated account into ${ca_dir} failed"
+  else
+      mv accounts* "${BcosBuilder_path}/${chain_version}" || LOG_FATAL "moving the generated account failed"
   fi
   LOG_INFO "Admin account: ${auth_admin_account}"
+}
+
+# The admin account comes from `fisco-bcos account new` (console's accounts/ layout:
+# <0xaddr>.pem + <0xaddr>.public.pem). Only reached without -a, i.e. on a non-auth chain (-a is
+# what turns auth on and always carries the address), so a binary without `account new` falls
+# back to the console script with a warning instead of failing the whole build.
+generate_auth_account()
+{
+  local account_dir="accounts"
+  local sm_flag=""
+  if ${sm_mode}; then
+    account_dir="accounts_gm"
+    sm_flag="--sm"
+  fi
+  local account_target
   if [[ ${chain_version} == "air" ]];then
-      mv accounts* "${ca_dir}"
+      account_target="${ca_dir}/${account_dir}"
   else
-      mv accounts* "${BcosBuilder_path}/${chain_version}"
+      account_target="${BcosBuilder_path}/${chain_version}/${account_dir}"
   fi
-  if [ "$?" -ne "0" ]; then
-      LOG_INFO "Admin account generate failed, please check ${HOME}/.fisco/${account_script}."
-      exit 1
+  local account_json
+  if [ -n "${docker_mode}" ]; then
+      # docker mode downloads no binary: the image's own fisco-bcos generates the account
+      mkdir -p "${account_target}"
+      local docker_tag="${compatibility_version}"
+      if ! fisco_bcos_has_account_new docker run --rm "fiscoorg/fiscobcos:${docker_tag}"; then
+          LOG_WARN "fiscoorg/fiscobcos:${docker_tag} has no 'account new'; generating the admin account with console's script (pass -a <address> to skip)"
+          generate_auth_account_with_console_script
+          return
+      fi
+      if ! account_json=$(docker run --rm -v "$(cd "${account_target}" && pwd)":/data -w /data "fiscoorg/fiscobcos:${docker_tag}" account new ${sm_flag} --out /data --json 2>&1); then
+          LOG_FATAL "'docker run fiscoorg/fiscobcos:${docker_tag} account new' failed: ${account_json}"
+      fi
+  else
+      local fisco_bcos_bin
+      if ! fisco_bcos_bin=$(find_fisco_bcos_for_account); then
+          LOG_FATAL "fisco-bcos binary not found; the auth admin account is generated with 'fisco-bcos account new', pass -e <fisco-bcos> or -a <admin address>"
+      fi
+      if ! fisco_bcos_has_account_new "${fisco_bcos_bin}"; then
+          LOG_WARN "${fisco_bcos_bin} has no 'account new' (released before 3.18); generating the admin account with console's script (pass -a <address> to skip)"
+          generate_auth_account_with_console_script
+          return
+      fi
+      if ! account_json=$("${fisco_bcos_bin}" account new ${sm_flag} --out "${account_target}" --json 2>&1); then
+          LOG_FATAL "'${fisco_bcos_bin} account new' failed: ${account_json}"
+      fi
   fi
+  auth_admin_account=$(echo "${account_json}" | grep '"address"' | sed -E 's/.*"address"[^"]*"([^"]*)".*/\1/')
+  # fail fast: an empty/garbage address surfaces only minutes later as an obscure
+  # expand-node timeout
+  if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+      LOG_FATAL "Failed to generate a valid auth admin account (got '${auth_admin_account}') from: ${account_json}"
+  fi
+  LOG_INFO "Admin account: ${auth_admin_account} (key pair in ${account_target})"
 }
 
 modify_node_ca_setting(){

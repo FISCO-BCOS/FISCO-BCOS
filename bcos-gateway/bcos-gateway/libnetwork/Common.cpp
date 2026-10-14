@@ -67,4 +67,45 @@ std::string reasonOf(DisconnectReason _reason)
     }
 }
 
+std::string_view disconnectReasonTag(DisconnectReason _reason)
+{
+    switch (_reason)
+    {
+    case ClientQuit:
+        return "remote_close";
+    case DisconnectRequested:
+    case UserReason:
+        return "local_close";
+    case PingTimeout:
+    case IdleWaitTimeout:
+        return "timeout";
+    case BadProtocol:
+    case IncompatibleProtocol:
+    case NullIdentity:
+    case UnexpectedIdentity:
+    case NegotiateFailed:
+        return "handshake_failed";
+    case InBlacklistReason:
+    case NotInWhitelistReason:
+        return "blacklist";
+    case TCPError:
+    case UselessPeer:
+    case TooManyPeers:
+    case NoDisconnect:
+    default:
+        return "error";
+    }
+}
+
+void logHandshakeFailed(bcos::LogLevel _level, NodeIPEndpoint const& _endpoint,
+    std::string_view _reason, std::string_view _detail)
+{
+    if (bcos::moduleLogEnabled(bcos::LogModule::GATEWAY, _level))
+    {
+        BOOST_LOG_SEV(bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(_level))
+            << "[NETWORK][Host]" << LOG_DESC("HandshakeFailed") << LOG_KV("endpoint", _endpoint)
+            << LOG_KV("reason", _reason) << LOG_KV("detail", _detail);
+    }
+}
+
 }  // namespace bcos::gateway
