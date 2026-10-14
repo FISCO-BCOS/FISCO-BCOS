@@ -25,6 +25,7 @@
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-protocol/bcos-protocol/TransactionStatus.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <unistd.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <filesystem>
@@ -78,9 +79,13 @@ bcostars::TransactionUniquePtr flagsSentTx(FakeRpc const& _rpc, size_t _nth = 0)
     return nullptr;
 }
 
+/// per process: ctest runs every case as its own process in parallel, and a shared path lets one
+/// case truncate the file while another reads it (an empty ABI fails the encode, not the check)
 std::string flagsAbiFile()
 {
-    auto path = (std::filesystem::temp_directory_path() / "txflags-hello.abi").string();
+    auto path = (std::filesystem::temp_directory_path() /
+                 ("txflags-hello-" + std::to_string(::getpid()) + ".abi"))
+                    .string();
     std::ofstream(path) << helloworld::c_abi;
     return path;
 }

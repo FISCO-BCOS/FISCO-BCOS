@@ -27,6 +27,7 @@
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <unistd.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <filesystem>
@@ -78,7 +79,9 @@ Json::Value senderReceipt(std::string const& _output, std::string const& _contra
 
 std::filesystem::path senderTempDir()
 {
-    auto dir = std::filesystem::temp_directory_path() / "ops-sender-test";
+    // per process: ctest runs the cases in parallel and several write key.hex here
+    auto dir =
+        std::filesystem::temp_directory_path() / ("ops-sender-test-" + std::to_string(::getpid()));
     std::filesystem::create_directories(dir);
     return dir;
 }
