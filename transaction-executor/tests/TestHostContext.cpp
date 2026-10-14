@@ -1141,11 +1141,11 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
 // The CREATE2 opcode hook must derive with the CHAIN hasher (0xff||sender||salt||
 // chainHasher(initcode), last 20 bytes): upstream evmone hashes the same preimage with
 // keccak256, which would fork SM-crypto chains whose historical CREATE2 addresses are
-// chain-hash derived. Pinned against frozen literals AND the v1 lane's historical
-// EIP-1014 helper (bcos::newCreate2EVMAddress, the formula pre-upgrade addresses came
-// from). The SM3 cell is the discriminating one — on a keccak chain the hook's output
-// coincides with upstream's, so a revert to keccak derivation turns only the SM3 cell
-// red while the parity assertion stays meaningful for both hashers.
+// chain-hash derived. The hook delegates to bcos::newCreate2EVMAddress, so the frozen
+// literals below are the only discriminating cell here — on a keccak chain the hook's
+// output coincides with upstream's, so a revert to keccak derivation turns only the SM3
+// literal red. The wiring itself (patch arm + VMInstance assignment) is pinned end-to-end
+// by create2OpcodeDeploysAtTheHookAddress below.
 BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
 {
     evmc_address sender{};
@@ -1154,7 +1154,6 @@ BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
     salt.bytes[31] = 0x42;
     static const bcos::bytes initCode{0x60, 0x42, 0x60, 0x00, 0xf3};
     bytesConstRef initCodeRef{initCode.data(), initCode.size()};
-    const auto senderHex = bcos::toHex(bytesConstRef{sender.bytes, sizeof(sender.bytes)});
 
     struct HasherCase
     {
@@ -1162,8 +1161,8 @@ BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
         bcos::crypto::Hash::Ptr hasher;
         std::string expected;
     };
-    // Literals frozen from the first run, cross-checked in-test against
-    // bcos::newCreate2EVMAddress (the v1 lane's historical implementation).
+    // Literals frozen from the first run — they are the discriminating cell, not a
+    // parity check (the hook delegates to the same helper that produced them).
     const std::array<HasherCase, 2> cases{
         HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>(),
             "cf68986460c687b1295a1ce12b24c5f4abe9d378"},
@@ -1181,10 +1180,6 @@ BOOST_AUTO_TEST_CASE(create2AddressForOpcodeFollowsTheChainHasher)
         const auto addr = hostContext.create2AddressForOpcode(sender, salt, initCodeRef);
         const auto addrHex = bcos::toHex(bytesConstRef{addr.bytes, sizeof(addr.bytes)});
         BOOST_CHECK_EQUAL(addrHex, hasherCase.expected);
-        // Parity with the v1 lane's historical EIP-1014 helper: same chain hasher,
-        // same preimage, independent implementation site.
-        BOOST_CHECK_EQUAL(addrHex,
-            bcos::newCreate2EVMAddress(hasherCase.hasher, senderHex, initCodeRef, u256(0x42)));
     }
 }
 
