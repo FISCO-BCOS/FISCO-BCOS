@@ -74,12 +74,18 @@ assert_jq()
 # block is followed by one consensus-timeout view change about one timeout later; a snapshot can
 # land inside either. Passes when the exit code is 0 or 2 and every check is in one of
 # <allowed-states> ("ok" for the RPC snapshot, "ok skipped" for the log one), consensus_stable
-# also being allowed "fail" when the exit code is 2.
+# also being allowed "fail" when the exit code is 2. Exit 2 without that failure (e.g. no check
+# could be evaluated) fails.
 assert_checks_but_view_change()
 {
     local json="${1}" rc="${2}" what="${3}" allowed="${4}"
     if (( rc != 0 && rc != 2 )); then
         scenario_fail "${what}: exit ${rc}"
+        return 1
+    fi
+    if (( rc == 2 )) && ! jq -e '[.checks[] | select(.name == "consensus_stable" and .state == "fail")] | length == 1' \
+            >/dev/null 2>&1 <<<"${json}"; then
+        scenario_fail "${what}: exit 2 without a consensus_stable failure: $(jq -c '[.checks[] | {name,state}]' <<<"${json}" 2>&1 | head -c 400)"
         return 1
     fi
     if ! jq -e --arg allowed "${allowed}" --argjson rc "${rc}" '[.checks[]
@@ -100,7 +106,12 @@ jq_get()
 # group id of the chain behind <node_dir>, from the status snapshot
 chain_group_id()
 {
-    ops "${1}" status | jq -r '.identity.groupId'
+    # status exits 2 when a check fails (an idle chain's consensus_stable); the snapshot is still
+    # valid. Capture, then parse: in a pipe the exit code is jq's, which is 0 on empty input
+    local snapshot rc
+    snapshot=$(ops "${1}" status) && rc=0 || rc=$?
+    (( rc == 0 || rc == 2 )) || return 1
+    jq -er '.identity.groupId' <<<"${snapshot}"
 }
 
 # admin account pem of an auth chain built by ci_check_air.sh (nodes/<chain>/admin/<0x..>.pem)

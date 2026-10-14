@@ -164,7 +164,12 @@ build_chain_for()
     perl -p -i -e 'if (/^\[rpc\]/) { $flag=1 } elsif ($flag && /^\[/) { $flag=0 } elsif ($flag) { s/^(\s*)listen_ip\s*=.*/${1}listen_ip=127.0.0.1/; s/enable_ssl\s*=\s*true/enable_ssl=false/ }' \
         "$(chain_node_dir "${chain}" 0)/config.ini"
     if [[ "${chain}" == "v1" ]]; then
-        perl -p -i -e 's/version=0/version=1/g' "$(chain_nodes_dir "${chain}")"/node*/config.genesis
+        # the v1 suite (web3_test.sh) needs executor version 1, which is build_chain's default
+        # (executor_version=1); assert it so a changed default fails here, not in the Hardhat run
+        if ! grep -qE '^[[:space:]]*version=1$' "$(chain_node_dir "${chain}" 0)/config.genesis"; then
+            LOG_ERROR "chain v1: config.genesis is not executor version 1"
+            return 1
+        fi
         perl -p -i -e 'if (/\[web3_rpc\]/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' \
             "$(chain_node_dir "${chain}" 0)/config.ini"
     fi

@@ -25,7 +25,9 @@ gov_write()
 # gov_proposal_status <node_dir> <id>: statusName of a proposal
 gov_proposal_status()
 {
-    ops "${1}" committee proposal "${2}" | jq -r '.statusName'
+    local proposal
+    proposal=$(ops "${1}" committee proposal "${2}") || return 1
+    jq -r '.statusName' <<<"${proposal}"
 }
 
 scenario_18_auth_governance()
@@ -61,8 +63,9 @@ scenario_18_auth_governance()
     # a fresh account cannot deploy, then is admitted
     local acct_dir="${node_dir}/../../scenario18-accounts"
     mkdir -p "${acct_dir}"
-    local acct acct_addr
-    acct=$("${fisco_bcos_path}" account new --out "${acct_dir}" --json | jq -r '.privateKeyFile') || return 1
+    local acct acct_addr created
+    created=$("${fisco_bcos_path}" account new --out "${acct_dir}" --json) || return 1
+    acct=$(jq -r '.privateKeyFile' <<<"${created}")
     [[ -f "${acct}" ]] || { scenario_fail "account new wrote no pem: ${acct}"; return 1; }
     acct_addr=$(pem_address "${acct}")
     local smoke
@@ -91,18 +94,22 @@ scenario_18_auth_governance()
     local new_node new_id
     new_node="${nodes_dir}/node$(( $(ls -d "${nodes_dir}"/node* | wc -l) - 1 ))"
     new_id=$(cat "${new_node}/conf/node.nodeid")
-    local role
-    role=$(ops "${node_dir}" consensus list | jq -r --arg id "${new_id}" '[.[] | select(.nodeId == $id) | .role] | first // "none"')
+    local role members
+    # capture, then parse: a failed `consensus list` piped into jq would read as role ""
+    members=$(ops "${node_dir}" consensus list) || return 1
+    role=$(jq -r --arg id "${new_id}" '[.[] | select(.nodeId == $id) | .role] | first // "none"' <<<"${members}")
     if [[ "${role}" != "sealer" ]]; then
         result=$(gov_write "${node_dir}" "${admin}" consensus add-sealer "${new_id}" 1) || return 1
         assert_jq "${result}" '.ok == true and .proposal.executed == true' "add-sealer proposal executed" || return 1
     fi
-    role=$(ops "${node_dir}" consensus list | jq -r --arg id "${new_id}" '[.[] | select(.nodeId == $id) | .role] | first // "none"')
+    members=$(ops "${node_dir}" consensus list) || return 1
+    role=$(jq -r --arg id "${new_id}" '[.[] | select(.nodeId == $id) | .role] | first // "none"' <<<"${members}")
     [[ "${role}" == "sealer" ]] || { scenario_fail "after the add-sealer proposal the role is ${role}"; return 1; }
 
     # a second governor, then rates that need both votes
     local acct2 acct2_addr
-    acct2=$("${fisco_bcos_path}" account new --out "${acct_dir}" --json | jq -r '.privateKeyFile') || return 1
+    created=$("${fisco_bcos_path}" account new --out "${acct_dir}" --json) || return 1
+    acct2=$(jq -r '.privateKeyFile' <<<"${created}")
     acct2_addr=$(pem_address "${acct2}")
     result=$(ops "${node_dir}" committee propose-governor "${acct2_addr}" 1 --yes --timeout 60000 --account "${admin}") || { echo "${result}"; return 1; }
     assert_jq "${result}" '.ok == true and .proposal.executed == true' "propose-governor executed by the single governor" || return 1

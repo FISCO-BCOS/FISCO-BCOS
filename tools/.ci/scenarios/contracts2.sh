@@ -94,9 +94,10 @@ scenario_11_payable()
     [[ -f "${governor}" ]] || { scenario_fail "no governor pem for ${node_dir}"; return 1; }
     # the deployer needs a balance to attach value (scenario 8 turned the feature on)
     local acct_dir="$(dirname "${node_dir}")/../scenario11-acct"
-    local payer payer_pem sm_flag=""
+    local payer payer_pem created sm_flag=""
     [[ "${chain}" == "sm" ]] && sm_flag="--sm"
-    payer=$("${fisco_bcos_path}" account new ${sm_flag} --out "${acct_dir}" --json | jq -r .address) || return 1
+    created=$("${fisco_bcos_path}" account new ${sm_flag} --out "${acct_dir}" --json) || return 1
+    payer=$(jq -r .address <<<"${created}")
     payer_pem="${acct_dir}/${payer}.pem"
     local fund
     fund=$(ops "${node_dir}" balance add "${payer}" 1000 --yes --account "${governor}") || { echo "${fund}"; return 1; }

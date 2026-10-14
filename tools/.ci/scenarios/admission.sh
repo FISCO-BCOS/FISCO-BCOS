@@ -54,9 +54,11 @@ txpool_full_probe()
     wait_node_answers "${extra}" 60 >/dev/null || return 1
     local work
     work=$(mktemp -d "${TMPDIR:-/tmp}/ci-txpool-${chain}.XXXXXX") || return 1
-    local i raw
+    local i raw signed
     for i in 1 2 3 4 5 6; do
-        raw=$("${fisco_bcos_path}" tx sign "${contract}" --abi "${abi}" ok --node-dir "${extra}" --json | jq -r .raw) || { rm -rf "${work}"; return 1; }
+        # capture, then parse: in a pipe the exit code is jq's, which is 0 on empty input
+        signed=$("${fisco_bcos_path}" tx sign "${contract}" --abi "${abi}" ok --node-dir "${extra}" --json) || { rm -rf "${work}"; return 1; }
+        raw=$(jq -r .raw <<<"${signed}")
         echo "${raw}" > "${work}/raw${i}"
     done
     for i in 1 2 3 4 5 6; do
