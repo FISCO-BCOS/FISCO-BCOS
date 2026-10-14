@@ -835,14 +835,21 @@ public:
         m_ledgerConfig.setEVMCRevision(*rev);
         m_forkTransition.reset();
 
-        // Detect fork transition names like "CancunToPragueAtTime15k"
-        auto toPos = forkName.find("To");
-        auto atPos = forkName.find("AtTime");
+        // Detect fork transition names like "CancunToPragueAtTime15k". The parse runs
+        // on the LOWERCASED name — the skip gate above reasons on lowercased
+        // substrings, and a gate that admits a name the parser (case-sensitive "To"/
+        // "AtTime", toPos < atPos, numeric suffix) then cannot resolve would execute
+        // the whole case at the default revision with no transition: one notion of
+        // "resolvable" on both sides, or skip.
+        auto lowerName = forkName;
+        boost::algorithm::to_lower(lowerName);
+        auto toPos = lowerName.find("to");
+        auto atPos = lowerName.find("attime");
         if (toPos != std::string::npos && atPos != std::string::npos && toPos < atPos)
         {
-            auto fromFork = forkName.substr(0, toPos);
-            auto toFork = forkName.substr(toPos + 2, atPos - toPos - 2);
-            auto timeStr = forkName.substr(atPos + 6);  // "AtTime" = 6 chars
+            auto fromFork = lowerName.substr(0, toPos);
+            auto toFork = lowerName.substr(toPos + 2, atPos - toPos - 2);
+            auto timeStr = lowerName.substr(atPos + 6);  // "attime" = 6 chars
             try
             {
                 // Handle 'k' suffix meaning ×1000 (e.g., "15k" = 15000)
@@ -872,7 +879,12 @@ public:
             }
             catch (...)
             {
+                // A name the gate admitted but the numeric parse failed on (e.g. a
+                // non-numeric AtTime suffix) must skip, not run whole-case at the
+                // default revision — reset-and-continue is the wrong-schedule
+                // execution the refusal exists to prevent.
                 m_forkTransition.reset();
+                return false;
             }
         }
         return true;
@@ -1363,7 +1375,8 @@ public:
         return errors.str();
     }
 
-    /// Run a single fixture test case. Returns true if passed.
+    /// Run a single fixture test case. Returns nullopt when the fixture is skipped
+    /// (fork has no executable revision), else pass/fail.
     std::optional<bool> runFixture(::test::EESTFixture const& fixture, std::string const& forkName,
         ::test::EESTForkPost const& post)
     {
@@ -1404,6 +1417,14 @@ public:
         }
 
         auto blockHeader = buildBlockHeader(fixture.env);
+        // Transition-named fixtures execute under the schedule their timestamp selects,
+        // the same rule the blockchain path applies via revisionForBlock — not the
+        // full-name default revision configureFork had to set while parsing.
+        if (m_forkTransition.has_value())
+        {
+            m_ledgerConfig.setEVMCRevision(
+                revisionForBlock(test::hexToTimestamp(fixture.env.timestamp)));
+        }
         auto tx =
             buildTransaction(fixture.transaction, post.dataIndex, post.gasIndex, post.valueIndex);
 
@@ -1672,7 +1693,7 @@ public:
 
     /// Run a blockchain test fixture: execute blocks sequentially,
     /// apply block rewards via finalize(), then verify postState.
-    /// Returns true if passed.
+    /// Returns nullopt when the fixture is skipped, else pass/fail.
     std::optional<bool> runBlockchainFixture(test::EESTBlockchainFixture const& fixture)
     {
         auto forkName = extractForkFromName(fixture.name);
