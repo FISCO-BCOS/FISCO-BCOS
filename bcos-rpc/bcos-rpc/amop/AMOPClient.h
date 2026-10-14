@@ -29,7 +29,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <utility>
 
-#define AMOP_CLIENT_LOG(level) BCOS_LOG(level) << LOG_BADGE("AMOPClient")
+#define AMOP_CLIENT_LOG(level) BCOS_MODULE_LOG(RPC, level) << LOG_BADGE("AMOPClient")
 
 namespace bcos::rpc
 {
