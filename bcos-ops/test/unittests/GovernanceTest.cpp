@@ -163,6 +163,30 @@ BOOST_AUTO_TEST_CASE(wantedIdsOutsideTheListAreFetchedAndListedOnesReused)
     BOOST_CHECK_EQUAL(govInfoCalls(rpc), 2U);  // id 3 from the list, id 1 fetched
 }
 
+// three RPCs per proposal per 2 s round: only rows that can still change are fetched again
+BOOST_AUTO_TEST_CASE(settledRowsAreReusedVotingRowsRefetched)
+{
+    auto rpc = govRpc();
+    auto connection = govConnection(rpc);
+    CommitteeReader reader(connection);
+    tui::GovernanceState state;
+    tui::GovernanceWants wants{.rows = 3, .ids = {1}};
+    tui::governanceFetch(state, reader, wants, nullptr);
+    BOOST_CHECK_EQUAL(govInfoCalls(rpc), 3U);
+    tui::governanceFetch(state, reader, wants, nullptr);  // all voting: fetched again
+    BOOST_CHECK_EQUAL(govInfoCalls(rpc), 6U);
+    rpc.setCall(
+        govSelector("getProposalStatus(uint256)"), govCallResult(govOutput("uint8", "[3]")));
+    tui::governanceFetch(state, reader, wants, nullptr);  // now denied
+    BOOST_CHECK_EQUAL(govInfoCalls(rpc), 9U);
+    BOOST_CHECK_EQUAL(state.proposals[0].statusName, "denied");
+    tui::governanceFetch(state, reader, wants, nullptr);  // settled: nothing asked
+    BOOST_CHECK_EQUAL(govInfoCalls(rpc), 9U);
+    BOOST_REQUIRE_EQUAL(state.proposals.size(), 3U);
+    BOOST_CHECK_EQUAL(state.proposals[2].statusName, "denied");
+    BOOST_CHECK_EQUAL(state.details.count(1), 1U);
+}
+
 BOOST_AUTO_TEST_CASE(stopEndsTheFetchAndKeepsThePreviousRows)
 {
     auto rpc = govRpc();
