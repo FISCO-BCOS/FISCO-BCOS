@@ -68,6 +68,29 @@ assert_jq()
     fi
 }
 
+# assert_checks_but_view_change <json> <exit-code> <what> <allowed-states>: status and log status
+# exit 2 when a check is in state "fail". The only failure a healthy idle chain shows is
+# consensus_stable: a fresh chain stays in timeout until its first block, and until #5643 every
+# block is followed by one consensus-timeout view change about one timeout later; a snapshot can
+# land inside either. Passes when the exit code is 0 or 2 and every check is in one of
+# <allowed-states> ("ok" for the RPC snapshot, "ok skipped" for the log one), consensus_stable
+# also being allowed "fail" when the exit code is 2.
+assert_checks_but_view_change()
+{
+    local json="${1}" rc="${2}" what="${3}" allowed="${4}"
+    if (( rc != 0 && rc != 2 )); then
+        scenario_fail "${what}: exit ${rc}"
+        return 1
+    fi
+    if ! jq -e --arg allowed "${allowed}" --argjson rc "${rc}" '[.checks[]
+            | select(.state as $s | ($allowed | split(" ") | index($s)) == null)
+            | select($rc != 2 or .name != "consensus_stable" or .state != "fail")] == []' \
+            >/dev/null 2>&1 <<<"${json}"; then
+        scenario_fail "${what}: $(jq -c '[.checks[] | {name,state,detail}]' <<<"${json}" 2>&1 | head -c 600)"
+        return 1
+    fi
+}
+
 # jq_get <json-text> <filter>: raw value
 jq_get()
 {

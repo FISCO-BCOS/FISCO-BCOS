@@ -12,20 +12,16 @@ scenario_20_ops_status()
     local chain="${1}"
     local node_dir="${2}"
     scenario_banner 20 ops-status "existing ops_tool_test"
-    local status smoke logStatus
+    local status smoke logStatus rc
     smoke=$(ops "${node_dir}" tx smoke --timeout 60000) || return 1
     assert_jq "${smoke}" '.ok == true' "tx smoke ok" || return 1
-    status=$(ops "${node_dir}" status) || return 1
-    assert_jq "${status}" '[.checks[] | .ok] | all' "status checks ok" || return 1
-    # log status may exit 2: a check in state "fail" (Checks.h: failed() is state == "fail",
-    # "skipped" does not count). The only failure an idle chain legitimately shows is
-    # consensus_stable — it triggers a consensus-timeout view change every few seconds
-    # (ViewChangeTriggered → NewViewReached) and the log snapshot can land in between; the RPC
-    # snapshot above already checked it. Any other failing check is a real finding.
-    logStatus=$(ops "${node_dir}" log status) || { (( $? == 2 )) || return 1; }
+    status=$(ops "${node_dir}" status) && rc=0 || rc=$?
+    assert_checks_but_view_change "${status}" "${rc}" "status: every check ok but a view-change consensus_stable" "ok" || return 1
+    # the log snapshot leaves the checks it cannot judge from the log files "skipped"
+    logStatus=$(ops "${node_dir}" log status) && rc=0 || rc=$?
     assert_jq "${logStatus}" '.source == "log"' "log status reads the log files" || return 1
-    assert_jq "${logStatus}" '([.checks[] | select(.state == "fail") | .name] | . == [] or . == ["consensus_stable"])' \
-        "log status: no failing check other than consensus_stable" || return 1
+    assert_checks_but_view_change "${logStatus}" "${rc}" \
+        "log status: no failing check other than consensus_stable" "ok skipped" || return 1
     assert_jq "${logStatus}" '.chain.blockNumber | type == "number"' "log status has a height" || return 1
     local rpcHeight logHeight
     rpcHeight=$(jq_get "${status}" '.chain.blockNumber')

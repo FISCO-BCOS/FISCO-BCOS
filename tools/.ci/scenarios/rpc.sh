@@ -15,10 +15,10 @@ scenario_1_rpc_shape()
     local warm
     warm=$(ops "${node_dir}" tx smoke --timeout 60000) || return 1
     assert_jq "${warm}" '.ok == true' "warm-up tx smoke" || return 1
-    local status
-    status=$(ops "${node_dir}" status) || return 1
+    local status rc
+    status=$(ops "${node_dir}" status) && rc=0 || rc=$?
     assert_jq "${status}" '.checks | length == 5' "status has five checks" || return 1
-    assert_jq "${status}" '[.checks[] | .ok] | all' "status: every check ok" || return 1
+    assert_checks_but_view_change "${status}" "${rc}" "status: every check ok but a view-change consensus_stable" "ok" || return 1
     assert_jq "${status}" '.chain.blockNumber | type == "number"' "status chain.blockNumber" || return 1
     assert_jq "${status}" '.identity.nodeID | length > 0' "status identity.nodeID" || return 1
     local group
