@@ -8,13 +8,12 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-// [ethereum] mode=opstack-el: the OP-Stack EL self-sync declaration. The genesis side is
-// bound to the OP lane (executor.version >= 3), the OP fork schedule
-// ([op_fork_timestamps]), the Ethereum-lane genesis shape ([alloc.*] +
-// [eth_genesis_header], both implied by executor.version >= 3) and a non-zero [web3]
-// chain_id; the config.ini side is bound to
-// the genesis declaration both ways and is mutually exclusive with the engine-driven
-// block producers ([op_engine_rpc], enable_single_node_consensus).
+// The OP-Stack devp2p follow driver ([debug] follow_devp2p, formerly [ethereum]
+// mode=opstack-el) on its genesis side: the OP lane (executor.version >= 3) with its fork
+// schedule ([op_fork_timestamps]), the Ethereum-lane genesis shape ([alloc.*] +
+// [eth_genesis_header]) and a non-zero [chain] chain_id, none of which carries a
+// driver declaration any more; plus the [ethereum] knobs only that driver reads. The
+// driver's lane x config.ini matrix is NodeConfigBlockDriverTest.
 
 #include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -67,9 +66,8 @@ std::string l2Sections()
 }
 
 /// OP-lane genesis (executor.version=3 + [op_fork_timestamps]) with a configurable
-/// [chain] chain_id, optional Ethereum-lane sections and an optional [ethereum] mode
-/// declaration.
-std::string opGenesis(std::string const& chainId, bool l2, std::string const& ethSection)
+/// [chain] chain_id, optional Ethereum-lane sections and optional extra sections.
+std::string opGenesis(std::string const& chainId, bool l2, std::string const& ethSection = "")
 {
     return "[version]\ncompatibility_version=3.18.0\n"
            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=" +
@@ -87,10 +85,10 @@ std::string opGenesis(std::string const& chainId, bool l2, std::string const& et
            (l2 ? l2Sections() : "") + ethSection;
 }
 
-/// The accepted opstack-el shape: OP lane + L2 sections + the declaration.
+/// The accepted OP genesis shape: OP lane + L2 sections.
 std::string opStackELGenesis(std::string const& chainId = "11155420")
 {
-    return opGenesis(chainId, true, "[ethereum]\nmode=opstack-el\n");
+    return opGenesis(chainId, true);
 }
 
 NodeConfig loadGenesis(std::string const& genesis)
@@ -101,57 +99,24 @@ NodeConfig loadGenesis(std::string const& genesis)
 }
 }  // namespace
 
-// The accepted shape: the declaration parses, pins the chain id, and lands in the
-// genesis data alongside it.
-BOOST_AUTO_TEST_CASE(opStackELGenesisLoadsAndPins)
+// The accepted shape parses and carries the chain id the follow driver's fork-id handshake
+// and EIP-155 checks key on; the genesis data carries no driver declaration, so a
+// follow_devp2p node and an op-node-driven node share the same genesis pin.
+BOOST_AUTO_TEST_CASE(opGenesisLoadsWithoutADriverDeclaration)
 {
     auto cfg = loadGenesis(opStackELGenesis());
-    BOOST_CHECK(cfg.genesisConfig().m_opStackELMode);
     BOOST_CHECK(!cfg.genesisConfig().m_ethereumELMode);
     BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 11155420u);
 
     BOOST_REQUIRE(cfg.ledgerConfig());
     auto data = bcos::tool::generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
-    BOOST_CHECK(data.find("[ethereum]\nmode:opstack-el\n") != std::string::npos);
-    BOOST_CHECK(data.find("[web3]\nchain_id:11155420\n") != std::string::npos);
-    // The OP fork pin keeps its own section and its own emit rules.
+    BOOST_CHECK(data.find("[ethereum]") == std::string::npos);
     BOOST_CHECK(
         data.find("[opForkTimestamps]\njovian_time:0\nkarst_time:0\n") != std::string::npos);
-
-    // A different chain id produces different genesis data (the id is pinned, not
-    // just validated).
-    auto other = loadGenesis(opStackELGenesis("10"));
-    BOOST_CHECK(
-        data != bcos::tool::generateGenesisData(other.genesisConfig(), *other.ledgerConfig()));
 }
 
-// The declaration is bound to the OP lane: on executor.version < 3 the sync client's
-// verifier (OpBlockVerifier) could not resolve the fork schedule. (With version=2 and
-// no [op_fork_timestamps] the opstack-el block's own guard is the one that fires.)
-BOOST_AUTO_TEST_CASE(opStackELRequiresOpLane)
-{
-    const std::string genesis =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=11155420\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        kNode +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-        "version=2\nevm_revision=cancun\n" +
-        l2Sections() + "[ethereum]\nmode=opstack-el\n";
-    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(
-        cfg.loadGenesisConfigFromString(genesis), InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "mode=opstack-el requires executor.version >= 3");
-        });
-}
-
-// Without [op_fork_timestamps] the OP lane binding fires first (an OP chain cannot
-// place its forks at all), which is also the guard an opstack-el genesis trips.
+// Without [op_fork_timestamps] the OP lane binding fires (an OP chain cannot place its
+// forks at all).
 BOOST_AUTO_TEST_CASE(opStackELRequiresOpForkSchedule)
 {
     const std::string genesis =
@@ -166,7 +131,7 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresOpForkSchedule)
         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
         "version=3\n" +
-        l2Sections() + "[ethereum]\nmode=opstack-el\n";
+        l2Sections();
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(
         cfg.loadGenesisConfigFromString(genesis), InvalidConfig, [](auto const& e) {
@@ -175,16 +140,13 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresOpForkSchedule)
         });
 }
 
-// The sync client replays an Ethereum-shaped OP chain: without the Ethereum-lane
-// genesis shape there is no genesis anchor to sync from. There is no feature-flag
-// check anymore — executor.version >= 3 already implies the lane, so the generic
-// lane binding fires instead: validateL2Invariants rejects the missing [alloc.*]
-// section before the opstack-el block is even reached.
+// The follow driver replays an Ethereum-shaped OP chain: without the Ethereum-lane
+// genesis shape there is no genesis anchor to sync from. executor.version >= 3 implies
+// the lane, so the generic lane binding rejects the missing [alloc.*] section.
 BOOST_AUTO_TEST_CASE(opStackELRequiresEthLaneGenesisShape)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(
-                              opGenesis("11155420", false, "[ethereum]\nmode=opstack-el\n")),
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis("11155420", false)),
         InvalidConfig,
         [](auto const& e) { return errinfoContains(e, "requires a non-empty [alloc.*] section"); });
 }
@@ -193,8 +155,7 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresEthLaneGenesisShape)
 // handshake and EIP-1559 validation key on.
 BOOST_AUTO_TEST_CASE(opStackELRequiresChainId)
 {
-    // The OP lane's [chain] chain_id parse (ethLaneChainId) refuses each bad spelling
-    // before the EL-sync guard sees it.
+    // The OP lane's [chain] chain_id parse (ethLaneChainId) refuses each bad spelling.
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opStackELGenesis("")), InvalidConfig,
@@ -213,84 +174,31 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresChainId)
         [](auto const& e) { return errinfoContains(e, "[chain].chain_id must fit uint64"); });
 }
 
-// Invalid mode values fail fast like every neighbouring parse.
+// Invalid mode values fail fast like every neighbouring parse; opstack-el is no longer a
+// value (NodeConfigBlockDriverTest asserts its replacement message).
 BOOST_AUTO_TEST_CASE(opStackELInvalidModeRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opStackELGenesis().replace(
-                              opStackELGenesis().find("mode=opstack-el"), 15, "mode=opstack")),
-        InvalidConfig, [](auto const& e) { return errinfoContains(e, "[ethereum].mode invalid"); });
+    BOOST_CHECK_EXCEPTION(
+        cfg.loadGenesisConfigFromString(opStackELGenesis() + "[ethereum]\nmode=opstack\n"),
+        InvalidConfig, [](auto const& e) {
+            return errinfoContains(e, "[ethereum].mode invalid: \"opstack\" (supported: none, el)");
+        });
     NodeConfig iniCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(iniCfg.loadConfigFromString("[ethereum]\nmode=opstack\n"), InvalidConfig,
         [](auto const& e) { return errinfoContains(e, "ethereum.mode invalid"); });
 }
 
-// The config.ini <-> config.genesis binding, both directions, checked by
-// validateELModeInvariants after BOTH files are loaded.
-BOOST_AUTO_TEST_CASE(opStackELIniBinding)
+// config.ini ethereum.mode=el on an OP genesis: an el declaration needs an el genesis, and
+// the OP lane's genesis cannot carry one (mode=el requires executor.version=2).
+BOOST_AUTO_TEST_CASE(elModeIniOnOpGenesisRejected)
 {
-    // Both sides declare opstack-el -> accepted.
-    {
-        auto cfg = loadGenesis(opStackELGenesis());
-        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=opstack-el\n"));
-        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
-        BOOST_CHECK(cfg.opStackELModeEnabled());
-        BOOST_CHECK(!cfg.ethereumELModeEnabled());
-    }
-    // Genesis declares opstack-el but config.ini says none -> the opstack-el direction
-    // of the hook rejects it.
-    {
-        auto cfg = loadGenesis(opStackELGenesis());
-        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
-        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "declares [ethereum] mode=opstack-el but config.ini");
-        });
-    }
-    // config.ini says el on an opstack-el genesis -> the EL direction of the hook fires
-    // first (an el declaration needs an el genesis).
-    {
-        auto cfg = loadGenesis(opStackELGenesis());
-        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=el\n"));
-        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "ethereum.mode=el requires config.genesis to declare [ethereum] mode=el");
-        });
-    }
-    // config.ini says opstack-el on a genesis that does not declare it -> rejected.
-    {
-        auto cfg = loadGenesis(opGenesis("11155420", true, ""));
-        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=opstack-el\n"));
-        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "ethereum.mode=opstack-el requires config.genesis to declare");
-        });
-    }
-}
-
-// Both self-sync modes replace the engine-API driver; combining them with it (or with
-// the built-in single-node driver) would leave two block movers reachable.
-BOOST_AUTO_TEST_CASE(opStackELMutualExclusion)
-{
-    {
-        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadConfigFromString("[op_engine_rpc]\nenable=true\n[ethereum]\nmode=opstack-el\n"),
-            InvalidConfig, [](auto const& e) {
-                return errinfoContains(
-                    e, "ethereum.mode=opstack-el and op_engine_rpc.enable are mutually exclusive");
-            });
-    }
-    {
-        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadConfigFromString(
-                "[consensus]\nenable_single_node_consensus=true\n[ethereum]\nmode=opstack-el\n"),
-            InvalidConfig, [](auto const& e) {
-                return errinfoContains(e,
-                    "ethereum.mode=opstack-el and consensus.enable_single_node_consensus are "
-                    "mutually exclusive");
-            });
-    }
+    auto cfg = loadGenesis(opStackELGenesis());
+    BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=el\n"));
+    BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
+        return errinfoContains(
+            e, "ethereum.mode=el requires config.genesis to declare [ethereum] mode=el");
+    });
 }
 
 // [ethereum] op_block_time_seconds: the OP chain's block cadence, default 2 (every
@@ -300,14 +208,15 @@ BOOST_AUTO_TEST_CASE(opBlockTimeSecondsBounds)
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=opstack-el\n"));
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[debug]\nfollow_devp2p=true\n"));
         BOOST_CHECK_EQUAL(cfg.opBlockTimeSeconds(), 2u);
     }
     for (const auto* value : {"1", "60"})
     {
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(
-            std::string("[ethereum]\nmode=opstack-el\nop_block_time_seconds=") + value + "\n"));
+            std::string("[debug]\nfollow_devp2p=true\n[ethereum]\nop_block_time_seconds=") + value +
+            "\n"));
         BOOST_CHECK_EQUAL(cfg.opBlockTimeSeconds(), std::stoull(value));
     }
     for (const auto* value : {"0", "61"})
@@ -315,7 +224,8 @@ BOOST_AUTO_TEST_CASE(opBlockTimeSecondsBounds)
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
             cfg.loadConfigFromString(
-                std::string("[ethereum]\nmode=opstack-el\nop_block_time_seconds=") + value + "\n"),
+                std::string("[debug]\nfollow_devp2p=true\n[ethereum]\nop_block_time_seconds=") +
+                value + "\n"),
             InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "op_block_time_seconds must be in [1, 60]");
             });
@@ -330,14 +240,15 @@ BOOST_AUTO_TEST_CASE(opSyncLagBlocksBounds)
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=opstack-el\n"));
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[debug]\nfollow_devp2p=true\n"));
         BOOST_CHECK_EQUAL(cfg.opSyncLagBlocks(), 64u);
     }
     for (const auto* value : {"0", "1", "10000"})
     {
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(
-            std::string("[ethereum]\nmode=opstack-el\nop_sync_lag_blocks=") + value + "\n"));
+            std::string("[debug]\nfollow_devp2p=true\n[ethereum]\nop_sync_lag_blocks=") + value +
+            "\n"));
         BOOST_CHECK_EQUAL(cfg.opSyncLagBlocks(), std::stoull(value));
     }
     for (const auto* value : {"10001", "999999"})
@@ -345,26 +256,12 @@ BOOST_AUTO_TEST_CASE(opSyncLagBlocksBounds)
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
             cfg.loadConfigFromString(
-                std::string("[ethereum]\nmode=opstack-el\nop_sync_lag_blocks=") + value + "\n"),
+                std::string("[debug]\nfollow_devp2p=true\n[ethereum]\nop_sync_lag_blocks=") +
+                value + "\n"),
             InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "op_sync_lag_blocks must be in [0, 10000]");
             });
     }
-}
-
-// Reload is a supported shape: a second genesis without the declaration must clear the
-// flag, or a stale opstack-el declaration would leak into the next chain's genesis pin.
-BOOST_AUTO_TEST_CASE(reloadWithoutDeclarationClears)
-{
-    auto cfg = loadGenesis(opStackELGenesis());
-    BOOST_CHECK(cfg.genesisConfig().m_opStackELMode);
-
-    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis("11155420", true, "")));
-    BOOST_CHECK(!cfg.genesisConfig().m_opStackELMode);
-    auto data = bcos::tool::generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
-    BOOST_CHECK(data.find("mode:opstack-el") == std::string::npos);
-    // The OP schedule pin stays — it is not part of the EL declaration.
-    BOOST_CHECK(data.find("[opForkTimestamps]") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

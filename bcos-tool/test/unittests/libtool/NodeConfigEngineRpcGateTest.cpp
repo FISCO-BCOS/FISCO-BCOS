@@ -7,9 +7,12 @@
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
-// Tests for the [engine_rpc] section (the EL-mode Engine API listener): parsing, and the
-// assembly gates that bind it to ethereum.mode=el and keep it off the OP/single-node lanes.
+// Tests for the [engine_rpc] section on executor.version < 3 (the EL-mode Engine API
+// listener): parsing, and the assembly gates that bind its enable key to ethereum.mode=el
+// and keep it off the single-node / [op_engine_rpc] drivers. The OP lane, where the section
+// has no enable key, is NodeConfigBlockDriverTest.
 
+#include "ExceptionCheck.h"
 #include "NodeConfigLoaderProbe.h"
 #include <boost/test/unit_test.hpp>
 
@@ -25,9 +28,10 @@ BOOST_AUTO_TEST_CASE(engineRpcDefaults)
     LoaderProbe probe;
     probe.loadEngineRpcConfig({});
     BOOST_CHECK(!probe.enableEngineRpc());
-    BOOST_CHECK_EQUAL(probe.engineRpcListenIP(), "127.0.0.1");
-    BOOST_CHECK_EQUAL(probe.engineRpcListenPort(), 8551);
-    BOOST_CHECK_EQUAL(probe.engineJwtSecretFile(), "conf/engine/jwt.hex");
+    BOOST_CHECK_EQUAL(probe.engineRpcConfig().listenIP, "127.0.0.1");
+    BOOST_CHECK_EQUAL(probe.engineRpcConfig().listenPort, 8551);
+    BOOST_CHECK_EQUAL(probe.engineRpcConfig().jwtSecretFile, "conf/engine/jwt.hex");
+    BOOST_CHECK(!probe.engineRpcConfig().enableMinerApi);
 }
 
 BOOST_AUTO_TEST_CASE(engineRpcPopulated)
@@ -38,10 +42,10 @@ BOOST_AUTO_TEST_CASE(engineRpcPopulated)
         "jwt_secret_file=conf/custom-jwt.hex\nclock_skew_secs=30\n");
     probe.loadEngineRpcConfig(pt);
     BOOST_CHECK(probe.enableEngineRpc());
-    BOOST_CHECK_EQUAL(probe.engineRpcListenIP(), "0.0.0.0");
-    BOOST_CHECK_EQUAL(probe.engineRpcListenPort(), 9551);
-    BOOST_CHECK_EQUAL(probe.engineJwtSecretFile(), "conf/custom-jwt.hex");
-    BOOST_CHECK_EQUAL(probe.engineClockSkewSecs(), 30);
+    BOOST_CHECK_EQUAL(probe.engineRpcConfig().listenIP, "0.0.0.0");
+    BOOST_CHECK_EQUAL(probe.engineRpcConfig().listenPort, 9551);
+    BOOST_CHECK_EQUAL(probe.engineRpcConfig().jwtSecretFile, "conf/custom-jwt.hex");
+    BOOST_CHECK_EQUAL(probe.engineRpcConfig().clockSkewSecs, 30);
 }
 
 BOOST_AUTO_TEST_CASE(engineRpcWithELModeAccepted)
@@ -55,12 +59,17 @@ BOOST_AUTO_TEST_CASE(engineRpcWithELModeAccepted)
     BOOST_CHECK(probe.ethereumELModeEnabled());
 }
 
+// The gate reads the lane, so it runs in the startup hook (here on the probe's default
+// executor.version 0; the v2 case is NodeConfigBlockDriverTest).
 BOOST_AUTO_TEST_CASE(engineRpcWithoutELModeRejected)
 {
     LoaderProbe probe;
     auto pt = fromIni("[engine_rpc]\nenable=true\n");
     probe.loadEngineRpcConfig(pt);
-    BOOST_CHECK_THROW(probe.loadEthereumConfig(pt), InvalidConfig);
+    BOOST_REQUIRE_NO_THROW(probe.loadEthereumConfig(pt));
+    BOOST_CHECK_EXCEPTION(probe.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
+        return errinfoContains(e, "engine_rpc.enable requires ethereum.mode=el");
+    });
 }
 
 BOOST_AUTO_TEST_CASE(engineRpcAndOpEngineRpcRejected)
@@ -79,7 +88,8 @@ BOOST_AUTO_TEST_CASE(engineRpcAndOpEngineRpcRejected)
 BOOST_AUTO_TEST_CASE(engineRpcAndSingleNodeConsensusRejected)
 {
     LoaderProbe probe;
-    auto pt = fromIni("[engine_rpc]\nenable=true\n[consensus]\nenable_single_node_consensus=true\n");
+    auto pt =
+        fromIni("[engine_rpc]\nenable=true\n[consensus]\nenable_single_node_consensus=true\n");
     probe.loadEngineRpcConfig(pt);
     BOOST_CHECK_THROW(probe.loadSingleNodeConsensusConfig(pt), InvalidConfig);
 
@@ -123,16 +133,18 @@ BOOST_AUTO_TEST_CASE(ethereumDepositContractAddress)
     {
         LoaderProbe probe;
         auto pt = fromIni(
-            "[ethereum]\nmode=el\ndeposit_contract_address=0x7f02c3E3c98b133055b8b348b2ac625669182295\n");
+            "[ethereum]\nmode=el\ndeposit_contract_address="
+            "0x7f02c3E3c98b133055b8b348b2ac625669182295\n");
         BOOST_CHECK_NO_THROW(probe.loadEthereumConfig(pt));
-        BOOST_CHECK_EQUAL(
-            probe.ethereumDepositContractAddress().hex(), "7f02c3e3c98b133055b8b348b2ac625669182295");
+        BOOST_CHECK_EQUAL(probe.ethereumDepositContractAddress().hex(),
+            "7f02c3e3c98b133055b8b348b2ac625669182295");
     }
     // Non-hex and wrong-length values are rejected.
     {
         LoaderProbe probe;
         auto pt = fromIni(
-            "[ethereum]\nmode=el\ndeposit_contract_address=0xzz02c3e3c98b133055b8b348b2ac625669182295\n");
+            "[ethereum]\nmode=el\ndeposit_contract_address="
+            "0xzz02c3e3c98b133055b8b348b2ac625669182295\n");
         BOOST_CHECK_THROW(probe.loadEthereumConfig(pt), InvalidConfig);
     }
     {

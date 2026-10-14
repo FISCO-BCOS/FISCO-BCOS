@@ -538,14 +538,14 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
             cfg.loadGenesisConfigFromString(head + "99999999999999999999999" + tail), InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "[chain].chain_id must fit uint64"); });
     }
-    // Non-EL genesis (no declaration, no schedule): the EL-sync getter stays unset and
-    // reads 0, never mainnet 1.
+    // Non-EL v2 genesis (no declaration, no schedule): the getter still carries the
+    // Ethereum lane's [chain] chain_id — it is copied on every lane >= 2, not only under an
+    // EL-sync declaration.
     {
         NodeConfig cfg(keyFactory);
         const std::string plainGenesis =
             "[version]\ncompatibility_version=3.18.0\n"
-            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-            "[web3]\nchain_id=1\n"
+            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=7\n"
             "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
             "node.0=" +
             node +
@@ -558,7 +558,7 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
         BOOST_CHECK(!cfg.ethereumELModeEnabled());
-        BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 0u);
+        BOOST_CHECK_EQUAL(cfg.ethereumChainId(), 7u);
     }
     // Tools order (config.ini BEFORE config.genesis): pure parsing, no genesis
     // reads in loadEthereumConfig — both loads pass, and the post-load hook

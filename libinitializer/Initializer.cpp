@@ -194,20 +194,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion,
     [[maybe_unused]] const std::string& _logPath)
 {
-    // Engine-driven block production (single-node consensus or [op_engine_rpc]) is AIR-only.
-    // Both modes skip txpool/pbft init and wire the in-process mempool into NodeService via
-    // AirNodeInitializer::setMemPool; on a MAX/tars node the flag would start the
-    // block-producing driver while sendRawTransaction still falls through to an
+    // Every driver other than PBFT is AIR-only. They skip txpool/pbft init and either wire
+    // the in-process mempool into NodeService (AirNodeInitializer::setMemPool) or run a
+    // devp2p sync client that only AirNodeInitializer builds; on a Pro/tars node the driver
+    // would be half-assembled while sendRawTransaction still falls through to an
     // uninitialized txpool. Reject the combination at startup rather than leaving that
     // state reachable by a config flag.
-    if (m_nodeConfig->engineDrivenBlockProduction() &&
+    auto const blockDriver = m_nodeConfig->blockDriver();
+    if (blockDriver != bcos::tool::BlockDriver::PBFT &&
         _nodeArchType != bcos::protocol::NodeArchitectureType::AIR)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "enable_single_node_consensus / op_engine_rpc.enable are only supported on "
-                "AIR nodes (in-process mempool/scheduler); not supported on MAX/tars "
-                "deployments"));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "only the PBFT block driver is supported on Pro/tars "
+                                  "deployments; the Engine API, EL sync, [debug] follow_devp2p "
+                                  "and single-node consensus drivers need an AIR node"));
     }
 
     // The account-table migration rewrites the state RocksDB directly; on TiKV the chain
@@ -416,23 +416,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // OP mode is the newest declared lane and everything above it (a value above the wired
     // slot count saturates onto the newest wired slot, see MultiVersionScheduler::setVersion).
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
-    // Refused here, ahead of the MPT pruner's boot-time init below: that init walks the window's
-    // state roots and, with storage.mpt_prune_sweep_garbage on, deletes unreachable "/mpt/" rows,
-    // so a refusal placed after it would turn a fail-fast into a slow, side-effectful one.
-    // Only the engine-driven OP mode is refused: EL mode is SUPPORTED — the devp2p sync commit
-    // path (EthereumBlockVerifier::verifyAndCommit) feeds the same CommitObserver hooks as the
-    // PBFT and Engine API paths (wired through EthereumSyncInitializer), so the window prunes
-    // at runtime there, not just at boot. OP-Stack EL self-sync (ethereum.mode=opstack-el) is
-    // supported for the same reason: its commit path (OpBlockVerifier::verifyAndCommit) takes
-    // the observer too (wired through OpStackSyncInitializer).
-    if (opStackMode && m_nodeConfig->mptPruneWindow() > 0 && !m_nodeConfig->opStackELModeEnabled())
-    {
-        BOOST_THROW_EXCEPTION(
-            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "storage.mpt_prune_window is not supported in engine-driven OP mode "
-                "(executor_version>=3) yet: the engine-API OP commit path has no MPT pruning "
-                "observer (the opstack-el self-sync path does — prune is supported there)"));
-    }
+    // storage.mpt_prune_window on the OP lane is refused unless [debug] follow_devp2p by
+    // NodeConfig::validateELModeInvariants (initConfig), ahead of the MPT pruner's boot-time
+    // init below. L1 EL mode is supported: the devp2p sync commit path
+    // (EthereumBlockVerifier::verifyAndCommit) feeds the same CommitObserver hooks as the
+    // PBFT and Engine API paths (wired through EthereumSyncInitializer).
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
     // endpoint would silently serve EthEngineService over the v1 TransactionExecutorImpl
@@ -519,7 +507,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 transactionExecutor, m_mptCommitObserver,
-                !m_nodeConfig->engineDrivenBlockProduction());
+                blockDriver == bcos::tool::BlockDriver::PBFT);
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -547,20 +535,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver,
-                !m_nodeConfig->engineDrivenBlockProduction());
+                blockDriver == bcos::tool::BlockDriver::PBFT);
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
-        // Ethereum-compliant semantics. Two mutually exclusive drivers use it (NodeConfig
-        // rejects both flags at once): the built-in single-node driver
-        // (enable_single_node_consensus) and an external op-node over the authenticated
-        // [op_engine_rpc] endpoint. In either mode the EngineService is the sole block
-        // producer — the legacy txpool/PBFT pipeline is never initialized or started (see
-        // engineDrivenBlockProduction() guards below and in start()). EL mode
-        // (ethereum.mode=el) with [engine_rpc] enable also builds it, to serve the
-        // authenticated Engine API listener; there block import stays with devp2p sync.
+        // Ethereum-compliant semantics. It is built when something drives it: the
+        // DebugSelfProduce driver (enable_single_node_consensus) or the Engine API
+        // listener ([op_engine_rpc] enable, or EL mode's [engine_rpc] enable). Under the
+        // first two the EngineService is the sole block producer — the legacy txpool/PBFT
+        // pipeline is never initialized or started (the blockDriver guards below and in
+        // start()); under EL mode block import also stays with devp2p sync.
         if (!engineApiForV1Only && !opStackMode &&
-            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc() ||
-                m_nodeConfig->enableEngineRpc()))
+            (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce ||
+                m_nodeConfig->servesEngineApi()))
         {
             // EL mode ([engine_rpc]): ONE verifier instance serves both the Engine API
             // external newPayload lane (through the type-erased adapter) and the devp2p
@@ -605,7 +591,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 transactionExecutor, m_mptCommitObserver,
-                !m_nodeConfig->engineDrivenBlockProduction());
+                blockDriver == bcos::tool::BlockDriver::PBFT);
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -623,15 +609,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver,
-                !m_nodeConfig->engineDrivenBlockProduction());
+                blockDriver == bcos::tool::BlockDriver::PBFT);
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
-        // branch above for why op_engine_rpc.enable also builds the EngineService here.
-        // executor_version=2 alone does NOT enable the Engine API: one of
+        // branch above. executor_version=2 alone does NOT enable the Engine API: one of
         // [consensus] enable_single_node_consensus, [op_engine_rpc] enable or (in EL mode)
         // [engine_rpc] enable must be set.
         if (!engineApiForV1Only && !opStackMode &&
-            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc() ||
-                m_nodeConfig->enableEngineRpc()))
+            (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce ||
+                m_nodeConfig->servesEngineApi()))
         {
             // EL mode ([engine_rpc]): ONE verifier instance serves both the Engine API
             // external newPayload lane (through the type-erased adapter) and the devp2p
@@ -671,16 +656,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     if (opStackMode)
     {
-        // Two OP drivers: an external op-node over [op_engine_rpc] (engine-driven block
-        // production), or the devp2p self-sync client (ethereum.mode=opstack-el, wired by
-        // AirNodeInitializer through OpStackSyncInitializer). Anything else (a plain
-        // PBFT chain on executor_version>=3) has no block producer at all — refuse.
-        if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->opStackELModeEnabled())
+        // Two OP drivers: op-node over the [engine_rpc] Engine API (Engine), or the devp2p
+        // follow client ([debug] follow_devp2p, wired by AirNodeInitializer through
+        // OpStackSyncInitializer). blockDriver() derives one of them from a genesis
+        // executor.version >= 3; anything else here means the on-chain executor_version
+        // moved to the OP slot under a non-OP genesis, and nothing would produce blocks.
+        if (blockDriver != bcos::tool::BlockDriver::Engine &&
+            blockDriver != bcos::tool::BlockDriver::DebugFollowDevp2p)
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                       "OP mode (executor_version==3, the OPSTACK slot) requires "
-                                      "engine-driven block production ([op_engine_rpc] enable) "
-                                      "or OP-Stack EL self-sync ([ethereum] mode=opstack-el)"));
+                                      "the Engine or the [debug] follow_devp2p block driver, "
+                                      "which only a config.genesis executor.version >= 3 "
+                                      "yields"));
         }
         // The OP lane's fork schedule comes from [op_fork_timestamps] (genesis config);
         // NodeConfig refuses an OP chain without it and a non-OP chain with it. Kept as a
@@ -727,8 +715,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
                 // Ledger on OpScheduler; engine keeps ledger=nullptr.
                 m_ledger, m_ioServicePool);
-        // The Engine API service is the block producer only in engine-driven OP mode. In
-        // opstack-el self-sync mode blocks arrive over devp2p and commit through
+        // The Engine API service is the block producer only under the Engine driver. Under
+        // [debug] follow_devp2p blocks arrive over devp2p and commit through
         // OpBlockVerifier (OpStackSyncInitializer), so no EngineService — and no DA-caps /
         // mempool wiring that exists only to serve it — is built.
         // The declared-ness diagnostic is hoisted OUT of that split on purpose: the same
@@ -759,7 +747,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 << LOG_KV("denominator", opEip1559.denominator)
                 << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
         }
-        if (!m_nodeConfig->opStackELModeEnabled())
+        if (blockDriver == bcos::tool::BlockDriver::Engine)
         {
             m_daCaps = std::make_shared<bcos::engine::DACaps>();
             m_engineServiceInitializer = EngineServiceInitializer::buildOp(
@@ -1072,14 +1060,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // would write blocks to the same global storage concurrently. The front service is
     // still wired for gateway bookkeeping, but its dispatchers are inert with no peers.
     //
-    // Ethereum L1 EL mode (ethereum.mode=el) and OP-Stack EL self-sync
-    // (ethereum.mode=opstack-el) skip them for the same reason, one level further out:
+    // Ethereum L1 EL mode (ethereum.mode=el) and the OP devp2p follow driver
+    // ([debug] follow_devp2p) skip them for the same reason, one level further out:
     // blocks arrive over devp2p download (EthereumSyncInitializer / OpStackSyncInitializer)
     // and there is no local block production at all, so the txpool's ledger reads at init
     // and the consensus/sync handlers pbft->init() registers would serve nothing. start()
-    // below already skips all three modes.
-    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled() &&
-        !m_nodeConfig->opStackELModeEnabled())
+    // below skips them under the same condition: every driver but PBFT.
+    if (blockDriver == bcos::tool::BlockDriver::PBFT)
     {
         // init the txpool
         m_txpoolInitializer->init();
@@ -1088,11 +1075,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // txpool init finished
         m_pbftInitializer->init();
     }
-    else if (m_nodeConfig->ethereumELModeEnabled() || m_nodeConfig->opStackELModeEnabled())
+    else if (m_nodeConfig->ethereumELModeEnabled() ||
+             blockDriver == bcos::tool::BlockDriver::DebugFollowDevp2p)
     {
         INITIALIZER_LOG(INFO) << LOG_DESC(
-            "EL self-sync mode (ethereum.mode=el|opstack-el): skip txpool/pbft/sealer init "
-            "(blocks arrive via devp2p download; no local block production)");
+            "EL self-sync mode (ethereum.mode=el or [debug] follow_devp2p): skip "
+            "txpool/pbft/sealer init (blocks arrive via devp2p download; no local block "
+            "production)");
     }
     else
     {
@@ -1101,8 +1090,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             "EngineService + mempool; driver = single-node consensus or external op-node)");
     }
 
-    // Admission for the mempool path: engine-driven modes, or EL mode with the [engine_rpc]
-    // listener (mempool admission over RPC while block import stays with devp2p sync).
+    // Admission for the mempool path: the DebugSelfProduce driver, or any node serving the
+    // Engine API (under EL mode: mempool admission over RPC while block import stays with
+    // devp2p sync).
     // Built here and not in the txpool initializer because in these modes there is no txpool:
     // the RPC entry judges a transaction against this validator and then reserves its
     // (sender, nonce) with MemPoolImpl::tryAdd.
@@ -1115,8 +1105,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // transaction reusing an already-executed nonce is admitted here and refused at
     // execution. That is where it was refused before this validator was wired, when the
     // path checked no nonce at all.
-    if (m_nodeConfig->engineDrivenBlockProduction() ||
-        (m_nodeConfig->ethereumELModeEnabled() && m_nodeConfig->enableEngineRpc()))
+    if (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce || m_nodeConfig->servesEngineApi())
     {
         auto web3NonceChecker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger);
         // executor_version==2 (the pure-Ethereum executor): admission must match the pool —
@@ -1136,9 +1125,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             blobPolicy);
         m_memPoolValidator->setScheduler(m_scheduler);
         // OP lane: the balance also covers the rollup cost (Check::L1Cost). Only this validator
-        // gets the callable: the txpool's cannot serve an OP chain (the OP gate above refuses a
-        // non-engine-driven, non-EL configuration) and opstack-el self-sync builds no mempool
-        // validator. The fork schedule was required when the OP scheduler was built.
+        // gets the callable: the txpool's cannot serve an OP chain (the OP gate above refuses
+        // every driver but Engine and DebugFollowDevp2p) and the follow driver builds no
+        // mempool validator. The fork schedule was required when the OP scheduler was built.
         if (m_executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)
         {
             m_memPoolValidator->setRollupCostFn(
@@ -1160,16 +1149,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // executor_version < 2 on the v1 scheduler, and for executor_version >= 2 on the
     // EthereumExecutor scheduler — so this is also the in-process CL path for the Engine API.
     //
-    // OP mode requires an external op-node; built-in single-node CL is unsupported.
-    if (m_nodeConfig->enableSingleNodeConsensus() &&
-        m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                  "enable_single_node_consensus is not supported with "
-                                  "executor_version >= 3 (OP mode): an OP chain is driven by "
-                                  "an external op-node over [op_engine_rpc]"));
-    }
-    if (m_nodeConfig->enableSingleNodeConsensus())
+    // The OP lane has no such driver: NodeConfig::blockDriver refuses single-node consensus
+    // on executor.version >= 3.
+    if (blockDriver == bcos::tool::BlockDriver::DebugSelfProduce)
     {
         // prevRandao: explicit 32-byte hex from config ([consensus] prev_randao), else a
         // deterministic hash of a fixed seed (for EEST the harness pins it to the fixture's
@@ -1394,14 +1376,11 @@ void Initializer::initSysContract()
 
 void Initializer::start()
 {
-    // Engine-driven modes (single-node consensus / op_engine_rpc): txpool/pbft (and the
-    // sealer inside pbft) stay dormant — block production goes through the EngineService.
-    // EL self-sync modes (ethereum.mode=el / opstack-el): the node is a pure execution-layer
-    // client; blocks come from bootnode download (EthereumSyncInitializer /
-    // OpStackSyncInitializer), never from FISCO consensus/txpool, so those pipelines also
-    // stay dormant.
-    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled() &&
-        !m_nodeConfig->opStackELModeEnabled())
+    // Every driver but PBFT keeps txpool/pbft (and the sealer inside pbft) dormant: the
+    // Engine and DebugSelfProduce drivers produce through the EngineService; EL mode and
+    // DebugFollowDevp2p download blocks from bootnodes (EthereumSyncInitializer /
+    // OpStackSyncInitializer), never from FISCO consensus/txpool.
+    if (m_nodeConfig->blockDriver() == bcos::tool::BlockDriver::PBFT)
     {
         if (m_txpoolInitializer)
         {

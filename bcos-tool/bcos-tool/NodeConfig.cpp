@@ -233,23 +233,12 @@ uint64_t readOptionalForkTimestamp(boost::property_tree::ptree const& section,
     return std::numeric_limits<uint64_t>::max();
 }
 
-// Shared field set of the authenticated Engine API listener sections
-// ([op_engine_rpc] and [engine_rpc]).
-struct EngineRpcSectionConfig
-{
-    bool enable = false;
-    std::string listenIP = "127.0.0.1";
-    int listenPort = 8551;
-    int requestBodySizeLimit = 10485760;
-    int batchRequestSizeLimit = 8;
-    std::string jwtSecretFile;
-    int32_t clockSkewSecs = 60;
-};
-
-EngineRpcSectionConfig parseEngineRpcSection(boost::property_tree::ptree const& _pt,
+// Shared parser of the authenticated Engine API listener sections ([engine_rpc] and
+// [op_engine_rpc]).
+EngineRpcConfig parseEngineRpcSection(boost::property_tree::ptree const& _pt,
     std::string const& _section, std::string _defaultJwtSecretFile)
 {
-    EngineRpcSectionConfig config;
+    EngineRpcConfig config;
     config.enable = _pt.get<bool>(_section + ".enable", false);
     config.listenIP = _pt.get<std::string>(_section + ".listen_ip", "127.0.0.1");
     config.listenPort = _pt.get<int>(_section + ".listen_port", 8551);
@@ -258,6 +247,8 @@ EngineRpcSectionConfig parseEngineRpcSection(boost::property_tree::ptree const& 
     config.jwtSecretFile =
         _pt.get<std::string>(_section + ".jwt_secret_file", std::move(_defaultJwtSecretFile));
     config.clockSkewSecs = _pt.get<int32_t>(_section + ".clock_skew_secs", 60);
+    config.enableMinerApi = _pt.get<bool>(_section + ".enable_miner_api", false);
+    config.enableDebugApi = _pt.get<bool>(_section + ".enable_debug_api", false);
     return config;
 }
 }  // namespace
@@ -315,6 +306,7 @@ void NodeConfig::loadConfig(
     loadWeb3RpcConfig(_pt);
     loadOpEngineRpcConfig(_pt);
     loadEngineRpcConfig(_pt);
+    loadDebugConfig(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadSingleNodeConsensusConfig(_pt);
@@ -667,12 +659,11 @@ void NodeConfig::validateL2Invariants()
                                   "[ethereum] mode=el requires a [fork_timestamps] section in "
                                   "config.genesis (the EL-mode fork schedule)"));
     }
-    // The lane binding, symmetric to the opstack-el >= 3 check below: mode=el is
-    // the L1 EL lane (L1 fork schedule, L1 PoS header rules), so it requires the
-    // L1 executor version. On the OP lane (executor.version >= 3) the self-sync
-    // declaration is mode=opstack-el — accepting mode=el there would also waive
-    // the non-empty-alloc invariant above for a chain whose predeploys live in
-    // the allocs.
+    // The lane binding: mode=el is the L1 EL lane (L1 fork schedule, L1 PoS header
+    // rules), so it requires the L1 executor version. On the OP lane (executor.version
+    // >= 3) devp2p self-follow is config.ini [debug] follow_devp2p — accepting mode=el
+    // there would also waive the non-empty-alloc invariant above for a chain whose
+    // predeploys live in the allocs.
     if (genesis.m_ethereumELMode &&
         (genesis.m_executorVersion < ledger::ETHEREUM_EXECUTOR_VERSION ||
             genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION))
@@ -680,14 +671,13 @@ void NodeConfig::validateL2Invariants()
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[ethereum] mode=el requires executor.version=2 (the L1 EL "
                                   "lane) in config.genesis; the OP lane (executor.version >= 3) "
-                                  "takes mode=opstack-el"));
+                                  "follows devp2p under config.ini [debug] follow_devp2p"));
     }
-    // EL-sync mode's EIP-155 signature validation and geth's EIP-2124 fork-id handshake
+    // EL-sync's EIP-155 signature validation and geth's EIP-2124 fork-id handshake
     // (parts 7-9) key on the CHAIN id. On the Ethereum lanes that id is [chain] chain_id,
-    // already held to a non-zero decimal uint64 by ethLaneChainId; an EL declaration on
-    // any other lane is refused by its own version check (mode=el above, opstack-el below).
-    // 0 = unset, never a mainnet fallback.
-    if (genesis.m_ethereumELMode || genesis.m_opStackELMode)
+    // already held to a non-zero decimal uint64 by ethLaneChainId. 0 = unset (FISCO lanes),
+    // never a mainnet fallback.
+    if (ethLane)
     {
         m_ethereumChainId =
             ledger::parseConfigUint64(genesis.m_web3ChainID, ledger::ConfigUint64Options{})
@@ -780,29 +770,6 @@ void NodeConfig::validateL2Invariants()
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(*problem));
     }
-    // The opstack-el declaration ([ethereum] mode=opstack-el) is bound to the OP lane and
-    // the Ethereum-lane genesis shape: the sync client downloads OP blocks over devp2p and
-    // commits them through OpBlockVerifier, which requires the OP executor (fork resolution
-    // from [op_fork_timestamps]) and the Ethereum genesis anchor ([eth_genesis_header] plus
-    // [alloc.*], both bound to executor.version >= 2 above — the >= 3 requirement below
-    // implies them). The chain-id requirement is the shared EL-sync block above.
-    if (genesis.m_opStackELMode)
-    {
-        if (genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=opstack-el requires executor.version >= 3 "
-                                      "(the OP lane) in config.genesis"));
-        }
-        if (!genesis.m_opForkSchedule.has_value())
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=opstack-el requires an "
-                                      "[op_fork_timestamps] section in config.genesis (the OP "
-                                      "fork schedule drives both header validation and the "
-                                      "EIP-2124 fork-id ladder)"));
-        }
-    }
 }
 
 // Cross-file EL-mode invariant: config.ini's ethereum.mode=el must be backed by the
@@ -811,8 +778,35 @@ void NodeConfig::validateL2Invariants()
 // must run after both are loaded: the node initializers call it explicitly. It is NOT
 // done inside loadEthereumConfig because tools (archive-tool, storage-tool) load
 // config.ini before config.genesis and must not trip on the not-yet-loaded genesis.
+// The lane-dependent config.ini checks live here for the same reason, starting with
+// blockDriver(), so a driver combination the lane refuses fails at startup.
 void NodeConfig::validateELModeInvariants() const
 {
+    auto const driver = blockDriver();
+    auto const lane = laneForExecutorVersion(m_genesisConfig.m_executorVersion);
+    // [engine_rpc] enable is a v0..v2 key: there it is the EL-mode Engine API listener, and
+    // without EL mode nothing drives or serves the EngineService it exposes. The OP lane's
+    // [engine_rpc] has no enable key (the listener always runs under the Engine driver).
+    if (lane != ChainLane::Op && m_engineRpc.enable && !m_enableEthereumEL)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "engine_rpc.enable requires ethereum.mode=el: the engine RPC listener serves "
+                "the EL-mode EngineService"));
+    }
+    // Refused ahead of the MPT pruner's boot-time init (Initializer::init): that init walks
+    // the window's state roots and, with storage.mpt_prune_sweep_garbage on, deletes
+    // unreachable "/mpt/" rows, so the refusal must not come after it. The OP Engine API
+    // commit path has no MPT pruning observer; the devp2p follow path does
+    // (OpBlockVerifier::verifyAndCommit, wired through OpStackSyncInitializer).
+    if (lane == ChainLane::Op && m_mptPruneWindow > 0 && driver != BlockDriver::DebugFollowDevp2p)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "storage.mpt_prune_window > 0 on executor.version >= 3 (the OP lane) requires "
+                "[debug] follow_devp2p=true: the Engine API OP commit path has no MPT pruning "
+                "observer"));
+    }
     if (m_enableEthereumEL && !m_genesisConfig.m_ethereumELMode)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -854,7 +848,8 @@ void NodeConfig::validateELModeInvariants() const
     // content hash, not by block, so it cannot produce eth_getProof's "State pruned" diagnostic).
     // The dispute window is a chain/contract parameter, not a node config, so the enforceable
     // invariant is the archive one: a node serving preimages must not bound MPT disk growth.
-    if ((m_enableDebugApi || m_enableOpEngineDebugApi) && m_mptPruneWindow != -1)
+    if ((m_enableDebugApi || m_opEngineRpc.enableDebugApi || engineApiDebugApi()) &&
+        m_mptPruneWindow != -1)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "enable_debug_api requires storage.mpt_prune_window = -1 "
@@ -862,26 +857,6 @@ void NodeConfig::validateELModeInvariants() const
                                   "no retention guarantee, and a pruned block still inside a "
                                   "dispute game's challenge window would answer -32000 \"not "
                                   "found\" indistinguishable from an unknown hash"));
-    }
-    // Same two-way binding for opstack-el: the per-node mode must be backed by the
-    // chain-level declaration (which validateL2Invariants binds to the OP lane, the
-    // fork schedule and the L2 genesis shape), and an opstack-el-declaring genesis
-    // must not boot with its sync client disabled.
-    if (m_enableOpStackEL && !m_genesisConfig.m_opStackELMode)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode=opstack-el requires config.genesis to declare "
-                                  "[ethereum] mode=opstack-el: the EL-mode declaration is part "
-                                  "of the genesis pin"));
-    }
-    if (m_genesisConfig.m_opStackELMode && !m_enableOpStackEL)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "config.genesis declares [ethereum] mode=opstack-el but "
-                                  "config.ini has ethereum.mode=" +
-                                  std::string(m_enableEthereumEL ? "el" : "none") +
-                                  ": an opstack-el chain must run its devp2p sync client on "
-                                  "every node"));
     }
 }
 
@@ -1215,13 +1190,14 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; The OP miner namespace (miner_setMaxDASize, the batcher DA-throttle handshake) is off
         ; unless enabled here: it writes the node-wide DA caps, and any client of the listener
         ; carrying it can starve the sequencer. This key scopes the namespace to THIS web3
-        ; listener only; the op-engine (8551) listener has its own [op_engine_rpc]
+        ; listener only; the Engine API (8551) listener has its own [engine_rpc]
         ; enable_miner_api. Keep this port private if you set it — never expose it publicly.
         ; enable_miner_api=false
         ; The geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload) is off
         ; unless enabled here: it serves the fault-proof preimage oracle (kona-host), not general
-        ; clients. This key scopes the namespace to THIS web3 listener only; the op-engine (8551)
-        ; listener has its own [op_engine_rpc] enable_debug_api.
+        ; clients. This key scopes the namespace to THIS web3 listener only; the Engine API (8551)
+        ; listener has its own key ([engine_rpc] enable_debug_api on the OP lane,
+        ; [op_engine_rpc] enable_debug_api below v3).
         ; Enabling it also REQUIRES storage.mpt_prune_window=-1 (archive): the namespace reads
         ; MPT preimages with no retention guarantee, so a pruned block still inside a dispute
         ; game's challenge window would answer an indistinguishable -32000. The node refuses to
@@ -1306,6 +1282,8 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
 {
     /*
     [op_engine_rpc]
+        ; read on executor.version < 3 only; the OP lane serves the Engine API from
+        ; [engine_rpc] and refuses enable=true here (blockDriver())
         enable=false
         listen_ip=127.0.0.1
         listen_port=8551
@@ -1313,68 +1291,53 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
         batch_request_size_limit=8
         jwt_secret_file=conf/op-engine/jwt.hex
         clock_skew_secs=60
-        ; scopes the OP miner namespace (miner_setMaxDASize) to THIS listener only — the
-        ; batcher/conductor port. [web3_rpc] enable_miner_api scopes it to the web3 listener
-        ; only; neither key reaches the other port.
-        ; enable_miner_api=false
         ; scopes the geth debug namespace to THIS listener only (default off); [web3_rpc]
         ; enable_debug_api scopes it to the web3 listener. Neither key reaches the other port.
         ; Enabling it on either port requires storage.mpt_prune_window=-1 (archive), for the
         ; same reason as [web3_rpc] enable_debug_api above.
         ; enable_debug_api=false
     */
-    const auto config = parseEngineRpcSection(_pt, "op_engine_rpc", "conf/op-engine/jwt.hex");
+    m_opEngineRpc = parseEngineRpcSection(_pt, "op_engine_rpc", "conf/op-engine/jwt.hex");
     // test-only escape hatch, see Initializer's executor-version guard
-    const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
-    const bool enableMinerApi = _pt.get<bool>("op_engine_rpc.enable_miner_api", false);
-    const bool enableDebugApi = _pt.get<bool>("op_engine_rpc.enable_debug_api", false);
+    m_opEngineAllowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
 
-    m_enableOpEngineRpc = config.enable;
     // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
     // two loaders runs second fires the guard, so it holds regardless of loadConfig's loader
     // order and also when a loader is invoked on its own.
-    if (m_enableOpEngineRpc && m_enableSingleNodeConsensus)
+    if (m_opEngineRpc.enable && m_enableSingleNodeConsensus)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
                 "exclusive: both drive the same EngineService; enable at most one"));
     }
-    // Symmetric with loadEngineRpcConfig: the EL-mode [engine_rpc] listener and the OP-lane
+    // Symmetric with loadEngineRpcConfig: the EL-mode [engine_rpc] listener and the
     // [op_engine_rpc] listener serve the same EngineService slot.
-    if (m_enableOpEngineRpc && m_enableEngineRpc)
+    if (m_opEngineRpc.enable && m_engineRpc.enable)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "op_engine_rpc.enable and engine_rpc.enable are mutually exclusive: both "
                 "configure the same Engine API listener; enable at most one"));
     }
-    m_opEngineRpcListenIP = config.listenIP;
-    m_opEngineRpcListenPort = config.listenPort;
-    m_opEngineHttpBodySizeLimit = config.requestBodySizeLimit;
-    m_opEngineBatchRequestSizeLimit = config.batchRequestSizeLimit;
-    m_opEngineJwtSecretFile = config.jwtSecretFile;
-    m_opEngineClockSkewSecs = config.clockSkewSecs;
-    m_opEngineAllowV1Executor = allowV1Executor;
-    m_enableOpEngineMinerApi = enableMinerApi;
-    m_enableOpEngineDebugApi = enableDebugApi;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
-                         << LOG_KV("enableOpEngineRpc", m_enableOpEngineRpc)
-                         << LOG_KV("listenIP", config.listenIP)
-                         << LOG_KV("listenPort", config.listenPort)
-                         << LOG_KV("requestBodySizeLimit", config.requestBodySizeLimit)
-                         << LOG_KV("batchRequestSizeLimit", config.batchRequestSizeLimit)
-                         << LOG_KV("jwtSecretFile", config.jwtSecretFile)
-                         << LOG_KV("clockSkewSecs", config.clockSkewSecs)
-                         << LOG_KV("unsafeAllowV1Executor", allowV1Executor)
-                         << LOG_KV("enableMinerApi", enableMinerApi);
+                         << LOG_KV("enableOpEngineRpc", m_opEngineRpc.enable)
+                         << LOG_KV("listenIP", m_opEngineRpc.listenIP)
+                         << LOG_KV("listenPort", m_opEngineRpc.listenPort)
+                         << LOG_KV("requestBodySizeLimit", m_opEngineRpc.requestBodySizeLimit)
+                         << LOG_KV("batchRequestSizeLimit", m_opEngineRpc.batchRequestSizeLimit)
+                         << LOG_KV("jwtSecretFile", m_opEngineRpc.jwtSecretFile)
+                         << LOG_KV("clockSkewSecs", m_opEngineRpc.clockSkewSecs)
+                         << LOG_KV("unsafeAllowV1Executor", m_opEngineAllowV1Executor);
 }
 
 void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
 {
     /*
     [engine_rpc]
+        ; the OP lane (executor.version >= 3) always runs this listener and has no enable
+        ; key; executor.version < 3 reads enable, which requires ethereum.mode=el
         enable=false
         listen_ip=127.0.0.1
         listen_port=8551
@@ -1382,39 +1345,58 @@ void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
         batch_request_size_limit=8
         jwt_secret_file=conf/engine/jwt.hex
         clock_skew_secs=60
+        ; OP lane only: registers the OP miner namespace (miner_setMaxDASize, the batcher
+        ; DA-throttle handshake) on THIS listener. [web3_rpc] enable_miner_api scopes it to the
+        ; web3 listener only; neither key reaches the other port.
+        ; enable_miner_api=false
+        ; OP lane only: scopes the geth debug namespace to THIS listener (default off);
+        ; [web3_rpc] enable_debug_api scopes it to the web3 listener. Requires
+        ; storage.mpt_prune_window=-1 (archive), for the same reason as [web3_rpc]
+        ; enable_debug_api above.
+        ; enable_debug_api=false
     */
-    const auto config = parseEngineRpcSection(_pt, "engine_rpc", "conf/engine/jwt.hex");
-
-    m_enableEngineRpc = config.enable;
-    if (m_enableEngineRpc && m_enableOpEngineRpc)
+    m_engineRpc = parseEngineRpcSection(_pt, "engine_rpc", "conf/engine/jwt.hex");
+    if (m_engineRpc.enable && m_opEngineRpc.enable)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "engine_rpc.enable and op_engine_rpc.enable are mutually exclusive: both "
                 "configure the same Engine API listener; enable at most one"));
     }
-    if (m_enableEngineRpc && m_enableSingleNodeConsensus)
+    if (m_engineRpc.enable && m_enableSingleNodeConsensus)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "engine_rpc.enable and consensus.enable_single_node_consensus are mutually "
                 "exclusive: both expose the same EngineService; enable at most one"));
     }
-    m_engineRpcListenIP = config.listenIP;
-    m_engineRpcListenPort = config.listenPort;
-    m_engineHttpBodySizeLimit = config.requestBodySizeLimit;
-    m_engineBatchRequestSizeLimit = config.batchRequestSizeLimit;
-    m_engineJwtSecretFile = config.jwtSecretFile;
-    m_engineClockSkewSecs = config.clockSkewSecs;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadEngineRpcConfig")
-                         << LOG_KV("enableEngineRpc", m_enableEngineRpc)
-                         << LOG_KV("listenIP", config.listenIP)
-                         << LOG_KV("listenPort", config.listenPort)
-                         << LOG_KV("requestBodySizeLimit", config.requestBodySizeLimit)
-                         << LOG_KV("batchRequestSizeLimit", config.batchRequestSizeLimit)
-                         << LOG_KV("jwtSecretFile", config.jwtSecretFile)
-                         << LOG_KV("clockSkewSecs", config.clockSkewSecs);
+                         << LOG_KV("enableEngineRpc", m_engineRpc.enable)
+                         << LOG_KV("listenIP", m_engineRpc.listenIP)
+                         << LOG_KV("listenPort", m_engineRpc.listenPort)
+                         << LOG_KV("requestBodySizeLimit", m_engineRpc.requestBodySizeLimit)
+                         << LOG_KV("batchRequestSizeLimit", m_engineRpc.batchRequestSizeLimit)
+                         << LOG_KV("jwtSecretFile", m_engineRpc.jwtSecretFile)
+                         << LOG_KV("clockSkewSecs", m_engineRpc.clockSkewSecs)
+                         << LOG_KV("enableMinerApi", m_engineRpc.enableMinerApi)
+                         << LOG_KV("enableDebugApi", m_engineRpc.enableDebugApi);
+}
+
+void NodeConfig::loadDebugConfig(boost::property_tree::ptree const& _pt)
+{
+    // Hidden development/test section: written into no template or runbook example. The
+    // lane checks live in blockDriver(), which needs config.genesis too.
+    //   [debug]
+    //       ; OP lane only: follow an OP chain's op-geth peers over devp2p (bootnodes and
+    //       ; sync knobs in [ethereum]) instead of being driven by op-node
+    //       follow_devp2p=false
+    m_debugFollowDevp2p = _pt.get<bool>("debug.follow_devp2p", false);
+    if (m_debugFollowDevp2p)
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "[debug] follow_devp2p=true: debug mode, not for production");
+    }
 }
 
 void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
@@ -1423,15 +1405,13 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     [ethereum]
         ; EL-mode self-sync. mode=el runs the node as an Ethereum L1
         ; execution-layer client (download via RLPx -> verify -> commit), with no
-        ; FISCO gateway / PBFT / txpool pipeline. mode=opstack-el is the same
-        ; shape for an OP-Stack chain (executor_version >= 3): blocks download
-        ; from op-geth EL serving peers and commit through OpBlockVerifier.
-        ; Any other value (or absent section) leaves the node in the normal
-        ; FISCO mode.
+        ; FISCO gateway / PBFT / txpool pipeline. mode=none (or absent section)
+        ; leaves the node in the normal FISCO mode. The OP lane's devp2p
+        ; self-follow is [debug] follow_devp2p, which reads the network keys below.
         mode=none
         ; geth-style enode:// list; path relative to the working directory.
-        ; For mode=opstack-el these must be op-geth EL serving peers of the OP
-        ; chain (e.g. op-sepolia bootnodes).
+        ; Under [debug] follow_devp2p these must be op-geth EL serving peers of the
+        ; OP chain (e.g. op-sepolia bootnodes).
         bootnodes_file=./bootnodes.json
         ; secp256k1 node identity: a file holding the 32-byte private key as hex
         ; (optional 0x prefix). Empty = auto-generate a persistent key on first
@@ -1449,11 +1429,11 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; cross-check. Optional; defaults to the Ethereum mainnet deposit
         ; contract (Sepolia: 0x7f02c3e3c98b133055b8b348b2ac625669182295).
         deposit_contract_address=
-        ; mode=opstack-el only: the OP chain's block cadence in seconds
+        ; [debug] follow_devp2p only: the OP chain's block cadence in seconds
         ; (rollup.json block_time; 2 on every superchain chain). Feeds the
         ; header validator's block-interval check. Range [1, 60].
         op_block_time_seconds=2
-        ; mode=opstack-el only: how far behind the peer's UNSAFE head the
+        ; [debug] follow_devp2p only: how far behind the peer's UNSAFE head the
         ; download stops (the peer head announced over eth/68 is the unsafe
         ; head; this lag does NOT track the OP safe/finalized head, which L1
         ; batch derivation defines and which can lag the unsafe head by a
@@ -1462,46 +1442,38 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         op_sync_lag_blocks=64
     */
     const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
-    if (mode != "none" && mode != "el" && mode != "opstack-el")
+    if (mode == "opstack-el")
     {
         BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.mode invalid: \"" + mode + "\" (supported: none, el, opstack-el)"));
+            InvalidConfig() << errinfo_comment("ethereum.mode=opstack-el is replaced by [debug] "
+                                               "follow_devp2p=true (executor.version >= 3 only)"));
+    }
+    if (mode != "none" && mode != "el")
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.mode invalid: \"" + mode + "\" (supported: none, el)"));
     }
     const bool enableEL = (mode == "el");
-    const bool enableOpStackEL = (mode == "opstack-el");
-    // Both EL modes are self-contained sync clients: mutually exclusive with the
-    // op-stack Engine API driver and the single-node consensus driver (both drive block
-    // production through the EngineService; EL modes drive it through devp2p download).
-    if ((enableEL || enableOpStackEL) && m_enableOpEngineRpc)
+    // EL mode is a self-contained sync client: mutually exclusive with the op-stack Engine
+    // API driver and the single-node consensus driver (both drive block production through
+    // the EngineService; EL mode drives it through devp2p download).
+    if (enableEL && m_opEngineRpc.enable)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "ethereum.mode=" + mode +
-                " and op_engine_rpc.enable are mutually exclusive: "
+                "ethereum.mode=el and op_engine_rpc.enable are mutually exclusive: "
                 "EL mode self-syncs from bootnodes; op_engine_rpc is driven by an "
                 "external op-node"));
     }
-    if ((enableEL || enableOpStackEL) && m_enableSingleNodeConsensus)
+    if (enableEL && m_enableSingleNodeConsensus)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "ethereum.mode=" + mode +
-                " and consensus.enable_single_node_consensus are mutually "
+                "ethereum.mode=el and consensus.enable_single_node_consensus are mutually "
                 "exclusive: EL mode self-syncs from bootnodes; single-node consensus "
                 "produces its own blocks"));
     }
-    // [engine_rpc] is the EL-mode Engine API listener; without EL mode nothing drives or
-    // serves the EngineService it exposes.
-    if (!enableEL && m_enableEngineRpc)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "engine_rpc.enable requires ethereum.mode=el: the engine RPC listener serves "
-                "the EL-mode EngineService"));
-    }
     m_enableEthereumEL = enableEL;
-    m_enableOpStackEL = enableOpStackEL;
     // NOTE: this loader deliberately stays PURE parsing of the config.ini
     // [ethereum] section — it must NOT read m_genesisConfig members: tools
     // (archive-tool, storage-tool) call loadConfig BEFORE loadGenesisConfig, so
@@ -1509,8 +1481,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     // cross-file requirements live in two order-independent places instead:
     // genesis-side pairing (EL declaration <-> [fork_timestamps] <-> [chain]
     // chain_id) in validateL2Invariants, and the config.ini->config.genesis
-    // direction in validateELModeInvariants, which the node initializers call
-    // after BOTH files are loaded.
+    // direction (plus the lane-dependent [engine_rpc] enable gate) in
+    // validateELModeInvariants, which the node initializers call after BOTH files
+    // are loaded.
     m_ethereumBootnodesFile = _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
     m_ethereumTxGossip = _pt.get<bool>("ethereum.tx_gossip", true);
     m_ethereumNodeKeyFile = _pt.get<std::string>("ethereum.node_key_file", "");
@@ -1528,7 +1501,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_ethereumMaxBatchSize = maxBatch;
 
-    // mode=opstack-el: the OP chain's block cadence (rollup.json block_time). Bounded
+    // [debug] follow_devp2p: the OP chain's block cadence (rollup.json block_time). Bounded
     // like every neighbouring knob: the header validator only WARNs on a deviation
     // (op-geth enforces no fixed cadence at EL level), but a nonsensical value is a
     // config error, not a tuning choice.
@@ -1541,7 +1514,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_opBlockTimeSeconds = blockTime;
 
-    // mode=opstack-el: the download lag behind the peer's UNSAFE head. The head a
+    // [debug] follow_devp2p: the download lag behind the peer's UNSAFE head. The head a
     // peer announces over eth/68 is its unsafe head; the OP safe/finalized heads are
     // defined by L1 batch derivation and can trail the unsafe head by a whole
     // sequencing window (~12h ≈ 21600 L2 blocks on superchain chains), so this knob
@@ -1678,7 +1651,6 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // m_ethereumELMode would waive both the executor.evm_revision and the auth_admin_account
     // guards; a stale schedule would leak into the genesis pin of a chain that has none.
     m_genesisConfig.m_ethereumELMode = false;
-    m_genesisConfig.m_opStackELMode = false;
     m_genesisConfig.m_ethereumForkSchedule.reset();
     m_ethereumChainId = 0;     // reassigned by validateL2Invariants when EL is declared
     m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
@@ -1686,18 +1658,21 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
     {
         auto mode = ethSection->get<std::string>("mode", "none");
-        if (mode != "none" && mode != "el" && mode != "opstack-el")
+        if (mode == "opstack-el")
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "config.genesis [ethereum].mode=opstack-el is no longer a "
+                    "chain-level declaration: remove it and set config.ini "
+                    "[debug] follow_devp2p=true on the nodes that follow devp2p"));
+        }
+        if (mode != "none" && mode != "el")
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("config.genesis [ethereum].mode invalid: \"" +
-                                                   mode + "\" (supported: none, el, opstack-el)"));
+                                                   mode + "\" (supported: none, el)"));
         }
         m_genesisConfig.m_ethereumELMode = (mode == "el");
-        // opstack-el: the chain-level declaration of the OP devp2p self-sync lane
-        // (OpStackSyncInitializer). Bound to the OP fork schedule / L2 genesis shape /
-        // [chain] chain_id in validateL2Invariants, and to config.ini's
-        // [ethereum].mode=opstack-el in validateELModeInvariants.
-        m_genesisConfig.m_opStackELMode = (mode == "opstack-el");
     }
 
     auto section = _genesisConfig.get_child_optional("fork_timestamps");
@@ -2445,7 +2420,7 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
     // Refuse the combination at startup instead of leaving two block producers reachable by
     // configuration. The check is symmetric (loadOpEngineRpcConfig carries the same guard),
     // so it does not depend on the order the two loaders run in loadConfig.
-    if (m_enableSingleNodeConsensus && m_enableOpEngineRpc)
+    if (m_enableSingleNodeConsensus && m_opEngineRpc.enable)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
@@ -2453,7 +2428,7 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
                 "exclusive: both drive the same EngineService; enable at most one"));
     }
     // Symmetric with loadEngineRpcConfig (the EL-mode Engine API listener).
-    if (m_enableSingleNodeConsensus && m_enableEngineRpc)
+    if (m_enableSingleNodeConsensus && m_engineRpc.enable)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
@@ -2689,7 +2664,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     // startup failure means the mistake is found once, at the node that made it, instead of
     // being discovered later as unexplained pool behaviour.
     m_eestReplayMode = _pt.get<bool>("executor.eest_replay_mode", false);
-    if (m_eestReplayMode && !engineDrivenBlockProduction())
+    if (m_eestReplayMode && !m_enableSingleNodeConsensus && !m_opEngineRpc.enable)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "executor.eest_replay_mode requires engine-driven block "
@@ -3597,9 +3572,67 @@ bool NodeConfig::web3SyncTransaction() const
     return m_web3SyncTransaction;
 }
 
-bool NodeConfig::enableOpEngineRpc() const
+BlockDriver NodeConfig::blockDriver() const
 {
-    return m_enableOpEngineRpc;
+    auto const lane = laneForExecutorVersion(m_genesisConfig.m_executorVersion);
+    if (m_debugFollowDevp2p && lane != ChainLane::Op)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[debug] follow_devp2p requires executor.version >= 3 (the OP "
+                                  "lane): it follows an OP chain's op-geth peers over devp2p"));
+    }
+    if (lane == ChainLane::Op)
+    {
+        if (m_enableSingleNodeConsensus)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "consensus.enable_single_node_consensus is not supported "
+                                      "on executor.version >= 3 (the OP lane): an OP chain is "
+                                      "driven by op-node over [engine_rpc]"));
+        }
+        if (m_opEngineRpc.enable)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[op_engine_rpc] is not read on executor.version >= 3 (the "
+                                      "OP lane): move its keys to [engine_rpc], which has no "
+                                      "enable key"));
+        }
+        return m_debugFollowDevp2p ? BlockDriver::DebugFollowDevp2p : BlockDriver::Engine;
+    }
+    if (m_enableSingleNodeConsensus)
+    {
+        return BlockDriver::DebugSelfProduce;
+    }
+    if (m_opEngineRpc.enable || m_enableEthereumEL)
+    {
+        return BlockDriver::Engine;
+    }
+    return BlockDriver::PBFT;
+}
+
+bool NodeConfig::servesEngineApi() const
+{
+    if (laneForExecutorVersion(m_genesisConfig.m_executorVersion) == ChainLane::Op)
+    {
+        return blockDriver() == BlockDriver::Engine;
+    }
+    return m_opEngineRpc.enable || m_engineRpc.enable;
+}
+
+EngineRpcConfig const& NodeConfig::engineApiListener() const
+{
+    if (laneForExecutorVersion(m_genesisConfig.m_executorVersion) != ChainLane::Op &&
+        m_opEngineRpc.enable)
+    {
+        return m_opEngineRpc;
+    }
+    return m_engineRpc;
+}
+
+bool NodeConfig::engineApiMinerApi() const
+{
+    return laneForExecutorVersion(m_genesisConfig.m_executorVersion) == ChainLane::Op &&
+           m_engineRpc.enableMinerApi;
 }
 
 bool NodeConfig::enableMinerApi() const
@@ -3607,9 +3640,19 @@ bool NodeConfig::enableMinerApi() const
     return m_enableMinerApi;
 }
 
-bool NodeConfig::enableOpEngineMinerApi() const
+EngineRpcConfig const& NodeConfig::engineRpcConfig() const
 {
-    return m_enableOpEngineMinerApi;
+    return m_engineRpc;
+}
+
+EngineRpcConfig const& NodeConfig::opEngineRpcConfig() const
+{
+    return m_opEngineRpc;
+}
+
+bool NodeConfig::enableOpEngineRpc() const
+{
+    return m_opEngineRpc.enable;
 }
 
 bool NodeConfig::enableDebugApi() const
@@ -3617,9 +3660,13 @@ bool NodeConfig::enableDebugApi() const
     return m_enableDebugApi;
 }
 
-bool NodeConfig::enableOpEngineDebugApi() const
+bool NodeConfig::engineApiDebugApi() const
 {
-    return m_enableOpEngineDebugApi;
+    if (laneForExecutorVersion(m_genesisConfig.m_executorVersion) == ChainLane::Op)
+    {
+        return m_engineRpc.enableDebugApi;
+    }
+    return m_opEngineRpc.enable && m_opEngineRpc.enableDebugApi;
 }
 
 bool NodeConfig::opEngineAllowV1Executor() const
@@ -3627,9 +3674,9 @@ bool NodeConfig::opEngineAllowV1Executor() const
     return m_opEngineAllowV1Executor;
 }
 
-bool NodeConfig::engineDrivenBlockProduction() const
+bool NodeConfig::enableEngineRpc() const
 {
-    return m_enableSingleNodeConsensus || m_enableOpEngineRpc;
+    return m_engineRpc.enable;
 }
 
 bool NodeConfig::enableSingleNodeConsensus() const
@@ -3660,71 +3707,6 @@ const std::string& NodeConfig::singleNodeConsensusPrevRandao() const
 std::uint64_t NodeConfig::singleNodeConsensusFixedTimestamp() const
 {
     return m_singleNodeConsensusFixedTimestamp;
-}
-
-const std::string& NodeConfig::opEngineRpcListenIP() const
-{
-    return m_opEngineRpcListenIP;
-}
-
-uint16_t NodeConfig::opEngineRpcListenPort() const
-{
-    return m_opEngineRpcListenPort;
-}
-
-uint32_t NodeConfig::opEngineHttpBodySizeLimit() const
-{
-    return m_opEngineHttpBodySizeLimit;
-}
-
-uint32_t NodeConfig::opEngineBatchRequestSizeLimit() const
-{
-    return m_opEngineBatchRequestSizeLimit;
-}
-
-const std::string& NodeConfig::opEngineJwtSecretFile() const
-{
-    return m_opEngineJwtSecretFile;
-}
-
-int32_t NodeConfig::opEngineClockSkewSecs() const
-{
-    return m_opEngineClockSkewSecs;
-}
-
-bool NodeConfig::enableEngineRpc() const
-{
-    return m_enableEngineRpc;
-}
-
-const std::string& NodeConfig::engineRpcListenIP() const
-{
-    return m_engineRpcListenIP;
-}
-
-uint16_t NodeConfig::engineRpcListenPort() const
-{
-    return m_engineRpcListenPort;
-}
-
-uint32_t NodeConfig::engineHttpBodySizeLimit() const
-{
-    return m_engineHttpBodySizeLimit;
-}
-
-uint32_t NodeConfig::engineBatchRequestSizeLimit() const
-{
-    return m_engineBatchRequestSizeLimit;
-}
-
-const std::string& NodeConfig::engineJwtSecretFile() const
-{
-    return m_engineJwtSecretFile;
-}
-
-int32_t NodeConfig::engineClockSkewSecs() const
-{
-    return m_engineClockSkewSecs;
 }
 
 const std::string& NodeConfig::p2pListenIP() const
@@ -4082,16 +4064,6 @@ std::string bcos::tool::generateGenesisData(
                << "[web3]" << '\n'
                << "chain_id:" << genesisConfig.m_web3ChainID << '\n';
         }
-        // opstack-el: same pin shape as the EL declaration above — the mode and the
-        // EIP-155/EIP-2124 chain id are chain-level decisions every node must agree
-        // on. (The [opForkTimestamps] block below keeps its own emit rules.)
-        if (genesisConfig.m_opStackELMode)
-        {
-            ss << "[ethereum]" << '\n'
-               << "mode:opstack-el" << '\n'
-               << "[web3]" << '\n'
-               << "chain_id:" << genesisConfig.m_web3ChainID << '\n';
-        }
         if (genesisConfig.m_ethereumForkSchedule.has_value())
         {
             auto const& schedule = *genesisConfig.m_ethereumForkSchedule;
@@ -4267,10 +4239,6 @@ bool bcos::tool::NodeConfig::ethereumELModeEnabled() const
 {
     return m_enableEthereumEL;
 }
-bool bcos::tool::NodeConfig::opStackELModeEnabled() const
-{
-    return m_enableOpStackEL;
-}
 uint64_t bcos::tool::NodeConfig::opBlockTimeSeconds() const
 {
     return m_opBlockTimeSeconds;
@@ -4297,9 +4265,9 @@ uint32_t bcos::tool::NodeConfig::ethereumMaxBatchSize() const
 }
 uint64_t bcos::tool::NodeConfig::ethereumChainId() const
 {
-    // Validated and pinned from config.genesis's [chain] chain_id when the genesis
-    // declares EL mode (validateL2Invariants throws on an absent/invalid id).
-    // 0 = unset (non-EL chains) — never a silent mainnet fallback.
+    // Copied from config.genesis's [chain] chain_id on executor.version >= 2
+    // (ethLaneChainId throws on an absent/invalid id). 0 = unset (FISCO lanes) — never a
+    // silent mainnet fallback.
     return m_ethereumChainId;
 }
 // Schedule absent -> UINT64_MAX ("not active") for every fork getter: 0 is the

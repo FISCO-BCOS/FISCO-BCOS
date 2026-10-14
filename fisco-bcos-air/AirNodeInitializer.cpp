@@ -125,14 +125,13 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // EL-mode sidecar handling stays keyed on the EL flag above.
     nodeService->setExecutorVersion(m_nodeInitializer->executorVersion());
 
-    // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc]):
-    // route sendRawTransaction to the in-process mempool instead of txpool — the
-    // EngineService seals these txs into blocks (driven by the built-in single-node timer
-    // or by an external op-node), bypassing txpool/sealer/pbft, which are never initialized
-    // in these modes. EL mode with [engine_rpc] enable gets the same mempool admission path
-    // (block import stays with devp2p sync).
-    if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->enableSingleNodeConsensus() ||
-        nodeConfig->enableEngineRpc())
+    // The DebugSelfProduce driver and every node serving the Engine API route
+    // sendRawTransaction to the in-process mempool instead of txpool — the EngineService
+    // seals these txs into blocks (driven by the built-in single-node timer or by an
+    // external consensus client), bypassing txpool/sealer/pbft, which are never initialized
+    // under these drivers. Under EL mode block import stays with devp2p sync.
+    if (nodeConfig->blockDriver() == bcos::tool::BlockDriver::DebugSelfProduce ||
+        nodeConfig->servesEngineApi())
     {
         nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
         // Admission travels with the pool it admits into. The context is the only thing the
@@ -185,6 +184,8 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
     nodeConfig->loadGenesisConfig(_params.genesisFilePath);
     nodeConfig->loadConfig(_params.configFilePath);
     validateEthereumELParams(_params, *nodeConfig);
+    auto const followDevp2p =
+        nodeConfig->blockDriver() == bcos::tool::BlockDriver::DebugFollowDevp2p;
 
     // EL mode's NodeConfig-only checks run BEFORE the core node init below: init performs
     // the MPT pruner's boot-time window walk and, with storage.mpt_prune_sweep_garbage, a
@@ -196,7 +197,7 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
     {
         bcos::initializer::EthereumSyncInitializer::validateNodeConfig(*nodeConfig);
     }
-    if (nodeConfig->opStackELModeEnabled())
+    if (followDevp2p)
     {
         bcos::initializer::OpStackSyncInitializer::validateNodeConfig(*nodeConfig);
     }
@@ -242,10 +243,10 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
         }
     }
 
-    // OP-Stack EL self-sync: same shape, one lane up. The verifier (OpBlockVerifier) builds
+    // [debug] follow_devp2p: same shape, one lane up. The verifier (OpBlockVerifier) builds
     // its own OpScheduler + OpEthExecutor internally, so the driver needs only the
     // shared ledger / block factory / global state storage / commit observer.
-    if (nodeConfig->opStackELModeEnabled())
+    if (followDevp2p)
     {
         auto initializer = m_nodeInitializer;
         m_opStackSync = std::make_shared<bcos::initializer::OpStackSyncInitializer>(nodeConfig,
@@ -263,15 +264,16 @@ void AirNodeInitializer::validateEthereumELParams(
     {
         bool const wantEL = *_params.ethereumEL;
         bool const configuredEL =
-            _nodeConfig.ethereumELModeEnabled() || _nodeConfig.opStackELModeEnabled();
+            _nodeConfig.ethereumELModeEnabled() ||
+            _nodeConfig.blockDriver() == bcos::tool::BlockDriver::DebugFollowDevp2p;
         if (wantEL && !configuredEL)
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "command-line --el requests EL self-sync mode but "
-                                      "[ethereum].mode is neither el nor opstack-el in " +
-                                      _params.configFilePath +
-                                      "; the config file is the source of truth — either "
-                                      "set [ethereum] mode=el|opstack-el or drop --el"));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "command-line --el requests EL self-sync mode but " + _params.configFilePath +
+                    " sets neither [ethereum] mode=el nor [debug] "
+                    "follow_devp2p=true; the config file is the source of "
+                    "truth — set one of them or drop --el"));
         }
     }
     if (_params.ethereumBootnodesFile.has_value())
@@ -309,10 +311,10 @@ bcos::initializer::BlockImportSummary AirNodeInitializer::importEthereumBlocks(
                                   "[ethereum] mode=el in config.ini"));
     }
     bcos::initializer::EthereumBlockImporter importer(nodeConfig, initializer->ledger(),
-        initializer->protocolInitializer()->blockFactory(),
-        initializer->ethereumSerialScheduler(), initializer->ethereumExecutor(),
-        initializer->globalStateStorageInitializer(), initializer->mptCommitObserver(),
-        initializer->ledgerConfigState(), initializer->elBlockVerifier());
+        initializer->protocolInitializer()->blockFactory(), initializer->ethereumSerialScheduler(),
+        initializer->ethereumExecutor(), initializer->globalStateStorageInitializer(),
+        initializer->mptCommitObserver(), initializer->ledgerConfigState(),
+        initializer->elBlockVerifier());
     auto summary = importer.import(_path);
     // Double-write the outcome: stdout for the hive/entrypoint harness, the node log
     // for operators.
@@ -320,8 +322,7 @@ bcos::initializer::BlockImportSummary AirNodeInitializer::importEthereumBlocks(
     std::cout << "import-blocks done: imported=" << summary.imported
               << " skipped=" << summary.skipped << " headNumber=" << summary.headNumber
               << " headHash=" << summary.headHash.hex() << std::endl;
-    INITIALIZER_LOG(INFO) << LOG_DESC("import-blocks done")
-                          << LOG_KV("imported", summary.imported)
+    INITIALIZER_LOG(INFO) << LOG_DESC("import-blocks done") << LOG_KV("imported", summary.imported)
                           << LOG_KV("skipped", summary.skipped)
                           << LOG_KV("headNumber", summary.headNumber)
                           << LOG_KV("headHash", summary.headHash.hex());

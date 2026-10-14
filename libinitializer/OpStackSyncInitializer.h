@@ -14,12 +14,13 @@
  *  limitations under the License.
  *
  * @file OpStackSyncInitializer.h
- * @brief OP-Stack EL-mode self-sync driver ([ethereum] mode=opstack-el): connect to
+ * @brief OP-Stack devp2p follow driver ([debug] follow_devp2p=true): connect to
  *        op-geth RLPx bootnodes, download blocks with BlockExchange (OP header
  *        validation via makeOpHeaderValidator), verify + commit each block with
  *        OpBlockVerifier (execute -> incremental MPT -> commitments -> ledger), in
  *        a dedicated background thread. Wired from AirNodeInitializer when
- *        [ethereum] mode=opstack-el; the config file is the source of truth.
+ *        NodeConfig::blockDriver() is DebugFollowDevp2p; the config file is the
+ *        source of truth.
  *
  * Mirrors EthereumSyncInitializer (the L1 EL driver) section for section; the
  * OP-specific pieces are the fork-id ladder (eth/OpForkId.h, op-geth's
@@ -106,12 +107,12 @@ public:
     OpStackSyncInitializer(OpStackSyncInitializer const&) = delete;
     OpStackSyncInitializer& operator=(OpStackSyncInitializer const&) = delete;
 
-    /// Validate that the opstack-el prerequisites hold (mode, OP executor version, OP
+    /// Validate that the follow_devp2p prerequisites hold (driver, OP executor version, OP
     /// fork schedule, genesis anchor present and hashing to the configured
     /// [eth_genesis_header].hash, bootnode file readable). Throws InvalidConfig on failure.
     void validateConfig() const { validateNodeConfig(*m_nodeConfig); }
 
-    /// NodeConfig-only validation of the opstack-el prerequisites. Static on purpose:
+    /// NodeConfig-only validation of the follow_devp2p prerequisites. Static on purpose:
     /// every check reads only NodeConfig, so AirNodeInitializer runs this BEFORE the
     /// core node init — which performs the MPT pruner's boot-time window walk and, with
     /// storage.mpt_prune_sweep_garbage, a whole-keyspace garbage sweep — keeping a config
@@ -119,35 +120,36 @@ public:
     /// the L1 EL driver, EthereumSyncInitializer::validateNodeConfig).
     static void validateNodeConfig(bcos::tool::NodeConfig const& nodeConfig)
     {
-        if (!nodeConfig.opStackELModeEnabled())
+        if (nodeConfig.blockDriver() != bcos::tool::BlockDriver::DebugFollowDevp2p)
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "OpStackSyncInitializer: [ethereum].mode != opstack-el"));
+                                      "OpStackSyncInitializer: [debug] follow_devp2p is not set"));
         }
         if (nodeConfig.executorVersion() < ledger::OPSTACK_EXECUTOR_VERSION)
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "opstack-el mode requires executor.version >= 3 "
+                                      "[debug] follow_devp2p requires executor.version >= 3 "
                                       "(the OP lane); set [executor] version=3 "
                                       "in config.genesis"));
         }
         if (!nodeConfig.opForkSchedule().has_value())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "opstack-el mode requires an [op_fork_timestamps] "
+                                      "[debug] follow_devp2p requires an [op_fork_timestamps] "
                                       "section in config.genesis (the OP fork schedule)"));
         }
         if (nodeConfig.ethereumChainId() == 0)
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "opstack-el mode requires a non-zero [chain] chain_id in "
-                                      "config.genesis (the OP chain id, e.g. 11155420 for "
-                                      "op-sepolia)"));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "[debug] follow_devp2p requires a non-zero [chain] chain_id in "
+                    "config.genesis (the OP chain id, e.g. 11155420 for "
+                    "op-sepolia)"));
         }
         if (!nodeConfig.genesisConfig().m_ethGenesisHeader.has_value())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "opstack-el mode requires an [eth_genesis_header] "
+                                      "[debug] follow_devp2p requires an [eth_genesis_header] "
                                       "section in config.genesis (sync anchor)"));
         }
         // The initializer's own genesis projection must hash to the configured
@@ -161,7 +163,8 @@ public:
         {
             BOOST_THROW_EXCEPTION(
                 bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "opstack-el mode: [eth_genesis_header].hash " + ethGenesisHeader->m_hash.hex() +
+                    "[debug] follow_devp2p: [eth_genesis_header].hash " +
+                    ethGenesisHeader->m_hash.hex() +
                     " does not match the re-computed genesis hash " + projectedHash.hex()));
         }
         // Bootnode file must exist and parse (validates the enode list eagerly).
@@ -170,7 +173,7 @@ public:
         {
             BOOST_THROW_EXCEPTION(
                 bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "opstack-el mode: no bootnodes in " + nodeConfig.ethereumBootnodesFile() +
+                    "[debug] follow_devp2p: no bootnodes in " + nodeConfig.ethereumBootnodesFile() +
                     " (expected op-geth EL serving peers of the OP chain)"));
         }
     }
@@ -268,8 +271,8 @@ private:
         return {static_cast<uint64_t>(current + 1), head, genesisHeader};
     }
 
-    /// The header-validation chain config: chain id ([chain] chain_id, pinned by
-    /// validateL2Invariants for opstack-el), the block cadence knob ([ethereum]
+    /// The header-validation chain config: chain id ([chain] chain_id, copied by
+    /// validateL2Invariants on the Ethereum lanes), the block cadence knob ([ethereum]
     /// op_block_time_seconds) and the OP fork schedule from [op_fork_timestamps],
     /// carried whole so the validator resolves forks through the same
     /// bcos::ledger::resolveOpFork ladder the executor uses. The declared

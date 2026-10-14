@@ -221,15 +221,6 @@ public:
     // them. validateL2Invariants binds it to m_ethereumForkSchedule both ways.
     bool m_ethereumELMode = false;
 
-    // True iff config.genesis declares "[ethereum] mode=opstack-el" — the chain is
-    // an OP-Stack chain synced over devp2p (OpStackSyncInitializer), executor
-    // version >= OPSTACK_EXECUTOR_VERSION. Same chain-level pin semantics as
-    // m_ethereumELMode; validateL2Invariants binds it to m_opForkSchedule, the L2
-    // genesis shape ([eth_genesis_header] + [alloc.*]) and a non-zero [chain]
-    // chain_id. Mutually exclusive with m_ethereumELMode by construction (one
-    // mode string).
-    bool m_opStackELMode = false;
-
     // Canonical OP fork schedule. Parsed from genesis [op_fork_schedule]
     // canonical and persisted into s_op_chain_metadata at genesis when set; not
     // part of LedgerConfig / generateGenesisData.

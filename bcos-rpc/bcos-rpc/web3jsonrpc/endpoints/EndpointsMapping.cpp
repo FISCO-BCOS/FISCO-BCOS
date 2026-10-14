@@ -144,7 +144,7 @@ void EndpointsMapping::addMinerHandlers()
 {
     // clang-format off
     // OP Stack `miner` namespace. Registered only for a listener whose own
-    // enable_miner_api key ([op_engine_rpc] or [web3_rpc]) is set — the flag is the
+    // enable_miner_api key ([engine_rpc] or [web3_rpc]) is set — the flag is the
     // gate. The null-daCaps MethodNotFound below is the Ethereum-only-node fallback,
     // not the protection.
     m_handlers[methodString(EthMethod::miner_setMaxDASize)] = &Endpoints::setMaxDASize;

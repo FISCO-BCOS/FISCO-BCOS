@@ -156,8 +156,8 @@ BOOST_AUTO_TEST_CASE(ELModeAllowsEmptyAllocs)
 
 BOOST_AUTO_TEST_CASE(ELModeOnOpLaneRejected)
 {
-    // mode=el is bound to the L1 EL lane: executor.version=3 (the OP lane) must
-    // declare mode=opstack-el instead. Accepting mode=el here would waive the
+    // mode=el is bound to the L1 EL lane: executor.version=3 (the OP lane) follows
+    // devp2p under config.ini [debug] follow_devp2p instead. Accepting mode=el here would waive the
     // non-empty-alloc invariant for a chain whose predeploys travel in the
     // allocs.
     constexpr auto kELDeclarations =

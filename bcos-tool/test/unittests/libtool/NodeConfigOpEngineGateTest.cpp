@@ -8,8 +8,9 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 // Regression tests for the [op_engine_rpc] / enable_single_node_consensus assembly gate:
-// parsing of the [op_engine_rpc] section and the startup fail-fast when both the built-in
-// single-node driver and the external op-node Engine RPC are enabled at once (K0).
+// parsing of the [op_engine_rpc] section (read on executor.version < 3 only; the OP lane is
+// NodeConfigBlockDriverTest) and the startup fail-fast when both the built-in single-node
+// driver and the external Engine RPC are enabled at once (K0).
 
 #include "NodeConfigLoaderProbe.h"
 #include <boost/test/unit_test.hpp>
@@ -26,9 +27,9 @@ BOOST_AUTO_TEST_CASE(opEngineRpcDefaults)
     LoaderProbe probe;
     probe.loadOpEngineRpcConfig({});
     BOOST_CHECK(!probe.enableOpEngineRpc());
-    BOOST_CHECK_EQUAL(probe.opEngineRpcListenIP(), "127.0.0.1");
-    BOOST_CHECK_EQUAL(probe.opEngineRpcListenPort(), 8551);
-    BOOST_CHECK_EQUAL(probe.opEngineJwtSecretFile(), "conf/op-engine/jwt.hex");
+    BOOST_CHECK_EQUAL(probe.opEngineRpcConfig().listenIP, "127.0.0.1");
+    BOOST_CHECK_EQUAL(probe.opEngineRpcConfig().listenPort, 8551);
+    BOOST_CHECK_EQUAL(probe.opEngineRpcConfig().jwtSecretFile, "conf/op-engine/jwt.hex");
 }
 
 BOOST_AUTO_TEST_CASE(opEngineRpcPopulated)
@@ -39,10 +40,10 @@ BOOST_AUTO_TEST_CASE(opEngineRpcPopulated)
         "jwt_secret_file=conf/custom-jwt.hex\nclock_skew_secs=30\n");
     probe.loadOpEngineRpcConfig(pt);
     BOOST_CHECK(probe.enableOpEngineRpc());
-    BOOST_CHECK_EQUAL(probe.opEngineRpcListenIP(), "0.0.0.0");
-    BOOST_CHECK_EQUAL(probe.opEngineRpcListenPort(), 9551);
-    BOOST_CHECK_EQUAL(probe.opEngineJwtSecretFile(), "conf/custom-jwt.hex");
-    BOOST_CHECK_EQUAL(probe.opEngineClockSkewSecs(), 30);
+    BOOST_CHECK_EQUAL(probe.opEngineRpcConfig().listenIP, "0.0.0.0");
+    BOOST_CHECK_EQUAL(probe.opEngineRpcConfig().listenPort, 9551);
+    BOOST_CHECK_EQUAL(probe.opEngineRpcConfig().jwtSecretFile, "conf/custom-jwt.hex");
+    BOOST_CHECK_EQUAL(probe.opEngineRpcConfig().clockSkewSecs, 30);
 }
 
 BOOST_AUTO_TEST_CASE(singleNodeConsensusAloneAccepted)
@@ -101,19 +102,6 @@ BOOST_AUTO_TEST_CASE(allowV1ExecutorDefaultsOff)
     BOOST_CHECK(probe2.opEngineAllowV1Executor());
 }
 
-BOOST_AUTO_TEST_CASE(engineDrivenBlockProduction)
-{
-    LoaderProbe probe;
-    BOOST_CHECK(!probe.engineDrivenBlockProduction());
-    probe.loadOpEngineRpcConfig(fromIni("[op_engine_rpc]\nenable=true\n"));
-    BOOST_CHECK(probe.engineDrivenBlockProduction());
-
-    LoaderProbe probe2;
-    probe2.loadSingleNodeConsensusConfig(
-        fromIni("[consensus]\nenable_single_node_consensus=true\n"));
-    BOOST_CHECK(probe2.engineDrivenBlockProduction());
-}
-
 // The OP miner namespace (miner_setMaxDASize) is opt-in: it writes the node-wide DA caps, so
 // a listener that has not enabled it must not register it at all. Default off is load-bearing —
 // an OP node creates the caps, so the runtime MethodNotFound guard would not stop a public caller.
@@ -124,38 +112,24 @@ BOOST_AUTO_TEST_CASE(minerApiDefaultsOff)
     BOOST_CHECK(!probe.enableMinerApi());
 }
 
-// The two listeners configure the miner namespace independently: the op-engine (8551) key
-// must not touch the web3 (8545) switch and vice versa — enabling the batcher handshake on
-// the private port can never expose it on the public one.
+// The two listeners configure the miner namespace independently: the [engine_rpc] key must
+// not touch the web3 (8545) switch and vice versa — enabling the batcher handshake on the
+// private port can never expose it on the public one. (That the [engine_rpc] key takes
+// effect on the OP lane only is NodeConfigBlockDriverTest.)
 BOOST_AUTO_TEST_CASE(minerApiScopedPerListener)
 {
     LoaderProbe probe;
-    probe.loadOpEngineRpcConfig(fromIni("[op_engine_rpc]\nenable=true\nenable_miner_api=true\n"));
-    BOOST_CHECK(probe.enableOpEngineMinerApi());
+    probe.loadEngineRpcConfig(fromIni("[engine_rpc]\nenable_miner_api=true\n"));
+    probe.loadWeb3RpcConfig(fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\n"));
+    BOOST_CHECK(probe.engineRpcConfig().enableMinerApi);
     BOOST_CHECK(!probe.enableMinerApi());
 
     LoaderProbe probe2;
+    probe2.loadEngineRpcConfig({});
     probe2.loadWeb3RpcConfig(
         fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\nenable_miner_api=true\n"));
     BOOST_CHECK(probe2.enableMinerApi());
-    BOOST_CHECK(!probe2.enableOpEngineMinerApi());
-}
-
-// The default is OFF on both listeners, and the web3 key reaches only the web3 listener: a
-// [web3_rpc] section that says nothing about the miner namespace must not expose it, which is
-// the half the scoped-per-listener case above does not state.
-BOOST_AUTO_TEST_CASE(minerApiDefaultsToOff)
-{
-    LoaderProbe plainWeb3;
-    plainWeb3.loadWeb3RpcConfig(fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\n"));
-    BOOST_CHECK(!plainWeb3.enableMinerApi());
-    BOOST_CHECK(!plainWeb3.enableOpEngineMinerApi());
-
-    LoaderProbe web3On;
-    web3On.loadWeb3RpcConfig(
-        fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\nenable_miner_api=true\n"));
-    BOOST_CHECK(web3On.enableMinerApi());
-    BOOST_CHECK(!web3On.enableOpEngineMinerApi());
+    BOOST_CHECK(!probe2.engineRpcConfig().enableMinerApi);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
