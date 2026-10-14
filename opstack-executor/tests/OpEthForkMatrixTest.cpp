@@ -24,7 +24,8 @@
 #include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
 #include <opstack-executor/OpEthReceipt.h>       // intxToBcosU256
 #include <opstack-executor/OpExecutionPolicy.h>
-#include <opstack-executor/OpRollupCost.h>  // computeLegacyL1Cost / computeL1Cost / computeOperatorCost
+#include <opstack-executor/OpRollupCost.h>  // computeLegacyL1Cost / computeL1Cost /
+                                            // computeOperatorCost
 
 #include <ethereum-executor/EthExecutionPolicy.h>  // EthL1Policy (⑦ contrast)
 #include <ethereum-executor/EthereumHost.h>
