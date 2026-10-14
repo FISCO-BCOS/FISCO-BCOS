@@ -9,7 +9,7 @@
 #include <memory>
 #include <bcos-utilities/BoostLog.h>
 
-#define EXECUTIVE_WRAPPER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
+#define EXECUTIVE_WRAPPER(LEVEL) BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
 
 namespace bcos::executor_v1
 {
