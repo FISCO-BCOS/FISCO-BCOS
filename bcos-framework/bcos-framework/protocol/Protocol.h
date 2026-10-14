@@ -42,12 +42,12 @@ enum MessageExtFieldFlag : uint32_t
 };
 using NodeType = MessageExtFieldFlag;
 
+// The values are kept as they were; 2 belonged to the retired MAX topology
 enum NodeArchitectureType
 {
     AIR = 0,
     PRO = 1,
-    MAX = 2,
-    LIGHT
+    LIGHT = 3
 };
 
 enum MessageType

@@ -61,9 +61,7 @@ BOOST_AUTO_TEST_CASE(builtSchedulerExecutesBlockOnTheGivenPool)
     auto storage =
         std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
 
-    boost::asio::io_context ioService;
-    bcos::scheduler::SchedulerFactory factory(
-        std::make_shared<bcos::scheduler::ExecutorManager>(ioService),
+    bcos::scheduler::SchedulerFactory factory(std::make_shared<bcos::scheduler::ExecutorManager>(),
         std::make_shared<MockLedger3>(), storage,
         std::make_shared<bcos::executor::NativeExecutionMessageFactory>(), blockFactory,
         std::make_shared<MockTxPool>(),
