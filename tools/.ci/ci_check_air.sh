@@ -295,11 +295,11 @@ export RUN_DMC="false"
 init ""
 expand_node ""
 check_consensus
-# ops_checks_pass <exit-code> <json-file>: status exits 2 when a check is in state "fail". The only
-# failure a healthy idle chain shows is consensus_stable: a fresh chain stays in timeout until its
-# first block, and until #5643 every block is followed by one consensus-timeout view change about
-# one timeout later; a snapshot can land inside either. Exit 2 passes when that is the sole
-# failing check.
+# ops_checks_pass <exit-code> <json-file>: status and log status exit 2 when a check is in state
+# "fail". The only failure a healthy idle chain shows is consensus_stable: a fresh chain stays in
+# timeout until its first block, and until #5643 every block is followed by one consensus-timeout
+# view change about one timeout later; a snapshot can land inside either. Exit 2 passes when that
+# is the sole failing check.
 ops_checks_pass()
 {
     [[ "${1}" == "0" ]] && return 0
@@ -322,7 +322,12 @@ ops_tool_test()
         cat ${current_path}/ops_smoke.json
         exit 1
     fi
-    ${fisco_bcos_path} log status --node-dir ${current_path}/nodes/127.0.0.1/node0 --json > ${current_path}/ops_log_status.json || { LOG_ERROR "ops log status failed"; cat ${current_path}/ops_log_status.json; exit 1; }
+    ${fisco_bcos_path} log status --node-dir ${current_path}/nodes/127.0.0.1/node0 --json > ${current_path}/ops_log_status.json
+    if ! ops_checks_pass ${?} ${current_path}/ops_log_status.json; then
+        LOG_ERROR "ops log status failed"
+        cat ${current_path}/ops_log_status.json
+        exit 1
+    fi
     LOG_INFO "=== ops tool: success ==="
 }
 ops_tool_test
