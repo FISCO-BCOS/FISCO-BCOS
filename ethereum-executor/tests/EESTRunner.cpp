@@ -584,12 +584,14 @@ std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
     // reverted EIP-1283 (SSTORE net gas metering), so running those fixtures under
     // Petersburg charges different gas and yields a wrong post-state. nullopt is the
     // skip signal — an exception here aborted the whole runner (exit 134) wherever the
-    // call was not wrapped in a try/catch, which is most call sites. Names merely
-    // EMBEDDING a refused fork (transition names like PragueToConstantinopleFixAtTime5)
-    // are caught in configureFork's transition parser, which skips the fixture when
-    // either endpoint is unresolvable; genuinely unknown names still take the
-    // EVMC_OSAKA default documented in the header.
-    if (lower == "constantinople" || lower == "constantinoplefix")
+    // call was not wrapped in a try/catch, which is most call sites. The containment
+    // check also refuses names merely EMBEDDING the fork — legacy transition names like
+    // ByzantiumToConstantinopleFixAt5 carry no "AtTime" marker, so configureFork's
+    // transition parser never runs on them and they would otherwise fall through to the
+    // EVMC_OSAKA default and execute with no transition. No surviving revision contains
+    // the substring, so this cannot refuse a fixture we could have run.
+    if (lower == "constantinople" || lower == "constantinoplefix" ||
+        lower.find("constantinople") != std::string::npos)
         return std::nullopt;
     if (lower == "petersburg")
         return EVMC_PETERSBURG;
