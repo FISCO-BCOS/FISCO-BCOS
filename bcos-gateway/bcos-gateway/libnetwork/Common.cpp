@@ -85,6 +85,8 @@ std::string_view disconnectReasonTag(DisconnectReason _reason)
     case UnexpectedIdentity:
     case NegotiateFailed:
         return "handshake_failed";
+    case DuplicatePeer:
+        return "duplicate";
     case InBlacklistReason:
     case NotInWhitelistReason:
         return "blacklist";
