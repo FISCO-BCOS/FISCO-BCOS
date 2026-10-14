@@ -132,7 +132,7 @@ int runLogStatus(LogInput const& _input, Args const& _args, std::ostream& _out)
     }
     auto checks = evaluate(status, thresholds, logNowMs());
     renderStatus(_out, status, checks, wantJson(_args.flag("json")));
-    return anyFailed(checks) ? c_exitChecksFailed : c_exitOk;
+    return anyFailed(checks) || !anyEvaluated(checks) ? c_exitChecksFailed : c_exitOk;
 }
 
 int runLogTx(LogInput const& _input, Args const& _args, std::ostream& _out)
@@ -277,6 +277,7 @@ void registerLogCommand()
                    "status | tx <hash> | pbft <number> | viewchange [--last N] | sync | seal-stall "
                    "| p2p | "
                    "txsync   [--since 1h] [--node-dir <dir>] [--json]",
-                   {}, runLog});
+                   {}, runLog, {"since", "last", "stall-factor", "max-lag", "viewchange-window-ms"},
+                   true});
 }
 }  // namespace bcos::ops
