@@ -25,6 +25,7 @@
 #include <bcos-framework/rpc/HandshakeRequest.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
+#include <boost/exception/diagnostic_information.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -83,6 +84,22 @@ void Rpc::start()
     {
         m_opEngineService->start();
     }
+    if (m_ipcServer)
+    {
+        try
+        {
+            m_ipcServer->start();
+        }
+        catch (std::exception const& e)
+        {
+            // the socket is an addition to the node, never a reason for it not to start: an
+            // over-long path, a read-only data dir or a bind race only loses `attach`
+            RPC_LOG(WARNING) << LOG_DESC("IpcServerStartFailed")
+                             << LOG_KV("path", m_ipcServer->path())
+                             << LOG_KV("reason", boost::diagnostic_information(e));
+            m_ipcServer.reset();
+        }
+    }
     RPC_LOG(INFO) << LOG_DESC("start rpc successfully");
 }
 
@@ -110,6 +127,10 @@ void Rpc::stop()
     if (m_opEngineService)
     {
         m_opEngineService->stop();
+    }
+    if (m_ipcServer)
+    {
+        m_ipcServer->stop();
     }
 
     RPC_LOG(INFO) << LOG_DESC("[RPC][RPC][stop]") << LOG_DESC("stop rpc successfully");
