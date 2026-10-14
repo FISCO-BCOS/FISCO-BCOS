@@ -124,8 +124,6 @@ private:
     int64_t m_lastExecutedBlockNumber{-1};
     std::mutex m_executeMutex;
     int64_t m_lastCommittedBlockNumber{-1};
-    /// elapsed ms of the last successful executeBlock; BlockStat prints it at commit
-    std::atomic<int64_t> m_lastExecuteMs{-1};
     std::mutex m_commitMutex;
     tbb::task_group m_asyncGroup;
 
@@ -144,6 +142,8 @@ private:
         /// header row, not from here (buildMPTStateRoot), so this field is not a channel any
         /// consensus-path data flows through.
         std::optional<ledger::mpt::MPTDeltaLayer> m_mptDelta;
+        /// elapsed ms of this block's execution; the commit-time BlockStat prints it
+        int64_t m_executeMs{-1};
     };
     std::deque<std::shared_ptr<ExecuteResult>> m_results;
     std::mutex m_resultsMutex;
