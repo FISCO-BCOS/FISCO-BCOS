@@ -187,6 +187,38 @@ BOOST_AUTO_TEST_CASE(settledRowsAreReusedVotingRowsRefetched)
     BOOST_CHECK_EQUAL(state.details.count(1), 1U);
 }
 
+// a denied row whose getProposalInfo failed has no type or votes: it is fetched again, not kept;
+// a settled detail row outside the list is reused like a listed one
+BOOST_AUTO_TEST_CASE(incompleteSettledRowsAreRefetched)
+{
+    auto rpc = govRpc();
+    rpc.setCall(
+        govSelector("getProposalStatus(uint256)"), govCallResult(govOutput("uint8", "[3]")));
+    Json::Value reverted;
+    reverted["status"] = 16;
+    reverted["output"] = "0x";
+    rpc.setCall(govSelector("getProposalInfo(uint256)"), reverted);  // info fails
+    auto connection = govConnection(rpc);
+    CommitteeReader reader(connection);
+    tui::GovernanceState state;
+    tui::GovernanceWants wants{.rows = 1, .ids = {1}};  // id 3 listed, id 1 as a detail
+    tui::governanceFetch(state, reader, wants, nullptr);
+    BOOST_CHECK_EQUAL(govInfoCalls(rpc), 2U);
+    tui::governanceFetch(state, reader, wants, nullptr);  // incomplete: asked again
+    BOOST_CHECK_EQUAL(govInfoCalls(rpc), 4U);
+    rpc.setCall(govSelector("getProposalInfo(uint256)"),
+        govCallResult(govOutput("address,address,uint8,uint256,uint8,address[],address[]",
+            "[\"" + c_govManager + "\",\"" + c_govGovernor + "\",41,1128,3,[],[\"" + c_govGovernor +
+                "\"]]")));
+    tui::governanceFetch(state, reader, wants, nullptr);  // complete now
+    BOOST_CHECK_EQUAL(govInfoCalls(rpc), 6U);
+    tui::governanceFetch(state, reader, wants, nullptr);  // settled list row and detail reused
+    BOOST_CHECK_EQUAL(govInfoCalls(rpc), 6U);
+    BOOST_CHECK_EQUAL(state.details.count(1), 1U);
+    BOOST_CHECK_EQUAL(state.details.at(1).statusName, "denied");
+    BOOST_CHECK_EQUAL(state.proposals.at(0).typeName, "sysConfig");
+}
+
 BOOST_AUTO_TEST_CASE(stopEndsTheFetchAndKeepsThePreviousRows)
 {
     auto rpc = govRpc();

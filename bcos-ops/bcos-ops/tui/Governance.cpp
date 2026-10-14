@@ -84,6 +84,7 @@ ProposalRow proposalRowFrom(ProposalOutcome const& _outcome)
     row.executed = _outcome.executed;
     row.execCode = _outcome.execCode;
     row.execCodeName = _outcome.execCodeName;
+    row.complete = _outcome.error.empty();
     auto const& info = _outcome.info;
     row.type = govInt(info["proposalType"]);
     row.typeName = proposalTypeName(row.type);
@@ -98,11 +99,12 @@ ProposalRow proposalRowFrom(ProposalOutcome const& _outcome)
 namespace
 {
 // denied / revoked / outdated, or passed and executed: a later vote cannot change the row
-// (ProposalManager.sol:19). A voting row can (votes, expiry), so it is fetched every round.
+// (ProposalManager.sol:19). A voting row can (votes, expiry), so it is fetched every round, and so
+// is a row whose info read failed.
 bool settled(ProposalRow const& _row)
 {
-    return _row.status == 3 || _row.status == 4 || _row.status == 5 ||
-           (_row.status == 2 && _row.executed);
+    return _row.complete && (_row.status == 3 || _row.status == 4 || _row.status == 5 ||
+                                (_row.status == 2 && _row.executed));
 }
 }  // namespace
 
