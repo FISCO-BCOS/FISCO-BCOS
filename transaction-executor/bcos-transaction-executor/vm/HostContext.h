@@ -154,15 +154,30 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
     const evmc_revision& revision, ledger::account::AddressTableMode addressTableMode)
 {
     Account<std::decay_t<decltype(storage)>> account(storage, address, addressTableMode);
-    // Read the account's stored CODE_HASH row first: a cache hit then costs one row read
-    // and skips the code-body read entirely.
+    // The cache is content-addressed on the code the state actually holds. A non-empty
+    // CODE_HASH row normally names the body in SYS_CODE_BINARY — but code() below also
+    // falls back to the account's CODE field when that row is not backed (legacy
+    // contracts and internal precompiles), and the fetched body then need not match the
+    // row. The row is therefore only a usable cache key while SYS_CODE_BINARY backs it:
+    // an unbacked-row account probed under the raw row would be served whatever a
+    // previously-backed fill left under that value (a process-global cache, so the
+    // wrong body can even come from another storage view). Verify backing FIRST — then
+    // a row-keyed hit still skips the code-body read — and key everything else
+    // (unbacked rows, hash-less accounts) on the body itself (a fixed keccak).
     auto const storedHash = co_await account.codeHash();
+    bool rowBacked = false;
     if (storedHash != h256{})
     {
-        if (auto executable = co_await storage2::readOne(
-                getCacheExecutables(), ExecutableCacheKey{storedHash, revision}))
+        rowBacked = co_await storage2::existsOne(
+            storage, executor_v1::StateKeyView{ledger::SYS_CODE_BINARY,
+                         std::string_view{(const char*)storedHash.data(), crypto::HashType::SIZE}});
+        if (rowBacked)
         {
-            co_return std::move(*executable);
+            if (auto executable = co_await storage2::readOne(
+                    getCacheExecutables(), ExecutableCacheKey{storedHash, revision}))
+            {
+                co_return std::move(*executable);
+            }
         }
     }
     // The already-read hash doubles as code()'s key: one row read on this path, not two.
@@ -172,21 +187,8 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
     {
         co_return {};
     }
-    // The cache is content-addressed on the code the state actually holds. A non-empty
-    // CODE_HASH row normally names the body in SYS_CODE_BINARY — but code() above also
-    // falls back to the account's CODE field when that row is not backed (legacy
-    // contracts and internal precompiles), and the fetched body then need not match the
-    // row. Keying such a fill on the row would let two accounts sharing an unbacked row
-    // value (e.g. the constant emptyCodeHash row the EIP-7702 clear path writes) share
-    // one executable, so any fill whose row SYS_CODE_BINARY does not back — including
-    // every hash-less account — keys on the body itself (a fixed keccak). That key is
-    // only computable after the code read, so the fallback path probes the cache once
-    // more here.
-    const bool rowBacked =
-        storedHash != h256{} &&
-        co_await storage2::existsOne(
-            storage, executor_v1::StateKeyView{ledger::SYS_CODE_BINARY,
-                         std::string_view{(const char*)storedHash.data(), crypto::HashType::SIZE}});
+    // The content key is only computable after the code read, so the fallback path
+    // probes the cache once more here.
     auto const key =
         rowBacked ? ExecutableCacheKey{storedHash, revision} :
                     ExecutableCacheKey{

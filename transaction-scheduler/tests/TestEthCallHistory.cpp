@@ -777,6 +777,61 @@ BOOST_AUTO_TEST_CASE(executableCacheCoversHashlessAccounts)
     }
 }
 
+
+// A row-keyed cache entry must only be served while SYS_CODE_BINARY backs the row: an
+// account whose CODE_HASH row is NOT backed (body in the CODE field) must never be
+// served an entry keyed on that row value — its own body hashes to a different content
+// key. Seeds a row-keyed entry directly (the shape a previously-backed fill in another
+// view leaves behind) and asserts the unbacked victim gets its OWN executable.
+BOOST_AUTO_TEST_CASE(rowKeyedCacheEntryIsNotServedToUnbackedRowAccount)
+{
+    auto plainView = multiLayerStorage.fork();
+    plainView.newMutable();
+    Rollbackable<decltype(plainView)> plainRollbackable(plainView);
+
+    // victim: CODE_HASH row present, SYS_CODE_BINARY absent, body in the CODE field
+    bytes bodyY{0x60, 0x07, 0x60, 0x07, 0xF3};
+    bytes bodyX{0x60, 0x08, 0x60, 0x08, 0xF3};
+    auto const foreignRow =
+        hostcontext::executableCodeKey(bytesConstRef{bodyX.data(), bodyX.size()});
+    evmc_address victim{};
+    victim.bytes[0] = 0xAD;
+    victim.bytes[19] = 0x09;
+    {
+        auto const table =
+            ledger::account::accountTableName(victim, ledger::account::AddressTableMode::Hex);
+        storage::Entry hashRow;
+        hashRow.set(std::string_view{(const char*)foreignRow.data(), crypto::HashType::SIZE});
+        task::syncWait(storage2::writeOne(plainRollbackable,
+            executor_v1::StateKey{table, ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH},
+            std::move(hashRow)));
+        storage::Entry bodyRow;
+        bodyRow.set(std::string_view{(const char*)bodyY.data(), bodyY.size()});
+        task::syncWait(storage2::writeOne(plainRollbackable,
+            executor_v1::StateKey{table, ledger::ACCOUNT_TABLE_FIELDS::CODE}, std::move(bodyRow)));
+    }
+    auto seeded =
+        std::make_shared<hostcontext::Executable>(bytesConstRef{bodyX.data(), bodyX.size()});
+    task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{foreignRow, EVMC_CANCUN}, seeded));
+
+    auto served = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, victim, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(served);
+    // The victim analyses its OWN body under the content key, not the row-keyed entry.
+    BOOST_CHECK(served.get() != seeded.get());
+
+    // Cleanup both candidate keys, verified by reading back.
+    auto const contentKey =
+        hostcontext::executableCodeKey(bytesConstRef{bodyY.data(), bodyY.size()});
+    for (auto const& spent : {hostcontext::ExecutableCacheKey{foreignRow, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{contentKey, EVMC_CANCUN}})
+    {
+        task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(), spent));
+        BOOST_CHECK(!task::syncWait(storage2::readOne(hostcontext::getCacheExecutables(), spent)));
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace
