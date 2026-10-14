@@ -129,10 +129,9 @@ struct ExecutableCacheKeyHash
 };
 
 /// Content identity of a code body: a fixed keccak (not the chain hasher, not a
-/// consensus value). getExecutable caches only under the account's STORED
-/// CODE_HASH row — without one, the key is unknowable before the code read, so
-/// no cache fill happens for such accounts; this helper is the test-side
-/// identity (TestEthCallHistory) for that shape, with no production caller.
+/// consensus value). getExecutable caches under the account's STORED CODE_HASH row;
+/// accounts without one (old-version contracts whose code lives in the table's CODE
+/// field) fall back to this key, computed from the body the read brought back.
 inline h256 executableCodeKey(bytesConstRef code)
 {
     crypto::Keccak256 hasher;
@@ -166,21 +165,32 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
             co_return std::move(*executable);
         }
     }
-    auto codeEntry = co_await account.code();
+    // The already-read hash doubles as code()'s key: one row read on this path, not two.
+    auto codeEntry = co_await account.code(
+        storedHash != h256{} ? std::optional<crypto::HashType>{storedHash} : std::nullopt);
     if (!codeEntry)
     {
         co_return {};
     }
-    auto executable = std::make_shared<Executable>(std::move(*codeEntry));
-    // Fill only under a key a later lookup can actually probe: without a stored
-    // CODE_HASH row the key is unknowable before the code read, so a fallback-keyed
-    // entry would be write-only — every call for such an account re-reads and
-    // re-analyses anyway, and the analysis cost is the price of the absent row.
-    if (storedHash != h256{})
+    // Hash-less accounts (old-version contracts whose code lives in the table's CODE field)
+    // have no stored CODE_HASH to key on — key those on a fixed keccak of the body instead,
+    // so they are cached like any other account rather than re-analysed on every call. That
+    // key is only computable after the code read, so the fallback path probes the cache once
+    // more here.
+    auto const key = (storedHash != h256{}) ?
+        ExecutableCacheKey{storedHash, revision} :
+        ExecutableCacheKey{executableCodeKey(bytesConstRef(
+                               reinterpret_cast<const byte*>(codeEntry->data()), codeEntry->size())),
+            revision};
+    if (storedHash == h256{})
     {
-        co_await storage2::writeOne(
-            getCacheExecutables(), ExecutableCacheKey{storedHash, revision}, executable);
+        if (auto cached = co_await storage2::readOne(getCacheExecutables(), key))
+        {
+            co_return std::move(*cached);
+        }
     }
+    auto executable = std::make_shared<Executable>(std::move(*codeEntry));
+    co_await storage2::writeOne(getCacheExecutables(), key, executable);
     co_return executable;
 }
 

@@ -641,6 +641,50 @@ BOOST_AUTO_TEST_CASE(executableCacheIsContentAddressed)
         hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_CANCUN}));
 }
 
+// Accounts without a stored CODE_HASH row (old-version contracts whose code lives in the
+// table's CODE field) cache under the content key: the second lookup serves the same
+// executable instead of re-analysing, and no other address's entry can collide with it.
+BOOST_AUTO_TEST_CASE(executableCacheCoversHashlessAccounts)
+{
+    // A unique address so this test owns its global-cache entry.
+    evmc_address hashlessAddress{};
+    hashlessAddress.bytes[0] = 0xAD;
+    hashlessAddress.bytes[19] = 0x02;
+
+    auto plainView = multiLayerStorage.fork();
+    plainView.newMutable();
+    Rollbackable<decltype(plainView)> plainRollbackable(plainView);
+
+    // Old-version shape: a CODE row in the contract table and no CODE_HASH row. setCode
+    // would write the hash row, so seed the raw row here.
+    bytes legacyCode{0x60, 0x02, 0x60, 0x02, 0xF3};
+    auto const tableName = ledger::account::accountTableName(
+        hashlessAddress, ledger::account::AddressTableMode::Hex);
+    {
+        storage::Entry codeEntry;
+        codeEntry.set(std::string_view{
+            reinterpret_cast<const char*>(legacyCode.data()), legacyCode.size()});
+        task::syncWait(storage2::writeOne(plainRollbackable,
+            executor_v1::StateKey{tableName, ledger::ACCOUNT_TABLE_FIELDS::CODE},
+            std::move(codeEntry)));
+    }
+
+    auto first = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, hashlessAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(first);
+    auto second = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, hashlessAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(second);
+    // Served from the content key — same shared_ptr, no re-analysis.
+    BOOST_CHECK_EQUAL(second.get(), first.get());
+
+    // Clean up the global cache so no other test sees this entry.
+    auto const contentKey = hostcontext::executableCodeKey(
+        bytesConstRef{legacyCode.data(), legacyCode.size()});
+    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{contentKey, EVMC_CANCUN}));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace
