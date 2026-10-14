@@ -411,6 +411,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         *m_protocolInitializer->blockFactory()->receiptFactory(),
         std::move(ethereumBlockHashLookup));
 
+    // A v2 genesis records no evmc_revision row: the EVM revision of a block is a function of
+    // its timestamp over [fork_timestamps]. The block verifier stamps it per block itself; the
+    // eth_call / eth_estimateGas dry run and the mempool's admission read it from here.
+    ledger::EvmcRevisionSchedule evmcRevisionSchedule;
+    if (m_nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        evmcRevisionSchedule = [schedule =
+                                       EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig)](
+                                   int64_t timestampSeconds, u256 const& difficulty) {
+            return scheduler_v1::evmcRevisionForTimestamp(schedule, timestampSeconds, difficulty);
+        };
+    }
+
     // v1 engine on executor_version < 2; Eth on 2; Op on exactly 3.
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
     // OP mode is the newest declared lane and everything above it (a value above the wired
@@ -505,8 +518,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, m_mptCommitObserver,
-                blockDriver == bcos::tool::BlockDriver::PBFT);
+                ethereumExecutor, m_mptCommitObserver, blockDriver == bcos::tool::BlockDriver::PBFT,
+                evmcRevisionSchedule);
         // Engine-driven modes on the v2 EthereumExecutor: build the Engine API service wired
         // to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. It is built when something drives it: the
@@ -579,8 +592,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, m_mptCommitObserver,
-                blockDriver == bcos::tool::BlockDriver::PBFT);
+                ethereumExecutor, m_mptCommitObserver, blockDriver == bcos::tool::BlockDriver::PBFT,
+                evmcRevisionSchedule);
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above.
         if (!engineApiForV1Only && !opStackMode &&
@@ -788,8 +801,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // on-chain evmc_revision row can name its revision. A v2 genesis is exempt under both of
     // its drivers (Engine and [debug] enable): block building and verification derive the EVMC
     // revision from the per-block timestamp via the [fork_timestamps] schedule
-    // (EthereumBlockVerifier's fillExecutionLedgerConfig), not from the row. (The RPC dry-run
-    // path, eth_call / eth_estimateGas, still reads the row and fails without it.)
+    // (EthereumBlockVerifier's fillExecutionLedgerConfig), not from the row, and so do the
+    // eth_call / eth_estimateGas dry run and admission (evmcRevisionSchedule above).
     //
     // The OP lane is outside this probe: NodeConfig rejects an explicit revision there and
     // Ledger::buildGenesisBlock therefore writes no evmc_revision row, because OpScheduler
@@ -1082,7 +1095,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_protocolInitializer->cryptoSuite(), m_ledger, m_ledgerConfigState,
             /*txPoolNonceChecker=*/nullptr, std::move(web3NonceChecker),
             &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
-            blobPolicy);
+            blobPolicy, evmcRevisionSchedule);
         m_memPoolValidator->setScheduler(m_scheduler);
         // OP lane: the balance also covers the rollup cost (Check::L1Cost). Only this validator
         // gets the callable: the txpool's cannot serve an OP chain (the OP gate above refuses

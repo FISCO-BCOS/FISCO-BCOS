@@ -6,11 +6,13 @@ against a live FISCO-BCOS node under the single-node driver ([debug] enable) via
 
 For each fixture (per fork, per post vector) it:
   1. generates a fresh single-node chain whose genesis reproduces the fixture:
-       - [alloc.*]  = fixture `pre`   (exact world state, L2 mode / op-geth MPT)
+       - [alloc.*]  = fixture `pre`   (exact world state, L2 mode / op-geth MPT), plus the
+         EIP-7002/7251 request contracts from Prague on (PRAGUE_SYSTEM_CONTRACTS)
        - [tx] gas_limit / gas_price   = fixture env.currentGasLimit / currentBaseFee
-       - [executor] version=2 evm_revision=<fork> (the RPC dry-run path's revision)
-       - [fork_timestamps] = every fork up to <fork> at 0, the rest in the future (the
-         block driver builds under it); pre-Paris forks are skipped (no PoW blocks)
+       - [executor] version=2
+       - [fork_timestamps] = every fork up to <fork> at 0, the rest in the future: the
+         chain's only EVM revision source (block building, the RPC dry run); pre-Paris
+         forks are skipped (no PoW blocks)
        - config.ini [debug] enable=true, produce_empty_blocks=false,
          prev_randao=<env.currentRandom>, fixed_timestamp=<env.currentTimestamp>,
          fee_recipient=<env.currentCoinbase>
@@ -44,7 +46,7 @@ import requests
 from eth_account import Account
 
 # ----------------------------------------------------------------------------- forks
-# EEST state-test fork names -> evmc revision (v2 executor evm_revision).
+# EEST state-test fork names -> evmc revision names (the [fork_timestamps] ladder rung).
 # NB: EEST "ConstantinopleFix" is Petersburg: the original Constantinople's
 # EIP-1283 (net gas metering) was reverted, so it must map to EVMC_PETERSBURG.
 # Mapping it to "constantinople" makes SSTORE billing diverge (observed: the
@@ -171,18 +173,43 @@ def fork_timestamps_section(fork_rev):
     return "\n".join(lines) + "\n"
 
 
+# EIP-7002 / EIP-7251 request contracts. A state test's `pre` omits them (state tests run no
+# system calls), but a Prague block cannot be built without them: the block-end system calls
+# fail on missing code (EIP-7002/7251). Their runtime code and nonce are the ones EEST's own
+# blockchain-test `pre` carries (v5.4.0, e.g. prague/eip7702_set_code_tx).
+PRAGUE_SYSTEM_CONTRACTS = {
+    "0x00000961ef480eb55e80d19ad83579a64c007002": {
+        "nonce": "0x01", "balance": "0x00",
+        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460cb5760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146101f457600182026001905f5b5f82111560685781019083028483029004916001019190604d565b909390049250505036603814608857366101f457346101f4575f5260205ff35b34106101f457600154600101600155600354806003026004013381556001015f35815560010160203590553360601b5f5260385f601437604c5fa0600101600355005b6003546002548082038060101160df575060105b5f5b8181146101835782810160030260040181604c02815460601b8152601401816001015481526020019060020154807fffffffffffffffffffffffffffffffff00000000000000000000000000000000168252906010019060401c908160381c81600701538160301c81600601538160281c81600501538160201c81600401538160181c81600301538160101c81600201538160081c81600101535360010160e1565b910180921461019557906002556101a0565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14156101cd57505f5b6001546002828201116101e25750505f6101e8565b01600290035b5f555f600155604c025ff35b5f5ffd"},
+    "0x0000bbddc7ce488642fb579f8b00f3a590007251": {
+        "nonce": "0x01", "balance": "0x00",
+        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004916001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57600154600101600155600354806004026004013381556001015f358155600101602035815560010160403590553360601b5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101295782810160040260040181607402815460601b815260140181600101548152602001816002015481526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd"},
+}
+
+
+def chain_pre(fixture, fork_rev):
+    """The fixture `pre` plus, from Prague on, the request contracts it does not carry."""
+    pre = dict(fixture.pre)
+    if rev_at_least(fork_rev, "prague"):
+        known = {a.lower() for a in pre}
+        for addr, acc in PRAGUE_SYSTEM_CONTRACTS.items():
+            if addr not in known:
+                pre[addr] = acc
+    return pre
+
+
 def _hx(value):
     """Fixture hex quantity -> int."""
     return int(value, 16) if isinstance(value, str) else int(value)
 
 
-def genesis_state_root(workdir, fixture, sync_check_binary):
+def genesis_state_root(workdir, fixture, fork_rev, sync_check_binary):
     """Derive the alloc MPT root with the node's own trie builder. The --genesis JSON
     path is used (NOT --genesis-ini): the INI path goes through NodeConfig, whose
     validateL2Invariants already refuses a header-less genesis — chicken-and-egg.
     eth-sync-check --genesis prints 'genesis stateRoot: <hex> ...'."""
     alloc = {}
-    for addr, acc in fixture.pre.items():
+    for addr, acc in chain_pre(fixture, fork_rev).items():
         entry = {"balance": acc.get("balance", "0x0"), "nonce": acc.get("nonce", "0x0"),
                  "code": acc.get("code", "0x")}
         storage = acc.get("storage", {})
@@ -292,7 +319,7 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     # ----- config.genesis -----
     allocs = []
     idx = 0
-    for addr, acc in fixture.pre.items():
+    for addr, acc in chain_pre(fixture, fork_rev).items():
         # balance / nonce must be decimal in config.genesis (requireDecimalField); the
         # fixture carries them as hex.
         allocs.append(f"[alloc.{idx}]\n    address={addr}\n")
@@ -346,7 +373,6 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     auth_admin_account=0x0000000000000000000000000000000000000000
     is_serial_execute=true
     version=2
-    evm_revision={fork_rev}
 
 """ + fork_timestamps_section(fork_rev) + "\n" + "\n".join(allocs)
     (workdir / "config.genesis").write_text(genesis)
@@ -354,7 +380,7 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     # [eth_genesis_header] is mandatory on the Ethereum lane (executor_version >= 2,
     # upstream #5420): derive the alloc state root with the node's own trie builder and
     # append a self-consistent B0 header section.
-    state_root = genesis_state_root(workdir, fixture, SYNC_CHECK_BINARY)
+    state_root = genesis_state_root(workdir, fixture, fork_rev, SYNC_CHECK_BINARY)
     with open(workdir / "config.genesis", "a") as fh:
         fh.write(eth_genesis_header_section(fixture, fork_rev, state_root))
 

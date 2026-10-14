@@ -127,7 +127,7 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     std::shared_ptr<ledger::LedgerInterface> ledger,
     ledger::LedgerConfigState::Ptr ledgerConfigState, NonceCheckerInterface::Ptr txPoolNonceChecker,
     Web3NonceChecker::Ptr web3NonceChecker, SystemTxPredicate isSystemTx, std::string groupId,
-    std::string chainId, BlobPolicy blobPolicy)
+    std::string chainId, BlobPolicy blobPolicy, ledger::EvmcRevisionSchedule evmcRevisionSchedule)
   : m_cryptoSuite(std::move(cryptoSuite)),
     m_ledger(std::move(ledger)),
     m_ledgerConfigState(std::move(ledgerConfigState)),
@@ -136,7 +136,8 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     m_isSystemTx(std::move(isSystemTx)),
     m_groupId(std::move(groupId)),
     m_chainId(std::move(chainId)),
-    m_blobPolicy(blobPolicy)
+    m_blobPolicy(blobPolicy),
+    m_evmcRevisionSchedule(std::move(evmcRevisionSchedule))
 {
     if (!m_ledgerConfigState)
     {
@@ -817,7 +818,8 @@ u256 parseBalance(std::string_view raw)
 /// Per-field, keyed on @p checks, for the same reason verify() reads the account only for
 /// c_accountStateDependent: deriving a value nothing in the set will read is work at best and a
 /// failure at worst. tx_gas_price is the "at worst" -- see c_baseFeeDependent.
-ChainView readChainView(ledger::LedgerConfigState const& configState, Check checks)
+ChainView readChainView(ledger::LedgerConfigState const& configState, Check checks,
+    ledger::EvmcRevisionSchedule const& revisionSchedule)
 {
     ChainView view;
     view.config = configState.get();
@@ -829,8 +831,14 @@ ChainView readChainView(ledger::LedgerConfigState const& configState, Check chec
     }
     if ((checks & c_revisionDependent) != Check::None)
     {
-        // Judged against the block it would execute in, which is the next one.
-        view.revision = view.config->evmcRevisionForBlock(view.config->blockNumber() + 1);
+        // Judged against the block it would execute in, which is the next one. On the L1 EL
+        // lane that block is not built yet: it is judged by the head's revision under the
+        // fork schedule, as geth's pool judges by head.Time (the builder seals PoS blocks
+        // only, hence difficulty 0). The snapshot's timestamp is the head's, in milliseconds.
+        view.revision =
+            revisionSchedule ?
+                std::optional<evmc_revision>(revisionSchedule(view.config->timestamp() / 1000, 0)) :
+                view.config->evmcRevisionForBlock(view.config->blockNumber() + 1);
     }
     if ((checks & c_baseFeeDependent) != Check::None)
     {
@@ -1000,7 +1008,7 @@ task::Task<TransactionStatus> TxValidator::verify(
     // extra member keys on the sender address without reading anything.
     if ((checks & c_stateStage) != Check::None)
     {
-        auto const chain = readChainView(*m_ledgerConfigState, checks);
+        auto const chain = readChainView(*m_ledgerConfigState, checks, m_evmcRevisionSchedule);
         std::optional<AccountState> sender;
         if ((checks & c_accountStateDependent) != Check::None)
         {

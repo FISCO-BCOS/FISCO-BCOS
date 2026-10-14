@@ -32,6 +32,7 @@
 #include <cctype>
 #include <charconv>
 #include <evmc/evmc.hpp>
+#include <functional>
 #include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
@@ -342,6 +343,15 @@ private:
 /// solely on the (defensive) v2-missing-config path in getLedgerConfig, plus test /
 /// EEST-runner convenience.
 inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
+
+/// executor_version=2 (the L1 EL lane): the EVM revision of a block with @p timestampSeconds
+/// and @p difficulty (0 = PoS), as the genesis [fork_timestamps] schedule assigns it. The block
+/// verifier stamps the revision per block itself (fillExecutionLedgerConfig); every other
+/// reader (the eth_call / eth_estimateGas dry run, transaction admission) is handed this
+/// function by the Initializer, built over scheduler_v1::evmcRevisionForTimestamp, instead of
+/// reading the evmc_revision row. Empty on every other lane.
+using EvmcRevisionSchedule =
+    std::function<evmc_revision(int64_t timestampSeconds, u256 const& difficulty)>;
 
 /// The executor-slot ladder: which scheduler an executor_version value selects. The
 /// values are the MultiVersionScheduler slot indices and the on-chain decimal string.

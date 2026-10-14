@@ -650,7 +650,13 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         // instead. An era this node merely cannot resolve is the nullopt branch below, and
         // that is the case that answers SYNCING.
         co_await ledger::getLedgerConfig(view, missLedgerConfig, parentNumber, *m_blockFactory);
-        auto const forkVersion = detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
+        // The L1 dialect has no evmc_revision row: its era comes from the fork schedule at
+        // the payload's timestamp (internal milliseconds).
+        auto const forkVersion =
+            m_externalPayloadVerifier ?
+                m_externalPayloadVerifier->forkVersionAt(static_cast<int64_t>(
+                    request.executionPayload.timestamp / 1000)) :
+                detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
         if (!forkVersion.has_value())
         {
             co_return engine_common::makeStatus(

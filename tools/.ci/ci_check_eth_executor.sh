@@ -52,10 +52,7 @@ trap stop_node EXIT
 log "building single-node chain via build_chain.sh"
 cd "${REPO_ROOT}/tools"
 rm -rf nodes config
-# -v 3.18.0 pins compatibility_version (build_chain.sh defaults to v3.16.0). Without it
-# Ledger::buildGenesisBlock gates the evmc_revision write on >= V3_18_0 and the config
-# set below would never reach on-chain state — the test would silently run the binary's
-# default revision instead of cancun while still passing.
+# -v 3.18.0 pins compatibility_version (build_chain.sh defaults to v3.16.0).
 bash "${BUILDER}" -l "127.0.0.1:1" -v 3.18.0 -e "${BINARY}" "" >/dev/null 2>&1 \
     || fail "build_chain.sh failed"
 [ -f "${WORK_DIR}/config.genesis" ] || fail "config.genesis not generated"
@@ -67,10 +64,11 @@ cd "${WORK_DIR}"
 perl -p -i -e 's/version=1/version=2/' config.genesis
 # executor version 2 takes its chain id from [chain] chain_id (a decimal), not [web3]
 perl -p -i -e 's/chain_id=chain0/chain_id=20200/' config.genesis
-# The v2 fork schedule: the block driver derives the EVM revision and the header rules per
-# block timestamp from it. Cancun from genesis; Prague stays in the future (a Prague block
-# runs the EIP-7002/7251 system calls, whose contracts this single-alloc genesis does not
-# carry).
+# The v2 fork schedule, the chain's only EVM revision source: the block driver derives the
+# revision and the header rules per block timestamp from it, and the eth_call /
+# eth_estimateGas dry run (step 4) from the head block's timestamp. Cancun from genesis;
+# Prague stays in the future (a Prague block runs the EIP-7002/7251 system calls, whose
+# contracts this single-alloc genesis does not carry).
 cat >> config.genesis <<'GENESIS_EOF'
 
 [fork_timestamps]
@@ -81,9 +79,6 @@ cancun_time=0
 prague_time=4102444800
 merge_block=0
 GENESIS_EOF
-# The RPC dry-run path (eth_call / eth_estimateGas) still reads the EVM revision from the
-# on-chain evmc_revision row, which only evm_revision writes; keep it, matching the schedule.
-perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' config.genesis
 
 # executor_version=2 (patched above) already puts the chain on the Ethereum lane, so
 # genesis [alloc] can pre-fund an EOA sender (the same lane the ethereum-executor

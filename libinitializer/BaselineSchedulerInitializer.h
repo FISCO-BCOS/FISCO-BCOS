@@ -44,7 +44,7 @@ public:
         std::shared_ptr<ledger::LedgerInterface> ledger,
         std::shared_ptr<Executor> transactionExecutor,
         std::shared_ptr<ledger::mpt::CommitObserver> mptCommitObserver = nullptr,
-        bool notifyTransactions = true)
+        bool notifyTransactions = true, ledger::EvmcRevisionSchedule evmcRevisionSchedule = {})
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
             Executor, SchedulerType, ledger::LedgerInterface>>(
@@ -54,6 +54,8 @@ public:
         // scheduler then pays nothing on the commit path (setMPTCommitObserver contract) and
         // skips the refCountDeltas tally on the execute path (needsRefCountDeltas).
         baselineScheduler->setMPTCommitObserver(std::move(mptCommitObserver));
+        // The v2 (L1 EL) dry-run revision source; empty on every other lane.
+        baselineScheduler->setEvmcRevisionSchedule(std::move(evmcRevisionSchedule));
         if (notifyTransactions)
         {
             baselineScheduler->registerTransactionNotifier(

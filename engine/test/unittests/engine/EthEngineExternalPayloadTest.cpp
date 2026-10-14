@@ -88,6 +88,11 @@ public:
         lastDeriveTimestamp = timestampSeconds;
         co_return l1Context;
     }
+    std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
+        int64_t /*timestampSeconds*/) const override
+    {
+        return l1Context.forkVersion;
+    }
     task::Task<engine_common::ExternalBuildResult> buildL1Block(
         RealGlobalStateStorage::ViewType&, engine_common::ExternalBuildBlock const& block) override
     {
