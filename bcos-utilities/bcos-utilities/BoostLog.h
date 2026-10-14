@@ -96,7 +96,8 @@ enum LogLevel
     FATAL = boost::log::trivial::severity_level::fatal,
 };
 
-// atomic: admin_setLogLevel (IPC) changes it while every logging thread reads it
+// atomic: admin_setLogLevel (IPC) and the SIGUSR2 reload (BoostLogInitializer) change it while
+// every logging thread reads it
 extern std::atomic<LogLevel> c_fileLogLevel;
 extern LogLevel c_statLogLevel;
 
