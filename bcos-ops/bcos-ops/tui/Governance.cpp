@@ -95,6 +95,17 @@ ProposalRow proposalRowFrom(ProposalOutcome const& _outcome)
     return row;
 }
 
+namespace
+{
+// denied / revoked / outdated, or passed and executed: a later vote cannot change the row
+// (ProposalManager.sol:19). A voting row can (votes, expiry), so it is fetched every round.
+bool settled(ProposalRow const& _row)
+{
+    return _row.status == 3 || _row.status == 4 || _row.status == 5 ||
+           (_row.status == 2 && _row.executed);
+}
+}  // namespace
+
 void governanceFetch(GovernanceState& _state, CommitteeReader& _reader,
     GovernanceWants const& _wants, std::atomic<bool> const* _stop)
 {
@@ -127,10 +138,27 @@ void governanceFetch(GovernanceState& _state, CommitteeReader& _reader,
             next.governors.push_back({govText(governors[i]), govText(weights.get(i, ""))});
         }
         next.proposalCount = count;
+        // the previous round's settled rows are reused instead of three RPCs each
+        auto previous = [&_state](int64_t _id) -> ProposalRow const* {
+            auto listed = std::find_if(_state.proposals.begin(), _state.proposals.end(),
+                [_id](ProposalRow const& r) { return r.id == _id; });
+            if (listed != _state.proposals.end())
+            {
+                return settled(*listed) ? &*listed : nullptr;
+            }
+            auto detail = _state.details.find(_id);
+            return detail != _state.details.end() && settled(detail->second) ? &detail->second :
+                                                                               nullptr;
+        };
         auto rows =
             static_cast<int64_t>(std::min(std::max<size_t>(1, _wants.rows), c_governanceMaxRows));
         for (auto id = count; id >= 1 && id > count - rows; --id)
         {
+            if (auto const* known = previous(id))
+            {
+                next.proposals.push_back(*known);
+                continue;
+            }
             govCheckStop(_stop);
             auto outcome = _reader.runner.proposalOutcome(std::to_string(id), Receipt{});
             if (!outcome.error.empty())
@@ -150,6 +178,11 @@ void governanceFetch(GovernanceState& _state, CommitteeReader& _reader,
             if (listed != next.proposals.end())
             {
                 next.details[id] = *listed;
+                continue;
+            }
+            if (auto const* known = previous(id))
+            {
+                next.details[id] = *known;
                 continue;
             }
             govCheckStop(_stop);
