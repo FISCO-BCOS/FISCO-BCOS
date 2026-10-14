@@ -56,6 +56,7 @@ struct ProposalRow
     bool executed = false;
     std::optional<int32_t> execCode;
     std::string execCodeName;
+    bool complete = false;  // both status and info were read (ProposalOutcome::error empty)
 };
 
 struct GovernanceState
