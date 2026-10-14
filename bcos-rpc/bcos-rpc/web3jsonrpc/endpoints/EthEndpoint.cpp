@@ -1269,7 +1269,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         // the mempool branch instead, so both pools refuse the same transaction the same way.
         //
         // Only for a code that is a verdict. This interface also carries faults that are the
-        // node's own -- a MAX/TARS deployment's TxPoolServiceClient throws "No value!" and TARS
+        // node's own -- a Pro/tars deployment's TxPoolServiceClient throws "No value!" and TARS
         // transport codes through it -- and those keep going to the catch-all, which answers
         // -32603 with the message they came with, as they did before this table existed.
         // bcos::Error only, where the mempool branch catches everything: an in-process pool has
