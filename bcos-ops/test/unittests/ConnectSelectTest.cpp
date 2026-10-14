@@ -13,6 +13,7 @@
 #include <bcos-ops/IpcClient.h>
 #include <bcos-ops/OpsError.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <unistd.h>
 #include <boost/asio/buffers_iterator.hpp>
 #include <boost/asio/io_context.hpp>
@@ -177,11 +178,14 @@ private:
     std::thread m_thread;
 };
 
-/// makes STDOUT_FILENO a terminal for the scope, so wantJson() picks the text output path
+/// makes STDOUT_FILENO a terminal for the scope, so wantJson() picks the text output path;
+/// whatever the code under test prints to stdout is read off the master so the pty never fills
 struct ScopedTtyStdout
 {
     int saved = ::dup(STDOUT_FILENO);
     int master = ::posix_openpt(O_RDWR | O_NOCTTY);
+    std::atomic<bool> stop{false};
+    std::thread drain;
     ScopedTtyStdout()
     {
         BOOST_REQUIRE(saved >= 0 && master >= 0);
@@ -191,12 +195,25 @@ struct ScopedTtyStdout
         std::fflush(stdout);
         ::dup2(slave, STDOUT_FILENO);
         ::close(slave);
+        drain = std::thread([this]() {
+            char buffer[4096];
+            while (!stop.load())
+            {
+                pollfd ready{master, POLLIN, 0};
+                if (::poll(&ready, 1, 20) > 0 && ::read(master, buffer, sizeof(buffer)) <= 0)
+                {
+                    return;
+                }
+            }
+        });
     }
     ~ScopedTtyStdout()
     {
         std::fflush(stdout);
         ::dup2(saved, STDOUT_FILENO);
         ::close(saved);
+        stop.store(true);
+        drain.join();
         ::close(master);
     }
 };
