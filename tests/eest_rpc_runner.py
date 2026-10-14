@@ -354,14 +354,10 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
 [consensus]
     consensus_type=pbft
     block_tx_count_limit=1000
-    consensus_timeout=3000
     leader_period=1
     epoch_sealer_num=4
     epoch_block_num=1000
     node.0=179895f679d850ae7e60e245ecee2ad89c625017666368e5b226bc0a894074520dc9c7be1a14e05b77482da1792c54a14f1d4c0581676e4e0081209db53093da: 1
-
-[version]
-    compatibility_version=3.18.0
 
 [tx]
     gas_limit={gas_limit}

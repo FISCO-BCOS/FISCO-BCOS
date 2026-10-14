@@ -52,8 +52,9 @@ trap stop_node EXIT
 log "building single-node chain via build_chain.sh"
 cd "${REPO_ROOT}/tools"
 rm -rf nodes config
-# -v 3.18.0 pins compatibility_version (build_chain.sh defaults to v3.16.0).
-bash "${BUILDER}" -l "127.0.0.1:1" -v 3.18.0 -e "${BINARY}" "" >/dev/null 2>&1 \
+# executor version 2 (patched in below) does not read [version]: the default compatibility
+# version build_chain.sh writes is fine.
+bash "${BUILDER}" -l "127.0.0.1:1" -e "${BINARY}" "" >/dev/null 2>&1 \
     || fail "build_chain.sh failed"
 [ -f "${WORK_DIR}/config.genesis" ] || fail "config.genesis not generated"
 

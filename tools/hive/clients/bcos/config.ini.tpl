@@ -1,8 +1,9 @@
 ; ============================================================================
 ; FISCO-BCOS hive client node configuration (config.ini) — Ethereum L1 EL mode
 ; (config.genesis executor.version=2: devp2p sync and the Engine API both run).
-; Instantiated by bcos.sh: __CHAIN_ID__ and __LOG_LEVEL__ are substituted from
-; the hive environment before the node starts.
+; Instantiated by bcos.sh: __LOG_LEVEL__ is substituted from the hive
+; environment before the node starts. The chain id lives in config.genesis
+; [chain] chain_id, which eth-sync-check --genesis2ini writes.
 ;
 ; DISPOSABLE TEST PROFILE: RPC and the Engine API bind to 0.0.0.0 with
 ; wide-open CORS and no authentication — correct inside a throwaway hive
@@ -26,14 +27,6 @@
     ; the import head is skipped); this window does not make side-chain
     ; imports possible.
     reorg_window=256
-
-[chain]
-    sm_crypto=false
-    group_id=group0
-    chain_id=__CHAIN_ID__
-
-[web3]
-    chain_id=__CHAIN_ID__
 
 [engine_rpc]
     ; always served on executor.version=2; bcos.sh writes the simulator's
@@ -72,7 +65,7 @@
     enable=true
     listen_ip=0.0.0.0
     listen_port=8545
-    http_body_size_limit=10240000
+    request_body_size_limit=10240000
     enable_cors=true
     cors_allowed_origins=*
 
@@ -81,7 +74,6 @@
 
 [executor]
     enable_dag=true
-    baseline_scheduler=false
     baseline_scheduler_parallel=false
 
 [storage]

@@ -129,7 +129,9 @@ The entrypoint:
   too, and so is one that leaves any of `shanghaiTime`/`cancunTime`/
   `pragueTime` unscheduled: `[fork_timestamps]` requires london..prague and the
   node refuses the UINT64_MAX not-scheduled sentinel there, so such a chain has
-  no representation. Unscheduled optional forks (osaka/bpo1/bpo2) are left out.
+  no representation. That includes hive's Paris/Shanghai/Cancun network
+  configs, whose genesis leaves the later forks unscheduled: their suites fail
+  at conversion. Unscheduled optional forks (osaka/bpo1/bpo2) are left out.
 - ~~**Empty alloc**~~ (fixed): `NodeConfig::validateL2Invariants` now exempts the
   L1 EL lane (`[executor] version=2`) from the non-empty-alloc invariant — an
   empty-alloc genesis publishes the canonical empty-trie root as its stateRoot

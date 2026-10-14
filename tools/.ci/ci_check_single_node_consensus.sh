@@ -46,7 +46,7 @@ trap stop_node EXIT
 log "building single-node chain via build_chain.sh"
 cd "${REPO_ROOT}/tools"
 rm -rf nodes config
-bash "${BUILDER}" -l "127.0.0.1:1" -v 3.18.0 -e "${BINARY}" "" >/dev/null 2>&1 \
+bash "${BUILDER}" -l "127.0.0.1:1" -e "${BINARY}" "" >/dev/null 2>&1 \
     || fail "build_chain.sh failed"
 [ -f "${WORK_DIR}/config.genesis" ] || fail "config.genesis not generated"
 

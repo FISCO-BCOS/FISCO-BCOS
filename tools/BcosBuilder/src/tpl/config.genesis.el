@@ -15,14 +15,8 @@
 [chain]
     sm_crypto=false
     group_id=group0
+    ; the numeric Ethereum chain id (Sepolia: 11155111); web3 RPC and EIP-155 use it
     chain_id=11155111
-
-[web3]
-    ; Ethereum chain id (decimal)
-    chain_id=11155111
-
-[version]
-    compatibility_version=3.18.0
 
 [consensus]
     consensus_type=pbft
@@ -138,7 +132,7 @@
 ; excess_blob_gas / parent_beacon_block_root / requests_hash) are OPTIONAL and
 ; are OMITTED here because Sepolia's genesis predates those forks — the ledger
 ; re-encodes exactly the fields present, which is what makes the hash below
-; byte-exact. (An L2 chain emits all 21 keys instead.)
+; byte-exact. (An L2 chain emits all six instead.)
 ; ----------------------------------------------------------------------------
 [eth_genesis_header]
     parent_hash=0x0000000000000000000000000000000000000000000000000000000000000000

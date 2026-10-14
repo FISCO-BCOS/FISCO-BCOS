@@ -45,7 +45,6 @@ default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
 auth_mode="false"
 monitor_mode="false"
-enable_op_node_driver="false"
 auth_admin_account=
 binary_path=""
 lightnode_binary_path=""
@@ -598,8 +597,9 @@ air
     -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -6 <ipv6 mode>                      [Optional] IPv6 mode use :: as default listen ip, default is false
     -T <Consensus Algorithm>            [Optional] Default PBFT. Options can be pbft / rpbft, pbft is recommended
-    -O <OP Engine RPC>                  [Optional] Default off. If set -O, build an OP-lane chain (executor version=3) driven by an external op-node: emit the [engine_rpc] section and generate a per-node JWT secret
     -h Help
+    (air chains use executor version 1. For an Ethereum-lane genesis (executor version 2),
+     convert a geth genesis.json with: eth-sync-check --genesis2ini <genesis.json>)
 pro or max
     -C <Command>                        [Optional] the command, support 'deploy' now, default is deploy
     -g <group id>                       [Optional] set the group id, default: group0
@@ -656,11 +656,9 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zDshHmEn:R:a:N:u:y:r:V:6T:O" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zDshHmEn:R:a:N:u:y:r:V:6T:" option; do
         case $option in
         6) use_ipv6="true" && default_listen_ip="::"
-        ;;
-        O) enable_op_node_driver="true"
         ;;
         l)
             ip_param=$OPTARG
@@ -773,24 +771,6 @@ parse_params() {
     done
 
     if [[ "$chain_version" == "air" ]];then
-        if [[ "${sm_mode}" == "true" && "${enable_op_node_driver}" == "true" ]]; then
-            LOG_FATAL "-O (OP Engine RPC) is not supported together with SM mode (-s) yet"
-        fi
-        if [[ "${enable_op_node_driver}" == "true" ]]; then
-            # op-node drives the OP lane (executor version=3) over [engine_rpc]; executor
-            # version >= 2 is a 3.18.0 lane
-            local compat_num="${compatibility_version//[vV]/}"
-            local compat_major compat_minor
-            compat_major=$(echo "${compat_num}" | cut -d. -f1)
-            compat_minor=$(echo "${compat_num}" | cut -d. -f2)
-            if ! [[ "${compat_major}" =~ ^[0-9]+$ && "${compat_minor}" =~ ^[0-9]+$ ]] ||
-                [ "${compat_major}" -lt 3 ] ||
-                { [ "${compat_major}" -eq 3 ] && [ "${compat_minor}" -lt 18 ]; }; then
-                LOG_FATAL "-O (OP Engine RPC) requires -v 3.18.0 or newer (got ${compatibility_version}): executor version=3 needs compatibility_version >= 3.18.0"
-            fi
-            executor_version=3
-            LOG_INFO "-O: config.genesis executor version=3 + [op_fork_timestamps] isthmus_time=0 (the OP lane, driven by op-node over [engine_rpc]); add the [alloc.*] and [eth_genesis_header] sections before the first boot"
-        fi
         if [[ "$mtail_binary_path" != "" ]]; then
             file_must_exists "${mtail_binary_path}"
         fi
@@ -801,9 +781,6 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
         fi
     else
-        if [[ "${enable_op_node_driver}" == "true" ]]; then
-            LOG_FATAL "-O (OP Engine RPC) only supports air mode; pro/max deployments have no Engine API assembly"
-        fi
         if [[ "$isPortSpecified" = "true" ]]; then
             if [ ${#proOrmax_port_start[@]} -lt 2 ]; then LOG_WARN "service start port error. e.g: 30300,20200" && exit 1; fi
         fi
@@ -1375,20 +1352,6 @@ generate_config_ini() {
         enable_ssl_content="enable_ssl=false"
     fi
 
-    # [engine_rpc] only appears when the chain is built for external op-node
-    # driven mode (-O); ordinary chains carry neither the section nor a JWT secret
-    local engine_rpc_section=""
-    if [[ "${enable_op_node_driver}" == "true" ]]; then
-        engine_rpc_section="[engine_rpc]
-    ; authenticated Engine API endpoint, driven by an external op-node
-    listen_ip=127.0.0.1
-    listen_port=8551
-    ; JWT shared secret (op-node --l2.jwt-secret must point at the same file)
-    jwt_secret_file=conf/engine/jwt.hex
-
-"
-    fi
-
     cat <<EOF >"${output}"
 [p2p]
     listen_ip=${p2p_listen_ip}
@@ -1436,7 +1399,7 @@ generate_config_ini() {
     cors_allowed_headers=Content-Type, Authorization, X-Requested-With
     cors_max_age=86400
 
-${engine_rpc_section}[cert]
+[cert]
     ; directory the certificates located in
     ca_path=./conf
     ; the ca certificate file
@@ -1480,7 +1443,6 @@ generate_common_ini() {
 
 [executor]
     enable_dag=true
-    baseline_scheduler=false
     baseline_scheduler_parallel=false
 
 [storage]
@@ -1489,9 +1451,6 @@ generate_common_ini() {
     ; The granularity of the storage page, in bytes, must not be less than 4096 Bytes, the default is 10240 Bytes (10KB)
     ; if modify key_page_size value to 0, should clear the data directory
     key_page_size=${key_page_size}
-    pd_ssl_ca_path=
-    pd_ssl_cert_path=
-    pd_ssl_key_path=
     enable_archive=false
     archive_ip=127.0.0.1
     archive_port=
@@ -1521,33 +1480,12 @@ generate_common_ini() {
     sync_block_by_tree=false
     tree_width=3
 
-[redis]
-    ; redis server ip
-    ;server_ip=127.0.0.1
-    ; redis server port
-    ;server_port=6379
-    ; redis request timeout, unit ms
-    ;request_timeout=3000
-    ; redis connection pool size
-    ;connection_pool_size=16
-    ; redis password, default empty
-    ;password=
-    ; redis db, default 0th
-    ;db=0
-
 [flow_control]
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000
 
     ; time window for rate limiter, default: 3s
     ; time_window_sec=3
-
-    ; enable distributed rate limiter, redis required, default: false
-    ; enable_distributed_ratelimit=false
-    ; enable local cache for distributed rate limiter, work with enable_distributed_ratelimit, default: true
-    ; enable_distributed_ratelimit_cache=true
-    ; distributed rate limiter local cache percent, work with enable_distributed_ratelimit_cache, default: 20
-    ; distributed_ratelimit_cache_percent=20
 
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
@@ -1657,7 +1595,7 @@ generate_sm_config_ini() {
     enable=false
     listen_ip=0.0.0.0
     listen_port=8545
-    http_body_size_limit=10240000
+    request_body_size_limit=10240000
     ; cors config for web3 rpc
     enable_cors=true
     cors_allow_credentials=true
@@ -1818,22 +1756,6 @@ generate_genesis_config() {
     local output=${1}
     local node_list=${2}
 
-    # the OP lane (-O pins executor version=3) requires an [op_fork_timestamps] section;
-    # edit it before the first boot to change the schedule
-    local genesis_op_fork_section=""
-    # executor version >= 2 takes its chain id from [chain] chain_id (a non-zero decimal)
-    # and does not read [web3]
-    local genesis_chainid="${default_chainid}"
-    if [[ "${executor_version}" -ge 2 ]]; then
-        genesis_chainid="${default_web3_chainid}"
-    fi
-    if [[ "${enable_op_node_driver}" == "true" ]]; then
-        genesis_op_fork_section="
-
-[op_fork_timestamps]
-    isthmus_time=0"
-    fi
-
     cat <<EOF >"${output}"
 [chain]
     ; use SM crypto or not, should nerver be changed
@@ -1841,7 +1763,7 @@ generate_genesis_config() {
     ; the group id, should nerver be changed
     group_id=${default_group}
     ; the chain id, should nerver be changed
-    chain_id=${genesis_chainid}
+    chain_id=${default_chainid}
 
 [web3]
     chain_id=${default_web3_chainid}
@@ -1851,8 +1773,6 @@ generate_genesis_config() {
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     block_tx_count_limit=1000
-    ; in millisecond, block consensus timeout, at least 3000ms
-    consensus_timeout=3000
     ; the number of blocks generated by each leader
     leader_period=1
     ; rpbft
@@ -1874,7 +1794,7 @@ generate_genesis_config() {
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
     is_serial_execute=${serial_mode}
-    version=${executor_version}${genesis_op_fork_section}
+    version=${executor_version}
 EOF
 }
 
@@ -2220,9 +2140,6 @@ deploy_nodes()
             node_dir="${output_dir}/${ip}/node${node_count}"
             mkdir -p "${node_dir}"
             generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
-            if [[ "${enable_op_node_driver}" == "true" ]]; then
-                generate_jwt_secret "${node_dir}/conf"
-            fi
             generate_node_scripts "${node_dir}" "${docker_mode}"
             if "${monitor_mode}" ;then
                 local port=$((mtail_listen_port + node_count))
@@ -2350,9 +2267,6 @@ generate_template_package()
     node_dir="${output_dir}/${node_name}"
     mkdir -p "${node_dir}"
     mkdir -p "${node_dir}/conf"
-    if [[ "${enable_op_node_driver}" == "true" ]]; then
-        generate_jwt_secret "${node_dir}/conf"
-    fi
 
     p2p_listen_ip="${default_listen_ip}"
     rpc_listen_ip="${default_listen_ip}"

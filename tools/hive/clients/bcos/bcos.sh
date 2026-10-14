@@ -85,9 +85,6 @@ if ! eth-sync-check --genesis2ini "${GENESIS_IN}" --output /bcos/config.genesis;
     exit 1
 fi
 
-CHAIN_ID=$(jq -r '.config.chainId // empty' "${GENESIS_IN}" 2>/dev/null || echo "")
-CHAIN_ID=${CHAIN_ID:-1}
-
 # ------------------------------------------------------------------- keys ----
 # secp256k1 consensus identity (conf/node.pem) and gateway certs: generated
 # per container — hive test networks are throwaway.
@@ -140,8 +137,7 @@ else
     openssl rand -hex 32 > conf/engine/jwt.hex
 fi
 
-sed -e "s/__CHAIN_ID__/${CHAIN_ID}/g" \
-    -e "s/__LOG_LEVEL__/${LOG_LEVEL}/g" \
+sed -e "s/__LOG_LEVEL__/${LOG_LEVEL}/g" \
     /bcos/config.ini.tpl > /bcos/config.ini
 
 echo '{"nodes":[]}' > nodes.json

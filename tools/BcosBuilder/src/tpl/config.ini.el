@@ -71,18 +71,6 @@
     ; deposit contract; this template targets Sepolia, whose deposit contract is:
     deposit_contract_address=0x7f02c3e3c98b133055b8b348b2ac625669182295
 
-[chain]
-    ; use SM crypto or not — EL mode is always plain secp256k1/keccak
-    sm_crypto=false
-    ; the group id (kept for FISCO compatibility; unused by the Ethereum stack)
-    group_id=group0
-    ; the chain id — must be the numeric Ethereum chain id (11155111 for Sepolia)
-    chain_id=11155111
-
-[web3]
-    ; Ethereum chain id used by web3 RPC (decimal string)
-    chain_id=11155111
-
 [engine_rpc]
     ; Authenticated Engine API listener (JSON-RPC over HTTP + JWT) for a consensus
     ; client. Always served on executor version 2 (there is no enable key).

@@ -35,28 +35,27 @@
  *                                   (secp256k1 node key -> enode:// URL, for hive)
  * @date 2026/8/18
  */
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <bcos-devp2p/sync/Block.h>
 #include <bcos-devp2p/sync/HeaderValidator.h>
 #include <bcos-devp2p/sync/OpHeaderValidator.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
-#include <bcos-task/Wait.h>
-#include <bcos-tool/NodeConfig.h>
 #include <bcos-ledger/GenesisStateRoot.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
-#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/EthGenesisHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <curl/curl.h>
 #include <json/json.h>
-#include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -147,8 +146,8 @@ protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
         std::string_view(stripHexPrefix(j["stateRoot"].asString())), crypto::HashType::FromHex);
     h.txsRoot = crypto::HashType(std::string_view(stripHexPrefix(j["transactionsRoot"].asString())),
         crypto::HashType::FromHex);
-    h.receiptsRoot = crypto::HashType(std::string_view(stripHexPrefix(j["receiptsRoot"].asString())),
-        crypto::HashType::FromHex);
+    h.receiptsRoot = crypto::HashType(
+        std::string_view(stripHexPrefix(j["receiptsRoot"].asString())), crypto::HashType::FromHex);
     auto bloomBytes = hexToBytes(j["logsBloom"].asString());
     std::copy(bloomBytes.begin(), bloomBytes.end(), h.logsBloom.begin());
     h.difficulty = u256(j["difficulty"].asString());
@@ -175,9 +174,9 @@ protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
     }
     if (j.isMember("withdrawalsRoot"))
     {
-        h.withdrawalsHash = crypto::HashType(
-            std::string_view(stripHexPrefix(j["withdrawalsRoot"].asString())),
-            crypto::HashType::FromHex);
+        h.withdrawalsHash =
+            crypto::HashType(std::string_view(stripHexPrefix(j["withdrawalsRoot"].asString())),
+                crypto::HashType::FromHex);
     }
     if (j.isMember("blobGasUsed"))
     {
@@ -195,8 +194,9 @@ protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
     }
     if (j.isMember("requestsHash"))
     {
-        h.requestsHash = crypto::HashType(std::string_view(stripHexPrefix(j["requestsHash"].asString())),
-            crypto::HashType::FromHex);
+        h.requestsHash =
+            crypto::HashType(std::string_view(stripHexPrefix(j["requestsHash"].asString())),
+                crypto::HashType::FromHex);
     }
     return h;
 }
@@ -209,7 +209,7 @@ ChainConfig sepoliaConfig()
 {
     ChainConfig config;
     config.chainId = 11155111;
-    config.londonTime = 0;          // active from genesis
+    config.londonTime = 0;  // active from genesis
     config.shanghaiTime = 1677557088;
     config.cancunTime = 1706655072;
     config.pragueTime = 1741159776;
@@ -251,17 +251,50 @@ OpChainConfig opSepoliaConfig()
 /// --op-fork <name> <timestamp>: override one OP fork activation time.
 bool setOpForkTime(OpChainConfig& config, std::string const& name, uint64_t ts)
 {
-    if (name == "regolith") { config.forkSchedule.m_regolithTime = ts; }
-    else if (name == "canyon") { config.forkSchedule.m_canyonTime = ts; }
-    else if (name == "delta") { config.forkSchedule.m_deltaTime = ts; }
-    else if (name == "ecotone") { config.forkSchedule.m_ecotoneTime = ts; }
-    else if (name == "fjord") { config.forkSchedule.m_fjordTime = ts; }
-    else if (name == "granite") { config.forkSchedule.m_graniteTime = ts; }
-    else if (name == "holocene") { config.forkSchedule.m_holoceneTime = ts; }
-    else if (name == "isthmus") { config.forkSchedule.m_isthmusTime = ts; }
-    else if (name == "jovian") { config.forkSchedule.m_jovianTime = ts; }
-    else if (name == "karst") { config.forkSchedule.m_karstTime = ts; }
-    else { return false; }
+    if (name == "regolith")
+    {
+        config.forkSchedule.m_regolithTime = ts;
+    }
+    else if (name == "canyon")
+    {
+        config.forkSchedule.m_canyonTime = ts;
+    }
+    else if (name == "delta")
+    {
+        config.forkSchedule.m_deltaTime = ts;
+    }
+    else if (name == "ecotone")
+    {
+        config.forkSchedule.m_ecotoneTime = ts;
+    }
+    else if (name == "fjord")
+    {
+        config.forkSchedule.m_fjordTime = ts;
+    }
+    else if (name == "granite")
+    {
+        config.forkSchedule.m_graniteTime = ts;
+    }
+    else if (name == "holocene")
+    {
+        config.forkSchedule.m_holoceneTime = ts;
+    }
+    else if (name == "isthmus")
+    {
+        config.forkSchedule.m_isthmusTime = ts;
+    }
+    else if (name == "jovian")
+    {
+        config.forkSchedule.m_jovianTime = ts;
+    }
+    else if (name == "karst")
+    {
+        config.forkSchedule.m_karstTime = ts;
+    }
+    else
+    {
+        return false;
+    }
     return true;
 }
 
@@ -285,8 +318,8 @@ void report(std::string const& what, bool ok, std::string const& detail = {})
 /// executorVersion selects the executor lane the genesis is judged for: the system-address
 /// alloc guard only applies to the legacy lane (< ETHEREUM_EXECUTOR_VERSION); the v2/v3
 /// executors keep every alloc under /apps/, so a 0x1000-range alloc is ordinary there.
-void runGenesisCheck(std::string const& path, std::optional<std::string> const& expect,
-    int executorVersion)
+void runGenesisCheck(
+    std::string const& path, std::optional<std::string> const& expect, int executorVersion)
 {
     Json::Value root;
     Json::Reader reader;
@@ -323,8 +356,8 @@ void runGenesisCheck(std::string const& path, std::optional<std::string> const& 
         {
             for (auto const& slot : av["storage"].getMemberNames())
             {
-                a.storage.emplace_back(stripHexPrefix(slot),
-                    stripHexPrefix(av["storage"][slot].asString()));
+                a.storage.emplace_back(
+                    stripHexPrefix(slot), stripHexPrefix(av["storage"][slot].asString()));
             }
         }
         genesis.m_allocs.push_back(std::move(a));
@@ -332,12 +365,12 @@ void runGenesisCheck(std::string const& path, std::optional<std::string> const& 
     std::cout << "alloc count: " << genesis.m_allocs.size() << std::endl;
 
     auto trie = task::syncWait(ledger::computeGenesisStateTrie(genesis));
-    std::cout << "genesis stateRoot: " << trie.root.hex()
-              << " trie-nodes: " << trie.nodes.size() << std::endl;
+    std::cout << "genesis stateRoot: " << trie.root.hex() << " trie-nodes: " << trie.nodes.size()
+              << std::endl;
     if (expect)
     {
-        auto expected = crypto::HashType(
-            std::string_view(stripHexPrefix(*expect)), crypto::HashType::FromHex);
+        auto expected =
+            crypto::HashType(std::string_view(stripHexPrefix(*expect)), crypto::HashType::FromHex);
         report("genesis stateRoot match", trie.root == expected, trie.root.hex());
     }
 }
@@ -373,8 +406,7 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
     for (auto const& txJson : txs)
     {
         auto const txHashHex = txJson["hash"].asString();
-        auto raw = rpcCall(rpcs, "eth_getRawTransactionByHash",
-            "[\"" + txHashHex + "\"]");
+        auto raw = rpcCall(rpcs, "eth_getRawTransactionByHash", "[\"" + txHashHex + "\"]");
         if (!raw)
         {
             report("tx[" + std::to_string(idx) + "] raw fetch", false, "RPC unavailable");
@@ -405,8 +437,8 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
             decoded->hash().hex().substr(0, 18));
 
         // 2. Recovered sender must equal the on-chain from.
-        auto senderHex =
-            bcos::toHexStringWithPrefix(bcos::bytes(decoded->sender().begin(), decoded->sender().end()));
+        auto senderHex = bcos::toHexStringWithPrefix(
+            bcos::bytes(decoded->sender().begin(), decoded->sender().end()));
         report("tx[" + std::to_string(idx) + "] sender", senderHex == txJson["from"].asString(),
             senderHex.substr(0, 18));
 
@@ -418,8 +450,7 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
             decoded->value() == u256(txJson["value"].asString()),
             decoded->value().str(0, std::ios_base::hex));
         report("tx[" + std::to_string(idx) + "] nonce",
-            decoded->nonce() == txJson["nonce"].asString(),
-            std::string(decoded->nonce()));
+            decoded->nonce() == txJson["nonce"].asString(), std::string(decoded->nonce()));
         report("tx[" + std::to_string(idx) + "] gasLimit",
             static_cast<uint64_t>(decoded->gasLimit()) == hexToU64(txJson["gas"].asString()),
             std::to_string(decoded->gasLimit()));
@@ -439,9 +470,9 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
         // EIP-4844 blob fields (type 3): maxFeePerBlobGas + blob versioned hashes.
         if (txJson.isMember("maxFeePerBlobGas"))
         {
-            auto blobGasMatches = decoded->maxFeePerBlobGas().has_value() &&
-                                  *decoded->maxFeePerBlobGas() ==
-                                      u256(txJson["maxFeePerBlobGas"].asString());
+            auto blobGasMatches =
+                decoded->maxFeePerBlobGas().has_value() &&
+                *decoded->maxFeePerBlobGas() == u256(txJson["maxFeePerBlobGas"].asString());
             report("tx[" + std::to_string(idx) + "] maxFeePerBlobGas", blobGasMatches,
                 std::string(decoded->maxFeePerBlobGas().has_value() ?
                                 decoded->maxFeePerBlobGas()->str(0, std::ios_base::hex) :
@@ -456,8 +487,7 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
             {
                 for (Json::ArrayIndex i = 0; i < onChainBlobs.size(); ++i)
                 {
-                    if (bcos::toHexStringWithPrefix(decodedBlobs[i]) !=
-                        onChainBlobs[i].asString())
+                    if (bcos::toHexStringWithPrefix(decodedBlobs[i]) != onChainBlobs[i].asString())
                     {
                         blobsMatch = false;
                         break;
@@ -531,13 +561,12 @@ void runGenesisIniCheck(std::string const& path, std::optional<std::string> cons
     bcos::tool::NodeConfig cfg(keyFactory);
     cfg.loadGenesisConfig(path);
     auto trie = task::syncWait(ledger::computeGenesisStateTrie(cfg.genesisConfig()));
-    std::cout << "genesis stateRoot: " << trie.root.hex()
-              << " trie-nodes: " << trie.nodes.size() << " allocs: "
-              << cfg.genesisConfig().m_allocs.size() << std::endl;
+    std::cout << "genesis stateRoot: " << trie.root.hex() << " trie-nodes: " << trie.nodes.size()
+              << " allocs: " << cfg.genesisConfig().m_allocs.size() << std::endl;
     if (expect)
     {
-        auto expected = crypto::HashType(
-            std::string_view(stripHexPrefix(*expect)), crypto::HashType::FromHex);
+        auto expected =
+            crypto::HashType(std::string_view(stripHexPrefix(*expect)), crypto::HashType::FromHex);
         report("genesis stateRoot match", trie.root == expected, trie.root.hex());
     }
     // Genesis header hash: re-encode the [eth_genesis_header] fields via the shared
@@ -584,12 +613,11 @@ std::string padHex(std::string const& hex, size_t len, std::string const& what)
     auto body = stripHexPrefix(hex);
     if (body.size() > len)
     {
-        throw std::runtime_error(
-            what + " exceeds " + std::to_string(len) + " hex chars: " + hex);
+        throw std::runtime_error(what + " exceeds " + std::to_string(len) + " hex chars: " + hex);
     }
     body.insert(0, len - body.size(), '0');
-    std::transform(body.begin(), body.end(), body.begin(),
-        [](unsigned char c) { return std::tolower(c); });
+    std::transform(
+        body.begin(), body.end(), body.begin(), [](unsigned char c) { return std::tolower(c); });
     return body;
 }
 
@@ -613,8 +641,8 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         ss << in.rdbuf();
         if (!reader.parse(ss.str(), root))
         {
-            throw std::runtime_error("cannot parse genesis.json: " +
-                                     reader.getFormattedErrorMessages());
+            throw std::runtime_error(
+                "cannot parse genesis.json: " + reader.getFormattedErrorMessages());
         }
         // An empty (or absent) alloc is a valid EL-mode genesis: the alloc loop
         // below emits no [alloc.*] sections and computeGenesisStateTrie returns
@@ -647,9 +675,18 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // ladder activates everything from genesis. Flag any configured at a
         // non-zero height so the operator knows the semantics shifted.
         static constexpr char const* kBlockForks[] = {
-            "homesteadBlock", "daoForkBlock", "eip150Block", "eip155Block",
-            "byzantiumBlock", "constantinopleBlock", "petersburgBlock", "istanbulBlock",
-            "muirGlacierBlock", "berlinBlock", "arrowGlacierBlock", "grayGlacierBlock",
+            "homesteadBlock",
+            "daoForkBlock",
+            "eip150Block",
+            "eip155Block",
+            "byzantiumBlock",
+            "constantinopleBlock",
+            "petersburgBlock",
+            "istanbulBlock",
+            "muirGlacierBlock",
+            "berlinBlock",
+            "arrowGlacierBlock",
+            "grayGlacierBlock",
             "londonBlock",
         };
         for (auto const* key : kBlockForks)
@@ -782,16 +819,17 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         h.gasLimit = headerQuantity("gasLimit");
         h.gasUsed = headerQuantity("gasUsed");
         h.prevRandao = crypto::HashType(
-            "0x" + padHex(
-                root.isMember("mixHash") ? root["mixHash"].asString() : "0x0", 64, "mixHash"));
+            "0x" +
+            padHex(root.isMember("mixHash") ? root["mixHash"].asString() : "0x0", 64, "mixHash"));
         if (root.isMember("extraData"))
         {
             h.extraData = hexToBytes(root["extraData"].asString());
         }
-        h.coinbase = Address("0x" + padHex(
-            root.isMember("coinbase") ? root["coinbase"].asString() : "0x0", 40, "coinbase"));
-        h.nonce = h64("0x" + padHex(
-            root.isMember("nonce") ? root["nonce"].asString() : "0x0", 16, "nonce"));
+        h.coinbase =
+            Address("0x" + padHex(root.isMember("coinbase") ? root["coinbase"].asString() : "0x0",
+                               40, "coinbase"));
+        h.nonce = h64(
+            "0x" + padHex(root.isMember("nonce") ? root["nonce"].asString() : "0x0", 16, "nonce"));
         h.number = 0;
         auto timestamp = headerQuantity("timestamp");
         if (timestamp > u256(std::numeric_limits<int64_t>::max() / 1000))
@@ -842,8 +880,8 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         }
         // consume-generated genesis files name it "withdrawalsRoot" (the fixture
         // header field); accept the geth-config-style "withdrawalsHash" too.
-        auto const* withdrawalsKey = root.isMember("withdrawalsRoot") ? "withdrawalsRoot" :
-                                                                          "withdrawalsHash";
+        auto const* withdrawalsKey =
+            root.isMember("withdrawalsRoot") ? "withdrawalsRoot" : "withdrawalsHash";
         if (root.isMember(withdrawalsKey) && !root[withdrawalsKey].isNull())
         {
             withdrawalsHash = h.withdrawalsHash = crypto::HashType(
@@ -875,9 +913,9 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         }
         if (root.isMember("parentBeaconBlockRoot") && !root["parentBeaconBlockRoot"].isNull())
         {
-            beaconRoot = h.parentBeaconRoot = crypto::HashType(
-                "0x" + padHex(root["parentBeaconBlockRoot"].asString(), 64,
-                    "parentBeaconBlockRoot"));
+            beaconRoot = h.parentBeaconRoot =
+                crypto::HashType("0x" + padHex(root["parentBeaconBlockRoot"].asString(), 64,
+                                            "parentBeaconBlockRoot"));
         }
         else if (forkActiveAtGenesis(cancunTime))
         {
@@ -908,10 +946,6 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             << "    sm_crypto=false\n"
             << "    group_id=group0\n"
             << "    chain_id=" << chainId->str() << "\n\n"
-            << "[web3]\n"
-            << "    chain_id=" << chainId->str() << "\n\n"
-            << "[version]\n"
-            << "    compatibility_version=3.18.0\n\n"
             << "[consensus]\n"
             << "    consensus_type=pbft\n"
             << "    block_tx_count_limit=1000\n"
@@ -972,7 +1006,8 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         ini << "[eth_genesis_header]\n"
             << "    parent_hash=" << h.parentInfo.blockHash.hexPrefixed() << "\n"
             << "    sha3_uncles=" << h.uncleHash.hexPrefixed() << "\n"
-            << "    miner=0x" << padHex(
+            << "    miner=0x"
+            << padHex(
                    root.isMember("coinbase") ? root["coinbase"].asString() : "0x0", 40, "coinbase")
             << "\n"
             << "    state_root=" << h.stateRoot.hexPrefixed() << "\n"
@@ -990,7 +1025,7 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             << "    timestamp=" << quantityHex(timestamp) << "\n"
             << "    extra_data="
             << (root.isMember("extraData") ? "0x" + stripHexPrefix(root["extraData"].asString()) :
-                                           std::string("0x"))
+                                             std::string("0x"))
             << "\n"
             << "    mix_hash=" << h.prevRandao.hexPrefixed() << "\n"
             << "    nonce=" << h.nonce.hexPrefixed() << "\n";
@@ -1046,12 +1081,10 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         if (root.isMember("stateRoot") &&
             stripHexPrefix(root["stateRoot"].asString()) != trie.root.hex())
         {
-            std::cerr << "WARNING: genesis.json stateRoot "
-                      << root["stateRoot"].asString() << " differs from the computed "
-                      << h.stateRoot.hexPrefixed() << std::endl;
+            std::cerr << "WARNING: genesis.json stateRoot " << root["stateRoot"].asString()
+                      << " differs from the computed " << h.stateRoot.hexPrefixed() << std::endl;
         }
-        if (root.isMember("hash") &&
-            stripHexPrefix(root["hash"].asString()) != hash.hex())
+        if (root.isMember("hash") && stripHexPrefix(root["hash"].asString()) != hash.hex())
         {
             std::cerr << "WARNING: genesis.json hash " << root["hash"].asString()
                       << " differs from the computed " << hash.hexPrefixed() << std::endl;
@@ -1098,8 +1131,8 @@ int runEnodeFromKey(std::string const& path, std::string const& ip, uint16_t por
         bcos::crypto::KeyFactoryImpl keyFactory;
         auto secret = keyFactory.createKey(bcos::fromHex(hex));
         auto pub = bcos::crypto::secp256k1PriToPub(secret);
-        std::cout << "enode://" << bcos::toHexStringWithPrefix(pub->data()).substr(2) << "@"
-                  << ip << ":" << port << std::endl;
+        std::cout << "enode://" << bcos::toHexStringWithPrefix(pub->data()).substr(2) << "@" << ip
+                  << ":" << port << std::endl;
         return 0;
     }
     catch (std::exception const& e)
@@ -1304,8 +1337,9 @@ int main(int argc, char** argv)
                   << " hash=" << (*block)["hash"].asString().substr(0, 18) << "..." << std::endl;
 
         // 1. Header RLP re-encoding: keccak(rlp(header)) must equal the canonical hash.
-        auto canonical = crypto::HashType(std::string_view(stripHexPrefix((*block)["hash"].asString())),
-            crypto::HashType::FromHex);
+        auto canonical =
+            crypto::HashType(std::string_view(stripHexPrefix((*block)["hash"].asString())),
+                crypto::HashType::FromHex);
         report("header hash", bcos::protocol::ethHeaderHash(h) == canonical);
 
         // 2. Header field rules against the parent: OP Stack rules in --op mode

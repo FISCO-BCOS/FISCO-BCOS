@@ -177,9 +177,6 @@ mkdir -p "${WORK_DIR}"
 
 # Generate genesis config
 cat > "${WORK_DIR}/config.genesis" << GENESIS_EOF
-[version]
-compatibility_version=3.18.0
-
 [chain]
 ; executor version 2 takes its chain id from here (a non-zero decimal)
 chain_id=20200
@@ -672,9 +669,9 @@ if [ -f "${PYTHON_SCRIPT}" ]; then
     python3 -c "import requests" 2>/dev/null || \
         pip3 install --quiet requests 2>/dev/null || \
         pip3 install --break-system-packages --quiet requests 2>/dev/null || true
-    # --eth-lane: this harness chain runs executor_version=2, the L1 Engine API (Cancun
-    # methods, no OP attributes; a 0x7e deposit envelope is a terminal INVALID).
-    if python3 "${PYTHON_SCRIPT}" "${RPC_URL}" "${WORK_DIR}/jwt.hex" --eth-lane 2>&1; then
+    # this harness chain runs executor_version=2, the L1 Engine API (Cancun methods; a 0x7e
+    # deposit envelope is a terminal INVALID)
+    if python3 "${PYTHON_SCRIPT}" "${RPC_URL}" "${WORK_DIR}/jwt.hex" 2>&1; then
         log_info "Python tests passed"
         log_pass
     else
