@@ -6,13 +6,17 @@
 #             artefact drifts from the committed one (reviewers run it on a PR that touches
 #             a .sol or a .bin). solc comes from SOLC_DIR (default ~/.fisco/solc, the layout
 #             console's download_solc.sh produces: <version>/keccak256/solc and
-#             <version>/sm3/solc); the binary's reported version must equal SOLC_VERSION.
+#             <version>/sm3/solc); the binary must report SOLC_VERSION+commit.SOLC_COMMIT.
+#             Bytecode is compiled with --metadata-hash none: the default IPFS metadata hash
+#             did not reproduce on another 0.8.11 binary that passed the version-only check, so
+#             --check reported drift on unchanged sources.
 #             Usage: bash tools/.ci/contracts/regenerate.sh [--check] [Name...]
 # @ file    : regenerate.sh
 set -euo pipefail
 
 contracts_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SOLC_VERSION="${SOLC_VERSION:-0.8.11}"
+SOLC_COMMIT="${SOLC_COMMIT:-41567353}"
 SOLC_DIR="${SOLC_DIR:-${HOME}/.fisco/solc}"
 solc_keccak="${SOLC_DIR}/${SOLC_VERSION}/keccak256/solc"
 solc_sm3="${SOLC_DIR}/${SOLC_VERSION}/sm3/solc"
@@ -48,8 +52,8 @@ for solc in "${solc_keccak}" "${solc_sm3}"; do
         exit 1
     fi
     version=$("${solc}" --version | tail -n 1)
-    if [[ "${version}" != *"${SOLC_VERSION}+"* ]]; then
-        echo "${solc} reports '${version}', expected ${SOLC_VERSION}" >&2
+    if [[ "${version}" != *"${SOLC_VERSION}+commit.${SOLC_COMMIT}"* ]]; then
+        echo "${solc} reports '${version}', expected ${SOLC_VERSION}+commit.${SOLC_COMMIT}" >&2
         exit 1
     fi
 done
@@ -59,7 +63,7 @@ run_solc()
 {
     local log
     log=$(mktemp)
-    if ! (cd "${1}" && "${2}" --bin --abi --overwrite -o "${3}" "${4}" >"${log}" 2>&1); then
+    if ! (cd "${1}" && "${2}" --bin --abi --metadata-hash none --overwrite -o "${3}" "${4}" >"${log}" 2>&1); then
         cat "${log}" >&2
         rm -f "${log}"
         return 1
