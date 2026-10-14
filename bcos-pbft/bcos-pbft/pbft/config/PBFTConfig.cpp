@@ -75,11 +75,13 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     freshTimer();
 
     auto roundMs = takeRoundMs(_ledgerConfig->blockNumber(), utcSteadyTime());
-    // one site for the one event; sealer=-1 marks a block that arrived through sync
+    // one site for the one event. sealer=-1,txs=-1 marks a block this node did not reach
+    // consensus on: one that arrived through sync (the sync path fills the ledger config from the
+    // downloaded header, so the -1 is chosen here) or the ledger config loaded at startup
     PBFT_LOG(INFO) << METRIC << LOG_DESC("^^^^^^^^Report")
-                   << LOG_KV("sealer", _ledgerConfig->sealerId())
-                   << LOG_KV("txs", _ledgerConfig->txsSize()) << printCurrentState()
-                   << LOG_KV("roundMs", roundMs);
+                   << LOG_KV("sealer", _syncedBlock ? -1 : _ledgerConfig->sealerId())
+                   << LOG_KV("txs", _syncedBlock ? -1 : _ledgerConfig->txsSize())
+                   << printCurrentState() << LOG_KV("roundMs", roundMs);
     if (bcos::BlockStat::enabled())
     {
         PBFT_LOG(INFO)
