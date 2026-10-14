@@ -105,10 +105,15 @@ int runAttach(Args const& _args, std::ostream& _out, std::ostream& _err)
 int runLogLevel(Args const& _args, std::ostream& _out, std::ostream& _err)
 {
     (void)_err;
+    // exactly `get` or `set <level>`: an extra word or a --module on get is a usage error, not
+    // something silently dropped
     auto const& positionals = _args.positionals();
-    if (positionals.empty() || (positionals[0] != "get" && positionals[0] != "set"))
+    bool const get = positionals.size() == 1 && positionals[0] == "get" && !_args.option("module");
+    bool const set = positionals.size() == 2 && positionals[0] == "set";
+    if (!get && !set)
     {
-        throw OpsError(c_exitUsage, "usage: log-level get | log-level set [--module M] <level>");
+        throw OpsError(
+            c_exitUsage, "usage: log-level get | log-level set [--module M] <level|inherit>");
     }
     auto options = connectOptionsFrom(_args);
     options.allowRpc = false;  // admin_* only exist on the socket
@@ -119,12 +124,8 @@ int runLogLevel(Args const& _args, std::ostream& _out, std::ostream& _err)
     auto connection = connect(options);
     Json::Value params(Json::arrayValue);
     std::string method = "admin_getLogLevel";
-    if (positionals[0] == "set")
+    if (set)
     {
-        if (positionals.size() < 2)
-        {
-            throw OpsError(c_exitUsage, "usage: log-level set [--module M] <level|inherit>");
-        }
         method = "admin_setLogLevel";
         params.append(positionals[1]);
         if (auto module = _args.option("module"))
