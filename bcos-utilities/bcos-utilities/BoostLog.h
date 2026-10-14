@@ -47,6 +47,13 @@
 
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
+#include <array>
+#include <atomic>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 // BCOS log format
 #ifndef LOG_BADGE
@@ -104,6 +111,49 @@ void setStatLogLevel(LogLevel const& _level);
 #define BCOS_LOG(level)                                \
     if (bcos::LogLevel::level >= bcos::c_fileLogLevel) \
     BOOST_LOG_SEV(                                     \
+        bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
+
+/// Per-module (channel) log level. Module name == the badge text used in the log line.
+/// A table entry of -1 means "inherit the global c_fileLogLevel".
+enum class LogModule : uint8_t
+{
+    PBFT,
+    TXPOOL,
+    SYNC,
+    SCHEDULER,
+    EXECUTOR,
+    LEDGER,
+    RPC,
+    GATEWAY,
+    FRONT,
+    COUNT
+};
+constexpr int c_inheritGlobalLogLevel = -1;
+extern std::array<std::atomic<int>, static_cast<size_t>(LogModule::COUNT)> c_moduleLogLevel;
+
+inline bool moduleLogEnabled(LogModule _module, LogLevel _level)
+{
+    auto configured =
+        c_moduleLogLevel[static_cast<size_t>(_module)].load(std::memory_order_relaxed);
+    auto threshold =
+        configured == c_inheritGlobalLogLevel ? static_cast<int>(c_fileLogLevel) : configured;
+    return static_cast<int>(_level) >= threshold;
+}
+
+std::string_view logModuleName(LogModule _module);
+/// case-insensitive; nullopt when the name is not a channel
+std::optional<LogModule> parseLogModule(std::string_view _name);
+void setModuleLogLevel(LogModule _module, LogLevel _level);
+void resetModuleLogLevel(LogModule _module);
+/// returns false when _name is not a channel
+bool setModuleLogLevel(std::string_view _name, LogLevel _level);
+bool resetModuleLogLevel(std::string_view _name);
+/// only the modules whose level is explicitly set (not inheriting)
+std::vector<std::pair<std::string, LogLevel>> moduleLogLevels();
+
+#define BCOS_MODULE_LOG(MODULE, level)                                          \
+    if (bcos::moduleLogEnabled(bcos::LogModule::MODULE, bcos::LogLevel::level)) \
+    BOOST_LOG_SEV(                                                              \
         bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
 // for block number log
 #define BLOCK_NUMBER(NUMBER) "[blk-" << (NUMBER) << "]"
