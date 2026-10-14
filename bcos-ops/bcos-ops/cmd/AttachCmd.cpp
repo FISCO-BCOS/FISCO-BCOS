@@ -77,10 +77,10 @@ int runAttach(Args const& _args, std::ostream& _out, std::ostream& _err)
     auto const& method = _args.positionals()[0];
     auto params = paramsFrom(_args.positionals(), 1);
     // the FISCO methods take [groupID, nodeName, ...]; fill the group in when the caller gave
-    // none and the method is not one of the group-less ones
-    static std::set<std::string> const c_groupless = {"getGroupList", "getGroupInfoList",
-        "getGroupPeers", "getGroupInfo", "getGroupNodeInfo", "getPeers", "getNodeInfo",
-        "admin_getLogLevel", "admin_setLogLevel"};
+    // none and the method reads no group (JsonRpcInterface.h: getGroupInfo / getGroupPeers /
+    // getGroupNodeInfo read params[0] as the group, so they are not in this set)
+    static std::set<std::string> const c_groupless = {
+        "getGroupList", "getGroupInfoList", "getPeers", "admin_getLogLevel", "admin_setLogLevel"};
     if (params.empty() && !c_groupless.contains(method))
     {
         params.append(connection.group);
@@ -89,7 +89,7 @@ int runAttach(Args const& _args, std::ostream& _out, std::ostream& _err)
     auto result = connection.call(method, params);
     if (result.isString() && !wantJson(_args.flag("json")))
     {
-        _out << result.asString() << '\n';
+        _out << sanitizeForTerminal(result.asString()) << '\n';
     }
     else if (result.isIntegral() && !wantJson(_args.flag("json")))
     {
@@ -144,11 +144,11 @@ void registerAttachCommands()
     registerCommand("attach",
         Command{"call any JSON-RPC method on the node (local socket first) and print the result",
             "<method> [params-json | args...] [--node-dir <dir> | --rpc <host:port>] [--json]", {},
-            runAttach});
+            runAttach, {}, true});
     registerCommand("log-level",
         Command{"get or set the node's log level in memory, per module (local socket only)",
             "get | set [--module PBFT|TXPOOL|SYNC|SCHEDULER|EXECUTOR|LEDGER|RPC|GATEWAY|FRONT] "
             "<trace|debug|info|warning|error|inherit> [--node-dir <dir>]",
-            {}, runLogLevel});
+            {}, runLogLevel, {"module"}, true});
 }
 }  // namespace bcos::ops

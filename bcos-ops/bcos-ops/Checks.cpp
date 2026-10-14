@@ -77,18 +77,26 @@ std::vector<Check> evaluate(
     }
 
     // 3. sync_caught_up
-    if (!_status.lag || !_status.isSyncing)
+    if (!_status.lag)
     {
-        checks.push_back(skipped("sync_caught_up", "lag or isSyncing unknown"));
+        checks.push_back(skipped("sync_caught_up", "lag unknown"));
     }
     else
     {
-        bool fail = *_status.lag >= _thresholds.maxLag && *_status.isSyncing;
+        // behind is behind whether or not a download is running: an idle node that stopped
+        // following its peers passes height_advancing whenever its txpool is empty
+        bool syncing = _status.isSyncing && *_status.isSyncing;
+        bool fail = *_status.lag >= _thresholds.maxLag;
         auto check = verdict("sync_caught_up", fail,
-            fail ? "syncing and " + std::to_string(*_status.lag) + " blocks behind" : "");
+            fail ? std::string(syncing ? "syncing" : "not syncing") + " and " +
+                       std::to_string(*_status.lag) + " blocks behind" :
+                   "");
         check.values["lag"] = static_cast<Json::Int64>(*_status.lag);
         check.values["maxLag"] = static_cast<Json::Int64>(_thresholds.maxLag);
-        check.values["isSyncing"] = *_status.isSyncing;
+        if (_status.isSyncing)
+        {
+            check.values["isSyncing"] = *_status.isSyncing;
+        }
         checks.push_back(std::move(check));
     }
 
@@ -130,6 +138,18 @@ std::vector<Check> evaluate(
         checks.push_back(std::move(check));
     }
     return checks;
+}
+
+bool anyEvaluated(std::vector<Check> const& _checks)
+{
+    for (auto const& check : _checks)
+    {
+        if (check.ok() || check.failed())
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool anyFailed(std::vector<Check> const& _checks)

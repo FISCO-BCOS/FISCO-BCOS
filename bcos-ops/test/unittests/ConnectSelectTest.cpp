@@ -8,9 +8,12 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
+#include <bcos-ops/Cli.h>
 #include <bcos-ops/Connect.h>
 #include <bcos-ops/IpcClient.h>
 #include <bcos-ops/OpsError.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <boost/asio/buffers_iterator.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/local/stream_protocol.hpp>
@@ -20,9 +23,12 @@
 #include <boost/asio/write.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <sstream>
 #include <thread>
 
 namespace bcos::ops::test
@@ -30,7 +36,8 @@ namespace bcos::ops::test
 namespace
 {
 /// minimal stand-in for the node's IpcServer (async accept + read loop on one io thread):
-/// getBlockNumber → 128, getConsensusStatus → a string-wrapped object, anything else → -32601.
+/// getBlockNumber → 128, getConsensusStatus → a string-wrapped object, getGroupInfo → echoes its
+/// params, getTerminalTrap → a string carrying escape sequences, anything else → -32601.
 /// `delayNextReplyMs` holds the next reply back that long; `wrongIdOnce` answers the next
 /// request under another id (a stream that got out of step).
 class FakeIpcNode
@@ -99,6 +106,14 @@ private:
                     {
                         response["result"] = R"({"view":2})";
                     }
+                    else if (request["method"].asString() == "getGroupInfo")
+                    {
+                        response["result"] = request["params"];
+                    }
+                    else if (request["method"].asString() == "getTerminalTrap")
+                    {
+                        response["result"] = "\x1b]0;owned\x07\x1b[2Jvalue";
+                    }
                     else
                     {
                         response["error"]["code"] = -32601;
@@ -160,6 +175,30 @@ private:
     boost::asio::io_context m_io;
     boost::asio::local::stream_protocol::acceptor* m_acceptor = nullptr;
     std::thread m_thread;
+};
+
+/// makes STDOUT_FILENO a terminal for the scope, so wantJson() picks the text output path
+struct ScopedTtyStdout
+{
+    int saved = ::dup(STDOUT_FILENO);
+    int master = ::posix_openpt(O_RDWR | O_NOCTTY);
+    ScopedTtyStdout()
+    {
+        BOOST_REQUIRE(saved >= 0 && master >= 0);
+        BOOST_REQUIRE(::grantpt(master) == 0 && ::unlockpt(master) == 0);
+        int slave = ::open(::ptsname(master), O_RDWR | O_NOCTTY);
+        BOOST_REQUIRE(slave >= 0);
+        std::fflush(stdout);
+        ::dup2(slave, STDOUT_FILENO);
+        ::close(slave);
+    }
+    ~ScopedTtyStdout()
+    {
+        std::fflush(stdout);
+        ::dup2(saved, STDOUT_FILENO);
+        ::close(saved);
+        ::close(master);
+    }
 };
 
 struct TempNode
@@ -268,6 +307,40 @@ BOOST_AUTO_TEST_CASE(staleSocketFileIsNotReachable)
     BOOST_CHECK_EXCEPTION(connect(options), OpsError, [](OpsError const& e) {
         return std::string(e.what()).find("ipc_enable") != std::string::npos;
     });
+}
+
+// getGroupInfo / getGroupPeers / getGroupNodeInfo read params[0] as the group: attach with no
+// params must send [group, ""], not []
+BOOST_AUTO_TEST_CASE(attachFillsTheGroupForGroupScopedMethods)
+{
+    TempNode node;
+    FakeIpcNode fake(node.socketPath());
+    std::ostringstream out;
+    std::ostringstream err;
+    auto code =
+        runOps({"fisco-bcos", "attach", "getGroupInfo", "--node-dir", node.dir.string(), "--json"},
+            out, err);
+    BOOST_REQUIRE_MESSAGE(code == c_exitOk, err.str());
+    auto echoed = parseJson(out.str(), "attach");
+    BOOST_REQUIRE(echoed.isArray());
+    BOOST_REQUIRE_EQUAL(echoed.size(), 2U);
+    BOOST_CHECK_EQUAL(echoed[0].asString(), "group0");
+}
+
+BOOST_AUTO_TEST_CASE(attachTextOutputIsSanitized)
+{
+    TempNode node;
+    FakeIpcNode fake(node.socketPath());
+    std::ostringstream out;
+    std::ostringstream err;
+    int code = 0;
+    {
+        ScopedTtyStdout tty;
+        code = runOps(
+            {"fisco-bcos", "attach", "getTerminalTrap", "--node-dir", node.dir.string()}, out, err);
+    }
+    BOOST_REQUIRE_MESSAGE(code == c_exitOk, err.str());
+    BOOST_CHECK_EQUAL(out.str(), "]0;owned[2Jvalue\n");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

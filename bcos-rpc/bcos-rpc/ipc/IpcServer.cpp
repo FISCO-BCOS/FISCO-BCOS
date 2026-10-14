@@ -142,7 +142,11 @@ void IpcServer::start()
     {
         std::filesystem::create_directories(parent, fsError);
     }
-    ::unlink(m_path.c_str());  // a stale file from a crashed node would make bind fail
+    // a stale file from a crashed node would make bind fail. No live listener can own this path:
+    // RpcFactory puts it in [storage] data_path, the directory Initializer::init opens as the
+    // state RocksDB (GlobalStateStorageInitializer::build), so a second process on it fails on
+    // RocksDB's LOCK before AirNodeInitializer::start reaches Rpc::start
+    ::unlink(m_path.c_str());
     m_acceptor = std::make_shared<boost::asio::local::stream_protocol::acceptor>(
         m_io, boost::asio::local::stream_protocol::endpoint(m_path));
     m_running = true;

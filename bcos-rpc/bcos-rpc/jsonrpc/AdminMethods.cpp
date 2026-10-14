@@ -84,7 +84,7 @@ void registerAdminMethods(JsonRpcInterface& _rpc)
         _respFunc(nullptr, result);
     });
     _rpc.registerIpcOnlyMethod("admin_setLogLevel", [](Json::Value& _params, RespFunc _respFunc) {
-        if (!_params.isArray() || _params.empty() || !_params[0].isString())
+        if (!_params.isArray() || _params.empty() || _params.size() > 2 || !_params[0].isString())
         {
             invalidParams(_respFunc, "admin_setLogLevel expects [level] or [level, module]");
             return;
