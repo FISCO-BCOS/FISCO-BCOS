@@ -18,8 +18,8 @@
  *        flat-state reads from a past block's MPT root; the View stacked on it gives the
  *        call read-your-writes; BaselineScheduler::callAtBlock wires blockNumber -> header
  *        stateRoot -> historical stack -> executor, with explicit refusals for beyond-latest
- *        blocks and non-scenario-B chains; getExecutable bypasses the global executable
- *        cache for historical storages.
+ *        blocks and non-scenario-B chains; getExecutable serves the shared
+ *        content-addressed executable cache for historical and latest lookups alike.
  */
 
 #include "SharedBaselineSchedulerMock.h"

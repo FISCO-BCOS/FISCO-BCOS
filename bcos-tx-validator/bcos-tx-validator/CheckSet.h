@@ -340,9 +340,9 @@ constexpr Check poolAdmissionCheckSet(TxKind kind) noexcept
     case TxKind::Web3DynamicFee:
         return c_web3Common | Check::TypeByRevision | Check::TipNotAboveCap;
     case TxKind::Web3Blob:
-        // evmone routes the blob type through the eip1559 hierarchy (state.cpp: blob sits in the
-        // same switch arm as eip1559 for INSUFFICIENT_MAX_FEE_PER_BLOB_GAS), so
-        // TipNotAboveCap applies here exactly
+        // evmone routes the blob type through the eip1559 hierarchy (state.cpp: blob sits
+        // in the same switch arm as eip1559 for
+        // PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS), so TipNotAboveCap applies here exactly
         // as for Web3DynamicFee; omitting it would admit a transaction execution then rejects.
         // The blob-specific rules mirror evmone's special block: TypeByRevision, then "to"
         // present (BlobHasTo); the empty-hashes rule runs even earlier, while normalizing.

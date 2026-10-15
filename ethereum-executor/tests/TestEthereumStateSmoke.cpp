@@ -373,11 +373,11 @@ void testEthereumStateBinaryMode()
 }  // namespace
 
 
-// The lane's own EIP-197 pairing precompile, pinned with frozen vectors (review F11:
-// the G2 parse rewrite had no fast in-lane oracle). Generator literals shared with the
-// v1 lane's EvmPrecompiledTest; the matching two-pair cell is (G1, G2) || (G1, -G2) —
-// the y coordinates field-negated — whose product is 1; the non-canonical cell adds the
-// field modulus to a1_x (same point mathematically, encoding >= p must be REJECTED).
+// The lane's own EIP-197 pairing precompile, pinned with frozen vectors. Generator
+// literals shared with the v1 lane's EvmPrecompiledTest; the matching two-pair cell is
+// (G1, G2) || (G1, -G2) — the y coordinates field-negated — whose product is 1; the
+// non-canonical cell adds the field modulus to the G2 x_im coefficient (same point
+// mathematically, an encoding >= p that the parse must REJECT).
 void testEcpairingVectors()
 {
     uint8_t out[32];
@@ -410,7 +410,7 @@ void testEcpairingVectors()
         CHECK(r.status_code == EVMC_SUCCESS);
         CHECK(out[31] == 0x01);
     }
-    // a1_x + p: non-canonical G2 encoding — the parse rewrite must reject it.
+    // G2 x_im + p: non-canonical G2 encoding — the parse must reject it.
     {
         auto r =
             run("0000000000000000000000000000000000000000000000000000000000000001000000000000000000"

@@ -198,6 +198,9 @@ public:
     virtual void setStaticCall(bool staticCall) = 0;
 
     // for evm
+    // Vestigial (ABI 19 removed evmc_message::create2_salt and both scheduler
+    // consumers were dropped): no production code sets or reads this. Retained on the
+    // protocol interface only; delete with the next wire-format revision.
     virtual std::optional<u256> createSalt() const = 0;
     virtual void setCreateSalt(u256 createSalt) = 0;
 
