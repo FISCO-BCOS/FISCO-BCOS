@@ -78,8 +78,9 @@ bcos::Error::UniquePtr decodeDepositTransaction(
 
 /// Fill `result` with the deposit-specific JSON fields in op-geth's RPC shape
 /// (internal/ethapi RPCTransaction): type 0x7e, sourceHash, from, to (null for creation),
-/// gas, value, input, mint (always emitted — "0x0" for the empty RLP item, matching
-/// op-geth's nil *big.Int encoding), isSystemTx (only when true). Fields
+/// gas, value, input, mint (emitted only when the envelope carried a mint item —
+/// omitted for the empty RLP item, matching op-geth's json:"mint,omitempty" / nil
+/// *big.Int; an explicit zero renders as "0x0"), isSystemTx (only when true). Fields
 /// without deposit semantics follow op-geth: nonce/gasPrice/v/r/s are 0x0 (the deposit
 /// nonce lives in the receipt and is filled by the receipt path once available), and no
 /// chainId is emitted.
