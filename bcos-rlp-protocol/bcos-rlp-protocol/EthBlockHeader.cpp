@@ -33,10 +33,7 @@ namespace bcos::protocol
 void EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHeader& header)
 {
     validateHeader(header);
-
-    EthBlockHeader ethHeader(header);
-    bcos::bytes encoded;
-    ethHeader.rlpEncode(encoded);
+    auto const encoded = encodeHeader(header);
     header.setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(encoded)));
 }
 
@@ -45,11 +42,18 @@ bcos::crypto::HashType EthBlockHeader::computeHash(
 {
     // No validateHeader here (unlike calculateRLPHash): this is the block-identity hash
     // for FISCO-native/OP headers (EthBlockVersion::NON_ETH) that validateHeader rejects.
+    auto const encoded = encodeHeader(header);
+    return bcos::crypto::keccak256Hash(bcos::ref(encoded));
+}
+
+bcos::bytes EthBlockHeader::encodeHeader(
+    const bcos::protocol::BlockHeader& header) noexcept(false)
+{
     // The ctor performs the ms->s conversion and throws on a sub-second timestamp.
     EthBlockHeader ethHeader(header);
     bcos::bytes encoded;
     ethHeader.rlpEncode(encoded);
-    return bcos::crypto::keccak256Hash(bcos::ref(encoded));
+    return encoded;
 }
 
 void EthBlockHeader::toTarsHeader(
