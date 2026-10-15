@@ -249,7 +249,9 @@ constexpr std::array c_deadConfigKeys{
     DeadKey{"consensus", "fee_recipient", "[debug] fee_recipient"},
     DeadKey{"consensus", "prev_randao", "[debug] prev_randao"},
     DeadKey{"consensus", "fixed_timestamp", "[debug] fixed_timestamp"},
-    DeadKey{"op_engine_rpc", "", "[engine_rpc] (no enable key)"},
+    DeadKey{"op_engine_rpc", "",
+        "[engine_rpc]: move its keys there (enable_debug_api, enable_miner_api, listen_ip/port, "
+        "jwt_secret_file, ...); enable and unsafe_allow_v1_executor are gone"},
     DeadKey{"engine_rpc", "enable",
         "none: the Engine API listener runs whenever the block driver is Engine "
         "(v2/v3 without a [debug] driver)"},
