@@ -118,9 +118,16 @@ void bcos::rpc::combineDepositTxResponse(Json::Value& result, const DepositTrans
     result["gas"] = toQuantity(deposit.gas);
     result["value"] = toQuantity(deposit.value);
     result["input"] = toHexStringWithPrefix(deposit.input);
+    // op-geth omits mint when the tx carries none: RPCTransaction tags the field
+    // `json:"mint,omitempty"` and its decoder (rlp:"nil") maps the empty item back to
+    // nil — and even the derived L1-attributes deposit is in this state (op-node builds
+    // it with Mint=big.NewInt(0), which go-ethereum's rlp writes as the empty item), so
+    // op-geth reports NO mint key on the every-block first deposit. Mirror that: emit
+    // mint only when the envelope carried a non-empty item (review F6; verified against
+    // op-geth e8800cff internal/ethapi/api.go:1179/:1221, core/types/deposit_tx.go:37,
+    // rlp/encbuffer.go:150 and op-node/rollup/derive/deposit_source.go:96).
     if (deposit.mint.has_value())
     {
-        // op-geth omits mint when nil and emits it when present (json:"mint,omitempty").
         result["mint"] = toQuantity(*deposit.mint);
     }
     if (deposit.isSystemTx)
@@ -129,10 +136,27 @@ void bcos::rpc::combineDepositTxResponse(Json::Value& result, const DepositTrans
         result["isSystemTx"] = true;
     }
     // Deposits carry no nonce (the deposit nonce lives in the receipt), no gas price and
-    // no signature; op-geth emits zero quantities for these.
+    // no signature; op-geth emits zero quantities for these. fillDepositReceiptFields
+    // overwrites nonce with the receipt's deposit nonce once the receipt is in scope.
     result["nonce"] = "0x0";
     result["gasPrice"] = "0x0";
     result["v"] = "0x0";
     result["r"] = "0x0";
     result["s"] = "0x0";
+}
+
+void bcos::rpc::fillDepositReceiptFields(
+    Json::Value& result, const protocol::TransactionReceipt& receipt)
+{
+    if (auto const meta = receipt.opStackMeta())
+    {
+        if (meta->deposit_nonce.has_value())
+        {
+            result["nonce"] = toQuantity(*meta->deposit_nonce);
+        }
+        if (meta->deposit_receipt_version.has_value())
+        {
+            result["depositReceiptVersion"] = toQuantity(*meta->deposit_receipt_version);
+        }
+    }
 }
