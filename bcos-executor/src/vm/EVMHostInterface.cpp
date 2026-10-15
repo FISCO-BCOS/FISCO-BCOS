@@ -292,22 +292,6 @@ evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
     return toEvmC(hostContext.blockHash(_number));
 }
 
-// evmc_result create(HostContext& _txContext, evmc_message const* _msg) noexcept
-// {
-//     return _txContext.externalRequest(_msg);
-// int64_t gas = _msg->gas;
-// // u256 value = fromEvmC(_msg->value);
-// bytesConstRef init = {_msg->input_data, _msg->input_size};
-// u256 salt = fromEvmC(_msg->create2_salt);
-// evmc_opcode opcode =
-//     _msg->kind == EVMC_CREATE ? evmc_opcode::OP_CREATE : evmc_opcode::OP_CREATE2;
-
-// // HostContext::create takes the sender address from .myAddress().
-// assert(fromEvmC(_msg->sender) == _txContext.myAddress());
-
-// return _txContext.create(gas, init, opcode, salt);
-// }
-
 evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
 {
     // This callback is noexcept (the evmc host interface requires it): an exception
@@ -321,8 +305,12 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
         if (_msg->gas < 0)
         {
             EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
-            return evmc_result{.status_code = EVMC_OUT_OF_GAS, .gas_left = 0, .gas_refund = 0,
-                .state_gas = {}, .output_data = nullptr, .output_size = 0,
+            return evmc_result{.status_code = EVMC_OUT_OF_GAS,
+                .gas_left = 0,
+                .gas_refund = 0,
+                .state_gas = {},
+                .output_data = nullptr,
+                .output_size = 0,
                 .release = nullptr};
         }
 
@@ -336,8 +324,12 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
         // throw); returning a failure lets evmone fail the create/call frame instead
         // of terminating the node mid-block.
         EXECUTIVE_LOG(WARNING) << LOG_DESC("EVM host call failed closed");
-        return evmc_result{.status_code = EVMC_INTERNAL_ERROR, .gas_left = 0,
-            .gas_refund = 0, .state_gas = {}, .output_data = nullptr, .output_size = 0,
+        return evmc_result{.status_code = EVMC_INTERNAL_ERROR,
+            .gas_left = 0,
+            .gas_refund = 0,
+            .state_gas = {},
+            .output_data = nullptr,
+            .output_size = 0,
             .release = nullptr};
     }
 }

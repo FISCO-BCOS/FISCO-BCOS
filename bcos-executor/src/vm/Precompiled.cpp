@@ -362,7 +362,6 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
         return {false, bytes(32, 0)};
 
     using namespace evmone::crypto::bn254;  // evmone 0.24: evmmax::bn254 moved here.
-    using intx::be::unsafe::load;
 
     std::vector<std::pair<AffinePoint, ExtPoint>> pairs;
     pairs.reserve(_in.size() / PAIR_SIZE);

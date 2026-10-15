@@ -848,6 +848,9 @@ BOOST_AUTO_TEST_CASE(externalCallLegacyCreateFormula)
 
     // The legacy branch's exact value — block 1, context 301, seq 4001 + 1. Without the
     // hook this address is evmone's keccak(rlp(sender, nonce)) instead, so the pin fails.
+    // The literal is the independent half: the formula check alone moves with the same
+    // helper the hook calls, so a drift inside newEVMAddress stays green without it.
+    BOOST_CHECK_EQUAL(result2->to(), "ff88cb2b46c76b9802f6a26c4e0b46f73879f2f8");
     BOOST_CHECK_EQUAL(result2->to(), bcos::newEVMAddress(hashImpl, 1, 301, 4002));
 }
 
