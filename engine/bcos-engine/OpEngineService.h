@@ -22,6 +22,9 @@
 #include "EngineServiceCommon.h"
 #include "EngineTracker.h"
 
+#include <atomic>
+#include <chrono>
+
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/engine/DACaps.h>
@@ -266,7 +269,24 @@ private:
         {
             // One-level tip reorg is a deferred scheduler capability (ReorgUndo
             // follow-up); the Engine-API answer is SYNCING so the CL retries after
-            // re-parenting — never a -32603 internal fault.
+            // re-parenting — never a -32603 internal fault. The answer used to be
+            // silent; a rate-limited WARNING names the deferred gap so sustained
+            // SYNCING churn is observable in production (review F24). Throttled
+            // because the CL retries this class on a loop.
+            static std::atomic<int64_t> s_lastSyncingLogEpoch{0};
+            auto const nowEpoch = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                                      .count();
+            auto lastLogged = s_lastSyncingLogEpoch.load(std::memory_order_relaxed);
+            if (nowEpoch - lastLogged >= 30 &&
+                s_lastSyncingLogEpoch.compare_exchange_weak(lastLogged, nowEpoch))
+            {
+                BCOS_LOG(WARNING) << LOG_BADGE("OpEngineService")
+                                  << LOG_DESC("recoverable refusal answered SYNCING "
+                                              "(one-level tip reorg / ReorgUndo is a "
+                                              "deferred scheduler capability)")
+                                  << LOG_KV("reason", error.errorMessage());
+            }
             return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
         BOOST_THROW_EXCEPTION(
