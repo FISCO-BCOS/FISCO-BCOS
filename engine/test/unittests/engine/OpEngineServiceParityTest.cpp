@@ -135,6 +135,11 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
     // the shape the build loop must answer SYNCING for instead of throwing
     // OpExecutionInternalError (review F3).
     bool siblingReorgRefusal = false;
+    // Models a delegate consensus rejection on the EXECUTE side (classifyException's
+    // OpConsensusError -> OpConsensusRejected): no culprit hash, no tag — the shape the
+    // build loop must answer INVALID for, exactly as mapDelegateError does on the
+    // newPayload lane (review F5).
+    bool consensusRejectExecute = false;
     bool failFirst = true;
     bool failCommit = false;
     /// Fail this many commitBlock calls then succeed. Used by the fallback pin.
@@ -166,6 +171,14 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
                 "Discontinuous execute block number! expect: 1 input: 2");
             *error << bcos::engine::OpSiblingReorgUnsupported{true};
             callback(std::move(error), nullptr, false);
+            return;
+        }
+        if (consensusRejectExecute)
+        {
+            callback(
+                BCOS_ERROR_PTR((int)bcos::scheduler::SchedulerError::OpConsensusRejected,
+                    "op block: consensus rejected the candidate"),
+                nullptr, false);
             return;
         }
         if (failFirst && executeCalls == 1)
@@ -912,14 +925,14 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
 
     bcos::h256 const targetHash(0x42);
     bcos::engine::PayloadID const targetPayloadId = "0xdeadbeef";
-    constexpr bcos::protocol::BlockNumber kTargetNumber = 7;
+    constexpr bcos::protocol::BlockNumber cTargetNumber = 7;
 
     {
         auto guard = tracker.lockExclusive();
         auto entry = std::make_shared<bcos::engine::BuiltPayload>();
         entry->executionPayload.blockHash = targetHash;
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(kTargetNumber);
+        header->setNumber(cTargetNumber);
         (void)bcos::engine::publishBuiltPayload(guard, artifacts, targetPayloadId, targetHash,
             entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
     }
@@ -937,7 +950,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         auto shared = tracker.lockShared();
         initialHeader = bcos::engine::detail::findBuiltHeader(shared, artifacts, targetHash);
         BOOST_REQUIRE(initialHeader);
-        BOOST_CHECK_EQUAL(initialHeader->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(initialHeader->number(), cTargetNumber);
 
         writer.emplace([&] {
             try
@@ -980,7 +993,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         auto shared = tracker.lockShared();
         auto stableHeader = bcos::engine::detail::findBuiltHeader(shared, artifacts, targetHash);
         BOOST_REQUIRE(stableHeader);
-        BOOST_CHECK_EQUAL(stableHeader->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(stableHeader->number(), cTargetNumber);
         BOOST_CHECK_EQUAL(stableHeader.get(), initialHeader.get());
     }
 }
@@ -1180,6 +1193,45 @@ BOOST_AUTO_TEST_CASE(op_build_tagged_recoverable_refusal_answers_syncing)
     BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing));
     BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_CHECK_GE(delegate->executeCalls, 1);
+}
+
+BOOST_AUTO_TEST_CASE(op_build_consensus_rejected_answers_invalid)
+{
+    // F5 — a delegate consensus rejection on the FCU build path must answer INVALID
+    // with the validation error, exactly as mapDelegateError does on the newPayload
+    // lane ("OpConsensusRejected is the ONLY code the service may answer INVALID
+    // for"). Before classification was routed through mapDelegateError, the build
+    // tail threw OpExecutionInternalError (-32603) for this code — the lane asymmetry
+    // this case pins away. Deliberately the twin of
+    // op_build_tagged_recoverable_refusal_answers_syncing: same setup, only the
+    // delegate error class differs.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    delegate->consensusRejectExecute = true;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    pair.memPool.pool.push_back(decoded.tx);
+
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    BOOST_CHECK(result.payloadStatus.validationError->find("consensus rejected") !=
+                std::string::npos);
     BOOST_CHECK_GE(delegate->executeCalls, 1);
 }
 
