@@ -23,6 +23,15 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(Boost_NO_WARN_NEW_VERSIONS ON)
 
+# Repo-wide unity build defaults (option declared in Options.cmake). These
+# variables initialize the UNITY_BUILD / UNITY_BUILD_BATCH_SIZE property of
+# every target created after this point; per-target set_target_properties
+# still overrides them (ethereum-executor / opstack-executor stay OFF).
+if(UNITY_BUILD)
+    set(CMAKE_UNITY_BUILD ON)
+    set(CMAKE_UNITY_BUILD_BATCH_SIZE ${UNITY_BUILD_BATCH_SIZE})
+endif()
+
 # C++23 std::expected floor: GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ (MSVC 19.33+).
 if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12) OR
    ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16) OR

@@ -25,7 +25,6 @@ add_executable(opstack-executor-tests
 # Unity build: header-heavy Boost.Test TUs share a large common preamble. TestMain.cpp
 # defines BOOST_TEST_MODULE. SeamSmoke has an anonymous-namespace CheckpointStorage stub
 # that would collide with SeedPreStateTest.cpp under unity merge.
-set_target_properties(opstack-executor-tests PROPERTIES UNITY_BUILD "ON")
 set_source_files_properties(TestMain.cpp OpSchedulerSeamSmokeTest.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_link_libraries(opstack-executor-tests PRIVATE

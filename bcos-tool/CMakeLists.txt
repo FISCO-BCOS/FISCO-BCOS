@@ -32,7 +32,6 @@ target_include_directories(tool PUBLIC
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/bcos-protocol>
 )
 target_link_libraries(tool PUBLIC table bcos-utilities bcos-framework bcos-protocol jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
-set_target_properties(tool PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
   enable_testing()

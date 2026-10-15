@@ -24,7 +24,6 @@ target_include_directories(front PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-front>)
 target_link_libraries(front PUBLIC bcos-framework bcos-utilities)
-set_target_properties(front PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

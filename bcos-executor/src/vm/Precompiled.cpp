@@ -40,7 +40,10 @@
 #include <span>
 #include <bcos-utilities/BoostLog.h>
 
-using namespace std;
+using std::max;
+using std::min;
+using std::numeric_limits;
+using std::pair;
 using namespace bcos;
 using namespace bcos::crypto;
 

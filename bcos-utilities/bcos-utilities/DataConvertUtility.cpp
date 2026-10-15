@@ -22,7 +22,7 @@
 #include <optional>
 #include <stdexcept>
 
-using namespace std;
+using std::string;
 using namespace bcos;
 
 /**

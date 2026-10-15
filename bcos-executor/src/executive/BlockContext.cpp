@@ -31,7 +31,7 @@
 using namespace bcos::executor;
 using namespace bcos::protocol;
 using namespace bcos::precompiled;
-using namespace std;
+using namespace std::literals;
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,

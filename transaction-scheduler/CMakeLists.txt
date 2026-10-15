@@ -6,7 +6,6 @@ target_include_directories(transaction-scheduler PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-transaction-scheduler>)
 target_link_libraries(transaction-scheduler PUBLIC ledger storage bcos-framework rlp-protocol ethereum-executor fmt::fmt)
-set_target_properties(transaction-scheduler PROPERTIES UNITY_BUILD "ON")
 
 include(GNUInstallDirs)
 # Headers only: the installed bcos-engine headers include

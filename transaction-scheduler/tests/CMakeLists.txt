@@ -62,5 +62,4 @@ set_source_files_properties(
 # TestWeb3RawTransaction (raw EIP-2718 -> Transaction decoder round-trip).
 set_source_files_properties(
     "TestWeb3RawTransaction.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(test-transaction-scheduler PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "test-transaction-scheduler" "" "")

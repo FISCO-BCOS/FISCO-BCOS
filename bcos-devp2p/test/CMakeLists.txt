@@ -26,4 +26,7 @@ find_package(jsoncpp CONFIG REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} bcos-devp2p Boost::unit_test_framework
     jsoncpp_static)
+# main.cpp defines BOOST_TEST_MODULE/BOOST_TEST_MAIN, which must precede every
+# boost.test include — impossible to guarantee inside a unity batch.
+set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 add_test(NAME test-bcos-devp2p WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
