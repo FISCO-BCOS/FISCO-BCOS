@@ -8,6 +8,8 @@
 
 #include "SingleNodeConsensus.h"
 #include "bcos-framework/engine/Types.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
@@ -62,47 +64,10 @@ private:
 };
 }  // namespace
 
-namespace
-{
-/// Engine API version triple (forkchoiceUpdated / getPayload / newPayload) for a chain EVM
-/// revision, mirroring how geth derives the method versions from the fork:
-///   Cancun+      -> V3 attributes (parentBeaconBlockRoot) — the Karst dialect's getPayloadV5
-///                   / newPayloadV4 response and commit shapes stay valid there;
-///   Shanghai     -> V2 (withdrawals, no parentBeaconBlockRoot);
-///   pre-Shanghai -> V1 (neither field exists).
-/// An unknown revision (executor_version < 2 chains) keeps the historical Karst dialect
-/// (V3/V5/V4). The produced blocks' execution semantics are still governed by the ledger's
-/// executor version, not by these versions.
-struct EngineVersions
-{
-    std::uint32_t forkchoice;
-    std::uint32_t getPayload;
-    std::uint32_t newPayload;
-};
-
-EngineVersions engineVersionsFor(std::optional<evmc_revision> revision)
-{
-    constexpr std::uint32_t v1 = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1);
-    constexpr std::uint32_t v2 = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2);
-    constexpr std::uint32_t v3 = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3);
-    constexpr std::uint32_t v4 = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4);
-    constexpr std::uint32_t v5 = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V5);
-    if (!revision.has_value() || *revision >= EVMC_CANCUN)
-    {
-        return {v3, v5, v4};
-    }
-    if (*revision >= EVMC_SHANGHAI)
-    {
-        return {v2, v2, v2};
-    }
-    return {v1, v1, v1};
-}
-}  // namespace
-
 SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engineService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::uint64_t _blockIntervalMs,
     bool _produceEmptyBlocks, bcos::crypto::HashType _prevRandao, std::string _feeRecipient,
-    std::uint64_t _fixedTimestamp, std::optional<evmc_revision> _evmRevision)
+    std::uint64_t _fixedTimestamp)
   : m_engineService(_engineService),
     m_ledger(std::move(_ledger)),
     m_blockIntervalMs(_blockIntervalMs > 0 ? _blockIntervalMs : 1000),
@@ -111,10 +76,7 @@ SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engine
     // Parse the coinbase exactly once here: a malformed fee_recipient must fail the node at
     // startup, not fail on the first block tick.
     m_feeRecipient(toAddress(_feeRecipient)),
-    m_fixedTimestamp(_fixedTimestamp),
-    m_forkchoiceVersion(engineVersionsFor(_evmRevision).forkchoice),
-    m_getPayloadVersion(engineVersionsFor(_evmRevision).getPayload),
-    m_newPayloadVersion(engineVersionsFor(_evmRevision).newPayload)
+    m_fixedTimestamp(_fixedTimestamp)
 {}
 
 SingleNodeConsensus::~SingleNodeConsensus()
@@ -230,11 +192,55 @@ void SingleNodeConsensus::resolveInitialHead()
                                << LOG_KV("lastTimestampMs", m_lastTimestamp);
 }
 
+std::optional<evmc_revision> SingleNodeConsensus::chainRevisionForNextBlock() const
+{
+    // The chain's authoritative EVM revision is the on-chain evmc_revision row — the same
+    // value the EngineService keys on per block (LedgerConfig::evmcRevisionForBlock), never
+    // the local genesis/boot copy, which can drift from it (operators may edit the genesis
+    // file or governance may rewrite the row). Reading per tick — one SYS_CONFIG row read
+    // per block — keeps the Engine API dialect in step with governance updates and with
+    // block-height fork transitions (evm_revision_forks), where a constructor-frozen value
+    // would keep speaking the genesis fork's dialect past the transition.
+    //
+    // A v0/v1 chain carries no row: revision stays unknown and the driver keeps the
+    // historical Karst dialect. A corrupt row throws InvalidEVMCRevisionConfig out of
+    // applyEVMCRevisionConfig — failing the tick loudly (loop() logs and retries) rather
+    // than silently picking a dialect, matching the boot-time probe's fail-stop.
+    std::optional<evmc_revision> revision;
+    if (auto const row = task::syncWait(
+            ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_EVMC_REVISION)))
+    {
+        ledger::LedgerConfig ledgerConfig;
+        ledger::applyEVMCRevisionConfig(ledgerConfig, std::get<0>(*row));
+        revision = ledgerConfig.evmcRevisionForBlock(m_headNumber + 1);
+    }
+    return revision;
+}
+
 bool SingleNodeConsensus::produceBlock()
 {
     if (!m_headInitialized)
     {
         resolveInitialHead();
+    }
+
+    // Select the Engine API dialect for the block about to be produced, from the chain's
+    // on-chain EVM revision. Log the resolved revision and version triple once per change
+    // (startup and any fork transition / governance update) so a "cannot produce blocks"
+    // failure names the dialect the CL chose, mirroring the boot-time "Effective EVMC
+    // revision" line the CI integration test greps.
+    auto const chainRevision = chainRevisionForNextBlock();
+    auto const versions = engineVersionsFor(chainRevision);
+    if (chainRevision != m_loggedRevision)
+    {
+        SINGLE_CONSENSUS_LOG(INFO)
+            << LOG_DESC("Engine API dialect selected")
+            << LOG_KV("evmcRevision",
+                   chainRevision ? std::string(ledger::evmcRevisionName(*chainRevision)) : "none")
+            << LOG_KV("forkchoiceUpdated", versions.forkchoice)
+            << LOG_KV("getPayload", versions.getPayload)
+            << LOG_KV("newPayload", versions.newPayload);
+        m_loggedRevision = chainRevision;
     }
 
     // Assemble the payload attributes — the "block proposal" the CL hands to the execution
@@ -280,11 +286,11 @@ bool SingleNodeConsensus::produceBlock()
     // produced by this driver is byte-indistinguishable from one a broken or malicious
     // external CL would submit with zero roots. Do not read this file as evidence that
     // zero roots are acceptable on a real chain.
-    if (m_forkchoiceVersion >= static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2))
+    if (versions.forkchoice >= static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2))
     {
         payloadAttributes.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
     }
-    if (m_forkchoiceVersion >= static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3))
+    if (versions.forkchoice >= static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3))
     {
         payloadAttributes.parentBeaconBlockRoot = bcos::h256{};
     }
@@ -300,7 +306,7 @@ bool SingleNodeConsensus::produceBlock()
         .finalizedBlockHash = m_headHash,
     };
     auto fcResult = task::syncWait(
-        m_engineService.updateForkchoice(forkchoiceState, &payloadAttributes, m_forkchoiceVersion));
+        m_engineService.updateForkchoice(forkchoiceState, &payloadAttributes, versions.forkchoice));
     if (fcResult.payloadStatus.status != bcos::engine::PayloadValidationStatus::Valid ||
         !fcResult.payloadId)
     {
@@ -314,7 +320,7 @@ bool SingleNodeConsensus::produceBlock()
 
     // getPayload: fetch the built block proposal (sealed transactions + header).
     auto payload =
-        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, m_getPayloadVersion));
+        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, versions.getPayload));
     if (!payload)
     {
         SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("getPayload returned null");
@@ -342,12 +348,12 @@ bool SingleNodeConsensus::produceBlock()
     // stay absent — a present-but-empty list would stamp a requestsHash onto a pre-Prague
     // header (EngineServiceCommon calculateRequestsHash runs whenever the field has a value).
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
-    if (m_newPayloadVersion >= static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4))
+    if (versions.newPayload >= static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4))
     {
         request.executionRequests = std::vector<bcos::bytes>{};
     }
     auto newPayloadStatus =
-        task::syncWait(m_engineService.newPayload(request, m_newPayloadVersion));
+        task::syncWait(m_engineService.newPayload(request, versions.newPayload));
     if (newPayloadStatus.status != bcos::engine::PayloadValidationStatus::Valid)
     {
         SINGLE_CONSENSUS_LOG(ERROR)

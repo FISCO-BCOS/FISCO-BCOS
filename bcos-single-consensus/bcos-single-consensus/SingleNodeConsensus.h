@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "EngineVersions.h"
 #include "bcos-framework/engine/AnyEngineService.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
@@ -54,8 +55,7 @@ public:
         bool _produceEmptyBlocks = true,
         bcos::crypto::HashType _prevRandao = bcos::crypto::HashType{},
         std::string _feeRecipient = "0x0000000000000000000000000000000000000000",
-        std::uint64_t _fixedTimestamp = 0,
-        std::optional<evmc_revision> _evmRevision = std::nullopt);
+        std::uint64_t _fixedTimestamp = 0);
 
     ~SingleNodeConsensus();
 
@@ -75,6 +75,9 @@ private:
     bool produceBlock();
     /// Resolve the current committed head (number + hash) from the ledger once at startup.
     void resolveInitialHead();
+    /// The chain's EVM revision for the block about to be produced (head + 1), read per tick
+    /// from the on-chain evmc_revision row — the same authority the EngineService keys on.
+    std::optional<evmc_revision> chainRevisionForNextBlock() const;
 
     bcos::engine::AnyEngineService& m_engineService;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -87,14 +90,14 @@ private:
     bcos::Address m_feeRecipient;
     std::uint64_t m_fixedTimestamp;
 
-    /// Engine API method versions this CL speaks, selected from the chain's EVM revision
-    /// ([executor] evm_revision) the way geth selects them from the fork: forkchoiceUpdated
-    /// V3 requires CANCUN+, V2 requires SHANGHAI+; a pre-Shanghai chain only accepts V1
-    /// attributes (no withdrawals / parentBeaconBlockRoot). std::nullopt (revision unknown)
-    /// keeps the historical Karst dialect (V3/V5/V4).
-    std::uint32_t m_forkchoiceVersion;
-    std::uint32_t m_getPayloadVersion;
-    std::uint32_t m_newPayloadVersion;
+    /// Engine API method versions this CL speaks are derived per tick from the chain's
+    /// EVM revision (see chainRevisionForNextBlock), the way geth selects them from the
+    /// fork: forkchoiceUpdated V3 requires CANCUN+, V2 requires SHANGHAI+; a pre-Shanghai
+    /// chain only accepts V1 attributes (no withdrawals / parentBeaconBlockRoot). The
+    /// per-tick resolution keeps the dialect in step with governance updates to the
+    /// evmc_revision row and with block-height fork transitions (evm_revision_forks).
+    /// m_loggedRevision only rate-limits the INFO line recording the selected dialect.
+    std::optional<evmc_revision> m_loggedRevision;
 
     /// CL-side head tracking. newPayload() persists the ledger block tables — including
     /// SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — via ledger::prewriteBlockToBuffer
