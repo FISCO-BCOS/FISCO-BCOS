@@ -1285,6 +1285,67 @@ BOOST_AUTO_TEST_CASE(creatorNonceSurvivesFailedCreate)
     BOOST_CHECK_EQUAL(nonceRowOf(creator), "1");
 }
 
+// The two creator-nonce gates differ on the depth-0 scheduler-nested create (the
+// ExecutiveWrapper shape precompileds initiate: EVM depth 0, m_level != 0) — BY DESIGN,
+// per the flag-ON comment in HostContext::executeCreate: keying the bump on m_level
+// would also bump the frames a scheduler hop re-delivers. Pin both sides so neither
+// gate silently drifts onto the other's key.
+BOOST_AUTO_TEST_CASE(depth0CreateBumpsUnderOffGateOnly)
+{
+    auto nonceRowOf = [&](const evmc_address& address) -> std::string {
+        ledger::account::EVMAccount<decltype(rollbackableStorage)> account(
+            rollbackableStorage, address, ledger::account::nodeAddressTableMode());
+        auto nonceStr = syncWait(account.nonce());
+        return nonceStr.value_or("<absent>");
+    };
+    auto seedNonce = [&](const evmc_address& address, std::string value) {
+        ledger::account::EVMAccount<decltype(rollbackableStorage)> account(
+            rollbackableStorage, address, ledger::account::nodeAddressTableMode());
+        syncWait(account.setNonce(std::move(value)));
+    };
+    auto runDepth0Create = [&](evmc_address creator) {
+        evmc_message parent{};
+        parent.kind = EVMC_CALL;
+        parent.depth = 0;
+        parent.gas = 10'000'000;
+        parent.recipient = creator;
+        parent.sender = creator;
+        parent.code_address = creator;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> host(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, parent, creator, "", 0,
+            seq, *precompiledManager, ledgerConfig, *hashImpl, /*web3Tx=*/true, 0,
+            bcos::task::syncWait);
+        evmc_message nested{};
+        nested.kind = EVMC_CREATE;
+        nested.depth = 0;  // ExecutiveWrapper hardcodes this for precompiled-initiated creates
+        nested.gas = 500000;
+        nested.sender = creator;
+        syncWait(host.externalCall(nested));
+    };
+
+    // Flag ON (bit 62): the depth-0 shape does NOT bump (the deliberate exclusion).
+    evmc_address creatorOn{};
+    creatorOn.bytes[19] = 0xC2;
+    seedNonce(creatorOn, "5");
+    {
+        auto features = ledgerConfig.features();
+        features.set(ledger::Features::Flag::bugfix_nested_create_creator_nonce);
+        ledgerConfig.setFeatures(features);
+        runDepth0Create(creatorOn);
+        BOOST_CHECK_EQUAL(nonceRowOf(creatorOn), "5");
+    }
+
+    // Flag OFF (the historical gate): the same shape DOES bump.
+    evmc_address creatorOff{};
+    creatorOff.bytes[19] = 0xC3;
+    seedNonce(creatorOff, "5");
+    {
+        ledgerConfig.setFeatures(ledger::Features{});  // flag OFF — the historical gate
+        runDepth0Create(creatorOff);
+        BOOST_CHECK_EQUAL(nonceRowOf(creatorOff), "6");
+    }
+}
+
 // bugfix_nested_create_creator_nonce (bit 62) ON, web3 tx: the nested-CREATE derivation
 // reads the creator's nonce, so the per-create bump is what keeps the second create off
 // the first one's address. The ON path bumps on the EVM message depth (not m_level) and

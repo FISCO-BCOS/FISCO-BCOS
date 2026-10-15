@@ -76,6 +76,10 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
         }
         // Same helper the CREATE2 hook uses: the chain hasher over
         // 0xff || sender || salt || chainHasher(initcode), via bcos::newCreate2EVMAddress.
+        // Production nested CREATE2 always arrives recipient-set (the opcode's hook
+        // fills it before the host sees the message); only transaction-level messages
+        // and hand-built test/probe messages take this arm, and ABI 19 removed
+        // create2_salt so no salt survives to here — hence the historical zero salt.
         constexpr evmc_bytes32 zero_salt{};
         auto addressHex = bcos::newCreate2EVMAddress(hashImpl,
             bcos::toHex(bytesConstRef(message.sender.bytes, sizeof(message.sender.bytes))),

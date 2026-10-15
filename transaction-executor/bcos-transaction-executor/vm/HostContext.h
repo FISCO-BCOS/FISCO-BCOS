@@ -953,6 +953,14 @@ private:
         //    nonce-initialized (EVMAccount::increaseNonce throws NonceNotInitialized); the
         //    missing-nonce case is therefore WRITTEN as 0 rather than rejected, matching
         //    the accounting the address derivation reads.
+        //    DELIBERATE EXCLUSION: a depth-0 create whose frame is scheduler-nested
+        //    (m_level != 0 — the ExecutiveWrapper shape precompileds initiate, and the
+        //    eip2929 probe frames) does NOT bump here, while the flag-OFF gate below
+        //    (m_level != 0) does cover it — the two gates differ on that shape by
+        //    design: keying the bump on m_level would also bump the frame replays a
+        //    scheduler hop re-delivers. A web3 chain that relies on per-create bumps
+        //    for precompiled-initiated creates should keep the flag OFF; pinned by
+        //    depth0CreateBumpsUnderOffGateOnly.
         //  - flag OFF (default; existing chains): the historical gate and semantics stay
         //    verbatim — web3 tx && m_level != 0 with increaseNonce(), which throws for a
         //    never-initialized account — so no NONCE row appears on a creator that never
