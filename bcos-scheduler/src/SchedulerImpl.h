@@ -47,7 +47,7 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, int64_t schedulerTermId,
-        size_t keyPageSize, bcos::IOServicePool::Ptr ioServicePool = nullptr);
+        size_t keyPageSize, bcos::IOServicePool::Ptr ioServicePool);
 
     SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
@@ -55,8 +55,7 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute,
-        int64_t schedulerTermId, size_t keyPageSize,
-        bcos::IOServicePool::Ptr ioServicePool = nullptr);
+        int64_t schedulerTermId, size_t keyPageSize, bcos::IOServicePool::Ptr ioServicePool);
 
     SchedulerImpl(const SchedulerImpl&) = delete;
     SchedulerImpl(SchedulerImpl&&) = delete;
