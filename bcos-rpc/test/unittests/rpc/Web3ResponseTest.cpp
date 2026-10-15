@@ -19,9 +19,11 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
-#include <string_view>
 
-#include <boost/test/unit_test.hpp>
+#include <string_view>
+#include <tuple>
+#include <vector>
+
 using namespace bcos;
 using namespace bcos::rpc;
 
@@ -543,6 +545,38 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
     BOOST_CHECK(result["logs"].isArray());
 }
 
+/// l1FeeScalar renders the RAW L1Block slot-6 scalar as op-geth's scaled decimal
+/// (scalar/1e6): 684000 -> "0.684", 1000000 -> "1", 2000001 -> "2.000001", and an
+/// absent field emits nothing. These vectors pin the decimal contract itself (the old
+/// truncating quantity path rendered 684000 as "0x0").
+BOOST_AUTO_TEST_CASE(combineReceiptResponseRendersL1FeeScalar)
+{
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x88;
+    for (auto [rawScalar, expected] :
+        std::vector<std::tuple<uint64_t, const char*>>{{684000, "0.684"}, {1'000'000, "1"},
+            {2'000'001, "2.000001"}, {340'282'366, "340.282366"}})
+    {
+        auto tx = makeWeb3Tx(m_blockFactory, chainId, groupId);
+        auto receipt = makeReceipt(m_blockFactory);
+        protocol::OpStackReceiptMeta meta;
+        meta.l1_fee_scalar = bcos::u256(rawScalar);
+        receipt->setOpStackMeta(meta);
+
+        Json::Value result(Json::objectValue);
+        combineReceiptResponse(result, *receipt, *tx, blockHash);
+        BOOST_CHECK_EQUAL(result["l1FeeScalar"].asString(), expected);
+    }
+    // Absent field: no key at all (never a default value), per the D7 gate.
+    {
+        auto tx = makeWeb3Tx(m_blockFactory, chainId, groupId);
+        auto receipt = makeReceipt(m_blockFactory);
+        Json::Value result(Json::objectValue);
+        combineReceiptResponse(result, *receipt, *tx, blockHash);
+        BOOST_CHECK(!result.isMember("l1FeeScalar"));
+    }
+}
+
 /// The per-log branch needs a NON-EMPTY logs vector: log.address must be the EIP-55
 /// checksum of the raw 20 bytes and log.transactionIndex a hex quantity. The base emitted
 /// toQuantity(transactionIndex) on an already-hex string ("0x307833") and the raw-byte
@@ -1056,8 +1090,8 @@ BOOST_AUTO_TEST_CASE(combineTxResponseVFieldFromTarsSignature)
         bcostars::protocol::TransactionImpl txImpl(
             [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
         Json::Value result = Json::objectValue;
-        combineTxResponse(result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/1,
-            bcos::crypto::HashType{});
+        combineTxResponse(
+            result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/1, bcos::crypto::HashType{});
         return result;
     };
 
