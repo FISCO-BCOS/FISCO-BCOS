@@ -172,6 +172,8 @@ bcos::bytes encodeReceiptLeaf(
     codec::rlp::encode(payload, bloom);
     encodeLogsList(payload, receipt.logEntries());
 
+    // The deposit leaf's [nonce, version] tail is presence-of-version driven only: a
+    // caller-chosen second gate here would be a fork knob with no caller.
     if (txType == c_depositTxType)
     {
         // op-geth Receipts.EncodeIndex (core/types/receipt.go) DepositTxType branch: the

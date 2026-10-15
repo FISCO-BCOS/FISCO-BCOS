@@ -397,6 +397,65 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     BOOST_CHECK(!forgedBcos->isDepositTx());
 }
 
+// U9-F4: TransactionImpl::size() must count the variable-length EIP-7702 authorizationList
+// (address/signer/r/s strings) and EIP-4844 blobVersionedHashes payloads, consistent with how
+// the other variable-length fields (accessList, signature, extraTransactionBytes) are counted.
+// Without this, a 0x04 SetCode tx makes BlockResponse["size"] under-report. 0x04 requires the
+// Prague revision (OP Isthmus+), so it is config-gated; blobVersionedHashes is defensive only
+// (0x03 is refused at admission). PER-FIELD deltas: the authorization strings are width-fixed
+// by their formats (address/signer 40, r/s 66 with the 0x prefix), so one sum over them cannot
+// attribute a copy-paste error — each field is added alone and its delta asserted against its
+// own width. The envelope's remaining variable-length fields (chainID/groupID/dataHash) are
+// pinned the same way.
+BOOST_AUTO_TEST_CASE(sizeCountsEachVariableLengthFieldSeparately)
+{
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = static_cast<tars::Char>(4);  // EIP-7702 SetCode
+
+    // One authorization entry per field, only that field set: each push's delta is exactly
+    // that field's width — an implementation that counts address twice and never signer
+    // (both 40) fails on the signer push.
+    auto const pushEntryWith =
+        [&](std::string bcostars::AuthorizationEntry::* field, std::string value) {
+            bcostars::AuthorizationEntry entry;
+            entry.*field = std::move(value);
+            inner.data.authorizationList.push_back(entry);
+        };
+    std::size_t const base = tx->size();
+    pushEntryWith(&bcostars::AuthorizationEntry::address, std::string(40, 'a'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 40U);
+    pushEntryWith(&bcostars::AuthorizationEntry::signer, std::string(40, 'b'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 80U);
+    pushEntryWith(&bcostars::AuthorizationEntry::r, "0x" + std::string(64, 'c'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 80U + 66U);
+    pushEntryWith(&bcostars::AuthorizationEntry::s, "0x" + std::string(64, 'd'));
+    BOOST_CHECK_EQUAL(tx->size() - base, 80U + 2U * 66U);
+
+    // Blob commitments (32 bytes each) and the sibling variable-length gas field.
+    std::size_t const afterAuth = tx->size();
+    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x11));
+    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x22));
+    BOOST_CHECK_EQUAL(tx->size() - afterAuth, 64U);
+    std::size_t const afterBlobs = tx->size();
+    inner.data.maxFeePerBlobGas = "0x" + std::string(64, 'f');
+    BOOST_CHECK_EQUAL(tx->size() - afterBlobs, 66U);
+
+    // The envelope's remaining variable-length fields (counted since the
+    // every-variable-length-field sweep): chainID/groupID hex strings and the dataHash
+    // byte payload that mirrors extraTransactionHash.
+    std::size_t const afterGas = tx->size();
+    inner.data.chainID = std::string(42, '1');
+    BOOST_CHECK_EQUAL(tx->size() - afterGas, 42U);
+    std::size_t const afterChainId = tx->size();
+    inner.data.groupID = std::string(7, '2');
+    BOOST_CHECK_EQUAL(tx->size() - afterChainId, 7U);
+    std::size_t const afterGroupId = tx->size();
+    inner.dataHash = std::vector<tars::Char>(32, 0x33);
+    BOOST_CHECK_EQUAL(tx->size() - afterGroupId, 32U);
+}
+
 // Deposit hash: the canonical txHash of a 0x7e tx is keccak256 of the full envelope (type byte
 // + RLP fields) — op-geth DepositTx.Hash() / op-reth TxDeposit::tx_hash(). calculateHash must
 // handle the deposit branch (deposits carry no signature, so the normal reassemble path would

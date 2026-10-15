@@ -247,7 +247,9 @@ log_path=./
 level=debug
 
 # The Ethereum lane (executor_version >= 2) REQUIRES a non-empty [alloc.*] section
-# and an [eth_genesis_header] section (NodeConfig::validateL2Invariants): the node
+# unless the chain declares [ethereum] mode=el (the L1 EL lane, where an
+# empty-alloc genesis publishes the canonical empty-trie root), and an
+# [eth_genesis_header] section (NodeConfig::validateL2Invariants): the node
 # cross-checks state_root against the MPT root it derives from the [alloc.*] sections
 # and hash against keccak256(rlp(header)) of the other 21 fields.
 # The values below are the same single-alloc fixture tools/.ci/ci_check_eth_executor.sh

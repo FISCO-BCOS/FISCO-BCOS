@@ -1,3 +1,23 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file LedgerMethods.h
+ * @brief Storage-level ledger primitives: table/row access, system-config reads and the
+ *        genesis/schedule metadata helpers.
+ */
+
 #pragma once
 
 #include "ConsensusNode.h"
@@ -13,6 +33,7 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -106,9 +127,9 @@ inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
     // An external tx list is iterated by its own size (the historical needStoreUnsavedTxs
     // semantics): indexing it by the block's tx count would overrun a shorter list and
     // silently drop the tail of a longer one.
-    auto const txCount = blockTxs ? blockTxs->size() :
-                                    std::max(block->transactionsSize(),
-                                        block->transactionsMetaDataSize());
+    auto const txCount = blockTxs ?
+                             blockTxs->size() :
+                             std::max(block->transactionsSize(), block->transactionsMetaDataSize());
     auto inlineTxs = block->transactions();
     std::vector<EncodedBlockTransaction> out;
     out.reserve(txCount);
@@ -217,8 +238,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
         storage::Entry txEntry;
         txEntry.set(std::move(pending.encoded));
         co_await storage2::writeOne(storage,
-            executor_v1::StateKey{
-                SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(pending.hash)},
+            executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(pending.hash)},
             std::move(txEntry));
 
         if (pending.tx)
@@ -438,8 +458,8 @@ task::Task<TransactionCount> tag_invoke(ledger::tag_t<getTransactionCount> /*unu
             }
             catch (boost::bad_lexical_cast& e)
             {
-                LEDGER_LOG(WARNING) << "Lexical cast transaction count failed, entry value: "
-                                    << entry->get();
+                LEDGER_LOG(WARNING)
+                    << "Lexical cast transaction count failed, entry value: " << entry->get();
                 BOOST_THROW_EXCEPTION(e);
             }
         }
@@ -607,6 +627,64 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
             ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
         }
     }
+    if (ledger::isOpLaneVersion(executorVersion))
+    {
+        // The OP lane's declared EIP-1559 triple rides the same snapshot so the RPC fee
+        // prediction (part B — at this head bcos-rpc still prices pre-Holocene blocks with
+        // the preset constants, FeeHistory.cpp) can price with the chain's own parameters.
+        // Fail closed on a malformed row, same policy as evmc_revision above.
+        if (auto opEip1559 = sysConfig.get(ledger::SystemConfig::op_eip1559_params); opEip1559)
+        {
+            ledgerConfig.setOpEip1559Params(ledger::parseOpEip1559Params(opEip1559.value().first));
+        }
+        // The resolved fork schedule rides the snapshot too: the RPC estimate gas-cap gate
+        // (M1, part B) will apply EIP-7825 only where the chain has actually activated
+        // Karst at the target block. Absent on OP chains initialized before the row
+        // existed — the gate treats that as "no Karst activation known" and leaves the
+        // budget unclamped.
+        if (auto opForkSchedule = sysConfig.get(ledger::SystemConfig::op_fork_schedule);
+            opForkSchedule)
+        {
+            ledgerConfig.setOpForkSchedule(
+                ledger::opForkScheduleFromCanonical(opForkSchedule.value().first));
+        }
+    }
+}
+
+/// The boot probe's integrity-triple validation, with the binding target resolved HERE so
+/// a schedule-carrying genesis built without a config-side [eth_genesis_header] boots
+/// instead of being unbootable (review F5): the config's declared hash when the node
+/// carries the section, else the chain's OWN block-0 header (the writer bound the triple
+/// to exactly that hash at genesis, so a self-consistent datadir passes while a tampered
+/// or foreign triple still refuses). Absent rows co_return nullopt (a pre-triple chain is
+/// legal); partial/corrupt/mis-bound rows throw InvalidOpForkSchedule, as before.
+template <class Storage>
+task::Task<std::optional<OpForkScheduleMetadata>> readValidatedOpForkScheduleMetadataForBoot(
+    Storage& storage, protocol::BlockFactory& blockFactory,
+    std::optional<crypto::HashType> const& configGenesisHash)
+{
+    auto rows = co_await readOpForkScheduleMetadataRows(storage);
+    if (opForkScheduleMetadataRowsAbsent(rows))
+    {
+        co_return std::nullopt;
+    }
+    if (configGenesisHash.has_value())
+    {
+        co_return validateOpForkScheduleMetadataRows(std::move(rows), *configGenesisHash);
+    }
+    auto entry = co_await storage2::readOne(
+        storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, "0"});
+    if (!entry)
+    {
+        BOOST_THROW_EXCEPTION(InvalidOpForkSchedule() << errinfo_comment(
+                                  "SYS_OP_CHAIN_METADATA triple is present but the chain's "
+                                  "genesis block (block 0) cannot be read to validate its "
+                                  "genesis binding against"));
+    }
+    auto field = entry->get();
+    auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
+        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+    co_return validateOpForkScheduleMetadataRows(std::move(rows), headerPtr->hash());
 }
 
 task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& storage,

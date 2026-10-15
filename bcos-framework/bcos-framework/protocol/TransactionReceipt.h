@@ -49,6 +49,10 @@ struct OpStackReceiptMeta
     std::optional<uint64_t> deposit_receipt_version;
     std::optional<uint64_t> l1_gas_used;
     std::optional<bcos::u256> operator_fee;
+    // Bedrock-era receipt L1FeeScalar: the RAW L1Block slot-6 scalar (op-geth's receipt
+    // FeeScalar is scalar/1e6; the raw word is kept here and scaled at the compare/RPC
+    // boundary). Absent from Ecotone on (l1_base_fee_scalar/l1_blob_base_fee_scalar take over).
+    std::optional<bcos::u256> l1_fee_scalar;
 };
 
 class LogEntry;
@@ -75,7 +79,7 @@ public:
     virtual std::string_view effectiveGasPrice() const = 0;
     virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
 
-    // OP Stack (Isthmus/Jovian) receipt metadata (13 OP-specific fields). nullopt means "not an
+    // OP Stack (Isthmus/Jovian) receipt metadata (14 OP-specific fields). nullopt means "not an
     // OP receipt" -- legacy receipts never set this, and old serialized receipts decode to an
     // empty opStackMeta (tars optional field). The tars layer stores every value as a hex string,
     // including explicit zeros ("0x0"), so per-field presence survives serialization.
