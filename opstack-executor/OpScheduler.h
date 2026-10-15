@@ -687,9 +687,11 @@ private:
                     // node fault; INVALID stays only for the announcement-driven cell.
                     if (!executedHeader->withdrawalsRoot().has_value())
                     {
-                        throw bcos::engine::OpExecutionInternalError(
-                            "OpScheduler: executed header is missing the withdrawalsRoot "
-                            "the announcement carried (node-side stamping, not consensus)");
+                        BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{}
+                                              << bcos::errinfo_comment{
+                                                  "OpScheduler: executed header is missing "
+                                                  "the withdrawalsRoot the announcement "
+                                                  "carried (node-side stamping, not consensus)"});
                     }
                     throw bcos::evm::OpConsensusError(
                         "OpScheduler: commitment mismatch on field withdrawalsRoot");
