@@ -1642,7 +1642,8 @@ private:
         if (view.size() >= 2 && view[0] == '0' && (view[1] == 'x' || view[1] == 'X'))
             view.remove_prefix(2);
         if (view.size() != sizeof(out.bytes) * 2)
-            throw std::invalid_argument("OpScheduler: invalid address (need 40 hex chars)");
+            BOOST_THROW_EXCEPTION(
+                std::invalid_argument("OpScheduler: invalid address (need 40 hex chars)"));
         boost::algorithm::unhex(view.begin(), view.end(), out.bytes);
         return out;
     }

@@ -18,6 +18,7 @@
 #include <array>
 #include <span>
 #include <stdexcept>
+#include <boost/throw_exception.hpp>
 
 namespace bcos::executor_v1::opstack
 {
@@ -159,15 +160,15 @@ bcos::bytes synthesizeOpEthL1AttributesEnvelope(const OpForkSchedule& schedule,
 {
     if (isUnsetOpEthL1BlockInfo(l1Info))
     {
-        throw std::invalid_argument(
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
             "synthesizeOpEthL1AttributesEnvelope: refuse to synthesize L1-attributes from an "
-            "unset L1BlockInfo (number, time, and blockHash are all zero)");
+            "unset L1BlockInfo (number, time, and blockHash are all zero)"));
     }
     if (isUnsetOpEthSystemConfig(l1Info))
     {
-        throw std::invalid_argument(
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
             "synthesizeOpEthL1AttributesEnvelope: refuse to synthesize L1-attributes with an "
-            "unset SystemConfig (baseFeeScalar and batcherHash must be non-zero)");
+            "unset SystemConfig (baseFeeScalar and batcherHash must be non-zero)"));
     }
     // Jovian layout only once the PARENT is Jovian too — on the activation block itself
     // the child is Jovian but the parent is not, and op-node still emits Isthmus there.

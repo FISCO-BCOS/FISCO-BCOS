@@ -25,6 +25,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <boost/throw_exception.hpp>
 
 namespace bcos::evm::engine
 {
@@ -163,7 +164,8 @@ public:
         ::ranges::input_range auto const& /*transactions*/,
         bcos::ledger::LedgerConfig const& /*ledgerConfig*/)
     {
-        throw std::logic_error("OpSchedulerSeam::executeBlock: not supported in OP mode");
+        BOOST_THROW_EXCEPTION(
+            std::logic_error("OpSchedulerSeam::executeBlock: not supported in OP mode"));
         co_return {};  // unreachable; satisfies the coroutine's declared return type
     }
 

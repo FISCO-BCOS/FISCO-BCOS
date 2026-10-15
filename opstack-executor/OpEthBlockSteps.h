@@ -276,13 +276,14 @@ task::Task<OpEthExecuteBlockResult> finalizeOpEthBlockResult(Storage& view,
     // Internal-invariant guard: a caller programming error, not a block-content
     // rejection, hence std::logic_error rather than OpConsensusError (as legacy).
     if (rawTxBytes.size() != receipts.size())
-        throw std::logic_error("op block: receipts/rawTxBytes length mismatch (caller bug)");
+        BOOST_THROW_EXCEPTION(
+            std::logic_error("op block: receipts/rawTxBytes length mismatch (caller bug)"));
     std::vector<uint8_t> txTypes;
     txTypes.reserve(rawTxBytes.size());
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
     {
         if (rawTxBytes[i].empty())  // defensive: the per-tx loop already rejects these
-            throw std::logic_error("op block: empty envelope (caller bug)");
+            BOOST_THROW_EXCEPTION(std::logic_error("op block: empty envelope (caller bug)"));
         txTypes.emplace_back(opEthClassifyTxType(rawTxBytes[i][0]));
     }
 

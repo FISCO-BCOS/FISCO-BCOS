@@ -402,9 +402,9 @@ public:
         auto const blockHash = bcos::protocol::ethHeaderHash(ethHeader);
         if (blockHash != block.hash)
         {
-            throw std::logic_error(
+            BOOST_THROW_EXCEPTION(std::logic_error(
                 "OpBlockVerifier: block.hash does not match keccak256(rlp(header)) — "
-                "devp2p Block assembly must fill hash from the header RLP");
+                "devp2p Block assembly must fill hash from the header RLP"));
         }
 
         // 1. Fork the execution view over the COMMITTED state (an engine-lane pending layer
@@ -476,9 +476,9 @@ public:
         auto header = detail::projectOpP2pHeader(ethHeader, *m_blockFactory);
         if (bcos::protocol::EthBlockHeader::computeHash(*header) != blockHash)
         {
-            throw std::logic_error(
+            BOOST_THROW_EXCEPTION(std::logic_error(
                 "OpBlockVerifier: header projection is not RLP-faithful (re-encoded hash "
-                "differs from the announced block hash)");
+                "differs from the announced block hash)"));
         }
 
         //    Feature set + the execution LedgerConfig (revision from the fork config;
@@ -744,10 +744,11 @@ private:
     // mutex for the same reason). The sync loop commits strictly sequentially; the mutex
     // keeps the contract independent of that caller property. NOTE (the scheduler's
     // OpScheduler.h contract, stated here too): this std::unique_lock spans the co_awaits
-    // of the commit section — verifyAndCommit runs under task::syncWait, so the awaiting
-    // caller does not proceed until the section finishes. If a future awaitable resumes
-    // on another thread, the lock must be narrowed or replaced with a coroutine-aware
-    // lock.
+    // of the commit section, so the load-bearing invariant is SAME-THREAD RESUMPTION —
+    // std::mutex may only be unlocked by the thread that took it, so every awaitable in
+    // the section must resume on the lock-owning thread. task::syncWait provides that
+    // today by blocking its caller to completion; if any future awaitable can resume on
+    // another thread, the lock must be narrowed or replaced with a coroutine-aware lock.
     std::mutex m_commitMutex;
 };
 

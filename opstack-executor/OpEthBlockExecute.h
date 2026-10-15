@@ -47,6 +47,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <boost/throw_exception.hpp>
 
 namespace bcos::executor_v1::opstack
 {
@@ -272,7 +273,8 @@ struct OpEthBlockSeal
     const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage)
 {
     if (txTypes.size() != receipts.size())
-        throw std::logic_error("op-eth block: receipts/txTypes length mismatch (caller bug)");
+        BOOST_THROW_EXCEPTION(
+            std::logic_error("op-eth block: receipts/txTypes length mismatch (caller bug)"));
     OpEthBlockSeal seal{};
 
     // receiptsRoot: index-keyed trie over the RLP receipt leaves (op-geth
@@ -345,7 +347,8 @@ struct OpEthBlockSeal
         // sha256(""), single-sourced from the framework constant.
         auto const raw = bcos::fromHex(std::string{bcos::engine::c_emptyRequestsHashHex});
         if (raw.size() != sizeof(bcos::h256))
-            throw std::logic_error("c_emptyRequestsHashHex must decode to exactly 32 bytes");
+            BOOST_THROW_EXCEPTION(
+                std::logic_error("c_emptyRequestsHashHex must decode to exactly 32 bytes"));
         bcos::h256 requestsHash{};
         std::copy(raw.begin(), raw.end(), requestsHash.begin());
         seal.requestsHash = requestsHash;
