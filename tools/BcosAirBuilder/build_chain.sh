@@ -81,9 +81,10 @@ download_service_binary_path_flag="false"
 service_type="all"
 chain_version="air"
 service_output_dir="generated"
-# p2p, rpc, tars start ports; a 4th value (the retired MAX TiKV port) is ignored and a 5th
-# sets the monitor port
+# -p fields: p2p, rpc, tars start ports; a 4th value (the retired MAX TiKV port) is ignored
+# and a 5th sets the monitor port. Read them through the index names below.
 pro_port_start=(30300 20200 40400)
+readonly pro_port_p2p=0 pro_port_rpc=1 pro_port_tars=2 pro_port_monitor=4
 isPortSpecified="false"
 tars_listen_port_space=5
 executor_version=1
@@ -2628,8 +2629,8 @@ gen_gateway_template() {
     local num=$3
     local config_path=$4
     local peers_str=$5
-    local p2p_listen_port=${pro_port_start[0]}
-    local rpc_listen_port=${pro_port_start[1]}
+    local p2p_listen_port=${pro_port_start[pro_port_p2p]}
+    local rpc_listen_port=${pro_port_start[pro_port_rpc]}
 
     cat <<EOF >>"${config_path}"
 [[agency]]
@@ -2709,7 +2710,7 @@ getPeers(){
     ip_array=(${ip_param//,/ })
 
     peer=""
-    local gateway_port=${pro_port_start[0]}
+    local gateway_port=${pro_port_start[pro_port_p2p]}
 
     for line in ${ip_array[*]}; do
         if [ -n "$(echo ${line} | grep "\.")" ];then
@@ -2740,16 +2741,16 @@ gen_gateway_config() {
     gen_chain_template "${config_path}"
     gen_group_template "${config_path}"
     local k=0
-    if [[ -z ${pro_port_start[2]} ]];then
+    if [[ -z ${pro_port_start[pro_port_tars]} ]];then
        tars_listen_port=40400
     else
-        tars_listen_port=${pro_port_start[2]}
+        tars_listen_port=${pro_port_start[pro_port_tars]}
     fi
 
-    if [[ -z ${pro_port_start[4]} ]];then
+    if [[ -z ${pro_port_start[pro_port_monitor]} ]];then
         monitor_listen_port=3901
     else
-        monitor_listen_port=${pro_port_start[4]}
+        monitor_listen_port=${pro_port_start[pro_port_monitor]}
     fi
 
     for line in ${ip_array[*]}; do
