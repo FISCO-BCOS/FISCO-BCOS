@@ -26,6 +26,7 @@
 
 #include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
 #include "support/GoldenSample.h"
+#include "support/T8nCorpus.h"  // opstack_test::c_opChainId (single home)
 #include "support/SeedPreState.h"
 
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -124,7 +125,7 @@ struct StubExecutor
 using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
 using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, EngineOpScheduler>;
 
-constexpr uint64_t c_chainId = 0x2105;  // review F35: c_ prefix, same constant as OpSchedulerTest
+constexpr uint64_t c_chainId = opstack_test::c_opChainId;  // single home: support/T8nCorpus.h
 
 bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {

@@ -47,9 +47,10 @@ inline constexpr std::string_view c_corpusParentHashHex{
     "0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"};
 
 /// The FISCO OP chain id (8453 = 0x2105) the t8n corpus envelopes embed; every suite that
-/// builds an envelope or an execution context announces it from here. Single-homed by
-/// review F42 — the fixture-side copies (DualRunHarness.h, OpEngineE2eFixture.h,
-/// OpBlockVerifierTest.cpp) had already drifted into three definitions of one value, and
-/// OpSchedulerTest's c_chainId pins the same constant.
+/// builds an envelope or an execution context announces it from here. Single home for the
+/// numeric constant: review F42 folded the fixture-side copies (DualRunHarness.h,
+/// OpEngineE2eFixture.h, OpBlockVerifierTest.cpp), and the two remaining suites
+/// (OpSchedulerTest, OpEngineServiceExecParityTest) alias this constant rather than
+/// re-pin the value. The decimal "8453" tars strings stay local to their call sites.
 inline constexpr uint64_t c_opChainId = 0x2105;
 }  // namespace opstack_test

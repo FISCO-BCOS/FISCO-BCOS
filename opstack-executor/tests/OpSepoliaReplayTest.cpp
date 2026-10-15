@@ -561,18 +561,26 @@ void runReplay(ReplayOptions const& options)
 
 }  // namespace
 
-BOOST_AUTO_TEST_SUITE(OpSepoliaReplaySuite)
-
-BOOST_AUTO_TEST_CASE(ReplayRealOpSepoliaFromGenesis)
+/// Network-gated acceptance test: the case runs only on manual dispatch with
+/// OP_SEPOLIA_REPLAY_RPC set. The precondition decorator makes an absent env a
+/// visible SKIP on automated legs instead of the zero-assertion PASS the
+/// in-body early return used to report (review F12).
+boost::test_tools::assertion_result opSepoliaReplayEnvEnabled(
+    boost::unit_test::test_unit_id)
 {
     const char* rpc = std::getenv("OP_SEPOLIA_REPLAY_RPC");
-    if (rpc == nullptr || *rpc == '\0')
-    {
-        BOOST_TEST_MESSAGE(
-            "skipping OpSepoliaReplayTest: OP_SEPOLIA_REPLAY_RPC is not set "
-            "(network-gated acceptance test)");
-        return;
-    }
+    return rpc != nullptr && *rpc != '\0';
+}
+
+BOOST_AUTO_TEST_SUITE(OpSepoliaReplaySuite)
+
+BOOST_AUTO_TEST_CASE(ReplayRealOpSepoliaFromGenesis,
+    * boost::unit_test::precondition(&opSepoliaReplayEnvEnabled) *
+        boost::unit_test::label("manual"))
+{
+    const char* rpc = std::getenv("OP_SEPOLIA_REPLAY_RPC");
+    BOOST_REQUIRE_MESSAGE(rpc != nullptr && *rpc != '\0',
+        "precondition gate passed, so OP_SEPOLIA_REPLAY_RPC must be set");
 
     ReplayOptions options;
     options.rpcUrl = rpc;

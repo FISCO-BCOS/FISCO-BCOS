@@ -51,7 +51,7 @@ using ViewType = typename MLS::ViewType;
 
 // Named selectors so BOOST_CHECK_EQUAL_COLLECTIONS does not dangle temporaries.
 constexpr std::array<uint8_t, 4> cIsthmusSelector{0x09, 0x89, 0x99, 0xbe};
-constexpr std::array<uint8_t, 4> kJovianSelector{0x3d, 0xb6, 0xbe, 0x2b};
+constexpr std::array<uint8_t, 4> cJovianSelector{0x3d, 0xb6, 0xbe, 0x2b};
 
 /// Fully populated L1 info (snapshot + SystemConfig) for the offset pins.
 opeth::OpEthL1BlockInfo filledL1Info()
@@ -233,7 +233,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
     };
     // Selector [0:4].
     BOOST_CHECK_EQUAL_COLLECTIONS(
-        calldata.begin(), calldata.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
+        calldata.begin(), calldata.begin() + 4, cJovianSelector.begin(), cJovianSelector.end());
     checkU32(4, l1Info.baseFeeScalar);
     checkU32(8, l1Info.blobBaseFeeScalar);
     checkBE(12, l1Info.sequenceNumber);  // seq
@@ -309,7 +309,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
     auto const dep = opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN);
     BOOST_CHECK_EQUAL_COLLECTIONS(
-        dep.data.begin(), dep.data.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
+        dep.data.begin(), dep.data.begin() + 4, cJovianSelector.begin(), cJovianSelector.end());
     // [176:178] DA-footprint scalar is zero.
     BOOST_CHECK_EQUAL(dep.data[176], 0);
     BOOST_CHECK_EQUAL(dep.data[177], 0);

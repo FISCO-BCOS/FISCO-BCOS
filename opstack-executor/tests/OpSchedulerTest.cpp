@@ -82,7 +82,7 @@ namespace opeth = bcos::executor_v1::opstack;
 namespace
 {
 
-constexpr uint64_t c_chainId = 0x2105;  // 8453 — the FISCO OP chain id (vector eip1559 chainId)
+constexpr uint64_t c_chainId = opstack_test::c_opChainId;  // 8453 — single home: support/T8nCorpus.h
 const bcos::Address c_sender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
                                                                              // sender
 
