@@ -321,7 +321,9 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
         if (_msg->gas < 0)
         {
             EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
-            return evmc_result{.status_code = EVMC_OUT_OF_GAS, .gas_left = 0};
+            return evmc_result{.status_code = EVMC_OUT_OF_GAS, .gas_left = 0, .gas_refund = 0,
+                .state_gas = {}, .output_data = nullptr, .output_size = 0,
+                .release = nullptr};
         }
 
         auto& hostContext = *reinterpret_cast<HostContext*>(_context);
@@ -334,7 +336,9 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
         // throw); returning a failure lets evmone fail the create/call frame instead
         // of terminating the node mid-block.
         EXECUTIVE_LOG(WARNING) << LOG_DESC("EVM host call failed closed");
-        return evmc_result{.status_code = EVMC_INTERNAL_ERROR, .gas_left = 0};
+        return evmc_result{.status_code = EVMC_INTERNAL_ERROR, .gas_left = 0,
+            .gas_refund = 0, .state_gas = {}, .output_data = nullptr, .output_size = 0,
+            .release = nullptr};
     }
 }
 
