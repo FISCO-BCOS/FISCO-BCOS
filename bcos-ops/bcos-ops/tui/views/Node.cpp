@@ -58,6 +58,10 @@ Element nodeCheckLine(Check const& _check)
     {
         return hbox({text(" ok ") | color(Color::Green), name, detail | dim});
     }
+    if (_check.state == "info")
+    {
+        return hbox({text("info"), name, detail | dim});
+    }
     return hbox({text("skip") | color(Color::Yellow), name, detail | dim});
 }
 }  // namespace
