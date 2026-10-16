@@ -18,6 +18,7 @@
 #include "RpcCollector.h"
 #include "GroupFacts.h"
 #include "bcos-ops/OpsError.h"
+#include <algorithm>
 #include <chrono>
 
 namespace bcos::ops
@@ -166,7 +167,9 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
             status.isSyncing = v["isSyncing"].asBool();
             status.knownHighestNumber = asInt64(v["knownHighestNumber"]);
             auto local = status.blockNumber ? *status.blockNumber : asInt64(v["blockNumber"]);
-            status.lag = *status.knownHighestNumber - local;
+            // peer-supplied heights: both non-negative, so the difference cannot overflow
+            status.lag =
+                std::max<int64_t>(*status.knownHighestNumber, 0) - std::max<int64_t>(local, 0);
             status.peerCount = static_cast<int64_t>(v["peers"].size());
         });
 

@@ -51,6 +51,10 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     {
         value = value.substr(7);
     }
+    if (value.ends_with('/'))
+    {
+        value.pop_back();  // http://host:8545/
+    }
     auto colon = value.rfind(':');
     if (colon == std::string::npos || colon + 1 >= value.size())
     {

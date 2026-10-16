@@ -86,6 +86,7 @@ BOOST_AUTO_TEST_CASE(rpcPortIsParsedWhole)
 {
     BOOST_CHECK_EQUAL(parseHostPort("127.0.0.1:20200").second, 20200);
     BOOST_CHECK_THROW(parseHostPort("127.0.0.1:20200abc"), OpsError);
+    BOOST_CHECK_EQUAL(parseHostPort("http://127.0.0.1:8545/").second, 8545);
 }
 
 // a peer reporting an absurd timeout or timestamp cannot overflow the height_advancing arithmetic
@@ -119,7 +120,9 @@ BOOST_AUTO_TEST_CASE(listenPortOutOfRangeIsAnError)
     std::filesystem::remove_all(dir);
 }
 
-// getSyncStatus failed: the wording says unknown, not "not syncing" / "idle"
+// a NodeStatus with a lag but no isSyncing: the wording says unknown, not "not syncing" / "idle".
+// No collector produces one today (lag and isSyncing come from the same getSyncStatus answer);
+// the check and the row do not assume that.
 BOOST_AUTO_TEST_CASE(unknownSyncStateIsNotPresentedAsIdle)
 {
     auto status = behindAndPending();
@@ -130,6 +133,22 @@ BOOST_AUTO_TEST_CASE(unknownSyncStateIsNotPresentedAsIdle)
     std::ostringstream table;
     renderStatus(table, status, evaluate(status, Thresholds{}, c_sampleNowMs), false);
     BOOST_CHECK_MESSAGE(table.str().find("idle") == std::string::npos, table.str());
+}
+
+BOOST_AUTO_TEST_CASE(extremeHeightsAndTimestampsDoNotOverflow)
+{
+    FakeRpc rpc;
+    rpc.set("getBlockNumber", -1);
+    rpc.setSync("knownHighestNumber", Json::Int64(std::numeric_limits<int64_t>::max()));
+    auto status = collectFromRpc(rpc.call(), "group0", "rpc");
+    BOOST_REQUIRE(status.lag);
+    BOOST_CHECK_EQUAL(*status.lag, std::numeric_limits<int64_t>::max());
+
+    auto ancient = behindAndPending();
+    ancient.latestTimestamp = std::numeric_limits<int64_t>::min();
+    std::ostringstream table;
+    renderStatus(table, ancient, {}, false);
+    BOOST_CHECK_MESSAGE(table.str().find("m ago") != std::string::npos, table.str());
 }
 
 BOOST_AUTO_TEST_CASE(peerNumbersAreParsedWhole)
