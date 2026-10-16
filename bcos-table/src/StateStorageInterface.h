@@ -28,11 +28,11 @@
 #include <bcos-utilities/Error.h>
 #include <boost/throw_exception.hpp>
 #include <future>
+#include <list>
 #include <memory>
 #include <optional>
 #include <shared_mutex>
 #include <type_traits>
-#include <list>
 
 namespace bcos::storage
 {
@@ -44,7 +44,7 @@ public:
 
     struct Change
     {
-                Change(std::string _table, std::string _key, std::optional<Entry> _entry);
+        Change(std::string _table, std::string _key, std::optional<Entry> _entry);
         Change(const Change&) = delete;
         Change& operator=(const Change&) = delete;
         Change(Change&&) noexcept = default;

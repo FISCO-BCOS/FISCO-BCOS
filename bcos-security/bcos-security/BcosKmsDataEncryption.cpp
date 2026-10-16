@@ -25,9 +25,9 @@
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace crypto;
@@ -70,7 +70,8 @@ BcosKmsDataEncryption::BcosKmsDataEncryption(const bcos::tool::NodeConfig::Ptr n
     keyClient.setIpPort(keyCenterIp, keyCenterPort);
     m_dataKey = asString(keyClient.getDataKey(cipherDataKey, m_nodeConfig->smCryptoType()));
 
-    BCOS_LOG(INFO) << LOG_BADGE("BcosKmsDataEncryption:init") << LOG_KV("key_center_ip:", keyCenterIp)
+    BCOS_LOG(INFO) << LOG_BADGE("BcosKmsDataEncryption:init")
+                   << LOG_KV("key_center_ip:", keyCenterIp)
                    << LOG_KV("key_center_port:", keyCenterPort);
 
 

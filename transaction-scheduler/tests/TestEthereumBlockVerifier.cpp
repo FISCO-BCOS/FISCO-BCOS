@@ -468,8 +468,8 @@ struct EEBVFaultyBackendStorage : EEBVBackendStorage
             key, std::forward<decltype(args)>(args)...);
     }
 
-    auto readSomeRaw(
-        ::ranges::input_range auto keys, auto&&... args) -> task::Task<std::vector<DataValue>>
+    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<std::vector<DataValue>>
     {
         if (requestContractReadThrowRemaining->load(std::memory_order_acquire) > 0)
         {
@@ -489,8 +489,8 @@ struct EEBVFaultyBackendStorage : EEBVBackendStorage
             std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto readSome(::ranges::input_range auto keys,
-        auto&&... args) -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
+    auto readSome(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
     {
         if (requestContractReadThrowRemaining->load(std::memory_order_acquire) > 0)
         {
@@ -1940,7 +1940,7 @@ BOOST_AUTO_TEST_CASE(requestsHashVerifyAgainstHeader)
     // Prague block, header matches the executed requests.
     BOOST_CHECK(!Verifier::verifyAgainstHeader(
         header, computation, header.stateRoot, std::nullopt, noUncles, noTransactions, requestsHash)
-                     .has_value());
+            .has_value());
     // Tampered header commitment.
     auto tampered = header;
     tampered.requestsHash = bcos::h256(
@@ -1955,15 +1955,15 @@ BOOST_AUTO_TEST_CASE(requestsHashVerifyAgainstHeader)
     missing.requestsHash.reset();
     BOOST_CHECK(Verifier::verifyAgainstHeader(missing, computation, header.stateRoot, std::nullopt,
         noUncles, noTransactions, requestsHash)
-                    .has_value());
+            .has_value());
     // Pre-Prague block (no computed hash) must not carry a requestsHash.
     BOOST_CHECK(Verifier::verifyAgainstHeader(
         header, computation, header.stateRoot, std::nullopt, noUncles, noTransactions, std::nullopt)
-                    .has_value());
+            .has_value());
     missing.requestsHash.reset();
     BOOST_CHECK(!Verifier::verifyAgainstHeader(missing, computation, header.stateRoot, std::nullopt,
         noUncles, noTransactions, std::nullopt)
-                     .has_value());
+            .has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

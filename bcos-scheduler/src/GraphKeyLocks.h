@@ -1,12 +1,12 @@
 #pragma once
 
 #include "Common.h"
+#include <bcos-utilities/BoostLog.h>
 #include <boost/graph/adjacency_list.hpp>
 #include <functional>
 #include <gsl/span>
 #include <string_view>
 #include <variant>
-#include <bcos-utilities/BoostLog.h>
 
 #define KEY_LOCK_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER") << LOG_BADGE("KEY_LOCK")
 // #define KEY_LOCK_LOG(LEVEL) std::cout << LOG_BADGE("KEY_LOCK")
@@ -79,10 +79,8 @@ private:
     void removeEdge(VertexID source, VertexID target, Seq seq);
 };
 
-bool operator<(const GraphKeyLocks::Vertex& lhs,
-    const GraphKeyLocks::KeyLockView& rhs);
+bool operator<(const GraphKeyLocks::Vertex& lhs, const GraphKeyLocks::KeyLockView& rhs);
 
-bool operator<(const GraphKeyLocks::KeyLockView& lhs,
-    const GraphKeyLocks::Vertex& rhs);
+bool operator<(const GraphKeyLocks::KeyLockView& lhs, const GraphKeyLocks::Vertex& rhs);
 
 }  // namespace bcos::scheduler

@@ -30,10 +30,8 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
             }
             else
             {
-                auto legacyAddr =
-                    newLegacyEVMAddress(bytesConstRef(message.sender.bytes), nonce);
-                std::copy(
-                    legacyAddr.begin(), legacyAddr.end(), message.code_address.bytes);
+                auto legacyAddr = newLegacyEVMAddress(bytesConstRef(message.sender.bytes), nonce);
+                std::copy(legacyAddr.begin(), legacyAddr.end(), message.code_address.bytes);
             }
         }
         message.recipient = message.code_address;

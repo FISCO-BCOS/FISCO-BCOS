@@ -412,8 +412,8 @@ BOOST_AUTO_TEST_CASE(RawHeaderServesPreCanyonOpHeader)
     header->setRLPHash(bcos::protocol::EthBlockHeader::computeHash(*header));
 
     auto const served = resultBytes(call1("debug_getRawHeader", "latest"));
-    BOOST_TEST(bcos::protocol::canonicalBlockHash(*header).hexPrefixed() ==
-               header->hash().hexPrefixed());
+    BOOST_TEST(
+        bcos::protocol::canonicalBlockHash(*header).hexPrefixed() == header->hash().hexPrefixed());
     BOOST_TEST(bcos::crypto::keccak256Hash(bcos::ref(served)).hexPrefixed() ==
                header->hash().hexPrefixed());
 }

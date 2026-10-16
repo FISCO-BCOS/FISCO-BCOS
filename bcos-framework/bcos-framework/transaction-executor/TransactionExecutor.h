@@ -32,8 +32,7 @@ concept TransactionExecutor = requires(TransactionExecutorType& executor, Storag
     // ExecuteContext must expose three lifecycle methods: prepare, execute, finish
     { execCtx.prepare() } -> task::IsAwaitableReturnValue<void>;
     { execCtx.execute() } -> task::IsAwaitableReturnValue<void>;
-    { execCtx.finish() } -> task::IsAwaitableReturnValue<
-        bcos::protocol::TransactionReceipt::Ptr>;
+    { execCtx.finish() } -> task::IsAwaitableReturnValue<bcos::protocol::TransactionReceipt::Ptr>;
 };
 
 }  // namespace bcos::executor_v1

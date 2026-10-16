@@ -68,9 +68,9 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
     if (m_evmcVm)
     {
         return Result(m_evmcVm
-                          ->execute(*_hostContext.hostInterface, hostCtx, m_revision, *_msg,
-                              m_code.data(), m_code.size())
-                          .release_raw());
+                ->execute(*_hostContext.hostInterface, hostCtx, m_revision, *_msg, m_code.data(),
+                    m_code.size())
+                .release_raw());
     }
 
     // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves

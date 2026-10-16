@@ -25,9 +25,9 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include <json/json.h>
+#include <chrono>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/sort.hpp>
-#include <chrono>
 #include <string>
 
 using namespace bcos;
@@ -37,8 +37,7 @@ using namespace bcos::crypto;
 using namespace bcos::ledger;
 using namespace bcos::tool;
 
-BlockSync::BlockSync(
-    BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
+BlockSync::BlockSync(BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
     bcos::IOServicePool::Ptr _ioServicePool, unsigned _idleWaitMs)
   : Worker(_ioContext, "syncWorker", _idleWaitMs),
     m_config(_config),
@@ -136,20 +135,20 @@ void BlockSync::initSendResponseHandler()
             }
             // fire-and-forget: the coroutine parameters own the payload copy so nothing
             // dangles after task::wait detaches
-            task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _id,
-                           int _moduleID, NodeIDPtr _dstNode,
-                           bcos::bytes _payload) -> task::Task<void> {
-                auto error = co_await _frontService->sendResponse(
-                    _id, _moduleID, _dstNode, bcos::ref(_payload));
-                if (error)
-                {
-                    BLKSYNC_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                       << LOG_KV("module", std::to_string(_moduleID))
-                                       << LOG_KV("dst", _dstNode->shortHex())
-                                       << LOG_KV("code", error->errorCode())
-                                       << LOG_KV("msg", error->errorMessage());
-                }
-            }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
+            task::wait(
+                [](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _id,
+                    int _moduleID, NodeIDPtr _dstNode, bcos::bytes _payload) -> task::Task<void> {
+                    auto error = co_await _frontService->sendResponse(
+                        _id, _moduleID, _dstNode, bcos::ref(_payload));
+                    if (error)
+                    {
+                        BLKSYNC_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                                           << LOG_KV("module", std::to_string(_moduleID))
+                                           << LOG_KV("dst", _dstNode->shortHex())
+                                           << LOG_KV("code", error->errorCode())
+                                           << LOG_KV("msg", error->errorMessage());
+                    }
+                }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
         }
         catch (std::exception const& e)
         {
@@ -972,14 +971,15 @@ void BlockSync::sendSyncStatusByTree()
     for (auto const& nodeID : *groupNodeList)
     {
         // per-node coroutine keeps the shared encodedData alive and sends it as a view (zero-copy);
-        // all state is passed as coroutine parameters so it is copied into the frame and stays alive
+        // all state is passed as coroutine parameters so it is copied into the frame and stays
+        // alive
         task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
                        decltype(encodedData) _encodedData) mutable -> task::Task<void> {
             try
             {
                 // fire-and-forget: no module-level response expected (timeout == 0)
-                auto result = co_await _front->sendMessageByNodeID(ModuleID::BlockSync, _nodeID,
-                    ::ranges::views::single(ref(*_encodedData)), 0);
+                auto result = co_await _front->sendMessageByNodeID(
+                    ModuleID::BlockSync, _nodeID, ::ranges::views::single(ref(*_encodedData)), 0);
                 (void)result;
             }
             catch (std::exception const& e)
@@ -1022,9 +1022,9 @@ void BlockSync::broadcastSyncStatus()
             }
             catch (std::exception const& e)
             {
-                BLKSYNC_LOG(WARNING) << LOG_BADGE("BlockSync")
-                                     << LOG_DESC("broadcastSyncStatus send exception")
-                                     << LOG_KV("message", boost::diagnostic_information(e));
+                BLKSYNC_LOG(WARNING)
+                    << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatus send exception")
+                    << LOG_KV("message", boost::diagnostic_information(e));
             }
         }(std::move(encodedData), m_config->frontService()));
     }
@@ -1035,7 +1035,8 @@ void BlockSync::broadcastSyncStatus()
         for (auto const& nodeID : groupNodeList)
         {
             // per-node coroutine keeps the shared encodedData alive and sends it as a view; all
-            // state is passed as coroutine parameters so it is copied into the frame and stays alive
+            // state is passed as coroutine parameters so it is copied into the frame and stays
+            // alive
             task::wait([](decltype(front) _front, decltype(nodeID) _nodeID,
                            decltype(encodedData) _encodedData) mutable -> task::Task<void> {
                 try
@@ -1048,10 +1049,10 @@ void BlockSync::broadcastSyncStatus()
                 catch (std::exception const& e)
                 {
                     // a synchronous throw must not break the per-node loop: log and continue
-                    BLKSYNC_LOG(WARNING) << LOG_BADGE("BlockSync")
-                                         << LOG_DESC("broadcastSyncStatus send exception")
-                                         << LOG_KV("nodeID", _nodeID->shortHex())
-                                         << LOG_KV("message", boost::diagnostic_information(e));
+                    BLKSYNC_LOG(WARNING)
+                        << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatus send exception")
+                        << LOG_KV("nodeID", _nodeID->shortHex())
+                        << LOG_KV("message", boost::diagnostic_information(e));
                 }
             }(front, nodeID, encodedData));
         }
@@ -1260,7 +1261,7 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
     {
         WriteGuard lock(x_archivedBlockQueue);
         for (auto topNumber = m_archivedBlockQueue.top()->blockHeader()->number();
-             topNumber >= topBlockNumber;)
+            topNumber >= topBlockNumber;)
         {
             m_archivedBlockQueue.pop();
             if (!m_archivedBlockQueue.empty())

@@ -1,7 +1,7 @@
+#include "../tests/TrivialCheckpointStorage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
-#include "../tests/TrivialCheckpointStorage.h"
 #include <bcos-task/Wait.h>
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
@@ -31,12 +31,13 @@ struct Fixture
                 return executor_v1::StateKey{"test_table"sv, std::string_view(key)};
             }) | ::ranges::to<decltype(allKeys)>();
 
-            auto allValues = ::ranges::views::iota(0, count) | ::ranges::views::transform([](int num) {
-                storage::Entry entry;
-                entry.set(fmt::format("value: {}", num));
+            auto allValues =
+                ::ranges::views::iota(0, count) | ::ranges::views::transform([](int num) {
+                    storage::Entry entry;
+                    entry.set(fmt::format("value: {}", num));
 
-                return entry;
-            });
+                    return entry;
+                });
 
             co_await storage2::writeSome(view, ::ranges::views::zip(allKeys, allValues));
             multiLayerStorage.pushView(std::move(view));

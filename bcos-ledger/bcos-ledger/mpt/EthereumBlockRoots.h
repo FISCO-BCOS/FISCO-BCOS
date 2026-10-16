@@ -98,8 +98,9 @@ inline h256 calculateEthereumReceiptsRoot(
         }
         catch (bcos::codec::rlp::RlpEncodeException const& e)
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error("toEthReceiptData: " +
-                bcos::codec::rlp::rlpErrorMessage(e, "receipt conversion failed")));
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error("toEthReceiptData: " + bcos::codec::rlp::rlpErrorMessage(
+                                                              e, "receipt conversion failed")));
         }
         bcos::bytes encoded;
         protocol::EthReceipt ethReceipt(std::move(eth));

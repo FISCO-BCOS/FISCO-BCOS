@@ -70,7 +70,8 @@ bytes hmacSha256(bytesConstRef _key, bytesConstRef _data1, bytesConstRef _data2)
     return hmacSha256Segments(_key, {_data1, _data2});
 }
 
-bytes hmacSha256(bytesConstRef _key, bytesConstRef _data1, bytesConstRef _data2, bytesConstRef _data3)
+bytes hmacSha256(
+    bytesConstRef _key, bytesConstRef _data1, bytesConstRef _data2, bytesConstRef _data3)
 {
     return hmacSha256Segments(_key, {_data1, _data2, _data3});
 }

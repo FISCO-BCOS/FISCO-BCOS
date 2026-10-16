@@ -21,6 +21,7 @@
  * @date 2026/8/18
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-codec/rlp/Common.h"
 #include "bcos-codec/rlp/RLPEncode.h"
@@ -33,15 +34,14 @@
 #include "bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
-#include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
-#include "EthereumBlockHashLookup.h"
 #include <bcos-devp2p/rlpx/Crypto.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -82,8 +82,8 @@ evmc_address TRWAddress(uint8_t seed)
 // Ethereum address from an uncompressed (64-byte) secp256k1 public key.
 bcos::bytes TRWAddressFromPublicKey(bcos::bytes const& publicKey)
 {
-    auto pubHash = bcos::crypto::keccak256Hash(
-        bcos::bytesConstRef(publicKey.data(), publicKey.size()));
+    auto pubHash =
+        bcos::crypto::keccak256Hash(bcos::bytesConstRef(publicKey.data(), publicKey.size()));
     return bcos::bytes(pubHash.begin() + 12, pubHash.end());
 }
 
@@ -117,11 +117,11 @@ std::shared_ptr<TRWTestTransactionImpl> TRWMakeSignedTransferTx(
     // Signing payload: 0x02 || rlp([chainId, nonce, maxPriorityFeePerGas, maxFeePerGas,
     // gasLimit, to, value, data, accessList]) — the canonical EIP-1559 shape.
     bcos::bytes body;
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));            // chainId
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));            // nonce
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));            // maxPriorityFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));   // maxFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));       // gasLimit
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));           // chainId
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));           // nonce
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));           // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));  // maxFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));      // gasLimit
     bcos::codec::rlp::encode(
         body, bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes))));
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(value));  // value
@@ -129,13 +129,13 @@ std::shared_ptr<TRWTestTransactionImpl> TRWMakeSignedTransferTx(
     body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);              // empty accessList
     bcos::bytes payloadBytes;
     payloadBytes.push_back(0x02);
-    bcos::codec::rlp::encodeHeader(payloadBytes,
-        bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    bcos::codec::rlp::encodeHeader(
+        payloadBytes, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
     payloadBytes.insert(payloadBytes.end(), body.begin(), body.end());
 
     // Real signature: 65 bytes r || s || recid over keccak(payload).
-    auto signingHash = bcos::crypto::keccak256Hash(
-        bcos::bytesConstRef(payloadBytes.data(), payloadBytes.size()));
+    auto signingHash =
+        bcos::crypto::keccak256Hash(bcos::bytesConstRef(payloadBytes.data(), payloadBytes.size()));
     auto const& privateKey = keyPair.privateKey();
     auto signature = bcos::devp2p::rlpx::signRecoverable(
         bcos::bytesConstRef(signingHash.data(), signingHash.size()),
@@ -187,8 +187,7 @@ public:
     {
         blockHashLookup = [&backend = backendStorage](
                               int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-            return initializer::ethBlockHashLookupFromStorage(
-                backend, blockNumber, currentHeight);
+            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
         };
         executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
         blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
@@ -225,20 +224,19 @@ BOOST_FIXTURE_TEST_CASE(decodeSignedRawTransactionRoundTrip, TRWFixture)
 
         // Field-level round-trip.
         BOOST_CHECK_EQUAL(decoded->web3TypedTxKind(), 2u);
-        BOOST_CHECK_EQUAL(decoded->to(), bcos::toHexStringWithPrefix(
-                                             bcos::bytes(std::begin(recipient.bytes),
-                                                 std::end(recipient.bytes))));
+        BOOST_CHECK_EQUAL(decoded->to(),
+            bcos::toHexStringWithPrefix(
+                bcos::bytes(std::begin(recipient.bytes), std::end(recipient.bytes))));
         BOOST_CHECK_EQUAL(decoded->value(), u256(100));
         BOOST_CHECK_EQUAL(decoded->gasLimit(), 100000);
         BOOST_CHECK_EQUAL(decoded->nonce(), std::string_view("0x0"));
-        BOOST_CHECK(decoded->maxFeePerGas().has_value() &&
-                    *decoded->maxFeePerGas() == u256(1000000000));
+        BOOST_CHECK(
+            decoded->maxFeePerGas().has_value() && *decoded->maxFeePerGas() == u256(1000000000));
         // Recovered sender must be the keypair's Ethereum address.
         auto decodedSender = decoded->sender();
         BOOST_CHECK_EQUAL(bcos::bytes(decodedSender.begin(), decodedSender.end()), senderRaw);
         // Canonical tx hash: keccak of the raw wire bytes.
-        auto canonical = bcos::crypto::keccak256Hash(
-            bcos::bytesConstRef(raw.data(), raw.size()));
+        auto canonical = bcos::crypto::keccak256Hash(bcos::bytesConstRef(raw.data(), raw.size()));
         BOOST_CHECK(decoded->hash() == canonical);
         BOOST_CHECK(decoded->hash() == original->hash());
 
@@ -285,14 +283,16 @@ BOOST_FIXTURE_TEST_CASE(decodeRealSepoliaTransactions, TRWFixture)
         bcos::bytesConstRef(raw1559.data(), raw1559.size()), *cryptoSuite->hashImpl());
     BOOST_REQUIRE(decoded1559);
     BOOST_CHECK_EQUAL(static_cast<uint8_t>(decoded1559->web3TypedTxKind()), 2u);
-    BOOST_CHECK(decoded1559->hash() == bcos::crypto::HashType(std::string_view(
-        "d2dc9ce65a21ad744b39974697e6a2b9f41381ea798dbdf9cea75c526879c524"),
-        bcos::crypto::HashType::FromHex));
-    BOOST_CHECK_EQUAL(bcos::toHexStringWithPrefix(bcos::bytes(decoded1559->sender().begin(),
-                          decoded1559->sender().end())),
+    BOOST_CHECK(
+        decoded1559->hash() ==
+        bcos::crypto::HashType(
+            std::string_view("d2dc9ce65a21ad744b39974697e6a2b9f41381ea798dbdf9cea75c526879c524"),
+            bcos::crypto::HashType::FromHex));
+    BOOST_CHECK_EQUAL(bcos::toHexStringWithPrefix(
+                          bcos::bytes(decoded1559->sender().begin(), decoded1559->sender().end())),
         std::string("0xcfe95817ac44c3f8ce75f1ee6ec1431f586ab5a3"));
-    BOOST_CHECK_EQUAL(decoded1559->to(),
-        std::string_view("0x274cde4f18c828e6e8b53bdb25fab3676dffbfb1"));
+    BOOST_CHECK_EQUAL(
+        decoded1559->to(), std::string_view("0x274cde4f18c828e6e8b53bdb25fab3676dffbfb1"));
     BOOST_CHECK_EQUAL(decoded1559->value(), u256("0x5d423c655aa0000"));
     BOOST_CHECK_EQUAL(decoded1559->nonce(), std::string_view("0xba5"));
     BOOST_CHECK_EQUAL(static_cast<uint64_t>(decoded1559->gasLimit()), 21000u);
@@ -311,14 +311,16 @@ BOOST_FIXTURE_TEST_CASE(decodeRealSepoliaTransactions, TRWFixture)
         bcos::bytesConstRef(raw4844.data(), raw4844.size()), *cryptoSuite->hashImpl());
     BOOST_REQUIRE(decoded4844);
     BOOST_CHECK_EQUAL(static_cast<uint8_t>(decoded4844->web3TypedTxKind()), 3u);
-    BOOST_CHECK(decoded4844->hash() == bcos::crypto::HashType(std::string_view(
-        "58285232ac6e1a7538404a3ec910efbdb23eb0591971aa865df9d799c9458095"),
-        bcos::crypto::HashType::FromHex));
-    BOOST_CHECK_EQUAL(bcos::toHexStringWithPrefix(bcos::bytes(decoded4844->sender().begin(),
-                          decoded4844->sender().end())),
+    BOOST_CHECK(
+        decoded4844->hash() ==
+        bcos::crypto::HashType(
+            std::string_view("58285232ac6e1a7538404a3ec910efbdb23eb0591971aa865df9d799c9458095"),
+            bcos::crypto::HashType::FromHex));
+    BOOST_CHECK_EQUAL(bcos::toHexStringWithPrefix(
+                          bcos::bytes(decoded4844->sender().begin(), decoded4844->sender().end())),
         std::string("0x0c970bb76126ac18c024f8d7fe81aeaf3eefa82e"));
-    BOOST_CHECK_EQUAL(decoded4844->to(),
-        std::string_view("0x256c2a2c24ca6afff72726b43dc9022469012c3e"));
+    BOOST_CHECK_EQUAL(
+        decoded4844->to(), std::string_view("0x256c2a2c24ca6afff72726b43dc9022469012c3e"));
     BOOST_CHECK_EQUAL(decoded4844->nonce(), std::string_view("0x18d76"));
     BOOST_CHECK_EQUAL(static_cast<uint64_t>(decoded4844->gasLimit()), 21000u);
     BOOST_CHECK(decoded4844->maxFeePerGas().has_value() &&
@@ -327,9 +329,10 @@ BOOST_FIXTURE_TEST_CASE(decodeRealSepoliaTransactions, TRWFixture)
                 *decoded4844->maxFeePerBlobGas() == u256("0x3b9aca00"));
     auto const& blobs = decoded4844->blobVersionedHashes();
     BOOST_REQUIRE_EQUAL(blobs.size(), 1u);
-    BOOST_CHECK(blobs[0] == bcos::h256(std::string_view(
-        "013fc3ae05167af931bb2a3329fedfaf13d61c728c593d3346968c8f258b2247"),
-        bcos::h256::FromHex));
+    BOOST_CHECK(blobs[0] ==
+                bcos::h256(std::string_view(
+                               "013fc3ae05167af931bb2a3329fedfaf13d61c728c593d3346968c8f258b2247"),
+                    bcos::h256::FromHex));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

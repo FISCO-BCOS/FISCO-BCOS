@@ -1,7 +1,7 @@
 #pragma once
 
-#include <bcos-concepts/Basic.h>
 #include "../concepts/bcos-concepts/storage/Storage.h"
+#include <bcos-concepts/Basic.h>
 #include <bcos-framework/storage/Entry.h>
 #include <boost/throw_exception.hpp>
 #include <range/v3/range/access.hpp>
@@ -57,7 +57,7 @@ public:
         for (auto&& it : keys)
         {
             viewArray.emplace_back(
-            std::string_view((const char*)::ranges::data(it), ::ranges::size(it)));
+                std::string_view((const char*)::ranges::data(it), ::ranges::size(it)));
         }
         storage().asyncGetRows(table, viewArray, std::move(callback));
 

@@ -36,9 +36,9 @@ class ExecutiveSerialFlow : public virtual ExecutiveFlowInterface,
                             public std::enable_shared_from_this<ExecutiveSerialFlow>
 {
 public:
-        ExecutiveSerialFlow(ExecutiveFactory::Ptr executiveFactory);
+    ExecutiveSerialFlow(ExecutiveFactory::Ptr executiveFactory);
 
-        virtual ~ExecutiveSerialFlow();
+    virtual ~ExecutiveSerialFlow();
 
     void submit(CallParameters::UniquePtr txInput) override;
     void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;

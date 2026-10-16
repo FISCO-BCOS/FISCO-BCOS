@@ -35,6 +35,7 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
+#include <bcos-utilities/BoostLog.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
@@ -43,7 +44,6 @@
 #include <range/v3/algorithm/copy.hpp>
 #include <range/v3/view/drop.hpp>
 #include <set>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos
 {

@@ -197,8 +197,8 @@ bcos::task::Task<bcos::Error::Ptr> bcostars::FrontServiceClient::onReceiveGroupN
     co_return co_await ErrorAwaitable{
         [proxy = m_proxy, timeout = c_frontServiceTimeout, groupID = std::move(_groupID),
             tarsGroupNodeInfo](std::unique_ptr<FrontServicePrxCallback> callback) mutable {
-            proxy->tars_set_timeout(timeout)
-                ->async_onReceiveGroupNodeInfo(callback.release(), groupID, tarsGroupNodeInfo);
+            proxy->tars_set_timeout(timeout)->async_onReceiveGroupNodeInfo(
+                callback.release(), groupID, tarsGroupNodeInfo);
         },
         std::make_shared<ErrorAwaitable::CompletionState>(),
         [](const bcostars::Error& ret) { return bcostars::toBcosError(ret); },
@@ -229,8 +229,8 @@ bcos::task::Task<bcos::Error::Ptr> bcostars::FrontServiceClient::onReceiveBroadc
             nodeID = std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
             data = std::vector<char>(_data.begin(), _data.end())](
             std::unique_ptr<FrontServicePrxCallback> callback) mutable {
-            proxy->tars_set_timeout(timeout)
-                ->async_onReceiveBroadcastMessage(callback.release(), groupID, nodeID, data);
+            proxy->tars_set_timeout(timeout)->async_onReceiveBroadcastMessage(
+                callback.release(), groupID, nodeID, data);
         },
         std::make_shared<ErrorAwaitable::CompletionState>(),
         [](const bcostars::Error& ret) { return bcostars::toBcosError(ret); },
@@ -252,10 +252,10 @@ bcos::task::Task<bcos::front::SendResult> bcostars::FrontServiceClient::sendMess
     co_return co_await SendAwaitable{
         [proxy = m_proxy, timeout = c_frontServiceTimeout, _moduleID,
             nodeID = std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
-            buffer = std::move(buffer), _timeout](
-            std::unique_ptr<FrontServicePrxCallback> callback) mutable {
-            proxy->tars_set_timeout(timeout)->async_asyncSendMessageByNodeID(callback.release(),
-                _moduleID, nodeID, buffer, _timeout, (_timeout > 0));
+            buffer = std::move(buffer),
+            _timeout](std::unique_ptr<FrontServicePrxCallback> callback) mutable {
+            proxy->tars_set_timeout(timeout)->async_asyncSendMessageByNodeID(
+                callback.release(), _moduleID, nodeID, buffer, _timeout, (_timeout > 0));
         },
         std::make_shared<SendAwaitable::CompletionState>(), {},
         [](tars::Int32 ret) {
@@ -282,8 +282,7 @@ bcos::task::Task<bcos::front::SendResult> bcostars::FrontServiceClient::sendMess
         }};
 }
 bcos::task::Task<bcos::Error::Ptr> bcostars::FrontServiceClient::sendResponse(
-    std::string _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
-    bcos::bytesConstRef _data)
+    std::string _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data)
 {
     auto nodeIDData = _nodeID->data();
     co_return co_await ErrorAwaitable{
@@ -298,8 +297,8 @@ bcos::task::Task<bcos::Error::Ptr> bcostars::FrontServiceClient::sendResponse(
         [](const bcostars::Error& ret) { return bcostars::toBcosError(ret); },
         [](tars::Int32 ret) { return bcostars::toBcosError(ret); }, {}, {}};
 }
-bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(uint16_t _type,
-    int _moduleID, ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads)
+bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(uint16_t _type, int _moduleID,
+    ::ranges::any_view<bcos::bytesConstRef, ::ranges::category::forward> payloads)
 {
     std::vector<char> data;
     for (auto payload : payloads)

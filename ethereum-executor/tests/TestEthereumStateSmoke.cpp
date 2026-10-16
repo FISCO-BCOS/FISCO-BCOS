@@ -226,10 +226,10 @@ void testL1PolicyPrecompileDispatch()
     CHECK(EthL1Policy::isPrecompile(
         EVMC_PRAGUE, addressFromHex("0x000000000000000000000000000000000000000b")));
     // The warm-account check and the dispatch check are the same predicate.
-    CHECK(EthL1Policy::isPrecompile(EVMC_CANCUN,
-               addressFromHex("0x0000000000000000000000000000000000000001")) ==
-          eth_evm::is_precompile(EVMC_CANCUN,
-              addressFromHex("0x0000000000000000000000000000000000000001")));
+    CHECK(EthL1Policy::isPrecompile(
+              EVMC_CANCUN, addressFromHex("0x0000000000000000000000000000000000000001")) ==
+          eth_evm::is_precompile(
+              EVMC_CANCUN, addressFromHex("0x0000000000000000000000000000000000000001")));
 }
 
 void testEthereumStateInstantiation()
@@ -273,14 +273,15 @@ void testHasStorageIgnoresTombstones()
     using TombstoneStorage =
         bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
             bcos::executor_v1::StateValue,
-            bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
+            bcos::storage2::memory_storage::Attribute(
+                bcos::storage2::memory_storage::ORDERED |
                 bcos::storage2::memory_storage::LOGICAL_DELETION)>;
     TombstoneStorage storage;
     const auto addr = addressFromHex("0x2000000000000000000000000000000000000000");
-    const auto slotKey = bytes32FromHex(
-        "0x0000000000000000000000000000000000000000000000000000000000000001");
-    const auto slotValue = bytes32FromHex(
-        "0x00000000000000000000000000000000000000000000000000000000000000ff");
+    const auto slotKey =
+        bytes32FromHex("0x0000000000000000000000000000000000000000000000000000000000000001");
+    const auto slotValue =
+        bytes32FromHex("0x00000000000000000000000000000000000000000000000000000000000000ff");
 
     // Lifecycle 1: a live contract with one storage slot.
     {

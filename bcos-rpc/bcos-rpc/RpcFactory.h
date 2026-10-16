@@ -109,8 +109,7 @@ protected:
     /// port reads [op_engine_rpc] enable_debug_api, the web3 port [web3_rpc] enable_debug_api.
     bcos::rpc::Web3JsonRpcImpl::Ptr buildWeb3JsonRpc(int sendTxTimeout,
         boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
-        bool _enableEngineRpc = false, bool _enableMinerApi = false,
-        bool _enableDebugApi = false);
+        bool _enableEngineRpc = false, bool _enableMinerApi = false, bool _enableDebugApi = false);
     bcos::event::EventSub::Ptr buildEventSub(
         const std::shared_ptr<boostssl::ws::WsService>& _wsService,
         GroupManager::Ptr _groupManager);

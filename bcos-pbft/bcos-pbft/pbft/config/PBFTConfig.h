@@ -40,8 +40,7 @@ class PBFTConfig : public ConsensusConfig, public std::enable_shared_from_this<P
 {
 public:
     using Ptr = std::shared_ptr<PBFTConfig>;
-    PBFTConfig(boost::asio::io_context& _ioService,
-        bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    PBFTConfig(boost::asio::io_context& _ioService, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
@@ -60,8 +59,7 @@ public:
         m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>()),
         m_blockFactory(std::move(_blockFactory))
     {
-        m_pbftTimer =
-            std::make_shared<PBFTTimer>(_ioService, consensusTimeout(), "pbftTimer");
+        m_pbftTimer = std::make_shared<PBFTTimer>(_ioService, consensusTimeout(), "pbftTimer");
         // Note: the pullTxsTimeout must be smaller than consensusTimeout to fetch txs before
         // viewchange when there has no-synced txs pullTxsTimeout is larger than 3000ms
     }

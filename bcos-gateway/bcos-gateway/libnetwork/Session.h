@@ -6,7 +6,9 @@
 
 #pragma once
 
+#include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
@@ -148,14 +150,14 @@ public:
     virtual const std::function<void(NetworkException, SessionFace::Ptr, Message)>&
     messageHandler();
     void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message)> messageHandler)
-        override;
+        std::function<void(NetworkException, SessionFace::Ptr, Message)> messageHandler) override;
 
     // handle before sending message: if the check fails (returns an error), the message is not
     // sent and a NetworkException surfaces so coroutine retry loops can stop. The handler receives
     // the actual wire length (payload views included) as _wireLength.
     void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t _wireLength)> handler) override;
+            SessionFace&, const Message&, uint32_t _wireLength)>
+            handler) override;
 
     void setHostInfo(P2PInfo _hostInfo);
 
@@ -290,8 +292,8 @@ public:
             }
             catch (std::exception const& e)
             {
-                SESSION_LOG(WARNING) << LOG_DESC(description)
-                                     << LOG_KV("what", boost::diagnostic_information(e));
+                SESSION_LOG(WARNING)
+                    << LOG_DESC(description) << LOG_KV("what", boost::diagnostic_information(e));
             }
         };
         if (m_server.get().haveNetwork())
@@ -322,8 +324,8 @@ public:
     // Owned by the Host (m_server) that created us. Never null, like m_server.
     std::reference_wrapper<SessionCallbackManager> m_sessionCallbackManager;
     std::function<void(NetworkException, SessionFace::Ptr, Message)> m_messageHandler;
-    std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)>
+        m_beforeMessageHandler;
 
     // Seqs of with-response sends registered through this session. The callback manager above is
     // shared host-wide, so drop() uses this set to fail only THIS session's pending response

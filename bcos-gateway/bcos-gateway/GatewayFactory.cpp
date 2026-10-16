@@ -15,8 +15,8 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
 #include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libp2p/Service.h"
@@ -33,9 +33,9 @@
 #include <bcos-task/Wait.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
+#include <boost/exception_ptr.hpp>
 #include <exception>
 #include <optional>
-#include <boost/exception_ptr.hpp>
 
 using namespace bcos::rpc;
 using namespace bcos;
@@ -704,10 +704,10 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
     // init peer black/white list
-    host->setPeerBlacklist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Blacklist,
-        _config->peerBlacklist(), _config->enableBlacklist()));
-    host->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
-        _config->peerWhitelist(), _config->enableWhitelist()));
+    host->setPeerBlacklist(PeerBlackWhitelist(
+        PeerBlackWhitelist::Type::Blacklist, _config->peerBlacklist(), _config->enableBlacklist()));
+    host->setPeerWhitelist(PeerBlackWhitelist(
+        PeerBlackWhitelist::Type::Whitelist, _config->peerWhitelist(), _config->enableWhitelist()));
     host->setEnableSslVerify(_config->enableSSLVerify());
     // FIB-184: apply the configured inbound-session caps (no longer hardcoded in Host)
     host->setMaxConcurrentSessions(_config->maxConcurrentSessions());
@@ -903,26 +903,26 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                     return {};
                 });
 
-            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](
-                                             SessionFace::Ptr _session, const Message& _message)
-                                             -> std::optional<bcos::Error> {
-                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
-                if (!gatewayRateLimiter)
-                {
+            service->setOnMessageHandler(
+                [gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
+                    const Message& _message) -> std::optional<bcos::Error> {
+                    auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                    if (!gatewayRateLimiter)
+                    {
+                        return std::nullopt;
+                    }
+
+                    auto endpoint = _session->nodeIPEndpoint().address();
+                    auto packetType = _message.packetType();
+                    auto msgLength = _message.length();
+
+                    auto result =
+                        gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
+                    return result ? std::make_optional(bcos::Error::buildError(
+                                        "", InQPSOverflow, result.value())) :
+                                    std::nullopt;
                     return std::nullopt;
-                }
-
-                auto endpoint = _session->nodeIPEndpoint().address();
-                auto packetType = _message.packetType();
-                auto msgLength = _message.length();
-
-                auto result =
-                    gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
-                return result ? std::make_optional(
-                                    bcos::Error::buildError("", InQPSOverflow, result.value())) :
-                                std::nullopt;
-                return std::nullopt;
-            });
+                });
         }
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");

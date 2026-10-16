@@ -20,8 +20,8 @@
 #pragma once
 #include <bcos-framework/Common.h>
 #include <bcos-framework/consensus/ConsensusTypeDef.h>
-#include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Exceptions.h>
 
 #define CONSENSUS_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("Core")
 namespace bcos::consensus

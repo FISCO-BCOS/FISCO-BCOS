@@ -36,8 +36,7 @@ public:
         WAIT_FOR_LATEST_BLOCK = 2,
     };
     using Ptr = std::shared_ptr<Sealer>;
-    explicit Sealer(SealerConfig::Ptr _sealerConfig,
-        boost::asio::io_context& _ioContext);
+    explicit Sealer(SealerConfig::Ptr _sealerConfig, boost::asio::io_context& _ioContext);
     ~Sealer() override = default;
 
     void start() override;

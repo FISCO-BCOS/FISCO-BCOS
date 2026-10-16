@@ -46,8 +46,7 @@ bcos::crypto::HashType EthBlockHeader::computeHash(
     return bcos::crypto::keccak256Hash(bcos::ref(encoded));
 }
 
-bcos::bytes EthBlockHeader::encodeHeader(
-    const bcos::protocol::BlockHeader& header) noexcept(false)
+bcos::bytes EthBlockHeader::encodeHeader(const bcos::protocol::BlockHeader& header) noexcept(false)
 {
     // The ctor performs the ms->s conversion and throws on a sub-second timestamp.
     EthBlockHeader ethHeader(header);

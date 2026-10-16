@@ -24,10 +24,10 @@
 // denominator (the corpus devnet and the C2 e2e both declare 8) priced every pre-Canyon block
 // differently from its own op-geth — and engine_newPayload rejected those valid blocks.
 
-#include "ExceptionCheck.h"
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include "EthLaneGenesisFixture.h"
+#include "ExceptionCheck.h"
 #include "NodeConfigLoaderProbe.h"
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
@@ -138,9 +138,8 @@ BOOST_AUTO_TEST_CASE(zeroValuesRejected)
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
                                   opExecutor(), std::string(c_schedule) + "[op_eip1559]\n" + body)),
-            InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "triple carries a zero elasticity");
-            });
+            InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "triple carries a zero elasticity"); });
     }
 }
 
@@ -235,8 +234,7 @@ BOOST_AUTO_TEST_CASE(valuesExceedingUint32Rejected)
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
                                   opExecutor(), std::string(c_schedule) + "[op_eip1559]\n" + body)),
-            InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "exceeding uint32"); });
+            InvalidConfig, [](auto const& e) { return errinfoContains(e, "exceeding uint32"); });
     }
 }
 
@@ -279,9 +277,9 @@ BOOST_AUTO_TEST_CASE(genesisDataCarriesTheDeclaredEip1559Triple)
     // The pin carries the EFFECTIVE value: declaring denominator_canyon=250 explicitly
     // must pin the SAME string as omitting it (asserted, not just documented).
     NodeConfig explicitCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_REQUIRE_NO_THROW(explicitCfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
-        std::string(c_schedule) +
-            "[op_eip1559]\nelasticity=2\ndenominator=8\ndenominator_canyon=250\n")));
+    BOOST_REQUIRE_NO_THROW(explicitCfg.loadGenesisConfigFromString(opGenesis(
+        opExecutor(), std::string(c_schedule) +
+                          "[op_eip1559]\nelasticity=2\ndenominator=8\ndenominator_canyon=250\n")));
     BOOST_REQUIRE(explicitCfg.ledgerConfig());
     auto const explicitPin =
         bcos::tool::generateGenesisData(explicitCfg.genesisConfig(), *explicitCfg.ledgerConfig());

@@ -8,8 +8,8 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include "ExceptionCheck.h"
 #include "EthLaneGenesisFixture.h"
+#include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -137,8 +137,7 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresEvmcRevision)
     // executor.version >= 2 both ways).
     {
         NodeConfig cfg(keyFactory);
-        std::string genesis =
-            base + "version=2\nevm_revision=cancun\n" + ethLaneGenesisSections();
+        std::string genesis = base + "version=2\nevm_revision=cancun\n" + ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
     }
 
@@ -168,8 +167,7 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresCompat318)
     const std::string node =
         "1234567890123456789012345678901234567890123456789012345678901234"
         "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=";
+    const std::string base = "[version]\ncompatibility_version=";
     const std::string mid =
         "\n[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
         "[web3]\nchain_id=1\n"
@@ -190,18 +188,14 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresCompat318)
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(base + "3.17.0" + mid + ethLaneGenesisSections()),
             InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e, "compatibility_version >= 3.18.0");
-            });
+            [](auto const& e) { return errinfoContains(e, "compatibility_version >= 3.18.0"); });
     }
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(base + "3.15.0" + mid + ethLaneGenesisSections()),
             InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e, "compatibility_version >= 3.18.0");
-            });
+            [](auto const& e) { return errinfoContains(e, "compatibility_version >= 3.18.0"); });
     }
     // compat >= 3.18.0 -> accepted.
     {
@@ -295,25 +289,24 @@ BOOST_AUTO_TEST_CASE(evmcExperimentalRejected)
     // Single revision = experimental -> rejected.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(base + "evm_revision=experimental\n"), InvalidConfig,
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "evm_revision=experimental\n"),
+            InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "evm_revision=experimental"); });
     }
     // Fork transition to experimental -> rejected.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(
-                                  base + "evm_revision_forks=0:experimental\n"),
-            InvalidConfig,
-            [](auto const& e) {
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "evm_revision_forks=0:experimental\n"),
+            InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "evm_revision_forks revision \"experimental\"");
             });
     }
     // Control: a released revision is still accepted (with the lane-mandatory sections).
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(
-            cfg.loadGenesisConfigFromString(base + "evm_revision=cancun\n" + ethLaneGenesisSections()));
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
+            base + "evm_revision=cancun\n" + ethLaneGenesisSections()));
     }
 }
 
@@ -415,10 +408,11 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     // A node with a different schedule produces different genesis data.
     NodeConfig cfg2(keyFactory);
     BOOST_REQUIRE_NO_THROW(cfg2.loadGenesisConfigFromString(
-        base + "[ethereum]\nmode=el\n"
-               "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-               "cancun_time=1710338135\nprague_time=1746612312\n"
-               "merge_block=0\n" +
+        base +
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612312\n"
+        "merge_block=0\n" +
         ethLaneGenesisSections()));
     BOOST_CHECK(
         data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
@@ -428,11 +422,12 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     // later does not break the restart comparison (EIP-2124 handshake covers it).
     NodeConfig cfgTail(keyFactory);
     BOOST_REQUIRE_NO_THROW(cfgTail.loadGenesisConfigFromString(
-        base + "[ethereum]\nmode=el\n"
-               "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-               "cancun_time=1710338135\nprague_time=1746612311\n"
-               "merge_block=0\n"
-               "osaka_time=1767225548\n" +
+        base +
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n"
+        "osaka_time=1767225548\n" +
         ethLaneGenesisSections()));
     BOOST_CHECK(
         data == bcos::tool::generateGenesisData(cfgTail.genesisConfig(), *cfgTail.ledgerConfig()));
@@ -501,30 +496,25 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(base + schedule + ethLaneGenesisSections()),
-            InvalidConfig,
-            [](auto const& e) {
+            InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "[fork_timestamps] section requires [ethereum] mode=el");
             });
     }
     // [ethereum] mode=el without [fork_timestamps]: rejected by validateL2Invariants.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(
-                base + "[ethereum]\nmode=el\n" + ethLaneGenesisSections()),
-            InvalidConfig,
-            [](auto const& e) {
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(
+                                  base + "[ethereum]\nmode=el\n" + ethLaneGenesisSections()),
+            InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "mode=el requires a [fork_timestamps] section");
             });
     }
     // [ethereum] mode=none alongside [fork_timestamps]: rejected (declaration is explicit).
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(
-                base + "[ethereum]\nmode=none\n" + schedule + ethLaneGenesisSections()),
-            InvalidConfig,
-            [](auto const& e) {
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=none\n" +
+                                                              schedule + ethLaneGenesisSections()),
+            InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "[fork_timestamps] section requires [ethereum] mode=el");
             });
     }
@@ -592,8 +582,7 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(head + "99999999999999999999999" + tail),
-            InvalidConfig,
+            cfg.loadGenesisConfigFromString(head + "99999999999999999999999" + tail), InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "chain_id to fit uint64"); });
     }
     // Non-EL genesis (no declaration, no schedule) never requires a chain id (normal
@@ -648,9 +637,7 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
         BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e, "requires config.genesis to declare");
-            });
+            [](auto const& e) { return errinfoContains(e, "requires config.genesis to declare"); });
     }
     // The symmetric direction: genesis declares EL but config.ini says mode=none —
     // the node would run executor v2 with neither an on-chain nor a
@@ -659,10 +646,9 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(head + "11155111" + tail));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
-        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e, "declares [ethereum] mode=el but config.ini");
-            });
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
+            return errinfoContains(e, "declares [ethereum] mode=el but config.ini");
+        });
     }
 }
 
@@ -757,31 +743,28 @@ BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
     {
         NodeConfig cfg(keyFactory);
         loadBoth(cfg, "[ethereum]\nmode=el\n[storage]\nmpt_prune_window=100\n");
-        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e, "must be -1 (disabled) or >= ethereum.reorg_window");
-            });
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
+            return errinfoContains(e, "must be -1 (disabled) or >= ethereum.reorg_window");
+        });
     }
     // Rollback disabled (reorg_window=0): no rewind can happen, so a small pruning
     // window is fine.
     {
         NodeConfig cfg(keyFactory);
-        loadBoth(
-            cfg, "[ethereum]\nmode=el\nreorg_window=0\n[storage]\nmpt_prune_window=100\n");
+        loadBoth(cfg, "[ethereum]\nmode=el\nreorg_window=0\n[storage]\nmpt_prune_window=100\n");
         BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
     }
     // reorg_window itself: negative or absurdly large is a load-time error.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadConfigFromString("[ethereum]\nmode=el\nreorg_window=-1\n"), InvalidConfig,
+        BOOST_CHECK_EXCEPTION(cfg.loadConfigFromString("[ethereum]\nmode=el\nreorg_window=-1\n"),
+            InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "ethereum.reorg_window must be"); });
     }
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
-            cfg.loadConfigFromString("[ethereum]\nmode=el\nreorg_window=100001\n"),
-            InvalidConfig,
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nreorg_window=100001\n"), InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "ethereum.reorg_window must be"); });
     }
 }
@@ -830,8 +813,7 @@ BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
             "[ethereum]\nmode=el\n[web3_rpc]\nenable_debug_api=true\n"
             "[storage]\nmpt_prune_window=300\n");
         BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "enable_debug_api requires storage.mpt_prune_window = -1");
+            return errinfoContains(e, "enable_debug_api requires storage.mpt_prune_window = -1");
         });
     }
     // The op-engine (8551) listener's own key is gated identically — "either listener" is the
@@ -842,8 +824,7 @@ BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
             "[ethereum]\nmode=el\n[op_engine_rpc]\nenable_debug_api=true\n"
             "[storage]\nmpt_prune_window=300\n");
         BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "enable_debug_api requires storage.mpt_prune_window = -1");
+            return errinfoContains(e, "enable_debug_api requires storage.mpt_prune_window = -1");
         });
     }
     // Archive (the -1 default) with the namespace on: accepted.
@@ -887,10 +868,11 @@ BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
     // First load: EL declaration + fork schedule (+ the lane-mandatory sections: every
     // config in this test is executor.version=2).
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
-        base + "[ethereum]\nmode=el\n"
-               "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-               "cancun_time=1710338135\nprague_time=1746612311\n"
-               "merge_block=0\n" +
+        base +
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n" +
         ethLaneGenesisSections()));
     BOOST_CHECK(cfg.genesisConfig().m_ethereumELMode);
     BOOST_CHECK(cfg.genesisConfig().m_ethereumForkSchedule.has_value());
@@ -929,15 +911,14 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
     // A leading '-' must not wrap to 2^64-1 ("fork never activates").
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(base + "-1\n"), InvalidConfig,
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "-1\n"), InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "prague_time invalid timestamp"); });
     }
     // Trailing garbage must not be silently truncated to a wrong schedule.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(base + "1746612311abc\n"), InvalidConfig,
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "1746612311abc\n"),
+            InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "prague_time invalid timestamp"); });
     }
     // 0x-prefixed hex is still accepted. (executor.version=2 also binds the
@@ -947,8 +928,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
             base + "0x67f9f25b\nmerge_block=0\n" + ethLaneGenesisSections()));
-        BOOST_CHECK_EQUAL(
-            cfg.genesisConfig().m_ethereumForkSchedule->m_pragueTime, 0x67f9f25bu);
+        BOOST_CHECK_EQUAL(cfg.genesisConfig().m_ethereumForkSchedule->m_pragueTime, 0x67f9f25bu);
     }
     // paris_time is REQUIRED: an omitted key must not silently default to 0 — a
     // mainnet-shaped schedule (london_time > 0) would then be rejected by the
@@ -957,10 +937,9 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
     {
         NodeConfig cfg(keyFactory);
         std::string noParis = base;
-        noParis.replace(
-            noParis.find("paris_time=0\n"), std::string("paris_time=0\n").size(), "");
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(noParis + "1746612311\n"), InvalidConfig,
+        noParis.replace(noParis.find("paris_time=0\n"), std::string("paris_time=0\n").size(), "");
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(noParis + "1746612311\n"),
+            InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "paris_time is required"); });
     }
 }
@@ -992,27 +971,23 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
     // Cancun earlier than Shanghai -> rejected.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(
-                head + "shanghai_time=1710338135\n"
-                       "cancun_time=1681338455\nprague_time=1746612311\n"
-                       "merge_block=0\n"),
-            InvalidConfig,
-            [](auto const& e) {
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(
+                                  head + "shanghai_time=1710338135\n"
+                                         "cancun_time=1681338455\nprague_time=1746612311\n"
+                                         "merge_block=0\n"),
+            InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "cancun_time (1681338455) is earlier than");
             });
     }
     // A scheduled bpo1 while osaka is unscheduled (UINT64_MAX, terminal) -> decreasing.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(
-                head + "shanghai_time=1681338455\n"
-                       "cancun_time=1710338135\nprague_time=1746612311\n"
-                       "merge_block=0\n"
-                       "bpo1_time=1750000000\n"),
-            InvalidConfig,
-            [](auto const& e) {
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(
+                                  head + "shanghai_time=1681338455\n"
+                                         "cancun_time=1710338135\nprague_time=1746612311\n"
+                                         "merge_block=0\n"
+                                         "bpo1_time=1750000000\n"),
+            InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "bpo1_time (1750000000) is earlier than");
             });
     }
@@ -1022,14 +997,13 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
     {
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(
-            cfg.loadGenesisConfigFromString(
-                head + "shanghai_time=1681338455\n"
-                       "cancun_time=1710338135\nprague_time=1746612311\n"
-                       "merge_block=0\n"
-                       "osaka_time=1767225548\n" +
-                ethLaneGenesisSections()));
-        BOOST_CHECK_EQUAL(
-            cfg.genesisConfig().m_ethereumForkSchedule->m_osakaTime, 1767225548u);
+            cfg.loadGenesisConfigFromString(head +
+                                            "shanghai_time=1681338455\n"
+                                            "cancun_time=1710338135\nprague_time=1746612311\n"
+                                            "merge_block=0\n"
+                                            "osaka_time=1767225548\n" +
+                                            ethLaneGenesisSections()));
+        BOOST_CHECK_EQUAL(cfg.genesisConfig().m_ethereumForkSchedule->m_osakaTime, 1767225548u);
     }
 }
 
@@ -1088,8 +1062,8 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
     // Malformed values fail fast like every neighbouring parse.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(base + "merge_block=-1\n"), InvalidConfig,
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "merge_block=-1\n"),
+            InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "merge_block invalid timestamp"); });
     }
     // Reload without the section resets to the unset value (0), not a stale one.
@@ -1121,8 +1095,7 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
 BOOST_AUTO_TEST_CASE(ethereumFinalizedCheckpointParsing)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string hash64 =
-        "0x1111111111111111111111111111111111111111111111111111111111111111";
+    const std::string hash64 = "0x1111111111111111111111111111111111111111111111111111111111111111";
     // Absent / empty -> no checkpoint.
     {
         NodeConfig cfg(keyFactory);
@@ -1150,14 +1123,13 @@ BOOST_AUTO_TEST_CASE(ethereumFinalizedCheckpointParsing)
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
             cfg.loadConfigFromString("[ethereum]\nmode=el\nfinalized_checkpoint=9200000\n"),
-            InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "finalized_checkpoint must be");
-            });
+            InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "finalized_checkpoint must be"); });
     }
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadConfigFromString("[ethereum]\nmode=el\nfinalized_checkpoint=abc:" + hash64 + "\n"),
+        BOOST_CHECK_EXCEPTION(cfg.loadConfigFromString(
+                                  "[ethereum]\nmode=el\nfinalized_checkpoint=abc:" + hash64 + "\n"),
             InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "finalized_checkpoint(number) must be decimal digits");
             });

@@ -191,8 +191,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
     // All-zero L1 is a test-only fixture: call the encoder, not the production seam.
     const auto env = opeth::synthesizeOpEthL1AttributesDeposit(opeth::OpEthL1BlockInfo{}, false);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
-    auto const dep =
-        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    auto const dep = opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
 
     BOOST_CHECK(dep.from == opeth::OP_DEPOSITOR);
     BOOST_REQUIRE(dep.to.has_value());
@@ -228,8 +227,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
 
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
     const auto env = scheduler.synthesizeL1AttributesEnvelope(kJovianMs, kJovianMs);
-    auto const dep =
-        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    auto const dep = opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN);
     auto const& calldata = dep.data;
 
@@ -280,8 +278,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
 
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
     const auto env = scheduler.synthesizeL1AttributesEnvelope(kIsthmusMs, kIsthmusMs);
-    auto const dep =
-        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    auto const dep = opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     auto const& calldata = dep.data;
 
@@ -328,8 +325,7 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
     opeth::OpEthL1BlockInfo const unset{};
     const auto env = opeth::synthesizeOpEthL1AttributesDeposit(unset, true);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
-    auto const dep =
-        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    auto const dep = opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         dep.data.begin(), dep.data.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
@@ -361,8 +357,7 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockKeepsIsthmusL1AttributesLayout)
     };
 
     // Activation block: child is Jovian, parent is not -> still Isthmus's 176 bytes.
-    BOOST_CHECK_EQUAL(
-        layoutSize(kJovianActivationMs, kParentOfActivationMs),
+    BOOST_CHECK_EQUAL(layoutSize(kJovianActivationMs, kParentOfActivationMs),
         opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     // The very next block: parent is Jovian too -> the 178-byte Jovian layout.
     BOOST_CHECK_EQUAL(layoutSize(kJovianActivationMs + 1000, kJovianActivationMs),

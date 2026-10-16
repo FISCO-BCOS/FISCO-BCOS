@@ -115,11 +115,11 @@ void PBFTEngine::initSendResponseHandler()
                     _id, _moduleID, _dstNode, bcos::ref(_payload));
                 if (error)
                 {
-                    PBFT_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                    << LOG_KV("module", std::to_string(_moduleID))
-                                    << LOG_KV("dst", _dstNode->shortHex())
-                                    << LOG_KV("code", error->errorCode())
-                                    << LOG_KV("msg", error->errorMessage());
+                    PBFT_LOG(TRACE)
+                        << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                        << LOG_KV("module", std::to_string(_moduleID))
+                        << LOG_KV("dst", _dstNode->shortHex()) << LOG_KV("code", error->errorCode())
+                        << LOG_KV("msg", error->errorMessage());
                 }
             }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
         }

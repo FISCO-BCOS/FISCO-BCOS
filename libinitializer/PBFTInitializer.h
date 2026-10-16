@@ -21,7 +21,6 @@
 #pragma once
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
@@ -33,6 +32,7 @@
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/IOServicePool.h>
 
 namespace bcos
 {

@@ -35,7 +35,7 @@ protected:
     std::shared_ptr<Callback> callback() const { return m_callback; }
 
 public:
-    RPCHandle(RPCClient& rpcClient) : m_rpcClient(rpcClient){};
+    RPCHandle(RPCClient& rpcClient) : m_rpcClient(rpcClient) {};
     RPCHandle(RPCHandle const&) = delete;
     RPCHandle& operator=(RPCHandle const&) = delete;
     RPCHandle(RPCHandle&&) noexcept = default;

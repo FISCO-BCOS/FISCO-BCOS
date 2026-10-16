@@ -39,9 +39,9 @@ public:
     }
 
     virtual std::vector<std::optional<storage::Entry>> getRows(const std::string_view& table,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access |
-                ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys) override
     {
         for (auto it : keys)

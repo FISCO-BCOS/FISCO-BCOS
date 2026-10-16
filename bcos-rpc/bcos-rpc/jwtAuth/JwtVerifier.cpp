@@ -36,11 +36,7 @@ namespace bcos::rpc
 inline JwtVerifyResult makeError(JwtError _error)
 {
     return JwtVerifyResult{
-        .ok = false,
-        .error = _error,
-        .errorMessage = std::string(toString(_error)),
-        .token = {}
-    };
+        .ok = false, .error = _error, .errorMessage = std::string(toString(_error)), .token = {}};
 }
 
 JwtVerifier::JwtVerifier(JwtConfig::Ptr _config) : m_config(std::move(_config))
@@ -165,9 +161,8 @@ bool JwtVerifier::validateSecret(std::string_view _secret) const
         return false;
     }
 
-    return std::all_of(_secret.begin(), _secret.end(), [](unsigned char ch) {
-        return std::isxdigit(ch) != 0;
-    });
+    return std::all_of(
+        _secret.begin(), _secret.end(), [](unsigned char ch) { return std::isxdigit(ch) != 0; });
 }
 
 std::optional<std::string> JwtVerifier::readSecret() const

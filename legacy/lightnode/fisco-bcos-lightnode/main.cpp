@@ -36,6 +36,7 @@
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <libinitializer/LedgerInitializer.h>
@@ -45,7 +46,6 @@
 #include <exception>
 #include <memory>
 #include <thread>
-#include <bcos-utilities/BoostLog.h>
 
 DERIVE_BCOS_EXCEPTION(StartLightNodeException);
 
@@ -85,8 +85,7 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
             {
                 auto& ledger = bcos::concepts::getRef(toLedger);
 
-                auto syncedBlock = bcos::task::syncWait(
-                    ledger
+                auto syncedBlock = bcos::task::syncWait(ledger
                         .template sync<std::remove_cvref_t<decltype(fromLedger)>, bcostars::Block>(
                             fromLedger, true));
                 auto currentStatus = bcos::task::syncWait(ledger.getStatus());

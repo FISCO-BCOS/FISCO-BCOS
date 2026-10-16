@@ -37,8 +37,9 @@ public:
     void initialize() override {}
     void destroy() override {}
 
-    bcostars::Error asyncGetBatchTxsByHashList(const std::vector<std::vector<tars::Char> >& _txsHashList,
-        tars::Bool _withProof, std::vector<bcostars::Transaction>& _transactions,
+    bcostars::Error asyncGetBatchTxsByHashList(
+        const std::vector<std::vector<tars::Char> >& _txsHashList, tars::Bool _withProof,
+        std::vector<bcostars::Transaction>& _transactions,
         std::map<std::string, std::vector<std::string> >& _merkleProofList,
         tars::TarsCurrentPtr current) override;
     bcostars::Error asyncGetBlockDataByNumber(tars::Int64 _blockNumber, tars::Int64 _blockFlag,
@@ -58,8 +59,8 @@ public:
         tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncGetTransactionReceiptByHash(const std::vector<tars::Char>& _txHash,
-        tars::Bool _withProof, bcostars::TransactionReceipt& _receipt, std::vector<std::string>& _proof,
-        tars::TarsCurrentPtr current) override;
+        tars::Bool _withProof, bcostars::TransactionReceipt& _receipt,
+        std::vector<std::string>& _proof, tars::TarsCurrentPtr current) override;
 
 private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;

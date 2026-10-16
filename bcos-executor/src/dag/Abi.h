@@ -26,9 +26,9 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
-#include <optional>
 
 namespace bcos::executor
 {
@@ -77,4 +77,4 @@ struct FunctionAbi
     static std::unique_ptr<FunctionAbi> deserialize(
         std::string_view abiStr, const bcos::bytes& expected, bool isSMCrypto);
 };
-}  // namespace bcos
+}  // namespace bcos::executor

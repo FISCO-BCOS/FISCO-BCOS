@@ -30,12 +30,12 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/CommonError.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
-#include <bcos-utilities/BoostLog.h>
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::crypto;

@@ -20,8 +20,8 @@
  */
 #pragma once
 #include <bcos-framework/Common.h>
-#include <tbb/parallel_for.h>
 #include <bcos-utilities/BoostLog.h>
+#include <tbb/parallel_for.h>
 
 #define SYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SYNC")
 namespace bcos::sync
