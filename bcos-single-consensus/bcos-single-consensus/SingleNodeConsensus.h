@@ -96,7 +96,10 @@ private:
     /// chain only accepts V1 attributes (no withdrawals / parentBeaconBlockRoot). The
     /// per-tick resolution keeps the dialect in step with governance updates to the
     /// evmc_revision row and with block-height fork transitions (evm_revision_forks).
-    /// m_loggedRevision only rate-limits the INFO line recording the selected dialect.
+    /// m_dialectLogged / m_loggedRevision rate-limit the INFO line recording the selected
+    /// dialect; the bool sentinel distinguishes "never logged" from "logged nullopt", so
+    /// the line also fires on chains with no on-chain revision row (revision = nullopt).
+    bool m_dialectLogged = false;
     std::optional<evmc_revision> m_loggedRevision;
 
     /// CL-side head tracking. newPayload() persists the ledger block tables — including

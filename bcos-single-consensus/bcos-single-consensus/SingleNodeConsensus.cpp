@@ -207,8 +207,8 @@ std::optional<evmc_revision> SingleNodeConsensus::chainRevisionForNextBlock() co
     // applyEVMCRevisionConfig — failing the tick loudly (loop() logs and retries) rather
     // than silently picking a dialect, matching the boot-time probe's fail-stop.
     std::optional<evmc_revision> revision;
-    if (auto const row = task::syncWait(
-            ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_EVMC_REVISION)))
+    if (auto const row =
+            task::syncWait(ledger::getSystemConfig(*m_ledger, ledger::SYSTEM_KEY_EVMC_REVISION)))
     {
         ledger::LedgerConfig ledgerConfig;
         ledger::applyEVMCRevisionConfig(ledgerConfig, std::get<0>(*row));
@@ -231,7 +231,7 @@ bool SingleNodeConsensus::produceBlock()
     // revision" line the CI integration test greps.
     auto const chainRevision = chainRevisionForNextBlock();
     auto const versions = engineVersionsFor(chainRevision);
-    if (chainRevision != m_loggedRevision)
+    if (!m_dialectLogged || chainRevision != m_loggedRevision)
     {
         SINGLE_CONSENSUS_LOG(INFO)
             << LOG_DESC("Engine API dialect selected")
@@ -240,6 +240,7 @@ bool SingleNodeConsensus::produceBlock()
             << LOG_KV("forkchoiceUpdated", versions.forkchoice)
             << LOG_KV("getPayload", versions.getPayload)
             << LOG_KV("newPayload", versions.newPayload);
+        m_dialectLogged = true;
         m_loggedRevision = chainRevision;
     }
 
@@ -345,8 +346,18 @@ bool SingleNodeConsensus::produceBlock()
     request.executionPayload = std::move(executionPayload);
     // newPayloadV4: echo the beacon root the payload was built with (as op-node does)
     // and pass the required-empty executionRequests list. Below V4 the requests list must
-    // stay absent — a present-but-empty list would stamp a requestsHash onto a pre-Prague
-    // header (EngineServiceCommon calculateRequestsHash runs whenever the field has a value).
+    // stay absent.
+    //
+    // The Cancun exception: the Karst dialect (V3/V5/V4) sends the present-but-empty list
+    // on Cancun chains too, even though Cancun is pre-Prague. That is safe on every lane
+    // this driver can reach: the locally built header gets a requestsHash only when the
+    // chain fork is Prague+ (finalizeEthBlockHeader's fork gate), and the newPayload
+    // cache-miss reconstruction hashes only a NON-empty list (EthEngineService.inl). The
+    // one ungated stamping — executionPayloadToEthBlock — serves the external EL lane,
+    // which single-node consensus cannot reach (NodeConfig refuses EL mode combined with
+    // this driver). Separating the Prague boundary in engineVersionsFor (so only Prague+
+    // selects newPayload V4) is follow-up #5674; it is deliberately not done here because
+    // it changes behaviour on chains that work today.
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
     if (versions.newPayload >= static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4))
     {
