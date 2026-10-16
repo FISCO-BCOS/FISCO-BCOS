@@ -51,8 +51,10 @@ void registerTxCommand();       // cmd/TxCmd.cpp
 void registerAttachCommands();  // cmd/AttachCmd.cpp: attach, log-level
 void registerLogCommand();      // cmd/LogCmd.cpp
 
-/// argv[0] is the program, argv[1] the subcommand. Returns the process exit code.
+/// argv[0] is the program, argv[1] the subcommand. Does not return: it leaves the process with
+/// std::_Exit(exit code), so the SDK transports kept by retainTransport() are never destroyed.
 int runOps(int argc, const char* argv[]);
+/// the same dispatch without leaving the process (tests); returns the exit code
 int runOps(std::vector<std::string> const& _args, std::ostream& _out, std::ostream& _err);
 
 void printUsage(std::ostream& _out);

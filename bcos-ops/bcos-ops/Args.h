@@ -23,12 +23,14 @@
 
 #include "OpsError.h"
 #include <cctype>
+#include <cmath>
 #include <map>
 #include <optional>
 #include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace bcos::ops
@@ -104,22 +106,31 @@ public:
         {
             return _default;
         }
+        // the whole value must be the number: "10x", "nan", "inf" and out-of-range values are
+        // usage errors, not silently truncated or converted
         try
         {
+            size_t used = 0;
             if constexpr (std::is_floating_point_v<T>)
             {
-                return static_cast<T>(std::stod(*value));
+                auto parsed = std::stod(*value, &used);
+                if (used == value->size() && std::isfinite(parsed))
+                {
+                    return static_cast<T>(parsed);
+                }
             }
             else
             {
-                return static_cast<T>(std::stoll(*value));
+                auto parsed = std::stoll(*value, &used);
+                if (used == value->size() && std::in_range<T>(parsed))
+                {
+                    return static_cast<T>(parsed);
+                }
             }
         }
         catch (std::exception const&)
-        {
-            throw OpsError(
-                c_exitUsage, "invalid number for --" + std::string(_name) + ": " + *value);
-        }
+        {}
+        throw OpsError(c_exitUsage, "invalid number for --" + std::string(_name) + ": " + *value);
     }
     std::vector<std::string> const& positionals() const { return m_positionals; }
     bool help() const { return flag("help") || flag("h"); }

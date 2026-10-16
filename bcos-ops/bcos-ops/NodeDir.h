@@ -41,7 +41,7 @@ struct NodeDir
     std::string logFormat;  // empty == default format
     size_t txpoolLimit = 15000;
     bool authCheck = false;
-    std::optional<int64_t> consensusTimeoutMs;  // config.genesis [consensus] consensus_timeout
+    std::optional<int64_t> consensusTimeoutMs;  // max(3000, [consensus] min_seal_time + 1)
 
     /// throws OpsError{1} when <dir>/config.ini is missing or unreadable
     static NodeDir load(std::string const& _dir);
