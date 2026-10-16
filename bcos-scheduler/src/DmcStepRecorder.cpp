@@ -69,10 +69,20 @@ uint32_t DmcStepRecorder::getAddressChecksum(std::string_view address)
 {
     uint32_t ret = 0;
 
-    for (int i = 0; i < 4; i++)
+    // Only the leading 4 bytes take part in the checksum, so read no further than
+    // what the address actually holds: a message built by a mock executor can carry
+    // an empty or shorter address. Missing bytes are folded in as zero, which keeps
+    // the value unchanged for real addresses (>= 4 bytes) and stays deterministic
+    // for the short ones instead of reading out of bounds.
+    auto length = std::min<size_t>(4, address.size());
+    for (size_t i = 0; i < length; i++)
     {
         ret <<= 8;
         ret |= (uint8_t)address[i];
+    }
+    for (size_t i = length; i < 4; i++)
+    {
+        ret <<= 8;
     }
     return ret;
 }
