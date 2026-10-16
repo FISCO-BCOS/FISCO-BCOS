@@ -1,0 +1,6 @@
+# Locally built binaries collected by build-local.sh (see tools/hive/README.md);
+# never commit them.
+clients/bcos/bin/
+
+# the root .gitignore "build**" pattern would swallow this script
+!build-local.sh

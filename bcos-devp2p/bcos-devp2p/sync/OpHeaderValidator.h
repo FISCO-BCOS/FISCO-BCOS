@@ -82,10 +82,12 @@ struct OpChainConfig
     uint64_t blockTimeSeconds{2};
     bcos::ledger::OpForkSchedule forkSchedule{};
     // op-geth params ChainConfig.Optimism constants (superchain-registry [optimism]
-    // section; identical on every superchain chain: 50 / 250 / 6).
-    uint64_t eip1559DenominatorBedrock{50};
-    uint64_t eip1559DenominatorCanyon{250};
-    uint64_t eip1559Elasticity{6};
+    // section; identical on every superchain chain). Derived from the ONE preset home
+    // (c_legacyOpEip1559Params) so these defaults cannot drift from the pricing path —
+    // production fills them via effectiveOpEip1559 anyway (OpStackSyncInitializer).
+    uint64_t eip1559DenominatorBedrock{bcos::engine::c_legacyOpEip1559Params.denominator};
+    uint64_t eip1559DenominatorCanyon{bcos::engine::c_legacyOpEip1559Params.denominatorCanyon};
+    uint64_t eip1559Elasticity{bcos::engine::c_legacyOpEip1559Params.elasticity};
 };
 
 namespace detail
@@ -126,16 +128,31 @@ inline std::optional<std::string> validateOpBaseFee(
             return "OP parent extraData " + *err;
         }
     }
-    uint64_t const fallbackDenominator =
-        bcos::ledger::resolveOpFork(_config.forkSchedule, static_cast<uint64_t>(_header.timestamp)) >=
-                OpFork::Canyon ?
-            _config.eip1559DenominatorCanyon :
-            _config.eip1559DenominatorBedrock;
     try
     {
-        auto const expected = bcos::engine::calcOpBaseFeeFromFields(_parent.gasLimit,
-            _parent.gasUsed, *_parent.baseFee, _parent.blobGasUsed, parentExtra, parentIsHolocene,
-            parentIsJovian, fallbackDenominator, _config.eip1559Elasticity);
+        bcos::u256 expected;
+        if (parentIsHolocene)
+        {
+            expected = bcos::engine::calcOpBaseFeeFromFields(_parent.gasLimit, _parent.gasUsed,
+                *_parent.baseFee, _parent.blobGasUsed, parentExtra, parentIsHolocene,
+                parentIsJovian, /*fallbackDenominator=*/0, _config.eip1559Elasticity);
+        }
+        else
+        {
+            // Pre-Holocene arm: the shared helper (OpBaseFee.h) — the Canyon denominator
+            // keys on the CHILD block's activation, same as op-geth's
+            // BaseFeeChangeDenominator(header.Time) (params/config.go:1349-1359).
+            auto const params =
+                bcos::engine::OpEip1559Params{.elasticity = _config.eip1559Elasticity,
+                .denominator = _config.eip1559DenominatorBedrock,
+                .denominatorCanyon = _config.eip1559DenominatorCanyon};
+            expected = bcos::engine::calcOpBaseFeePreHolocene(_parent.gasLimit, _parent.gasUsed,
+                *_parent.baseFee,
+                bcos::ledger::resolveOpFork(
+                    _config.forkSchedule, static_cast<uint64_t>(_header.timestamp)) >=
+                    OpFork::Canyon,
+                params);
+        }
         if (*_header.baseFee != expected)
         {
             return "baseFee does not match the OP EIP-1559 recomputation (have " +

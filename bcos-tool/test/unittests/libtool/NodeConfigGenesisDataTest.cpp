@@ -786,6 +786,80 @@ BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
     }
 }
 
+// The challenger data plane (debug_dbGet, gated by enable_debug_api on EITHER listener) reads
+// MPT preimages straight out of the node store with no retention guarantee: a block still
+// inside a dispute game's challenge window can have its trie nodes pruned, and kona-host then
+// receives an indistinguishable -32000 "not found". The dispute window is a chain/contract
+// parameter rather than a node config, so the enforceable invariant is the archive one — a node
+// serving preimages must not bound MPT disk growth. validateELModeInvariants refuses to boot
+// one that does.
+BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string genesis =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=11155111\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n"
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n" +
+        ethLaneGenesisSections();
+
+    auto loadBoth = [&](NodeConfig& cfg, std::string const& ini) {
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
+    };
+
+    // The web3 listener's enable_debug_api with a finite prune window (valid for the reorg rule,
+    // but not archive): rejected.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg,
+            "[ethereum]\nmode=el\n[web3_rpc]\nenable_debug_api=true\n"
+            "[storage]\nmpt_prune_window=300\n");
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
+            return errinfoContains(
+                e, "enable_debug_api requires storage.mpt_prune_window = -1");
+        });
+    }
+    // The op-engine (8551) listener's own key is gated identically — "either listener" is the
+    // invariant, not "the web3 listener".
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg,
+            "[ethereum]\nmode=el\n[op_engine_rpc]\nenable_debug_api=true\n"
+            "[storage]\nmpt_prune_window=300\n");
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
+            return errinfoContains(
+                e, "enable_debug_api requires storage.mpt_prune_window = -1");
+        });
+    }
+    // Archive (the -1 default) with the namespace on: accepted.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg, "[ethereum]\nmode=el\n[web3_rpc]\nenable_debug_api=true\n");
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+    }
+    // Pruning on with the namespace off: unaffected — the invariant is scoped to the gate.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg, "[ethereum]\nmode=el\n[storage]\nmpt_prune_window=300\n");
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+    }
+}
+
 // Reload is a supported shape: a second loadGenesisConfig without the EL declaration /
 // fork schedule must clear the previous values (a stale m_ethereumELMode would waive both
 // the executor.evm_revision and the auth_admin_account guards).

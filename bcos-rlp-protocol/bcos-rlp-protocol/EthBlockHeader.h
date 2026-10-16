@@ -141,6 +141,10 @@ public:
     /// throws RlpEncodeException).
     static bcos::crypto::HashType computeHash(const bcos::protocol::BlockHeader& header) noexcept(
         false);
+    /// The RLP bytes computeHash hashes: keccak256(encodeHeader(h)) == computeHash(h). Same
+    /// conversion and throw contract as computeHash (served verbatim by debug_getRawHeader,
+    /// whose preimage-oracle key is the block hash).
+    static bcos::bytes encodeHeader(const bcos::protocol::BlockHeader& header) noexcept(false);
 
     const EthBlockHeaderData& data() const { return m_data; }
 

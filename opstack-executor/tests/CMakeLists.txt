@@ -20,6 +20,7 @@ add_executable(opstack-executor-tests
     support/SeedPreStateTest.cpp
     OpSchedulerSeamSmokeTest.cpp
     OpRollupCostGoldenTest.cpp
+    OpL1DataCostTest.cpp
 )
 # Unity build: header-heavy Boost.Test TUs share a large common preamble. TestMain.cpp
 # defines BOOST_TEST_MODULE. SeamSmoke has an anonymous-namespace CheckpointStorage stub
