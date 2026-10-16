@@ -123,7 +123,9 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         set(_fisco_ld_probe_src "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/linker-probe.cpp")
         file(WRITE "${_fisco_ld_probe_src}" "int main() { return 0; }\n")
         # CMAKE_EXE_LINKER_FLAGS may already carry -static for BUILD_STATIC, so the probe
-        # links with the same flags the real targets will use.
+        # covers the static link path that motivates it. Flags added later in this file
+        # (MARCH_TYPE, sanitizers, coverage) do not affect the linker-script parsing the
+        # probe guards, so probing here is sufficient.
         separate_arguments(_fisco_ld_probe_extra UNIX_COMMAND "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_CXX_FLAGS}")
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} ${_fisco_ld_probe_extra} ${_fisco_ld_flag}
@@ -147,6 +149,11 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         unset(_fisco_ld_probe_extra)
         unset(_fisco_ld_probe_result)
         unset(_fisco_ld_probe_error)
+    elseif(NOT "${LINKER}" STREQUAL "default")
+        # Options.cmake defaults LINKER to "default"; anything else that matched neither
+        # branch above (typo, versioned name like lld-21) would otherwise silently link
+        # with the default linker.
+        message(FATAL_ERROR "Unknown LINKER=${LINKER}; supported values: default, gold, lld, mold")
     endif()
 
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")

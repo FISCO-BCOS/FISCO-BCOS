@@ -77,6 +77,7 @@ jobs:
           ninjaVersion: 1.12.1
 
       - name: Restore vcpkg cache
+        id: vcpkg-cache
         uses: actions/cache/restore@v4
         with:
           path: build/vcpkg_installed
@@ -215,6 +216,18 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
 
+      # vcpkg installs during Configure; nothing past this point writes to
+      # build/vcpkg_installed, so save right here instead of behind the 45-minute e2e -
+      # an e2e flake after a dependency change would otherwise discard the freshly built
+      # tree. This workflow has no pull_request trigger (manual + nightly only), so its
+      # saves are always legitimate refreshes, not PR churn.
+      - name: Save vcpkg cache
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+
       - name: Build fisco-bcos
         run: cmake --build build --target fisco-bcos
 
@@ -223,6 +236,17 @@ jobs:
         # failed or timed-out build is exactly the run whose numbers are wanted.
         if: always()
         run: ccache --show-stats
+
+      # Save right after the build: the 45-minute e2e below must not gate the cache write.
+      # always() on purpose: ccache entries are content-addressed, so a cache written by a
+      # run whose e2e later fails is still valid (this is also why the condition does not
+      # add success()).
+      - name: Save ccache
+        if: always() && steps.ccache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
 
       - name: Fetch pinned Solidity deps
         run: bash tools/.ci/fetch-l2-contract-deps.sh
@@ -238,17 +262,3 @@ jobs:
           BIN_DIR: ${{ github.workspace }}/.ci-c2-bins
           FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
           SKIP_FISCO_BUILD: "1"
-      # Cache save split from restore. This workflow has no pull_request trigger (manual +
-      # nightly only), so its saves are always legitimate refreshes, not PR churn.
-      - name: Save vcpkg cache
-        if: success()
-        uses: actions/cache/save@v4
-        with:
-          path: build/vcpkg_installed
-          key: vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
-      - name: Save ccache
-        if: always() && steps.ccache.outputs.cache-primary-key != '' && success()
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ steps.ccache.outputs.cache-primary-key }}

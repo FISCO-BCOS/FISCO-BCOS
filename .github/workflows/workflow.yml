@@ -41,11 +41,11 @@ jobs:
       CCACHE_SLOPPINESS: time_macros,include_file_ctime
       CCACHE_COMPRESS: "true"
       CCACHE_COMPRESSLEVEL: "1"
-      # One cache per toolchain rather than per matrix entry: the static leg compiles the
-      # exact same objects as the plain x64 leg (BUILD_STATIC only changes archiving and
-      # linking - verified by diffing the two configures' compile commands), so it should
-      # read that leg's entry instead of maintaining a near-identical copy.
-      CCACHE_SCOPE: ${{ matrix.os == 'ubuntu-26.04-static' && 'ubuntu-26.04' || matrix.os }}
+      # One cache per matrix entry: the static leg cannot share the plain x64 leg's entry.
+      # Its TESTS=OFF drops the root-scope -DBOOST_TEST_THREAD_SAFE compile option
+      # (cmake/CompilerSettings.cmake), which changes every translation unit's command
+      # line and therefore its ccache hash, so sharing the x64 scope would be all misses.
+      CCACHE_SCOPE: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -204,6 +204,44 @@ jobs:
           mkdir build -Force
           cd build
           cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DALLOCATOR=default -DTESTS=OFF -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_TARS_SERVICES=OFF -DWITH_CPPSDK=ON -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static-release ..
+      # vcpkg installs during Configure; nothing past this point writes to
+      # build/vcpkg_installed, so strip and save the tree right here instead of at the end
+      # of the job: a flake in the build, the unit tests or any of the E2E gates would
+      # otherwise discard a freshly built dependency tree and the next run would pay a full
+      # ~43 minute rebuild. No always(): at this position the implicit success() means
+      # "Configure completed", which is exactly when the tree is whole - a failed configure
+      # must not save a partial one. cache-hit skips the write when the key already exists.
+      - name: Reduce vcpkg cache size
+        if: matrix.os != 'windows-2025'
+        run: |
+          set -euo pipefail
+          echo "=== Before cleanup ==="
+          du -sh build/vcpkg_installed 2>/dev/null  || true
+
+          # 1) Remove only debug libraries — keep debug metadata/includes intact
+          echo "Removing debug libraries..."
+          find build/vcpkg_installed -path '*/debug/lib/*' \( -name "*.a" -o -name "*.so" -o -name "*.so.*" -o -name "*.dylib" \) -print -delete 2>/dev/null || true
+
+          # 2) Strip release static libs (remove debug info, keep symbols needed for linking)
+          echo "Stripping release static libraries..."
+          find build/vcpkg_installed \( -name "*.a" -o -name "*.dylib" \) -print -exec strip -S {} \; 2>/dev/null || true
+
+          # 3) Remove per-package build workdirs if present (already excluded from cache, paranoia)
+          rm -rf build/vcpkg_installed/*/src 2>/dev/null || true
+
+          echo "=== After cleanup ==="
+          du -sh build/vcpkg_installed 2>/dev/null || true
+      # Cache SAVE is deliberately split from restore (actions/cache/restore above) so a PR
+      # never writes: only push (merge to the base branch) and release refresh the entries,
+      # and a PR's restore falls back to the base branch's most recent entry via the key
+      # prefix. Keep this key byte-identical to the Restore step above.
+      - name: Save vcpkg cache
+        if: github.event_name != 'pull_request' && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ github.workspace }}/build/vcpkg_installed
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.os }}-cache-key-v4
       - name: Build
         run: |
           cd build
@@ -216,15 +254,15 @@ jobs:
       # Save ccache right after the steps that fill it: nothing later writes to .ccache, and
       # leaving the save at the end of the job put it behind six E2E gates (EEST, RpcApi,
       # air, eth-executor, single-node consensus, Engine API) - any one of them flaking would
-      # freeze the baseline cache. The vcpkg save stays at the end of the job because
-      # "Reduce vcpkg cache size" has to strip that tree first.
+      # freeze the baseline cache.
       # always() on purpose: ccache entries are content-addressed, so a cache written by a
       # build that later failed is still valid, and it is the failed runs whose cache we most
-      # want to keep. Only non-PR events write (see the Restore step for the key scoping), and
-      # the static leg never writes: it shares the x64 leg's scope, so writing from both would
-      # put two near-identical entries under one prefix on every push.
+      # want to keep. Only base-branch pushes write: a PR must never write (see the Restore
+      # step for the key scoping), and a feature-branch push would write an entry under its
+      # own branch-scoped prefix that no PR ever reads while still competing for the
+      # repository's 10GB cache budget.
       - name: Save ccache
-        if: always() && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static' && github.event_name != 'pull_request' && steps.ccache.outputs.cache-primary-key != ''
+        if: always() && matrix.os != 'windows-2025' && github.event_name != 'pull_request' && (github.ref_name == 'master' || startsWith(github.ref_name, 'release-')) && steps.ccache.outputs.cache-primary-key != ''
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.ccache
@@ -335,26 +373,6 @@ jobs:
           pip3 install --break-system-packages --quiet requests 2>/dev/null || true
           # Run engine API integration test (curl smoke + Python mock CL)
           bash tools/engine_integration_test.sh build 8551
-      - name: Reduce vcpkg cache size
-        if: matrix.os != 'windows-2025'
-        run: |
-          set -euo pipefail
-          echo "=== Before cleanup ==="
-          du -sh build/vcpkg_installed 2>/dev/null  || true
-
-          # 1) Remove only debug libraries — keep debug metadata/includes intact
-          echo "Removing debug libraries..."
-          find build/vcpkg_installed -path '*/debug/lib/*' \( -name "*.a" -o -name "*.so" -o -name "*.so.*" -o -name "*.dylib" \) -print -delete 2>/dev/null || true
-
-          # 2) Strip release static libs (remove debug info, keep symbols needed for linking)
-          echo "Stripping release static libraries..."
-          find build/vcpkg_installed \( -name "*.a" -o -name "*.dylib" \) -print -exec strip -S {} \; 2>/dev/null || true
-
-          # 3) Remove per-package build workdirs if present (already excluded from cache, paranoia)
-          rm -rf build/vcpkg_installed/*/src 2>/dev/null || true
-
-          echo "=== After cleanup ==="
-          du -sh build/vcpkg_installed 2>/dev/null || true
       - name: Set packaging variables
         if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
         id: pkgvars
@@ -404,18 +422,6 @@ jobs:
         with:
           files: |
             ${{ steps.pkgvars.outputs.pkg_name }}
-      # Cache SAVE is deliberately split from restore (actions/cache/restore above) so a PR
-      # never writes: only push (merge to the base branch) and release refresh the entries, and
-      # a PR's restore falls back to the base branch's most recent entry via the key prefix.
-      # success() keeps a failed build from clobbering a good cache with a partial one.
-      # (The ccache save is earlier, right after the Build step: see there for why.)
-      - name: Save vcpkg cache
-        if: github.event_name != 'pull_request' && success()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.os }}-cache-key-v4
 
   coverage:
     name: Coverage
@@ -511,6 +517,15 @@ jobs:
           mkdir -p build
           cd build
           CC=gcc-16 CXX=g++-16 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+      # vcpkg installs during Configure, so save right after it (same reasoning as the
+      # build matrix): a later flake must not discard a freshly built dependency tree.
+      - name: Save vcpkg cache
+        if: github.event_name != 'pull_request' && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ github.workspace }}/build/vcpkg_installed
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-coverage-cache-key-v2
       - name: Build
         run: |
           cd build
@@ -597,18 +612,10 @@ jobs:
             build/coverage.info
             build/pr-number.txt
           retention-days: 7
-      # Save split from restore: PRs never write, only base-branch push/release refresh.
-      # Keep these two keys byte-identical to the Restore steps above, otherwise the save
-      # writes an entry nothing ever reads.
-      - name: Save vcpkg cache
-        if: github.event_name != 'pull_request' && success()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-coverage-cache-key-v2
+      # The vcpkg save is earlier, right after Configure: see there for why.
+      # Base-branch pushes only: a feature-branch push would write an entry no PR ever reads.
       - name: Save ccache
-        if: always() && github.event_name != 'pull_request' && steps.ccache.outputs.cache-primary-key != ''
+        if: always() && github.event_name != 'pull_request' && (github.ref_name == 'master' || startsWith(github.ref_name, 'release-')) && steps.ccache.outputs.cache-primary-key != ''
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.ccache
@@ -657,6 +664,7 @@ jobs:
           cmakeVersion: 3.28.3
           ninjaVersion: 1.12.1
       - name: Restore vcpkg cache
+        id: vcpkg-cache
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -698,6 +706,15 @@ jobs:
           mkdir -p build
           cd build
           CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+      # vcpkg installs during Configure, so save right after it (same reasoning as the
+      # build matrix): a later flake must not discard a freshly built dependency tree.
+      - name: Save vcpkg cache
+        if: github.event_name != 'pull_request' && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ github.workspace }}/build/vcpkg_installed
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
       - name: Build
         run: |
           cd build
@@ -729,16 +746,10 @@ jobs:
           name: fisco-bcos-l2-ubuntu
           path: build/fisco-bcos-air/fisco-bcos
           retention-days: 1
-      # Save split from restore: PRs never write, only base-branch push/release refresh.
-      - name: Save vcpkg cache
-        if: github.event_name != 'pull_request' && success()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+      # The vcpkg save is earlier, right after Configure: see there for why.
+      # Base-branch pushes only: a feature-branch push would write an entry no PR ever reads.
       - name: Save ccache
-        if: always() && github.event_name != 'pull_request' && steps.ccache.outputs.cache-primary-key != ''
+        if: always() && github.event_name != 'pull_request' && (github.ref_name == 'master' || startsWith(github.ref_name, 'release-')) && steps.ccache.outputs.cache-primary-key != ''
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.ccache

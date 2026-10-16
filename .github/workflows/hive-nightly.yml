@@ -43,7 +43,7 @@ jobs:
         with:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-hive-ubuntu-26.04-cache-key-v4
       - name: Install linux dependencies
         run: |
           sudo apt update
@@ -56,6 +56,17 @@ jobs:
           mkdir -p build
           cd build
           CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=OFF -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DTOOLS=ON -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+      # vcpkg installs during Configure, so save right after it (same reasoning as
+      # workflow.yml's build matrix): a later build failure must not discard a freshly
+      # built dependency tree. This workflow has no pull_request trigger (schedule +
+      # workflow_dispatch only), so its saves are always legitimate refreshes.
+      - name: Save vcpkg cache
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ github.workspace }}/build/vcpkg_installed
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-hive-ubuntu-26.04-cache-key-v4
       - name: Build
         run: |
           cd build
@@ -68,17 +79,6 @@ jobs:
             build/fisco-bcos-air/fisco-bcos
             build/tools/eth-sync-check/eth-sync-check
           retention-days: 1
-      # Save split from restore, matching the other workflows: this workflow has no
-      # pull_request trigger (schedule + workflow_dispatch only), so its saves are always
-      # legitimate refreshes. The vcpkg key is content-derived, so an unchanged dependency
-      # set makes this a no-op rather than a rewrite.
-      - name: Save vcpkg cache
-        if: success()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
 
   eels:
     name: eels consume-rlp (${{ matrix.shard }})
