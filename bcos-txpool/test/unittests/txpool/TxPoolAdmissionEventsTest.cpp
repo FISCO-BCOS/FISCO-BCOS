@@ -7,9 +7,16 @@
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
  * @brief the two txpool event edges that do not go through a successful admission: an insert()
  *        that only lends its callback to the already-pooled copy is not an admission, and a
  *        removal that brings a full pool under its limit flips it back (TxPoolRecovered)
+ * @file TxPoolAdmissionEventsTest.cpp
  */
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"

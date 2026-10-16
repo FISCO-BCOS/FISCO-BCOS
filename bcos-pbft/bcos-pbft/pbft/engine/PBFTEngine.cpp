@@ -1063,8 +1063,12 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 {
                     m_config->notifySealer(_prePrepareMsg->index(), true);
                 }
-                // FIB-131: beyond the cap the reseal notification is suppressed
-                logPrePrepareRejected(bcos::LogLevel::WARNING, "signature", _prePrepareMsg,
+                // FIB-131: beyond the cap the reseal notification is suppressed; only then is the
+                // rejection a WARNING, as before this event existed
+                logPrePrepareRejected(failCount > c_maxInvalidPrePreparePerPeer ?
+                                          bcos::LogLevel::WARNING :
+                                          bcos::LogLevel::DEBUG,
+                    "signature", _prePrepareMsg,
                     std::string(",failCount=") + std::to_string(failCount) + ",resealSuppressed=" +
                         (failCount > c_maxInvalidPrePreparePerPeer ? "true" : "false"));
                 return false;
