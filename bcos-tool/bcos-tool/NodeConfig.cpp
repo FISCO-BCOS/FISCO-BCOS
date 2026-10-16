@@ -290,13 +290,15 @@ constexpr std::array c_deadV01LaneGenesisKeys{
     DeadKey{"executor", "evm_revision_forks", "none: v0/v1 follow [version] and [features]"},
 };
 
-// [debug] block parameters that only the DebugSelfProduce driver reads.
+// [debug] block parameters that only the DebugSelfProduce driver reads. blockDriver() refuses
+// [debug] enable on executor.version 0 and on the OP lane, so the replacement names the lanes.
+constexpr auto c_debugEnableReplacement = "[debug] enable=true (executor.version 1 or 2 only)";
 constexpr std::array c_debugSelfProduceKeys{
-    DeadKey{"debug", "block_interval", "[debug] enable=true"},
-    DeadKey{"debug", "produce_empty_blocks", "[debug] enable=true"},
-    DeadKey{"debug", "fee_recipient", "[debug] enable=true"},
-    DeadKey{"debug", "prev_randao", "[debug] enable=true"},
-    DeadKey{"debug", "fixed_timestamp", "[debug] enable=true"},
+    DeadKey{"debug", "block_interval", c_debugEnableReplacement},
+    DeadKey{"debug", "produce_empty_blocks", c_debugEnableReplacement},
+    DeadKey{"debug", "fee_recipient", c_debugEnableReplacement},
+    DeadKey{"debug", "prev_randao", c_debugEnableReplacement},
+    DeadKey{"debug", "fixed_timestamp", c_debugEnableReplacement},
 };
 
 // WARN once for each key of `table` present in `pt`; returns them as "<file> [section] key".
