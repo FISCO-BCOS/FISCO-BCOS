@@ -82,6 +82,12 @@ struct FakeBackend
         }
         return out;
     }
+
+    std::size_t flushCount()
+    {
+        std::lock_guard lock(mutex);
+        return flushes;
+    }
 };
 
 using FakeSink = bcos::log::LineAsyncSink<FakeBackend>;
@@ -263,6 +269,57 @@ BOOST_AUTO_TEST_CASE(fatalDeliveredAfterStop)
     auto lines = backend->snapshot();
     BOOST_REQUIRE_EQUAL(lines.size(), 1u);
     BOOST_CHECK(lines.front().find("fatalAfterStop") != std::string::npos);
+}
+
+// The drain branch must flush unconditionally: a line that lands inside the
+// flood-path rate-limit window still reaches the backend without an explicit
+// flush() call.
+BOOST_AUTO_TEST_CASE(queueDrainFlushesWithoutExplicitFlush)
+{
+    auto backend = boost::make_shared<FakeBackend>();
+    {
+        FakeSink sink(backend);
+        sink.writeLine(LogLevel::INFO, "p|", "first");
+        for (int i = 0; i < 200 && backend->flushCount() == 0; ++i)
+        {
+            std::this_thread::sleep_for(10ms);
+        }
+        BOOST_REQUIRE_GE(backend->flushCount(), 1u);
+        auto const flushesAfterFirst = backend->flushCount();
+
+        sink.writeLine(LogLevel::INFO, "p|", "second");
+        for (int i = 0; i < 200 && backend->flushCount() == flushesAfterFirst; ++i)
+        {
+            std::this_thread::sleep_for(10ms);
+        }
+        BOOST_CHECK_GT(backend->flushCount(), flushesAfterFirst);
+        sink.stop();
+    }
+    auto lines = backend->snapshot();
+    BOOST_REQUIRE_EQUAL(lines.size(), 2u);
+    BOOST_CHECK(lines.back().find("second") != std::string::npos);
+}
+
+// A FATAL first drains the queued backlog, so the lines logged before it keep
+// their ordering ahead of the abort (base behaviour of the single FIFO).
+BOOST_AUTO_TEST_CASE(fatalDrainsQueuedBacklogBeforeWriting)
+{
+    auto backend = boost::make_shared<FakeBackend>();
+    backend->gate = false;  // hold the feeding thread inside consumeLine
+    FakeSink sink(backend);
+    for (int i = 0; i < 3; ++i)
+    {
+        sink.writeLine(LogLevel::INFO, "p|", "queued" + std::to_string(i));
+    }
+    std::thread fatalWriter([&] { sink.writeLine(LogLevel::FATAL, "p|", "fatalLine"); });
+    std::this_thread::sleep_for(100ms);
+    backend->gate = true;
+    fatalWriter.join();
+
+    auto lines = backend->snapshot();
+    BOOST_REQUIRE_EQUAL(lines.size(), 4u);
+    BOOST_CHECK(lines.back().find("fatalLine") != std::string::npos);
+    sink.stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

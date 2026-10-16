@@ -150,7 +150,8 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     // Custom log.format strings are no longer supported: the pipeline formats
     // the built-in line layout on the producer thread and never builds a
     // boost record. Warn instead of silently ignoring the key; emitted after
-    // the sinks are registered so the warning lands in the log file.
+    // the sinks are registered so it lands in the log file, at ERROR so a
+    // quiet log.level cannot filter the notice out.
     auto logFormat = _pt.get<std::string>("log.format", "");
 
     if (m_consoleLog)
@@ -191,9 +192,9 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
 
     if (!logFormat.empty())
     {
-        BCOS_LOG(WARNING) << "log.format is no longer supported, the built-in log line format "
-                             "is always used, configured format = "
-                          << logFormat;
+        BCOS_LOG(ERROR) << "log.format is no longer supported, the built-in log line format "
+                           "is always used, configured format = "
+                        << logFormat;
     }
 }
 
@@ -333,8 +334,9 @@ void BoostLogInitializer::stopLogging()
     }
     m_running.store(false);
     // Unregister whole-line sinks first so new records stop arriving;
-    // producers that already hold a shared_ptr copy keep the sink alive until
-    // their write finishes.
+    // unregisterLineSink takes the registry's unique lock, so it waits for
+    // in-flight producers (who hold the shared lock across writeLine) before
+    // the sinks below are stopped and destroyed.
     for (auto const& sink : m_lineSinks)
     {
         bcos::log::unregisterLineSink(sink.get());

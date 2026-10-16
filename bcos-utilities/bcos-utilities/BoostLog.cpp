@@ -45,6 +45,10 @@
 #include <boost/system/detail/error_category.hpp>
 #include <boost/system/detail/error_code.hpp>
 #ifdef _WIN32
+// NOMINMAX: windows.h otherwise defines min/max as function-like macros,
+// which leak ahead in unity builds and break unparenthesized
+// std::numeric_limits<...>::max() in BoostLogInitializer.cpp.
+#define NOMINMAX
 #include <windows.h>
 // wingdi.h (pulled in by windows.h) defines ERROR as a macro, which breaks
 // LogLevel::ERROR below; LogStream.h's #undef cannot help because windows.h
@@ -84,12 +88,12 @@ namespace log
 namespace
 {
 // Process-wide registry of whole-line sinks (fast path, used when no custom
-// log.format is configured). Producers hold a shared_ptr copy while writing,
-// so a sink stays alive even if it is unregistered mid-write.
-// std::atomic<std::shared_ptr> is not portable (libc++ rejects it), so the
-// slots are plain shared_ptrs guarded by a shared_mutex: register/unregister
-// are rare, and readers only hold the shared lock long enough to copy the
-// fixed-size slot array.
+// log.format is configured). std::atomic<std::shared_ptr> is not portable
+// (libc++ rejects it), so the slots are plain shared_ptrs guarded by a
+// shared_mutex: readers hold the shared lock across writeLine, and
+// unregisterLineSink takes the unique lock, so it waits for in-flight
+// producers before a sink can be destroyed. Register/unregister are rare
+// (initLog/stopLogging), so the lock is never contended in practice.
 constexpr std::size_t MaxLineSinks = 4;
 std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> g_lineSinks;
 std::shared_mutex g_lineSinksMutex;
