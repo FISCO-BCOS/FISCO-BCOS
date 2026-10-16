@@ -26,11 +26,4 @@ compile_service("GatewayService/main" ${GATEWAY_BINARY_NAME})
 set(PRO_NODE_SERVICE_BINARY_NAME BcosNodeService)
 compile_service("NodeService/pro" ${PRO_NODE_SERVICE_BINARY_NAME})
 
-# max-NodeService
-set(MAX_NODE_SERVICE_BINARY_NAME BcosMaxNodeService)
-compile_service("NodeService/max" ${MAX_NODE_SERVICE_BINARY_NAME})
-
-# ExecutorService (TiKV-based, deprecated) has been archived to
-# legacy/ExecutorService and is no longer built.
-
 add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})

@@ -1,22 +1,20 @@
 #pragma once
 
-#include "bcos-utilities/Timer.h"
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Common.h>
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>
+#include <boost/iterator/transform_iterator.hpp>
 #include <functional>
 #include <memory>
 #include <queue>
 #include <string>
 #include <unordered_map>
-#include <boost/iterator/transform_iterator.hpp>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::scheduler
 {
-
-#define EXECUTOR_MANAGER_CHECK_PERIOD (5000)
 
 #define EXECUTOR_MANAGER_LOG(LEVEL) \
     BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER") << LOG_BADGE("Switch")
@@ -26,16 +24,9 @@ class ExecutorManager
 public:
     using Ptr = std::shared_ptr<ExecutorManager>;
 
-    ExecutorManager(boost::asio::io_context& _ioService);
+    ExecutorManager() = default;
 
-    virtual ~ExecutorManager();
-
-    /**
-     * Only used in max version
-     */
-    void startTimer();
-
-    void stopTimer();
+    virtual ~ExecutorManager() = default;
 
     bool addExecutor(std::string name,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor, int64_t seq = -1);
@@ -48,12 +39,6 @@ public:
         const std::string_view& contract);
 
     bool removeExecutor(const std::string_view& name);
-
-    void checkExecutorStatus();
-
-    std::pair<bool, bcos::protocol::ExecutorStatus::UniquePtr> getExecutorStatus(
-        const std::string& _executorName,
-        const bcos::executor::ParallelTransactionExecutorInterface::Ptr& _executor);
 
     auto begin() const
     {
@@ -103,8 +88,6 @@ public:
     ExecutorInfo::Ptr getExecutorInfoByName(const std::string_view& name);
 
 private:
-    std::shared_ptr<Timer> m_timer;
-
     mutable SharedMutex m_mutex;
     std::unordered_map<std::string_view, ExecutorInfo::Ptr, std::hash<std::string_view>>
         m_name2Executors;

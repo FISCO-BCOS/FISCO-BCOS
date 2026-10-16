@@ -39,7 +39,7 @@ using namespace bcos::rpc;
 namespace bcos::test
 {
 // submitTransaction answers a refusal and a fault with the same C++ type and the same int field.
-// An in-process pool only ever puts a TransactionStatus there, but a MAX/TARS deployment's
+// An in-process pool only ever puts a TransactionStatus there, but a Pro/tars deployment's
 // TxPoolServiceClient throws BCOS_ERROR(-1, "No value!") when the callback left no value, and
 // toBcosError(tarsRet)'s "TARS error!" when the call itself failed. Casting one of those to a
 // TransactionStatus reaches no row of the admission table and lands on its fallback, which would

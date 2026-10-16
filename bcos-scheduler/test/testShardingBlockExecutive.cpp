@@ -68,7 +68,7 @@ struct ShardingBlockExecutiveFixture
         signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
         ledger = std::make_shared<MockLedger3>();
-        executorManager = std::make_shared<scheduler::ExecutorManager>(ioService);
+        executorManager = std::make_shared<scheduler::ExecutorManager>();
 
         // create RocksDBStorage
         rocksdb::DB* db;
@@ -106,7 +106,6 @@ struct ShardingBlockExecutiveFixture
         ioServicePool = nullptr;  // destroy the pool now -> stop + join threads
     }
 
-    boost::asio::io_context ioService;
     bcos::IOServicePool::Ptr ioServicePool;
     bcos::ledger::LedgerInterface::Ptr ledger;
     bcos::scheduler::ExecutorManager::Ptr executorManager;

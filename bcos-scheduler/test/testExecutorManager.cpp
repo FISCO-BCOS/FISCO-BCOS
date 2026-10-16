@@ -8,12 +8,8 @@ namespace bcos::test
 {
 struct ExecutorManagerFixture
 {
-    ExecutorManagerFixture()
-    {
-        executorManager = std::make_shared<scheduler::ExecutorManager>(ioService);
-    }
+    ExecutorManagerFixture() { executorManager = std::make_shared<scheduler::ExecutorManager>(); }
 
-    boost::asio::io_context ioService;
     scheduler::ExecutorManager::Ptr executorManager;
 };
 

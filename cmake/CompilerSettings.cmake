@@ -43,7 +43,12 @@ message(STATUS "COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
     find_program(CCACHE_PROGRAM ccache)
 
-    if(CCACHE_PROGRAM)
+    # Only auto-wrap when the caller has not already chosen a launcher: the CI passes
+    # -DCMAKE_CXX_COMPILER_LAUNCHER=ccache, and setting both mechanisms makes the two
+    # launchers stack in generators that expand RULE_LAUNCH_* and COMPILER_LAUNCHER
+    # separately (the Ninja generator collapses them into one LAUNCHER variable, but
+    # the Makefile generators used for release builds do not).
+    if(CCACHE_PROGRAM AND NOT CMAKE_C_COMPILER_LAUNCHER AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
         set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
     endif()
@@ -116,27 +121,48 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=gold")
             set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
         endif()
-    elseif("${LINKER}" MATCHES "mold")
-        # GCC 16's libgcc spec always references the libgcc_s_asneeded.so linker
-        # script (INPUT(AS_NEEDED(-lgcc_s))), which mold < 2.41.0 cannot parse,
-        # so probe with a real link instead of assuming -fuse-ld=mold works.
-        set(_mold_probe_src "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/mold-link-probe.cpp")
-        file(WRITE "${_mold_probe_src}" "int main() { return 0; }\n")
+    elseif("${LINKER}" MATCHES "^(lld|mold)$")
+        # GCC 16 routes libgcc/libatomic through the libgcc_s_asneeded.so linker script
+        # (INPUT(AS_NEEDED(-lgcc_s))). mold < 2.41.0 cannot parse it, while lld handles
+        # it fine, so an explicitly requested linker is verified with a real link rather
+        # than assumed. A failed probe is a hard error: silently falling back would make
+        # CI link with a different linker than the one it asked for, and the static link
+        # path (-static, below) is exactly the configuration that ships as a release.
+        set(_fisco_ld_flag "-fuse-ld=${LINKER}")
+        set(_fisco_ld_probe_src "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/linker-probe.cpp")
+        file(WRITE "${_fisco_ld_probe_src}" "int main() { return 0; }\n")
+        # CMAKE_EXE_LINKER_FLAGS may already carry -static for BUILD_STATIC, so the probe
+        # covers the static link path that motivates it. Flags added later in this file
+        # (MARCH_TYPE, sanitizers, coverage) do not affect the linker-script parsing the
+        # probe guards, so probing here is sufficient.
+        separate_arguments(_fisco_ld_probe_extra UNIX_COMMAND "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_CXX_FLAGS}")
         execute_process(
-            COMMAND ${CMAKE_CXX_COMPILER} -fuse-ld=mold "${_mold_probe_src}" -o "${_mold_probe_src}.out"
-            RESULT_VARIABLE _mold_probe_result
-            OUTPUT_QUIET ERROR_VARIABLE _mold_probe_error)
-        file(REMOVE "${_mold_probe_src}" "${_mold_probe_src}.out")
-        if(_mold_probe_result EQUAL 0)
-            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
-            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=mold")
+            COMMAND ${CMAKE_CXX_COMPILER} ${_fisco_ld_probe_extra} ${_fisco_ld_flag}
+                    "${_fisco_ld_probe_src}" -o "${_fisco_ld_probe_src}.out"
+            RESULT_VARIABLE _fisco_ld_probe_result
+            OUTPUT_QUIET ERROR_VARIABLE _fisco_ld_probe_error)
+        file(REMOVE "${_fisco_ld_probe_src}" "${_fisco_ld_probe_src}.out")
+        if(_fisco_ld_probe_result EQUAL 0)
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_fisco_ld_flag}")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${_fisco_ld_flag}")
+            message(STATUS "LINKER: ${LINKER} verified and enabled (${_fisco_ld_flag})")
         else()
-            message(WARNING "LINKER=mold requested but a test link with -fuse-ld=mold failed; "
-                "falling back to the default linker. A likely cause is mold < 2.41.0, which "
-                "cannot parse GCC 16's libgcc_s_asneeded.so linker script (install mold >= 2.41.0 "
-                "to use mold); it can also be that mold is not installed at all. "
-                "Linker output: ${_mold_probe_error}")
+            message(FATAL_ERROR
+                "LINKER=${LINKER} requested but a probe link with ${_fisco_ld_flag} failed. "
+                "mold < 2.41.0 cannot parse GCC 16's libgcc_s_asneeded.so linker script; "
+                "install a newer mold, use -DLINKER=lld, or omit -DLINKER for the default "
+                "linker. Linker output: ${_fisco_ld_probe_error}")
         endif()
+        unset(_fisco_ld_flag)
+        unset(_fisco_ld_probe_src)
+        unset(_fisco_ld_probe_extra)
+        unset(_fisco_ld_probe_result)
+        unset(_fisco_ld_probe_error)
+    elseif(NOT "${LINKER}" STREQUAL "default")
+        # Options.cmake defaults LINKER to "default"; anything else that matched neither
+        # branch above (typo, versioned name like lld-21) would otherwise silently link
+        # with the default linker.
+        message(FATAL_ERROR "Unknown LINKER=${LINKER}; supported values: default, gold, lld, mold")
     endif()
 
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
@@ -183,8 +209,12 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
             add_compile_options(-Wno-error=uninitialized)
             add_compile_options(-Wno-error=tsan)
-            add_compile_options(-fconcepts-diagnostics-depth=10)
-            add_compile_options(-fdiagnostics-all-candidates)
+            # -fconcepts-diagnostics-depth=10 and -fdiagnostics-all-candidates used to be
+            # set here. They only shape template/concept *diagnostics*, but GCC still pays
+            # for candidate tracking on every overload resolution: dropping them measured
+            # ~10% off the CI compile time on this codebase (6 heaviest unity TUs, same
+            # machine). Add them back locally (or on a single target) when a concept error
+            # needs the full candidate list.
         endif()
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
