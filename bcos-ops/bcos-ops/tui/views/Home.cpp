@@ -38,16 +38,18 @@ std::string homeCheckSummary(Model const& _model)
     }
     size_t failed = 0;
     size_t passed = 0;
+    size_t info = 0;  // reported, never a verdict
     for (auto const& check : _model.checks)
     {
         failed += check.failed() ? 1 : 0;
         passed += check.ok() ? 1 : 0;
+        info += check.state == "info" ? 1 : 0;
     }
     if (failed > 0)
     {
         return "checks " + std::to_string(failed) + " FAIL";
     }
-    auto skipped = _model.checks.size() - passed;
+    auto skipped = _model.checks.size() - passed - info;
     return "checks " + std::to_string(passed) + " ok" +
            (skipped > 0 ? " (" + std::to_string(skipped) + " skip)" : "");
 }

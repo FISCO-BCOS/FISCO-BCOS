@@ -84,13 +84,16 @@ NodeDir NodeDir::load(std::string const& _dir)
         std::max<int64_t>(3000, ini.get<int64_t>("consensus.min_seal_time", 500) + 1);
 
     node.rpcListenIp = ini.get<std::string>("rpc.listen_ip", "0.0.0.0");
-    auto port = ini.get<int>("rpc.listen_port", 20200);
-    if (port <= 0 || port > 65535)
-    {
-        throw OpsError(
-            c_exitUsage, "config.ini [rpc] listen_port out of range: " + std::to_string(port));
-    }
-    node.rpcListenPort = static_cast<uint16_t>(port);
+    auto listenPort = [&ini](std::string const& _key, int _default) {
+        auto port = ini.get<int>(_key, _default);
+        if (port <= 0 || port > 65535)
+        {
+            throw OpsError(
+                c_exitUsage, "config.ini " + _key + " out of range: " + std::to_string(port));
+        }
+        return static_cast<uint16_t>(port);
+    };
+    node.rpcListenPort = listenPort("rpc.listen_port", 20200);
     // NodeConfig::loadRpcConfig: disable_ssl is the legacy key, enable_ssl overrides it
     node.rpcDisableSsl = ini.get<bool>("rpc.disable_ssl", false);
     if (auto enableSsl = ini.get_optional<bool>("rpc.enable_ssl"))
@@ -104,7 +107,7 @@ NodeDir NodeDir::load(std::string const& _dir)
     node.ethereumMode = ini.get<std::string>("ethereum.mode", "none");
     node.web3Enable = ini.get<bool>("web3_rpc.enable", false);
     node.web3ListenIp = ini.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
-    node.web3ListenPort = static_cast<uint16_t>(ini.get<int>("web3_rpc.listen_port", 8545));
+    node.web3ListenPort = listenPort("web3_rpc.listen_port", 8545);
     return node;
 }
 
