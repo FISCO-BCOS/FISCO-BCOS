@@ -31,6 +31,7 @@ target_link_libraries(${TEST_BINARY_NAME} PRIVATE protocol-tars rlp-protocol bco
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("ErrorConverterTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("TransactionSubmitResultImplTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("ExecutionMessageImplTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("TransactionReceiptImplTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("TransactionFactoryImplTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("CommonConvertTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)

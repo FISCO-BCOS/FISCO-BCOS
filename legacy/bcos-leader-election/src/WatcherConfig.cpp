@@ -1,0 +1,257 @@
+/**
+ *  Copyright (C) 2022 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @brief the config for the watcher
+ * @file WatcherConfig.cpp
+ * @author: yujiechen
+ * @date 2022-04-28
+ */
+
+#include "WatcherConfig.h"
+#include "bcos-utilities/BoostLog.h"
+#include <algorithm>
+#include <cstddef>
+#include <set>
+#include <utility>
+
+using namespace bcos;
+using namespace bcos::election;
+
+// FIB-168: produce a short, log-safe hex prefix of the watched etcd value so
+// failure-path logs do not echo the full attacker-controlled payload.
+std::string WatcherConfig::truncateValueForLog(std::string_view _value)
+{
+    static constexpr char kHex[] = "0123456789abcdef";
+    auto const limit = std::min(_value.size(), static_cast<std::size_t>(c_logValuePrefixBytes));
+    std::string out;
+    out.reserve(limit * 2);
+    for (std::size_t i = 0; i < limit; ++i)
+    {
+        unsigned char b = static_cast<unsigned char>(_value[i]);
+        out.push_back(kHex[(b >> 4) & 0x0f]);
+        out.push_back(kHex[b & 0x0f]);
+    }
+    return out;
+}
+
+void WatcherConfig::reCreateWatcher()
+{
+    ELECTION_LOG(INFO) << LOG_DESC("reCreateWatcher");
+    // Note: set recursive to watch subdirectory change
+    auto weak = std::weak_ptr<ElectionConfig>(shared_from_this());
+    m_watcher = std::make_shared<etcd::Watcher>(
+        *m_etcdClient, m_watchDir,
+        [weak](etcd::Response response) {
+            auto self = std::dynamic_pointer_cast<WatcherConfig>(weak.lock());
+            if (!self)
+            {
+                return;
+            }
+            self->onWatcherKeyChanged(std::move(response));
+        },
+        true);
+    // fetchLeadersInfo when reCreateWatcher
+    fetchLeadersInfo();
+}
+
+void WatcherConfig::fetchLeadersInfo()
+{
+    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo") << LOG_KV("watchDir", m_watchDir);
+    auto response = m_etcdClient->ls(m_watchDir).get();
+    if (!response.is_ok())
+    {
+        ELECTION_LOG(WARNING) << LOG_DESC("fetchLeadersInfo failed")
+                              << LOG_KV("watchDir", m_watchDir);
+        return;
+    }
+    auto const& values = response.values();
+    // FIB-182: this is a full snapshot of m_watchDir. A delete event that
+    // arrives while the watcher is disconnected is never delivered, so the old
+    // logic (add/update only) leaves a stale leader entry in m_keyToLeader
+    // forever. Track every key present in the snapshot and prune any tracked
+    // key that is absent from it.
+    std::set<std::string> snapshotKeys;
+    for (auto const& value : values)
+    {
+        snapshotKeys.insert(value.key());
+        updateLeaderInfo(value);
+    }
+    std::vector<std::pair<std::string, bcos::protocol::MemberInterface::Ptr>> prunedMembers;
+    {
+        WriteGuard l(x_keyToLeader);
+        for (auto it = m_keyToLeader.begin(); it != m_keyToLeader.end();)
+        {
+            if (snapshotKeys.count(it->first) != 0)
+            {
+                ++it;
+                continue;
+            }
+            prunedMembers.emplace_back(it->first, it->second);
+            m_keyToLeaderSeq.erase(it->first);
+            it = m_keyToLeader.erase(it);
+        }
+    }
+    // invoke delete callbacks outside the lock to prevent self-deadlock
+    for (auto const& pruned : prunedMembers)
+    {
+        ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo: prune missed-delete leader key")
+                           << LOG_KV("watchDir", m_watchDir) << LOG_KV("leaderKey", pruned.first);
+        onMemberDeleted(pruned.first, pruned.second);
+    }
+    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir)
+                       << LOG_KV("nodesSize", values.size())
+                       << LOG_KV("prunedSize", prunedMembers.size());
+}
+
+void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
+{
+    try
+    {
+        auto version = _value.version();
+        if (version == 0)
+        {
+            ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: the leaderKey has been released")
+                               << LOG_KV("leaderKey", _value.key());
+            auto const& leaderKey = _value.key();
+            bcos::protocol::MemberInterface::Ptr deletedMember;
+            {
+                UpgradableGuard l(x_keyToLeader);
+                auto it = m_keyToLeader.find(leaderKey);
+                if (it == m_keyToLeader.end())
+                {
+                    return;
+                }
+                deletedMember = it->second;
+                UpgradeGuard ul(l);
+                m_keyToLeader.erase(leaderKey);
+                m_keyToLeaderSeq.erase(leaderKey);
+            }
+            // invoke callback outside lock to prevent self-deadlock
+            onMemberDeleted(leaderKey, deletedMember);
+            return;
+        }
+        auto const& leaderKey = _value.key();
+        // FIB-168: enforce a hard size cap on the watched payload BEFORE
+        // decode. An attacker (or compromised) writer to the watched etcd
+        // prefix could otherwise force expensive Tars decoding plus an
+        // amplified failure-path log of the full value on every update.
+        auto const& rawValue = _value.as_string();
+        if (isOversizeEtcdValue(rawValue.size()))
+        {
+            ELECTION_LOG(WARNING) << LOG_DESC(
+                                         "FIB-168: updateLeaderInfo reject oversize etcd value")
+                                  << LOG_KV("watchDir", m_watchDir)
+                                  << LOG_KV("leaderKey", leaderKey)
+                                  << LOG_KV("size", rawValue.size())
+                                  << LOG_KV("max", c_maxEtcdValueSize);
+            return;
+        }
+        auto member = m_memberFactory->createMember(rawValue);
+        auto seq = _value.modified_index();
+        member->setSeq(seq);
+        {
+            WriteGuard l(x_keyToLeader);
+            auto seqIt = m_keyToLeaderSeq.find(leaderKey);
+            if (seqIt != m_keyToLeaderSeq.end() && seq <= seqIt->second)
+            {
+                ELECTION_LOG(DEBUG) << LOG_DESC("updateLeaderInfo: ignore stale update")
+                                    << LOG_KV("leaderKey", leaderKey) << LOG_KV("incomingSeq", seq)
+                                    << LOG_KV("currentSeq", seqIt->second);
+                return;
+            }
+            m_keyToLeaderSeq[leaderKey] = seq;
+            m_keyToLeader[leaderKey] = member;
+        }
+        ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: update leader")
+                           << LOG_KV("leaderKey", leaderKey) << LOG_KV("member", member->memberID())
+                           << LOG_KV("modifiedIndex", seq);
+        callNotificationHandlers(leaderKey, member);
+    }
+    catch (std::exception const& e)
+    {
+        // FIB-168: do NOT echo the full attacker-controlled payload here.
+        // Logging the full value on failure provides a log-volume amplification
+        // primitive (especially when paired with an attacker repeatedly writing
+        // values that fail decode). Log only the size and a short hex prefix.
+        auto const& rawValue = _value.as_string();
+        ELECTION_LOG(WARNING) << LOG_DESC("updateLeaderInfo exception")
+                              << LOG_KV("watchDir", m_watchDir) << LOG_KV("key", _value.key())
+                              << LOG_KV("size", rawValue.size())
+                              << LOG_KV("prefix", truncateValueForLog(rawValue))
+                              << LOG_KV("message", boost::diagnostic_information(e));
+    }
+}
+
+void WatcherConfig::onWatcherKeyChanged(etcd::Response _response)
+{
+    if (!_response.is_ok())
+    {
+        ELECTION_LOG(WARNING) << LOG_DESC("onWatcherKeyChanged error")
+                              << LOG_KV("code", _response.error_code())
+                              << LOG_KV("msg", _response.error_message());
+    }
+    ELECTION_LOG(INFO) << LOG_DESC("onWatcherKeyChanged") << LOG_KV("key", _response.value().key())
+                       << LOG_KV("version", _response.value().version());
+    updateLeaderInfo(_response.value());
+}
+
+void WatcherConfig::callNotificationHandlers(
+    std::string const& _key, bcos::protocol::MemberInterface::Ptr _member)
+{
+    ReadGuard l(x_notificationHandlers);
+    for (auto const& handler : m_notificationHandlers)
+    {
+        try
+        {
+            handler(_key, _member);
+        }
+        catch (std::exception const& e)
+        {
+            ELECTION_LOG(ERROR) << LOG_DESC("callNotificationHandlers exception")
+                                << LOG_KV("key", _key) << LOG_KV("memberID", _member->memberID())
+                                << LOG_KV("message", boost::diagnostic_information(e));
+        }
+    }
+}
+
+void WatcherConfig::onMemberDeleted(
+    std::string const& _key, bcos::protocol::MemberInterface::Ptr _member)
+{
+    ReadGuard l(x_onMemberDeleted);
+    for (auto const& handler : m_onMemberDeleted)
+    {
+        try
+        {
+            handler(_key, _member);
+        }
+        catch (std::exception const& e)
+        {
+            ELECTION_LOG(ERROR) << LOG_DESC("onMemberDeleted exception") << LOG_KV("key", _key)
+                                << LOG_KV("memberID", _member->memberID())
+                                << LOG_KV("message", boost::diagnostic_information(e));
+        }
+    }
+}
+
+bcos::election::WatcherConfig::WatcherConfig(std::string const& _etcdEndPoint,
+    std::string const& _watchDir, bcos::protocol::MemberFactoryInterface::Ptr _memberFactory,
+    std::string const& _purpose, boost::asio::io_context& _ioContext, const std::string& _caPath,
+    const std::string& _certPath, const std::string& _keyPath)
+  : ElectionConfig(
+        _etcdEndPoint, _memberFactory, _purpose, _ioContext, _caPath, _certPath, _keyPath)
+{
+    m_watchDir = _watchDir;
+    ELECTION_LOG(INFO) << LOG_DESC("WatcherConfig") << LOG_KV("watchDir", _watchDir);
+}

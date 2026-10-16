@@ -13,6 +13,11 @@ class NodeCommandImpl:
         notice_info = "generate config for all nodes"
         return self.execute_command(function, notice_info)
 
+    def gen_executor_config(self):
+        function = "generate_all_executor_config"
+        notice_info = "generate config for all executor"
+        return self.execute_command(function, notice_info)
+
     def start_all(self):
         function = "start_group"
         notice_info = "start all nodes of the given group"
@@ -51,6 +56,11 @@ class NodeCommandImpl:
     def expand_nodes(self):
         function = "expand_and_deploy_all_nodes"
         notice_info = "expand nodes for the given group"
+        return self.execute_command(function, notice_info)
+
+    def expand_executors(self):
+        function = "expand_and_deploy_all_executors"
+        notice_info = "expand executors for the given group"
         return self.execute_command(function, notice_info)
 
     def execute_command(self, function, notice_info):

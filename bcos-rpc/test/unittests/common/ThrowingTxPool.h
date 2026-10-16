@@ -29,7 +29,7 @@ namespace bcos::test
 /// A pool whose submitTransaction always throws the Error it was built with, so a case about what
 /// an RPC face does with a throwing pool takes microseconds instead of the pool's own timing. The
 /// code is the point of the parameter: submitTransaction answers a refusal and a fault with the
-/// same type and the same int field -- a TransactionStatus for the first, a Pro/tars client's
+/// same type and the same int field -- a TransactionStatus for the first, a MAX/TARS client's
 /// "No value!" or a transport code for the second -- and the faces answer the two differently.
 class ThrowingTxPool : public FakeTxPool
 {
