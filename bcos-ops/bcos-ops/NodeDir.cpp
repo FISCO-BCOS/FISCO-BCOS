@@ -19,6 +19,7 @@
 #include "OpsError.h"
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <algorithm>
 #include <filesystem>
 
 namespace bcos::ops
@@ -76,9 +77,11 @@ NodeDir NodeDir::load(std::string const& _dir)
     node.chainId = chainSource.get<std::string>("chain.chain_id", "chain");
     node.smCrypto = chainSource.get<bool>("chain.sm_crypto", false);
     node.authCheck = genesis.get<bool>("executor.is_auth_check", false);
-    // no config key sets the PBFT timeout: the node runs ConsensusConfig's default (3000 ms, raised
-    // to min_seal_time + 1 when that is longer); genesis [consensus] consensus_timeout is not read
-    node.consensusTimeoutMs = 3000;
+    // no config key sets the PBFT timeout: the node runs ConsensusConfig's 3000 ms default, which
+    // PBFTConfig raises to min_seal_time + 1 when that is longer; genesis consensus_timeout is not
+    // read
+    node.consensusTimeoutMs =
+        std::max<int64_t>(3000, ini.get<int64_t>("consensus.min_seal_time", 500) + 1);
 
     node.rpcListenIp = ini.get<std::string>("rpc.listen_ip", "0.0.0.0");
     node.rpcListenPort = static_cast<uint16_t>(ini.get<int>("rpc.listen_port", 20200));
