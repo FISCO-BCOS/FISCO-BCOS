@@ -260,8 +260,8 @@ Connection makeWsRpcCall(
                 catch (std::future_error const&)
                 {}
             });
-        if (future.wait_for(std::chrono::milliseconds(_requestTimeoutMs + 500)) !=
-            std::future_status::ready)
+        if (future.wait_for(std::chrono::milliseconds(_requestTimeoutMs) +
+                            std::chrono::milliseconds(500)) != std::future_status::ready)
         {
             throw OpsError(c_exitUsage, std::string(_method) + " timed out");
         }

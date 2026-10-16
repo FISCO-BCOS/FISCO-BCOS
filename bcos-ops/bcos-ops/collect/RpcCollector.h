@@ -29,7 +29,7 @@ namespace bcos::ops
 struct LocalFallbacks
 {
     std::optional<int64_t> txpoolLimit;         // [txpool] limit, config.ini
-    std::optional<int64_t> consensusTimeoutMs;  // [consensus] consensus_timeout, config.genesis
+    std::optional<int64_t> consensusTimeoutMs;  // the PBFT default, for nodes before 3.18
 };
 
 /// _mode (Connection::mode): in the EL modes getConsensusStatus is not sent — there is no PBFT,

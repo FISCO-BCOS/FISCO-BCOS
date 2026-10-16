@@ -7,8 +7,15 @@
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
  * @brief TXPOOL BlockStat counters: admitted / rejected submissions are counted only while
  *        log.enable_block_stat is on, and takeAndReset drains the slots.
+ * @file TxPoolBlockStatTest.cpp
  */
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"

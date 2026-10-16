@@ -115,7 +115,9 @@ void setStatLogLevel(LogLevel const& _level);
     BOOST_LOG_SEV(                                                                     \
         bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
 
-/// Per-module (channel) log level. Module name == the badge text used in the log line.
+/// Per-module (channel) log level. A module is the subsystem slot a log macro is wired to; the
+/// badge text it prints is separate and may differ (PBFT_LOG prints [CONSENSUS][PBFT], GATEWAY
+/// covers [Gateway], [P2PService] and [AMOP], EXECUTOR covers [DAG] and [PRECOMPILED]).
 /// A table entry of -1 means "inherit the global c_fileLogLevel".
 enum class LogModule : uint8_t
 {

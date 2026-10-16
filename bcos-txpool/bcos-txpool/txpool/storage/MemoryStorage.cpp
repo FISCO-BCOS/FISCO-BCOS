@@ -403,8 +403,10 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     Transaction::Ptr transaction, TxSubmitCallback txSubmitCallback, bool checkPoolLimit, bool lock)
 {
-    // One TxAdmitted / TxRejected line per submission, whichever ingress it came through; the
-    // callers (RPC, tx sync, proposal import) do not print their own.
+    // One TxAdmitted / TxRejected line per submission from RPC, tx sync or the rPBFT sealer's
+    // rotation tx (VRFBasedSealer, which also logs its own WARNING on failure). Proposal import
+    // goes through enforceSubmitTransaction instead and is neither printed here nor counted in
+    // BlockStat.
     auto const txHash = transaction->hash();
     auto const status = doVerifyAndSubmitTransaction(
         std::move(transaction), std::move(txSubmitCallback), checkPoolLimit);
@@ -576,14 +578,14 @@ TransactionStatus MemoryStorage::doVerifyAndSubmitTransaction(
                           << LOG_KV("insertTime", utcTime() - txImportTime);
     }
 
-    auto* txPtr = transaction.get();
-    auto const result = insert(std::move(transaction));
+    // keep a reference: once pooled, a concurrent removal may drop the pool's copy
+    auto const result = insert(transaction);
     if (result == TransactionStatus::None)
     {
-        TXPOOL_LOG(DEBUG) << LOG_DESC("TxAdmitted") << LOG_KV("tx", txPtr->hash().abridged())
-                          << LOG_KV("from", toHex(txPtr->sender()))
-                          << LOG_KV("nonce", txPtr->nonce())
-                          << LOG_KV("blockLimit", txPtr->blockLimit());
+        TXPOOL_LOG(DEBUG) << LOG_DESC("TxAdmitted") << LOG_KV("tx", transaction->hash().abridged())
+                          << LOG_KV("from", toHex(transaction->sender()))
+                          << LOG_KV("nonce", transaction->nonce())
+                          << LOG_KV("blockLimit", transaction->blockLimit());
     }
     return result;
 }

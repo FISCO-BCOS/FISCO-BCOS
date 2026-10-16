@@ -18,6 +18,7 @@
 #include "Checks.h"
 #include "Mode.h"
 #include <algorithm>
+#include <limits>
 
 namespace bcos::ops
 {
@@ -46,8 +47,12 @@ std::vector<Check> evaluate(
     }
     else
     {
-        auto ageMs = _nowMs - *_status.latestTimestamp;
-        auto limitMs = static_cast<int64_t>(_thresholds.stallFactor * *_status.consensusTimeoutMs);
+        // the timestamp and the timeout come from the RPC peer: clamp both before the int64
+        // arithmetic so an extreme value cannot overflow it
+        auto ageMs = _nowMs - std::clamp<int64_t>(*_status.latestTimestamp, 0, _nowMs);
+        auto limit = _thresholds.stallFactor * static_cast<double>(*_status.consensusTimeoutMs);
+        auto limitMs = limit >= 9.2e18 ? std::numeric_limits<int64_t>::max() :
+                                         static_cast<int64_t>(std::max(limit, 0.0));
         if (!readsPbft(_status.mode))
         {
             // no PBFT timer drives the blocks: an L1 EL seals every ~12 s and an OP sequencer
@@ -97,12 +102,12 @@ std::vector<Check> evaluate(
     {
         // behind is behind whether or not a download is running: an idle node that stopped
         // following its peers passes height_advancing whenever its txpool is empty
-        bool syncing = _status.isSyncing && *_status.isSyncing;
+        std::string syncState = !_status.isSyncing ? "sync state unknown" :
+                                *_status.isSyncing ? "syncing" :
+                                                     "not syncing";
         bool fail = *_status.lag >= _thresholds.maxLag;
         auto check = verdict("sync_caught_up", fail,
-            fail ? std::string(syncing ? "syncing" : "not syncing") + " and " +
-                       std::to_string(*_status.lag) + " blocks behind" :
-                   "");
+            fail ? syncState + " and " + std::to_string(*_status.lag) + " blocks behind" : "");
         check.values["lag"] = static_cast<Json::Int64>(*_status.lag);
         check.values["maxLag"] = static_cast<Json::Int64>(_thresholds.maxLag);
         if (_status.isSyncing)
@@ -127,14 +132,12 @@ std::vector<Check> evaluate(
     }
     else
     {
-        // connectedNodeList counts this node and any observer, so this leans towards ok
+        // informational only: getConsensusStatus reports connectedNodeList as a count that includes
+        // this node and any observer, so it cannot tell whether the sealers alone reach the quorum
         auto reachable = *_status.connectedGroupNodes;
-        bool fail = reachable < *_status.minRequiredQuorum;
-        auto check = verdict("quorum_connected", fail,
-            fail ?
-                "only " + std::to_string(reachable) + " group nodes connected (self included) of " +
-                    std::to_string(*_status.minRequiredQuorum) + " required" :
-                "");
+        auto check = Check{"quorum_connected", "info",
+            std::to_string(reachable) + " group nodes connected (self and observers included), " +
+                std::to_string(*_status.minRequiredQuorum) + " sealers required"};
         check.values["reachable"] = static_cast<Json::Int64>(reachable);
         check.values["minRequiredQuorum"] = static_cast<Json::Int64>(*_status.minRequiredQuorum);
         checks.push_back(std::move(check));

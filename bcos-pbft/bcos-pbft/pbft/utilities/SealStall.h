@@ -19,6 +19,7 @@
 #pragma once
 #include "Common.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <array>
 #include <mutex>
 #include <optional>
 #include <string_view>
@@ -57,15 +58,26 @@ inline std::string_view sealSkipReasonName(SealSkipReason _reason)
 
 namespace detail
 {
-// One state per process, on purpose: the sealer and PBFT report the same stall and hold no common
-// object besides the process (Sealer only sees the consensus through ConsensusInterface), and a
-// node process runs exactly one of each -- Initializer::init builds one m_pbftInitializer
-// (PBFTInitializer or ProPBFTInitializer) for its one group. Several PBFT instances in one process
-// only exist in unit tests, where the cost is a deduplicated log line.
+// One state per process: the sealer and PBFT hold no common object besides the process (Sealer
+// only sees the consensus through ConsensusInterface), and a node process runs exactly one of each
+// -- Initializer::init builds one m_pbftInitializer for its one group. The two report different
+// stages of a stall, so each keeps its own last reason: interleaved reports from the sealer and
+// PBFT do not defeat each other's once-per-change suppression.
+enum class SealStallSource : uint8_t
+{
+    Sealer,
+    Pbft,
+};
+inline SealStallSource sealStallSource(SealSkipReason _reason)
+{
+    return (_reason == SealSkipReason::NoTxs || _reason == SealSkipReason::AlreadyCommitted) ?
+               SealStallSource::Sealer :
+               SealStallSource::Pbft;
+}
 struct SealStallState
 {
     std::mutex mutex;
-    std::optional<SealSkipReason> lastReason;
+    std::array<std::optional<SealSkipReason>, 2> lastReason;
 };
 inline SealStallState& sealStallState()
 {
@@ -74,18 +86,21 @@ inline SealStallState& sealStallState()
 }
 }  // namespace detail
 
-/// Prints SealSkipped only when the reason differs from the last one reported. `_until` is the
-/// block index the stall waits for (-1 when not applicable).
+/// Prints SealSkipped only when the reason differs from the last one its source (sealer or PBFT)
+/// reported. `_until` is the block index the stall waits for (-1 when not applicable).
 inline void noteSealSkipped(
     SealSkipReason _reason, bcos::protocol::BlockNumber _index, bcos::protocol::BlockNumber _until)
 {
     auto& state = detail::sealStallState();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    if (state.lastReason == _reason)
     {
-        return;
+        std::lock_guard<std::mutex> lock(state.mutex);
+        auto& last = state.lastReason[static_cast<size_t>(detail::sealStallSource(_reason))];
+        if (last == _reason)
+        {
+            return;
+        }
+        last = _reason;
     }
-    state.lastReason = _reason;
     PBFT_LOG(INFO) << LOG_DESC("SealSkipped") << LOG_KV("reason", sealSkipReasonName(_reason))
                    << LOG_KV("index", _index) << LOG_KV("until", _until);
 }
@@ -94,12 +109,14 @@ inline void noteSealSkipped(
 inline void noteSealResumed(bcos::protocol::BlockNumber _index)
 {
     auto& state = detail::sealStallState();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    if (!state.lastReason)
     {
-        return;
+        std::lock_guard<std::mutex> lock(state.mutex);
+        if (!state.lastReason[0] && !state.lastReason[1])
+        {
+            return;
+        }
+        state.lastReason = {};
     }
-    state.lastReason.reset();
     PBFT_LOG(INFO) << LOG_DESC("SealResumed") << LOG_KV("index", _index);
 }
 }  // namespace bcos::consensus
