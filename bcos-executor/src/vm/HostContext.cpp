@@ -154,6 +154,17 @@ std::string evmAddress2String(const evmc_address& address)
     return addressBytesStr2String(receiveAddressBytes);
 }
 
+void HostContext::throwIfHostFault() const
+{
+    if (!m_hostFault.empty())
+    {
+        // bcos::Error lands in TransactionExecutive::go's first catch arm, which
+        // reverts the WHOLE transaction — the honest outcome for a node fault,
+        // never a silently-wrong successful receipt (review F2).
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "EVM host-side fault: " + m_hostFault));
+    }
+}
+
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
 {
     // Convert evmc_message to CallParameters

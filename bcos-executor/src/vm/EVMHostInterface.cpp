@@ -162,7 +162,10 @@ uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr) noexce
         // The body reads storage and parses the stored nonce string, both of which can
         // throw; an exception escaping this noexcept callback is std::terminate. Fail
         // closed per EIP-2681 instead: MAX_NONCE makes evmone reject the CREATE. Name
-        // the cause so a storage fault is distinguishable from a hostile input.
+        // the cause so a storage fault is distinguishable from a hostile input. The
+        // sub-op rejection alone would let the parent frame continue (review F2), so
+        // record the fault for go()'s whole-frame check too.
+        hostContext.recordHostFault(boost::current_exception_diagnostic_information());
         EXECUTIVE_LOG(WARNING) << LOG_DESC("getNonce failed closed (EIP-2681 reject)")
                                << LOG_KV("exception",
                                       boost::current_exception_diagnostic_information());
@@ -327,7 +330,13 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
     {
         // externalRequest reads storage and parses the stored nonce string (both can
         // throw); returning a failure lets evmone fail the create/call frame instead
-        // of terminating the node mid-block.
+        // of terminating the node mid-block. evmone 0.24 treats any non-SUCCESS
+        // host-call answer as an ordinary failed sub-call and CONTINUES the parent
+        // frame — so also record the fault: TransactionExecutive::go checks it after
+        // vm.execute() and reverts the whole transaction instead of letting a node
+        // fault masquerade as a wrong-but-successful receipt (review F2).
+        reinterpret_cast<HostContext*>(_context)->recordHostFault(
+            boost::current_exception_diagnostic_information());
         EXECUTIVE_LOG(WARNING) << LOG_DESC("EVM host call failed closed")
                                << LOG_KV("exception",
                                       boost::current_exception_diagnostic_information());

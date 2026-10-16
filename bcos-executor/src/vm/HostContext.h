@@ -117,6 +117,16 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
+    /// A host-side fault (a storage/parse exception in an EVMC callback) recorded by
+    /// the fail-closed catches in EVMHostInterface. evmone 0.24 treats any non-SUCCESS
+    /// host-call answer as an ordinary failed sub-call and continues the parent frame,
+    /// which would turn a node fault into a wrong-but-successful receipt (lost event
+    /// logs, silent divergence). TransactionExecutive::go checks this after
+    /// vm.execute() and fails the whole frame instead (review F2).
+    void recordHostFault(std::string message) { m_hostFault = std::move(message); }
+    std::string const& hostFault() const { return m_hostFault; }
+    void throwIfHostFault() const;
+
     virtual std::string_view myAddress() const;
     virtual std::string_view caller() const { return m_callParameters->senderAddress; }
     std::string_view origin() const { return m_callParameters->origin; }
@@ -220,6 +230,7 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
+    std::string m_hostFault;
 
     /// Per-transaction warm set; cached at construction to avoid BucketMap lookup on every
     /// accessAccount/accessStorage (same pattern as TE HostContext::m_eip2929Access).

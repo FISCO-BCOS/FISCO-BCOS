@@ -1064,6 +1064,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto vm = m_blockContext.getVMFactory()->create(
                 vmKind, revision, crypto::HashType(), code, true);
             auto ret = vm.execute(hostContext, &evmcMessage);
+            // A host-side fault recorded during execution (review F2) must fail the
+            // whole frame, not ride a sub-call failure the parent frame survives.
+            hostContext.throwIfHostFault();
 
             auto callResults = hostContext.takeCallParameters();
             // clear unnecessary logs
@@ -1244,6 +1247,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 hostContext.codeHash(), bytes_view((uint8_t*)code.data(), code.size()));
             auto evmcMessage = getEVMCMessage(m_blockContext, hostContext);
             auto ret = vm.execute(hostContext, &evmcMessage);
+            // Same whole-frame fault check as the create branch (review F2).
+            hostContext.throwIfHostFault();
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
 
