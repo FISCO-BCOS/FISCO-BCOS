@@ -238,6 +238,52 @@ BOOST_AUTO_TEST_CASE(executeAndCall)
     }());
 }
 
+// [F2 v2 mirror regression] A fault inside a noexcept EVMC callback (only
+// getNonce swallows on this lane) must fail the WHOLE frame after the VM
+// returns, not masquerade as a legitimate EIP-2681 nonce rejection the parent
+// frame survives. Inject the real fault shape — a corrupt (unparseable) nonce
+// row on the creating contract — then drive its nested CREATE: the callback's
+// parse throws, the catch records the host fault, and execute() rethrows it
+// out of the task for the scheduler-level catch arms to classify. Without the
+// fix the call completes "successfully" with the create merely failed.
+BOOST_AUTO_TEST_CASE(storageFaultInNonceCallbackFailsWholeFrameV2)
+{
+    // Corrupt the deployed contract's own nonce row: helloworld's nested
+    // creates derive their address through getNonce(helloworld), whose parse
+    // of this row throws inside the noexcept callback.
+    syncWait([this]() -> Task<void> {
+        bcos::ledger::account::EVMAccount account(
+            storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("not-a-number"));
+        co_return;
+    }());
+
+    // The whole frame must fail: the recorded host fault rethrows out of
+    // execute() (the discriminator — without the fix this completes with
+    // status 0/18 and the create merely failed).
+    syncWait([this]() -> Task<void> {
+        // The whole frame must fail THROUGH v2's native channel: the recorded
+        // host fault rethrows inside executeCall/executeCreate and lands in
+        // execute()'s FIB-88/92 catch arm, which answers a transaction-level
+        // EVMC_INTERNAL_ERROR (status Unknown) — never a success whose nested
+        // create merely failed. Without the fix this call returns status 0.
+        auto faulted = co_await call("deployAndCall(int256)", {}, false, bcos::s256(999));
+        // Exact discriminator: with the whole-frame check the fault lands in the
+        // FIB-92 internal-error channel; without it the same fault masquerades as
+        // an EVMC_REVERT the contract's own logic never chose.
+        BOOST_CHECK_EQUAL(faulted.status_code, EVMC_INTERNAL_ERROR);
+        BOOST_TEST_MESSAGE("F2 v2 mirror: faulted status_code=" << faulted.status_code);
+
+        // The executor surface stays usable: repair the row and the same call
+        // succeeds again.
+        bcos::ledger::account::EVMAccount account(
+            storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("0"));
+        auto ok = co_await call("deployAndCall(int256)", {}, false, bcos::s256(999));
+        BOOST_CHECK_EQUAL(ok.status_code, 0);
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(contractDeploy)
 {
     syncWait([this]() -> Task<void> {

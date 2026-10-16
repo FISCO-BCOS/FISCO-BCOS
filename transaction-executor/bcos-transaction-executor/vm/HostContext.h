@@ -210,12 +210,32 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
 template <class Storage, class TransientStorage>
 class HostContext
 {
+public:
+    /// A host-side fault (a storage/parse exception in a noexcept EVMC callback)
+    /// recorded by the fail-closed catches in EVMHostInterface. Only getNonce
+    /// swallows today (this lane's call() lets exceptions propagate through the
+    /// exception-enabled evmone build); the recorded fault makes the whole frame
+    /// fail after the VM returns instead of a node fault masquerading as a
+    /// legitimate EIP-2681 nonce rejection (review F2, v2 mirror).
+    void recordHostFault(std::string message) { m_hostFault = std::move(message); }
+    void throwIfHostFault() const
+    {
+        if (!m_hostFault.empty())
+        {
+            // Propagates up the task chain to the scheduler-level catch arms
+            // (OpScheduler::coExecuteBlock &c.), which classify it as a storage
+            // fault and fail the operation.
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "EVM host-side fault: " + m_hostFault));
+        }
+    }
+
 private:
     /// EVMC host interface table (formerly the inherited `interface` field of the
     /// concretized evmc_host_context; the evmc type is upstream-opaque again).
     /// Renamed: `interface` is a Windows SDK macro. Declared first so the
     /// mem-init list order below matches declaration order.
     const evmc_host_interface* m_hostInterface = nullptr;
+    mutable std::string m_hostFault;
 
     std::reference_wrapper<Storage> m_rollbackableStorage;
     std::reference_wrapper<TransientStorage> m_rollbackableTransientStorage;
@@ -996,6 +1016,10 @@ private:
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
             ref.input_data, ref.input_size, &HostContext::createAddressHook,
             &HostContext::create2AddressHook);
+        // Whole-frame fault check (review F2, v2 mirror): a fault recorded by a
+        // fail-closed EVMC callback must fail this frame, not ride the callback's
+        // sub-op-level answer the parent frame survives.
+        throwIfHostFault();
         if (result.status_code == EVMC_SUCCESS)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
@@ -1142,10 +1166,12 @@ private:
                 m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
-        co_return m_executable->m_vmInstance.execute(m_hostInterface,
+        auto result = m_executable->m_vmInstance.execute(m_hostInterface,
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
             (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size(),
             &HostContext::createAddressHook, &HostContext::create2AddressHook);
+        throwIfHostFault();  // same whole-frame check as the create branch
+        co_return result;
     }
 };
 

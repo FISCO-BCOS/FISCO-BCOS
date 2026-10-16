@@ -137,6 +137,10 @@ struct EVMHostInterface
             // Fail closed per EIP-2681 instead: MAX_NONCE makes evmone reject the
             // CREATE. Name the cause so a storage fault is distinguishable from a
             // hostile input.
+            // The EIP-2681 reject alone lets the parent frame continue (a node
+            // fault masquerading as a legit max-nonce rejection); record it so the
+            // post-execute check fails the whole frame (review F2, v2 mirror).
+            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
             EXECUTIVE_LOG(WARNING)
                 << LOG_DESC("getNonce failed closed (EIP-2681 reject)")
                 << LOG_KV("exception", boost::current_exception_diagnostic_information());
