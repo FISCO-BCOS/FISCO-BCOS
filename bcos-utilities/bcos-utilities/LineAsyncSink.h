@@ -130,15 +130,20 @@ public:
         m_clients.push_back(_client);
     }
 
-    // Wakes the worker for one pass over all registered clients. Cheap when
-    // the worker is already awake: only sets a flag.
+    // Wakes the worker for one pass over all registered clients. Cheap when a
+    // wake is already pending or the worker is mid-pass: one atomic exchange,
+    // no mutex. Only the thread that flips the flag takes the lock to notify;
+    // taking m_mutex after the exchange pairs with the waiter's predicate
+    // check under the same mutex, so no wakeup is lost.
     void wake()
     {
+        if (!m_dirty.exchange(true, std::memory_order_acq_rel))
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_dirty = true;
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+            }
+            m_cv.notify_one();
         }
-        m_cv.notify_one();
     }
 
     // Removes _client, blocking until the worker is not inside its
@@ -162,8 +167,9 @@ private:
         {
             {
                 std::unique_lock<std::mutex> lock(m_mutex);
-                m_cv.wait(lock, [this]() { return m_dirty; });
-                m_dirty = false;
+                m_cv.wait(
+                    lock, [this]() { return m_dirty.load(std::memory_order_acquire); });
+                m_dirty.store(false, std::memory_order_release);
                 snapshot = m_clients;
             }
             for (Client* client : snapshot)
@@ -199,7 +205,7 @@ private:
     // Clients whose feedOnWorker() is running on the worker right now;
     // removeClient() waits for this to clear before letting the sink die.
     std::set<Client*> m_active;
-    bool m_dirty = false;
+    std::atomic<bool> m_dirty{false};
     std::thread m_thread;
 };
 
@@ -378,10 +384,11 @@ private:
     static constexpr auto FatalDrainTimeout = std::chrono::seconds(1);
 
     // FIB-184: a backend exception must never kill the shared feeding thread.
-    // m_queueMutex must be held (it guards m_lastFlush).
-    void flushBackendLocked()
+    // Backend IO without m_queueMutex: producers keep their single short
+    // critical section (LineSinkWriter's contract). m_backendMutex serializes
+    // against the other backend users (locked_backend(), the FATAL write).
+    void flushBackend()
     {
-        m_lastFlush = std::chrono::steady_clock::now();
         try
         {
             std::lock_guard<std::mutex> backendLock(m_backendMutex);
@@ -391,30 +398,42 @@ private:
         {}
     }
 
-    // Emits one marker line for the lines dropped since the last report.
-    // m_queueMutex must be held.
-    void reportDroppedLocked()
+    // Emits one marker line for _dropped dropped lines. Line building lives
+    // inside the guard as well: this function is reached from stop() (i.e.
+    // the destructor), where an escaping bad_alloc would terminate.
+    void reportDropped(std::uint64_t _dropped)
     {
-        auto const dropped = m_droppedLines.exchange(0, std::memory_order_relaxed);
-        if (dropped == 0)
-        {
-            return;
-        }
         try
         {
-            // Line building lives inside the guard as well: this function is
-            // reached from stop() (i.e. the destructor), where a bad_alloc
-            // escaping would terminate the process.
             std::string line;
             appendLinePrefix(line, LogLevel::WARNING);
             line += "[log] dropped ";
-            line += std::to_string(dropped);
+            line += std::to_string(_dropped);
             line += " log line(s): slot pool exhausted";
             std::lock_guard<std::mutex> backendLock(m_backendMutex);
             m_backend->consumeLine(LogLevel::WARNING, line);
         }
         catch (...)
         {}
+    }
+
+    // Locked variants for the cold paths (flush(), stop(), the FATAL drain):
+    // m_queueMutex is already held there and producer latency is not a
+    // concern. m_queueMutex guards m_lastFlush.
+    void flushBackendLocked()
+    {
+        m_lastFlush = std::chrono::steady_clock::now();
+        flushBackend();
+    }
+
+    // m_queueMutex must be held.
+    void reportDroppedLocked()
+    {
+        auto const dropped = m_droppedLines.exchange(0, std::memory_order_relaxed);
+        if (dropped != 0)
+        {
+            reportDropped(dropped);
+        }
     }
 
     // m_queueMutex must be held.
@@ -473,36 +492,64 @@ private:
         for (;;)
         {
             std::uint32_t slot = 0;
+            bool haveSlot = false;
+            std::uint64_t dropped = 0;
+            bool flushRequested = false;
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
-                if (m_queue.empty())
+                if (!m_queue.empty())
                 {
-                    // Queue drained: surface dropped lines, then flush
-                    // unconditionally so the tail of a burst reaches the file
-                    // right away. This branch is cold by definition — under a
-                    // flood the queue never drains, and that case stays
-                    // rate-limited by maybeFlushLocked() below.
-                    reportDroppedLocked();
-                    flushBackendLocked();
-                    if (m_flushRequested)
-                    {
-                        m_flushRequested = false;
-                        m_flushDone.notify_all();
-                    }
-                    return;
+                    slot = m_queue.front();
+                    m_queue.pop_front();
+                    haveSlot = true;
                 }
-                slot = m_queue.front();
-                m_queue.pop_front();
+                else
+                {
+                    // Queue drained. Take only the bookkeeping under the queue
+                    // mutex: writeLine() wakes the worker per line, so this
+                    // branch runs once per line at any rate the worker keeps
+                    // up with, and the backend IO below must not stand in
+                    // front of the producers.
+                    dropped = m_droppedLines.exchange(0, std::memory_order_relaxed);
+                    m_lastFlush = std::chrono::steady_clock::now();
+                    flushRequested = m_flushRequested;
+                }
             }
-            feedOne(slot);
-            // Under a continuous flood the queue never drains; keep the flush
-            // staleness bounded. One clock read per FlushCheckEvery lines.
-            if (++linesSinceFlushCheck >= FlushCheckEvery)
+            if (haveSlot)
             {
-                linesSinceFlushCheck = 0;
-                std::lock_guard<std::mutex> lock(m_queueMutex);
-                maybeFlushLocked();
+                feedOne(slot);
+                // Under a continuous flood the queue never drains; keep the
+                // flush staleness bounded. One clock read per FlushCheckEvery
+                // lines.
+                if (++linesSinceFlushCheck >= FlushCheckEvery)
+                {
+                    linesSinceFlushCheck = 0;
+                    std::lock_guard<std::mutex> lock(m_queueMutex);
+                    maybeFlushLocked();
+                }
+                continue;
             }
+            // Drained branch, queue mutex released: surface dropped lines,
+            // then flush unconditionally so the tail of a burst reaches the
+            // file right away. Under a flood this branch never runs; that
+            // case stays rate-limited by maybeFlushLocked() above.
+            if (dropped != 0)
+            {
+                reportDropped(dropped);
+            }
+            flushBackend();
+            if (flushRequested)
+            {
+                std::lock_guard<std::mutex> lock(m_queueMutex);
+                // A flush() that set the flag after we read it stays pending
+                // for the next pass.
+                if (m_flushRequested)
+                {
+                    m_flushRequested = false;
+                    m_flushDone.notify_all();
+                }
+            }
+            return;
         }
     }
 

@@ -23,8 +23,8 @@ namespace bcos::test
 namespace
 {
 // A backend that throws on every consumeLine and every flush, simulating a
-// persistent IO failure on the async sink's dedicated feeding thread (the
-// FIB-184 crash trigger).
+// persistent IO failure on the shared LineFeeder worker thread (the FIB-184
+// crash trigger).
 struct AlwaysThrowingBackend
 {
     std::atomic<int>* m_consumed = nullptr;
@@ -51,8 +51,9 @@ BOOST_AUTO_TEST_CASE(lineSinkSuppressesBackendException)
     bcos::log::LineAsyncSink<AlwaysThrowingBackend> sink(backend);
 
     sink.writeLine(bcos::LogLevel::INFO, "p|", "FIB-184 trigger line");
-    // flush() and stop() run the throwing backend on the feeding thread and
-    // join it; reaching std::terminate would crash the whole test binary.
+    // flush() waits for the throwing backend to run on the shared LineFeeder
+    // worker; stop() then drains inline and detaches from the worker.
+    // Reaching std::terminate would crash the whole test binary.
     sink.flush();
     sink.stop();
 
