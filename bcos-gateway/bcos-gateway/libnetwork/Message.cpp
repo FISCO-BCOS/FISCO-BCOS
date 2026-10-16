@@ -28,7 +28,7 @@
 #include <utility>
 
 // same log tag as the former libp2p message implementation
-#define P2PMSG_LOG(LEVEL) BCOS_LOG(LEVEL) << "[P2PService][P2PMessage]"
+#define P2PMSG_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[P2PService][P2PMessage]"
 
 using namespace bcos;
 using namespace bcos::gateway;

@@ -29,7 +29,7 @@
 #include <utility>
 #include <bcos-utilities/BoostLog.h>
 
-#define AMOP_CLIENT_LOG(level) BCOS_LOG(level) << LOG_BADGE("AMOPClient")
+#define AMOP_CLIENT_LOG(level) BCOS_MODULE_LOG(RPC, level) << LOG_BADGE("AMOPClient")
 
 namespace bcos::rpc
 {
@@ -69,16 +69,16 @@ public:
             case AMOPNotifyMessageType::Broadcast:
                 co_return co_await notifyAMOPBroadcastMessage(_topic, _data);
             default:
-                BCOS_LOG(WARNING) << LOG_DESC("notifyAMOPMessage: unknown message type")
-                                  << LOG_KV("type", _type);
+                AMOP_CLIENT_LOG(WARNING)
+                    << LOG_DESC("notifyAMOPMessage: unknown message type") << LOG_KV("type", _type);
                 co_return std::make_tuple(
                     BCOS_ERROR_PTR(-1, "unknown AMOP notify message type"), bytesPointer());
             }
         }
         catch (std::exception const& e)
         {
-            BCOS_LOG(WARNING) << LOG_DESC("notifyAMOPMessage exception")
-                              << LOG_KV("message", boost::diagnostic_information(e));
+            AMOP_CLIENT_LOG(WARNING) << LOG_DESC("notifyAMOPMessage exception")
+                                     << LOG_KV("message", boost::diagnostic_information(e));
             co_return std::make_tuple(
                 BCOS_ERROR_PTR(-1, boost::diagnostic_information(e)), bytesPointer());
         }

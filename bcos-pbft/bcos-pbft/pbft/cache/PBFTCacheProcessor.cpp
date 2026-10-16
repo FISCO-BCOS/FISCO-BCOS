@@ -19,6 +19,7 @@
  * @date 2021-04-21
  */
 #include "PBFTCacheProcessor.h"
+#include "bcos-pbft/pbft/utilities/SealStall.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <chrono>
@@ -315,15 +316,16 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
     m_committedQueue.push(_committedProposal);
     m_committedProposalList.insert(proposalIndex);
     m_proposalsToStableConsensus.insert(proposalIndex);
-    PBFT_LOG(INFO) << LOG_DESC("######## CommitProposal") << printPBFTProposal(_committedProposal)
+    // keys named like the rest of the round (index/hash) so `log pbft <n>` joins on them
+    PBFT_LOG(INFO) << LOG_DESC("######## CommitQuorum")
+                   << LOG_KV("index", _committedProposal->index())
+                   << LOG_KV("hash", _committedProposal->hash().abridged())
                    << LOG_KV("sys", _committedProposal->systemProposal())
                    << m_config->printCurrentState();
     if (_committedProposal->systemProposal())
     {
         m_config->setWaitSealUntil(proposalIndex);
-        PBFT_LOG(INFO) << LOG_DESC(
-                              "Receive valid system prePrepare proposal, stop to notify sealing")
-                       << LOG_KV("waitSealUntil", proposalIndex);
+        noteSealSkipped(SealSkipReason::SysProposalPending, proposalIndex + 1, proposalIndex);
     }
     // Note: should notify to seal nextBlock after waitSealUntil setted, in case of the system
     // proposals are generated and committed not by serial
@@ -342,9 +344,9 @@ void PBFTCacheProcessor::notifyCommittedProposalIndex(bcos::protocol::BlockNumbe
     m_committedProposalNotifier(_index, [_index](Error::Ptr _error) {
         if (!_error)
         {
-            PBFT_LOG(INFO) << LOG_DESC(
-                                  "notify the committed proposal index to the sync module success")
-                           << LOG_KV("index", _index);
+            PBFT_LOG(DEBUG) << LOG_DESC(
+                                   "notify the committed proposal index to the sync module success")
+                            << LOG_KV("index", _index);
             return;
         }
         PBFT_LOG(WARNING) << LOG_DESC(
@@ -552,17 +554,15 @@ void PBFTCacheProcessor::notifyToSealNextBlock()
     }
     auto nextProposalIndex = std::max(lastIndex + 1, committedIndex + 1);
     m_config->notifySealer(nextProposalIndex);
-    PBFT_LOG(INFO) << LOG_DESC("notify to seal next proposal")
-                   << LOG_KV("nextProposalIndex", nextProposalIndex);
 }
 
 // execute the proposal and broadcast checkpoint message
 void PBFTCacheProcessor::applyStateMachine(
     ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal)
 {
-    PBFT_LOG(INFO) << LOG_DESC("applyStateMachine") << LOG_KV("index", _proposal->index())
-                   << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState()
-                   << LOG_KV("unAppliedProposals", m_committedQueue.size());
+    PBFT_LOG(DEBUG) << LOG_DESC("applyStateMachine") << LOG_KV("index", _proposal->index())
+                    << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState()
+                    << LOG_KV("unAppliedProposals", m_committedQueue.size());
     auto executedProposal = m_config->pbftMessageFactory()->createPBFTProposal();
     auto self = weak_from_this();
     auto startT = utcTime();
@@ -591,12 +591,12 @@ void PBFTCacheProcessor::applyStateMachine(
                 {
                     cache->m_proposalAppliedHandler(_ret, _proposal, executedProposal);
                 }
-                PBFT_LOG(INFO) << LOG_DESC("applyStateMachine finished")
+                PBFT_LOG(INFO) << LOG_DESC("ProposalExecuted")
                                << LOG_KV("index", _proposal->index())
-                               << LOG_KV("beforeExec", _proposal->hash().abridged())
-                               << LOG_KV("afterExec", executedProposal->hash().abridged())
-                               << config->printCurrentState()
-                               << LOG_KV("timecost", utcTime() - startT);
+                               << LOG_KV("hash", executedProposal->hash().abridged())
+                               << LOG_KV("proposalHash", _proposal->hash().abridged())
+                               << LOG_KV("execMs", utcTime() - startT)
+                               << config->printCurrentState();
             }
             catch (std::exception const& e)
             {
@@ -685,7 +685,8 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
                              << LOG_KV("fromIdx", proposal->generatedFrom())
                              << LOG_KV("dataSize", proposal->consensusProposal()->data().size());
     }
-    PBFT_LOG(INFO) << LOG_DESC("addViewChangeReq") << printPBFTMsgInfo(_viewChange)
+    PBFT_LOG(INFO) << LOG_DESC("ViewChangeReceived") << LOG_KV("toView", reqView)
+                   << LOG_KV("fromIdx", _viewChange->generatedFrom())
                    << LOG_KV("weight", m_viewChangeWeight[reqView])
                    << LOG_KV("maxCommittedIndex", m_maxCommittedIndex[reqView])
                    << LOG_KV("maxPrecommitIndex", m_maxPrecommitIndex[reqView])
@@ -777,9 +778,9 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
             PacketType::PrePreparePacket, prePrepareProposal, m_config->pbftMsgDefaultVersion(),
             m_config->toView(), utcTime(), generatedFrom);
         prePrepareMsgList.push_back(prePrepareMsg);
-        PBFT_LOG(INFO) << LOG_DESC("generatePrePrepareMsg") << printPBFTMsgInfo(prePrepareMsg)
-                       << LOG_KV("dataSize", prePrepareMsg->consensusProposal()->data().size())
-                       << LOG_KV("emptyProposal", empty);
+        PBFT_LOG(DEBUG) << LOG_DESC("generatePrePrepareMsg") << printPBFTMsgInfo(prePrepareMsg)
+                        << LOG_KV("dataSize", prePrepareMsg->consensusProposal()->data().size())
+                        << LOG_KV("emptyProposal", empty);
     }
     return prePrepareMsgList;
 }
@@ -805,6 +806,9 @@ NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
         return nullptr;
     }
     // the next leader collect enough viewChange requests
+    PBFT_LOG(INFO) << LOG_DESC("ViewChangeQuorum") << LOG_KV("toView", toView)
+                   << LOG_KV("weight", m_viewChangeWeight[toView])
+                   << LOG_KV("minRequiredQuorum", m_config->minRequiredQuorum());
     // set the viewchanges(without prePreparedProposals)
     auto viewChangeCache = m_viewChangeCache[toView];
     ViewChangeMsgList viewChangeList;
@@ -833,8 +837,9 @@ NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
     m_config->frontService()->broadcastMessageByOwnedPayload(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     m_newViewGenerated = true;
-    PBFT_LOG(INFO) << LOG_DESC("The next leader broadcast NewView request")
-                   << printPBFTMsgInfo(newViewMsg) << LOG_KV("Idx", m_config->nodeIndex());
+    PBFT_LOG(INFO) << LOG_DESC("NewViewSent") << LOG_KV("view", toView)
+                   << LOG_KV("Idx", m_config->nodeIndex())
+                   << LOG_KV("prePrepareCount", generatedPrePrepareList.size());
     return newViewMsg;
 }
 
@@ -986,9 +991,9 @@ void PBFTCacheProcessor::removeConsensusedCache(
 void PBFTCacheProcessor::resetCacheAfterViewChange(
     ViewType _view, bcos::protocol::BlockNumber _latestCommittedProposal)
 {
-    PBFT_LOG(INFO) << LOG_DESC("resetCacheAfterViewChange") << LOG_KV("view", _view)
-                   << LOG_KV("number", _latestCommittedProposal)
-                   << LOG_KV("cacheSize", m_caches.size());
+    PBFT_LOG(DEBUG) << LOG_DESC("resetCacheAfterViewChange") << LOG_KV("view", _view)
+                    << LOG_KV("number", _latestCommittedProposal)
+                    << LOG_KV("cacheSize", m_caches.size());
     for (auto const& it : m_caches)
     {
         it.second->resetCache(_view);
@@ -1106,10 +1111,10 @@ void PBFTCacheProcessor::updateStableCheckPointQueue(PBFTProposalInterface::Ptr 
 {
     assert(_stableCheckPoint);
     m_stableCheckPointQueue.push(_stableCheckPoint);
-    PBFT_LOG(INFO) << LOG_DESC("updateStableCheckPointQueue: insert new checkpoint proposal")
-                   << LOG_KV("index", _stableCheckPoint->index())
-                   << LOG_KV("hash", _stableCheckPoint->hash().abridged())
-                   << m_config->printCurrentState();
+    PBFT_LOG(DEBUG) << LOG_DESC("updateStableCheckPointQueue: insert new checkpoint proposal")
+                    << LOG_KV("index", _stableCheckPoint->index())
+                    << LOG_KV("hash", _stableCheckPoint->hash().abridged())
+                    << m_config->printCurrentState();
     tryToCommitStableCheckPoint();
 }
 
@@ -1129,9 +1134,9 @@ void PBFTCacheProcessor::tryToCommitStableCheckPoint()
     if (!m_stableCheckPointQueue.empty() &&
         m_stableCheckPointQueue.top()->index() == m_config->committedProposal()->index() + 1)
     {
-        PBFT_LOG(INFO) << LOG_DESC("updateStableCheckPointQueue: commit stable checkpoint")
-                       << LOG_KV("index", m_stableCheckPointQueue.top()->index())
-                       << LOG_KV("committedIndex", m_config->committedProposal()->index());
+        PBFT_LOG(DEBUG) << LOG_DESC("updateStableCheckPointQueue: commit stable checkpoint")
+                        << LOG_KV("index", m_stableCheckPointQueue.top()->index())
+                        << LOG_KV("committedIndex", m_config->committedProposal()->index());
         auto stableCheckPoint = m_stableCheckPointQueue.top();
         m_committedProposalList.erase(stableCheckPoint->index());
         m_stableCheckPointQueue.pop();

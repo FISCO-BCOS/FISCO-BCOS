@@ -425,8 +425,8 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     }
                 }
                 auto signature = orgBlockHeader->signatureList();
-                BLKSYNC_LOG(INFO) << METRIC << LOG_BADGE("Download")
-                                  << LOG_DESC("BlockSync: applyBlock success")
+                downloadQueue->m_config->blockStat().add(BlockSyncConfig::Applied);
+                BLKSYNC_LOG(INFO) << METRIC << LOG_BADGE("Download") << LOG_DESC("BlockApplied")
                                   << LOG_KV("number", orgBlockHeader->number())
                                   << LOG_KV("hash", orgBlockHeader->hash().abridged())
                                   << LOG_KV("signatureSize", signature.size())
@@ -465,11 +465,11 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
         return false;
     }
     auto signature = blockHeader->signatureList();
-    BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("checkAndCommitBlock")
-                      << LOG_KV("number", blockHeader->number())
-                      << LOG_KV("signatureSize", signature.size())
-                      << LOG_KV("currentNumber", m_config->blockNumber())
-                      << LOG_KV("hash", blockHeader->hash().abridged());
+    BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("checkAndCommitBlock")
+                       << LOG_KV("number", blockHeader->number())
+                       << LOG_KV("signatureSize", signature.size())
+                       << LOG_KV("currentNumber", m_config->blockNumber())
+                       << LOG_KV("hash", blockHeader->hash().abridged());
 
     auto self = weak_from_this();
     m_config->consensus()->asyncCheckBlock(_block, [self, _block, blockHeader](
@@ -493,9 +493,9 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
             }
             if (_ret)
             {
-                BLKSYNC_LOG(INFO) << BLOCK_NUMBER(blockHeader->number())
-                                  << LOG_DESC("asyncCheckBlock success, try to commit the block")
-                                  << LOG_KV("hash", blockHeader->hash().abridged());
+                BLKSYNC_LOG(DEBUG) << BLOCK_NUMBER(blockHeader->number())
+                                   << LOG_DESC("asyncCheckBlock success, try to commit the block")
+                                   << LOG_KV("hash", blockHeader->hash().abridged());
                 downloadQueue->commitBlock(_block);
                 return;
             }
@@ -551,15 +551,16 @@ void DownloadingQueue::tryToCommitBlockToLedger()
 void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
 {
     auto blockHeader = _block->blockHeader();
-    BLKSYNC_LOG(INFO) << LOG_DESC("commitBlock") << LOG_KV("number", blockHeader->number())
-                      << LOG_KV("txsNum", _block->transactionsSize())
-                      << LOG_KV("hash", blockHeader->hash().abridged());
+    BLKSYNC_LOG(DEBUG) << LOG_DESC("commitBlock") << LOG_KV("number", blockHeader->number())
+                       << LOG_KV("txsNum", _block->transactionsSize())
+                       << LOG_KV("hash", blockHeader->hash().abridged());
     // empty block
     if (_block->transactionsSize() == 0)
     {
-        BLKSYNC_LOG(INFO) << LOG_DESC("commitBlock: receive empty block, commitBlockState directly")
-                          << LOG_KV("number", blockHeader->number())
-                          << LOG_KV("hash", blockHeader->hash().abridged());
+        BLKSYNC_LOG(DEBUG) << LOG_DESC(
+                                  "commitBlock: receive empty block, commitBlockState directly")
+                           << LOG_KV("number", blockHeader->number())
+                           << LOG_KV("hash", blockHeader->hash().abridged());
         commitBlockState(_block);
         return;
     }
@@ -584,8 +585,8 @@ void DownloadingQueue::commitBlock(bcos::protocol::Block::Ptr _block)
 void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
 {
     auto blockHeader = _block->blockHeader();
-    BLKSYNC_LOG(INFO) << LOG_DESC("commitBlockState") << LOG_KV("number", blockHeader->number())
-                      << LOG_KV("hash", blockHeader->hash().abridged());
+    BLKSYNC_LOG(DEBUG) << LOG_DESC("commitBlockState") << LOG_KV("number", blockHeader->number())
+                       << LOG_KV("hash", blockHeader->hash().abridged());
     auto startT = utcTime();
     auto self = weak_from_this();
     m_config->scheduler()->commitBlock(blockHeader, [self, startT, _block, blockHeader](
@@ -631,7 +632,7 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
                 downloadingQueue->m_config->setExecutedBlock(blockHeader->number());
             }
             BLKSYNC_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << METRIC
-                              << LOG_DESC("commitBlockState success")
+                              << LOG_DESC("BlockCommitted")
                               << LOG_KV("number", blockHeader->number())
                               << LOG_KV("hash", blockHeader->hash().abridged())
                               << LOG_KV(
