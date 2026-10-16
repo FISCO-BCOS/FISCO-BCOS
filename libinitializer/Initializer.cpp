@@ -25,6 +25,7 @@
  */
 
 #include "Initializer.h"
+#include <bcos-framework/ledger/OpForkScheduleMetadata.h>
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
@@ -43,7 +44,6 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/MPTPruner.h"
-#include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-single-consensus/SingleNodeConsensus.h"
 #include "bcos-storage/MPTNodeReadStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
@@ -55,6 +55,7 @@
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
+#include "opstack-executor/OpAdmissionRollupCost.h"
 #include <TxPool.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hasher/AnyHasher.h>
@@ -76,7 +77,6 @@
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
-#include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <bcos-transaction-executor/TransactionExecutorImpl.h>
@@ -119,6 +119,9 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     std::string const& _privateKeyPath, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
+    // AirNodeInitializer creates the shared pool for an AIR node; a Pro NodeService process
+    // creates its own before init() hands it to the front, ledger and scheduler
+    m_ioServicePool = std::make_shared<bcos::IOServicePool>(m_nodeConfig->ioThreadCount(), "io");
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
@@ -157,8 +160,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     m_protocolInitializer->loadKeyPair(privateKeyPath);
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configFilePath, pt);
-    m_nodeConfig->loadNodeServiceConfig(
-        m_protocolInitializer->keyPair()->publicKey()->hex(), pt, false);
+    m_nodeConfig->loadNodeServiceConfig(m_protocolInitializer->keyPair()->publicKey()->hex(), pt);
     if (!_airVersion)
     {
         // load the service config
@@ -194,7 +196,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 {
     // Engine-driven block production (single-node consensus or [op_engine_rpc]) is AIR-only.
     // Both modes skip txpool/pbft init and wire the in-process mempool into NodeService via
-    // AirNodeInitializer::setMemPool; on a MAX/tars node the flag would start the
+    // AirNodeInitializer::setMemPool; on a Pro/tars node the flag would start the
     // block-producing driver while sendRawTransaction still falls through to an
     // uninitialized txpool. Reject the combination at startup rather than leaving that
     // state reachable by a config flag.
@@ -204,7 +206,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "enable_single_node_consensus / op_engine_rpc.enable are only supported on "
-                "AIR nodes (in-process mempool/scheduler); not supported on MAX/tars "
+                "AIR nodes (in-process mempool/scheduler); not supported on Pro/tars "
                 "deployments"));
     }
 
@@ -296,16 +298,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
-    bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
-    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-    {
-        executionMessageFactory =
-            std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
-    }
-    else
-    {
-        executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
-    }
+    auto executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
 
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
@@ -367,8 +360,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
     }
     m_memPoolInitializer = MemPoolInitializer::build(memPoolConfig);
-
-    std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
 
     bcos::executor::GlobalHashImpl::g_hashImpl = m_protocolInitializer->cryptoSuite()->hashImpl();
 
@@ -729,6 +720,33 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // opstack-el self-sync mode blocks arrive over devp2p and commit through
         // OpBlockVerifier (OpStackSyncInitializer), so no EngineService — and no DA-caps /
         // mempool wiring that exists only to serve it — is built.
+        // The declared-ness diagnostic is hoisted OUT of that split on purpose: the same
+        // preset reaches BOTH lanes — the engine substitutes it into extraData whenever
+        // op-node reports zero params, and the sync validator re-prices pre-Holocene
+        // headers with it (OpStackSyncInitializer::opChainConfig) — so an undeclared OP
+        // chain must hear about it in either mode, not just the engine-driven one.
+        auto const& declaredOpEip1559 = m_nodeConfig->genesisConfig().m_opEip1559;
+        auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
+        if (declaredOpEip1559.has_value())
+        {
+            INITIALIZER_LOG(INFO)
+                << LOG_DESC("OP chain EIP-1559 parameters") << LOG_KV("declared", true)
+                << LOG_KV("elasticity", opEip1559.elasticity)
+                << LOG_KV("denominator", opEip1559.denominator)
+                << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+        }
+        else
+        {
+            // Never silent: this preset is what zero-attribute-params substitution (the
+            // engine lane) and pre-Holocene header re-pricing (the el lane) fall back to,
+            // and the preset need not be this chain's pair.
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("OP chain declares no [op_eip1559]: preset-priced fallback "
+                            "will use the OP-mainnet PRESET")
+                << LOG_KV("elasticity", opEip1559.elasticity)
+                << LOG_KV("denominator", opEip1559.denominator)
+                << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+        }
         if (!m_nodeConfig->opStackELModeEnabled())
         {
             m_daCaps = std::make_shared<bcos::engine::DACaps>();
@@ -736,6 +754,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
                 m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
                 opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+            // NOTE (split): the declaredOpEip1559 wiring into the engine constructor rides
+            // the engine-side PR (the OpEngineService ctor param lands there); this branch
+            // keeps the config-channel reading + boot diagnostics only.
         }
 
         m_opScheduler = opDelegate;
@@ -762,16 +783,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             republishLedgerConfig);
     }
 
-    executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
-        *m_ioServicePool->getIOService(), m_nodeConfig->executorServiceName(), m_nodeConfig);
+    auto executorManager = std::make_shared<bcos::scheduler::ExecutorManager>();
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize());
+        m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize(), m_ioServicePool);
 
-    int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
-                               // switch to a leader during startup
+    int64_t schedulerSeq = 0;
     // The dispatcher republishes the configuration after every commit, for every executor
     // version; the holder was published once at boot when it was created.
     auto multiVersionScheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
@@ -835,6 +854,99 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
     }
 
+    // Boot probe parity for the OP lane's fail-closed rows (review finding T):
+    // applyLedgerConfig throws on a malformed op_eip1559_params / op_fork_schedule row,
+    // and without a boot-side parse a corrupt row would only surface as the per-block
+    // "Execute block failed!" loop plus -32603 on every RPC reader. Parse both rows
+    // here on the OP lane so the failure is an explicit startup refusal, mirroring the
+    // evmc_revision probe above. Absent rows stay legal (pre-existing OP chains). The
+    // same probe refuses a node whose OWN declared material diverges from the chain's
+    // recorded copy — see the two comparisons below.
+    if (ledger::isOpLaneVersion(m_executorVersion))
+    {
+        std::optional<std::string> recordedEip1559Row;
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_eip1559_params))))
+        {
+            // Throws InvalidOpEip1559Config on a malformed row — the exact parse
+            // applyLedgerConfig performs on every snapshot read.
+            (void)ledger::parseOpEip1559Params(std::get<0>(*row));
+            recordedEip1559Row = std::get<0>(*row);
+        }
+        // The recorded triple is genesis-frozen; the triple THIS node prices with
+        // (effectiveOpEip1559 of the local [op_eip1559], the preset when it declares
+        // nothing) must equal it, or header validation and the zero-param substitution
+        // run on constants the chain never recorded.
+        if (auto const problem =
+                ledger::opEip1559BootProbeProblem(recordedEip1559Row, m_nodeConfig->opEip1559()))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
+        }
+
+        std::optional<std::string> recordedScheduleRow;
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_fork_schedule))))
+        {
+            // opForkScheduleFromCanonical throws ledger::InvalidOpForkSchedule on a
+            // malformed canonical row — the exact parse applyLedgerConfig performs.
+            (void)ledger::opForkScheduleFromCanonical(std::get<0>(*row));
+            recordedScheduleRow = std::get<0>(*row);
+        }
+        // SYS_OP_CHAIN_METADATA integrity triple: absent is legal (pre-triple chain);
+        // PRESENT-but-partial/corrupt/mis-bound is an explicit startup refusal — the
+        // triple exists precisely so a tampered schedule cannot survive unnoticed.
+        // Scope note (deliberately conditional, not unconditional): the production Ledger
+        // returns a state storage on both branches of getStateStorage(), but the
+        // LedgerInterface DEFAULT returns nullptr — a non-overriding ledger SKIPS this
+        // check rather than refusing, and that skip is logged loudly below rather than
+        // left silent. The binding target resolves inside the helper: the config's
+        // [eth_genesis_header] hash when declared, else the chain's own block-0 header —
+        // a schedule-carrying genesis built by a direct-API caller (no config section)
+        // boots with its tamper evidence intact instead of being refused (review F5).
+        std::optional<std::string> recordedTripleSchedule;
+        std::optional<crypto::HashType> configGenesisHash;
+        if (auto const& genesisHeader = m_nodeConfig->genesisConfig().m_ethGenesisHeader;
+            genesisHeader.has_value())
+        {
+            configGenesisHash = genesisHeader->m_hash;
+        }
+        if (auto stateStorage = m_ledger->getStateStorage())
+        {
+            if (auto metadata = task::syncWait(ledger::readValidatedOpForkScheduleMetadataForBoot(
+                    *stateStorage, *m_protocolInitializer->blockFactory(), configGenesisHash));
+                metadata.has_value())
+            {
+                recordedTripleSchedule = metadata->schedule;
+            }
+        }
+        else
+        {
+            // Fail-visible rather than fail-open: the tamper check below then runs with
+            // no triple side. The production Ledger never lands here (both getStateStorage
+            // branches return a storage); only a non-overriding LedgerInterface does.
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("OP boot probe: ledger exposes no state storage — the "
+                            "SYS_OP_CHAIN_METADATA integrity triple cannot be read and its "
+                            "tamper check is SKIPPED");
+        }
+        // The schedule this node will actually run comes from WHICHEVER declaration channel
+        // it carries — the canonical [op_fork_schedule] (Optional) or the folded
+        // [op_fork_timestamps] shorthand (Required) — so a shorthand-only chain, which is
+        // legal and populates only the required channel, is compared too. The recorded side
+        // is the row every snapshot reader consumes, else the pre-triple chain's triple, else
+        // nothing to compare against; a node booted with a different schedule than the
+        // chain's recorded one must refuse, or the divergence surfaces only at the next fork
+        // activation.
+        auto const localSchedule = ledger::resolvedLocalOpForkScheduleCanonical(
+            m_nodeConfig->genesisConfig().m_opForkSchedule,
+            m_nodeConfig->genesisConfig().m_opstackForkSchedule);
+        if (auto const problem = ledger::opForkScheduleBootProbeProblem(
+                recordedScheduleRow, recordedTripleSchedule, localSchedule))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(*problem));
+        }
+    }
+
     // Set scheduler to TxPoolInitializer after scheduler is created
     m_txpoolInitializer->setScheduler(m_scheduler);
 
@@ -851,35 +963,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
     }
 
-    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-    {
-        INITIALIZER_LOG(INFO) << LOG_DESC("waiting for connect executor")
-                              << LOG_KV("nodeArchType", _nodeArchType);
-        executorManager->start();  // will waiting for connecting some executors
+    INITIALIZER_LOG(INFO) << LOG_DESC("create Executor") << LOG_KV("nodeArchType", _nodeArchType);
 
-        // init scheduler
-        dynamic_cast<scheduler::SchedulerManager&>(m_scheduler->scheduler(0))
-            .initSchedulerIfNotExist();
-    }
-    else
-    {
-        INITIALIZER_LOG(INFO) << LOG_DESC("create Executor")
-                              << LOG_KV("nodeArchType", _nodeArchType);
-
-        // Note: ensure that there has at least one executor before pbft/sync execute block
-        auto storageFactory =
-            std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
-        std::string executorName = "executor-local";
-        auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
-            m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
-            executionMessageFactory, storageFactory,
-            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->vmCacheSize(),
-            m_nodeConfig->isAuthCheck(), executorName, m_ioServicePool);
-        auto switchExecutorManager = std::make_shared<bcos::executor::SwitchExecutorManager>(
-            executorFactory, m_ioServicePool);
-        executorManager->addExecutor(executorName, switchExecutorManager);
-        m_switchExecutorManager = switchExecutorManager;
-    }
+    // Note: ensure that there has at least one executor before pbft/sync execute block
+    auto storageFactory =
+        std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
+    std::string executorName = "executor-local";
+    auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(m_ledger,
+        m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage, executionMessageFactory,
+        storageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
+        m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName, m_ioServicePool);
+    auto switchExecutorManager =
+        std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory, m_ioServicePool);
+    executorManager->addExecutor(executorName, switchExecutorManager);
+    m_switchExecutorManager = switchExecutorManager;
 
     // build node time synchronization tool
     auto nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
@@ -918,22 +1015,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig, m_protocolInitializer,
                 m_txpoolInitializer->txpool(), ledger, m_scheduler, consensusStorage,
                 m_frontServiceInitializer->front(), nodeTimeMaintenance, m_ioServicePool);
-    }
-    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-    {
-        INITIALIZER_LOG(INFO) << LOG_DESC("Register switch handler in scheduler manager");
-        // PBFT and scheduler are in the same process here, we just cast m_scheduler to
-        // SchedulerService
-        auto& schedulerServer =
-            dynamic_cast<bcos::scheduler::SchedulerManager&>(m_scheduler->scheduler(0));
-        auto consensus = m_pbftInitializer->pbft();
-        schedulerServer.registerOnSwitchTermHandler([consensus](
-                                                        bcos::protocol::BlockNumber blockNumber) {
-            INITIALIZER_LOG(DEBUG)
-                << LOG_BADGE("Switch")
-                << "Receive scheduler switch term notify of number " + std::to_string(blockNumber);
-            consensus->clearExceptionProposalState(blockNumber);
-        });
     }
     // init the txpool / pbft.
     // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc])
@@ -1009,6 +1090,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
             blobPolicy);
         m_memPoolValidator->setScheduler(m_scheduler);
+        // OP lane: the balance also covers the rollup cost (Check::L1Cost). Only this validator
+        // gets the callable: the txpool's cannot serve an OP chain (the OP gate above refuses a
+        // non-engine-driven, non-EL configuration) and opstack-el self-sync builds no mempool
+        // validator. The fork schedule was required when the OP scheduler was built.
+        if (m_executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+        {
+            m_memPoolValidator->setRollupCostFn(
+                bcos::executor_v1::opstack::makeOpAdmissionRollupCost(
+                    m_globalStateStorageInitializer, *m_nodeConfig->opForkSchedule(),
+                    m_protocolInitializer->blockFactory()));
+        }
     }
 
     // init the frontService
@@ -1109,7 +1201,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
             INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
-            // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
+            // Note: the interface will notify blockNumber to all rpc nodes in pro mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
     // notify transactions
@@ -1124,7 +1216,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     m_setBaselineSchedulerBlockNumberNotifier(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
             INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
-            // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
+            // Note: the interface will notify blockNumber to all rpc nodes in pro mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
 

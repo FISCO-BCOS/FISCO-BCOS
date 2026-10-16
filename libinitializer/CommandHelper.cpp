@@ -88,6 +88,9 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         "and receipts")(
         "output,o", boost::program_options::value<std::string>(), "snapshot output directory")(
         "import,i", boost::program_options::value<std::string>(), "import snapshot from directory")(
+        "import-blocks", boost::program_options::value<std::string>(),
+        "offline import of RLP-encoded Ethereum blocks (a chain.rlp-style file or a "
+        "directory of one-block *.rlp files), then exit — Ethereum L1 EL mode only")(
         "el,e", "run in EL self-sync mode (mirror of [ethereum].mode=el or mode=opstack-el; "
                 "conflicts with the config file are rejected)")(
         "bootnodes,b", boost::program_options::value<std::string>(),
@@ -109,7 +112,7 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     {
         std::cout << "invalid parameters" << std::endl;
         std::cout << main_options << std::endl;
-        exit(0);
+        exit(1);
     }
     /// help information
     if (vm.count("help") || vm.count("h"))
@@ -143,13 +146,13 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     }
     if (!boost::filesystem::exists(configPath))
     {
-        std::cout << "config \'" << configPath << "\' not found!";
-        exit(0);
+        std::cout << "config \'" << configPath << "\' not found!" << std::endl;
+        exit(1);
     }
     if (!boost::filesystem::exists(genesisFilePath))
     {
-        std::cout << "genesis config \'" << genesisFilePath << "\' not found!";
-        exit(0);
+        std::cout << "genesis config \'" << genesisFilePath << "\' not found!" << std::endl;
+        exit(1);
     }
     float txSpeed = 10;
     if (_autoSendTx)
@@ -195,6 +198,17 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         op = Params::operation::ImportSnapshot;
         snapshotPath = vm["import"].as<std::string>();
     }
+    std::string importBlocksPath;
+    if (vm.count("import-blocks"))
+    {
+        if (op != Params::operation::None)
+        {
+            std::cout << "import blocks can not be used with other operations";
+            exit(0);
+        }
+        op = Params::operation::ImportBlocks;
+        importBlocksPath = vm["import-blocks"].as<std::string>();
+    }
 
     // Ethereum L1 EL-mode command-line mirrors ([ethereum] in config.ini is the source of
     // truth; these flags only echo it). The conflict check is done by the caller
@@ -211,6 +225,6 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         ethereumBootnodesFile = vm["bootnodes"].as<std::string>();
     }
 
-    return bcos::initializer::Params{
-        configPath, genesisFilePath, snapshotPath, txSpeed, ethereumEL, ethereumBootnodesFile, op};
+    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed,
+        ethereumEL, ethereumBootnodesFile, op, std::move(importBlocksPath)};
 }

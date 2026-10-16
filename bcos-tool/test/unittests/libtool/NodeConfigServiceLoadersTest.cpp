@@ -125,11 +125,11 @@ BOOST_AUTO_TEST_CASE(nodeServiceConfigValidAndInvalid)
 {
     LoaderProbe a;
     BOOST_CHECK_NO_THROW(a.loadNodeServiceConfig(
-        "node0", fromIni("[service]\nnode_name=node0\nwithout_tars_framework=false\n"), false));
+        "node0", fromIni("[service]\nnode_name=node0\nwithout_tars_framework=false\n")));
+    BOOST_CHECK_EQUAL(a.nodeName(), "node0");
 
     LoaderProbe b;  // non-alnum node name → throws
-    BOOST_CHECK_THROW(
-        b.loadNodeServiceConfig("n", fromIni("[service]\nnode_name=bad!name\n"), false),
+    BOOST_CHECK_THROW(b.loadNodeServiceConfig("n", fromIni("[service]\nnode_name=bad!name\n")),
         bcos::tool::InvalidConfig);
 }
 

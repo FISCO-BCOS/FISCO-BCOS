@@ -19,7 +19,6 @@ from controller.node_controller import NodeController
 from config.service_config_generator import ServiceConfigGenerator
 from config.node_config_generator import NodeConfigGenerator
 from config.tars_config_generator import TarsConfigGenerator
-from config.max_node_config_generator import MaxNodeConfigGenerator
 
 
 class _HelpAction(argparse._HelpAction):
@@ -257,14 +256,6 @@ def chain_operations(args, node_type):
             cmd_func_attr = getattr(command_impl, impl_str)
             cmd_func_attr()
             return
-    if op_type == ServiceInfo.executor_service_type:
-        if command in CommandInfo.executor_command_to_impl.keys():
-            chain_config = ChainConfig(toml_config, node_type, output_dir, True, True)
-            command_impl = NodeCommandImpl(chain_config, node_type, output_dir)
-            impl_str = CommandInfo.executor_command_to_impl[command]
-            cmd_func_attr = getattr(command_impl, impl_str)
-            cmd_func_attr()
-            return
     utilities.log_info("unimplemented command, op_type: " + str(op_type))
 
 
@@ -416,11 +407,7 @@ def build_package_operation(args, node_type):
     utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.rpc_service))
     utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.gateway_service))
 
-    if node_type == "max":
-        utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.executor_service))
-        utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.max_node_service))
-    else:
-        utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.single_node_service))
+    utilities.file_must_exist(os.path.join(chain_config.tars_config.tars_pkg_dir, ServiceInfo.single_node_service))
 
     # TODO: port conflict check
 
@@ -444,21 +431,9 @@ def build_package_operation(args, node_type):
     enable_build_node_tars_pkg = False
     if args_type in ["all", "node"]:
         enable_build_node_tars_pkg = True
-        if node_type == "max":
-            node_config_gen = MaxNodeConfigGenerator(chain_config, node_type, output_dir, True)
-            # gen max node config
-            node_config_gen.generate_all_max_node_tars_install_package()
-        else:
-            node_config_gen = NodeConfigGenerator(chain_config, node_type, output_dir, True)
-            # gen node config
-            node_config_gen.generate_all_tars_install_package()
-
-    enable_build_executor_tars_pkg = False
-    if args_type in ["all", "executor"]:
-        if node_type == "max":
-            executor_config_gen = MaxNodeConfigGenerator(chain_config, node_type, output_dir, True)
-            executor_config_gen.generate_all_executor_tars_install_package()
-            enable_build_executor_tars_pkg = True
+        node_config_gen = NodeConfigGenerator(chain_config, node_type, output_dir, True)
+        # gen node config
+        node_config_gen.generate_all_tars_install_package()
 
     # copy tars proxy json file
     if enable_build_rpc_tars_pkg:
@@ -466,12 +441,7 @@ def build_package_operation(args, node_type):
     if enable_build_gateway_tars_pkg:
         gateway_config_gen.copy_tars_proxy_conf()
     if enable_build_node_tars_pkg:
-        if node_type != "max":
-            node_config_gen.copy_tars_proxy_conf()
-        else:
-            node_config_gen.copy_max_node_tars_proxy_conf()
-    if enable_build_executor_tars_pkg:
-        executor_config_gen.copy_executor_tars_proxy_conf()
+        node_config_gen.copy_tars_proxy_conf()
 
     utilities.print_split_info()
     utilities.log_info("* build tars install package output dir : %s" % output_dir)

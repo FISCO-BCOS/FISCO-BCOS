@@ -26,6 +26,12 @@ if (ONLY_CPP_SDK)
 endif ()
 
 add_library(bcos-utilities ${SRCS})
+# ClientIdentity.cpp is the only source here that includes the generated include/BuildInfo.h
+# (create_build_info in cmake/BuildInfo.cmake): make sure it exists before this library
+# compiles, and keep that file out of the unity batches so the per-build timestamp in
+# BuildInfo.h only recompiles this one small TU.
+add_dependencies(bcos-utilities BuildInfo.h)
+set_source_files_properties(bcos-utilities/ClientIdentity.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_include_directories(bcos-utilities PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-utilities>)

@@ -65,7 +65,7 @@ public:
     virtual void loadWithoutTarsFrameworkConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadNodeServiceConfig(
-        std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require = false);
+        std::string const& _nodeID, boost::property_tree::ptree const& _pt);
 
     virtual void loadTarsProxyConfig(const std::string& _tarsProxyConf);
 
@@ -99,6 +99,12 @@ public:
     /// An unset isthmus_time keeps Isthmus as the zero-start baseline (existing chains); a
     /// set one activates the full Bedrock..Karst ladder (Bedrock is genesis, no entry).
     std::optional<ledger::OpForkSchedule> const& opForkSchedule() const;
+
+    /// The chain's EIP-1559 triple from the genesis [op_eip1559] section, or nullopt when the
+    /// section is absent (the engine then prices with c_legacyOpEip1559Params). Chain-level and
+    /// genesis-frozen: two nodes disagreeing about it would price the same height differently,
+    /// so it is part of the genesis pin via generateGenesisData.
+    std::optional<ledger::OpEip1559Params> const& opEip1559() const;
 
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
@@ -168,14 +174,7 @@ public:
     std::string const& rpcServiceName() const;
     std::string const& gatewayServiceName() const;
 
-    std::string const& schedulerServiceName() const;
-    std::string const& executorServiceName() const;
-    std::string const& txpoolServiceName() const;
-
     std::string const& nodeName() const;
-
-    std::string getDefaultServiceName(
-        std::string const& _nodeName, std::string const& _serviceName) const;
 
     // the rpc configurations
     const std::string& rpcListenIP() const;
@@ -218,6 +217,14 @@ public:
     // so the batcher's handshake never leaks onto the public port.
     bool enableOpEngineMinerApi() const;
     bool enableMinerApi() const;
+    // scopes the geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload) to
+    // a listener that explicitly opts in via enable_debug_api. Off by default: it serves the
+    // fault-proof preimage oracle (kona-host), not general clients, so geth-style the namespace
+    // is only exposed where configured — enableOpEngineDebugApi() gates the op-engine listener
+    // ([op_engine_rpc] enable_debug_api), enableDebugApi() the web3 listener
+    // ([web3_rpc] enable_debug_api).
+    bool enableOpEngineDebugApi() const;
+    bool enableDebugApi() const;
     const std::string& opEngineRpcListenIP() const;
     uint16_t opEngineRpcListenPort() const;
     uint32_t opEngineHttpBodySizeLimit() const;
@@ -449,8 +456,13 @@ protected:
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
     // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis)
     void loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
+    // OP-Stack canonical fork schedule ([op_fork_schedule] in config.genesis).
+    // Missing section leaves m_opstackForkSchedule unset (legacy via feature_op_jovian).
+    void loadOpForkSchedule(boost::property_tree::ptree const& _genesisConfig);
     // OP-lane fork schedule ([op_fork_timestamps] in config.genesis)
     void loadOpForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
+    // OP-lane chain EIP-1559 parameters ([op_eip1559] in config.genesis)
+    void loadOpEip1559(boost::property_tree::ptree const& _genesisConfig);
 
     // load config.ini
     void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);
@@ -584,7 +596,7 @@ private:
     BaselineSchedulerConfig m_baselineSchedulerConfig;
     TarsRPCConfig m_tarsRPCConfig;
 
-    // Pro and Max versions run do not apply to tars admin site
+    // a Pro deployment run without the tars admin site
     bool m_withoutTarsFramework = {false};
 
     // service name to tars endpoints
@@ -593,10 +605,6 @@ private:
     std::string m_rpcServiceName;
     std::string m_gatewayServiceName;
 
-    // the serviceName of other modules
-    std::string m_schedulerServiceName;
-    std::string m_executorServiceName;
-    std::string m_txpoolServiceName;
     std::string m_nodeName;
 
     // config for rpc
@@ -636,6 +644,8 @@ private:
     bool m_enableOpEngineRpc = false;
     bool m_enableMinerApi = false;
     bool m_enableOpEngineMinerApi = false;
+    bool m_enableDebugApi = false;
+    bool m_enableOpEngineDebugApi = false;
     std::string m_opEngineRpcListenIP = "127.0.0.1";
     uint16_t m_opEngineRpcListenPort{};
     uint32_t m_opEngineHttpBodySizeLimit{};

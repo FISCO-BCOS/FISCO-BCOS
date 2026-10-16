@@ -105,10 +105,10 @@ inline constexpr uint64_t kSecondsToMilliseconds = 1000;
 inline constexpr size_t kHashBytes = 32;
 inline constexpr size_t kChainIdBytes = 8;
 
-/// The EVMC revision active for a block with the given timestamp. A zero fork
-/// timestamp means "active from genesis" (consistent with HeaderValidator's
-/// isForkActive semantics); an unset field (the UINT64_MAX default) means the fork
-/// never activates.
+/// The EVMC revision active for a block with the given timestamp. Activation is
+/// bcos::protocol::isForkActive (bcos-rlp-protocol/EthPoSHeaderValidation.h): a
+/// zero fork timestamp means "active from genesis"; an unset field (the
+/// UINT64_MAX default) means the fork never activates.
 ///
 /// Paris (the Merge) is special: geth activates it at paris_time OR as soon as
 /// the chain's Terminal Total Difficulty has been reached — a PoW-configured
@@ -123,27 +123,25 @@ inline constexpr size_t kChainIdBytes = 8;
 inline evmc_revision evmcRevisionForTimestamp(
     EvmcForkTimestamps const& schedule, int64_t timestamp, u256 const& difficulty)
 {
-    const uint64_t timestampValue = static_cast<uint64_t>(timestamp);
-    auto active = [timestampValue](
-                      uint64_t forkTime) { return forkTime == 0 || timestampValue >= forkTime; };
-    if (active(schedule.osakaTime))
+    using bcos::protocol::isForkActive;
+    if (isForkActive(schedule.osakaTime, timestamp))
     {
         return EVMC_OSAKA;
     }
-    if (active(schedule.pragueTime))
+    if (isForkActive(schedule.pragueTime, timestamp))
     {
         return EVMC_PRAGUE;
     }
-    if (active(schedule.cancunTime))
+    if (isForkActive(schedule.cancunTime, timestamp))
     {
         return EVMC_CANCUN;
     }
-    if (active(schedule.shanghaiTime))
+    if (isForkActive(schedule.shanghaiTime, timestamp))
     {
         return EVMC_SHANGHAI;
     }
     // Paris: paris_time reached, or TTD passed (difficulty == 0 on a PoW chain).
-    if (active(schedule.parisTime) || difficulty == 0)
+    if (isForkActive(schedule.parisTime, timestamp) || difficulty == 0)
     {
         return EVMC_PARIS;
     }
@@ -165,7 +163,7 @@ inline std::string u256ToHexString(u256 const& value)
 /// are what we are about to verify, so they are left at their defaults here.
 inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
     protocol::EthBlockHeaderData const& ethHeader, protocol::BlockFactory& blockFactory,
-    uint32_t blockVersion)
+    uint32_t blockVersion, EvmcForkTimestamps const& forkSchedule)
 {
     auto header = blockFactory.blockHeaderFactory()->createBlockHeader();
     header->setNumber(ethHeader.number);
@@ -215,6 +213,35 @@ inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
     {
         header->setRequestsHash(*ethHeader.requestsHash);
     }
+    // Stamp the Eth fork version so the committed header is served as an Ethereum header:
+    // combineBlockResponse only emits miner/mixHash (and the real fork-gated fields) when
+    // ethBlockVersion != NON_ETH. Without this a Paris/London header (no withdrawalsRoot)
+    // reads back as NON_ETH and the RPC response loses miner entirely, failing hive's
+    // FixtureHeader validation. The version is derived from the chain's fork SCHEDULE at
+    // the block's timestamp — the same rule the EL build lane applies
+    // (finalizeEthBlockHeader stamps a schedule-derived forkVersion) — so the two lanes
+    // agree by construction, not by coincidence. The agreement is safe for the RLP
+    // round-trip because validateHeaderPoS's symmetric require/forbidForkField pair
+    // guarantees field presence == schedule on every committed external header — and
+    // the activation predicate here IS the validator's own (bcos::protocol::isForkActive),
+    // so the two cannot drift apart.
+    // EthBlockVersion tops out at PRAGUE (Osaka/BPO add no header fields;
+    // tryEthBlockVersionFor likewise maps EVMC_OSAKA to PRAGUE). This lane is London+
+    // only, so the floor is LONDON.
+    auto ethVersion = bcos::protocol::EthBlockVersion::LONDON;
+    if (bcos::protocol::isForkActive(forkSchedule.pragueTime, ethHeader.timestamp))
+    {
+        ethVersion = bcos::protocol::EthBlockVersion::PRAGUE;
+    }
+    else if (bcos::protocol::isForkActive(forkSchedule.cancunTime, ethHeader.timestamp))
+    {
+        ethVersion = bcos::protocol::EthBlockVersion::CANCUN;
+    }
+    else if (bcos::protocol::isForkActive(forkSchedule.shanghaiTime, ethHeader.timestamp))
+    {
+        ethVersion = bcos::protocol::EthBlockVersion::SHANGHAI;
+    }
+    header->setEthBlockVersion(ethVersion);
     return header;
 }
 
@@ -558,7 +585,8 @@ public:
 
         // Execution header carrying the block context for the EVM.
         auto blockHeader = makeExecutionBlockHeader(
-            ethHeader, m_blockFactory.get(), ledgerConfig.compatibilityVersion());
+            ethHeader, m_blockFactory.get(), ledgerConfig.compatibilityVersion(),
+            forkSchedule);
         execution.header = blockHeader;
 
         // The block's EVM revision, resolved once for every fork-gated step below

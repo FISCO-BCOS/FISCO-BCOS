@@ -123,6 +123,12 @@ enum class Check : uint32_t
     /// EIP-4844: a blob transaction must carry a `to` address (blob txs cannot be contract
     /// creations). The non-empty blobVersionedHashes half is enforced while normalizing.
     BlobHasTo = 1U << 21,
+    /// OP lane: the balance also covers the rollup cost (L1 data fee of the signed envelope
+    /// plus, from Isthmus on, the operator fee at the gas limit) -- op-geth validation.go
+    /// ValidateTransactionWithState, TotalTxCost = tx.Cost() + RollupCostFn(tx). Same status as
+    /// Balance. Stands down wherever no rollup cost is bound (the FISCO and L1 lanes) -- one
+    /// table, no lane dimension.
+    L1Cost = 1U << 22,
 };
 
 constexpr Check operator|(Check lhs, Check rhs) noexcept
@@ -192,6 +198,7 @@ inline constexpr std::array c_stateOrder{
     Check::Web3NonceWindow,
     Check::InitCodeSize,
     Check::Balance,
+    Check::L1Cost,
     Check::IntrinsicGas,
 };
 inline constexpr std::array c_poolOrder{
@@ -268,8 +275,9 @@ inline constexpr Check c_poolStage = detail::unionOf(c_poolOrder);
 /// Checks that need the account's own state -- balance, nonce, code. Membership decides whether
 /// verify() performs that read, so a check that merely keys on the sender address must NOT be
 /// listed here or it would drag a storage read onto its path.
-inline constexpr Check c_accountStateDependent =
-    Check::SenderIsEOA | Check::NonceNotMax | Check::Web3NonceWindow | Check::Balance;
+inline constexpr Check c_accountStateDependent = Check::SenderIsEOA | Check::NonceNotMax |
+                                                 Check::Web3NonceWindow | Check::Balance |
+                                                 Check::L1Cost;
 
 /// What the chain view has to DERIVE, per field. The state stage always holds the configuration
 /// snapshot itself -- a pointer copy -- but the three values read out of it are not free, and one
@@ -286,7 +294,10 @@ inline constexpr Check c_accountStateDependent =
 /// tests are what catch it.
 inline constexpr Check c_revisionDependent =
     Check::TypeByRevision | Check::MaxGasLimit | Check::InitCodeSize | Check::IntrinsicGas;
-inline constexpr Check c_baseFeeDependent = Check::FeeCapVsBaseFee | Check::Balance;
+inline constexpr Check c_baseFeeDependent = Check::FeeCapVsBaseFee | Check::Balance | Check::L1Cost;
+
+/// verify() asks the bound RollupCostFn exactly when the set contains one of these.
+inline constexpr Check c_rollupCostDependent = Check::L1Cost;
 
 /// Web3PoolNonce IS sender-dependent, and that is the difference between the two pool rules: its
 /// key is the PAIR (sender, nonce), where BcosPoolNonce's is a nonce value alone. Run with an
@@ -298,11 +309,11 @@ inline constexpr Check c_baseFeeDependent = Check::FeeCapVsBaseFee | Check::Bala
 inline constexpr Check c_senderDependent = c_accountStateDependent | Check::Web3PoolNonce;
 
 /// Checks shared by every Web3 kind.
-inline constexpr Check c_web3Common = Check::TypeGate | Check::ToFieldFormat | Check::Signature |
-                                      Check::MaxGasLimit | Check::FeeCapVsBaseFee | Check::ChainId |
-                                      Check::SenderIsEOA | Check::NonceNotMax |
-                                      Check::Web3NonceWindow | Check::InitCodeSize |
-                                      Check::Balance | Check::IntrinsicGas | Check::Web3PoolNonce;
+inline constexpr Check c_web3Common =
+    Check::TypeGate | Check::ToFieldFormat | Check::Signature | Check::MaxGasLimit |
+    Check::FeeCapVsBaseFee | Check::ChainId | Check::SenderIsEOA | Check::NonceNotMax |
+    Check::Web3NonceWindow | Check::InitCodeSize | Check::Balance | Check::L1Cost |
+    Check::IntrinsicGas | Check::Web3PoolNonce;
 
 /// The check set for @p kind under PoolAdmission. The other two contexts are derived from this
 /// one rather than written out separately, so the columns cannot drift apart.
@@ -334,7 +345,10 @@ constexpr Check poolAdmissionCheckSet(TxKind kind) noexcept
         // as for Web3DynamicFee; omitting it would admit a transaction execution then rejects.
         // The blob-specific rules mirror evmone's special block: TypeByRevision, then "to"
         // present (BlobHasTo); the empty-hashes rule runs even earlier, while normalizing.
-        return c_web3Common | Check::TypeByRevision | Check::TipNotAboveCap | Check::BlobHasTo;
+        // No L1Cost: the only chain that admits a blob is the L1 lane, which has no rollup
+        // cost, and the OP lane refuses the type before the table is consulted.
+        return (c_web3Common & ~Check::L1Cost) | Check::TypeByRevision | Check::TipNotAboveCap |
+               Check::BlobHasTo;
     case TxKind::Web3SetCode:
         return c_web3Common | Check::TypeByRevision | Check::TipNotAboveCap | Check::SetCodeHasTo |
                Check::AuthListNonEmpty;
@@ -360,7 +374,7 @@ constexpr Check checkSet(TxKind kind, AdmissionContext context) noexcept
         // Web3PoolNonce stays: a fixture whose transactions are all distinct never meets it, and
         // one that does repeat a (sender, nonce) would be refused by the pool's reservation
         // anyway, with the same status. Dropping it would let no additional fixture through.
-        return base & ~(Check::Balance | Check::Web3NonceWindow);
+        return base & ~(Check::Balance | Check::L1Cost | Check::Web3NonceWindow);
     case AdmissionContext::ProposalVerification:
         // Everything a leader could violate stays ON. These are protocol invariants: their
         // answer is a function of the transaction and the chain config, so every honest node
@@ -377,8 +391,9 @@ constexpr Check checkSet(TxKind kind, AdmissionContext context) noexcept
         //
         // FIVE come off, each for a different reason:
         //
-        //   Balance -- its answer depends on WHERE in the block a transaction sits. One funded
-        //   by an earlier transaction in the same proposal fails it against pre-block state.
+        //   Balance, and L1Cost with it -- their answer depends on WHERE in the block a
+        //   transaction sits. One funded by an earlier transaction in the same proposal fails
+        //   them against pre-block state.
         //
         //   SenderIsEOA and NonceNotMax -- correctness-neutral here (execution enforces both)
         //   but each pulls a full account read onto the consensus hot path.
@@ -403,7 +418,7 @@ constexpr Check checkSet(TxKind kind, AdmissionContext context) noexcept
         //   (checkTransaction(tx, onlyCheckLedgerNonce = true) -- the same flag that switches
         //   its Web3 memory-nonce lookup off). BcosLedgerNonce, the committed-nonce and
         //   blockLimit half, is chain state and stays.
-        return base & ~(Check::Balance | Check::SenderIsEOA | Check::NonceNotMax |
+        return base & ~(Check::Balance | Check::L1Cost | Check::SenderIsEOA | Check::NonceNotMax |
                           Check::Web3NonceWindow | Check::BcosPoolNonce | Check::Web3PoolNonce);
     }
     // See poolAdmissionCheckSet: unreachable for a real AdmissionContext, closed for anything

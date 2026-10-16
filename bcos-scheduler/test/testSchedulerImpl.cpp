@@ -50,7 +50,7 @@ struct schedulerImplFixture
         signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
         ledger = std::make_shared<MockLedger3>();
-        executorManager = std::make_shared<scheduler::ExecutorManager>(ioService);
+        executorManager = std::make_shared<scheduler::ExecutorManager>();
 
         // create RocksDBStorage
         rocksdb::DB* db;
@@ -92,7 +92,6 @@ struct schedulerImplFixture
         ioServicePool = nullptr;  // destroy the pool now -> stop + join threads
     }
     bcos::IOServicePool::Ptr ioServicePool;
-    boost::asio::io_context ioService;
     bcos::test::MockLedger3::Ptr ledger;
     bcos::scheduler::ExecutorManager::Ptr executorManager;
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory;

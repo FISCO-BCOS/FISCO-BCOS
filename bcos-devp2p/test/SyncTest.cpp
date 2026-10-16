@@ -181,10 +181,14 @@ BOOST_AUTO_TEST_CASE(downloadChainWithPoSValidation)
         auto established = client.connect();
 
         // Anchor = block 0's header; download blocks 1..4 with PoS checks.
-        // The fake headers carry no Shanghai/Cancun fields, so keep those forks
-        // inactive (UINT64_MAX = never) and exercise the PoS/London rules only.
+        // The last fake header is Shanghai-shaped (carries withdrawalsHash), so
+        // activate Shanghai exactly at that block's timestamp: earlier headers
+        // stay pre-Shanghai (field absent) and the last one carries the field as
+        // required — both directions of the fork-gated presence rule are met.
+        // Cancun/Prague stay inactive (UINT64_MAX = never); their fields are
+        // absent everywhere.
         sync::ChainConfig config;
-        config.shanghaiTime = std::numeric_limits<uint64_t>::max();
+        config.shanghaiTime = static_cast<uint64_t>(chain.back().header.timestamp);
         config.cancunTime = std::numeric_limits<uint64_t>::max();
         config.pragueTime = std::numeric_limits<uint64_t>::max();
         sync::BlockExchange exchange(1, chain[0].header, config);
