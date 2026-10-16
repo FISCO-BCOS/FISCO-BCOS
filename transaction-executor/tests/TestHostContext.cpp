@@ -258,19 +258,15 @@ BOOST_AUTO_TEST_CASE(storageFaultInNonceCallbackFailsWholeFrameV2)
         co_return;
     }());
 
-    // The whole frame must fail: the recorded host fault rethrows out of
-    // execute() (the discriminator — without the fix this completes with
-    // status 0/18 and the create merely failed).
+    // The whole frame must fail THROUGH v2's native channel (review F1): the fault from
+    // the host callback propagates through the exception-enabled evmone build into
+    // execute()'s FIB-88/92 catch arm, which answers a transaction-level
+    // EVMC_INTERNAL_ERROR (status Unknown) — never a success whose nested create merely
+    // failed. With a catch in the callback answering MAX_NONCE (the removed shape) the
+    // same fault masquerades as a legit max-nonce rejection the contract's own logic
+    // converts to a REVERT.
     syncWait([this]() -> Task<void> {
-        // The whole frame must fail THROUGH v2's native channel: the recorded
-        // host fault rethrows inside executeCall/executeCreate and lands in
-        // execute()'s FIB-88/92 catch arm, which answers a transaction-level
-        // EVMC_INTERNAL_ERROR (status Unknown) — never a success whose nested
-        // create merely failed. Without the fix this call returns status 0.
         auto faulted = co_await call("deployAndCall(int256)", {}, false, bcos::s256(999));
-        // Exact discriminator: with the whole-frame check the fault lands in the
-        // FIB-92 internal-error channel; without it the same fault masquerades as
-        // an EVMC_REVERT the contract's own logic never chose.
         BOOST_CHECK_EQUAL(faulted.status_code, EVMC_INTERNAL_ERROR);
         BOOST_TEST_MESSAGE("F2 v2 mirror: faulted status_code=" << faulted.status_code);
 
@@ -1282,46 +1278,6 @@ BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
     }
 }
 
-// The flag-ON bump is CREATE-only (upstream parity): CREATE2's address derives from
-// the salt and consumes no nonce, so a nested CREATE2 under the flag writes no nonce
-// row even on a web3 chain.
-BOOST_AUTO_TEST_CASE(creatorNonceFlagSkipsCreate2)
-{
-    auto features = ledgerConfig.features();
-    features.set(ledger::Features::Flag::bugfix_nested_create_creator_nonce);
-    ledgerConfig.setFeatures(features);
-
-    evmc_address creator{};
-    creator.bytes[19] = 0xC4;
-
-    evmc_message parent{};
-    parent.kind = EVMC_CALL;
-    parent.depth = 0;
-    parent.gas = 10'000'000;
-    parent.recipient = creator;
-    parent.sender = creator;
-    parent.code_address = creator;
-    HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> host(
-        rollbackableStorage, rollbackableTransientStorage, blockHeader, parent, creator, "", 0, seq,
-        *precompiledManager, ledgerConfig, *hashImpl, /*web3Tx=*/true, 0, bcos::task::syncWait);
-
-    auto nonceRowOf = [&](const evmc_address& address) -> std::string {
-        ledger::account::EVMAccount<decltype(rollbackableStorage)> account(
-            rollbackableStorage, address, ledger::account::nodeAddressTableMode());
-        auto nonceStr = syncWait(account.nonce());
-        return nonceStr.value_or("<absent>");
-    };
-
-    evmc_message nested{};
-    nested.kind = EVMC_CREATE2;
-    nested.depth = 1;
-    nested.gas = 500000;
-    nested.sender = creator;
-    auto result = syncWait(host.externalCall(nested));
-    BOOST_REQUIRE(result.status_code != EVMC_SUCCESS || true);  // either outcome: no bump below
-    BOOST_CHECK_EQUAL(nonceRowOf(creator), "<absent>");
-}
-
 // The flag-ON creator-nonce bump carries the upstream Host::call contract: "bump the
 // creator's nonce, not reverted if the creation fails". A nested create whose init code
 // reverts must therefore leave the bump behind — the next create in the same tx then
@@ -1507,6 +1463,28 @@ BOOST_AUTO_TEST_CASE(creatorNonceFlagBumpsPerNestedCreate)
     auto third = runNestedCreate(0);
     BOOST_REQUIRE_EQUAL(third.status_code, EVMC_SUCCESS);
     BOOST_CHECK_EQUAL(nonceRowOf(creator), "2");
+
+    // CREATE2 then CREATE (review F2): the bump is kind-independent — upstream's
+    // prepare_message bumps whenever depth != 0, CREATE2 included (EthereumHost.h) —
+    // because the creator's nonce is state the NEXT create reads. The nested CREATE2
+    // must advance the nonce to 3, and the following nested CREATE must derive its
+    // address from that bumped 3. With the bump gated on EVMC_CREATE (the removed
+    // conjunct) the CREATE2 leaves the nonce at 2, the CREATE lands on
+    // legacy(creator, 2) instead, and the address pinned below stays vacant.
+    evmc_message nestedCreate2{};
+    nestedCreate2.kind = EVMC_CREATE2;
+    nestedCreate2.depth = 1;
+    nestedCreate2.gas = 500000;
+    nestedCreate2.sender = creator;
+    auto create2 = syncWait(host.externalCall(nestedCreate2));
+    BOOST_REQUIRE_EQUAL(create2.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(nonceRowOf(creator), "3");  // bumped by the CREATE2 — kind-independent
+    auto fourth = runNestedCreate(1);
+    BOOST_REQUIRE_EQUAL(fourth.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(nonceRowOf(creator), "4");
+    auto addrFrom3 = addressOf(
+        newLegacyEVMAddress(bytesConstRef{creator.bytes, sizeof(creator.bytes)}, u256(3)));
+    BOOST_CHECK_EQUAL(nonceRowOf(addrFrom3), "1");  // derived from the bumped nonce
 }
 
 // CREATE2 through the VM itself (not a direct hook call): a creator contract executes the

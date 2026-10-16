@@ -569,71 +569,81 @@ std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
     auto lower = forkName;
     boost::algorithm::to_lower(lower);
 
-    if (lower == "frontier")
-        return EVMC_FRONTIER;
-    if (lower == "homestead")
-        return EVMC_HOMESTEAD;
-    if (lower == "tangerine whistle" || lower == "tangerinewhistle" || lower == "eip150")
-        return EVMC_TANGERINE_WHISTLE;
-    if (lower == "spurious dragon" || lower == "spuriousdragon" || lower == "eip158")
-        return EVMC_SPURIOUS_DRAGON;
-    if (lower == "byzantium")
-        return EVMC_BYZANTIUM;
-    // evmone 0.23 removed the Constantinople revision. EEST fixtures naming it are
-    // SKIPPED, not retargeted to Petersburg: Petersburg is Constantinople minus the
-    // reverted EIP-1283 (SSTORE net gas metering), so running those fixtures under
-    // Petersburg charges different gas and yields a wrong post-state. nullopt is the
-    // skip signal — an exception here aborted the whole runner (exit 134) wherever the
-    // call was not wrapped in a try/catch, which is most call sites. The containment
-    // check also refuses names merely EMBEDDING the fork — legacy transition names like
-    // ByzantiumToConstantinopleFixAt5 carry no "AtTime" marker, so configureFork's
-    // transition parser never runs on them and they would otherwise fall through to the
-    // EVMC_OSAKA default and execute with no transition. No surviving revision contains
-    // the constantinople substring, so this cannot refuse a fixture we could have run.
-    if (lower == "constantinople" || lower == "constantinoplefix" ||
-        lower.find("constantinople") != std::string::npos)
-        return std::nullopt;
-    // `amsterdam` is refused for the same reason the parser refuses it (LedgerConfig):
-    // this binary has no state_gas (EIP-8037/8038) pricing, so a fixture naming it —
-    // plain, embedded in a transition name, or as a transition endpoint (the parser
-    // below resolves the endpoint through this same function, so a nullopt here makes
-    // the endpoint guard skip the fixture) — must skip instead of executing under the
-    // EVMC_OSAKA default.
-    if (lower == "amsterdam" || lower.find("amsterdam") != std::string::npos)
-        return std::nullopt;
-    // Legacy transition names that carry no AtTime marker (e.g. FrontierToHomesteadAt5)
-    // never reach the transition parser and would likewise run whole-case at the OSAKA
-    // default with no transition installed — skip them too. Plain fork names contain no
-    // "to" substring, so this only catches transition-shaped names.
-    if (lower.find("to") != std::string::npos && lower.find("attime") == std::string::npos)
-        return std::nullopt;
-    if (lower == "petersburg")
-        return EVMC_PETERSBURG;
-    if (lower == "istanbul")
-        return EVMC_ISTANBUL;
-    // Muir Glacier (EIP-2384) only delays the difficulty bomb; it changes no
-    // EVM semantics over Istanbul. Mapping it to Berlin would wrongly activate
-    // EIP-2929 access-list gas for MuirGlacier fixtures.
-    if (lower == "muir glacier" || lower == "muirglacier")
-        return EVMC_ISTANBUL;
-    if (lower == "berlin")
-        return EVMC_BERLIN;
-    if (lower == "london")
-        return EVMC_LONDON;
-    if (lower == "paris" || lower == "merge")
-        return EVMC_PARIS;
-    if (lower == "shanghai")
-        return EVMC_SHANGHAI;
-    if (lower == "cancun")
-        return EVMC_CANCUN;
-    if (lower == "prague")
-        return EVMC_PRAGUE;
-    if (lower == "osaka")
-        return EVMC_OSAKA;
+    // Explicit tables decide run / skip (review F6); no name is admitted or refused by
+    // substring shape. Plain names first, including the historical aliases:
+    struct ForkName
+    {
+        std::string_view name;
+        evmc_revision revision;
+    };
+    static constexpr ForkName c_forks[] = {
+        {"frontier", EVMC_FRONTIER},
+        {"homestead", EVMC_HOMESTEAD},
+        {"tangerine whistle", EVMC_TANGERINE_WHISTLE},
+        {"tangerinewhistle", EVMC_TANGERINE_WHISTLE},
+        {"eip150", EVMC_TANGERINE_WHISTLE},
+        {"spurious dragon", EVMC_SPURIOUS_DRAGON},
+        {"spuriousdragon", EVMC_SPURIOUS_DRAGON},
+        {"eip158", EVMC_SPURIOUS_DRAGON},
+        {"byzantium", EVMC_BYZANTIUM},
+        {"petersburg", EVMC_PETERSBURG},
+        {"istanbul", EVMC_ISTANBUL},
+        // Muir Glacier (EIP-2384) only delays the difficulty bomb; it changes no
+        // EVM semantics over Istanbul. Mapping it to Berlin would wrongly activate
+        // EIP-2929 access-list gas for MuirGlacier fixtures.
+        {"muir glacier", EVMC_ISTANBUL},
+        {"muirglacier", EVMC_ISTANBUL},
+        {"berlin", EVMC_BERLIN},
+        {"london", EVMC_LONDON},
+        {"paris", EVMC_PARIS},
+        {"merge", EVMC_PARIS},
+        {"shanghai", EVMC_SHANGHAI},
+        {"cancun", EVMC_CANCUN},
+        {"prague", EVMC_PRAGUE},
+        {"osaka", EVMC_OSAKA},
+    };
+    for (auto const& fork : c_forks)
+    {
+        if (lower == fork.name)
+            return fork.revision;
+    }
 
-    // Unknown fork → default to the latest handled revision so a future fork
-    // is not silently mis-executed as Cancun (which would produce false
-    // pass/fail outcomes in the compliance suite).
+    // Refused exactly: evmone 0.23 removed the Constantinople revision — Petersburg is
+    // Constantinople minus the reverted EIP-1283 (SSTORE net gas metering), so running
+    // those fixtures under Petersburg charges different gas and yields a wrong post-state
+    // — and `amsterdam` needs the state_gas (EIP-8037/8038) pricing this binary does not
+    // have. nullopt is the skip signal (an exception here aborted the whole runner,
+    // exit 134, wherever the call was not wrapped in a try/catch); the caller counts and
+    // reports the skip.
+    static constexpr std::string_view c_refusedForks[] = {
+        "constantinople", "constantinoplefix", "amsterdam"};
+    for (auto const& refused : c_refusedForks)
+    {
+        if (lower == refused)
+            return std::nullopt;
+    }
+
+    // Transition names configureFork's parser resolves: `<From>To<To>AtTime<Suffix>`,
+    // both endpoints looked up in the tables above, so a transition naming a refused
+    // endpoint (…ToAmsterdamAtTime…) fails the parser's endpoint guard there. A
+    // transition-SHAPED name without the AtTime marker (the legacy block-number format,
+    // e.g. FrontierToHomesteadAt5) cannot be resolved to a schedule: report it and skip,
+    // never pattern-match it into either outcome.
+    if (lower.find("to") != std::string::npos)
+    {
+        if (lower.find("attime") != std::string::npos)
+            return EVMC_OSAKA;  // carrier value only; configureFork installs the schedule
+        std::cerr << "Info: fork name '" << forkName
+                  << "' is transition-shaped without an AtTime marker; skipping its fixtures"
+                  << std::endl;
+        return std::nullopt;
+    }
+
+    // A plain name outside the tables: keep executing its fixtures under the newest
+    // handled revision (a future fork must not be mis-executed as an older one), but say
+    // so — this line is the diagnostic the name-shape heuristics used to do without.
+    std::cerr << "Info: unknown fork name '" << forkName
+              << "'; running its fixtures under the newest revision" << std::endl;
     return EVMC_OSAKA;
 }
 }  // namespace bcos::test
@@ -872,7 +882,10 @@ public:
                     // whole case at the default revision with no transition — the
                     // wrong-schedule execution the refusal exists to prevent (a probe
                     // fixture named this way executed and bogusly passed under Osaka
-                    // rules before this branch existed).
+                    // rules before this branch existed). Report it: the skip removes
+                    // fixtures from the denominator (review F6).
+                    std::cerr << "Info: transition endpoint of '" << forkName
+                              << "' has no executable revision; skipping its fixtures" << std::endl;
                     return false;
                 }
                 m_forkTransition = ForkTransition{*from, *to, transitionTime};
@@ -882,7 +895,10 @@ public:
                 // A name the gate admitted but the numeric parse failed on (e.g. a
                 // non-numeric AtTime suffix) must skip, not run whole-case at the
                 // default revision — reset-and-continue is the wrong-schedule
-                // execution the refusal exists to prevent.
+                // execution the refusal exists to prevent. Reported for the same
+                // reason as the endpoint guard above (review F6).
+                std::cerr << "Info: cannot parse the transition suffix of '" << forkName
+                          << "'; skipping its fixtures" << std::endl;
                 m_forkTransition.reset();
                 return false;
             }
