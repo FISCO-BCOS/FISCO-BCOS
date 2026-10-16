@@ -38,9 +38,9 @@ jobs:
       CONTEST: ${{ github.event.inputs.contest || '1' }}
       # Same sizing as workflow.yml's l2 leg, whose prefix this job restores (restore-only;
       # the l2 leg owns the writes): 300M is two or three revisions of headroom above the
-      # ~103MB working set. The steady-state footprint is ~7 daily generations per scope
-      # under 7-day retention, not one entry - see workflow.yml's build-matrix env comment
-      # for why LRU eviction order, not headroom, is what protects the vcpkg trees.
+      # ~103MB working set. The l2 leg's prune step keeps the prefix at one live generation;
+      # without it the 7-day retention would hold ~7. See workflow.yml's build-matrix env
+      # comment for the full model.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 300M
       CCACHE_BASEDIR: ${{ github.workspace }}

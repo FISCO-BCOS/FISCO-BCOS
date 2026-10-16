@@ -33,12 +33,12 @@ jobs:
       # revisions' worth; the reason runs were cold is not the cap but that the entries do
       # not survive - see the Save step for how the write rate is bounded.
       # 300M is two or three revisions of headroom above the ~115MB working set. The daily
-      # bucket (see Restore ccache) bounds writes to one per scope per day, but GitHub keeps
-      # entries for 7 days after their last access, so up to ~7 generations per scope are
-      # alive at once: the steady-state footprint is ~7x one entry, not one. What protects
-      # the vcpkg trees is eviction order, not headroom: they are restored on every run and
-      # stay recently accessed, while stale ccache generations go cold and are what LRU
-      # evicts first when the repository nears its 10GB budget.
+      # bucket (see Restore ccache) bounds writes to one per scope per day, and the prune
+      # step after the save deletes the previous generations, so the steady state is one
+      # live generation per scope plus the one being written - not the ~7 that GitHub's
+      # 7-day retention would otherwise keep. LRU is only the backstop now: if a prune is
+      # skipped or fails, stale generations go cold and are evicted before the vcpkg trees,
+      # which are restored - and so recently accessed - on every run.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 300M
       # ccache mixes the absolute working directory into its hash, and a fresh checkout
@@ -293,13 +293,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PREFIX='ccache-${{ github.base_ref || github.ref_name }}-${{ env.CACHE_SCOPE }}-${{ runner.arch }}-v1-'
-          KEEP="${PREFIX}${{ steps.ccache-bucket.outputs.day }}"
-          gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref |
-            jq -r --arg prefix "$PREFIX" --arg keep "$KEEP" --arg ref "$GITHUB_REF" \
-              '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id' |
-            xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY" ||
-            echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
+          set -o pipefail
+          prune() {
+            local prefix='ccache-${{ github.base_ref || github.ref_name }}-${{ env.CACHE_SCOPE }}-${{ runner.arch }}-v1-'
+            local keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
+            local ids count
+            ids=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref |
+              jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
+                '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id')
+            count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l)
+            echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
+            printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY"
+          }
+          prune || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
       - name: Test
         # the static leg builds with TESTS=OFF (see "Compute build flags")
         if: matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
@@ -474,11 +480,10 @@ jobs:
       # MinSizeRel objects the build legs cache, so this job legitimately needs more room
       # than the 300M the other legs use. 2G was more than a working set can use, though:
       # each entry came out ~1.4GB and two of them alone held 2.83GB of the shared 10GB
-      # budget, the single largest consumer. The daily bucket bounds the write rate, not
-      # the live entry count: with 7-day retention up to ~7 generations stay alive, so at
-      # the cap this scope alone could reach ~7GB. In practice entries stay well under the
-      # cap, and eviction order protects the hot vcpkg trees - see the build matrix's env
-      # comment.
+      # budget, the single largest consumer. The prune step after the save keeps this scope
+      # at one live generation plus the one being written; without it the 7-day retention
+      # would hold ~7 generations - up to ~7GB at the cap. LRU is the backstop if a prune
+      # is skipped or fails - see the build matrix's env comment.
       CCACHE_MAXSIZE: 1G
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_ctime
@@ -670,13 +675,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PREFIX='ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-'
-          KEEP="${PREFIX}${{ steps.ccache-bucket.outputs.day }}"
-          gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref |
-            jq -r --arg prefix "$PREFIX" --arg keep "$KEEP" --arg ref "$GITHUB_REF" \
-              '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id' |
-            xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY" ||
-            echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
+          set -o pipefail
+          prune() {
+            local prefix='ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-'
+            local keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
+            local ids count
+            ids=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref |
+              jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
+                '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id')
+            count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l)
+            echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
+            printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY"
+          }
+          prune || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
 
   # Dedicated, lightweight leg for the OP-Stack L2 mode. Kept OUT of the 5-OS
   # `build` matrix on purpose: multiplying that matrix by an l2 dimension would
@@ -826,13 +837,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PREFIX='ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-'
-          KEEP="${PREFIX}${{ steps.ccache-bucket.outputs.day }}"
-          gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref |
-            jq -r --arg prefix "$PREFIX" --arg keep "$KEEP" --arg ref "$GITHUB_REF" \
-              '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id' |
-            xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY" ||
-            echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
+          set -o pipefail
+          prune() {
+            local prefix='ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-'
+            local keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
+            local ids count
+            ids=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref |
+              jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
+                '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id')
+            count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l)
+            echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
+            printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY"
+          }
+          prune || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
 
   # Full-stack C2 devnet e2e. Reuses the fisco-bcos binary built by
   # l2_unit_suites (artifact) so this job skips vcpkg configure + C++ build.
