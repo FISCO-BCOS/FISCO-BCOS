@@ -54,7 +54,9 @@ BOOST_AUTO_TEST_CASE(healthyNodePassesAllFive)
     BOOST_REQUIRE_EQUAL(checks.size(), 5U);
     for (auto const& check : checks)
     {
-        BOOST_CHECK_MESSAGE(check.ok(), check.name + " " + check.state + " " + check.detail);
+        auto expected = check.name == "quorum_connected" ? "info" : "ok";
+        BOOST_CHECK_MESSAGE(
+            check.state == expected, check.name + " " + check.state + " " + check.detail);
     }
     BOOST_CHECK(!anyFailed(checks));
     auto json = checksToJson(checks);
@@ -114,13 +116,19 @@ BOOST_AUTO_TEST_CASE(syncCaughtUp)
     BOOST_CHECK(find(evaluate(status, strict, c_now), "sync_caught_up").failed());
 }
 
+// the connected count includes self and observers, so quorum_connected reports it and never
+// passes or fails the node
 BOOST_AUTO_TEST_CASE(quorumConnected)
 {
     auto status = healthy();
-    status.connectedGroupNodes = 2;  // self + 1 peer < quorum 3
-    BOOST_CHECK(find(evaluate(status, Thresholds{}, c_now), "quorum_connected").failed());
-    status.connectedGroupNodes = 3;  // self + 2 peers = quorum 3
-    BOOST_CHECK(find(evaluate(status, Thresholds{}, c_now), "quorum_connected").ok());
+    status.connectedGroupNodes = 2;  // below quorum 3
+    auto low = find(evaluate(status, Thresholds{}, c_now), "quorum_connected");
+    BOOST_CHECK_EQUAL(low.state, "info");
+    BOOST_CHECK(!low.failed());
+    status.connectedGroupNodes = 3;  // self + 1 sealer + 1 observer: not a real quorum
+    auto check = find(evaluate(status, Thresholds{}, c_now), "quorum_connected");
+    BOOST_CHECK_EQUAL(check.state, "info");
+    BOOST_CHECK(!check.ok());
     status.isConsensusNode = false;
     BOOST_CHECK_EQUAL(
         find(evaluate(status, Thresholds{}, c_now), "quorum_connected").state, "skipped");

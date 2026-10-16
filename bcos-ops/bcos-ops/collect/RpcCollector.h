@@ -29,7 +29,7 @@ namespace bcos::ops
 struct LocalFallbacks
 {
     std::optional<int64_t> txpoolLimit;         // [txpool] limit, config.ini
-    std::optional<int64_t> consensusTimeoutMs;  // [consensus] consensus_timeout, config.genesis
+    std::optional<int64_t> consensusTimeoutMs;  // the PBFT default, for nodes before 3.18
 };
 
 NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,

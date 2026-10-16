@@ -122,6 +122,7 @@ void renderStatus(
                       (_status.txpoolLimit ? "  limit " + show(_status.txpoolLimit) : ""));
     size_t failed = 0;
     size_t skippedCount = 0;
+    size_t infoCount = 0;
     std::string failedNames;
     for (auto const& check : _checks)
     {
@@ -131,9 +132,13 @@ void renderStatus(
             failedNames +=
                 (failedNames.empty() ? "" : ", ") + check.name + " (" + check.detail + ")";
         }
-        else if (!check.ok())
+        else if (check.state == "skipped")
         {
             ++skippedCount;
+        }
+        else if (!check.ok())
+        {
+            ++infoCount;
         }
     }
     std::string summary;
@@ -147,7 +152,7 @@ void renderStatus(
     }
     else
     {
-        summary = std::to_string(_checks.size() - skippedCount) + " ok";
+        summary = std::to_string(_checks.size() - skippedCount - infoCount) + " ok";
     }
     if (skippedCount > 0)
     {
@@ -197,6 +202,6 @@ void registerStatusCommand()
         Command{"print the node status snapshot and run the health checks",
             "[--node-dir <dir> | --rpc <host:port>] [--json] [--stall-factor 2] [--max-lag 10] "
             "[--timeout 15000]",
-            {}, runStatus, {"stall-factor", "max-lag", "viewchange-window-ms"}});
+            {}, runStatus, {"stall-factor", "max-lag"}});
 }
 }  // namespace bcos::ops
