@@ -44,7 +44,6 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/MPTPruner.h"
-#include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-single-consensus/SingleNodeConsensus.h"
 #include "bcos-storage/MPTNodeReadStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
@@ -78,7 +77,6 @@
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
-#include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <bcos-transaction-executor/TransactionExecutorImpl.h>
@@ -121,6 +119,9 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     std::string const& _privateKeyPath, const std::string& _logPath)
 {
     initConfig(_configFilePath, _genesisFile, _privateKeyPath, false);
+    // AirNodeInitializer creates the shared pool for an AIR node; a Pro NodeService process
+    // creates its own before init() hands it to the front, ledger and scheduler
+    m_ioServicePool = std::make_shared<bcos::IOServicePool>(m_nodeConfig->ioThreadCount(), "io");
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
@@ -159,8 +160,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     m_protocolInitializer->loadKeyPair(privateKeyPath);
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configFilePath, pt);
-    m_nodeConfig->loadNodeServiceConfig(
-        m_protocolInitializer->keyPair()->publicKey()->hex(), pt, false);
+    m_nodeConfig->loadNodeServiceConfig(m_protocolInitializer->keyPair()->publicKey()->hex(), pt);
     if (!_airVersion)
     {
         // load the service config
@@ -196,7 +196,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 {
     // Engine-driven block production (single-node consensus or [op_engine_rpc]) is AIR-only.
     // Both modes skip txpool/pbft init and wire the in-process mempool into NodeService via
-    // AirNodeInitializer::setMemPool; on a MAX/tars node the flag would start the
+    // AirNodeInitializer::setMemPool; on a Pro/tars node the flag would start the
     // block-producing driver while sendRawTransaction still falls through to an
     // uninitialized txpool. Reject the combination at startup rather than leaving that
     // state reachable by a config flag.
@@ -206,7 +206,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "enable_single_node_consensus / op_engine_rpc.enable are only supported on "
-                "AIR nodes (in-process mempool/scheduler); not supported on MAX/tars "
+                "AIR nodes (in-process mempool/scheduler); not supported on Pro/tars "
                 "deployments"));
     }
 
@@ -298,16 +298,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
-    bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
-    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-    {
-        executionMessageFactory =
-            std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
-    }
-    else
-    {
-        executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
-    }
+    auto executionMessageFactory = std::make_shared<executor::NativeExecutionMessageFactory>();
 
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
@@ -369,8 +360,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
     }
     m_memPoolInitializer = MemPoolInitializer::build(memPoolConfig);
-
-    std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
 
     bcos::executor::GlobalHashImpl::g_hashImpl = m_protocolInitializer->cryptoSuite()->hashImpl();
 
@@ -794,16 +783,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             republishLedgerConfig);
     }
 
-    executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
-        *m_ioServicePool->getIOService(), m_nodeConfig->executorServiceName(), m_nodeConfig);
+    auto executorManager = std::make_shared<bcos::scheduler::ExecutorManager>();
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize());
+        m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize(), m_ioServicePool);
 
-    int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
-                               // switch to a leader during startup
+    int64_t schedulerSeq = 0;
     // The dispatcher republishes the configuration after every commit, for every executor
     // version; the holder was published once at boot when it was created.
     auto multiVersionScheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
@@ -976,35 +963,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
     }
 
-    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-    {
-        INITIALIZER_LOG(INFO) << LOG_DESC("waiting for connect executor")
-                              << LOG_KV("nodeArchType", _nodeArchType);
-        executorManager->start();  // will waiting for connecting some executors
+    INITIALIZER_LOG(INFO) << LOG_DESC("create Executor") << LOG_KV("nodeArchType", _nodeArchType);
 
-        // init scheduler
-        dynamic_cast<scheduler::SchedulerManager&>(m_scheduler->scheduler(0))
-            .initSchedulerIfNotExist();
-    }
-    else
-    {
-        INITIALIZER_LOG(INFO) << LOG_DESC("create Executor")
-                              << LOG_KV("nodeArchType", _nodeArchType);
-
-        // Note: ensure that there has at least one executor before pbft/sync execute block
-        auto storageFactory =
-            std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
-        std::string executorName = "executor-local";
-        auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
-            m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
-            executionMessageFactory, storageFactory,
-            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->vmCacheSize(),
-            m_nodeConfig->isAuthCheck(), executorName, m_ioServicePool);
-        auto switchExecutorManager = std::make_shared<bcos::executor::SwitchExecutorManager>(
-            executorFactory, m_ioServicePool);
-        executorManager->addExecutor(executorName, switchExecutorManager);
-        m_switchExecutorManager = switchExecutorManager;
-    }
+    // Note: ensure that there has at least one executor before pbft/sync execute block
+    auto storageFactory =
+        std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
+    std::string executorName = "executor-local";
+    auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(m_ledger,
+        m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage, executionMessageFactory,
+        storageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
+        m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName, m_ioServicePool);
+    auto switchExecutorManager =
+        std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory, m_ioServicePool);
+    executorManager->addExecutor(executorName, switchExecutorManager);
+    m_switchExecutorManager = switchExecutorManager;
 
     // build node time synchronization tool
     auto nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
@@ -1043,22 +1015,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig, m_protocolInitializer,
                 m_txpoolInitializer->txpool(), ledger, m_scheduler, consensusStorage,
                 m_frontServiceInitializer->front(), nodeTimeMaintenance, m_ioServicePool);
-    }
-    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-    {
-        INITIALIZER_LOG(INFO) << LOG_DESC("Register switch handler in scheduler manager");
-        // PBFT and scheduler are in the same process here, we just cast m_scheduler to
-        // SchedulerService
-        auto& schedulerServer =
-            dynamic_cast<bcos::scheduler::SchedulerManager&>(m_scheduler->scheduler(0));
-        auto consensus = m_pbftInitializer->pbft();
-        schedulerServer.registerOnSwitchTermHandler([consensus](
-                                                        bcos::protocol::BlockNumber blockNumber) {
-            INITIALIZER_LOG(DEBUG)
-                << LOG_BADGE("Switch")
-                << "Receive scheduler switch term notify of number " + std::to_string(blockNumber);
-            consensus->clearExceptionProposalState(blockNumber);
-        });
     }
     // init the txpool / pbft.
     // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc])
@@ -1245,7 +1201,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
             INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
-            // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
+            // Note: the interface will notify blockNumber to all rpc nodes in pro mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
     // notify transactions
@@ -1260,7 +1216,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     m_setBaselineSchedulerBlockNumberNotifier(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
             INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
-            // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
+            // Note: the interface will notify blockNumber to all rpc nodes in pro mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
 

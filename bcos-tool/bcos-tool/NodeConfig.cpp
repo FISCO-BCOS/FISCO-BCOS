@@ -923,7 +923,7 @@ void NodeConfig::loadWithoutTarsFrameworkConfig(boost::property_tree::ptree cons
 }
 
 void NodeConfig::loadNodeServiceConfig(
-    std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require)
+    std::string const& _nodeID, boost::property_tree::ptree const& _pt)
 {
     auto nodeName = _pt.get<std::string>("service.node_name", "");
     if (nodeName.size() == 0)
@@ -956,17 +956,9 @@ void NodeConfig::loadNodeServiceConfig(
     }
 
     m_nodeName = nodeName;
-    m_schedulerServiceName = getServiceName(_pt, "service.scheduler", SCHEDULER_SERVANT_NAME,
-        getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), _require);
-    m_executorServiceName = getServiceName(_pt, "service.executor", EXECUTOR_SERVANT_NAME,
-        getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), _require);
-    m_txpoolServiceName = getServiceName(_pt, "service.txpool", TXPOOL_SERVANT_NAME,
-        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), _require);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
-                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework)
-                         << LOG_KV("schedulerServiceName", m_schedulerServiceName)
-                         << LOG_KV("executorServiceName", m_executorServiceName);
+                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework);
 }
 
 void NodeConfig::loadTarsProxyConfig(const std::string& _tarsProxyConf)
@@ -986,9 +978,6 @@ void NodeConfig::loadTarsProxyConfig(const std::string& _tarsProxyConf)
         loadServiceTarsProxyConfig("front", pt);
         loadServiceTarsProxyConfig("rpc", pt);
         loadServiceTarsProxyConfig("gateway", pt);
-        loadServiceTarsProxyConfig("executor", pt);
-        loadServiceTarsProxyConfig("txpool", pt);
-        loadServiceTarsProxyConfig("scheduler", pt);
         loadServiceTarsProxyConfig("pbft", pt);
         loadServiceTarsProxyConfig("ledger", pt);
 
@@ -3208,12 +3197,6 @@ void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree con
     }
 }
 
-std::string bcos::tool::NodeConfig::getDefaultServiceName(
-    std::string const& _nodeName, std::string const& _serviceName) const
-{
-    return m_genesisConfig.m_chainID + "." + _nodeName + _serviceName;
-}
-
 size_t NodeConfig::txpoolLimit() const
 {
     return m_txpoolLimit;
@@ -3472,21 +3455,6 @@ std::string const& NodeConfig::rpcServiceName() const
 std::string const& NodeConfig::gatewayServiceName() const
 {
     return m_gatewayServiceName;
-}
-
-std::string const& NodeConfig::schedulerServiceName() const
-{
-    return m_schedulerServiceName;
-}
-
-std::string const& NodeConfig::executorServiceName() const
-{
-    return m_executorServiceName;
-}
-
-std::string const& NodeConfig::txpoolServiceName() const
-{
-    return m_txpoolServiceName;
 }
 
 std::string const& NodeConfig::nodeName() const

@@ -30,11 +30,11 @@ jobs:
       - name: install macOS dependencies
         run: brew install ccache libomp gmp
       - name: configure
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DWITH_LIGHTNODE=ON -DWITH_TARS_SERVICES=ON
       - name: compile
         # -j2 left most of the runner idle: this job is a Release (-O3) build of the whole
         # project, so use every core the runner has.
-        run: make -j"$(sysctl -n hw.ncpu)" && make tar
+        run: make -j"$(sysctl -n hw.ncpu)" && make BcosRpcService-tar BcosNodeService-tar
       - name: tar BcosBuilder
         run: mv tools/BcosBuilder . && tar -cvzf BcosBuilder.tgz BcosBuilder
       - name: tar fisco-bcos for macOS
@@ -72,27 +72,16 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosGatewayService binaries to release
+        # Disabled: the appleclang build of BcosGatewayService crashes in static init (tarscpp's
+        # TC_Logger<>::LN is constant-initialized into a read-only section by
+        # GatewayInitializer.cpp while libtarsservant.a initializes it dynamically). Re-enable
+        # once that is fixed.
+        if: false
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: fisco-bcos-tars-service/BcosGatewayService.tgz
           asset_name: BcosGatewayService-macOS-arm.tgz
-          tag: ${{ github.ref }}
-          overwrite: true
-      - name: Upload BcosMaxNodeService binaries to release
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosMaxNodeService.tgz
-          asset_name: BcosMaxNodeService-macOS-arm.tgz
-          tag: ${{ github.ref }}
-          overwrite: true
-      - name: Upload BcosExecutorService binaries to release
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: fisco-bcos-tars-service/BcosExecutorService.tgz
-          asset_name: BcosExecutorService-macOS-arm.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload build_chain.sh

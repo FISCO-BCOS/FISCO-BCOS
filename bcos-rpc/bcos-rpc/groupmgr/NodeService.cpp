@@ -94,8 +94,8 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
     }
 
     // Note: m_engineService is nullptr by default. In AIR nodes, it is wired via
-    // AirNodeInitializer. In MAX/Tars nodes, the EngineService needs to be exposed as a
-    // Tars servant before the RPC process can obtain a proxy to it (TODO: MAX wiring).
+    // AirNodeInitializer. In Pro/tars nodes, the EngineService needs to be exposed as a
+    // Tars servant before the RPC process can obtain a proxy to it (TODO: Pro wiring).
     auto nodeService = std::make_shared<NodeService>(ledgerClient.first, schedulerClient.first,
         txpoolClient.first, consensusClient.first, syncClient.first, blockFactory,
         m_engineService);
@@ -103,7 +103,7 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
     nodeService->setLedgerPrx(ledgerClient.second);
 
     // blockTag semantics ([web3_rpc] safe_block_depth / finalized_block_depth): without this,
-    // a MAX/pro deployment's NodeService keeps the default 0 and the operator's configured
+    // a Pro deployment's NodeService keeps the default 0 and the operator's configured
     // depths would be parsed and logged by NodeConfig but silently ignored.
     nodeService->setSafeBlockDepth(_nodeConfig->web3SafeBlockDepth());
     nodeService->setFinalizedBlockDepth(_nodeConfig->web3FinalizedBlockDepth());
