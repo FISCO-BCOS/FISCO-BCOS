@@ -155,6 +155,8 @@ jobs:
         with:
           path: |
             .ci-op-monorepo
+            !.ci-op-monorepo/rust/target
+            !.ci-op-monorepo/op-deployer/bin
             .ci-c2-bins
           # BOTH paths are required. .ci-c2-bins carries the binaries, but .ci-op-monorepo must
           # stay in the entry even though the e2e itself only consumes the binaries: setup_c2.sh
@@ -210,6 +212,8 @@ jobs:
         with:
           path: |
             .ci-op-monorepo
+            !.ci-op-monorepo/rust/target
+            !.ci-op-monorepo/op-deployer/bin
             .ci-c2-bins
           key: c2-op-${{ steps.op-pin.outputs.commit }}-kona1-${{ runner.os }}-${{ runner.arch }}
 
