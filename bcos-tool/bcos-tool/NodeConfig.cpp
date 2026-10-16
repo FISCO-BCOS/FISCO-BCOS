@@ -129,18 +129,21 @@ void requireDecimalField(
 /// "1677557088abc") — a typo'd config must fail fast like every neighbouring parse, not yield
 /// a wrong fork schedule. Shared by the L1 [fork_timestamps] ladder and the OP
 /// [op_fork_timestamps] schedule so the two can never disagree on what a timestamp is.
+/// The not-scheduled sentinel (UINT64_MAX) policy differs per caller: the OP schedule refuses
+/// it (fail-closed, @c refuseSentinel=true), while the L1 ladder accepts it as "never
+/// activates" because eth-sync-check --genesis2ini emits UINT64_MAX for forks the geth-format
+/// genesis leaves unscheduled (see the kNever design note in tools/eth-sync-check/main.cpp).
 uint64_t parseForkTimestamp(
-    std::string const& section, std::string const& key, std::string const& value)
+    std::string const& section, std::string const& key, std::string const& value,
+    bool refuseSentinel)
 {
     // One acceptance window with the other loaders and the canonical-channel codec
-    // (ledger::parseConfigUint64): decimal or 0x-hex, the whole string consumed, and the
-    // not-scheduled sentinel refused. NOTE: the sentinel refusal is shared with the L1
-    // [fork_timestamps] ladder (this helper is its parser too) — a deliberate fail-closed
-    // widening over the old permissive from_chars, which accepted the all-9s value.
+    // (ledger::parseConfigUint64): decimal or 0x-hex, the whole string consumed, with the
+    // not-scheduled sentinel refused only where the caller asks for it (the OP lane).
     auto const parsed = ledger::parseConfigUint64(value,
         ledger::ConfigUint64Options{.allowHex = true,
             .maxValue = std::numeric_limits<uint64_t>::max(),
-            .refuseSentinel = true,
+            .refuseSentinel = refuseSentinel,
             .sentinel = ledger::c_opForkTimeUnset});
     if (parsed.error == ledger::ConfigUint64Error::sentinel)
     {
@@ -160,7 +163,7 @@ uint64_t parseForkTimestamp(
 
 /// Required key: absent is a config error.
 uint64_t readForkTimestamp(boost::property_tree::ptree const& section,
-    std::string const& sectionName, std::string const& key)
+    std::string const& sectionName, std::string const& key, bool refuseSentinel)
 {
     auto value = section.get_optional<std::string>(key);
     if (!value)
@@ -168,16 +171,16 @@ uint64_t readForkTimestamp(boost::property_tree::ptree const& section,
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("[" + sectionName + "]." + key + " is required"));
     }
-    return parseForkTimestamp(sectionName, key, *value);
+    return parseForkTimestamp(sectionName, key, *value, refuseSentinel);
 }
 
 /// Optional key: absent yields UINT64_MAX, the "not scheduled" sentinel both schedules use.
 uint64_t readOptionalForkTimestamp(boost::property_tree::ptree const& section,
-    std::string const& sectionName, std::string const& key)
+    std::string const& sectionName, std::string const& key, bool refuseSentinel)
 {
     if (auto value = section.get_optional<std::string>(key))
     {
-        return parseForkTimestamp(sectionName, key, *value);
+        return parseForkTimestamp(sectionName, key, *value, refuseSentinel);
     }
     return std::numeric_limits<uint64_t>::max();
 }
@@ -1671,7 +1674,11 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // rejected by peers. parseForkTimestamp (file-local, shared with the OP schedule) is
     // what enforces that.
     auto readTs = [&](std::string const& key) {
-        return readForkTimestamp(*section, "fork_timestamps", key);
+        // The L1 ladder accepts the not-scheduled sentinel: eth-sync-check
+        // --genesis2ini emits UINT64_MAX for forks the geth genesis leaves unscheduled,
+        // and the non-decreasing ladder check below treats it as the terminal
+        // "never activates" value.
+        return readForkTimestamp(*section, "fork_timestamps", key, /*refuseSentinel=*/false);
     };
     // Post-Prague forks (osaka, bpo1, bpo2, ...) are optional: absent means "not yet
     // active". They MUST be configured once activated on the chain — geth's EIP-2124
@@ -1680,7 +1687,8 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // part of the genesis pin (only the required london..prague ladder is pinned), so
     // configuring one later does not trip the restart comparison.
     auto readOptionalTs = [&](std::string const& key, uint64_t& out) {
-        out = readOptionalForkTimestamp(*section, "fork_timestamps", key);
+        out = readOptionalForkTimestamp(
+            *section, "fork_timestamps", key, /*refuseSentinel=*/false);
     };
 
     ledger::EthereumForkSchedule schedule;
@@ -1820,8 +1828,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     ledger::OpForkSchedule schedule;
     for (auto const& [key, member] : keys)
     {
-        schedule.*member =
-            readOptionalForkTimestamp(*section, "op_fork_timestamps", std::string(key));
+        schedule.*member = readOptionalForkTimestamp(
+            *section, "op_fork_timestamps", std::string(key), /*refuseSentinel=*/true);
     }
     // Same rule as the L1 ladder: activation times must be non-decreasing down the fork
     // order, because a later fork is defined as a superset of the earlier one (Karst is
