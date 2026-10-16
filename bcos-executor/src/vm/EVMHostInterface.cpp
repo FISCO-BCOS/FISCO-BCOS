@@ -150,25 +150,32 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
 // evmc ABI 19: the VM reads the sender's nonce itself to compute CREATE addresses
 // (evmone instructions_calls.cpp create_impl) and to enforce EIP-2681; the value
 // must match the nonce the executive reads when it assigns the created address.
-uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr) noexcept
+uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     try
     {
         return hostContext.getNonce(_addr);
     }
+    catch (bcos::Error& _e)
+    {
+        // A storage/parse fault. It cannot be left to propagate (review F1): an
+        // exception cannot cross the VM — evmc::VM::execute is noexcept (evmc.hpp:722)
+        // and the unwind dies inside evmone's instruction frames (verified: letting one
+        // through aborts with libc++abi "terminating due to uncaught exception of type
+        // bcos::Error"). Answer fail-closed per EIP-2681 (MAX_NONCE makes evmone reject
+        // the CREATE) and record the fault with its family: go() rethrows it into the
+        // ladder arm this family would have reached — bcos::Error reverts the frame —
+        // so the ladder's decision holds without the impossible propagation.
+        hostContext.recordHostFault(_e.errorMessage(), /*halting=*/false);
+        return std::numeric_limits<uint64_t>::max();
+    }
     catch (...)
     {
-        // The body reads storage and parses the stored nonce string, both of which can
-        // throw; an exception escaping this noexcept callback is std::terminate. Fail
-        // closed per EIP-2681 instead: MAX_NONCE makes evmone reject the CREATE. Name
-        // the cause so a storage fault is distinguishable from a hostile input. The
-        // sub-op rejection alone would let the parent frame continue (review F2), so
-        // record the fault for go()'s whole-frame check too.
-        hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("getNonce failed closed (EIP-2681 reject)")
-                               << LOG_KV("exception",
-                                      boost::current_exception_diagnostic_information());
+        // The non-bcos family: the ladder's std::exception arm halts the node, and the
+        // recorded fault reproduces exactly that in go() (it must not become a receipt).
+        hostContext.recordHostFault(boost::current_exception_diagnostic_information(),
+            /*halting=*/true);
         return std::numeric_limits<uint64_t>::max();
     }
 }
@@ -300,46 +307,55 @@ evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
     return toEvmC(hostContext.blockHash(_number));
 }
 
-evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
+evmc_result call(evmc_host_context* _context, const evmc_message* _msg)
 {
-    // This callback is noexcept (the evmc host interface requires it): an exception
-    // escaping it is std::terminate, so every throwing path inside must be translated
-    // into a failed evmc_result — the same fail-closed shape getNonce below uses.
+    // gas maybe smaller than 0 since outside gas is u256 and evmc_message is
+    // int64_t so gas maybe smaller than 0 in some extreme cases
+    // * origin code: assert(_msg->gas >= 0)
+    if (_msg->gas < 0)
+    {
+        EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
+        return evmc_result{.status_code = EVMC_OUT_OF_GAS,
+            .gas_left = 0,
+            .gas_refund = 0,
+            .state_gas = {},
+            .output_data = nullptr,
+            .output_size = 0,
+            .release = nullptr};
+    }
+
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     try
     {
-        // gas maybe smaller than 0 since outside gas is u256 and evmc_message is
-        // int64_t so gas maybe smaller than 0 in some extreme cases
-        // * origin code: assert(_msg->gas >= 0)
-        if (_msg->gas < 0)
-        {
-            EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
-            return evmc_result{.status_code = EVMC_OUT_OF_GAS,
-                .gas_left = 0,
-                .gas_refund = 0,
-                .state_gas = {},
-                .output_data = nullptr,
-                .output_size = 0,
-                .release = nullptr};
-        }
-
-        auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-
         return hostContext.externalRequest(_msg);
+    }
+    catch (bcos::Error& _e)
+    {
+        // A fault while building/serving the sub-call. The catch is load-bearing, not a
+        // fail-open answer (review F1): the exception cannot cross the VM —
+        // evmc::VM::execute is noexcept (evmc.hpp:722) and the unwind dies inside
+        // evmone's instruction frames (verified: a raw throw aborts with libc++abi
+        // "terminating due to uncaught exception of type bcos::Error"), so dropping the
+        // catch turns a node fault into std::terminate instead of the ladder's decision.
+        // Record the fault with its family and answer fail-closed; go() rethrows it into
+        // the ladder arm the family would have reached — bcos::Error reverts the whole
+        // frame, never a committed receipt other nodes would not produce.
+        hostContext.recordHostFault(_e.errorMessage(), /*halting=*/false);
+        return evmc_result{.status_code = EVMC_INTERNAL_ERROR,
+            .gas_left = 0,
+            .gas_refund = 0,
+            .state_gas = {},
+            .output_data = nullptr,
+            .output_size = 0,
+            .release = nullptr};
     }
     catch (...)
     {
-        // externalRequest reads storage and parses the stored nonce string (both can
-        // throw); returning a failure lets evmone fail the create/call frame instead
-        // of terminating the node mid-block. evmone 0.24 treats any non-SUCCESS
-        // host-call answer as an ordinary failed sub-call and CONTINUES the parent
-        // frame — so also record the fault: TransactionExecutive::go checks it after
-        // vm.execute() and reverts the whole transaction instead of letting a node
-        // fault masquerade as a wrong-but-successful receipt (review F2).
-        reinterpret_cast<HostContext*>(_context)->recordHostFault(
-            boost::current_exception_diagnostic_information());
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVM host call failed closed")
-                               << LOG_KV("exception",
-                                      boost::current_exception_diagnostic_information());
+        // The non-bcos family: the ladder's std::exception arm halts the node; go()
+        // reproduces that (the fault must not ride a failed sub-call answer into a
+        // receipt).
+        hostContext.recordHostFault(boost::current_exception_diagnostic_information(),
+            /*halting=*/true);
         return evmc_result{.status_code = EVMC_INTERNAL_ERROR,
             .gas_left = 0,
             .gas_refund = 0,

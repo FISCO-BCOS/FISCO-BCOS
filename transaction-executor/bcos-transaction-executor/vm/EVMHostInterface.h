@@ -123,7 +123,7 @@ struct EVMHostInterface
         return toEvmC(balance);
     }
 
-    static uint64_t getNonce(evmc_host_context* context, const evmc_address* addr) noexcept
+    static uint64_t getNonce(evmc_host_context* context, const evmc_address* addr)
     {
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         try
@@ -132,18 +132,16 @@ struct EVMHostInterface
         }
         catch (...)
         {
-            // The body reads storage and parses the stored nonce string, both of which
-            // can throw; an exception escaping this noexcept callback is std::terminate.
-            // Fail closed per EIP-2681 instead: MAX_NONCE makes evmone reject the
-            // CREATE. Name the cause so a storage fault is distinguishable from a
-            // hostile input.
-            // The EIP-2681 reject alone lets the parent frame continue (a node
-            // fault masquerading as a legit max-nonce rejection); record it so the
-            // post-execute check fails the whole frame (review F2, v2 mirror).
+            // A storage/parse fault. It cannot be left to propagate (review F1): an
+            // exception cannot cross the VM — evmc::VM::execute is noexcept
+            // (evmc.hpp:722) and the unwind dies inside evmone's instruction frames
+            // (letting one through aborts the process) — so answer fail-closed per
+            // EIP-2681 (MAX_NONCE makes evmone reject the CREATE) and record the fault:
+            // executeCall/executeCreate rethrow it right after the VM returns, landing in
+            // execute()'s FIB-88/92 arm (status Unknown) instead of a node fault
+            // masquerading as a legitimate max-nonce rejection the contract's own logic
+            // converts to a revert.
             hostContext.recordHostFault(boost::current_exception_diagnostic_information());
-            EXECUTIVE_LOG(WARNING)
-                << LOG_DESC("getNonce failed closed (EIP-2681 reject)")
-                << LOG_KV("exception", boost::current_exception_diagnostic_information());
             return std::numeric_limits<uint64_t>::max();
         }
     }

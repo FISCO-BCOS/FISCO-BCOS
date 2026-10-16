@@ -117,13 +117,19 @@ public:
     void log(h256s&& _topics, bytesConstRef _data);
 
     /// ------ get interfaces related to HostContext------
-    /// A host-side fault (a storage/parse exception in an EVMC callback) recorded by
-    /// the fail-closed catches in EVMHostInterface. evmone 0.24 treats any non-SUCCESS
-    /// host-call answer as an ordinary failed sub-call and continues the parent frame,
-    /// which would turn a node fault into a wrong-but-successful receipt (lost event
-    /// logs, silent divergence). TransactionExecutive::go checks this after
-    /// vm.execute() and fails the whole frame instead (review F2).
-    void recordHostFault(std::string message) { m_hostFault = std::move(message); }
+    /// A host-side fault recorded by the fail-closed catches in EVMHostInterface. The
+    /// exception cannot cross the VM (evmc::VM::execute is noexcept and evmone's
+    /// instruction frames do not unwind), so the callback records it together with the
+    /// ladder family it belongs to and answers fail-closed; TransactionExecutive::go
+    /// checks this right after vm.execute() and rethrows the fault into the arm it would
+    /// have reached — `halting` = the std::exception arm (exit(1), the node halts), the
+    /// bcos::Error family otherwise (revert the whole frame). Never a receipt the rest
+    /// of the network would not produce (review F1).
+    void recordHostFault(std::string message, bool halting)
+    {
+        m_hostFault = std::move(message);
+        m_hostFaultHalting = halting;
+    }
     std::string const& hostFault() const { return m_hostFault; }
     void throwIfHostFault() const;
 
@@ -231,6 +237,7 @@ private:
 
     std::list<CallParameters::UniquePtr> m_responseStore;
     std::string m_hostFault;
+    bool m_hostFaultHalting = false;
 
     /// Per-transaction warm set; cached at construction to avoid BucketMap lookup on every
     /// accessAccount/accessStorage (same pattern as TE HostContext::m_eip2929Access).

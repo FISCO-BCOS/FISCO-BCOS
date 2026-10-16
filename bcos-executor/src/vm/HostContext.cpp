@@ -38,6 +38,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -156,13 +157,20 @@ std::string evmAddress2String(const evmc_address& address)
 
 void HostContext::throwIfHostFault() const
 {
-    if (!m_hostFault.empty())
+    if (m_hostFault.empty())
     {
-        // bcos::Error lands in TransactionExecutive::go's first catch arm, which
-        // reverts the WHOLE transaction — the honest outcome for a node fault,
-        // never a silently-wrong successful receipt (review F2).
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "EVM host-side fault: " + m_hostFault));
+        return;
     }
+    if (m_hostFaultHalting)
+    {
+        // The family that would have reached go()'s std::exception arm: unexpected /
+        // non-deterministic faults halt the node (that arm's policy), they never become
+        // a receipt. The callback could not propagate it — the VM boundary is noexcept —
+        // so the ladder's decision is reproduced from the recorded family.
+        BOOST_THROW_EXCEPTION(std::runtime_error("EVM host-side fault: " + m_hostFault));
+    }
+    // bcos::Error family: lands in go()'s first arm, which reverts the whole frame.
+    BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, m_hostFault));
 }
 
 evmc_result HostContext::externalRequest(const evmc_message* _msg)
@@ -198,10 +206,18 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         // as the creation address. Top-level deploys never pass through
         // externalRequest — their executor-built messages carry the tx's own
         // receiveAddress — so this only affects nested opcode creates.
-        // Pre-bugfix chains reject CREATE2 outright, and the rejected message keeps its
-        // historical shape: no derived recipient is assigned before the break below, so a
-        // legacy CREATE2 still addresses the empty address (the DMC lane routing and the
-        // isStaticPrecompiled/isEthereumPrecompiled probes then see what they saw before).
+        // Pre-bugfix chains reject CREATE2 outright. The rejection keeps the message's
+        // historical SHAPE: no derived recipient is assigned before the break below, so a
+        // legacy CREATE2 still spawns with an empty recipient and the
+        // isStaticPrecompiled/isEthereumPrecompiled probes run against the empty address
+        // exactly as before. What the ABI-19 createSalt removal DID change is the address
+        // the scheduler stamps on that rejected hop: the message reaches
+        // DmcExecutor::handleCreateMessage with to() empty and create == false, which now
+        // derives newEVMAddress(blockNumber, contextID, seq) where the base derived
+        // newCreate2EVMAddress(from, <empty data>, salt). Both substitution targets are
+        // code-less accounts, so the hop fails identically and neither address reaches the
+        // receipt — the rejected hop's shape is pinned by
+        // preBugfixRejectedCreate2PinsStatusGasOutput.
         if (_msg->kind == EVMC_CREATE2 &&
             !features().get(
                 ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))

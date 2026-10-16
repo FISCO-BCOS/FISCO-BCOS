@@ -35,8 +35,13 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     }
     (void)code;  // execute uses pre-analyzed m_analysis
     (void)codeSize;
-    // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
-    // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION).
+    // Fresh VM per execute: evmone pools one ExecutionState per depth inside the VM
+    // (0.24: `std::vector<ExecutionState> m_execution_states`, `get_execution_state(depth)`)
+    // and its `reset()` clears memory/return-data/gas-refund but NOT the stack
+    // (execution_state.hpp), so reusing a VM across executions can start the next one on
+    // the previous stack's content. The 0.21-era observation (EVMC_BAD_JUMP_DESTINATION
+    // after reset-and-reuse) is consistent with that; the workaround is carried forward
+    // as-is (review F5).
     evmc::VM evm{evmc_create_evmone()};
     auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
     evmoneVm->hash_fn = hostcontext::evm_hash_fn;

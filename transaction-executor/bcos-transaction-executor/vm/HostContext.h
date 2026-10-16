@@ -155,29 +155,22 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
 {
     Account<std::decay_t<decltype(storage)>> account(storage, address, addressTableMode);
     // The cache is content-addressed on the code the state actually holds. A non-empty
-    // CODE_HASH row normally names the body in SYS_CODE_BINARY — but code() below also
-    // falls back to the account's CODE field when that row is not backed (legacy
-    // contracts and internal precompiles), and the fetched body then need not match the
-    // row. The row is therefore only a usable cache key while SYS_CODE_BINARY backs it:
-    // an unbacked-row account probed under the raw row would be served whatever a
-    // previously-backed fill left under that value (a process-global cache, so the
-    // wrong body can even come from another storage view). Verify backing FIRST — then
-    // a row-keyed hit still skips the code-body read — and key everything else
-    // (unbacked rows, hash-less accounts) on the body itself (a fixed keccak).
+    // CODE_HASH row is that key directly: every writer in this tree stores the row as the
+    // code's own chain hash in the same call that stores the body — v2's
+    // EVMAccount::setCode writes SYS_CODE_BINARY, v1's setCode writes it too, and v1's
+    // pre-V3_1 half (bcos-executor/vm/HostContext.cpp) writes the body to the account's
+    // CODE field instead — so a row-keyed fill under {storedHash, revision} can never
+    // hold a body other than the one code() returns, whether or not SYS_CODE_BINARY
+    // backs the row (review F3: the backing probe that used to guard this is gone; no
+    // writer produces a row naming a different body). Hash-less accounts (no row at all)
+    // key on the body itself (a fixed keccak).
     auto const storedHash = co_await account.codeHash();
-    bool rowBacked = false;
     if (storedHash != h256{})
     {
-        rowBacked = co_await storage2::existsOne(
-            storage, executor_v1::StateKeyView{ledger::SYS_CODE_BINARY,
-                         std::string_view{(const char*)storedHash.data(), crypto::HashType::SIZE}});
-        if (rowBacked)
+        if (auto executable = co_await storage2::readOne(
+                getCacheExecutables(), ExecutableCacheKey{storedHash, revision}))
         {
-            if (auto executable = co_await storage2::readOne(
-                    getCacheExecutables(), ExecutableCacheKey{storedHash, revision}))
-            {
-                co_return std::move(*executable);
-            }
+            co_return std::move(*executable);
         }
     }
     // The already-read hash doubles as code()'s key: one row read on this path, not two.
@@ -187,15 +180,16 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
     {
         co_return {};
     }
-    // The content key is only computable after the code read, so the fallback path
+    // The content key is only computable after the code read, so the hash-less path
     // probes the cache once more here.
     auto const key =
-        rowBacked ? ExecutableCacheKey{storedHash, revision} :
-                    ExecutableCacheKey{
-                        executableCodeKey(bytesConstRef(
-                            reinterpret_cast<const byte*>(codeEntry->data()), codeEntry->size())),
-                        revision};
-    if (!rowBacked)
+        storedHash != h256{} ?
+            ExecutableCacheKey{storedHash, revision} :
+            ExecutableCacheKey{
+                executableCodeKey(bytesConstRef(
+                    reinterpret_cast<const byte*>(codeEntry->data()), codeEntry->size())),
+                revision};
+    if (storedHash == h256{})
     {
         if (auto cached = co_await storage2::readOne(getCacheExecutables(), key))
         {
@@ -211,20 +205,18 @@ template <class Storage, class TransientStorage>
 class HostContext
 {
 public:
-    /// A host-side fault (a storage/parse exception in a noexcept EVMC callback)
-    /// recorded by the fail-closed catches in EVMHostInterface. Only getNonce
-    /// swallows today (this lane's call() lets exceptions propagate through the
-    /// exception-enabled evmone build); the recorded fault makes the whole frame
-    /// fail after the VM returns instead of a node fault masquerading as a
-    /// legitimate EIP-2681 nonce rejection (review F2, v2 mirror).
+    /// A host-side fault recorded by a fail-closed EVMC callback. The exception cannot
+    /// cross the VM (evmc::VM::execute is noexcept and evmone's instruction frames do
+    /// not unwind), so getNonce records it and executeCall/executeCreate rethrow it
+    /// right after the VM returns: it lands in execute()'s FIB-88/92 arm (status
+    /// Unknown) — this lane's existing policy for execution exceptions — instead of a
+    /// node fault masquerading as a legitimate EIP-2681 nonce rejection the contract's
+    /// logic converts to a revert (review F1).
     void recordHostFault(std::string message) { m_hostFault = std::move(message); }
     void throwIfHostFault() const
     {
         if (!m_hostFault.empty())
         {
-            // Propagates up the task chain to the scheduler-level catch arms
-            // (OpScheduler::coExecuteBlock &c.), which classify it as a storage
-            // fault and fail the operation.
             BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "EVM host-side fault: " + m_hostFault));
         }
     }
@@ -988,12 +980,14 @@ private:
         if (m_ledgerConfig.get().features().get(
                 ledger::Features::Flag::bugfix_nested_create_creator_nonce))
         {
-            // CREATE only: upstream bumps the creator's nonce for CREATE, never for
-            // CREATE2 (whose address derives from the salt and consumes no nonce), and
-            // this lane's CREATE2 address is chain-hasher derived either way — a bump
-            // there would be a state-root row with no behavioural purpose. The flag is
-            // new in this upgrade, so no flag-ON chain depends on the CREATE2 bump.
-            if (m_web3Tx && ref.depth != 0 && ref.kind == EVMC_CREATE)
+            // Kind-independent by design (review F2): upstream's prepare_message bumps
+            // whenever depth != 0, for CREATE and CREATE2 alike (EthereumHost.h:495-507;
+            // the kind check there gates only the recipient derivation). The creator's
+            // nonce is state a LATER create reads, so a CREATE2 must advance it too — a
+            // CREATE2-then-CREATE sequence derives the second create's address from the
+            // bumped nonce, matching geth and this repo's own Ethereum lane. Pinned by
+            // creatorNonceFlagBumpsPerNestedCreate's CREATE2-then-CREATE cell.
+            if (m_web3Tx && ref.depth != 0)
             {
                 co_await bumpCreatorNonce(ref.sender);
                 m_creatorNonceBumped = true;
@@ -1016,9 +1010,8 @@ private:
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
             ref.input_data, ref.input_size, &HostContext::createAddressHook,
             &HostContext::create2AddressHook);
-        // Whole-frame fault check (review F2, v2 mirror): a fault recorded by a
-        // fail-closed EVMC callback must fail this frame, not ride the callback's
-        // sub-op-level answer the parent frame survives.
+        // Whole-frame fault check (review F1): a fault recorded by a fail-closed EVMC
+        // callback must fail this frame, not ride the callback's sub-op-level answer.
         throwIfHostFault();
         if (result.status_code == EVMC_SUCCESS)
         {
@@ -1170,7 +1163,7 @@ private:
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
             (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size(),
             &HostContext::createAddressHook, &HostContext::create2AddressHook);
-        throwIfHostFault();  // same whole-frame check as the create branch
+        throwIfHostFault();  // same whole-frame check as the create branch (review F1)
         co_return result;
     }
 };
