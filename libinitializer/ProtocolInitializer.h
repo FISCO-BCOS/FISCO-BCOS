@@ -23,8 +23,8 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
-#include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-framework/security/KeyEncryptInterface.h>
+#include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer
@@ -54,7 +54,8 @@ public:
     bcos::crypto::KeyFactory::Ptr keyFactory() const { return m_keyFactory; }
     bcos::security::KeyEncryptInterface::Ptr keyEncryption() const { return m_keyEncryption; }
     bcos::security::StorageEncryptInterface::Ptr dataEncryption() const { return m_dataEncryption; }
-    bcos::security::KeyEncryptInterface::Ptr getKeyEncryptionByType(bcos::security::KeyEncryptionType _type);
+    bcos::security::KeyEncryptInterface::Ptr getKeyEncryptionByType(
+        bcos::security::KeyEncryptionType _type);
 
 private:
     void createCryptoSuite();

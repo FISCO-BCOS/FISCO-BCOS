@@ -68,8 +68,7 @@ public:
     task::Task<Error::Ptr> sendResponse(std::string _id, int _moduleID,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
 
-    task::Task<void> broadcastMessage(
-        uint16_t type, int moduleID,
+    task::Task<void> broadcastMessage(uint16_t type, int moduleID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
 
     /**
@@ -85,8 +84,7 @@ public:
     // FIB-185: dispatch the gateway broadcast onto a serial send queue (off the caller thread) so a
     // caller holding a lock (PBFT under m_mutex) is not coupled to gateway session-lock contention.
     // The owned payload is captured by the queued task -> the message body is never copied.
-    void broadcastMessageByOwnedPayload(
-        uint16_t type, int moduleID, bytesPointer payload) override;
+    void broadcastMessageByOwnedPayload(uint16_t type, int moduleID, bytesPointer payload) override;
 
     // FIB-185: dispatch the point-to-point gateway send onto the serial send queue (off the caller
     // thread), so sendViewChange / sendRecoverResponse run under m_mutex without contending the
@@ -101,8 +99,8 @@ public:
      * @param _groupNodeInfo: nodeIDs pushed by gateway
      * @return error: nullptr on success
      */
-    task::Task<Error::Ptr> onReceiveGroupNodeInfo(std::string _groupID,
-        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) override;
+    task::Task<Error::Ptr> onReceiveGroupNodeInfo(
+        std::string _groupID, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) override;
 
     /**
      * @brief: (coroutine) receive message from gateway
@@ -112,8 +110,8 @@ public:
      *        completes; the payload is copied before the deferred module dispatch)
      * @return error: nullptr on success
      */
-    task::Task<Error::Ptr> onReceiveMessage(std::string _groupID,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
+    task::Task<Error::Ptr> onReceiveMessage(
+        std::string _groupID, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
 
     /**
      * @brief: (coroutine) receive broadcast message from gateway
@@ -122,8 +120,8 @@ public:
      * @param _data: received message data (a view — same lifetime contract as onReceiveMessage)
      * @return error: nullptr on success
      */
-    task::Task<Error::Ptr> onReceiveBroadcastMessage(std::string _groupID,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
+    task::Task<Error::Ptr> onReceiveBroadcastMessage(
+        std::string _groupID, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data) override;
 
     /**
      * @brief: handle message timeout

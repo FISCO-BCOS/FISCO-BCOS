@@ -22,9 +22,9 @@
 #include "Common.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include <tbb/concurrent_unordered_map.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/regex.hpp>
-#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::executor;

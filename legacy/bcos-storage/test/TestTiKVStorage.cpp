@@ -440,8 +440,8 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->get(),
-                            std::string("hello world!") + table1Keys[i][3]);
+                        BOOST_CHECK_EQUAL(
+                            entries[i]->get(), std::string("hello world!") + table1Keys[i][3]);
                     }
                 });
         });
@@ -463,8 +463,8 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->get(),
-                            std::string("hello world!") + table2Keys[i][3]);
+                        BOOST_CHECK_EQUAL(
+                            entries[i]->get(), std::string("hello world!") + table2Keys[i][3]);
                     }
                 });
         });

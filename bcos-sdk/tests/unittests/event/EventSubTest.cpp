@@ -205,8 +205,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
         auto respTask = std::make_shared<bcos::cppsdk::event::EventSubTask>();
         respTask->setId(id);
         bool called = false;
-        respTask->setCallback(
-            [&called](bcos::Error::Ptr, const std::string&) { called = true; });
+        respTask->setCallback([&called](bcos::Error::Ptr, const std::string&) { called = true; });
         es->addTask(respTask);
 
         auto resp = std::make_shared<bcos::cppsdk::event::EventSubResponse>();

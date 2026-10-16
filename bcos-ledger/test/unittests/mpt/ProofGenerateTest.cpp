@@ -312,13 +312,13 @@ BOOST_AUTO_TEST_CASE(AccountNotInMPTErrors)
     auto const stateRoot = seedStateTrieFlushed(storage, {{known, account}});
 
     bcos::Address const unknown = makeAddress(0xcd);
-    auto missing = bcos::task::syncWait(generateProof(storage, stateRoot, unknown,
-        std::span<bcos::h256 const>{}, /*fullTrie=*/false));
+    auto missing = bcos::task::syncWait(generateProof(
+        storage, stateRoot, unknown, std::span<bcos::h256 const>{}, /*fullTrie=*/false));
     BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(missing));
     BOOST_CHECK(std::get<ProofErrorCode>(missing) == ProofErrorCode::AccountNotInMPT);
 
-    auto emptyRoot = bcos::task::syncWait(generateProof(storage, emptyRootHash(), known,
-        std::span<bcos::h256 const>{}, /*fullTrie=*/false));
+    auto emptyRoot = bcos::task::syncWait(generateProof(
+        storage, emptyRootHash(), known, std::span<bcos::h256 const>{}, /*fullTrie=*/false));
     BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(emptyRoot));
     BOOST_CHECK(std::get<ProofErrorCode>(emptyRoot) == ProofErrorCode::AccountNotInMPT);
 

@@ -101,8 +101,8 @@ public:
                 // total completion: an unexpected type must still answer the read, or the
                 // awaiting read-loop coroutine pins forever. Post the completion so it runs on
                 // the socket's io thread like every other asio completion.
-                boost::asio::post(socket->ioService(),
-                    [completion = std::move(completion)]() mutable {
+                boost::asio::post(
+                    socket->ioService(), [completion = std::move(completion)]() mutable {
                         completion(boost::asio::error::operation_not_supported, std::size_t{0});
                     });
                 break;
@@ -115,18 +115,16 @@ public:
         const std::shared_ptr<SocketFace>& socket, boost::asio::mutable_buffer buffers)
     {
         return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
-            [this, socket, buffers](auto handler) {
-                ReadPolicy::invoke(this, socket, buffers, std::move(handler));
-            },
+            [this, socket, buffers](
+                auto handler) { ReadPolicy::invoke(this, socket, buffers, std::move(handler)); },
             boost::asio::error::operation_aborted);
     }
 
     auto awaitableAccept(const std::shared_ptr<SocketFace>& socket)
     {
         return task::makeFireAwaitable<boost::system::error_code>(
-            [this, socket](auto handler) {
-                m_acceptor.async_accept(socket->ref(), std::move(handler));
-            },
+            [this, socket](
+                auto handler) { m_acceptor.async_accept(socket->ref(), std::move(handler)); },
             boost::asio::error::operation_aborted);
     }
 
@@ -137,13 +135,12 @@ public:
             boost::asio::error::operation_aborted);
     }
 
-    static auto awaitableHandshake(const std::shared_ptr<SocketFace>& socket,
-        ba::ssl::stream_base::handshake_type type)
+    static auto awaitableHandshake(
+        const std::shared_ptr<SocketFace>& socket, ba::ssl::stream_base::handshake_type type)
     {
         return task::makeFireAwaitable<boost::system::error_code>(
-            [socket, type](auto handler) {
-                socket->sslref().async_handshake(type, std::move(handler));
-            },
+            [socket, type](
+                auto handler) { socket->sslref().async_handshake(type, std::move(handler)); },
             boost::asio::error::operation_aborted);
     }
 

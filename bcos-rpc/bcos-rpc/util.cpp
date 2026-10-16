@@ -18,9 +18,9 @@
  * @date 2024/4/24
  */
 
+#include "bcos-rpc/util.h"
 #include "bcos-rpc/Common.h"
 #include "bcos-rpc/jsonrpc/Common.h"
-#include "bcos-rpc/util.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <boost/regex.hpp>
 #include <limits>
@@ -37,12 +37,10 @@ constexpr int32_t c_headerNotFoundCode = -32000;
 constexpr std::string_view c_headerNotFoundMessage = "header not found";
 
 // return (actual block number, isLatest block)
-std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
-    protocol::BlockNumber latest, std::string_view blockTag, protocol::BlockNumber safeDepth,
-    protocol::BlockNumber finalizedDepth,
-    std::optional<protocol::BlockNumber> forkchoiceSafe,
-    std::optional<protocol::BlockNumber> forkchoiceFinalized,
-    bool failClosedOnMissingForkchoice)
+std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(protocol::BlockNumber latest,
+    std::string_view blockTag, protocol::BlockNumber safeDepth,
+    protocol::BlockNumber finalizedDepth, std::optional<protocol::BlockNumber> forkchoiceSafe,
+    std::optional<protocol::BlockNumber> forkchoiceFinalized, bool failClosedOnMissingForkchoice)
 {
     if (blockTag.data() == nullptr || blockTag.empty())
     {

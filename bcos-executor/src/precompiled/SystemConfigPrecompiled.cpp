@@ -405,8 +405,7 @@ int64_t SystemConfigPrecompiled::validate(
     // lane. Versioned on V3_18_0_VERSION for the same replay reason as the refusal above.
     constexpr std::string_view c_executorVersionKey =
         magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version);
-    if (key == c_executorVersionKey &&
-        configuredValue < bcos::ledger::ETHEREUM_EXECUTOR_VERSION &&
+    if (key == c_executorVersionKey && configuredValue < bcos::ledger::ETHEREUM_EXECUTOR_VERSION &&
         versionCompareTo(blockVersion, BlockVersion::V3_18_0_VERSION) >= 0)
     {
         auto const currentRow = getSysConfigByKey(_executive, key);
@@ -426,16 +425,15 @@ int64_t SystemConfigPrecompiled::validate(
         }
         if (currentExecutorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError{} << errinfo_comment(
-                    "executor_version " + std::to_string(configuredValue) + " cannot replace " +
-                    std::to_string(currentExecutorVersion) + ": the Ethereum lane " +
-                    "(executor_version >= " +
-                    std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION) +
-                    ") is a genesis property, so a running chain cannot be "
-                    "moved off it by governance; the node keeps executing the "
-                    "lane it booted with and the next start would derive the "
-                    "other one from this row"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                      "executor_version " + std::to_string(configuredValue) +
+                                      " cannot replace " + std::to_string(currentExecutorVersion) +
+                                      ": the Ethereum lane " + "(executor_version >= " +
+                                      std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION) +
+                                      ") is a genesis property, so a running chain cannot be "
+                                      "moved off it by governance; the node keeps executing the "
+                                      "lane it booted with and the next start would derive the "
+                                      "other one from this row"));
         }
     }
     return configuredValue;

@@ -24,10 +24,8 @@ bcos::bytes toBytes(char* STRING, size_t LENGTH);
 
 template <class Input>
 concept HasMemberConvertTo = requires(Input&& input) {
-                                 {
-                                     input.template convert_to<std::string>()
-                                     } -> std::same_as<std::string>;
-                             };
+    { input.template convert_to<std::string>() } -> std::same_as<std::string>;
+};
 template <class Input>
 std::string toString(Input const& input)
 {
@@ -49,10 +47,8 @@ std::string_view toStringView(Buffer input)
 
 template <class Input>
 concept HasMemberHex = requires(Input&& input) {
-                           {
-                               input.hex()
-                               } -> std::same_as<std::string>;
-                       };
+    { input.hex() } -> std::same_as<std::string>;
+};
 template <class Input>
 std::string toHex(Input const& input)
 {

@@ -20,8 +20,14 @@ class OpenSSLDigestSign
 private:
     constexpr static int id()
     {
-        if constexpr (digestSignType == SM2) { return EVP_PKEY_SM2; }
-        else { static_assert(!sizeof(OpenSSLDigestSign), "Unknown DigestSignType!"); }
+        if constexpr (digestSignType == SM2)
+        {
+            return EVP_PKEY_SM2;
+        }
+        else
+        {
+            static_assert(!sizeof(OpenSSLDigestSign), "Unknown DigestSignType!");
+        }
     }
 
     struct EVPContext

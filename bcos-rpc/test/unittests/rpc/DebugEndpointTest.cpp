@@ -116,10 +116,9 @@ public:
         Json::Value value;
         Json::Reader reader;
         std::promise<bcos::bytes> promise;
-        web3JsonRpc->onRPCRequest(req,
-            [&promise](bcos::bytes resp, boost::beast::http::status) {
-                promise.set_value(std::move(resp));
-            });
+        web3JsonRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         reader.parse(json.begin(), json.end(), value);
@@ -182,9 +181,8 @@ BOOST_AUTO_TEST_CASE(DbGetCodePrefixHappyPath)
     wireReader();
     bcos::h256 codeHash{0x11U};
     bcos::bytes codeBytes{0x60, 0x00, 0x60, 0x01};
-    m_ledger->setStateStorageEntry(
-        std::string(bcos::ledger::SYS_CODE_BINARY), codeHash.toRawString(),
-        bcos::storage::Entry{codeBytes});
+    m_ledger->setStateStorageEntry(std::string(bcos::ledger::SYS_CODE_BINARY),
+        codeHash.toRawString(), bcos::storage::Entry{codeBytes});
 
     // key = "0x63" ('c') + codeHash hex
     std::string key = "0x63" + codeHash.hex();

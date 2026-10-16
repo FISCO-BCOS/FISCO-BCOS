@@ -23,8 +23,8 @@
  */
 #pragma once
 
-#include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/security/StorageEncryptInterface.h>
+#include <bcos-framework/storage/StorageInterface.h>
 #include <rocksdb/db.h>
 #include <tbb/parallel_for.h>
 
@@ -54,9 +54,9 @@ public:
 
     // due to the blocking of m_db->MultiGet, this interface is actually a synchronous interface
     void asyncGetRows(std::string_view table,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access |
-                ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
         override;

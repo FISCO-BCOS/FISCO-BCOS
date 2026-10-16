@@ -22,8 +22,8 @@
 #include "./CriticalFields.h"
 #include "./TxDAGInterface.h"
 #include "tbb/flow_graph.h"
-#include <vector>
 #include <bcos-utilities/BoostLog.h>
+#include <vector>
 
 #define DAGFLOW_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR") << LOG_BADGE("DAGFlow")
 
@@ -43,7 +43,7 @@ public:
     };
 
     using Ptr = std::shared_ptr<FlowTask>;
-    FlowTask(ExecuteTxFunc _f) : f_executeTx(_f){};
+    FlowTask(ExecuteTxFunc _f) : f_executeTx(_f) {};
     virtual ~FlowTask() = default;
     virtual void run() = 0;
     virtual Type type() = 0;

@@ -46,8 +46,8 @@ class TestPBFTEngine : public FakePBFTEngine
 {
 public:
     using Ptr = std::shared_ptr<TestPBFTEngine>;
-    explicit TestPBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& io,
-        bcos::IOServicePool::Ptr pool)
+    explicit TestPBFTEngine(
+        PBFTConfig::Ptr _config, boost::asio::io_context& io, bcos::IOServicePool::Ptr pool)
       : FakePBFTEngine(_config, io, std::move(pool))
     {}
     bool testIsValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _msg)
@@ -78,7 +78,8 @@ BOOST_AUTO_TEST_CASE(testRejectNewViewWithTamperedPrePrepareHash)
 
     // Build a TestPBFTEngine backed by the verifier's config.
     auto ioPool = std::make_shared<IOServicePool>(1, "fib124");
-    auto testEngine = std::make_shared<TestPBFTEngine>(verifierConfig, verifierFaker->ioContext(), ioPool);
+    auto testEngine =
+        std::make_shared<TestPBFTEngine>(verifierConfig, verifierFaker->ioContext(), ioPool);
 
     // Advance to a higher view so that isValidNewViewMsg passes the view check.
     ViewType targetView = 1;

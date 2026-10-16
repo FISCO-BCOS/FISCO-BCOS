@@ -176,8 +176,7 @@ BOOST_AUTO_TEST_CASE(activationGateNeverReadsAnUnsetRungAsACrossing)
     // not even at the sentinel boundary itself (the sentinel means "not scheduled").
     OpForkSchedule unset;
     BOOST_CHECK(!isOpNoUserTxActivationBlock(unset, 0, 100));
-    BOOST_CHECK(
-        !isOpNoUserTxActivationBlock(unset, 0, std::numeric_limits<uint64_t>::max()));
+    BOOST_CHECK(!isOpNoUserTxActivationBlock(unset, 0, std::numeric_limits<uint64_t>::max()));
     // A scheduled rung crosses exactly at its activation second.
     OpForkSchedule jovian;
     jovian.m_jovianTime = 100;
@@ -200,8 +199,8 @@ BOOST_AUTO_TEST_CASE(engineApiProfilesAndForkIdsAreValuePinned)
 {
     using bcos::engine::ApiVersion;
     using bcos::engine::EngineApiProfile;
-    using bcos::engine::OpForkId;
     using bcos::engine::engineApiProfileFor;
+    using bcos::engine::OpForkId;
     using bcos::engine::opForkIdFor;
     struct Row
     {
@@ -216,22 +215,16 @@ BOOST_AUTO_TEST_CASE(engineApiProfilesAndForkIdsAreValuePinned)
         {OpFork::Bedrock, false, {}, ApiVersion::V1, ApiVersion::V1, ApiVersion::V1},
         {OpFork::Regolith, true, OpForkId::Regolith, ApiVersion::V1, ApiVersion::V2,
             ApiVersion::V2},
-        {OpFork::Canyon, true, OpForkId::Canyon, ApiVersion::V2, ApiVersion::V2,
-            ApiVersion::V2},
+        {OpFork::Canyon, true, OpForkId::Canyon, ApiVersion::V2, ApiVersion::V2, ApiVersion::V2},
         {OpFork::Delta, false, {}, ApiVersion::V1, ApiVersion::V1, ApiVersion::V1},
-        {OpFork::Ecotone, true, OpForkId::Ecotone, ApiVersion::V3, ApiVersion::V3,
-            ApiVersion::V3},
+        {OpFork::Ecotone, true, OpForkId::Ecotone, ApiVersion::V3, ApiVersion::V3, ApiVersion::V3},
         {OpFork::Fjord, true, OpForkId::Fjord, ApiVersion::V3, ApiVersion::V3, ApiVersion::V3},
-        {OpFork::Granite, true, OpForkId::Granite, ApiVersion::V3, ApiVersion::V3,
-            ApiVersion::V3},
+        {OpFork::Granite, true, OpForkId::Granite, ApiVersion::V3, ApiVersion::V3, ApiVersion::V3},
         {OpFork::Holocene, true, OpForkId::Holocene, ApiVersion::V3, ApiVersion::V3,
             ApiVersion::V3},
-        {OpFork::Isthmus, true, OpForkId::Isthmus, ApiVersion::V3, ApiVersion::V4,
-            ApiVersion::V4},
-        {OpFork::Jovian, true, OpForkId::Jovian, ApiVersion::V3, ApiVersion::V4,
-            ApiVersion::V4},
-        {OpFork::Karst, true, OpForkId::Karst, ApiVersion::V3, ApiVersion::V5,
-            ApiVersion::V4},
+        {OpFork::Isthmus, true, OpForkId::Isthmus, ApiVersion::V3, ApiVersion::V4, ApiVersion::V4},
+        {OpFork::Jovian, true, OpForkId::Jovian, ApiVersion::V3, ApiVersion::V4, ApiVersion::V4},
+        {OpFork::Karst, true, OpForkId::Karst, ApiVersion::V3, ApiVersion::V5, ApiVersion::V4},
     };
     for (auto const& row : rows)
     {

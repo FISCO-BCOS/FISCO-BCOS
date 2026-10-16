@@ -43,9 +43,8 @@ public:
     using ConstPtr = std::shared_ptr<const RateLimiterManager>;
     using UniquePtr = std::unique_ptr<RateLimiterManager>;
 
-        RateLimiterManager(
-            boost::asio::io_context& _ioService,
-            const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
+    RateLimiterManager(boost::asio::io_context& _ioService,
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
 
     bcos::ratelimiter::RateLimiterInterface::Ptr getRateLimiter(const std::string& _rateLimiterKey);
 

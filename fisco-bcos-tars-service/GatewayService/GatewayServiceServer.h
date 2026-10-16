@@ -36,7 +36,8 @@ public:
         const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncSendMessageByNodeIDs(const std::string& groupID, tars::Int32 moduleID,
-        const std::vector<tars::Char>& srcNodeID, const std::vector<std::vector<tars::Char>>& dstNodeID,
+        const std::vector<tars::Char>& srcNodeID,
+        const std::vector<std::vector<tars::Char>>& dstNodeID,
         const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncGetGroupNodeInfo(
@@ -45,8 +46,8 @@ public:
         const bcostars::GroupInfo& groupInfo, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncSendMessageByTopic(const std::string& _topic,
-        const std::vector<tars::Char>& _data, tars::Int32& _type, std::vector<tars::Char>& _responseData,
-        tars::TarsCurrentPtr current) override;
+        const std::vector<tars::Char>& _data, tars::Int32& _type,
+        std::vector<tars::Char>& _responseData, tars::TarsCurrentPtr current) override;
     bcostars::Error asyncSubscribeTopic(const std::string& _clientID, const std::string& _topicInfo,
         tars::TarsCurrentPtr current) override;
     bcostars::Error asyncSendBroadcastMessageByTopic(const std::string& _topic,

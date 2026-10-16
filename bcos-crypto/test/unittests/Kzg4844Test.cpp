@@ -45,8 +45,7 @@ BOOST_AUTO_TEST_CASE(commitProveVerifyRoundtrip)
     bytes commitment;
     BOOST_REQUIRE(blobToKzgCommitment(ref(blob), commitment));
     BOOST_CHECK_EQUAL(commitment.size(), CommitmentSize);
-    BOOST_CHECK_EQUAL(versionedHashFromCommitment(ref(commitment))[0],
-        VERSIONED_HASH_VERSION_KZG);
+    BOOST_CHECK_EQUAL(versionedHashFromCommitment(ref(commitment))[0], VERSIONED_HASH_VERSION_KZG);
 
     bytes proof;
     BOOST_REQUIRE(computeBlobKzgProof(ref(blob), ref(commitment), proof));

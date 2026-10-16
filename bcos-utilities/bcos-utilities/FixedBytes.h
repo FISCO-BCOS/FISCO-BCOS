@@ -434,9 +434,10 @@ private:
         {
             if (_bytesData.size() != N)
             {
-                BOOST_THROW_EXCEPTION(ConstructFixedBytesFailed() << errinfo_comment(
-                                          "Require " + std::to_string(N) + " length input data, got " +
-                                          std::to_string(_bytesData.size())));
+                BOOST_THROW_EXCEPTION(
+                    ConstructFixedBytesFailed()
+                    << errinfo_comment("Require " + std::to_string(N) + " length input data, got " +
+                                       std::to_string(_bytesData.size())));
             }
             memcpy(m_data.data(), _bytesData.data(), N);
             break;

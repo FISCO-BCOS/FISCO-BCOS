@@ -44,9 +44,9 @@ public:
     {
     public:
         InvalidInstruction(const std::string& _opName, uint32_t _loc)
-          : m_opName(_opName), m_location(_loc){};
+          : m_opName(_opName), m_location(_loc) {};
         InvalidInstruction(const char* _opName, uint32_t _loc)
-          : m_opName(_opName), m_location(_loc){};
+          : m_opName(_opName), m_location(_loc) {};
         std::string ErrorMessage() const noexcept
         {
             return "Unsupported opcode " + m_opName + ", location:" + std::to_string(m_location);
