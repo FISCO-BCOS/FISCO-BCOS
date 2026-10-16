@@ -52,7 +52,7 @@ void dropSnapshotRevision(AdmitHarness& harness, int64_t headTimestampMs)
 // timestamp in seconds (the snapshot carries milliseconds) with PoS difficulty 0.
 BOOST_AUTO_TEST_CASE(revisionComesFromTheScheduleAtTheHeadTimestamp)
 {
-    for (auto const [revision, expected] :
+    for (auto const& [revision, expected] :
         {std::pair{EVMC_ISTANBUL, TransactionStatus::TxTypeNotSupported},
             std::pair{EVMC_PRAGUE, TransactionStatus::None}})
     {
