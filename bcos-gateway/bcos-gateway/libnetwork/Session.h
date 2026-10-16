@@ -6,7 +6,9 @@
 
 #pragma once
 
+#include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"

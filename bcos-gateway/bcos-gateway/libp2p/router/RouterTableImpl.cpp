@@ -20,7 +20,7 @@
 #include "RouterTableImpl.h"
 #include "../Common.h"
 #include "bcos-tars-protocol/Common.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 
 using namespace bcos;
 using namespace bcos::gateway;

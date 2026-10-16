@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../../mock/MockLedger.h"
+#include <boost/log/core/core.hpp>
 #include "../../mock/MockTransactionalStorage.h"
 #include "../../mock/MockTxPool.h"
 #include "CompatTestFixture.h"

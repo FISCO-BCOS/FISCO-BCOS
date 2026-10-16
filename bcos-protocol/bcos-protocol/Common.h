@@ -25,7 +25,7 @@
 #include <limits>
 #include <algorithm>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos::protocol
 {

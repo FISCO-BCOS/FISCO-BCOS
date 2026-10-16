@@ -38,14 +38,15 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/ProtocolInitializer.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <memory>
 #include <thread>
-#include <bcos-utilities/BoostLog.h>
 
 DERIVE_BCOS_EXCEPTION(StartLightNodeException);
 

@@ -59,14 +59,14 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
-#include <bcos-utilities/Exceptions.h>
 #include <opstack-executor/OpEthL1Attributes.h>  // synthesize fixture: DepositTx / OP_ETH_* constants
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
 #include <algorithm>
 #include <array>
 #include <atomic>

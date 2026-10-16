@@ -19,6 +19,7 @@
  */
 
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/log/core/core.hpp>
 #include <algorithm>
 #include <map>
 #include <random>

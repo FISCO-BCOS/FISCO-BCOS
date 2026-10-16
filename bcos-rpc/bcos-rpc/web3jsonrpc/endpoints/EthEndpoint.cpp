@@ -26,7 +26,6 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/web3jsonrpc/utils/FeeHistory.h"
 #include "bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h"
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -55,7 +54,6 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -66,6 +64,9 @@
 #include <string>
 #include <variant>
 #include <vector>
+
+#include "bcos-protocol/TransactionStatus.h"
+#include <bcos-utilities/DataConvertUtility.h>
 
 using namespace bcos;
 using namespace bcos::rpc;

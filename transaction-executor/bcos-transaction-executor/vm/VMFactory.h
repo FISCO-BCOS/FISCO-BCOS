@@ -21,7 +21,7 @@
 
 #pragma once
 #include "VMInstance.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmone/evmone.h>

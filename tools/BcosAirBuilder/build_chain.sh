@@ -1605,6 +1605,9 @@ generate_common_ini() {
     ; rotate the log every hour
     ;enable_rotate_by_hour=true
     enable_rate_collector=false
+    ; flush every log line to disk immediately (default false: lines are flushed
+    ; when the log queue drains, and at least every 100ms)
+    ;flush=false
 EOF
 }
 

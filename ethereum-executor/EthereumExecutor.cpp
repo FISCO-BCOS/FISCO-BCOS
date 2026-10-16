@@ -6,10 +6,11 @@
 
 #include "EthereumExecutor.h"
 
-#include "bcos-protocol/TransactionStatus.h"
 #include <algorithm>
 #include <cstdint>
 #include <string>
+
+#include "bcos-protocol/TransactionStatus.h"
 
 namespace bcos::executor_v1::eth
 {

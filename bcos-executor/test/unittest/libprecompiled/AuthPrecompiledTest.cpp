@@ -19,6 +19,7 @@
  */
 
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include <boost/log/core/core.hpp>
 #include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "libprecompiled/PreCompiledFixture.h"

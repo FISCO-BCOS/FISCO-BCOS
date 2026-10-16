@@ -19,6 +19,7 @@
  */
 
 #include "bcos-framework/protocol/GlobalConfig.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "fisco-bcos-air/Common.h"
 #include "libinitializer/CommandHelper.h"

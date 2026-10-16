@@ -22,7 +22,7 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-protocol/TransactionStatus.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <tbb/concurrent_unordered_set.h>
 
 #define NONCECHECKER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXPOOL") << LOG_BADGE("NonceChecker")

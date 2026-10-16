@@ -15,7 +15,6 @@
 #include "CompatTestFixture.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-task/Wait.h"
 #include "executive/BlockContext.h"
@@ -23,6 +22,8 @@
 #include "vm/VMInstance.h"
 #include <boost/test/unit_test.hpp>
 #include <vector>
+
+#include "bcos-protocol/TransactionStatus.h"
 
 namespace bcos::test
 {

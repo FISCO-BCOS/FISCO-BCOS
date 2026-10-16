@@ -145,6 +145,9 @@
     log_path=./log
     level=info
     max_log_file_size=200
+    ; flush every log line to disk immediately (default false: lines are flushed
+    ; when the log queue drains, and at least every 100ms)
+    ;flush=false
 
 [thread_pool]
     ; Shared IOServicePool thread count

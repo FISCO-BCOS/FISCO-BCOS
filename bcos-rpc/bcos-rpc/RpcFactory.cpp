@@ -34,9 +34,9 @@
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/NewTimer.h>
 #include <memory>
 #include <string>

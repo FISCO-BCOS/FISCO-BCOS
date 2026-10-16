@@ -20,7 +20,7 @@
 
 #include <bcos-boostssl/context/NodeInfoTools.h>
 #include <bcos-boostssl/httpserver/HttpServer.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <memory>
 #include <utility>
 

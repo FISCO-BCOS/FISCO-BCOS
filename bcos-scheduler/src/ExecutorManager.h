@@ -11,7 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include <boost/iterator/transform_iterator.hpp>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos::scheduler
 {

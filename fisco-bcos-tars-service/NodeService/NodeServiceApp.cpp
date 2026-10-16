@@ -19,6 +19,7 @@
  * @date 2021-10-18
  */
 #include "NodeServiceApp.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "../Common/TarsUtils.h"
 #include "../FrontService/FrontServiceServer.h"
 #include "../LedgerService/LedgerServiceServer.h"
@@ -32,7 +33,7 @@
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 using namespace bcostars;
 using namespace bcos;

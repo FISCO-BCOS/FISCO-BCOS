@@ -7,7 +7,7 @@
 #include "bcos-executor/src/vm/HostContext.h"
 #include <evmc/evmc.h>
 #include <memory>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define EXECUTIVE_WRAPPER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
 

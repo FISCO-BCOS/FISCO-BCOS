@@ -20,6 +20,7 @@
  */
 #pragma once
 #include <bcos-utilities/Timer.h>
+#include <cmath>
 namespace bcos::consensus
 {
 class PBFTTimer : public Timer

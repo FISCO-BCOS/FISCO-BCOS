@@ -35,7 +35,7 @@
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::crypto;

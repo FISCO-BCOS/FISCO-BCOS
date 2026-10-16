@@ -44,15 +44,15 @@ BOOST_AUTO_TEST_SUITE(BoostLogInitializerTest)
 
 BOOST_AUTO_TEST_CASE(getLogLevelMapsAllSeverities)
 {
-    using lvl = boost::log::trivial::severity_level;
-    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("trace"), (unsigned)lvl::trace);
-    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("DEBUG"), (unsigned)lvl::debug);
-    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("warning"), (unsigned)lvl::warning);
-    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("error"), (unsigned)lvl::error);
-    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("fatal"), (unsigned)lvl::fatal);
-    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("info"), (unsigned)lvl::info);
+    using lvl = bcos::LogLevel;
+    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("trace"), (unsigned)lvl::TRACE);
+    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("DEBUG"), (unsigned)lvl::DEBUG);
+    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("warning"), (unsigned)lvl::WARNING);
+    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("error"), (unsigned)lvl::ERROR);
+    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("fatal"), (unsigned)lvl::FATAL);
+    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("info"), (unsigned)lvl::INFO);
     // unrecognised string falls through to the info default
-    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("nonsense"), (unsigned)lvl::info);
+    BOOST_CHECK_EQUAL(BoostLogInitializer::getLogLevel("nonsense"), (unsigned)lvl::INFO);
 }
 
 BOOST_AUTO_TEST_CASE(initLogHourlyRotation)

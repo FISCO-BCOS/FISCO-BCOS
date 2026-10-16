@@ -33,7 +33,6 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
@@ -50,6 +49,8 @@
 #include <optional>
 #include <string>
 #include <vector>
+
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 
 // Anonymous namespace (unity-build friendly). The storage stack, mock executor /
 // scheduler and the getLedgerConfig stub are the SHARED test mocks

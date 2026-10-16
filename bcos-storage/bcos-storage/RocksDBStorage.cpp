@@ -25,6 +25,7 @@
 #include "bcos-utilities/Common.h"
 #include "rocksdb/convenience.h"
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/LogStream.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
@@ -37,7 +38,6 @@
 #include <mutex>
 #include <optional>
 #include <variant>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos::storage;
 using namespace bcos::protocol;

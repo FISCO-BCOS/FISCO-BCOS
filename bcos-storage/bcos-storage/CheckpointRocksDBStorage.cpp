@@ -1,6 +1,6 @@
 #include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/StateKVResolver.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <rocksdb/filter_policy.h>
 #include <rocksdb/statistics.h>
 #include <rocksdb/table.h>

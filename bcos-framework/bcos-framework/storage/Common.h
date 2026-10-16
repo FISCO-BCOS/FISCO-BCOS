@@ -31,7 +31,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define STORAGE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE]"
 

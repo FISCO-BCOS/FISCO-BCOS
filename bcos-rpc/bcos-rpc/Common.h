@@ -25,7 +25,7 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <iostream>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define RPC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("RPC")
 

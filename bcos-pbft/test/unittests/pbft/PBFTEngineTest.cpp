@@ -19,6 +19,7 @@
  * @date 2021-05-31
  */
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
+#include <boost/log/core/core.hpp>
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "test/unittests/pbft/PBFTFixture.h"
 #include "test/unittests/protocol/FakePBFTMessage.h"

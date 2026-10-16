@@ -6,7 +6,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <legacy/bcos-ledger/LedgerImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <boost/throw_exception.hpp>

@@ -25,8 +25,11 @@
 #include "bcos-task/Wait.h"
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <fmt/format.h>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/view/concat.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/transform.hpp>
 #include <tuple>
 
 struct LegacyStorageTestFixture

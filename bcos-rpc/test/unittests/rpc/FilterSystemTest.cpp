@@ -1,8 +1,8 @@
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include "unittests/common/RPCFixture.h"
 #include <bcos-rpc/filter/FilterSystem.h>
-#include <bcos-utilities/Common.h>
 
+#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;

@@ -50,7 +50,7 @@
 #include <bcos-framework/protocol/TxGasModel.h>  // protocol::ethToAddress
 #include <bcos-framework/storage2/RollbackableStorage.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/DataConvertUtility.h>  // safeFromQuantity / fromBigEndian
 #include <bcos-utilities/Exceptions.h>
 #include <ethereum-executor/EthereumState.h>

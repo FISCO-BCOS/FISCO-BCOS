@@ -35,28 +35,27 @@
  *                                   (secp256k1 node key -> enode:// URL, for hive)
  * @date 2026/8/18
  */
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <bcos-devp2p/sync/Block.h>
 #include <bcos-devp2p/sync/HeaderValidator.h>
 #include <bcos-devp2p/sync/OpHeaderValidator.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
-#include <bcos-task/Wait.h>
-#include <bcos-tool/NodeConfig.h>
 #include <bcos-ledger/GenesisStateRoot.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
-#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/EthGenesisHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <curl/curl.h>
 #include <json/json.h>
-#include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include <cctype>
 #include <cstdint>

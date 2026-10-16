@@ -18,19 +18,19 @@
  * @author: octopus
  * @date 2023-02-23
  */
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -39,10 +39,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <list>
 #include <mutex>
 #include <optional>
 #include <queue>
-#include <list>
 #include <range/v3/view/single.hpp>
 #include <thread>
 #include <tuple>

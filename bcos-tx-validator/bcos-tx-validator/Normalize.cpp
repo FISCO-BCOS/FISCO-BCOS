@@ -24,7 +24,7 @@
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <algorithm>
 #include <cstring>

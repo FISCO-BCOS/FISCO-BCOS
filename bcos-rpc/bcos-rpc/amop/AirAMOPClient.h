@@ -23,7 +23,7 @@
 
 #include <bcos-task/Wait.h>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos::rpc
 {

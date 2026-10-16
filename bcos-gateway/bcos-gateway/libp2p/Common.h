@@ -7,7 +7,7 @@
 #pragma once
 
 #include "bcos-gateway/libnetwork/Common.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos
 {

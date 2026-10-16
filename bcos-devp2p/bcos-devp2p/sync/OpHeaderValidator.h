@@ -38,7 +38,7 @@
 #include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Common.h>
 #include <atomic>
 #include <functional>

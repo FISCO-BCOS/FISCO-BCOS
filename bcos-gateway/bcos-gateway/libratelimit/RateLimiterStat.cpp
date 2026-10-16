@@ -20,8 +20,8 @@
 
 #include "bcos-gateway/libratelimit/RateLimiterStat.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/LogStream.h"
 #include <iomanip>
 #include <optional>
 #include <sstream>

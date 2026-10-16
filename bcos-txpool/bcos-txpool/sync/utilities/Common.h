@@ -21,7 +21,7 @@
 #pragma once
 #include <bcos-framework/Common.h>
 #include <tbb/parallel_for.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define SYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SYNC")
 namespace bcos::sync

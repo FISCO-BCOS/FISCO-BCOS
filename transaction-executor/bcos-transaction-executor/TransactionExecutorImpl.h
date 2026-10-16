@@ -8,7 +8,7 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/EVMCResult.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "bcos-utilities/Exceptions.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"

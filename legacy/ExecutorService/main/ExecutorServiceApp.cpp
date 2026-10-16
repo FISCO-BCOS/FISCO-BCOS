@@ -19,6 +19,7 @@
  * @date 2022-5-10
  */
 #include "ExecutorServiceApp.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "../../Common/TarsUtils.h"
 #include "../ExecutorServiceServer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"

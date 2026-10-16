@@ -19,6 +19,7 @@
  */
 
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include <boost/log/core/core.hpp>
 #include "bcos-framework/protocol/Protocol.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <range/v3/view/drop.hpp>
