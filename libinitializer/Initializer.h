@@ -139,7 +139,7 @@ public:
     /// The EL-mode ([engine_rpc]) block verifier, shared between the Engine API external
     /// newPayload lane and the devp2p sync loop (AirNodeInitializer forwards it to
     /// EthereumSyncInitializer); both lanes serialize on the verifier's m_commitMutex.
-    /// Null unless initNode() built it (ethereum.mode=el with [engine_rpc] enable).
+    /// Null unless initNode() built it (EL mode: executor.version=2 under the Engine driver).
     std::shared_ptr<scheduler_v1::EthereumBlockVerifier<scheduler_v1::SchedulerSerialImpl,
         executor_v1::eth::EthereumExecutor>>
     elBlockVerifier()
@@ -290,8 +290,8 @@ private:
     std::shared_ptr<executor_v1::eth::EthereumExecutor> m_ethereumExecutor;
     std::shared_ptr<scheduler_v1::SchedulerSerialImpl> m_ethereumSerialScheduler;
     /// The EL-mode block verifier shared between the Engine API external newPayload lane
-    /// (via ExternalPayloadVerifierImpl) and the devp2p sync loop. Built only when
-    /// ethereum.mode=el and [engine_rpc] enable are both set.
+    /// (via ExternalPayloadVerifierImpl) and the devp2p sync loop. Built only in EL mode
+    /// (executor.version=2 under the Engine driver).
     std::shared_ptr<scheduler_v1::EthereumBlockVerifier<scheduler_v1::SchedulerSerialImpl,
         executor_v1::eth::EthereumExecutor>>
         m_elBlockVerifier;

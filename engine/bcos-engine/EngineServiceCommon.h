@@ -236,6 +236,12 @@ public:
     virtual task::Task<ExternalL1Context> deriveL1Context(
         bcos::protocol::EthBlockHeaderData const& parentHeader,
         int64_t timestampSeconds) = 0;
+    /// The header fork era the L1 fork schedule assigns to a block at @p timestampSeconds
+    /// (a PoS block), or nullopt when this binary maps no era to that revision. The L1 lane
+    /// records no evmc_revision row, so newPayload's cache-miss reconstruction reads the era
+    /// here.
+    virtual std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
+        int64_t timestampSeconds) const = 0;
     /// Phase 4 (EL block building): execute the assembled block into the caller's view
     /// — block-start system calls, transactions, withdrawals, block-end system calls,
     /// the deterministic roots and the MPT delta — without verifying or committing

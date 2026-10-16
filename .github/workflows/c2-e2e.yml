@@ -52,12 +52,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          # Pinned at a post-#7 merge commit: #7 added the kona native replay phase 3.6, and
-          # the later pins enable the debug namespace on the C2 web3 listener (setup_c2.sh
-          # enable_debug_api=true — the preimage oracle kona-host reads debug_dbGet /
-          # debug_getRawHeader off it) and drop the removed feature_l2_ethereum_compat bit
-          # from the genesis feature_flags so the node's verifyL2FeatureFlagsSlot passes.
-          ref: 5a2ad071ab2162972073ed9dfcf814e55a77fc8f
+          # FISCO-BCOS/op-stack-e2e-tests#13 moves the harness to the 3.18 config surface
+          # ([engine_rpc], no [op_fork_schedule], separate config.ini / config.genesis, no
+          # SystemConfig feature_flags slot). This is that PR's head commit, reachable through
+          # refs/pull/13/head; re-pin to its merge commit on the default branch once it merges.
+          # It descends from the previous pin 5a2ad071a, so it keeps the kona native replay
+          # phase 3.6 and setup_c2.sh's [web3_rpc] enable_debug_api=true (kona-host's preimage
+          # oracle).
+          ref: dac984d09777de634279025b6f6013106ae42b5c
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule

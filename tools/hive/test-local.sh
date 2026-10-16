@@ -40,7 +40,6 @@ cd "${WORK}"
 # ---- genesis -> config.genesis (mirrors bcos.sh) ----
 "${TOOL}" --genesis2ini "${GENESIS}" --output config.genesis || {
     echo "[test-local] FAIL: genesis2ini"; exit 1; }
-CHAIN_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('config',{}).get('chainId',1))" "${GENESIS}")
 
 # ---- keys / certs / bootnodes (mirrors bcos.sh) ----
 mkdir -p conf/engine
@@ -57,10 +56,7 @@ openssl rand -hex 32 > node.rlpx.key
 echo '["enode://79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8@127.0.0.1:1"]' > bootnodes.json
 echo '{"nodes":[]}' > nodes.json
 
-sed -e "s/__CHAIN_ID__/${CHAIN_ID}/g" \
-    -e "s/__LOG_LEVEL__/info/g" \
-    -e "s/__ENGINE_ENABLED__/false/g" \
-    config.ini.tpl > config.ini
+sed -e "s/__LOG_LEVEL__/info/g" config.ini.tpl > config.ini
 
 # ---- import (mirrors bcos.sh) ----
 if [ -n "${CHAIN_RLP}" ]; then

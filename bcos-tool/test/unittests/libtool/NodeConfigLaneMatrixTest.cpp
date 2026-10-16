@@ -25,9 +25,9 @@
 // validateELModeInvariants, libinitializer and transaction-scheduler), so a new lane-specific
 // key had no defined home. This suite pins the OP section family's contract as a table.
 
+#include "EthLaneGenesisFixture.h"
 #include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include "EthLaneGenesisFixture.h"
 #include <bcos-tool/ChainLaneConfig.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
@@ -53,12 +53,6 @@ std::string opSectionBody(std::string_view section)
         // means the Isthmus zero-start baseline, which would hide the pre-Isthmus rungs
         // under test); no loader guard couples jovian_time to isthmus_time.
         return "isthmus_time=0\njovian_time=0\n";
-    }
-    if (section == "op_fork_schedule")
-    {
-        // [op_fork_schedule].canonical is required (loadOpForkSchedule) — an empty section
-        // leaves the presence hook unset and the rule never fires.
-        return "canonical=0:isthmus\n";
     }
     if (section == "op_eip1559")
     {
@@ -94,8 +88,6 @@ BOOST_AUTO_TEST_CASE(laneMatrixCoversTheOpSectionFamily)
         std::string_view rejectMessage;
     };
     const Expected expected[] = {
-        {"op_fork_schedule", false, KeyPresence::Optional,
-            "[op_fork_schedule] requires executor.version >= 3 (OP lane)"},
         {"op_fork_timestamps", true, KeyPresence::Required,
             "[op_fork_timestamps] requires executor.version >= 3 (OP lane)"},
         {"op_eip1559", true, KeyPresence::Optional,
@@ -108,8 +100,8 @@ BOOST_AUTO_TEST_CASE(laneMatrixCoversTheOpSectionFamily)
         BOOST_CHECK(rule->lane == ChainLane::Op);
         BOOST_CHECK(rule->presence == expected_rule.presence);
         BOOST_CHECK_EQUAL(rule->pinned, expected_rule.pinned);
-        BOOST_CHECK_MESSAGE(!rule->reason.empty(),
-            expected_rule.section << " must cite its provenance");
+        BOOST_CHECK_MESSAGE(
+            !rule->reason.empty(), expected_rule.section << " must cite its provenance");
         BOOST_CHECK_EQUAL(rule->rejectMessage, expected_rule.rejectMessage);
         // A Required rule must carry the absence message too (validateL2Invariants throws it).
         if (rule->presence == KeyPresence::Required)
@@ -124,14 +116,13 @@ BOOST_AUTO_TEST_CASE(laneMatrixCoversTheOpSectionFamily)
 // declaring an OP-only section gets that rule's own rejection message.
 BOOST_AUTO_TEST_CASE(opSectionOnANonOpLaneIsRejectedByTheMatrix)
 {
-    for (auto const* section : {"op_fork_timestamps", "op_fork_schedule", "op_eip1559"})
+    for (auto const* section : {"op_fork_timestamps", "op_eip1559"})
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         auto const genesis =
             std::string(
                 "[version]\ncompatibility_version=3.18.0\n"
                 "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-                "[web3]\nchain_id=1\n"
                 "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
                 "leader_period=1\nnode.0=") +
             std::string(128, '1') +
@@ -139,7 +130,7 @@ BOOST_AUTO_TEST_CASE(opSectionOnANonOpLaneIsRejectedByTheMatrix)
             "[tx]\ngas_limit=3000000000\n"
             "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
             "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=2\nevm_revision=prague\n" +
+            "version=2\n" +
             "[" + section + "]\n" + opSectionBody(section) + ethLaneGenesisSections();
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(genesis), InvalidConfig, [](auto const& e) {
@@ -154,84 +145,23 @@ BOOST_AUTO_TEST_CASE(opSectionOnANonOpLaneIsRejectedByTheMatrix)
 BOOST_AUTO_TEST_CASE(opLaneWithoutTheRequiredSectionThrowsTheTableMessage)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    auto const genesis =
-        std::string(
-            "[version]\ncompatibility_version=3.18.0\n"
-            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-            "[web3]\nchain_id=1\n"
-            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
-            "leader_period=1\nnode.0=") +
-        std::string(128, '1') +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-        "version=3\n" +
-        ethLaneGenesisSections();
-    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
-        [](auto const& e) {
-            return errinfoContains(e,
-                "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
+    auto const genesis = std::string(
+                             "[version]\ncompatibility_version=3.18.0\n"
+                             "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+                             "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
+                             "leader_period=1\nnode.0=") +
+                         std::string(128, '1') +
+                         ":1:1\n"
+                         "[tx]\ngas_limit=3000000000\n"
+                         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+                         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+                         "version=3\n" +
+                         ethLaneGenesisSections();
+    BOOST_CHECK_EXCEPTION(
+        cfg.loadGenesisConfigFromString(genesis), InvalidConfig, [](auto const& e) {
+            return errinfoContains(
+                e, "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
         });
-}
-
-// The two fork-schedule declaration channels may coexist only when they agree on WHEN
-// jovian/karst activate (review AF): the canonical text feeds the stored SYS_CONFIG row
-// (snapshot readers / RPC gates), the shorthand drives the executor — a divergent dual
-// declaration would boot and then price against a different ladder than it executes.
-BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
-{
-    auto genesisWith = [](std::string_view timestamps, std::string_view canonical) {
-        return std::string(
-                   "[version]\ncompatibility_version=3.18.0\n"
-                   "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-                   "[web3]\nchain_id=1\n"
-                   "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
-                   "leader_period=1\nnode.0=") +
-            std::string(128, '1') +
-            ":1:1\n"
-            "[tx]\ngas_limit=3000000000\n"
-            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=3\n"
-            "[op_fork_timestamps]\n" +
-            std::string(timestamps) + "[op_fork_schedule]\ncanonical=" + std::string(canonical) +
-            "\n" + ethLaneGenesisSections();
-    };
-
-    // Agreeing: jovian at genesis on both channels.
-    {
-        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_NO_THROW(cfg.loadGenesisConfigFromString(
-            genesisWith("jovian_time=0\n", "0:jovian")));
-    }
-    // Agreeing via the implied jump: shorthand karst-only folds jovian to karst's second,
-    // and a canonical that declares exactly that shape matches.
-    {
-        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_NO_THROW(cfg.loadGenesisConfigFromString(
-            genesisWith("karst_time=5\n", "0:isthmus,5:karst")));
-    }
-    // Diverging: the canonical activates jovian at 100 while the shorthand says 0 — the
-    // stored row and the executor would disagree; reject with both values named.
-    {
-        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(genesisWith("jovian_time=0\n", "0:isthmus,100:jovian")),
-            InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "declare different schedules");
-            });
-    }
-    // The karst rung diverges on its own too (the jovian pair above agrees): shorthand
-    // karst_time=5 vs canonical karst at 100.
-    {
-        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(genesisWith("karst_time=5\n", "0:isthmus,100:karst")),
-            InvalidConfig, [](auto const& e) {
-                return errinfoContains(e, "declare different schedules");
-            });
-    }
 }
 
 // The pinned field is the mechanical guard: a pinned rule's section must reach the
@@ -258,13 +188,12 @@ BOOST_AUTO_TEST_CASE(pinnedRulesActuallyReachTheGenesisPin)
                               "expectedPinToken (the rule's emission must be pinned, or the "
                               "table claims a guard nothing enforces)");
         // An OP-lane config carrying the section (jovian active at genesis so the
-        // schedule pin is emitted; the shorthand and the canonical agree by fold).
+        // schedule pin is emitted).
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         auto const genesis =
             std::string(
                 "[version]\ncompatibility_version=3.18.0\n"
                 "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-                "[web3]\nchain_id=1\n"
                 "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
                 "leader_period=1\nnode.0=") +
             std::string(128, '1') +
@@ -274,7 +203,6 @@ BOOST_AUTO_TEST_CASE(pinnedRulesActuallyReachTheGenesisPin)
             "auth_admin_account=0x0000000000000000000000000000000000000001\n"
             "version=3\n"
             "[op_fork_timestamps]\njovian_time=0\n"
-            "[op_fork_schedule]\ncanonical=0:jovian\n"
             "[op_eip1559]\nelasticity=2\ndenominator=8\n" +
             ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));

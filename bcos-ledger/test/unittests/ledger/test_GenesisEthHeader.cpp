@@ -28,6 +28,8 @@
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/Exceptions.h"
+#include "bcos-tool/NodeConfig.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>

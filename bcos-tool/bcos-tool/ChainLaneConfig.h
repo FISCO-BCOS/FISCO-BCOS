@@ -88,22 +88,12 @@ struct LaneKeyRule
 }
 
 /// The OP section family, moved here from the hand-written if-pairs in
-/// NodeConfig::validateL2Invariants. TODO (deliberately NOT in this change): the
-/// remaining pairs —
-/// [eth_genesis_header] <-> feature_l2_ethereum_compat, [alloc.*] <-> the same feature,
-/// [fork_timestamps] <-> [ethereum] mode=el, mode=el -> [web3] chain_id, OP lane forbids
-/// executor.evm_revision, config.ini <-> genesis EL mode — still live where they were.
+/// NodeConfig::validateL2Invariants. The remaining pairs — [eth_genesis_header] <->
+/// executor.version >= 2, [alloc.*] <-> executor.version >= 2 (non-empty on the OP lane),
+/// [fork_timestamps] -> executor.version=2 — still live there as hand-written checks.
 [[nodiscard]] inline std::vector<LaneKeyRule> const& laneKeyRules()
 {
     static std::vector<LaneKeyRule> const rules{
-        {.section = "op_fork_schedule",
-            .lane = ChainLane::Op,
-            .presence = KeyPresence::Optional,
-            .pinned = false,
-            .rejectMessage = "[op_fork_schedule] requires executor.version >= 3 (OP lane)",
-            .requiredMessage = {},
-            .presenceMember = "m_opstackForkSchedule",
-            .reason = "NodeConfig.cpp loadOpForkSchedule + validateL2Invariants"},
         {.section = "op_fork_timestamps",
             .lane = ChainLane::Op,
             .presence = KeyPresence::Required,

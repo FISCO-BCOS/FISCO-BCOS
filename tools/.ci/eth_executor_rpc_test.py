@@ -94,11 +94,14 @@ def main():
     if balance == 0:
         raise RuntimeError("sender balance is 0 — genesis alloc was not applied")
 
-    # Simple legacy value transfer: 1 wei to the fixture recipient.
+    # Simple legacy value transfer: 1 wei to the fixture recipient. The block's base fee
+    # follows the EIP-1559 rule from the genesis header's 1 gwei; a price below it is never
+    # sealed, so pay 2 gwei.
+    gas_price = 2 * 10**9
     tx = {
         "chainId": chain_id,
         "nonce": nonce,
-        "gasPrice": 1,
+        "gasPrice": gas_price,
         "gas": 21000,
         "to": eth_utils.to_checksum_address(to),
         "value": 1,
@@ -126,7 +129,7 @@ def main():
 
     # Sender must have been debited (value + intrinsic gas).
     bal_after = int(rpc_call(args.rpc, "eth_getBalance", [sender, "latest"]), 16)
-    assert bal_after == balance - 21000 - 1, (
+    assert bal_after == balance - 21000 * gas_price - 1, (
         f"sender balance not debited correctly: before={balance} after={bal_after}")
     print(f"[eth-executor] sender debited correctly: {balance} -> {bal_after}")
 

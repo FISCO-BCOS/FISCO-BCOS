@@ -79,8 +79,8 @@ std::vector<std::string> supportedCapabilities()
     // full `caps` list regardless of the active fork and lets the CL pick; op-node picks
     // its method versions from the rollup config (forkchoiceUpdatedV3 / getPayloadV5 /
     // newPayloadV4 on Karst) without needing the EL to prune the list for it. Narrowing
-    // here would also break the pre-Karst callers this node still serves — the v1 Engine
-    // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
+    // here would also break the pre-Karst callers this node still serves — the V1-V3
+    // integration suites.
     //
     // This is the Eth-lane list; the OP lane advertises its own narrower window
     // (op::supportedOpCapabilities). FCU V4 is unimplemented (Endpoint -38005) and absent

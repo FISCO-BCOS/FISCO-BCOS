@@ -34,11 +34,11 @@ public:
     /// enableOPEngine: register the engine_* methods (JWT-guarded engine listener only).
     /// enableMinerApi: register the OP miner namespace (miner_setMaxDASize) on THIS listener
     /// only. Off by default — it writes the node-wide DA caps. Each listener has its own
-    /// config key ([op_engine_rpc] vs [web3_rpc] enable_miner_api), so enabling the batcher's
+    /// config key ([engine_rpc] vs [web3_rpc] enable_miner_api), so enabling the batcher's
     /// handshake on the engine port never exposes it on the web3 port, and vice versa.
     /// enableDebugApi: register the geth debug namespace (debug_dbGet / debug_getRawHeader /
     /// debug_executePayload) on THIS listener only, behind the same per-listener convention
-    /// ([op_engine_rpc] vs [web3_rpc] enable_debug_api). Off by default — it serves the
+    /// ([engine_rpc] vs [web3_rpc] enable_debug_api). Off by default — it serves the
     /// fault-proof preimage oracle (kona-host), not general clients.
     EndpointsMapping(bool enableOPEngine = false, bool enableMinerApi = false,
         bool enableDebugApi = false)
