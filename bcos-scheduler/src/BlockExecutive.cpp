@@ -199,33 +199,20 @@ bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
         }
     }
 
-    if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
+    if (tx->to().empty())
     {
-        // LIQUID
-        if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
-        {
-            message->setCreate(true);
-        }
-        message->setTo(std::string(tx->to()));
+        message->setCreate(true);
+        message->setNonce(std::string(tx->nonce()));
     }
     else
     {
-        // SOLIDITY
-        if (tx->to().empty())
+        if (!m_staticCall && isSysContractDeploy(number()) &&
+            tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
         {
+            // if enable auth check, and first deploy auth contract
             message->setCreate(true);
-            message->setNonce(std::string(tx->nonce()));
         }
-        else
-        {
-            if (!m_staticCall && isSysContractDeploy(number()) &&
-                tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
-            {
-                // if enable auth check, and first deploy auth contract
-                message->setCreate(true);
-            }
-            message->setTo(preprocessAddress(tx->to()));
-        }
+        message->setTo(preprocessAddress(tx->to()));
     }
     if (m_scheduler->ledgerConfig().features().get(
             ledger::Features::Flag::bugfix_nonce_not_increase_when_revert))
