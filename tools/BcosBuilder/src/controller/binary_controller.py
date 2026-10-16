@@ -24,9 +24,6 @@ class BinaryController:
         if node_type == "pro":
             self.binary_list = ["BcosRpcService",
                                 "BcosGatewayService", "BcosNodeService"]
-        elif node_type == "max":
-            self.binary_list = ["BcosRpcService", "BcosGatewayService",
-                                "BcosMaxNodeService", "BcosExecutorService"]
         else:
             utilities.log_error("Unsupported node_type %s" % node_type)
             sys.exit(-1)

@@ -16,7 +16,7 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute,
-        size_t keyPageSize = 10240);
+        size_t keyPageSize, bcos::IOServicePool::Ptr ioServicePool);
 
     SchedulerImpl::Ptr build(int64_t schedulerTermId);
 
@@ -42,6 +42,8 @@ private:
     bool m_isAuthCheck;
     bool m_isSerialExecute;
     size_t m_keyPageSize;
+    // SchedulerImpl posts block execution onto a strand of this pool
+    bcos::IOServicePool::Ptr m_ioServicePool;
 
     std::function<void(protocol::BlockNumber blockNumber)> m_blockNumberReceiver;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
