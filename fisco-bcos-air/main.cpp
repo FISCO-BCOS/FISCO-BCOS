@@ -26,6 +26,7 @@
 #include "Common.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-ops/Cli.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <execinfo.h>
@@ -38,6 +39,14 @@ int main(int argc, const char* argv[])
 {
     /// set LC_ALL
     setDefaultOrCLocale();
+    // `fisco-bcos <subcommand> ...`: the first non-flag argument selects an operator command
+    // (status / tx / attach / log-level, with log and tui to follow). The node start path only
+    // ever took flags, so no flag-only invocation changes; a stray positional argument used to
+    // print the usage and exit 0, it now reports an unknown subcommand and exits 1.
+    if (argc >= 2 && argv[1][0] != '-')
+    {
+        return bcos::ops::runOps(argc, argv);
+    }
     // FIB-184: the log-sink abort path is now closed at the source — every async sink in
     // BoostLogInitializer installs make_exception_suppressor(), so an exception on the log
     // feeding thread drops the record instead of reaching std::terminate. This handler is kept
