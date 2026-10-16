@@ -1042,12 +1042,18 @@ public:
     bcostars::protocol::BlockHeaderImpl buildBlockHeader(test::EESTEnvironment const& env)
     {
         bcostars::protocol::BlockHeaderImpl header;
+        // The header version must follow the schedule THIS block executes under —
+        // for transition-named fixtures m_currentRevision stays at the full-name
+        // default (Osaka), so gate on revisionForBlock(ts) like the execution
+        // path does (review F6; two notions of one revision otherwise).
+        auto tsSec = test::hexToTimestamp(env.timestamp);
+        auto const blockRev = revisionForBlock(tsSec);
         uint32_t blockVer;
-        if (m_currentRevision >= EVMC_CANCUN)
+        if (blockRev >= EVMC_CANCUN)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
         }
-        else if (m_currentRevision >= EVMC_PARIS)
+        else if (blockRev >= EVMC_PARIS)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
         }
@@ -1058,7 +1064,6 @@ public:
         header.setVersion(blockVer);
         header.setNumber(test::hexToInt64(env.number));
 
-        auto tsSec = test::hexToTimestamp(env.timestamp);
         header.setTimestamp(tsSec * 1000);
         header.setSealer(0);
 
@@ -1562,12 +1567,16 @@ public:
     bcostars::protocol::BlockHeaderImpl buildBlockHeader(test::EESTBlockHeader const& bh)
     {
         bcostars::protocol::BlockHeaderImpl header;
+        // Same revisionForBlock keying as the env-based buildBlockHeader above
+        // (review F6): the version follows the schedule the block runs under.
+        auto tsSec = test::hexToTimestamp(bh.timestamp);
+        auto const blockRev = revisionForBlock(tsSec);
         uint32_t blockVer;
-        if (m_currentRevision >= EVMC_CANCUN)
+        if (blockRev >= EVMC_CANCUN)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
         }
-        else if (m_currentRevision >= EVMC_PARIS)
+        else if (blockRev >= EVMC_PARIS)
         {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
         }
@@ -1578,7 +1587,6 @@ public:
         header.setVersion(blockVer);
 
         header.setNumber(test::hexToInt64(bh.number));
-        auto tsSec = test::hexToTimestamp(bh.timestamp);
         header.setTimestamp(tsSec * 1000);
         header.setSealer(0);
         if (!bh.coinbase.empty())

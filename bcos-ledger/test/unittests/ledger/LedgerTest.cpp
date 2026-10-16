@@ -1956,13 +1956,16 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
     }
     // And the refusal is halt-loudly where a persisted row would consume it: the
     // apply path throws instead of retargeting to petersburg.
-    for (auto const* refused : {"constantinople", "constantinoplefix"})
+    for (auto const* refused : {"constantinople", "constantinoplefix", "amsterdam"})
     {
         // A persisted row naming the refused spelling (100000:<name>) must throw
-        // instead of retargeting the chain onto the petersburg schedule.
+        // instead of retargeting the chain onto the petersburg schedule. Pin the
+        // typed error: an unrelated throw keeping this green is a false pass
+        // (review F5).
         auto encoded = std::to_string(100000) + ':' + refused;
         LedgerConfig parsed;
-        BOOST_CHECK_THROW(ledger::applyEVMCRevisionConfig(parsed, encoded), std::exception);
+        BOOST_CHECK_THROW(
+            ledger::applyEVMCRevisionConfig(parsed, encoded), ledger::InvalidEVMCRevisionConfig);
     }
 }
 

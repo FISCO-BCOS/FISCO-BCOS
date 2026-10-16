@@ -2907,7 +2907,9 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                         "executor.evm_revision is invalid: " + evmcRevisionStr +
                         ", supported revisions: frontier/homestead/tangerinewhistle/"
                         "spuriousdragon/byzantium/petersburg/istanbul/berlin/"
-                        "london/paris/shanghai/cancun/prague/osaka"));
+                        "london/paris/shanghai/cancun/prague/osaka "
+                        "(aliases also accepted: tangerine whistle/spurious dragon/"
+                        "eip150/eip158/muirglacier/muir glacier/merge)"));
             }
         }
 

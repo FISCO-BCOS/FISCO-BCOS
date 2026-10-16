@@ -186,8 +186,6 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
     // SEND_BACK    (MESSAGE)
     auto message3 = createMessage(3, 0, 4, "", false);
     message3->setTransactionHash(h256(123));
-    bcos::u256 salt(787667543453);
-    message3->setCreateSalt(salt);
     dmcExecutor->submit(std::move(message3), false);
 
     // NEED_SCHEDULE_OUT

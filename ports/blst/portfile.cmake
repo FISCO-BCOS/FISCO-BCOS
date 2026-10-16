@@ -11,11 +11,19 @@ set(BLST_CC "${CMAKE_C_COMPILER}")
 # blst>=0.3.17's C23 includes fail with 'stdlib.h' file not found). Pass the sysroot the
 # way the runner resolves it instead.
 if(CMAKE_HOST_APPLE)
-    find_program(BLST_XCRUN_TOOL xcrun)
-    if(BLST_XCRUN_TOOL)
-        execute_process(COMMAND xcrun --show-sdk-path
-            OUTPUT_VARIABLE BLST_SDK_PATH OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-        if(BLST_SDK_PATH)
+    # A triplet setting CMAKE_OSX_SYSROOT (cross-SDK builds) wins; fall back to the
+    # host default the command-line runner resolves (review F15).
+    if(CMAKE_OSX_SYSROOT)
+        set(BLST_SDK_PATH "${CMAKE_OSX_SYSROOT}")
+    endif()
+    if(NOT BLST_SDK_PATH)
+        find_program(BLST_XCRUN_TOOL xcrun)
+        if(BLST_XCRUN_TOOL)
+            execute_process(COMMAND xcrun --show-sdk-path
+                OUTPUT_VARIABLE BLST_SDK_PATH OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        endif()
+    endif()
+    if(BLST_SDK_PATH)
             # build.sh resolves CFLAGS with ${CFLAGS:-default}: a non-empty value
             # REPLACES the upstream defaults (-O2 -fno-builtin -fPIC -Wall -Wextra
             # -Werror) rather than appending to them. Repeat them so the sysroot
