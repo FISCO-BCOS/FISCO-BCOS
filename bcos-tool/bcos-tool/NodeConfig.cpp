@@ -129,10 +129,13 @@ void requireDecimalField(
 /// "1677557088abc") — a typo'd config must fail fast like every neighbouring parse, not yield
 /// a wrong fork schedule. Shared by the L1 [fork_timestamps] ladder and the OP
 /// [op_fork_timestamps] schedule so the two can never disagree on what a timestamp is.
-/// The not-scheduled sentinel (UINT64_MAX) policy differs per caller: the OP schedule refuses
-/// it (fail-closed, @c refuseSentinel=true), while the L1 ladder accepts it as "never
-/// activates" because eth-sync-check --genesis2ini emits UINT64_MAX for forks the geth-format
-/// genesis leaves unscheduled (see the kNever design note in tools/eth-sync-check/main.cpp).
+/// The not-scheduled sentinel (UINT64_MAX) policy differs per key, even within one
+/// section: timestamp keys of the L1 ladder accept it as "never activates" because
+/// eth-sync-check --genesis2ini emits UINT64_MAX for forks the geth-format genesis
+/// leaves unscheduled (see the kNever design note in tools/eth-sync-check/main.cpp),
+/// while the OP schedule's keys and the L1 merge_block (a block number, where the
+/// sentinel would silently mean "pre-merge forever") refuse it (fail-closed,
+/// @c refuseSentinel=true).
 uint64_t parseForkTimestamp(
     std::string const& section, std::string const& key, std::string const& value,
     bool refuseSentinel)
@@ -1674,10 +1677,10 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // rejected by peers. parseForkTimestamp (file-local, shared with the OP schedule) is
     // what enforces that.
     auto readTs = [&](std::string const& key) {
-        // The L1 ladder accepts the not-scheduled sentinel: eth-sync-check
+        // The L1 ladder's TIMESTAMP keys accept the not-scheduled sentinel: eth-sync-check
         // --genesis2ini emits UINT64_MAX for forks the geth genesis leaves unscheduled,
         // and the non-decreasing ladder check below treats it as the terminal
-        // "never activates" value.
+        // "never activates" value. (merge_block is NOT read through this lambda — see below.)
         return readForkTimestamp(*section, "fork_timestamps", key, /*refuseSentinel=*/false);
     };
     // Post-Prague forks (osaka, bpo1, bpo2, ...) are optional: absent means "not yet
@@ -1716,10 +1719,15 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // permissive) PoW validation branch and announce an EIP-2124 fork-id the
     // remote rejects, with no config error to explain either. Not a timestamp, but
     // it belongs to the same chain-level fork declaration and is parsed with the
-    // same strict decimal/0x-hex rules. Like the post-Prague tail it is
-    // deliberately NOT part of the genesis pin: divergence is caught by the
-    // fork-id handshake, which chains the merge block into the checksum.
-    m_ethereumMergeBlock = readTs("merge_block");
+    // same strict decimal/0x-hex rules. Unlike the timestamp keys it REFUSES the
+    // not-scheduled sentinel: a block number of UINT64_MAX would silently read as
+    // "pre-merge forever" (every block validated under PoW rules and rewarded as
+    // such), and the ladder check below does not cover merge_block. Like the
+    // post-Prague tail it is deliberately NOT part of the genesis pin: divergence
+    // is caught by the fork-id handshake, which chains the merge block into the
+    // checksum.
+    m_ethereumMergeBlock =
+        readForkTimestamp(*section, "fork_timestamps", "merge_block", /*refuseSentinel=*/true);
     // Activation times must be non-decreasing down the fork ladder — geth rejects an
     // out-of-order schedule at startup (ChainConfig.CheckConfigForkOrder), and the
     // EIP-2124 fork-id checksum chains activations IN ORDER, so a decreasing step
@@ -4090,12 +4098,30 @@ std::string bcos::tool::generateGenesisData(
             // byte-compared pin (geth's CheckCompatible permits appending a future
             // fork; divergence on a not-yet-activated fork is caught by the EIP-2124
             // fork-id handshake, not by a startup abort).
-            ss << "[forkTimestamps]" << '\n'
-               << "london_time:" << schedule.m_londonTime << '\n'
-               << "paris_time:" << schedule.m_parisTime << '\n'
-               << "shanghai_time:" << schedule.m_shanghaiTime << '\n'
-               << "cancun_time:" << schedule.m_cancunTime << '\n'
-               << "prague_time:" << schedule.m_pragueTime << '\n';
+            //
+            // For the same reason a not-scheduled entry (UINT64_MAX, what
+            // eth-sync-check emits for a fork the chain never schedules) is SKIPPED
+            // rather than pinned literally: an operator who later schedules Cancun on
+            // a Shanghai-era chain must not trip the restart comparison. Divergence
+            // is still caught — a node holding the sentinel emits no key while a
+            // node holding a real activation time emits one, so the pins differ.
+            // Fully-scheduled chains emit all five keys exactly as before.
+            std::array<std::pair<std::string_view, uint64_t>, 5> const pinned{{
+                {"london_time", schedule.m_londonTime},
+                {"paris_time", schedule.m_parisTime},
+                {"shanghai_time", schedule.m_shanghaiTime},
+                {"cancun_time", schedule.m_cancunTime},
+                {"prague_time", schedule.m_pragueTime},
+            }};
+            ss << "[forkTimestamps]" << '\n';
+            for (auto const& [key, value] : pinned)
+            {
+                if (value == std::numeric_limits<uint64_t>::max())
+                {
+                    continue;  // not-scheduled sentinel: not pinned
+                }
+                ss << key << ":" << value << '\n';
+            }
         }
         // OP lane: only the entries that are 0 ("active from genesis") reach the pin. Those
         // are decided at genesis and must never differ between nodes. A fork scheduled for a
