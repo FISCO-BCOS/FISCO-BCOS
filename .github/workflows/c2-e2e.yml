@@ -45,6 +45,7 @@ jobs:
       CCACHE_MAXSIZE: 300M
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_ctime
+      CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: "true"
       CCACHE_COMPRESSLEVEL: "1"
     steps:
@@ -155,8 +156,6 @@ jobs:
         with:
           path: |
             .ci-op-monorepo
-            !.ci-op-monorepo/rust/target
-            !.ci-op-monorepo/op-deployer/bin
             .ci-c2-bins
           # BOTH paths are required. .ci-c2-bins carries the binaries, but .ci-op-monorepo must
           # stay in the entry even though the e2e itself only consumes the binaries: setup_c2.sh
@@ -202,6 +201,10 @@ jobs:
           (cd .ci-op-monorepo/rust && cargo build --release -p kona-host -p kona-client)
           cp .ci-op-monorepo/rust/target/release/kona-host "$GITHUB_WORKSPACE/.ci-c2-bins/kona-host"
           cp .ci-op-monorepo/rust/target/release/kona-client "$GITHUB_WORKSPACE/.ci-c2-bins/kona-client"
+          # The cache entry carries .ci-op-monorepo but must not carry its build products:
+          # actions/cache's ! path exclusions do not subtract a directory's recursive
+          # contents (@actions/glob, implicitDescendants:false), so delete them here instead.
+          rm -rf .ci-op-monorepo/rust/target .ci-op-monorepo/op-deployer/bin
       - name: Save OP binaries
         # cache-hit != 'true' skips the save when the entry already exists (pin unchanged).
         # The path set and key MUST mirror the Cache OP binaries restore above exactly (both
@@ -212,8 +215,6 @@ jobs:
         with:
           path: |
             .ci-op-monorepo
-            !.ci-op-monorepo/rust/target
-            !.ci-op-monorepo/op-deployer/bin
             .ci-c2-bins
           key: c2-op-${{ steps.op-pin.outputs.commit }}-kona1-${{ runner.os }}-${{ runner.arch }}
 

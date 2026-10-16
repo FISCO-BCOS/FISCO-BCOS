@@ -45,6 +45,7 @@ jobs:
       # re-stamps every mtime; both differ between runs even when sources are identical.
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_ctime
+      CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: "true"
       CCACHE_COMPRESSLEVEL: "1"
       # One cache per matrix entry: the static leg cannot share the plain x64 leg's entry.
@@ -277,7 +278,6 @@ jobs:
       # push would write an entry under its own branch-scoped prefix that no PR ever reads
       # while still competing for the repository's 10GB cache budget.
       - name: Save ccache
-        id: save-ccache
         if: '!cancelled() && matrix.os != ''windows-2025'' && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-'')) && steps.ccache.outputs.cache-primary-key != '''''
         uses: actions/cache/save@v4
         with:
@@ -288,24 +288,33 @@ jobs:
       # every older generation of this scope's prefix on this ref; restore-keys only ever
       # reads the newest, so the older ones are dead weight. Non-fatal on purpose: a prune
       # failure costs cache budget, not the build, and the next push retries.
+      # The prune only deletes after confirming today's entry is in the listing: an
+      # actions/cache/save upload failure surfaces as a warning with a successful step
+      # outcome, and without that gate a silent save failure would let the prune delete
+      # yesterday's generation - the prefix's only entry - and cold-build the next run.
       - name: Prune previous ccache generations
         if: '!cancelled() && matrix.os != ''windows-2025'' && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-'')) && steps.ccache.outputs.cache-primary-key != '''''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -o pipefail
-          prune() {
-            local prefix='ccache-${{ github.base_ref || github.ref_name }}-${{ env.CACHE_SCOPE }}-${{ runner.arch }}-v1-'
-            local keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
-            local ids count
-            ids=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref |
-              jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
-                '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id')
-            count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l)
-            echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
-            printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY"
-          }
-          prune || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
+          prefix='ccache-${{ github.base_ref || github.ref_name }}-${{ env.CACHE_SCOPE }}-${{ runner.arch }}-v1-'
+          keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
+          if ! listing=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref); then
+            echo "::warning::gh cache list failed; ccache reclamation deferred to the next push"
+            exit 0
+          fi
+          if ! printf '%s' "$listing" | jq -e --arg keep "$keep" --arg ref "$GITHUB_REF" \
+              'any(.[]; .ref == $ref and .key == $keep)' > /dev/null; then
+            echo "::warning::today's ccache entry ${keep} is absent; skipping prune"
+            exit 0
+          fi
+          ids=$(printf '%s' "$listing" | jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
+            '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id') \
+            || { echo "::warning::cache listing parse failed; ccache reclamation deferred to the next push"; exit 0; }
+          count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')
+          echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
+          printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY" \
+            || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
       - name: Test
         # the static leg builds with TESTS=OFF (see "Compute build flags")
         if: matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
@@ -487,6 +496,7 @@ jobs:
       CCACHE_MAXSIZE: 1G
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_ctime
+      CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: "true"
       CCACHE_COMPRESSLEVEL: "1"
     steps:
@@ -659,7 +669,6 @@ jobs:
       # The vcpkg save is earlier, right after Configure: see there for why.
       # Base-branch pushes only: a feature-branch push would write an entry no PR ever reads.
       - name: Save ccache
-        id: save-ccache
         if: '!cancelled() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-'')) && steps.ccache.outputs.cache-primary-key != '''''
         uses: actions/cache/save@v4
         with:
@@ -670,24 +679,33 @@ jobs:
       # every older generation of this scope's prefix on this ref; restore-keys only ever
       # reads the newest, so the older ones are dead weight. Non-fatal on purpose: a prune
       # failure costs cache budget, not the build, and the next push retries.
+      # The prune only deletes after confirming today's entry is in the listing: an
+      # actions/cache/save upload failure surfaces as a warning with a successful step
+      # outcome, and without that gate a silent save failure would let the prune delete
+      # yesterday's generation - the prefix's only entry - and cold-build the next run.
       - name: Prune previous ccache generations
         if: '!cancelled() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-'')) && steps.ccache.outputs.cache-primary-key != '''''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -o pipefail
-          prune() {
-            local prefix='ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-'
-            local keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
-            local ids count
-            ids=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref |
-              jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
-                '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id')
-            count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l)
-            echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
-            printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY"
-          }
-          prune || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
+          prefix='ccache-coverage-ubuntu-26.04-${{ runner.arch }}-v1-'
+          keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
+          if ! listing=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref); then
+            echo "::warning::gh cache list failed; ccache reclamation deferred to the next push"
+            exit 0
+          fi
+          if ! printf '%s' "$listing" | jq -e --arg keep "$keep" --arg ref "$GITHUB_REF" \
+              'any(.[]; .ref == $ref and .key == $keep)' > /dev/null; then
+            echo "::warning::today's ccache entry ${keep} is absent; skipping prune"
+            exit 0
+          fi
+          ids=$(printf '%s' "$listing" | jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
+            '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id') \
+            || { echo "::warning::cache listing parse failed; ccache reclamation deferred to the next push"; exit 0; }
+          count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')
+          echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
+          printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY" \
+            || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
 
   # Dedicated, lightweight leg for the OP-Stack L2 mode. Kept OUT of the 5-OS
   # `build` matrix on purpose: multiplying that matrix by an l2 dimension would
@@ -711,6 +729,7 @@ jobs:
       CCACHE_MAXSIZE: 300M
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_ctime
+      CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: "true"
       CCACHE_COMPRESSLEVEL: "1"
     steps:
@@ -821,7 +840,6 @@ jobs:
       # The vcpkg save is earlier, right after Configure: see there for why.
       # Base-branch pushes only: a feature-branch push would write an entry no PR ever reads.
       - name: Save ccache
-        id: save-ccache
         if: '!cancelled() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-'')) && steps.ccache.outputs.cache-primary-key != '''''
         uses: actions/cache/save@v4
         with:
@@ -832,24 +850,33 @@ jobs:
       # every older generation of this scope's prefix on this ref; restore-keys only ever
       # reads the newest, so the older ones are dead weight. Non-fatal on purpose: a prune
       # failure costs cache budget, not the build, and the next push retries.
+      # The prune only deletes after confirming today's entry is in the listing: an
+      # actions/cache/save upload failure surfaces as a warning with a successful step
+      # outcome, and without that gate a silent save failure would let the prune delete
+      # yesterday's generation - the prefix's only entry - and cold-build the next run.
       - name: Prune previous ccache generations
         if: '!cancelled() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-'')) && steps.ccache.outputs.cache-primary-key != '''''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -o pipefail
-          prune() {
-            local prefix='ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-'
-            local keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
-            local ids count
-            ids=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref |
-              jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
-                '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id')
-            count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l)
-            echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
-            printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY"
-          }
-          prune || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
+          prefix='ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-'
+          keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
+          if ! listing=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref); then
+            echo "::warning::gh cache list failed; ccache reclamation deferred to the next push"
+            exit 0
+          fi
+          if ! printf '%s' "$listing" | jq -e --arg keep "$keep" --arg ref "$GITHUB_REF" \
+              'any(.[]; .ref == $ref and .key == $keep)' > /dev/null; then
+            echo "::warning::today's ccache entry ${keep} is absent; skipping prune"
+            exit 0
+          fi
+          ids=$(printf '%s' "$listing" | jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
+            '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id') \
+            || { echo "::warning::cache listing parse failed; ccache reclamation deferred to the next push"; exit 0; }
+          count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')
+          echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
+          printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY" \
+            || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
 
   # Full-stack C2 devnet e2e. Reuses the fisco-bcos binary built by
   # l2_unit_suites (artifact) so this job skips vcpkg configure + C++ build.
@@ -947,8 +974,6 @@ jobs:
         with:
           path: |
             .ci-op-monorepo
-            !.ci-op-monorepo/rust/target
-            !.ci-op-monorepo/op-deployer/bin
             .ci-c2-bins
           # BOTH paths are required. .ci-c2-bins carries the binaries, but .ci-op-monorepo must
           # stay in the entry even though the e2e itself only consumes the binaries: setup_c2.sh
@@ -957,9 +982,11 @@ jobs:
           # hit the Build step is skipped, so an entry without the clone makes that check read ""
           # and the e2e aborts with "version manifest mismatch" - far from the cause. Do not
           # narrow this to .ci-c2-bins alone.
-          # The ! exclusions keep the kona cargo target/ tree and op-deployer's build outputs
-          # out of the entry: both are rebuildable products of the Build step, and the binaries
-          # the e2e actually consumes are the copies in .ci-c2-bins.
+          # The kona cargo target/ tree and op-deployer's build outputs stay out of the entry
+          # because the Build step rm -rf's them before the save (path-level ! exclusions do
+          # not subtract a directory's recursive contents): both are rebuildable products of
+          # the Build step, and the binaries the e2e actually consumes are the copies in
+          # .ci-c2-bins.
           # The -kona1- token describes the cached binary SET: this entry now also carries
           # kona-host/kona-client (cargo build). A cache keyed only on the OP monorepo commit
           # would hit a pre-kona entry (op-deployer/op-node/op-batcher only) and skip the
@@ -996,6 +1023,10 @@ jobs:
           (cd .ci-op-monorepo/rust && cargo build --release -p kona-host -p kona-client)
           cp .ci-op-monorepo/rust/target/release/kona-host "$GITHUB_WORKSPACE/.ci-c2-bins/kona-host"
           cp .ci-op-monorepo/rust/target/release/kona-client "$GITHUB_WORKSPACE/.ci-c2-bins/kona-client"
+          # The cache entry carries .ci-op-monorepo but must not carry its build products:
+          # actions/cache's ! path exclusions do not subtract a directory's recursive
+          # contents (@actions/glob, implicitDescendants:false), so delete them here instead.
+          rm -rf .ci-op-monorepo/rust/target .ci-op-monorepo/op-deployer/bin
       - name: Save OP binaries
         # Save split from restore: PRs never write. cache-hit != 'true' skips the save when the
         # entry already exists (pin unchanged), so only a pin bump on the base branch writes.
@@ -1007,8 +1038,6 @@ jobs:
         with:
           path: |
             .ci-op-monorepo
-            !.ci-op-monorepo/rust/target
-            !.ci-op-monorepo/op-deployer/bin
             .ci-c2-bins
           key: c2-op-${{ steps.op-pin.outputs.commit }}-kona1-${{ runner.os }}-${{ runner.arch }}
 
