@@ -27,6 +27,7 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
+#include <atomic>
 #include <optional>
 #include <string_view>
 #include <unordered_map>
@@ -200,9 +201,12 @@ protected:
     /// trigger is not a timer expiry)
     virtual void triggerTimeout(bool _incTimeout, ViewChangeReason _reason, int64_t _waitedMs = -1);
     /// the reason of the most recent triggerTimeout() on this engine (test hook)
-    std::optional<ViewChangeReason> lastViewChangeReason() const { return m_lastViewChangeReason; }
+    std::optional<ViewChangeReason> lastViewChangeReason() const
+    {
+        return m_lastViewChangeReason.load();
+    }
     /// the waitedMs of the most recent triggerTimeout() on this engine (test hook)
-    int64_t lastViewChangeWaitedMs() const { return m_lastViewChangeWaitedMs; }
+    int64_t lastViewChangeWaitedMs() const { return m_lastViewChangeWaitedMs.load(); }
 
     void handleRecoverResponse(PBFTMessageInterface::Ptr _recoverResponse);
     void handleRecoverRequest(PBFTMessageInterface::Ptr _request);
@@ -249,8 +253,9 @@ private:
         NewViewMsgInterface::Ptr const& _newViewMsg, std::string const& _extra = {});
     void countReceivedPacket(PacketType _type, size_t _bytes);
 
-    std::optional<ViewChangeReason> m_lastViewChangeReason;
-    int64_t m_lastViewChangeWaitedMs = -1;
+    // atomic: start() and restart() call triggerTimeout without m_mutex
+    std::atomic<std::optional<ViewChangeReason>> m_lastViewChangeReason;
+    std::atomic<int64_t> m_lastViewChangeWaitedMs = -1;
 
 protected:
     // PBFT configuration class
