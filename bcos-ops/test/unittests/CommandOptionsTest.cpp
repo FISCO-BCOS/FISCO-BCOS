@@ -35,10 +35,9 @@ BOOST_AUTO_TEST_CASE(everyOptionACommandReadsIsAccepted)
 {
     std::vector<std::string> const connect = {
         "node-dir", "rpc", "connect-timeout", "timeout", "mode", "web3"};
-    std::vector<std::string> const thresholds = {"stall-factor", "max-lag", "viewchange-window-ms"};
     std::vector<std::string> const preset = {"account", "interval"};
     std::map<std::string, std::vector<std::string>> reads = {
-        {"status", thresholds},
+        {"status", {"stall-factor", "max-lag"}},  // status reads no log: no view-change window
         {"log", {"since", "last", "stall-factor", "max-lag", "viewchange-window-ms"}},
         {"tui", {"account", "key", "filter", "snapshot-dir", "stall-factor", "max-lag",
                     "viewchange-window-ms"}},

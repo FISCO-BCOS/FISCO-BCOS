@@ -69,7 +69,8 @@ BOOST_AUTO_TEST_CASE(narrowTerminalStacksTheListsAndDropsColumns)
     BOOST_CHECK(text.find("nodes 4/4") != std::string::npos);
     BOOST_CHECK(text.find("quorum 3") != std::string::npos);
     BOOST_CHECK(text.find("pending 0/15000") != std::string::npos);
-    BOOST_CHECK(text.find("checks 5 ok") != std::string::npos);
+    // quorum_connected is informational: four verdicts ok
+    BOOST_CHECK(text.find("checks 4 ok") != std::string::npos);
     BOOST_CHECK(text.find("last block 2s ago") != std::string::npos);
     BOOST_CHECK(text.find("avg interval 1.0s (last 20)") != std::string::npos);
     // stacked: the blocks window ends before the txs window starts
