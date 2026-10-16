@@ -60,7 +60,15 @@ int64_t asInt64(Json::Value const& _value)
 {
     if (_value.isString())
     {
-        return std::stoll(_value.asString());
+        // the whole string must be the number: "0x80" or "12abc" is an error, not 0 or 12
+        auto text = _value.asString();
+        size_t used = 0;
+        auto parsed = std::stoll(text, &used);
+        if (used != text.size())
+        {
+            throw std::invalid_argument("not a decimal integer: " + text);
+        }
+        return parsed;
     }
     return _value.asInt64();
 }
@@ -114,6 +122,15 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
         status.version = facts.version;
         status.smCrypto = facts.smCrypto;
         status.authCheck = facts.authCheck;
+        for (auto [field, known] : {std::pair{"version", facts.version.has_value()},
+                 std::pair{"smCrypto", facts.smCrypto.has_value()},
+                 std::pair{"authCheck", facts.authCheck.has_value()}})
+        {
+            if (!known)
+            {
+                status.missing(field, "getGroupInfo: not in iniConfig");
+            }
+        }
     }
     catch (std::exception const& e)
     {

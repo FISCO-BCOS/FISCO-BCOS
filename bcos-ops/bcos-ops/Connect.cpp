@@ -64,7 +64,13 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     int port = 0;
     try
     {
-        port = std::stoi(value.substr(colon + 1));
+        auto portText = value.substr(colon + 1);
+        size_t used = 0;
+        port = std::stoi(portText, &used);
+        if (used != portText.size())
+        {
+            throw std::invalid_argument(portText);  // "20200abc" is not a port
+        }
     }
     catch (std::exception const&)
     {
