@@ -718,8 +718,9 @@ evmc_tx_context EthereumHost<Storage, Policy>::get_tx_context() const noexcept
         .blob_hashes = blob_hashes,
         .blob_hashes_count = blob_hashes_count,
         // Designators like the sibling producer (transaction-executor EVMHostInterface.h):
-        // every field here is an int64_t/pointer run, so a future insertion inside a
-        // positional list would silently misalign instead of failing to compile.
+        // many fields share a shape (uint256be / address / int64_t), so a future
+        // insertion inside a positional list could silently misalign instead of failing
+        // to compile — bind by designator.
         .block_slot_number = 0,  // block_slot_number (EIP-7843, evmc ABI 19): no beacon slot on
                                  // this chain.
     };

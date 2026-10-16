@@ -410,7 +410,8 @@ inline constexpr int MAX_GOVERNANCE_EXECUTOR_VERSION =
     static_cast<int>(magic_enum::enum_values<ExecutorLane>().back());
 
 /// Convert a canonical EVM fork name (case-insensitive, e.g. "cancun"/"osaka") to an
-/// EVMC revision. Returns nullopt for unknown names so callers can fall back to a default.
+/// EVMC revision. Returns nullopt for unknown — and deliberately refused — names; every
+/// caller halts loudly on nullopt rather than falling back to a default.
 inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
 {
     std::string n(name);
