@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "DebugEndpoint.h"
 #include "EngineEndpoint.h"
 #include "EthEndpoint.h"
 #include "MinerEndpoint.h"
@@ -32,7 +33,8 @@ class Endpoints : public EngineEndpoint,
                   public EthEndpoint,
                   public MinerEndpoint,
                   public NetEndpoint,
-                  public Web3Endpoint
+                  public Web3Endpoint,
+                  public DebugEndpoint
 {
 public:
     Endpoints(NodeService::Ptr _nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction)
@@ -40,7 +42,8 @@ public:
         EthEndpoint(_nodeService, filterSystem, syncTransaction),
         MinerEndpoint(_nodeService),
         NetEndpoint(_nodeService),
-        Web3Endpoint(_nodeService)
+        Web3Endpoint(_nodeService),
+        DebugEndpoint(_nodeService)
     {}
 
     ~Endpoints() override = default;
