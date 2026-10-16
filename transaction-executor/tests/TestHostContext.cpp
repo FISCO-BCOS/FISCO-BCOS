@@ -280,6 +280,73 @@ BOOST_AUTO_TEST_CASE(storageFaultInNonceCallbackFailsWholeFrameV2)
     }());
 }
 
+// [F10 translation regression] Every faulting EVMC callback on this lane — not just
+// getNonce — records the fault and answers fail-closed instead of aborting the
+// process. getBalance is the representative data-reading callback: its coroutine
+// parses the balance row (lexical_cast over the stored string), so a corrupt row is
+// the real fault shape. Before the translation a raw throw escaped the noexcept
+// callback into evmone's instruction frames and aborted the process; now the zero
+// answer comes back, the fault is recorded, and throwIfHostFault fails the frame for
+// execute()'s FIB-88/92 arm. The balance row has no string setter (setBalance takes
+// the typed u256), so the corruption writes the raw row the way a torn write would.
+BOOST_AUTO_TEST_CASE(dataCallbackFaultIsRecordedNotFatal)
+{
+    using HostContextType =
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>;
+
+    evmc_message message = {.kind = EVMC_CALL,
+        .flags = 0,
+        .depth = 0,
+        .gas = 300 * 10000,
+        .state_gas = {},  // evmc ABI 19 (EIP-8037)
+        .recipient = helloworldAddress,
+        .sender = {},
+        .input_data = nullptr,
+        .input_size = 0,
+        .value = {},
+        .code_address = helloworldAddress,
+        .code = nullptr,
+        .code_size = 0};
+    evmc_address origin = {};
+    HostContextType host(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+        origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+        bcos::task::syncWait);
+    auto* interface = host.hostInterface();
+
+    // Clean row: the freshly deployed contract has no balance row — the answer is zero
+    // and no fault is recorded.
+    auto clean =
+        interface->get_balance(reinterpret_cast<evmc_host_context*>(&host), &helloworldAddress);
+    BOOST_CHECK(
+        std::all_of(clean.bytes, clean.bytes + sizeof(clean.bytes), [](auto b) { return b == 0; }));
+    host.throwIfHostFault();
+
+    // Corrupt the balance row: the callback's parse throws, the translation answers
+    // fail-closed zero and records the fault.
+    auto tableName = bcos::ledger::account::accountTableName(
+        helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+    syncWait([this, &tableName]() -> Task<void> {
+        co_await storage2::writeOne(storage,
+            bcos::executor_v1::StateKey{tableName, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE},
+            bcos::storage::Entry{std::string("not-a-number")});
+        co_return;
+    }());
+
+    auto faulted =
+        interface->get_balance(reinterpret_cast<evmc_host_context*>(&host), &helloworldAddress);
+    BOOST_CHECK(std::all_of(
+        faulted.bytes, faulted.bytes + sizeof(faulted.bytes), [](auto b) { return b == 0; }));
+    // The discriminator: the zero answer must ride a recorded fault — without the
+    // translation this line is never reached (the process aborted above), and a
+    // catch-and-answer without the record would leave it a silent zero.
+    BOOST_CHECK_THROW(host.throwIfHostFault(), bcos::Error);
+
+    // The first fault wins: a second recording attempt does not overwrite the message
+    // that decided the frame's failure.
+    host.recordHostFault("second fault");
+    BOOST_CHECK_THROW(host.throwIfHostFault(), bcos::Error);
+}
+
 BOOST_AUTO_TEST_CASE(contractDeploy)
 {
     syncWait([this]() -> Task<void> {

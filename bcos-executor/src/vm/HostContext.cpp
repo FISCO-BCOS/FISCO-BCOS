@@ -34,6 +34,7 @@
 #include <bcos-crypto/ChecksumAddress.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 #include <iterator>
 #include <limits>
@@ -59,19 +60,42 @@ evmc_bytes32 evm_hash_fn(evmc_host_context* /*context*/, const uint8_t* data, si
 // FISCO extension (evmone create_address_fn): the CREATE opcode asks the CREATOR's
 // HostContext for the replay-stable legacy formula address instead of deriving
 // keccak(rlp(sender, nonce)) — see HostContext::createAddressForOpcode.
+// The same F1/F10 translation the data callbacks use: the derivation is pure
+// computation (hash + hex), so a throw here is an allocation/crypto-level fault — the
+// non-bcos family, recorded halting — and the zero address is a fail-closed answer
+// that never commits (go() rethrows the recorded fault into the exit(1) arm right
+// after vm.execute returns, before any address is stored or forwarded).
 evmc_address evm_create_address_fn(
     evmc_host_context* context, const evmc_address* sender, uint64_t nonce)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(context);
-    return hostContext.createAddressForOpcode(*sender, nonce);
+    try
+    {
+        return hostContext.createAddressForOpcode(*sender, nonce);
+    }
+    catch (...)
+    {
+        hostContext.recordHostFault(
+            boost::current_exception_diagnostic_information(), /*halting=*/true);
+        return evmc_address{};
+    }
 }
 
 evmc_address evm_create2_address_fn(evmc_host_context* context, const evmc_address* sender,
     const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(context);
-    return hostContext.create2AddressForOpcode(
-        *sender, *salt, bytesConstRef(init_code, init_code_size));
+    try
+    {
+        return hostContext.create2AddressForOpcode(
+            *sender, *salt, bytesConstRef(init_code, init_code_size));
+    }
+    catch (...)
+    {
+        hostContext.recordHostFault(
+            boost::current_exception_diagnostic_information(), /*halting=*/true);
+        return evmc_address{};
+    }
 }
 
 HostContext::HostContext(CallParameters::UniquePtr callParameters,

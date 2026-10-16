@@ -207,12 +207,22 @@ class HostContext
 public:
     /// A host-side fault recorded by a fail-closed EVMC callback. The exception cannot
     /// cross the VM (evmc::VM::execute is noexcept and evmone's instruction frames do
-    /// not unwind), so getNonce records it and executeCall/executeCreate rethrow it
-    /// right after the VM returns: it lands in execute()'s FIB-88/92 arm (status
-    /// Unknown) — this lane's existing policy for execution exceptions — instead of a
-    /// node fault masquerading as a legitimate EIP-2681 nonce rejection the contract's
-    /// logic converts to a revert (review F1).
-    void recordHostFault(std::string message) { m_hostFault = std::move(message); }
+    /// not unwind), so EVERY faulting callback — getNonce, the data-reading callbacks
+    /// and the create-address hooks (see EVMHostInterface's fault-translation
+    /// contract) — records it, and executeCall/executeCreate rethrow it right after
+    /// the VM returns: it lands in execute()'s FIB-88/92 arm (status Unknown) — this
+    /// lane's existing policy for execution exceptions — instead of a node fault
+    /// masquerading as a legitimate EIP-2681 nonce rejection the contract's logic
+    /// converts to a revert (review F1), or aborting the process outright (F10).
+    /// First fault wins: the fail-closed answers let the frame keep running, so a
+    /// later fault must not overwrite the one that decided the frame's failure.
+    void recordHostFault(std::string message)
+    {
+        if (m_hostFault.empty())
+        {
+            m_hostFault = std::move(message);
+        }
+    }
     void throwIfHostFault() const
     {
         if (!m_hostFault.empty())
@@ -410,19 +420,39 @@ public:
         return out;
     }
 
+    // Same fault translation as the data callbacks (F10): the derivations are pure
+    // computation (hash + hex), so a throw is an allocation/crypto-level fault; the
+    // zero address is a fail-closed answer that never commits — throwIfHostFault()
+    // fails the whole frame right after the VM returns.
     static evmc_address createAddressHook(
         evmc_host_context* context, const evmc_address* sender, uint64_t nonce)
     {
         auto& hostContext = *reinterpret_cast<HostContext*>(context);
-        return hostContext.createAddressForOpcode(*sender, nonce);
+        try
+        {
+            return hostContext.createAddressForOpcode(*sender, nonce);
+        }
+        catch (...)
+        {
+            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
+            return evmc_address{};
+        }
     }
 
     static evmc_address create2AddressHook(evmc_host_context* context, const evmc_address* sender,
         const evmc_bytes32* salt, const uint8_t* init_code, size_t init_code_size)
     {
         auto& hostContext = *reinterpret_cast<HostContext*>(context);
-        return hostContext.create2AddressForOpcode(
-            *sender, *salt, bytesConstRef(init_code, init_code_size));
+        try
+        {
+            return hostContext.create2AddressForOpcode(
+                *sender, *salt, bytesConstRef(init_code, init_code_size));
+        }
+        catch (...)
+        {
+            hostContext.recordHostFault(boost::current_exception_diagnostic_information());
+            return evmc_address{};
+        }
     }
 
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)

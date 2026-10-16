@@ -1343,6 +1343,60 @@ BOOST_AUTO_TEST_CASE(preBugfixCreate2HookAnswersTheZeroAddress)
     BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{derived.bytes, sizeof(derived.bytes)}), expected);
 }
 
+// The host-fault record's family semantics (review F19). The fail-closed callback
+// answers let the frame keep executing after a fault, so a second fault can still be
+// recorded — the record must reproduce the ladder's FIRST-exception decision: the
+// first fault's message wins, and halting is sticky (a bcos::Error arriving after a
+// non-bcos fault must not soften the exit(1) decision into a revert receipt). The
+// end-to-end [non-bcos → halt] cell cannot run in-process (go()'s std::exception arm
+// calls exit(1)), so the state machine is pinned here at the record/throw boundary —
+// the only place both orderings are observable.
+BOOST_AUTO_TEST_CASE(hostFaultRecordIsFirstWinsAndStickyOnHalting)
+{
+    auto makeHost = [&] {
+        auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+        auto ledgerCache = std::make_shared<LedgerCache>(ledger);
+        bcos::executor::BlockContext blockContext(lruStorage, ledgerCache, hashImpl,
+            /*blockNumber=*/1, h256(1), /*timestamp=*/0,
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION,
+            /*isAuthCheck=*/false, backend);
+        auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        callParameters->senderAddress = "ff6f30856ad3bae00b1169808488502786a13e3c";
+        callParameters->receiveAddress = callParameters->senderAddress;
+        callParameters->codeAddress = callParameters->senderAddress;
+        auto tableName = std::string("/apps/") + callParameters->senderAddress;
+        auto executive = std::make_shared<TransactionExecutive>(
+            blockContext, callParameters->senderAddress, /*contextID=*/1, /*seq=*/1);
+        return bcos::executor::HostContext(
+            std::move(callParameters), std::move(executive), std::move(tableName));
+    };
+
+    // No fault recorded: throwIfHostFault is a no-op.
+    auto clean = makeHost();
+    clean.throwIfHostFault();
+
+    // A single bcos::Error-family fault rethrows as bcos::Error (go()'s first arm).
+    auto bcosFamily = makeHost();
+    bcosFamily.recordHostFault("storage fault", /*halting=*/false);
+    BOOST_CHECK_THROW(bcosFamily.throwIfHostFault(), bcos::Error);
+
+    // [non-bcos first, bcos::Error second]: the sticky record keeps the halt family —
+    // the old last-writer-wins record would have downgraded this to a revert.
+    auto downgraded = makeHost();
+    downgraded.recordHostFault("non-bcos fault", /*halting=*/true);
+    downgraded.recordHostFault("later storage fault", /*halting=*/false);
+    BOOST_CHECK_EQUAL(downgraded.hostFault(), "non-bcos fault");
+    BOOST_CHECK_THROW(downgraded.throwIfHostFault(), std::runtime_error);
+
+    // [bcos::Error first, non-bcos second]: the family upgrades to halt (sticky),
+    // and the first fault's message survives for the diagnostic.
+    auto upgraded = makeHost();
+    upgraded.recordHostFault("storage fault", /*halting=*/false);
+    upgraded.recordHostFault("later non-bcos fault", /*halting=*/true);
+    BOOST_CHECK_EQUAL(upgraded.hostFault(), "storage fault");
+    BOOST_CHECK_THROW(upgraded.throwIfHostFault(), std::runtime_error);
+}
+
 // The rejected legacy CREATE2's whole downstream shape (review F4): with the bugfix flag
 // off, a contract's CREATE2 opcode spawns a plain message — create == false, init data
 // never forwarded, recipient never assigned by the reject arm — and the DMC lane stamps

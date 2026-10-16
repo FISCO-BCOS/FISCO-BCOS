@@ -125,10 +125,20 @@ public:
     /// have reached — `halting` = the std::exception arm (exit(1), the node halts), the
     /// bcos::Error family otherwise (revert the whole frame). Never a receipt the rest
     /// of the network would not produce (review F1).
+    ///
+    /// First fault wins, halting is sticky (review F19): the ladder decides on the
+    /// FIRST exception thrown, and the fail-closed answers let the frame keep running
+    /// after a fault, so a later record must not soften an earlier one — a bcos::Error
+    /// arriving after a non-bcos fault must not turn the exit(1) decision into a revert
+    /// receipt. The first fault's message is kept (it names the exception that decided
+    /// the family); a later halting fault still upgrades the family to halt.
     void recordHostFault(std::string message, bool halting)
     {
-        m_hostFault = std::move(message);
-        m_hostFaultHalting = halting;
+        if (m_hostFault.empty())
+        {
+            m_hostFault = std::move(message);
+        }
+        m_hostFaultHalting = m_hostFaultHalting || halting;
     }
     std::string const& hostFault() const { return m_hostFault; }
     void throwIfHostFault() const;
