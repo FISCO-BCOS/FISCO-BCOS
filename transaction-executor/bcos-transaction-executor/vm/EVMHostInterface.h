@@ -30,6 +30,7 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include <evmc/evmc.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <limits>
 
 namespace bcos::executor_v1
@@ -133,7 +134,12 @@ struct EVMHostInterface
         {
             // The body reads storage and parses the stored nonce string, both of which
             // can throw; an exception escaping this noexcept callback is std::terminate.
-            // Fail closed per EIP-2681 instead: MAX_NONCE makes evmone reject the CREATE.
+            // Fail closed per EIP-2681 instead: MAX_NONCE makes evmone reject the
+            // CREATE. Name the cause so a storage fault is distinguishable from a
+            // hostile input.
+            EXECUTIVE_LOG(WARNING)
+                << LOG_DESC("getNonce failed closed (EIP-2681 reject)")
+                << LOG_KV("exception", boost::current_exception_diagnostic_information());
             return std::numeric_limits<uint64_t>::max();
         }
     }

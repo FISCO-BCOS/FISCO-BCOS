@@ -968,7 +968,12 @@ private:
         if (m_ledgerConfig.get().features().get(
                 ledger::Features::Flag::bugfix_nested_create_creator_nonce))
         {
-            if (m_web3Tx && ref.depth != 0)
+            // CREATE only: upstream bumps the creator's nonce for CREATE, never for
+            // CREATE2 (whose address derives from the salt and consumes no nonce), and
+            // this lane's CREATE2 address is chain-hasher derived either way — a bump
+            // there would be a state-root row with no behavioural purpose. The flag is
+            // new in this upgrade, so no flag-ON chain depends on the CREATE2 bump.
+            if (m_web3Tx && ref.depth != 0 && ref.kind == EVMC_CREATE)
             {
                 co_await bumpCreatorNonce(ref.sender);
                 m_creatorNonceBumped = true;

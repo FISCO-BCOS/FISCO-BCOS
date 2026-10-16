@@ -1236,6 +1236,46 @@ BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
     }
 }
 
+// The flag-ON bump is CREATE-only (upstream parity): CREATE2's address derives from
+// the salt and consumes no nonce, so a nested CREATE2 under the flag writes no nonce
+// row even on a web3 chain.
+BOOST_AUTO_TEST_CASE(creatorNonceFlagSkipsCreate2)
+{
+    auto features = ledgerConfig.features();
+    features.set(ledger::Features::Flag::bugfix_nested_create_creator_nonce);
+    ledgerConfig.setFeatures(features);
+
+    evmc_address creator{};
+    creator.bytes[19] = 0xC4;
+
+    evmc_message parent{};
+    parent.kind = EVMC_CALL;
+    parent.depth = 0;
+    parent.gas = 10'000'000;
+    parent.recipient = creator;
+    parent.sender = creator;
+    parent.code_address = creator;
+    HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> host(
+        rollbackableStorage, rollbackableTransientStorage, blockHeader, parent, creator, "", 0, seq,
+        *precompiledManager, ledgerConfig, *hashImpl, /*web3Tx=*/true, 0, bcos::task::syncWait);
+
+    auto nonceRowOf = [&](const evmc_address& address) -> std::string {
+        ledger::account::EVMAccount<decltype(rollbackableStorage)> account(
+            rollbackableStorage, address, ledger::account::nodeAddressTableMode());
+        auto nonceStr = syncWait(account.nonce());
+        return nonceStr.value_or("<absent>");
+    };
+
+    evmc_message nested{};
+    nested.kind = EVMC_CREATE2;
+    nested.depth = 1;
+    nested.gas = 500000;
+    nested.sender = creator;
+    auto result = syncWait(host.externalCall(nested));
+    BOOST_REQUIRE(result.status_code != EVMC_SUCCESS || true);  // either outcome: no bump below
+    BOOST_CHECK_EQUAL(nonceRowOf(creator), "<absent>");
+}
+
 // The flag-ON creator-nonce bump carries the upstream Host::call contract: "bump the
 // creator's nonce, not reverted if the creation fails". A nested create whose init code
 // reverts must therefore leave the bump behind — the next create in the same tx then

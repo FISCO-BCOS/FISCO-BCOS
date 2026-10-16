@@ -34,6 +34,7 @@
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <limits>
 
 using namespace std;
@@ -160,7 +161,11 @@ uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr) noexce
     {
         // The body reads storage and parses the stored nonce string, both of which can
         // throw; an exception escaping this noexcept callback is std::terminate. Fail
-        // closed per EIP-2681 instead: MAX_NONCE makes evmone reject the CREATE.
+        // closed per EIP-2681 instead: MAX_NONCE makes evmone reject the CREATE. Name
+        // the cause so a storage fault is distinguishable from a hostile input.
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("getNonce failed closed (EIP-2681 reject)")
+                               << LOG_KV("exception",
+                                      boost::current_exception_diagnostic_information());
         return std::numeric_limits<uint64_t>::max();
     }
 }
@@ -323,7 +328,9 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
         // externalRequest reads storage and parses the stored nonce string (both can
         // throw); returning a failure lets evmone fail the create/call frame instead
         // of terminating the node mid-block.
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVM host call failed closed");
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVM host call failed closed")
+                               << LOG_KV("exception",
+                                      boost::current_exception_diagnostic_information());
         return evmc_result{.status_code = EVMC_INTERNAL_ERROR,
             .gas_left = 0,
             .gas_refund = 0,
