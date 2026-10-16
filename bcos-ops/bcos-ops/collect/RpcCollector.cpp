@@ -18,6 +18,7 @@
 #include "RpcCollector.h"
 #include "GroupFacts.h"
 #include "bcos-ops/OpsError.h"
+#include <algorithm>
 #include <chrono>
 
 namespace bcos::ops
@@ -60,7 +61,15 @@ int64_t asInt64(Json::Value const& _value)
 {
     if (_value.isString())
     {
-        return std::stoll(_value.asString());
+        // the whole string must be the number: "0x80" or "12abc" is an error, not 0 or 12
+        auto text = _value.asString();
+        size_t used = 0;
+        auto parsed = std::stoll(text, &used);
+        if (used != text.size())
+        {
+            throw std::invalid_argument("not a decimal integer: " + text);
+        }
+        return parsed;
     }
     return _value.asInt64();
 }
@@ -114,6 +123,15 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
         status.version = facts.version;
         status.smCrypto = facts.smCrypto;
         status.authCheck = facts.authCheck;
+        for (auto [field, known] : {std::pair{"version", facts.version.has_value()},
+                 std::pair{"smCrypto", facts.smCrypto.has_value()},
+                 std::pair{"authCheck", facts.authCheck.has_value()}})
+        {
+            if (!known)
+            {
+                status.missing(field, "getGroupInfo: not in iniConfig");
+            }
+        }
     }
     catch (std::exception const& e)
     {
@@ -149,15 +167,17 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
             status.isSyncing = v["isSyncing"].asBool();
             status.knownHighestNumber = asInt64(v["knownHighestNumber"]);
             auto local = status.blockNumber ? *status.blockNumber : asInt64(v["blockNumber"]);
-            status.lag = *status.knownHighestNumber - local;
+            // peer-supplied heights: both non-negative, so the difference cannot overflow
+            status.lag =
+                std::max<int64_t>(*status.knownHighestNumber, 0) - std::max<int64_t>(local, 0);
             status.peerCount = static_cast<int64_t>(v["peers"].size());
         });
 
     tryCall(status, _call, "getPendingTxSize", params(_group, node), {"pendingTxSize"},
         [&](Json::Value const& v) { status.pendingTxSize = asInt64(v); });
 
-    // consensus_timeout is a genesis value, not a system-config key, so older nodes cannot
-    // answer it over RPC; the node dir supplies it locally
+    // nodes before 3.18 do not report their PBFT timeout over RPC; they all run the default,
+    // which the node dir supplies
     if (!status.consensusTimeoutMs)
     {
         if (_fallbacks.consensusTimeoutMs)
