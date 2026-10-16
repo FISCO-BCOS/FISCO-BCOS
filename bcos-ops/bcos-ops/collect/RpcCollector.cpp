@@ -156,8 +156,8 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
     tryCall(status, _call, "getPendingTxSize", params(_group, node), {"pendingTxSize"},
         [&](Json::Value const& v) { status.pendingTxSize = asInt64(v); });
 
-    // consensus_timeout is a genesis value, not a system-config key, so older nodes cannot
-    // answer it over RPC; the node dir supplies it locally
+    // nodes before 3.18 do not report their PBFT timeout over RPC; they all run the default,
+    // which the node dir supplies
     if (!status.consensusTimeoutMs)
     {
         if (_fallbacks.consensusTimeoutMs)

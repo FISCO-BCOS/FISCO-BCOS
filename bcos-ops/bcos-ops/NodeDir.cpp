@@ -76,10 +76,9 @@ NodeDir NodeDir::load(std::string const& _dir)
     node.chainId = chainSource.get<std::string>("chain.chain_id", "chain");
     node.smCrypto = chainSource.get<bool>("chain.sm_crypto", false);
     node.authCheck = genesis.get<bool>("executor.is_auth_check", false);
-    if (auto timeout = genesis.get_optional<int64_t>("consensus.consensus_timeout"))
-    {
-        node.consensusTimeoutMs = *timeout;
-    }
+    // no config key sets the PBFT timeout: the node runs ConsensusConfig's default (3000 ms, raised
+    // to min_seal_time + 1 when that is longer); genesis [consensus] consensus_timeout is not read
+    node.consensusTimeoutMs = 3000;
 
     node.rpcListenIp = ini.get<std::string>("rpc.listen_ip", "0.0.0.0");
     node.rpcListenPort = static_cast<uint16_t>(ini.get<int>("rpc.listen_port", 20200));

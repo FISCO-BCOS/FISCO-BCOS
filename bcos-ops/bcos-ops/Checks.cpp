@@ -111,14 +111,12 @@ std::vector<Check> evaluate(
     }
     else
     {
-        // connectedNodeList counts this node and any observer, so this leans towards ok
+        // informational only: getConsensusStatus reports connectedNodeList as a count that includes
+        // this node and any observer, so it cannot tell whether the sealers alone reach the quorum
         auto reachable = *_status.connectedGroupNodes;
-        bool fail = reachable < *_status.minRequiredQuorum;
-        auto check = verdict("quorum_connected", fail,
-            fail ?
-                "only " + std::to_string(reachable) + " group nodes connected (self included) of " +
-                    std::to_string(*_status.minRequiredQuorum) + " required" :
-                "");
+        auto check = Check{"quorum_connected", "info",
+            std::to_string(reachable) + " group nodes connected (self and observers included), " +
+                std::to_string(*_status.minRequiredQuorum) + " sealers required"};
         check.values["reachable"] = static_cast<Json::Int64>(reachable);
         check.values["minRequiredQuorum"] = static_cast<Json::Int64>(*_status.minRequiredQuorum);
         checks.push_back(std::move(check));

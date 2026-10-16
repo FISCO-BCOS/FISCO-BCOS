@@ -88,8 +88,9 @@ BOOST_AUTO_TEST_CASE(nodeDirReadsIniAndGenesis)
         "[executor]\n"
         "    is_auth_check=true\n"
         "[consensus]\n"
-        "    consensus_timeout=3000\n");
+        "    consensus_timeout=9000\n");
     auto node = NodeDir::load(temp.dir.string());
+    // the node does not read genesis consensus_timeout: its PBFT timeout is the 3000 ms default
     BOOST_REQUIRE(node.consensusTimeoutMs);
     BOOST_CHECK_EQUAL(*node.consensusTimeoutMs, 3000);
     BOOST_CHECK_EQUAL(node.rpcEndpoint(), "127.0.0.1:20200");
