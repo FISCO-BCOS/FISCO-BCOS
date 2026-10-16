@@ -31,8 +31,13 @@ jobs:
       # ~360 TUs a leg builds). So the 200M the legs used to carry already held about two
       # revisions' worth; the reason runs were cold is not the cap but that the entries do
       # not survive - see the Save step for how the write rate is bounded.
-      # 300M keeps room for two or three revisions of every object without competing with
-      # the vcpkg trees for the repository's 10GB budget.
+      # 300M is two or three revisions of headroom above the ~115MB working set. The daily
+      # bucket (see Restore ccache) bounds writes to one per scope per day, but GitHub keeps
+      # entries for 7 days after their last access, so up to ~7 generations per scope are
+      # alive at once: the steady-state footprint is ~7x one entry, not one. What protects
+      # the vcpkg trees is eviction order, not headroom: they are restored on every run and
+      # stay recently accessed, while stale ccache generations go cold and are what LRU
+      # evicts first when the repository nears its 10GB budget.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 300M
       # ccache mixes the absolute working directory into its hash, and a fresh checkout
@@ -45,7 +50,10 @@ jobs:
       # Its TESTS=OFF drops the root-scope -DBOOST_TEST_THREAD_SAFE compile option
       # (cmake/CompilerSettings.cmake), which changes every translation unit's command
       # line and therefore its ccache hash, so sharing the x64 scope would be all misses.
-      CCACHE_SCOPE: ${{ matrix.os }}
+      # Named CACHE_SCOPE rather than CCACHE_*: ccache reads its configuration from
+      # CCACHE_-prefixed environment variables, and this is a cache-key component for
+      # actions/cache, not a ccache option.
+      CACHE_SCOPE: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -116,9 +124,9 @@ jobs:
           # PR reads under its base branch (github.base_ref), so a master push and a
           # release-3.18.0 PR stop sharing one baseline. ccache hashes content and flags, so
           # an entry from the "wrong" branch could only ever be a miss, never a bad object.
-          key: ccache-${{ github.base_ref || github.ref_name }}-${{ env.CCACHE_SCOPE }}-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
+          key: ccache-${{ github.base_ref || github.ref_name }}-${{ env.CACHE_SCOPE }}-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
           restore-keys: |
-            ccache-${{ github.base_ref || github.ref_name }}-${{ env.CCACHE_SCOPE }}-${{ runner.arch }}-v1-
+            ccache-${{ github.base_ref || github.ref_name }}-${{ env.CACHE_SCOPE }}-${{ runner.arch }}-v1-
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2025'
         uses: actions/setup-node@v4
@@ -438,8 +446,11 @@ jobs:
       # MinSizeRel objects the build legs cache, so this job legitimately needs more room
       # than the 300M the other legs use. 2G was more than a working set can use, though:
       # each entry came out ~1.4GB and two of them alone held 2.83GB of the shared 10GB
-      # budget, the single largest consumer. With the daily bucket below the job also
-      # writes at most one entry per day instead of one per push.
+      # budget, the single largest consumer. The daily bucket bounds the write rate, not
+      # the live entry count: with 7-day retention up to ~7 generations stay alive, so at
+      # the cap this scope alone could reach ~7GB. In practice entries stay well under the
+      # cap, and eviction order protects the hot vcpkg trees - see the build matrix's env
+      # comment.
       CCACHE_MAXSIZE: 1G
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_ctime
@@ -679,9 +690,12 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          # Deliberately NOT branch-scoped, unlike the build matrix: c2-e2e.yml warms the
-          # same prefix, so the nightly run keeps seeding this job's cache. Daily bucket, so
-          # the two of them together still write at most one entry per scope per day.
+          # Deliberately NOT branch-scoped, unlike the build matrix: c2-e2e.yml's nightly
+          # full run restores this same prefix. This job owns the writes - it builds the
+          # superset of objects and runs on every integration-branch push, while c2-e2e.yml
+          # is restore-only: its --target fisco-bcos build is a strict subset, and a nightly
+          # save would otherwise lock the daily bucket before this job's save. Daily bucket:
+          # at most one entry per scope per day.
           key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
           restore-keys: |
             ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-
@@ -898,11 +912,16 @@ jobs:
       - name: Save OP binaries
         # Save split from restore: PRs never write. cache-hit != 'true' skips the save when the
         # entry already exists (pin unchanged), so only a pin bump on the base branch writes.
+        # The path set and key MUST mirror the Cache OP binaries restore above exactly (both
+        # paths, -kona1- token): a mismatch means the -kona1- entry is never created, the
+        # restore misses forever, and every run pays the full OP + kona rebuild.
         if: github.event_name != 'pull_request' && steps.op-cache.outputs.cache-hit != 'true' && success()
         uses: actions/cache/save@v4
         with:
-          path: ${{ github.workspace }}/.ci-c2-bins
-          key: c2-op-${{ steps.op-pin.outputs.commit }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            .ci-op-monorepo
+            .ci-c2-bins
+          key: c2-op-${{ steps.op-pin.outputs.commit }}-kona1-${{ runner.os }}-${{ runner.arch }}
 
       - name: Fetch pinned Solidity deps
         run: bash tools/.ci/fetch-l2-contract-deps.sh

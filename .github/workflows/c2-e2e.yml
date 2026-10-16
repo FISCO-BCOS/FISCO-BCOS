@@ -36,9 +36,11 @@ jobs:
       # Manual runs pass the input; a scheduled run has none, so default to the full
       # adversarial variant there.
       CONTEST: ${{ github.event.inputs.contest || '1' }}
-      # Same sizing as workflow.yml's l2 leg (these two share one cache prefix): 300M holds
-      # two or three revisions of the whole project - a full working set is only ~103MB for
-      # 325 translation units - without competing with the vcpkg trees for the 10GB budget.
+      # Same sizing as workflow.yml's l2 leg, whose prefix this job restores (restore-only;
+      # the l2 leg owns the writes): 300M is two or three revisions of headroom above the
+      # ~103MB working set. The steady-state footprint is ~7 daily generations per scope
+      # under 7-day retention, not one entry - see workflow.yml's build-matrix env comment
+      # for why LRU eviction order, not headroom, is what protects the vcpkg trees.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 300M
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -93,10 +95,11 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          # Daily bucket + "v1-" restore prefix, matching workflow.yml's l2 leg: the two
-          # share this prefix, and together they write at most one entry per day (save is
-          # skipped when the key exists) instead of one per run. A constant key would be
-          # written once and restored frozen forever.
+          # Daily bucket + "v1-" restore prefix, matching workflow.yml's l2 leg. This job is
+          # restore-only: it builds just --target fisco-bcos, a strict subset of what the l2
+          # leg builds, and actions/cache/save locks a daily key to its first writer - a
+          # nightly save here could seed the shared prefix with the subset and starve the l2
+          # leg's full refresh for that day. The l2 leg owns the writes.
           key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
           restore-keys: |
             ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-
@@ -199,11 +202,16 @@ jobs:
           cp .ci-op-monorepo/rust/target/release/kona-client "$GITHUB_WORKSPACE/.ci-c2-bins/kona-client"
       - name: Save OP binaries
         # cache-hit != 'true' skips the save when the entry already exists (pin unchanged).
+        # The path set and key MUST mirror the Cache OP binaries restore above exactly (both
+        # paths, -kona1- token): a mismatch means the -kona1- entry is never created and the
+        # restore misses forever.
         if: steps.op-cache.outputs.cache-hit != 'true' && success()
         uses: actions/cache/save@v4
         with:
-          path: ${{ github.workspace }}/.ci-c2-bins
-          key: c2-op-${{ steps.op-pin.outputs.commit }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            .ci-op-monorepo
+            .ci-c2-bins
+          key: c2-op-${{ steps.op-pin.outputs.commit }}-kona1-${{ runner.os }}-${{ runner.arch }}
 
       - name: Configure FISCO (WITH_L2_CONTRACTS=ON)
         run: |
@@ -236,17 +244,6 @@ jobs:
         # failed or timed-out build is exactly the run whose numbers are wanted.
         if: always()
         run: ccache --show-stats
-
-      # Save right after the build: the 45-minute e2e below must not gate the cache write.
-      # always() on purpose: ccache entries are content-addressed, so a cache written by a
-      # run whose e2e later fails is still valid (this is also why the condition does not
-      # add success()).
-      - name: Save ccache
-        if: always() && steps.ccache.outputs.cache-primary-key != ''
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ steps.ccache.outputs.cache-primary-key }}
 
       - name: Fetch pinned Solidity deps
         run: bash tools/.ci/fetch-l2-contract-deps.sh
