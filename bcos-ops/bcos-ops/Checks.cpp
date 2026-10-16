@@ -1,0 +1,192 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file Checks.cpp
+ */
+#include "Checks.h"
+#include <algorithm>
+#include <limits>
+
+namespace bcos::ops
+{
+namespace
+{
+Check skipped(std::string _name, std::string _why)
+{
+    return Check{std::move(_name), "skipped", std::move(_why)};
+}
+Check verdict(std::string _name, bool _fail, std::string _detail)
+{
+    return Check{std::move(_name), _fail ? "fail" : "ok", std::move(_detail)};
+}
+}  // namespace
+
+std::vector<Check> evaluate(
+    NodeStatus const& _status, Thresholds const& _thresholds, int64_t _nowMs)
+{
+    std::vector<Check> checks;
+
+    // 1. height_advancing
+    if (!_status.latestTimestamp || !_status.consensusTimeoutMs || !_status.pendingTxSize)
+    {
+        checks.push_back(skipped(
+            "height_advancing", "needs latestTimestamp, consensusTimeoutMs and pendingTxSize"));
+    }
+    else
+    {
+        // the timestamp and the timeout come from the RPC peer: clamp both before the int64
+        // arithmetic so an extreme value cannot overflow it
+        auto ageMs = _nowMs - std::clamp<int64_t>(*_status.latestTimestamp, 0, _nowMs);
+        auto limit = _thresholds.stallFactor * static_cast<double>(*_status.consensusTimeoutMs);
+        auto limitMs = limit >= 9.2e18 ? std::numeric_limits<int64_t>::max() :
+                                         static_cast<int64_t>(std::max(limit, 0.0));
+        bool fail = ageMs > limitMs && *_status.pendingTxSize > 0;
+        auto check = verdict("height_advancing", fail,
+            fail ? "pending txs but no block for " + std::to_string(ageMs) + "ms" : "");
+        check.values["blockAgeMs"] = static_cast<Json::Int64>(ageMs);
+        check.values["limitMs"] = static_cast<Json::Int64>(limitMs);
+        check.values["pendingTxSize"] = static_cast<Json::Int64>(*_status.pendingTxSize);
+        checks.push_back(std::move(check));
+    }
+
+    // 2. consensus_stable
+    if (!_status.inTimeout)
+    {
+        checks.push_back(skipped("consensus_stable", "inTimeout unknown"));
+    }
+    else
+    {
+        auto check = verdict("consensus_stable", *_status.inTimeout,
+            *_status.inTimeout ? "view change in progress" : "");
+        check.values["inTimeout"] = *_status.inTimeout;
+        if (_status.view)
+        {
+            check.values["view"] = static_cast<Json::Int64>(*_status.view);
+        }
+        if (_status.changeCycle)
+        {
+            check.values["changeCycle"] = static_cast<Json::Int64>(*_status.changeCycle);
+        }
+        checks.push_back(std::move(check));
+    }
+
+    // 3. sync_caught_up
+    if (!_status.lag)
+    {
+        checks.push_back(skipped("sync_caught_up", "lag unknown"));
+    }
+    else
+    {
+        // behind is behind whether or not a download is running: an idle node that stopped
+        // following its peers passes height_advancing whenever its txpool is empty
+        std::string syncState = !_status.isSyncing ? "sync state unknown" :
+                                *_status.isSyncing ? "syncing" :
+                                                     "not syncing";
+        bool fail = *_status.lag >= _thresholds.maxLag;
+        auto check = verdict("sync_caught_up", fail,
+            fail ? syncState + " and " + std::to_string(*_status.lag) + " blocks behind" : "");
+        check.values["lag"] = static_cast<Json::Int64>(*_status.lag);
+        check.values["maxLag"] = static_cast<Json::Int64>(_thresholds.maxLag);
+        if (_status.isSyncing)
+        {
+            check.values["isSyncing"] = *_status.isSyncing;
+        }
+        checks.push_back(std::move(check));
+    }
+
+    // 4. quorum_connected
+    if (_status.isConsensusNode && !*_status.isConsensusNode)
+    {
+        checks.push_back(skipped("quorum_connected", "not a consensus node"));
+    }
+    else if (!_status.connectedGroupNodes || !_status.minRequiredQuorum)
+    {
+        checks.push_back(skipped("quorum_connected", "connected nodes or quorum unknown"));
+    }
+    else
+    {
+        // informational only: getConsensusStatus reports connectedNodeList as a count that includes
+        // this node and any observer, so it cannot tell whether the sealers alone reach the quorum
+        auto reachable = *_status.connectedGroupNodes;
+        auto check = Check{"quorum_connected", "info",
+            std::to_string(reachable) + " group nodes connected (self and observers included), " +
+                std::to_string(*_status.minRequiredQuorum) + " sealers required"};
+        check.values["reachable"] = static_cast<Json::Int64>(reachable);
+        check.values["minRequiredQuorum"] = static_cast<Json::Int64>(*_status.minRequiredQuorum);
+        checks.push_back(std::move(check));
+    }
+
+    // 5. txpool_not_full
+    if (!_status.pendingTxSize || !_status.txpoolLimit)
+    {
+        checks.push_back(skipped("txpool_not_full", "pendingTxSize or txpool limit unknown"));
+    }
+    else
+    {
+        bool fail = *_status.pendingTxSize >= *_status.txpoolLimit;
+        auto check = verdict("txpool_not_full", fail, fail ? "txpool at limit" : "");
+        check.values["pendingTxSize"] = static_cast<Json::Int64>(*_status.pendingTxSize);
+        check.values["limit"] = static_cast<Json::Int64>(*_status.txpoolLimit);
+        checks.push_back(std::move(check));
+    }
+    return checks;
+}
+
+bool anyEvaluated(std::vector<Check> const& _checks)
+{
+    for (auto const& check : _checks)
+    {
+        if (check.ok() || check.failed())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool anyFailed(std::vector<Check> const& _checks)
+{
+    for (auto const& check : _checks)
+    {
+        if (check.failed())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+Json::Value checksToJson(std::vector<Check> const& _checks)
+{
+    Json::Value array(Json::arrayValue);
+    for (auto const& check : _checks)
+    {
+        Json::Value item;
+        item["name"] = check.name;
+        item["state"] = check.state;
+        item["ok"] = check.ok();
+        if (!check.detail.empty())
+        {
+            item["detail"] = check.detail;
+        }
+        for (auto const& key : check.values.getMemberNames())
+        {
+            item[key] = check.values[key];
+        }
+        array.append(item);
+    }
+    return array;
+}
+}  // namespace bcos::ops
