@@ -22,8 +22,8 @@
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-framework/gateway/GroupNodeInfo.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-task/Task.h"
 #include <oneapi/tbb/concurrent_unordered_map.h>
@@ -37,7 +37,7 @@ class PeersRouterTable
 public:
     using Ptr = std::shared_ptr<PeersRouterTable>;
     PeersRouterTable(std::string _uuid, bcos::crypto::KeyFactory::Ptr _keyFactory,
-        P2PInterface::Ptr _p2pInterface)
+        Service::Ptr _p2pInterface)
       : m_uuid(std::move(_uuid)),
         m_keyFactory(std::move(_keyFactory)),
         m_p2pInterface(std::move(_p2pInterface)),
@@ -46,40 +46,40 @@ public:
     virtual ~PeersRouterTable() = default;
 
     void getGroupNodeInfoList(GroupNodeInfo::Ptr _groupInfo, const std::string& _groupID) const;
-    std::set<P2pID> queryP2pIDs(const std::string& _groupID, const std::string& _nodeID) const;
-    std::set<P2pID> queryP2pIDsByGroupID(const std::string& _groupID) const;
-    void removeP2PID(const P2pID& _p2pID);
+    std::set<bcos::network::P2pID> queryP2pIDs(const std::string& _groupID, const std::string& _nodeID) const;
+    std::set<bcos::network::P2pID> queryP2pIDsByGroupID(const std::string& _groupID) const;
+    void removeP2PID(const bcos::network::P2pID& _p2pID);
 
-    void updatePeerStatus(P2pID const& _p2pID, GatewayNodeStatus::Ptr _gatewayNodeStatus);
+    void updatePeerStatus(bcos::network::P2pID const& _p2pID, GatewayNodeStatus::Ptr _gatewayNodeStatus);
 
     using Group2NodeIDListType = std::map<std::string, std::map<std::string, uint32_t>>;
-    Group2NodeIDListType peersNodeIDList(P2pID const& _p2pNodeID) const;
+    Group2NodeIDListType peersNodeIDList(bcos::network::P2pID const& _p2pNodeID) const;
 
     task::Task<void> broadcastMessage(uint16_t type, std::string_view group, uint16_t moduleID,
         const Message& message,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads);
 
-    std::set<P2pID> getAllPeers() const;
+    std::set<bcos::network::P2pID> getAllPeers() const;
     GatewayStatus::Ptr gatewayInfo(std::string const& _uuid);
 
 protected:
     void batchInsertNodeList(
-        P2pID const& _p2pNodeID, std::vector<GroupNodeInfo::Ptr> const& _nodeList);
-    void updatePeerNodeList(P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status);
+        bcos::network::P2pID const& _p2pNodeID, std::vector<GroupNodeInfo::Ptr> const& _nodeList);
+    void updatePeerNodeList(bcos::network::P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status);
 
-    void removeP2PIDFromGroupNodeList(P2pID const& _p2pID);
-    void removePeerStatus(P2pID const& _p2pNodeID);
+    void removeP2PIDFromGroupNodeList(bcos::network::P2pID const& _p2pID);
+    void removePeerStatus(bcos::network::P2pID const& _p2pNodeID);
 
-    void updateGatewayInfo(P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status);
-    void removeNodeFromGatewayInfo(P2pID const& _p2pID);
+    void updateGatewayInfo(bcos::network::P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status);
+    void removeNodeFromGatewayInfo(bcos::network::P2pID const& _p2pID);
 
 private:
     std::string m_uuid;
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
-    P2PInterface::Ptr m_p2pInterface;
+    Service::Ptr m_p2pInterface;
     // used for peer-to-peer router
     // groupID => NodeID => set<P2pID>
-    std::map<std::string, std::map<std::string, std::set<P2pID>, std::less<>>, std::less<>>
+    std::map<std::string, std::map<std::string, std::set<bcos::network::P2pID>, std::less<>>, std::less<>>
         m_groupNodeList;
     // FIB-186 (vector D): reverse index p2pID => the (groupID, nodeID) entries that p2pID appears
     // under in m_groupNodeList. removeP2PIDFromGroupNodeList used to scan the whole forward map
@@ -98,13 +98,13 @@ private:
     // pointer stored here always outlives the reverse entry holding it. This REQUIRES
     // m_groupNodeList to remain a node-based container: do NOT switch it to a flat/vector-backed
     // map whose keys move on insert/rehash, or these pointers dangle.
-    std::map<P2pID, std::set<std::pair<const std::string*, const std::string*>>> m_p2pID2GroupNodes;
+    std::map<bcos::network::P2pID, std::set<std::pair<const std::string*, const std::string*>>> m_p2pID2GroupNodes;
     std::map<std::string, bcos::protocol::ProtocolInfo::ConstPtr> m_nodeProtocolInfo;
     mutable SharedMutex x_groupNodeList;
 
     // the nodeIDList infos of the peers
     // p2pNodeID => GatewayNodeStatus
-    std::map<P2pID, GatewayNodeStatus::Ptr> m_peersStatus;
+    std::map<bcos::network::P2pID, GatewayNodeStatus::Ptr> m_peersStatus;
     mutable SharedMutex x_peersStatus;
 
     GatewayStatusFactory::Ptr m_gatewayStatusFactory;

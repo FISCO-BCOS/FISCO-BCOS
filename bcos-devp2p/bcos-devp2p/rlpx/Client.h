@@ -24,10 +24,11 @@
 #include "Handshake.h"
 #include "Messages.h"
 #include "Session.h"
-#include "Socket.h"
 #include "../eth/ForkId.h"
 #include "../eth/Protocol.h"
+#include <bcos-network/ASIOInterface.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <mutex>
 #include <string>
 
 namespace bcos::devp2p::rlpx
@@ -82,16 +83,22 @@ class RlpxServer
 {
 public:
     RlpxServer(EccKeyPair _keyPair, uint16_t _port, PeerConfig _config = {});
+    ~RlpxServer();
 
     // Block until a client completes the full handshake/hello/status exchange.
     EstablishedSession accept();
 
     // The port this server listens on (valid once constructed).
-    uint16_t port() const { return m_listener.port(); }
+    uint16_t port() const
+    {
+        return m_asio->acceptor()->local_endpoint().port();
+    }
 
 private:
     EccKeyPair m_keyPair;
     PeerConfig m_config;
-    TcpListener m_listener;
+    std::shared_ptr<bcos::network::ASIOInterface> m_asio;
+    NetHostPtr m_host;
+    std::once_flag m_startOnce;
 };
 }  // namespace bcos::devp2p::rlpx

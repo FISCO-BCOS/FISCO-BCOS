@@ -1,0 +1,199 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @brief Regression tests for FIB-184: cap sessions and bound per-session recv buffer
+ * @file FIB184_SessionResourceCapTest.cpp
+ * @date 2026-06-15
+ *
+ * Migrated from bcos-gateway/test/unittests/FIB184_SessionResourceCapTest.cpp: the caps, the
+ * lazy recv-buffer sizing and the lifetime guard are all bcos-network (Host/BasicSession)
+ * mechanisms — no session here ever decodes a frame, so the test decoder is only a template
+ * argument.
+ */
+
+#include "unittests/utils/TestAsioInterface.h"
+#include "unittests/utils/TestFraming.h"
+#include "unittests/utils/TestSessionSocket.h"
+#include <bcos-network/ASIOInterface.h>
+#include <bcos-network/Host.h>
+#include <bcos-network/Session.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <boost/test/unit_test.hpp>
+
+using namespace bcos;
+using namespace bcos::network;
+using namespace bcos::network::test;
+
+BOOST_AUTO_TEST_SUITE(FIB184_SessionResourceCapTest)
+
+// Exposes the protected session-cap helpers for direct testing.
+class FakeHost_FIB184 : public bcos::network::Host<TestFrameDecoder, TestSessionSocket>
+{
+public:
+    explicit FakeHost_FIB184(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface)
+      : bcos::network::Host<TestFrameDecoder, TestSessionSocket>(std::move(_asioInterface), nullptr)
+    {
+        this->m_run = true;
+    }
+    bool callTryAcquireSessionSlot(std::string const& addr) { return tryAcquireSessionSlot(addr); }
+    void callReleaseSessionSlot(std::string const& addr) { releaseSessionSlot(addr); }
+};
+
+using Session_FIB184 = bcos::network::BasicSession<TestFrameDecoder, TestSessionSocket>;
+
+// FIB-184 Fix 2: a forced-size session uses exactly the requested recv buffer size, not the
+// 512KB floor that was unconditionally applied before.
+BOOST_AUTO_TEST_CASE(ForcedSmallRecvBufferIsHonored)
+{
+    auto fakeSocket = std::make_shared<TestSessionSocket>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
+
+    auto session = std::make_shared<Session_FIB184>(fakeSocket, *fakeHost, /*size*/ 2, /*forceSize*/ true);
+    BOOST_CHECK_EQUAL(session->recvBuffer().recvBufferSize(), 2u);
+    // grow ceiling is still the 512KB minimum
+    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session_FIB184::MIN_SESSION_RECV_BUFFER_SIZE);
+
+    session->setSocket(nullptr);
+    fakeSocket->close();
+}
+
+// FIB-184 Fix 2: a default-constructed session no longer allocates the 512KB floor up front;
+// it starts at the (much smaller) lazy initial size and relies on the grow path.
+BOOST_AUTO_TEST_CASE(DefaultRecvBufferStartsSmall)
+{
+    auto fakeSocket = std::make_shared<TestSessionSocket>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
+
+    auto session = std::make_shared<Session_FIB184>(fakeSocket, *fakeHost);
+    BOOST_CHECK_EQUAL(
+        session->recvBuffer().recvBufferSize(), Session_FIB184::INITIAL_SESSION_RECV_BUFFER_SIZE);
+    BOOST_CHECK_LT(Session_FIB184::INITIAL_SESSION_RECV_BUFFER_SIZE,
+        Session_FIB184::MIN_SESSION_RECV_BUFFER_SIZE);
+    // the grow ceiling stays at the 512KB minimum so large messages still fit after growth
+    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session_FIB184::MIN_SESSION_RECV_BUFFER_SIZE);
+
+    session->setSocket(nullptr);
+    fakeSocket->close();
+}
+
+// FIB-184: production createSession passes the config-validated ceiling (forced to
+// 2 * allow_max_msg_size = 64MB), NOT forceSize. The session must allocate only the small initial
+// buffer and keep the 64MB as the grow ceiling -- not preallocate 64MB per session (the
+// heap-exhaustion crash source). This is the production path the two tests above do not cover.
+BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
+{
+    auto fakeSocket = std::make_shared<TestSessionSocket>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
+
+    constexpr size_t k64MB =
+        64UL * 1024 * 1024;  // == 2 * MAX_MESSAGE_LENGTH, the production ceiling
+    auto session =
+        std::make_shared<Session_FIB184>(fakeSocket, *fakeHost, /*ceiling*/ k64MB, /*forceSize*/ false);
+
+    // initial allocation is the lazy 16KB, NOT the 64MB ceiling
+    BOOST_CHECK_EQUAL(
+        session->recvBuffer().recvBufferSize(), Session_FIB184::INITIAL_SESSION_RECV_BUFFER_SIZE);
+    // the grow ceiling still reflects the requested 64MB so large messages fit after growth
+    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), k64MB);
+
+    session->setSocket(nullptr);
+    fakeSocket->close();
+}
+
+// FIB-184 Fix 1: per-IP cap rejects slot acquisition once the limit is hit; releasing a slot
+// makes room again.
+BOOST_AUTO_TEST_CASE(PerIPSessionCapIsEnforced)
+{
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
+
+    fakeHost->setMaxSessionsPerIP(3);
+    fakeHost->setMaxConcurrentSessions(100);
+
+    const std::string ip = "1.2.3.4";
+    BOOST_CHECK(fakeHost->callTryAcquireSessionSlot(ip));
+    BOOST_CHECK(fakeHost->callTryAcquireSessionSlot(ip));
+    BOOST_CHECK(fakeHost->callTryAcquireSessionSlot(ip));
+    // 4th from the same IP is rejected
+    BOOST_CHECK(!fakeHost->callTryAcquireSessionSlot(ip));
+    BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 3u);
+
+    // a different IP is unaffected
+    BOOST_CHECK(fakeHost->callTryAcquireSessionSlot("5.6.7.8"));
+    BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 4u);
+
+    // releasing one slot for the capped IP makes room for exactly one more
+    fakeHost->callReleaseSessionSlot(ip);
+    BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 3u);
+    BOOST_CHECK(fakeHost->callTryAcquireSessionSlot(ip));
+    BOOST_CHECK(!fakeHost->callTryAcquireSessionSlot(ip));
+}
+
+// FIB-184 Fix 1: global concurrent-session cap rejects once the total limit is hit, even across
+// distinct source IPs.
+BOOST_AUTO_TEST_CASE(GlobalSessionCapIsEnforced)
+{
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
+
+    fakeHost->setMaxConcurrentSessions(2);
+    fakeHost->setMaxSessionsPerIP(100);
+
+    BOOST_CHECK(fakeHost->callTryAcquireSessionSlot("10.0.0.1"));
+    BOOST_CHECK(fakeHost->callTryAcquireSessionSlot("10.0.0.2"));
+    // global cap reached
+    BOOST_CHECK(!fakeHost->callTryAcquireSessionSlot("10.0.0.3"));
+    BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 2u);
+
+    fakeHost->callReleaseSessionSlot("10.0.0.1");
+    BOOST_CHECK(fakeHost->callTryAcquireSessionSlot("10.0.0.3"));
+    BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 2u);
+}
+
+// FIB-184 Fix 1: the lifetime guard releases the slot exactly when the session is destroyed.
+BOOST_AUTO_TEST_CASE(LifetimeGuardReleasesSlotOnSessionDestruction)
+{
+    auto fakeSocket = std::make_shared<TestSessionSocket>();
+    auto fakeAsio = std::make_shared<TestAsioInterface>();
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
+
+    const std::string ip = "9.9.9.9";
+    BOOST_CHECK(fakeHost->callTryAcquireSessionSlot(ip));
+    BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 1u);
+
+    {
+        auto session = std::make_shared<Session_FIB184>(fakeSocket, *fakeHost, 2, true);
+        // Attach a guard that releases the slot when the session is destroyed, mirroring
+        // Host::startPeerSession. Capture the host by weak_ptr so the lambda guard is safe.
+        std::weak_ptr<FakeHost_FIB184> weakHost = fakeHost;
+        session->setLifetimeGuard(std::shared_ptr<void>(nullptr, [weakHost, ip](void*) {
+            if (auto h = weakHost.lock())
+            {
+                h->callReleaseSessionSlot(ip);
+            }
+        }));
+        BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 1u);
+        session->setSocket(nullptr);
+    }
+    // After the session (and its guard) is destroyed, the slot is released.
+    BOOST_CHECK_EQUAL(fakeHost->currentSessionCount(), 0u);
+
+    fakeSocket->close();
+}
+
+BOOST_AUTO_TEST_SUITE_END()

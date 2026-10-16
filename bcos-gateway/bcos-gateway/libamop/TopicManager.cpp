@@ -33,7 +33,7 @@ using namespace bcos::amop;
 using namespace bcos::gateway;
 
 TopicManager::TopicManager(
-    std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network)
+    std::string const& _rpcServiceName, bcos::gateway::Service::Ptr _network)
   : m_rpcServiceName(_rpcServiceName), m_network(_network)
 {}
 
@@ -315,7 +315,7 @@ bool TopicManager::parseTopicItemsJson(
  * @param _topicSeq: the topicSeq of the nodeID
  * @return bool: if the nodeID has been changed
  */
-bool TopicManager::checkTopicSeq(P2pID const& _nodeID, uint32_t _topicSeq)
+bool TopicManager::checkTopicSeq(bcos::network::P2pID const& _nodeID, uint32_t _topicSeq)
 {
     std::shared_lock lock(x_topics);
     auto it = m_nodeID2TopicSeq.find(_nodeID);
@@ -331,7 +331,7 @@ bool TopicManager::checkTopicSeq(P2pID const& _nodeID, uint32_t _topicSeq)
  * @param _nodeIDs: the online nodeIDs
  * @return void
  */
-void TopicManager::onDisconnect(const bcos::gateway::P2pID& _nodeID)
+void TopicManager::onDisconnect(const bcos::network::P2pID& _nodeID)
 {
     std::unique_lock lock(x_topics);
     auto it = m_nodeID2TopicItems.find(_nodeID);
@@ -352,7 +352,7 @@ void TopicManager::onDisconnect(const bcos::gateway::P2pID& _nodeID)
  * @return void
  */
 void TopicManager::updateSeqAndTopicsByNodeID(
-    P2pID const& _nodeID, uint32_t _topicSeq, const TopicItems& _topicItems)
+    bcos::network::P2pID const& _nodeID, uint32_t _topicSeq, const TopicItems& _topicItems)
 {
     {
         std::unique_lock lock(x_topics);

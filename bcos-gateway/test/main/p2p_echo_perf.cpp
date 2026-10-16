@@ -19,8 +19,8 @@
  */
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-gateway/GatewayFactory.h"
-#include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-network/Common.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLogInitializer.h"
@@ -96,9 +96,9 @@ int main(int argc, const char** argv)
         {
             // register message handler for p2p echo message type
             service->registerHandlerByMsgType(
-                packageType, [reporter](NetworkException _exception,
+                packageType, [reporter](bcos::network::NetworkException _exception,
                                  std::shared_ptr<P2PSession> _session, Message _message) {
-                    if (_exception.errorCode() != 0)
+                    if (bcos::network::errorCodeOf(_exception) != 0)
                     {
                         return;
                     }
@@ -118,7 +118,7 @@ int main(int argc, const char** argv)
                         try
                         {
                             co_await _session->fastSendP2PMessage(
-                                _message, ::ranges::views::single(_message.payload()), Options());
+                                _message, ::ranges::views::single(_message.payload()), bcos::network::Options());
                         }
                         catch (std::exception const& e)
                         {
@@ -189,16 +189,16 @@ int main(int argc, const char** argv)
                 // the removed asyncSendMessageByNodeID callback path): the message is passed as a
                 // coroutine parameter so it is copied into the frame and stays alive for the whole
                 // (possibly deferred) send.
-                task::wait([](P2PInterface::Ptr _service, P2pID _p2pID, Message _message)
+                task::wait([](Service::Ptr _service, bcos::network::P2pID _p2pID, Message _message)
                                -> task::Task<void> {
                     try
                     {
                         co_await _service->sendMessageByNodeID(_p2pID, _message,
-                            ::ranges::views::single(_message.payload()), Options{0, true});
+                            ::ranges::views::single(_message.payload()), bcos::network::Options{0, true});
                     }
-                    catch (NetworkException const& e)
+                    catch (bcos::network::NetworkException const& e)
                     {
-                        std::cerr << "\t[Client] recv exception, error code: " << e.errorCode()
+                        std::cerr << "\t[Client] recv exception, error code: " << bcos::network::errorCodeOf(e)
                                   << " ,error message: " << e.what() << std::endl;
                     }
                 }(service, p2pID, message));

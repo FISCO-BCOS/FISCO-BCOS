@@ -46,7 +46,13 @@ endif()
 target_include_directories(bcos-framework PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-framework>)
+# gateway/GatewayTypeDef.h re-exports bcos-network's Endpoint.h (NodeIPEndpoint), so
+# bcos-network is a PUBLIC dependency: it propagates the include dir and the install/export
+# requirement. The target is created by the root's add_subdirectory(bcos-network) AFTER this
+# directory — plain target names in target_link_libraries resolve at generate time, and there
+# is no cycle (bcos-network depends only on bcos-utilities/bcos-task).
 target_link_libraries(bcos-framework PUBLIC
+    bcos-network
     bcos-task
     bcos-utilities
     bcos-crypto

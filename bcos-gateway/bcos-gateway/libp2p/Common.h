@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-network/Common.h"
 #include <bcos-utilities/BoostLog.h>
 
 namespace bcos
@@ -18,6 +18,7 @@ namespace gateway
 #define SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[P2PService][Service]"
 #define SERVICE2_LOG(LEVEL) BCOS_LOG(LEVEL) << "[P2PService][Service2]"
 #define SERVICE_ROUTER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[P2PService][Router]"
+#define P2P_IDENTITY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[P2PService][Identity]"
 
 }  // namespace gateway
 }  // namespace bcos

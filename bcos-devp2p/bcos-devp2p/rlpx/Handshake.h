@@ -22,7 +22,7 @@
 #pragma once
 
 #include "Crypto.h"
-#include "Socket.h"
+#include <functional>
 
 namespace bcos::devp2p::rlpx
 {
@@ -91,7 +91,16 @@ struct AuthKeys
     bcos::bytes recipientFirstMessageData;
 };
 
-// Runs the encrypted handshake over a socket.
+// Raw byte I/O channel the handshake runs over: full-write / fixed-size-read
+// primitives. Decouples the handshake from any concrete socket type — the
+// caller wires in blocking or coroutine-backed transports.
+struct IoChannel
+{
+    std::function<void(bytesConstRef)> sendAll;   // write all bytes, throw on failure
+    std::function<bcos::bytes(size_t)> recvFixed;  // read exactly N bytes, throw on failure/timeout
+};
+
+// Runs the encrypted handshake over an I/O channel.
 //   initiator side: send auth, receive ack (needs the recipient static pubkey)
 //   recipient side: receive auth, send ack
 class Handshake
@@ -103,11 +112,11 @@ public:
         m_recipientPublicKey(_recipientPublicKey.begin(), _recipientPublicKey.end())
     {}
 
-    AuthKeys execute(Socket& _socket);
+    AuthKeys execute(IoChannel const& _io);
 
 private:
-    AuthKeys authInitiator(Socket& _socket);
-    AuthKeys authRecipient(Socket& _socket);
+    AuthKeys authInitiator(IoChannel const& _io);
+    AuthKeys authRecipient(IoChannel const& _io);
 
     EccKeyPair m_keyPair;
     bool m_isInitiator;

@@ -1,0 +1,277 @@
+/*
+ *  Copyright (C) 2021 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file Message.h
+ * @author: octopus
+ * @date 2021-05-06
+ */
+
+#pragma once
+
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
+#include <boost/asio/buffer.hpp>
+#include <boost/throw_exception.hpp>
+#include <any>
+#include <memory>
+#include <optional>
+#include <utility>
+#include <vector>
+
+void checkOffset(auto offset, auto length)
+{
+    if (std::cmp_greater((offset), (length)))
+    {
+        bcos::throwTrace(std::out_of_range("Out of range error, offset:" + std::to_string(offset) +
+                                           " ,length: " + std::to_string(length)));
+    }
+}
+
+namespace bcos::gateway
+{
+/// Options format definition
+///   options(default version):
+///       groupID length    :1 bytes
+///       groupID           : bytes
+///       nodeID length     :2 bytes
+///       src nodeID        : bytes
+///       src nodeID count  :1 bytes
+///       dst nodeIDs       : bytes
+///       moduleID          : 2 bytes
+class P2PMessageOptions
+{
+public:
+    using Ptr = std::shared_ptr<P2PMessageOptions>;
+    /// groupID length(2) + nodeID length(2) + dst nodeID count(1) + moduleID(2)
+    const static size_t OPTIONS_MIN_LENGTH = 7;
+
+    P2PMessageOptions() = default;
+    P2PMessageOptions(const P2PMessageOptions&) = default;
+    P2PMessageOptions(P2PMessageOptions&&) = default;
+    P2PMessageOptions& operator=(const P2PMessageOptions&) = default;
+    P2PMessageOptions& operator=(P2PMessageOptions&&) = default;
+
+    ~P2PMessageOptions() = default;
+
+    /// The maximum gateway transport protocol supported groupID length  65535
+    constexpr static size_t MAX_GROUPID_LENGTH = 65535;
+    /// The maximum gateway transport protocol supported nodeID length  65535
+    constexpr static size_t MAX_NODEID_LENGTH = 65535;
+    /// The maximum gateway transport protocol supported dst nodeID count  127
+    constexpr static size_t MAX_DST_NODEID_COUNT = 255;
+
+    bool encode(bytes& _buffer) const;
+    int32_t decode(const bytesConstRef& _buffer);
+
+    uint16_t moduleID() const;
+    void setModuleID(uint16_t _moduleID);
+
+    std::string groupID() const;
+    void setGroupID(const std::string& _groupID);
+
+    bytesConstRef srcNodeID() const;
+    void setSrcNodeID(bytes _srcNodeID);
+
+    const std::vector<bytes>& dstNodeIDs() const;
+    void setDstNodeIDs(std::vector<bytes> _dstNodeIDs);
+    std::vector<bytes>& mutableDstNodeIDs();
+
+protected:
+    std::string m_groupID;
+    bytes m_srcNodeID;
+    std::vector<bytes> m_dstNodeIDs;
+    uint16_t m_moduleID = 0;
+};
+
+/// Message format definition of gateway P2P network
+///
+/// fields:
+///   length            :4 bytes
+///   version           :2 bytes
+///   packet type       :2 bytes
+///   seq               :4 bytes
+///   ext               :2 bytes
+///   extended header (version > V0 only):
+///       ttl               :2 bytes
+///       srcP2PNodeID len  :2 bytes
+///       srcP2PNodeID      : bytes
+///       dstP2PNodeID len  :2 bytes
+///       dstP2PNodeID      : bytes
+///   options(default version):
+///       groupID length    :1 bytes
+///       groupID           : bytes
+///       nodeID length     :2 bytes
+///       src nodeID        : bytes
+///       src nodeID count  :1 bytes
+///       dst nodeIDs       : bytes
+///       moduleID          : 2 bytes
+///   payload           :X bytes
+///
+/// Concrete, non-polymorphic message type: the wire-format differences between protocol
+/// versions are data-driven (the version field branches inside encode/decode), so no virtual
+/// dispatch is needed anywhere in the gateway.
+class Message
+{
+public:
+    using Ptr = std::shared_ptr<Message>;
+    using ConstPtr = std::shared_ptr<const Message>;
+
+    /// length(4) + version(2) + packetType(2) + seq(4) + ext(2)
+    constexpr static size_t MESSAGE_HEADER_LENGTH = 14;
+
+    /// The ext flag meaning "payload is compressed" on the wire.
+    constexpr static uint16_t COMPRESS_EXT_FLAG =
+        (uint16_t)bcos::protocol::MessageExtFieldFlag::COMPRESS;
+
+    /// For RSA public key, the prefix length is 18 in hex, used for print log graciously
+    constexpr static size_t RSA_PUBLIC_KEY_PREFIX = 18;
+    constexpr static size_t RSA_PUBLIC_KEY_TRUNC = 8;
+    constexpr static size_t RSA_PUBLIC_KEY_TRUNC_LENGTH = 26;
+
+    Message() = default;
+    Message(const Message&) = default;
+    Message(Message&&) = default;
+    Message& operator=(Message&&) = default;
+    Message& operator=(const Message&) = default;
+    ~Message() noexcept = default;
+
+    uint32_t lengthDirect() const;
+    uint32_t length() const;
+
+    uint16_t version() const;
+    void setVersion(uint16_t version);
+
+    uint16_t packetType() const;
+    void setPacketType(uint16_t packetType);
+
+    uint32_t seq() const;
+    void setSeq(uint32_t seq);
+
+    uint16_t ext() const;
+    void setExt(uint16_t _ext);
+
+    // only meaningful when version > V0 (encoded into the extended header)
+    int16_t ttl() const;
+    void setTTL(int16_t _ttl);
+
+    const P2PMessageOptions& options() const;
+    void setOptions(P2PMessageOptions _options);
+
+    bytesConstRef payload() const;
+    void setPayload(bytes _payload);
+
+    void setRespPacket();
+    // Deprecated: the send path encodes the header with encodeHeader and passes the payload as
+    // views (see Session::sendMessage); kept for tests and legacy callers.
+    bool encode(bytes& _buffer);
+    int32_t decode(const bytesConstRef& _buffer);
+    /// Receive-path decode that takes ownership of the frame storage instead of copying the
+    /// payload out of it. `storage` is the FrameMeta's frame vector: exactly the frame on the
+    /// copy path (frameOffset == 0), the session's former receive buffer on the take-buffer
+    /// path (frame at [frameOffset, ...)). payload() then views into the owned storage;
+    /// compressed frames fall back to an owned m_payload (decompression materializes new bytes
+    /// anyway). A message decoded this way must not be re-encode()d whole — the send paths
+    /// re-encode the header and pass payload() as views, which stays correct.
+    int32_t decodeOwned(bytes&& storage, uint32_t frameOffset);
+    bool isRespPacket() const;
+
+    // compress payload if payload need to be compressed
+    bool tryToCompressPayload(bytes& compressData) const;
+
+    bool hasOptions() const;
+
+    void setSrcP2PNodeID(std::string const& _srcP2PNodeID);
+    void setDstP2PNodeID(std::string const& _dstP2PNodeID);
+
+    std::string const& srcP2PNodeID() const;
+    std::string const& dstP2PNodeID() const;
+
+    // Note: only for log
+    std::string printSrcP2PNodeID() const;
+    // Note: only for log
+    std::string printDstP2PNodeID() const;
+
+    void setExtAttributes(std::any _extAttr);
+    const std::any& extAttributes() const;
+
+    bool encodeHeader(bytes& _buffer) const;
+    /// Encode the header using the given wire ext flags instead of the message's own m_ext.
+    /// The fast send path stamps flags like COMPRESS onto the wire header only, so a shared
+    /// message object (e.g. broadcast fan-out) is never mutated by an individual send.
+    bool encodeHeaderWithExt(bytes& _buffer, uint16_t _wireExt) const;
+
+    /// The response-decision fields of an encoded frame's wire header, lifted without a full
+    /// decode. dstP2PNodeID is empty for V0 frames (no extended header on the wire).
+    struct ResponseFrameInfo
+    {
+        bool isResp = false;
+        uint32_t seq = 0;  ///< the correlation key the pending-request table is keyed by
+        std::string dstP2PNodeID;
+    };
+    /// Bounds-safe peek at an encoded frame: the response flag, the correlation seq and, for
+    /// version > V0, the dstP2PNodeID. The Service receive path uses this to tell a response
+    /// addressed to this node from a routed one before settling a pending request — a routed
+    /// response must never consume a LOCAL pending callback on a seq collision. Returns
+    /// std::nullopt when the frame is malformed; the caller then falls through to
+    /// Message::decode's error path.
+    static std::optional<ResponseFrameInfo> peekResponseFrameInfo(const bytesConstRef& _frame);
+
+    /// Patch the frame total length into an already-encoded header (offset 0, network order).
+    /// The send path zero-copies the payload views, so the final wire length is only known
+    /// after the header was encoded.
+    static void stampLength(bytes& _header, uint32_t _totalLength);
+    /// Whether the wire format of this message's version supports payload compression
+    /// (the ext flags are only honoured V2+).
+    bool compressionSupported() const;
+
+protected:
+    bool encodeHeaderImpl(bytes& _buffer, uint16_t _wireExt) const;
+    int32_t decodeHeader(const bytesConstRef& _buffer);
+    /// Shared decode body. When _frameOwned is true the payload is recorded as an (offset,
+    /// size) view into m_ownedFrame — _viewStart is the frame's offset within m_ownedFrame —
+    /// instead of being copied into m_payload.
+    int32_t decodeImpl(const bytesConstRef& _buffer, bool _frameOwned, uint32_t _viewStart);
+
+    mutable uint32_t m_length = 0;
+    uint16_t m_version = (uint16_t)(bcos::protocol::ProtocolVersion::V0);
+    uint16_t m_packetType = 0;
+    uint32_t m_seq = 0;
+    mutable uint16_t m_ext = 0;
+    // time-to-live for forwarded messages, encoded only when version > V0
+    int16_t m_ttl = 10;
+
+    // the src p2pNodeID, for message forward, encoded only when version > V0
+    std::string m_srcP2PNodeID;
+    // the dst p2pNodeID, for message forward, encoded only when version > V0
+    std::string m_dstP2PNodeID;
+
+    P2PMessageOptions m_options;  ///< options fields
+    bytes m_payload;              ///< payload data
+
+    // decodeOwned mode: the frame storage is owned here and the payload is a position-based
+    // (offset, size) view into it — positions stay valid across the default copy/move
+    // constructors (a copy deep-copies the vector and the offsets index the new buffer), so
+    // no custom special members are needed. m_payloadInFrame is false on the send path, on
+    // copy-decode, and for compressed frames (decompression materializes m_payload).
+    bytes m_ownedFrame;
+    uint32_t m_payloadOffsetInFrame = 0;
+    uint32_t m_payloadSizeInFrame = 0;
+    bool m_payloadInFrame = false;
+
+    std::any m_extAttr = nullptr;  ///< message additional attributes
+};
+
+}  // namespace bcos::gateway

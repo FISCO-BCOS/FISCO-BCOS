@@ -19,6 +19,7 @@
  * @date 2021-04-19
  */
 #pragma once
+#include <bcos-network/Endpoint.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/asio/ip/tcp.hpp>
@@ -28,6 +29,12 @@
 
 namespace bcos::gateway
 {
+// NodeIPEndpoint now lives in bcos-network (bcos-network/Endpoint.h) so the standalone
+// network library carries no bcos-framework dependency; re-exported here so existing
+// bcos::gateway::NodeIPEndpoint users (libp2p, tests) keep compiling unchanged. The
+// operator<< overload is found by ADL on the bcos::network type.
+using bcos::network::NodeIPEndpoint;
+
 constexpr static size_t HASH_NODEID_MAX_SIZE = 33;
 /// For RSA public key, the prefix length is 18 in hex, used for print log graciously
 constexpr static size_t RSA_PUBLIC_KEY_PREFIX = 18;
@@ -51,59 +58,6 @@ enum GatewayMessageType : uint16_t
     ForwardMessage = 0xd,
     All = 0xff
 };
-/**
- * @brief client end endpoint. Node will connect to NodeIPEndpoint.
- */
-struct NodeIPEndpoint
-{
-    using Ptr = std::shared_ptr<NodeIPEndpoint>;
-    NodeIPEndpoint() = default;
-    NodeIPEndpoint(NodeIPEndpoint&&) noexcept = default;
-    NodeIPEndpoint& operator=(const NodeIPEndpoint&) = default;
-    NodeIPEndpoint& operator=(NodeIPEndpoint&&) noexcept = default;
-    NodeIPEndpoint(std::string _host, uint16_t _port) : m_host(std::move(_host)), m_port(_port) {}
-    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
-    NodeIPEndpoint(const boost::asio::ip::address& _addr, uint16_t _port)
-      : m_host(_addr.to_string()), m_port(_port), m_ipv6(_addr.is_v6())
-    {}
-    NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint) : m_port(_endpoint.port())
-    {
-        m_host = _endpoint.address().to_string();
-        m_ipv6 = _endpoint.address().is_v6();
-    }
-
-    virtual ~NodeIPEndpoint() = default;
-
-    bool operator<(const NodeIPEndpoint& rhs) const
-    {
-        return m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port);
-    }
-    bool operator==(const NodeIPEndpoint& rhs) const
-    {
-        return (m_host + std::to_string(m_port) == rhs.m_host + std::to_string(rhs.m_port));
-    }
-    operator boost::asio::ip::tcp::endpoint() const
-    {
-        return {boost::asio::ip::make_address(m_host), m_port};
-    }
-
-    // Get the port associated with the endpoint.
-    uint16_t port() const { return m_port; };
-
-    // Get the IP address associated with the endpoint.
-    std::string address() const { return m_host; };
-    bool isIPv6() const { return m_ipv6; }
-
-    std::string m_host;
-    uint16_t m_port{};
-    bool m_ipv6 = false;
-};
-
-inline std::ostream& operator<<(std::ostream& _out, NodeIPEndpoint const& _endpoint)
-{
-    _out << _endpoint.address() << ":" << _endpoint.port();
-    return _out;
-}
 
 /// node info obtained from the certificate
 struct P2PInfo
