@@ -14,6 +14,8 @@
 #pragma once
 
 #include <ethereum-executor/EVMSupport.h>
+#include <ethereum-executor/EthExecutionPolicy.h>  // eth::applyRefundAndFloor
+#include <ethereum-executor/EthLogs.h>
 #include <ethereum-executor/EthereumHost.h>
 #include <ethereum-executor/EthereumState.h>
 #include <ethereum-executor/EthereumTransition.h>
@@ -305,25 +307,11 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
         auto execResult = host.call(message);
         receiptStatus = execResult.status_code;
 
-        auto gasUsed = dep.gasLimit - execResult.gas_left;
-        const auto maxRefundQuotient = rev >= EVMC_LONDON ? 5 : 2;
-        const auto refundLimit = gasUsed / maxRefundQuotient;
-        const auto refund = std::min(execResult.gas_refund, refundLimit);
-        gasUsed -= refund;
-        assert(gasUsed > 0);
-        // EIP-7623: The gas used by the transaction must be at least the min_gas_cost.
-        gasUsed = std::max(gasUsed, minGasCost);
+        auto gasUsed = eth::applyRefundAndFloor(
+            rev, minGasCost, dep.gasLimit, execResult.gas_left, execResult.gas_refund);
         receiptGasUsed = preRegolith ? preRegolithGasUsed : gasUsed;
 
-        for (auto const& l : host.take_logs())
-        {
-            bcos::bytes addr(l.addr.bytes, l.addr.bytes + sizeof(evmc_address));
-            bcos::h256s topics;
-            for (auto const& t : l.topics)
-                topics.emplace_back(bcos::bytesConstRef(t.bytes, sizeof(evmc_bytes32)));
-            bcos::bytes data(l.data.begin(), l.data.end());
-            logs.emplace_back(std::move(addr), std::move(topics), std::move(data));
-        }
+        logs = eth::takeBcosLogs(host);
         // The attributes deposit's own return data (normally empty: it CALLs L1Block with a
         // void return). Guard the null-pointer case: evmone sets output_data=nullptr /
         // output_size=0 for a void-return call; `nullptr + 0` is UB.

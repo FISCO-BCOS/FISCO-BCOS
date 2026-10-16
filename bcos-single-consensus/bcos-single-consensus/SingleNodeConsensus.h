@@ -8,15 +8,18 @@
 
 #pragma once
 
+#include "EngineVersions.h"
 #include "bcos-framework/engine/AnyEngineService.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <evmc/evmc.h>
 #include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -72,6 +75,9 @@ private:
     bool produceBlock();
     /// Resolve the current committed head (number + hash) from the ledger once at startup.
     void resolveInitialHead();
+    /// The chain's EVM revision for the block about to be produced (head + 1), read per tick
+    /// from the on-chain evmc_revision row — the same authority the EngineService keys on.
+    std::optional<evmc_revision> chainRevisionForNextBlock() const;
 
     bcos::engine::AnyEngineService& m_engineService;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
@@ -83,6 +89,18 @@ private:
     /// at startup instead of failing on the first block tick).
     bcos::Address m_feeRecipient;
     std::uint64_t m_fixedTimestamp;
+
+    /// Engine API method versions this CL speaks are derived per tick from the chain's
+    /// EVM revision (see chainRevisionForNextBlock), the way geth selects them from the
+    /// fork: forkchoiceUpdated V3 requires CANCUN+, V2 requires SHANGHAI+; a pre-Shanghai
+    /// chain only accepts V1 attributes (no withdrawals / parentBeaconBlockRoot). The
+    /// per-tick resolution keeps the dialect in step with governance updates to the
+    /// evmc_revision row and with block-height fork transitions (evm_revision_forks).
+    /// m_dialectLogged / m_loggedRevision rate-limit the INFO line recording the selected
+    /// dialect; the bool sentinel distinguishes "never logged" from "logged nullopt", so
+    /// the line also fires on chains with no on-chain revision row (revision = nullopt).
+    bool m_dialectLogged = false;
+    std::optional<evmc_revision> m_loggedRevision;
 
     /// CL-side head tracking. newPayload() persists the ledger block tables — including
     /// SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — via ledger::prewriteBlockToBuffer
