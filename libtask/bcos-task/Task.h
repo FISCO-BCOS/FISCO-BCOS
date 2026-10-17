@@ -147,6 +147,9 @@ struct GetResultAwaitable
         std::coroutine_handle<> handle;
         // Exactly-once claim: the completer that flips this false->true owns the completion.
         std::atomic<bool> completed{false};
+        // Why a settled wait delivered no value, when it was settled by cancellation rather than by
+        // complete(). Null on the value path, and on a wait that was never settled at all.
+        std::exception_ptr error;
     };
 
     explicit GetResultAwaitable(Result& result) : m_result(result) {}
@@ -171,8 +174,19 @@ struct GetResultAwaitable
         // the data inline.
         return false;
     }
-    std::tuple<Resp...> await_resume() noexcept
+    std::tuple<Resp...> await_resume()
     {
+        // A settled-without-value wait (OneShot::cancel) reports its reason here, so teardown is
+        // never mistaken for a real result. A wait that was never settled at all is a bug in the
+        // producer; report it the same way instead of returning default-constructed values.
+        if (m_result.error)
+        {
+            std::rethrow_exception(m_result.error);
+        }
+        if (!m_result.completed.load(std::memory_order_acquire))
+        {
+            BOOST_THROW_EXCEPTION(NoReturnValue{});
+        }
         return std::move(m_result.data);
     }
 

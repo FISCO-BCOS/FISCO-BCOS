@@ -22,16 +22,23 @@
 
 namespace bcos::task
 {
-
+// A value that is ALREADY THERE: await_ready() is always true, so `co_await` never suspends and the
+// awaiting frame is never left parked. This is the synchronous end of the library's awaitables —
+// the counterpart of task::OneShot, which delivers its values LATER (and may never deliver them at all).
+//
+// The name is load-bearing, not decorative: code in the tree asserts on this exact type to prove a
+// backend can be driven without ever blocking a worker thread (MPTPruner's "never suspends" check).
+// "Immediate" — not merely "awaitable", which every awaitable in this library already is — is the
+// property those traits and callers depend on.
 template <class Value>
-class [[nodiscard]] AwaitableValue
+class [[nodiscard]] Immediate
 {
 public:
-    AwaitableValue()
+    Immediate()
         requires std::default_initializable<Value>
     = default;
-    AwaitableValue(Value value) : m_value(std::move(value)) {}
-    AwaitableValue(std::in_place_t /*unused*/, auto&&... args)
+    Immediate(Value value) : m_value(std::move(value)) {}
+    Immediate(std::in_place_t /*unused*/, auto&&... args)
       : m_value(std::forward<decltype(args)>(args)...)
     {}
     constexpr static bool await_ready() noexcept { return true; }
@@ -47,9 +54,9 @@ private:
     Value m_value;
 };
 template <>
-struct [[nodiscard]] AwaitableValue<void>
+struct [[nodiscard]] Immediate<void>
 {
-    AwaitableValue() = default;
+    Immediate() = default;
     constexpr static bool await_ready() noexcept { return true; }
     constexpr static bool await_suspend([[maybe_unused]] std::coroutine_handle<> handle) noexcept
     {

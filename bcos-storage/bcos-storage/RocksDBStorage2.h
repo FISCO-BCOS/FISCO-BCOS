@@ -1,6 +1,6 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Immediate.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Exceptions.h"
@@ -172,7 +172,7 @@ public:
         co_return std::nullopt;
     }
 
-    task::AwaitableValue<void> writeSome(::ranges::input_range auto keyValues)
+    task::Immediate<void> writeSome(::ranges::input_range auto keyValues)
     {
         ::rocksdb::WriteBatch writeBatch;
         for (auto&& [key, value] : keyValues)
@@ -195,7 +195,7 @@ public:
         return {};
     }
 
-    task::AwaitableValue<void> writeOne(auto key, auto value)
+    task::Immediate<void> writeOne(auto key, auto value)
     {
         if constexpr (std::is_same_v<std::decay_t<decltype(value)>, storage2::DELETED_TYPE>)
         {
@@ -222,12 +222,12 @@ public:
         }
     }
 
-    task::AwaitableValue<void> removeOne(auto const& key, auto&&... /*args*/)
+    task::Immediate<void> removeOne(auto const& key, auto&&... /*args*/)
     {
         return removeSome(::ranges::single_view(key));
     }
 
-    task::AwaitableValue<void> removeSome(::ranges::input_range auto keys)
+    task::Immediate<void> removeSome(::ranges::input_range auto keys)
     {
         ::rocksdb::WriteBatch writeBatch;
 
@@ -340,7 +340,7 @@ public:
 
         auto next()
         {
-            task::AwaitableValue<std::optional<std::tuple<KeyType, StorageValueType<ValueType>>>>
+            task::Immediate<std::optional<std::tuple<KeyType, StorageValueType<ValueType>>>>
                 result;
             if (m_iterator->Valid())
             {
@@ -353,7 +353,7 @@ public:
         }
     };
 
-    static task::AwaitableValue<Iterator> rangeImpl(
+    static task::Immediate<Iterator> rangeImpl(
         RocksDBStorage2& storage, const ::rocksdb::Slice* startSlice = nullptr)
     {
         const auto* snapshot = storage.rocksDBRef().GetSnapshot();
@@ -371,9 +371,9 @@ public:
         return Iterator{snapshot, iterator, std::addressof(storage)};
     }
 
-    task::AwaitableValue<Iterator> range() { return rangeImpl(*this); }
+    task::Immediate<Iterator> range() { return rangeImpl(*this); }
 
-    task::AwaitableValue<Iterator> range(storage2::RANGE_SEEK_TYPE /*unused*/, auto&& startKey)
+    task::Immediate<Iterator> range(storage2::RANGE_SEEK_TYPE /*unused*/, auto&& startKey)
     {
         auto encodedKey = encodeToBuffer(m_keyResolver, startKey);
         ::rocksdb::Slice slice(::ranges::data(encodedKey), ::ranges::size(encodedKey));
