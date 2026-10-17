@@ -130,6 +130,7 @@ void PBFTImpl::asyncGetConsensusStatus(
     consensusStatus["changeCycle"] = (Json::UInt64)config->timer()->changeCycle();
     consensusStatus["view"] = (Json::UInt64)config->view();
     consensusStatus["connectedNodeList"] = (Json::UInt64)((config->connectedNodeList()).size());
+    consensusStatus["consensusTimeout"] = (Json::UInt64)config->consensusTimeout();
 
     // print the nodeIndex of all other nodes
     auto nodeList = config->consensusNodeList();

@@ -31,7 +31,7 @@ namespace bcos::engine
 /// block creates it and passes it to buildOp). The `miner_setMaxDASize` producer is the
 /// RPC's MinerEndpoint, gated per listener by its own enable_miner_api key; on an AIR
 /// deployment AirNodeInitializer publishes the same instance into NodeService. Only the
-/// Pro/Max (tars) setDaCaps bootstrap remains in the RPC follow-up (#5572).
+/// Pro (tars) setDaCaps bootstrap remains in the RPC follow-up (#5572).
 ///   maxTxSize    — drop sealed pool txs above this estimated DA size.
 ///   maxBlockSize — stop appending sealed txs once the cumulative estimate exceeds this.
 /// Zero means uncapped. Sizes use the Fjord FastLZ estimate over the EIP-2718 envelope.

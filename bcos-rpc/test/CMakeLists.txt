@@ -38,9 +38,12 @@ target_link_libraries(${TEST_BINARY_NAME} txpool mempool ledger rpc tool transac
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/rpc/RpcReadHandlersTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # FullChainFixture.h pulls RocksDB and testutils headers whose names collide with the
-# using-directives other unity-merged TUs carry; compile its user standalone.
+# using-directives other unity-merged TUs carry; compile its user standalone. Same for
+# DebugChallengerDataPlaneTest.cpp (it pulls bcos-ledger/mpt/* headers whose ConsensusNodeList
+# etc. collide with FakeTxPool.h in a unity merge).
 set_source_files_properties(
     "unittests/rpc/EthGetProofIntegrationTest.cpp" "unittests/rpc/FullChainFixtureInst.cpp"
+    "unittests/rpc/DebugChallengerDataPlaneTest.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

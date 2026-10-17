@@ -1,6 +1,5 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-from config.max_node_config_generator import MaxNodeConfigGenerator
 from config.node_config_generator import NodeConfigGenerator
 from common import utilities
 from service.tars_service import TarsService
@@ -8,27 +7,20 @@ from service.tars_service import TarsService
 
 class NodeController:
     """
-    the max node controller
+    the node controller
     """
 
     def __init__(self, config, node_type, output_dir):
         self.config = config
-        if node_type == "max":
-            self.node_generator = MaxNodeConfigGenerator(
-                self.config, node_type, output_dir)
-        else:
-            self.node_generator = NodeConfigGenerator(
-                self.config, node_type, output_dir)
+        self.node_generator = NodeConfigGenerator(
+            self.config, node_type, output_dir)
 
     def generate_all_config(self):
         return self.node_generator.generate_all_config(False)
 
-    def generate_all_executor_config(self):
-        return self.node_generator.generate_all_executor_config()
-
     def deploy_group_services(self):
         """
-        deploy max node for all group
+        deploy node for all group
         """
         for node in self.config.node_list.values():
             if self.__deploy_all_service(node) is False:
@@ -79,29 +71,11 @@ class NodeController:
             return False
         return True
 
-    def generate_all_executor_expand_config(self):
-        """
-        generate expand config
-        """
-        if self.node_generator.generate_all_executor_config() is False:
-            return False
-        return True
-
     def expand_and_deploy_all_nodes(self):
         """
         expand and deploy all nodes
         """
         if self.generate_all_expand_config() is False:
-            return False
-        if self.deploy_group_services() is False:
-            return False
-        return True
-
-    def expand_and_deploy_all_executors(self):
-        """
-        expand and deploy all executor
-        """
-        if self.generate_all_executor_expand_config() is False:
             return False
         if self.deploy_group_services() is False:
             return False
@@ -190,18 +164,6 @@ class NodeController:
             deploy_ip, node_service_config.config_file_list, node_service_config.service_name, config_path_list)
         if ret is False:
             return False
-        # add ini configuration
-        if self.node_generator.node_type == "max" and node_service_config.need_add_ini_config is True:
-            ini_config_path = self.node_generator.get_ini_config_file_path(
-                node_service_config, node_config, deploy_ip)
-            ini_config_file_list = []
-            ini_config_file_list.append(node_service_config.ini_config_file)
-            ini_config_path_list = []
-            ini_config_path_list.append(ini_config_path)
-            ret = tars_service_obj.add_config_list(
-                ini_config_file_list, node_service_config.service_name, deploy_ip, ini_config_path_list, True)
-            if ret is False:
-                return False
         # patch tars
         (ret, server_id) = tars_service_obj.get_server_id(
             node_service_config.service_name, deploy_ip)
