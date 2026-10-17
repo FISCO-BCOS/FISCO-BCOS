@@ -238,6 +238,9 @@ BOOST_AUTO_TEST_CASE(feature)
         // bugfix_internal_create_seq = 66: two creates through one ExecutiveWrapper get
         // distinct addresses; off = historical snapshot semantics.
         "bugfix_internal_create_seq",
+        // bugfix_precompiled_node_fault_rethrow = 67: node faults rethrow to the FIB arm
+        // instead of a PrecompiledError REVERT; off = the pre-existing receipt.
+        "bugfix_precompiled_node_fault_rethrow",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());
@@ -711,6 +714,7 @@ BOOST_AUTO_TEST_CASE(newestVersionSetActivatesDmcCreateAddressRule)
     BOOST_CHECK_EQUAL(
         features.get(Features::Flag::bugfix_v2_status_mapper_ordinary_failures), true);
     BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_internal_create_seq), true);
+    BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_precompiled_node_fault_rethrow), true);
 
     Features older;
     older.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);

@@ -206,13 +206,20 @@ public:
                                                     // instead of colliding on f(seq+1). Off: the
                                                     // historical snapshot semantics, so blocks
                                                     // replay byte-identically.
+        bugfix_precompiled_node_fault_rethrow = 67, // bcos precompiled dispatch: a bcos::Error
+                                                    // (node/infra fault: storage I/O, row decode)
+                                                    // rethrows to executeCall()'s FIB-88/92 arm
+                                                    // instead of being sealed as a
+                                                    // PrecompiledError REVERT receipt. Off: the
+                                                    // pre-existing REVERT receipt is kept, so
+                                                    // historical blocks replay byte-identically.
     };
 
     // feature_flags bit = enum value. Pin the newest flag so a value beyond
     // magic_enum's default reflection range [-128,127] is caught at compile time.
     // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
     // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
-    static_assert(magic_enum::enum_contains(Flag::bugfix_internal_create_seq),
+    static_assert(magic_enum::enum_contains(Flag::bugfix_precompiled_node_fault_rethrow),
         "newest Flag fell outside magic_enum's reflection range — check enum values");
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,

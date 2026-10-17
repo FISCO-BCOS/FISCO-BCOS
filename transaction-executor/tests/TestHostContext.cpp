@@ -1803,10 +1803,21 @@ BOOST_AUTO_TEST_CASE(bcosPrecompiledNodeFaultRethrowsWhileLogicErrorReverts)
         return m;
     }();
 
+    // Gate OFF (bit 67 clear, the historical default): the node fault is sealed as the
+    // pre-existing PrecompiledError REVERT receipt, byte-identical to old blocks.
     auto nodeFault = std::make_shared<StubPrecompiled>(hashImpl, /*nodeFault=*/true);
+    ledger::Features offFeatures{};  // every bit clear: the historical dispatch
+    auto historical = bcos::executor_v1::callBcosPrecompiled(nodeFault, storage, blockHeader,
+        message, {}, caller, *precompiledManager, /*contextID=*/1, /*seq=*/1, false, offFeatures);
+    BOOST_CHECK_EQUAL(historical.status_code, EVMC_REVERT);
+    BOOST_CHECK_EQUAL(historical.status, bcos::protocol::TransactionStatus::PrecompiledError);
+
+    // Gate ON: rethrow to the ladder.
+    auto onFeatures = features;
+    onFeatures.set(ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow);
     BOOST_CHECK_EXCEPTION(
         bcos::executor_v1::callBcosPrecompiled(nodeFault, storage, blockHeader, message, {},
-            caller, *precompiledManager, /*contextID=*/1, /*seq=*/1, false, features),
+            caller, *precompiledManager, /*contextID=*/1, /*seq=*/1, false, onFeatures),
         bcos::Error,
         [](auto const& e) { return std::string(e.errorMessage()).find("F7 pin") != std::string::npos; });
 
