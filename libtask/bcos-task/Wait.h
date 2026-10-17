@@ -38,6 +38,19 @@ constexpr inline struct Wait
     }
 } wait{};
 
+// NOTE (measured 2026-10, do not "optimize" this away): wait()'s AsyncTask wrapper is NOT
+// redundant overhead — it is the LIFETIME OWNER of the detached task.
+//
+// A coroutine frame cannot destroy itself at final_suspend, so a fire-and-forget task needs an owner
+// that outlives its suspension points. executeTask IS that owner: it is the frame that keeps the
+// task alive while it is parked and destroys it when the body completes. Starting the Task directly
+// and dropping the handle (a tempting `task::detach`) frees the frame at the FIRST suspension point
+// instead. Measured, with a payload moved into a parked task's frame:
+//     task::wait(task)  -> use_count 2 after launch (frame alive, payload owned)
+//     task.start()      -> use_count 1 after launch (frame freed, payload destroyed)
+// The second form then resumes into freed memory as soon as a completion fires the parked
+// operation — which is exactly what it did to FIB184_SessionAsyncLifetimeTest. Keep using wait().
+
 constexpr inline struct SyncWait
 {
     template <IsAwaitable Task>

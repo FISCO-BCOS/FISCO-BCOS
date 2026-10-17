@@ -21,7 +21,7 @@
 #pragma once
 
 #include "Storage.h"
-#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Immediate.h"
 #include "bcos-utilities/Overloaded.h"
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/rw_mutex.h>
@@ -370,7 +370,7 @@ public:
             .has_value();
     }
 
-    task::AwaitableValue<void> writeOne(auto key, auto value)
+    task::Immediate<void> writeOne(auto key, auto value)
     {
         auto& bucket = getBucket(key);
         Lock lock(bucket.mutex, true);
@@ -378,14 +378,14 @@ public:
         return {};
     }
 
-    task::AwaitableValue<bool> insertIfAbsent(auto key, auto value)
+    task::Immediate<bool> insertIfAbsent(auto key, auto value)
     {
         auto& bucket = getBucket(key);
         Lock lock(bucket.mutex, true);
         return {writeOne(bucket, std::move(key), std::move(value), false, /*insertOnly=*/true)};
     }
 
-    task::AwaitableValue<bool> writeOneIf(
+    task::Immediate<bool> writeOneIf(
         auto key, auto value, std::predicate<Value const&> auto predicate)
     {
         auto& bucket = getBucket(key);
@@ -423,7 +423,7 @@ public:
         co_return;
     }
 
-    task::AwaitableValue<void> removeOne(auto key)
+    task::Immediate<void> removeOne(auto key)
     {
         removeSome(::ranges::views::single(std::move(key)), false);
         return {};
@@ -433,7 +433,7 @@ public:
     // only if predicate(existing) is true. The read, predicate evaluation and remove all
     // happen under the same bucket-level writer lock, so a concurrent writer cannot publish
     // a fresher value between the read and the remove.
-    task::AwaitableValue<bool> removeOneIf(auto key, std::predicate<Value const&> auto predicate)
+    task::Immediate<bool> removeOneIf(auto key, std::predicate<Value const&> auto predicate)
     {
         auto& bucket = getBucket(key);
         [[maybe_unused]] Lock lock(bucket.mutex, true);
@@ -461,7 +461,7 @@ public:
         return {true};
     }
 
-    task::AwaitableValue<void> removeOne(auto key, auto... tags)
+    task::Immediate<void> removeOne(auto key, auto... tags)
     {
         constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         removeSome(::ranges::views::single(std::move(key)), physical);
@@ -481,7 +481,7 @@ public:
         co_return;
     }
 
-    task::AwaitableValue<void> merge(MemoryStorage& fromStorage)
+    task::Immediate<void> merge(MemoryStorage& fromStorage)
         requires(!std::is_const_v<decltype(fromStorage)>)
     {
         for (auto&& [bucket, fromBucket] : ::ranges::views::zip(m_buckets, fromStorage.m_buckets))
@@ -540,7 +540,7 @@ public:
                 auto const& data = *m_begin;
                 result.emplace(std::make_tuple(std::cref(data.key), std::cref(data.value)));
                 ++m_begin;
-                return task::AwaitableValue(std::move(result));
+                return task::Immediate(std::move(result));
             }
 
             if (m_bucketIndex + 1 < m_buckets.get().size())
@@ -549,7 +549,7 @@ public:
                 updateIterator();
                 return next();
             }
-            return task::AwaitableValue(std::move(result));
+            return task::Immediate(std::move(result));
         }
 
         auto seek(const auto& key)
@@ -562,7 +562,7 @@ public:
         }
     };
 
-    auto range() { return task::AwaitableValue(Iterator(m_buckets)); }
+    auto range() { return task::Immediate(Iterator(m_buckets)); }
 
     auto range(RANGE_SEEK_TYPE /*unused*/, const auto& key)
         // TODO: need !withConcurrent, fix benchmarkScheduler
@@ -571,7 +571,7 @@ public:
     {
         auto iterator = Iterator(m_buckets);
         iterator.seek(key);
-        return task::AwaitableValue(std::move(iterator));
+        return task::Immediate(std::move(iterator));
     }
 
     void mergeConcurrent(MemoryStorage& toStorage)
@@ -634,7 +634,7 @@ public:
 
     template <class... FromStorages>
         requires(withConcurrent && (... && (!FromStorages::withConcurrent)))
-    task::AwaitableValue<void> merge(FromStorages&... fromStorage)
+    task::Immediate<void> merge(FromStorages&... fromStorage)
     {
         mergeConcurrent(*this, fromStorage...);
         return {};

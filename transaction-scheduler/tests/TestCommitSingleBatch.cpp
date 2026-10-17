@@ -66,7 +66,7 @@
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
-#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Immediate.h"
 #include "bcos-transaction-scheduler/BaselineScheduler-tpp.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
@@ -108,7 +108,7 @@ struct SBCountingBackend
     std::vector<std::vector<StateKey>> m_mergedKeySets;  // one key list per merge call
 
     template <class... FromStorages>
-    task::AwaitableValue<void> merge(FromStorages&... fromStorages)
+    task::Immediate<void> merge(FromStorages&... fromStorages)
     {
         std::vector<StateKey> keys;
         (collectKeys(fromStorages, keys), ...);
@@ -220,7 +220,7 @@ struct SBExecutor
 /// The Features the getLedgerConfig stub hands to every execute — set per test.
 ledger::Features g_sbFeatures{};
 
-[[maybe_unused]] task::AwaitableValue<void> tag_invoke(
+[[maybe_unused]] task::Immediate<void> tag_invoke(
     ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/,
     SBMultiLayerStorage::ViewType& /*storage*/, bcos::ledger::LedgerConfig& ledgerConfig,
     protocol::BlockNumber /*blockNumber*/, protocol::BlockFactory& /*blockFactory*/)
