@@ -249,8 +249,11 @@ BOOST_AUTO_TEST_CASE(RewardPercentilesGasWeighted)
     BOOST_CHECK(rpc::rewardPercentiles(samples, percentiles, 0) == std::vector<u256>(6, 0));
 }
 
-// op-geth CalcBaseFee, hand-computed with parent gasLimit 30M and baseFee 1 gwei.
-BOOST_AUTO_TEST_CASE(NextOpBaseFeeByParentShape)
+// op-geth CalcBaseFee, hand-computed with parent gasLimit 30M and baseFee 1 gwei. The
+// pre-Holocene arm's Canyon decision comes from the fork schedule at the expected child
+// time (review F2), so the fixtures name schedules — the parent's header shape does not
+// decide it.
+BOOST_AUTO_TEST_CASE(NextOpBaseFeeChildForkScheduleKeysCanyon)
 {
     auto parent = [&](bytes extra, u256 gasUsed, bool withdrawals) {
         auto h = m_blockFactory->blockHeaderFactory()->createBlockHeader();
@@ -265,25 +268,65 @@ BOOST_AUTO_TEST_CASE(NextOpBaseFeeByParentShape)
         }
         return h;
     };
+    // Canyon active at the expected child time. The isthmus rung is explicit on purpose:
+    // an UNSET isthmus takes resolveOpFork's Isthmus-baseline fallback and reads Canyon
+    // everywhere, which would hide the pre-Canyon cell below.
+    bcos::ledger::OpForkSchedule canyonActive;
+    canyonActive.m_canyonTime = 0;
+    canyonActive.m_isthmusTime = 4'000'000'000;
+    bcos::ledger::OpForkSchedule preCanyon;
+    preCanyon.m_canyonTime = 4'000'000'000;
+    preCanyon.m_isthmusTime = 4'000'000'000;
+    std::uint64_t const childTs = 1'000;
     bytes const holocene{0x00, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};  // 250 / 6
     // target 5M, used 10M: + 1e9 * 5M / 5M / 250 = +4,000,000
-    BOOST_CHECK_EQUAL(
-        rpc::nextOpBaseFee(*parent(holocene, 10'000'000, true), std::nullopt), 1'004'000'000);
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(
+                          *parent(holocene, 10'000'000, true), std::nullopt, canyonActive, childTs),
+        1'004'000'000);
     // Holocene params come from extraData: 8 / 2, target 15M, used 30M: + 1e9 / 8
     bytes const eightTwo{0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x02};
-    BOOST_CHECK_EQUAL(
-        rpc::nextOpBaseFee(*parent(eightTwo, 30'000'000, true), std::nullopt), 1'125'000'000);
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(
+                          *parent(eightTwo, 30'000'000, true), std::nullopt, canyonActive, childTs),
+        1'125'000'000);
     // Jovian (17 bytes, 0x01): empty block lowers the fee to 996e6, the 2 gwei floor wins.
     bytes jovian{0x01, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};
     auto const floor = bytes{0x00, 0x00, 0x00, 0x00, 0x77, 0x35, 0x94, 0x00};  // 2e9
     jovian.insert(jovian.end(), floor.begin(), floor.end());
-    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*parent(jovian, 0, true), std::nullopt), 2'000'000'000);
-    // Pre-Holocene, Canyon child (parent has withdrawalsRoot): 250 / 6, same as the first case.
     BOOST_CHECK_EQUAL(
-        rpc::nextOpBaseFee(*parent({}, 10'000'000, true), std::nullopt), 1'004'000'000);
-    // Pre-Canyon: denominator 50: + 1e9 * 5M / 5M / 50 = +20,000,000
+        rpc::nextOpBaseFee(*parent(jovian, 0, true), std::nullopt, canyonActive, childTs),
+        2'000'000'000);
+    // Pre-Holocene parent, Canyon child per the schedule: 250 / 6, same as the first case.
     BOOST_CHECK_EQUAL(
-        rpc::nextOpBaseFee(*parent({}, 10'000'000, false), std::nullopt), 1'020'000'000);
+        rpc::nextOpBaseFee(*parent({}, 10'000'000, true), std::nullopt, canyonActive, childTs),
+        1'004'000'000);
+    // Pre-Canyon child per the schedule: denominator 50: + 1e9 * 5M / 5M / 50 = +20,000,000
+    BOOST_CHECK_EQUAL(
+        rpc::nextOpBaseFee(*parent({}, 10'000'000, false), std::nullopt, preCanyon, childTs),
+        1'020'000'000);
+}
+
+// Review F2's pinned behaviour: the Canyon ACTIVATION block prices with the Canyon
+// denominator even though its parent is pre-Canyon (no withdrawalsRoot) — the child's
+// fork comes from the schedule, not the parent's header shape. The rung sits between the
+// two named child times, so both sides of it are pinned (the shape proxy read the
+// activation block as pre-Canyon and answered 1,020,000,000 here).
+BOOST_AUTO_TEST_CASE(NextOpBaseFeeCanyonActivationBlockUsesCanyonDenominator)
+{
+    auto h = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    h->setGasLimit(30'000'000);
+    h->setGasUsed(10'000'000);
+    h->setBaseFee(1'000'000'000);
+    h->setBlobGasUsed(0);
+    // No withdrawalsRoot: the pre-Canyon parent shape the old proxy keyed on.
+    bcos::ledger::OpForkSchedule crossing;
+    crossing.m_canyonTime = 1'000;
+    crossing.m_isthmusTime = 4'000'000'000;
+    // Child AT the rung: Canyon active -> denominator 250.
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*h, std::nullopt, crossing, /*expectedChildTsSec=*/1'000),
+        1'004'000'000);
+    // Child BEFORE the rung: pre-Canyon -> denominator 50.
+    BOOST_CHECK_EQUAL(
+        rpc::nextOpBaseFee(*h, std::nullopt, crossing, /*expectedChildTsSec=*/999), 1'020'000'000);
 }
 
 // The declared-triple substitution: a chain that declares [op_eip1559] prices the
@@ -296,14 +339,19 @@ BOOST_AUTO_TEST_CASE(NextOpBaseFeeDeclaredTripleSubstitutesThePreset)
     h->setGasUsed(10'000'000);
     h->setBaseFee(1'000'000'000);
     h->setBlobGasUsed(0);
-    h->setWithdrawalsRoot(h256(1U));  // Canyon+ child: the Canyon denominator applies
+    bcos::ledger::OpForkSchedule canyonActive;
+    canyonActive.m_canyonTime = 0;
+    canyonActive.m_isthmusTime = 4'000'000'000;
     auto const declared = bcos::engine::OpEip1559Params{
         .elasticity = 8, .denominator = 100, .denominatorCanyon = 400};
     // Preset (250/6): +4,000,000 → 1,004,000,000. Declared (400/8):
     // 1e9 * (10M − 30M/8) / (30M/8) / 400 = +4,166,666 → 1,004,166,666 — the two are
     // distinguishable, and the declared one must win.
-    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*h, std::nullopt), 1'004'000'000);
-    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*h, declared), 1'004'166'666);
+    BOOST_CHECK_EQUAL(
+        rpc::nextOpBaseFee(*h, std::nullopt, canyonActive, /*expectedChildTsSec=*/1'000),
+        1'004'000'000);
+    BOOST_CHECK_EQUAL(rpc::nextOpBaseFee(*h, declared, canyonActive, /*expectedChildTsSec=*/1'000),
+        1'004'166'666);
 }
 
 BOOST_AUTO_TEST_CASE(FeeHistoryShape)
@@ -319,9 +367,14 @@ BOOST_AUTO_TEST_CASE(FeeHistoryShape)
     BOOST_REQUIRE_EQUAL(fees.size(), 4U);
     BOOST_CHECK_EQUAL(fees[0].asString(), "0x3e8");
     BOOST_CHECK_EQUAL(fees[2].asString(), "0x4b0");
-    // 1200 + 1200 * 5M / 5M / 250 = 1204
+    // 1200 + 1200 * 5M / 5M / 250 = 1204. The trailing cell is the child-keyed
+    // prediction; the fixture's fake ledger holds no schedule row, so the handler
+    // resolves the OP lane's Isthmus baseline (Canyon active) — same as the default
+    // schedule named here — and the zero-timestamp walk falls back to the +1s child
+    // estimate (unixSecondsFromInternalMillis(0 + 1000) = 1).
     BOOST_CHECK_EQUAL(
-        fees[3].asString(), toQuantity(rpc::nextOpBaseFee(*header(19), std::nullopt)));
+        fees[3].asString(), toQuantity(rpc::nextOpBaseFee(*header(19), std::nullopt,
+                                bcos::ledger::OpForkSchedule{}, /*expectedChildTsSec=*/1)));
     BOOST_CHECK_EQUAL(fees[3].asString(), "0x4b4");
     BOOST_REQUIRE_EQUAL(result["gasUsedRatio"].size(), 3U);
     BOOST_CHECK_CLOSE(result["gasUsedRatio"][0].asDouble(), 0.5, 1e-9);
