@@ -222,6 +222,12 @@ BOOST_AUTO_TEST_CASE(feature)
         "reserved_removed_op_jovian",
         // bugfix_eip161_1052_account_semantics = 61 (#5371/#5372), next unused value.
         "bugfix_eip161_1052_account_semantics",
+        // bugfix_nested_create_creator_nonce = 62: v2 nested-CREATE
+        // creator-nonce bump, opt-in so existing chains keep the historical gate.
+        "bugfix_nested_create_creator_nonce",
+        // bugfix_evm_pairing_canonical_g2 = 63: v1 lane's alt_bn128 pairing
+        // G2-canonicity verdict, opt-in so existing chains keep the 0.21 wrap.
+        "bugfix_evm_pairing_canonical_g2",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());
@@ -239,6 +245,10 @@ BOOST_AUTO_TEST_CASE(feature)
 BOOST_AUTO_TEST_CASE(retiredOpJovianBitIsReservedNotReusable)
 {
     BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::reserved_removed_op_jovian), 60);
+    // Same pin for the newly added consensus bit: the enum value IS the on-chain
+    // feature_flags bit position.
+    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::bugfix_nested_create_creator_nonce), 62);
+    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::bugfix_evm_pairing_canonical_g2), 63);
     BOOST_CHECK(!Features::contains("feature_op_jovian"));
     BOOST_CHECK_THROW(Features::string2Flag("feature_op_jovian"), std::exception);
 

@@ -57,7 +57,9 @@ std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) n
 std::string newLegacyEVMAddressString(bytesConstRef sender, std::string const& nonce) noexcept;
 
 // EIP-1014
-std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl,
+std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::string_view& _sender,
+    bytesConstRef _init, u256 const& _salt);
+std::string newCreate2EVMAddress(bcos::crypto::Hash const& _hashImpl,
     const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
 
 }  // namespace bcos

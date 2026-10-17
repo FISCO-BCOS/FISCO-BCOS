@@ -40,6 +40,8 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
+#include "vm/EVMHostInterface.h"
+#include "vm/HostContext.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -499,7 +501,19 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result2->newEVMContractAddress(), "");
     BOOST_CHECK_EQUAL(result2->origin(), std::string(sender));
     BOOST_CHECK_EQUAL(result2->from(), std::string(address));
-    BOOST_CHECK(result2->to().empty());
+    // evmc ABI 19: the created address arrives in `to` and must survive the scheduler hop
+    // (the resume path stores at the address the CREATE pushed). THIS FIXTURE ENABLES
+    // feature_evm_address (SYS_CONFIG row set to "1" above), so the create_address_fn
+    // hook's EIP branch derives it — newLegacyEVMAddress(creator, creatorNonce) =
+    // keccak(rlp(creator, nonce))[12:], the same value evmone's own derivation produces.
+    // Contract A (ff6f3085…) holds nonce 0 here (no nonce-initialization feature is
+    // active), so the address is pinned both literally and through the formula: a size
+    // check would pass for any 40-character address and hide a changed derivation. Was
+    // `to().empty()` under 0.21's deferred address assignment.
+    const auto expectedCreateA = std::string("0ad0adfd2d72408f1f46ff96a7e9bdd7c5072abb");
+    BOOST_CHECK_EQUAL(result2->to(), expectedCreateA);
+    BOOST_CHECK_EQUAL(result2->to(),
+        bcos::newLegacyEVMAddressString(bytesConstRef(addressCreate.data(), 20), u256(0)));
     BOOST_CHECK_LT(result2->gasAvailable(), gas);
     BOOST_CHECK_EQUAL(result2->keyLocks().size(), 2);  // code,codeHash
     BOOST_CHECK_EQUAL(result2->keyLocks()[0], "code");
@@ -513,10 +527,18 @@ BOOST_AUTO_TEST_CASE(externalCall)
     // Clear the key lock to avoid effect
     result2->setKeyLocks({});
 
-    h256 addressCreate2(
-        "ee6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");  // ee6f30856ad3bae00b1169808488502786a13e3c
-    std::string addressString2 = addressCreate2.hex().substr(0, 40);
-    result2->setTo(addressString2);
+    // This line re-reads result2->to() — create #1's address, carried into the next
+    // scheduler hop, where the DMC replay re-derives the CREATE. TransactionExecutive's
+    // bump predicates (origin != sender && create && !internalCreate, or under
+    // feature_evm_address the create predicate alone) DO match this fixture's shape, but
+    // the bump runs inside the executive AFTER externalCall derived the address from the
+    // pre-bump nonce row, and DMC hops re-derive from the same base view — so the two
+    // hops keep ONE address despite the bump, not because no bump happened. The invariant
+    // is pinned below: hop 2's FINISHED result must report the created contract at the
+    // SAME address (result3->newEVMContractAddress() == addressString2) — a hop-visible
+    // bump between the derivations would split them.
+    std::string addressString2{result2->to()};
+    BOOST_CHECK_EQUAL(addressString2, expectedCreateA);
 
     std::promise<ExecutionMessage::UniquePtr> executePromise3;
     executor->dmcExecuteTransaction(std::move(result2),
@@ -719,6 +741,850 @@ BOOST_AUTO_TEST_CASE(externalCall)
         BOOST_CHECK(nonceEntry);
         BOOST_CHECK_EQUAL(nonceEntry->get(), "1");
     }
+}
+
+// [host-fault regression — mechanical clone of the externalCall flow with a storage
+// fault armed on the sub-call create nonce read]
+BOOST_AUTO_TEST_CASE(storageFaultDuringSubcallFailsWholeFrame)
+{
+    // Solidity source code from test_external_call.sol, using remix
+    // 0.6.10+commit.00c0fcaf
+
+    ledger::SystemConfigEntry se = {"1", 0};
+    storage::Entry entry;
+    entry.set(bcos::storage::serialize::encode(se));
+    backend->setRow(ledger::SYS_CONFIG, "feature_evm_address", entry);
+    std::string ABin =
+        "608060405234801561001057600080fd5b5061037f806100206000396000f3fe60806040523480156100105760"
+        "0080fd5b506004361061002b5760003560e01c80635b975a7314610030575b600080fd5b61005c600480360360"
+        "2081101561004657600080fd5b8101908080359060200190929190505050610072565b60405180828152602001"
+        "91505060405180910390f35b600081604051610081906101c7565b808281526020019150506040518091039060"
+        "00f0801580156100a7573d6000803e3d6000fd5b506000806101000a81548173ffffffffffffffffffffffffff"
+        "ffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055507fd8e189e965"
+        "f1ff506594c5c65110ea4132cee975b58710da78ea19bc094414ae826040518082815260200191505060405180"
+        "910390a16000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffff"
+        "ffffffffffffffffffffffffffff16633fa4f2456040518163ffffffff1660e01b815260040160206040518083"
+        "038186803b15801561018557600080fd5b505afa158015610199573d6000803e3d6000fd5b505050506040513d"
+        "60208110156101af57600080fd5b81019080805190602001909291905050509050919050565b610175806101d5"
+        "8339019056fe608060405234801561001057600080fd5b50604051610175380380610175833981810160405260"
+        "2081101561003357600080fd5b8101908080519060200190929190505050806000819055507fdc509bfccbee28"
+        "6f248e0904323788ad0c0e04e04de65c04b482b056acb1a0658160405180828152602001915050604051809103"
+        "90a15060e4806100916000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e0"
+        "1c80633fa4f245146037578063a16fe09b146053575b600080fd5b603d605b565b604051808281526020019150"
+        "5060405180910390f35b60596064565b005b60008054905090565b6000808154600101919050819055507f052f"
+        "6b9dfac9e4e1257cb5b806b7673421c54730f663c8ab02561743bb23622d600054604051808281526020019150"
+        "5060405180910390a156fea264697066735822122006eea3bbe24f3d859a9cb90efc318f26898aeb4dffb31cac"
+        "e105776a6c272f8464736f6c634300060a0033a2646970667358221220b441da8ba792a40e444d0ed767a4417e"
+        "944c55578d1c8d0ca4ad4ec050e05a9364736f6c634300060a0033";
+
+    std::string BBin =
+        "608060405234801561001057600080fd5b50604051610175380380610175833981810160405260208110156100"
+        "3357600080fd5b8101908080519060200190929190505050806000819055507fdc509bfccbee286f248e090432"
+        "3788ad0c0e04e04de65c04b482b056acb1a065816040518082815260200191505060405180910390a15060e480"
+        "6100916000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80633fa4f2"
+        "45146037578063a16fe09b146053575b600080fd5b603d605b565b604051808281526020019150506040518091"
+        "0390f35b60596064565b005b60008054905090565b6000808154600101919050819055507f052f6b9dfac9e4e1"
+        "257cb5b806b7673421c54730f663c8ab02561743bb23622d600054604051808281526020019150506040518091"
+        "0390a156fea264697066735822122006eea3bbe24f3d859a9cb90efc318f26898aeb4dffb31cace105776a6c27"
+        "2f8464736f6c634300060a0033";
+
+    bytes input;
+    boost::algorithm::unhex(ABin, std::back_inserter(input));
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+
+    // The contract address
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    std::string addressString = addressCreate.hex().substr(0, 40);
+    params->setTo(std::move(addressString));
+
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    blockHeader->setNumber(1);
+
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------------
+    // Create contract A
+    // --------------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+
+    auto result = executePromise.get_future().get();
+
+    auto address = result->newEVMContractAddress();
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+    BOOST_CHECK_GT(address.size(), 0);
+    BOOST_CHECK(result->keyLocks().empty());
+
+    // [host-fault regression] Arm a storage fault on parent A's nonce row (feature_evm_address
+    // is on in this fixture, so the sub-call CREATE reads it inside the host callback
+    // window). StorageWrapper::getRowInternal converts the Error response into a
+    // thrown bcos::Error — the real storage-fault shape.
+    backend->armRowFault(std::string("/apps/") + std::string(address), "nonce");
+
+    // --------------------------------
+    // Call A createAndCallB(int256)
+    // --------------------------------
+    auto params2 = std::make_unique<NativeExecutionMessage>();
+    params2->setContextID(101);
+    params2->setSeq(1001);
+    params2->setDepth(0);
+    params2->setFrom(std::string(sender));
+    params2->setTo(std::string(address));
+    params2->setOrigin(std::string(sender));
+    params2->setStaticCall(false);
+    params2->setGasAvailable(gas);
+    params2->setCreate(false);
+
+    bcos::u256 value(1000);
+    params2->setData(codec->encodeWithSig("createAndCallB(int256)", value));
+    params2->setType(NativeExecutionMessage::MESSAGE);
+
+    std::promise<ExecutionMessage::UniquePtr> executePromise2;
+    executor->dmcExecuteTransaction(std::move(params2),
+        [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise2.set_value(std::move(result));
+        });
+    auto result2 = executePromise2.get_future().get();
+
+    BOOST_CHECK(result2);
+    // [host-fault regression pin] the whole frame must FAIL here — never a crash, never
+    // a success whose emitted events died with the unwound request.
+    BOOST_TEST_MESSAGE("faulted hop: status=" << result2->status() << " type=" << result2->type()
+                                              << " message=" << result2->message());
+    BOOST_CHECK_NE(result2->status(), 0);
+    // Discriminator: the ladder's bcos::Error arm stamps the original storage fault's
+    // message (the storage wrapper's text), so it can only appear here if the recorded
+    // fault reached that arm. A catch-and-answer variant never fails this frame: the
+    // parent continues, status stays 0 above, and the message comes back empty.
+    BOOST_CHECK(result2->message().find("Get row from storage failed!") != std::string::npos);
+    backend->disarmRowFault();
+    if (result2->type() != ExecutionMessage::MESSAGE)
+    {
+        // The frame already failed at this hop (the fix). Run the survival probe:
+        // disarm and deploy a fresh contract on the same executor.
+        auto sTx = fakeTransaction(
+            cryptoSuite, keyPair, "", bytes(input), std::to_string(999), 100009, "1", "1");
+        auto sHash = sTx->hash();
+        txpool->hash2Transaction.emplace(sHash, sTx);
+        auto sParams = std::make_unique<NativeExecutionMessage>();
+        sParams->setContextID(210);
+        sParams->setSeq(9000);
+        sParams->setDepth(0);
+        sParams->setOrigin(std::string(sender));
+        sParams->setFrom(std::string(sender));
+        h256 sAddr("aa6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd5131099ff");
+        sParams->setTo(sAddr.hex().substr(0, 40));
+        sParams->setStaticCall(false);
+        sParams->setGasAvailable(gas);
+        sParams->setData(input);
+        sParams->setType(NativeExecutionMessage::TXHASH);
+        sParams->setTransactionHash(sHash);
+        sParams->setCreate(true);
+        std::promise<ExecutionMessage::UniquePtr> sPromise;
+        executor->dmcExecuteTransaction(std::move(sParams),
+            [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& sResult) {
+                BOOST_CHECK(!error);
+                sPromise.set_value(std::move(sResult));
+            });
+        auto sResult = sPromise.get_future().get();
+        BOOST_TEST_MESSAGE(
+            "survival hop: status=" << sResult->status() << " type=" << sResult->type());
+        BOOST_CHECK_EQUAL(sResult->status(), 0);
+        return;
+    }
+    BOOST_CHECK_EQUAL(result2->type(), ExecutionMessage::MESSAGE);
+    BOOST_CHECK(result2->data().size() > 0);
+    BOOST_CHECK_EQUAL(result2->contextID(), 101);
+    BOOST_CHECK_EQUAL(result2->seq(), 1001);
+    BOOST_CHECK_EQUAL(result2->create(), true);
+    BOOST_CHECK_EQUAL(result2->newEVMContractAddress(), "");
+    BOOST_CHECK_EQUAL(result2->origin(), std::string(sender));
+    BOOST_CHECK_EQUAL(result2->from(), std::string(address));
+    // evmc ABI 19: the created address arrives in `to` and must survive the scheduler hop
+    // (the resume path stores at the address the CREATE pushed). THIS FIXTURE ENABLES
+    // feature_evm_address (SYS_CONFIG row set to "1" above), so the create_address_fn
+    // hook's EIP branch derives it — newLegacyEVMAddress(creator, creatorNonce) =
+    // keccak(rlp(creator, nonce))[12:], the same value evmone's own derivation produces.
+    // Contract A (ff6f3085…) holds nonce 0 here (no nonce-initialization feature is
+    // active), so the address is pinned both literally and through the formula: a size
+    // check would pass for any 40-character address and hide a changed derivation. Was
+    // `to().empty()` under 0.21's deferred address assignment.
+    const auto expectedCreateA = std::string("0ad0adfd2d72408f1f46ff96a7e9bdd7c5072abb");
+    BOOST_CHECK_EQUAL(result2->to(), expectedCreateA);
+    BOOST_CHECK_EQUAL(result2->to(),
+        bcos::newLegacyEVMAddressString(bytesConstRef(addressCreate.data(), 20), u256(0)));
+    BOOST_CHECK_LT(result2->gasAvailable(), gas);
+    BOOST_CHECK_EQUAL(result2->keyLocks().size(), 2);  // code,codeHash
+    BOOST_CHECK_EQUAL(result2->keyLocks()[0], "code");
+
+    // --------------------------------
+    // Message 1: Create contract B, set new seq 1002
+    // A -> B
+    // --------------------------------
+    result2->setSeq(1002);
+
+    // Clear the key lock to avoid effect
+    result2->setKeyLocks({});
+
+    // This line re-reads result2->to() — create #1's address, carried into the next
+    // scheduler hop, where the DMC replay re-derives the CREATE. TransactionExecutive's
+    // bump predicates (origin != sender && create && !internalCreate, or under
+    // feature_evm_address the create predicate alone) DO match this fixture's shape, but
+    // the bump runs inside the executive AFTER externalCall derived the address from the
+    // pre-bump nonce row, and DMC hops re-derive from the same base view — so the two
+    // hops keep ONE address despite the bump, not because no bump happened. The invariant
+    // is pinned below: hop 2's FINISHED result must report the created contract at the
+    // SAME address (result3->newEVMContractAddress() == addressString2) — a hop-visible
+    // bump between the derivations would split them.
+    std::string addressString2{result2->to()};
+    BOOST_CHECK_EQUAL(addressString2, expectedCreateA);
+
+    std::promise<ExecutionMessage::UniquePtr> executePromise3;
+    executor->dmcExecuteTransaction(std::move(result2),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise3.set_value(std::move(result));
+        });
+    auto result3 = executePromise3.get_future().get();
+    BOOST_CHECK(result3);
+    BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result3->data().size(), 0);
+    BOOST_CHECK_EQUAL(result3->contextID(), 101);
+    BOOST_CHECK_EQUAL(result3->seq(), 1002);
+    BOOST_CHECK_EQUAL(result3->origin(), std::string(sender));
+    BOOST_CHECK_EQUAL(result3->from(), addressString2);
+    BOOST_CHECK_EQUAL(result3->to(), std::string(address));
+    BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), addressString2);
+    BOOST_CHECK_EQUAL(result3->create(), false);
+    BOOST_CHECK_EQUAL(result3->status(), 0);
+    BOOST_CHECK_EQUAL(result3->evmStatus(), 0);
+    BOOST_CHECK(result3->logEntries().size() == 0);
+    BOOST_CHECK(result3->keyLocks().empty());
+
+    // --------------------------------
+    // Message 2: Create contract B success return, set previous seq 1001
+    // B -> A
+    // --------------------------------
+    result3->setSeq(1001);
+    std::promise<ExecutionMessage::UniquePtr> executePromise4;
+    executor->dmcExecuteTransaction(std::move(result3),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise4.set_value(std::move(result));
+        });
+    auto result4 = executePromise4.get_future().get();
+
+    BOOST_CHECK(result4);
+    BOOST_CHECK_EQUAL(result4->type(), ExecutionMessage::MESSAGE);
+    BOOST_CHECK_GT(result4->data().size(), 0);
+    auto param = codec->encodeWithSig("value()");
+    BOOST_CHECK(result4->data().toBytes() == param);
+    BOOST_CHECK_EQUAL(result4->contextID(), 101);
+    BOOST_CHECK_EQUAL(result4->seq(), 1001);
+    BOOST_CHECK_EQUAL(result4->from(), std::string(address));
+    BOOST_CHECK_EQUAL(result4->to(), std::string(addressString2));
+    BOOST_CHECK_EQUAL(result4->keyLocks().size(), 1);
+    BOOST_CHECK_EQUAL(toHex(result4->keyLocks()[0]), h256(0).hex());  // first member
+
+    // Request message without status
+    // BOOST_CHECK_EQUAL(result4->status(), 0);
+    BOOST_CHECK(result4->message().empty());
+    BOOST_CHECK(result4->newEVMContractAddress().empty());
+    BOOST_CHECK_GT(result4->keyLocks().size(), 0);
+
+    // --------------------------------
+    // Message 3: A call B's value(), set new seq 1003
+    // A -> B
+    // --------------------------------
+    result4->setSeq(1003);
+    // Clear the keylock
+    result4->setKeyLocks({});
+
+    std::promise<ExecutionMessage::UniquePtr> executePromise5;
+    executor->dmcExecuteTransaction(std::move(result4),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise5.set_value(std::move(result));
+        });
+    auto result5 = executePromise5.get_future().get();
+
+    BOOST_CHECK(result5);
+    BOOST_CHECK_EQUAL(result5->type(), ExecutionMessage::FINISHED);
+    BOOST_CHECK_GT(result5->data().size(), 0);
+    param = codec->encode(s256(1000));
+    BOOST_CHECK(result5->data().toBytes() == param);
+    BOOST_CHECK_EQUAL(result5->contextID(), 101);
+    BOOST_CHECK_EQUAL(result5->seq(), 1003);
+    BOOST_CHECK_EQUAL(result5->from(), std::string(addressString2));
+    BOOST_CHECK_EQUAL(result5->to(), std::string(address));
+    BOOST_CHECK_EQUAL(result5->status(), 0);
+    BOOST_CHECK_EQUAL(result5->evmStatus(), 0);
+    BOOST_CHECK(result5->message().empty());
+    BOOST_CHECK_EQUAL(result5->keyLocks().size(), 0);
+
+    // --------------------------------
+    // Message 4: A call B's success return, set previous seq 1001
+    // B -> A
+    // --------------------------------
+    result5->setSeq(1001);
+    std::promise<ExecutionMessage::UniquePtr> executePromise6;
+    executor->dmcExecuteTransaction(std::move(result5),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise6.set_value(std::move(result));
+        });
+    auto result6 = executePromise6.get_future().get();
+    BOOST_CHECK(result6);
+    BOOST_CHECK_EQUAL(result6->type(), ExecutionMessage::FINISHED);
+    BOOST_CHECK_GT(result6->data().size(), 0);
+    BOOST_CHECK(result6->data().toBytes() == param);
+    BOOST_CHECK_EQUAL(result6->contextID(), 101);
+    BOOST_CHECK_EQUAL(result6->seq(), 1001);
+    BOOST_CHECK_EQUAL(result6->from(), std::string(address));
+    BOOST_CHECK_EQUAL(result6->to(), std::string(sender));
+    BOOST_CHECK_EQUAL(result6->origin(), std::string(sender));
+    BOOST_CHECK_EQUAL(result6->status(), 0);
+    BOOST_CHECK_EQUAL(result6->evmStatus(), 0);
+    BOOST_CHECK(result6->message().empty());
+    BOOST_CHECK(result6->logEntries().size() == 1);
+    BOOST_CHECK_EQUAL(result6->keyLocks().size(), 0);
+
+    executor->getHash(1, [&](bcos::Error::UniquePtr&& error, crypto::HashType&& hash) {
+        BOOST_CHECK(!error);
+        BOOST_CHECK_NE(hash.hex(), h256().hex());
+    });
+
+    // commit the state
+    TwoPCParams commitParams;
+    commitParams.number = 1;
+
+    executor->prepare(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+    ledger->setBlockHeader(blockHeader);
+    executor->commit(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+
+
+    // execute a call request
+    auto callParam = std::make_unique<NativeExecutionMessage>();
+    callParam->setType(executor::NativeExecutionMessage::MESSAGE);
+    callParam->setContextID(500);
+    callParam->setSeq(7778);
+    callParam->setDepth(0);
+    callParam->setFrom(std::string(sender));
+    callParam->setTo(std::string(addressString2));
+    callParam->setData(codec->encodeWithSig("value()"));
+    callParam->setOrigin(std::string(sender));
+    callParam->setStaticCall(true);
+    callParam->setGasAvailable(gas);
+    callParam->setCreate(false);
+
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> callResultPromise;
+    executor->dmcCall(std::move(callParam),
+        [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr response) {
+            BOOST_CHECK(!error);
+            callResultPromise.set_value(std::move(response));
+        });
+
+    bcos::protocol::ExecutionMessage::UniquePtr callResult = callResultPromise.get_future().get();
+
+
+    BOOST_CHECK_EQUAL(callResult->type(), protocol::ExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(callResult->status(), 0);
+    BOOST_CHECK_EQUAL(callResult->evmStatus(), 0);
+
+    auto expectResult = codec->encode(s256(1000));
+    BOOST_CHECK(callResult->data().toBytes() == expectResult);
+
+    // commit the state, and call
+    // bcos::protocol::TwoPCParams commitParams;
+    // commitParams.number = 1;
+    // executor->prepare(commitParams, [&](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+    // executor->commit(commitParams, [&](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+
+    auto callParam2 = std::make_unique<NativeExecutionMessage>();
+    callParam2->setType(executor::NativeExecutionMessage::MESSAGE);
+    callParam2->setContextID(501);
+    callParam2->setSeq(7779);
+    callParam2->setDepth(0);
+    callParam2->setFrom(std::string(sender));
+    callParam2->setTo(std::string(addressString2));
+    callParam2->setData(codec->encodeWithSig("value()"));
+    callParam2->setOrigin(std::string(sender));
+    callParam2->setStaticCall(true);
+    callParam2->setGasAvailable(gas);
+    callParam2->setCreate(false);
+
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> callResult2Promise;
+    executor->dmcCall(std::move(callParam2),
+        [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr response) {
+            BOOST_CHECK(!error);
+            callResult2Promise.set_value(std::move(response));
+        });
+
+    bcos::protocol::ExecutionMessage::UniquePtr callResult2 = callResult2Promise.get_future().get();
+
+
+    BOOST_CHECK_EQUAL(callResult2->type(), protocol::ExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(callResult2->status(), 0);
+    BOOST_CHECK_EQUAL(callResult2->evmStatus(), 0);
+
+    auto expectResult2 = codec->encode(s256(1000));
+    BOOST_CHECK(callResult2->data().toBytes() == expectResult);
+
+    std::string tableName;
+    tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+    tableName.append(address);
+
+    {
+        auto [e, nonceEntry] = backend->getRow(tableName, ledger::ACCOUNT_TABLE_FIELDS::NONCE);
+        BOOST_CHECK(!e);
+        BOOST_CHECK(nonceEntry);
+        BOOST_CHECK_EQUAL(nonceEntry->get(), "1");
+    }
+}
+
+// The same flow as externalCall but WITHOUT feature_evm_address (no SYS_CONFIG row): the
+// create_address_fn hook's legacy branch — newEVMAddress(hashHandler, blockNumber,
+// contextID, seq + 1) — is what every chain without that feature executes, and it had
+// zero coverage in either lane. Pin the exact address: deleting the hook
+// leaves evmone's nonce-derived compute_create_address in charge, which produces a
+// different value and turns this red.
+BOOST_AUTO_TEST_CASE(externalCallLegacyCreateFormula)
+{
+    std::string ABin =
+        "608060405234801561001057600080fd5b5061037f806100206000396000f3fe60806040523480156100105760"
+        "0080fd5b506004361061002b5760003560e01c80635b975a7314610030575b600080fd5b61005c600480360360"
+        "2081101561004657600080fd5b8101908080359060200190929190505050610072565b60405180828152602001"
+        "91505060405180910390f35b600081604051610081906101c7565b808281526020019150506040518091039060"
+        "00f0801580156100a7573d6000803e3d6000fd5b506000806101000a81548173ffffffffffffffffffffffffff"
+        "ffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055507fd8e189e965"
+        "f1ff506594c5c65110ea4132cee975b58710da78ea19bc094414ae826040518082815260200191505060405180"
+        "910390a16000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffff"
+        "ffffffffffffffffffffffffffff16633fa4f2456040518163ffffffff1660e01b815260040160206040518083"
+        "038186803b15801561018557600080fd5b505afa158015610199573d6000803e3d6000fd5b505050506040513d"
+        "60208110156101af57600080fd5b81019080805190602001909291905050509050919050565b610175806101d5"
+        "8339019056fe608060405234801561001057600080fd5b50604051610175380380610175833981810160405260"
+        "2081101561003357600080fd5b8101908080519060200190929190505050806000819055507fdc509bfccbee28"
+        "6f248e0904323788ad0c0e04e04de65c04b482b056acb1a0658160405180828152602001915050604051809103"
+        "90a15060e4806100916000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e0"
+        "1c80633fa4f245146037578063a16fe09b146053575b600080fd5b603d605b565b604051808281526020019150"
+        "5060405180910390f35b60596064565b005b60008054905090565b6000808154600101919050819055507f052f"
+        "6b9dfac9e4e1257cb5b806b7673421c54730f663c8ab02561743bb23622d600054604051808281526020019150"
+        "5060405180910390a156fea264697066735822122006eea3bbe24f3d859a9cb90efc318f26898aeb4dffb31cac"
+        "e105776a6c272f8464736f6c634300060a0033a2646970667358221220b441da8ba792a40e444d0ed767a4417e"
+        "944c55578d1c8d0ca4ad4ec050e05a9364736f6c634300060a0033";
+
+    bytes input;
+    boost::algorithm::unhex(ABin, std::back_inserter(input));
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(300), 100001, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(300);
+    params->setSeq(3000);
+    params->setDepth(0);
+    params->setFrom(std::string(sender));
+    h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
+    params->setTo(addressCreate.hex().substr(0, 40));
+    params->setOrigin(std::string(sender));
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    blockHeader->setNumber(1);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    std::promise<ExecutionMessage::UniquePtr> deployPromise;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            deployPromise.set_value(std::move(result));
+        });
+    auto deployResult = deployPromise.get_future().get();
+    auto contractAddress = std::string(deployResult->newEVMContractAddress());
+    BOOST_CHECK_GT(contractAddress.size(), 0);
+
+    auto params2 = std::make_unique<NativeExecutionMessage>();
+    params2->setContextID(301);
+    params2->setSeq(4001);
+    params2->setDepth(0);
+    params2->setFrom(std::string(sender));
+    params2->setTo(contractAddress);
+    params2->setOrigin(std::string(sender));
+    params2->setStaticCall(false);
+    params2->setGasAvailable(gas);
+    bcos::u256 value(1);
+    params2->setData(codec->encodeWithSig("createAndCallB(int256)", value));
+    params2->setType(NativeExecutionMessage::MESSAGE);
+
+    std::promise<ExecutionMessage::UniquePtr> executePromise;
+    executor->dmcExecuteTransaction(std::move(params2),
+        [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result2 = executePromise.get_future().get();
+    BOOST_CHECK_EQUAL(result2->contextID(), 301);
+    BOOST_CHECK_EQUAL(result2->seq(), 4001);
+    BOOST_CHECK_EQUAL(result2->create(), true);
+
+    // The legacy branch's exact value — block 1, context 301, seq 4001 + 1. Without the
+    // hook this address is evmone's keccak(rlp(sender, nonce)) instead, so the pin fails.
+    // The literal is the independent half: the formula check alone moves with the same
+    // helper the hook calls, so a drift inside newEVMAddress stays green without it.
+    BOOST_CHECK_EQUAL(result2->to(), "ff88cb2b46c76b9802f6a26c4e0b46f73879f2f8");
+    BOOST_CHECK_EQUAL(result2->to(), bcos::newEVMAddress(hashImpl, 1, 301, 4002));
+}
+
+// Pre-bugfix chains reject the CREATE2 request outright, and the value the opcode
+// pushed historically was 0x0: evmone 0.21 echoed the host's result.create_address,
+// which the rejection path left empty. ABI 19 removed that echo and evmone now pushes
+// its own derivation, so the create2_address_fn hook must answer the zero address while
+// bugfix_evm_create2_delegatecall_staticcall_codecopy is off — pinned here at the hook
+// itself (the only place the answer is observable: the reject arm never forwards a
+// recipient, so the spawned message cannot discriminate).
+BOOST_AUTO_TEST_CASE(preBugfixCreate2HookAnswersTheZeroAddress)
+{
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+    auto ledgerCache = std::make_shared<LedgerCache>(ledger);
+    bcos::executor::BlockContext blockContext(lruStorage, ledgerCache, hashImpl,
+        /*blockNumber=*/1, h256(1), /*timestamp=*/0,
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION,
+        /*isAuthCheck=*/false, backend);
+
+    auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    callParameters->senderAddress = "ff6f30856ad3bae00b1169808488502786a13e3c";
+    callParameters->receiveAddress = callParameters->senderAddress;
+    callParameters->codeAddress = callParameters->senderAddress;
+    auto tableName = std::string("/apps/") + callParameters->senderAddress;
+    auto executive = std::make_shared<TransactionExecutive>(
+        blockContext, callParameters->senderAddress, /*contextID=*/1, /*seq=*/1);
+    bcos::executor::HostContext host(
+        std::move(callParameters), std::move(executive), std::move(tableName));
+
+    evmc_address sender{};
+    sender.bytes[19] = 0x2a;
+    evmc_bytes32 salt{};
+    salt.bytes[31] = 0x42;
+    bytes initCode{0x60, 0x42, 0x60, 0x00, 0xf3};
+    bytesConstRef initRef{initCode.data(), initCode.size()};
+
+    // Flag OFF (the default this BlockContext carries): the historical zero answer.
+    auto zeroAnswer = host.create2AddressForOpcode(sender, salt, initRef);
+    BOOST_CHECK(std::all_of(zeroAnswer.bytes, zeroAnswer.bytes + sizeof(zeroAnswer.bytes),
+        [](byte b) { return b == 0; }));
+
+    // Flag ON: the chain-hashed formula address, not zero, and equal to the shared
+    // helper over the same inputs.
+    auto features = ledger::Features{};
+    features.set(ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
+    blockContext.setFeatures(std::move(features));
+    auto derived = host.create2AddressForOpcode(sender, salt, initRef);
+    BOOST_CHECK(!std::all_of(
+        derived.bytes, derived.bytes + sizeof(derived.bytes), [](byte b) { return b == 0; }));
+    auto expected = bcos::newCreate2EVMAddress(hashImpl,
+        bcos::toHex(bytesConstRef{sender.bytes, sizeof(sender.bytes)}), initRef, fromEvmC(salt));
+    BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{derived.bytes, sizeof(derived.bytes)}), expected);
+}
+
+// The host-fault record's family semantics (review F19). The fail-closed callback
+// answers let the frame keep executing after a fault, so a second fault can still be
+// recorded — the record must reproduce the ladder's FIRST-exception decision: the
+// first fault's message wins, and halting is sticky (a bcos::Error arriving after a
+// non-bcos fault must not soften the exit(1) decision into a revert receipt). The
+// end-to-end [non-bcos → halt] cell cannot run in-process (go()'s std::exception arm
+// calls exit(1)), so the state machine is pinned here at the record/throw boundary —
+// the only place both orderings are observable.
+BOOST_AUTO_TEST_CASE(hostFaultRecordIsFirstWinsAndStickyOnHalting)
+{
+    auto makeHost = [&] {
+        auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+        auto ledgerCache = std::make_shared<LedgerCache>(ledger);
+        bcos::executor::BlockContext blockContext(lruStorage, ledgerCache, hashImpl,
+            /*blockNumber=*/1, h256(1), /*timestamp=*/0,
+            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION,
+            /*isAuthCheck=*/false, backend);
+        auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        callParameters->senderAddress = "ff6f30856ad3bae00b1169808488502786a13e3c";
+        callParameters->receiveAddress = callParameters->senderAddress;
+        callParameters->codeAddress = callParameters->senderAddress;
+        auto tableName = std::string("/apps/") + callParameters->senderAddress;
+        auto executive = std::make_shared<TransactionExecutive>(
+            blockContext, callParameters->senderAddress, /*contextID=*/1, /*seq=*/1);
+        return bcos::executor::HostContext(
+            std::move(callParameters), std::move(executive), std::move(tableName));
+    };
+
+    // No fault recorded: throwIfHostFault is a no-op.
+    auto clean = makeHost();
+    clean.throwIfHostFault();
+
+    // A single bcos::Error-family fault rethrows as bcos::Error (go()'s first arm).
+    auto bcosFamily = makeHost();
+    bcosFamily.recordHostFault("storage fault", /*halting=*/false);
+    BOOST_CHECK_THROW(bcosFamily.throwIfHostFault(), bcos::Error);
+
+    // [non-bcos first, bcos::Error second]: the sticky record keeps the halt family —
+    // the old last-writer-wins record would have downgraded this to a revert.
+    auto downgraded = makeHost();
+    downgraded.recordHostFault("non-bcos fault", /*halting=*/true);
+    downgraded.recordHostFault("later storage fault", /*halting=*/false);
+    BOOST_CHECK_EQUAL(downgraded.hostFault(), "non-bcos fault");
+    BOOST_CHECK_THROW(downgraded.throwIfHostFault(), std::runtime_error);
+
+    // [bcos::Error first, non-bcos second]: the family upgrades to halt (sticky),
+    // and the first fault's message survives for the diagnostic.
+    auto upgraded = makeHost();
+    upgraded.recordHostFault("storage fault", /*halting=*/false);
+    upgraded.recordHostFault("later non-bcos fault", /*halting=*/true);
+    BOOST_CHECK_EQUAL(upgraded.hostFault(), "storage fault");
+    BOOST_CHECK_THROW(upgraded.throwIfHostFault(), std::runtime_error);
+}
+
+// The rejected legacy CREATE2's whole downstream shape (review F4): with the bugfix flag
+// off, a contract's CREATE2 opcode spawns a plain message — create == false, init data
+// never forwarded, recipient never assigned by the reject arm — and the DMC lane stamps
+// that empty-to message with newEVMAddress(blockNumber, contextID, seq) where the base
+// derived newCreate2EVMAddress(from, <empty data>, salt) (createSalt is gone with ABI
+// 19). This fixture pins the observable triple the address-independence argument rests
+// on: the spawned hop runs against a code-less account and fails, the CREATE2 opcode
+// still yields 0x0 (the pre-bugfix hook answer), and the outer frame completes with
+// status 0 returning that zero — so a change to either derivation or to the reject
+// shape fails here instead of silently re-routing a consensus-replay path.
+BOOST_AUTO_TEST_CASE(preBugfixRejectedCreate2PinsStatusGasOutput)
+{
+    // Creator runtime: CODECOPY the inner init out, CREATE2 (zero salt), then return the
+    // pushed value as a 32-byte word so the opcode's result is observable. The inner
+    // init sits at runtime offset 0x37.
+    bytes runtime{0x60, 0x0a, 0x60, 0x37, 0x60, 0x00,
+        0x39,   // PUSH1 10 PUSH1 0x37 PUSH1 0 CODECOPY
+        0x7f};  // PUSH32 <salt>
+    runtime.resize(runtime.size() + 32, 0x00);
+    runtime.insert(runtime.end(), {0x60, 0x0a,                 // size
+                                      0x60, 0x00,              // offset
+                                      0x60, 0x00,              // value (top)
+                                      0xf5,                    // CREATE2
+                                      0x60, 0x00, 0x52,        // PUSH1 0 MSTORE
+                                      0x60, 0x20, 0x60, 0x00,  // PUSH1 0x20 PUSH1 0
+                                      0xf3});                  // RETURN
+    static const bcos::bytes innerInit{0x60, 0x2a, 0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3};
+    runtime.insert(runtime.end(), innerInit.begin(), innerInit.end());
+    BOOST_REQUIRE_EQUAL(runtime.size(), 65u);
+
+    // Deploy init: return the runtime.
+    bytes input{0x60, 0x41, 0x60, 0x0c, 0x60, 0x00, 0x39,  // CODECOPY
+        0x60, 0x41, 0x60, 0x00, 0xf3};                     // RETURN
+    input.insert(input.end(), runtime.begin(), runtime.end());
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(131), 100031, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setContextID(130);
+    params->setSeq(1330);
+    params->setDepth(0);
+    params->setOrigin(std::string(sender));
+    params->setFrom(std::string(sender));
+    h256 deployAddress("cc2233445566778899001122334455667788990011223344556677889900112233");
+    params->setTo(deployAddress.hex().substr(0, 40));
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setData(input);
+    params->setType(NativeExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    blockHeader->setNumber(1);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    // --------------------------------
+    // Create the creator contract.
+    // --------------------------------
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    executor->dmcExecuteTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+    auto result = executePromise.get_future().get();
+    BOOST_REQUIRE(result);
+    BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result->status(), 0);
+    BOOST_CHECK_EQUAL(result->evmStatus(), 0);
+    auto address = result->newEVMContractAddress();
+    BOOST_CHECK_GT(address.size(), 0);
+
+    // --------------------------------
+    // Call the creator: its runtime executes the CREATE2 opcode, which the pre-bugfix
+    // flag turns into a rejected spawn.
+    // --------------------------------
+    auto params2 = std::make_unique<NativeExecutionMessage>();
+    params2->setContextID(131);
+    params2->setSeq(1331);
+    params2->setDepth(0);
+    params2->setFrom(std::string(sender));
+    params2->setTo(std::string(address));
+    params2->setOrigin(std::string(sender));
+    params2->setStaticCall(false);
+    params2->setGasAvailable(gas);
+    params2->setCreate(false);
+    params2->setType(NativeExecutionMessage::MESSAGE);
+
+    std::promise<ExecutionMessage::UniquePtr> executePromise2;
+    executor->dmcExecuteTransaction(std::move(params2),
+        [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise2.set_value(std::move(result));
+        });
+    auto result2 = executePromise2.get_future().get();
+    BOOST_REQUIRE(result2);
+    BOOST_CHECK_EQUAL(result2->type(), ExecutionMessage::MESSAGE);  // the spawn
+    BOOST_CHECK_EQUAL(result2->create(), false);   // rejected: never a create message
+    BOOST_CHECK_EQUAL(result2->data().size(), 0);  // init data not forwarded
+    BOOST_CHECK_EQUAL(result2->contextID(), 131);
+    BOOST_CHECK(result2->to().empty());  // the reject arm forwards no recipient
+    BOOST_TEST_MESSAGE(
+        "rejected CREATE2 spawn: to='" << result2->to() << "' seq=" << result2->seq());
+
+    // --------------------------------
+    // Run the spawn hop: a code-less account, so it fails — the "address-independent"
+    // half, since both candidate addresses are code-less.
+    // --------------------------------
+    result2->setSeq(1332);
+    result2->setKeyLocks({});
+    std::promise<ExecutionMessage::UniquePtr> executePromise3;
+    executor->dmcExecuteTransaction(std::move(result2),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise3.set_value(std::move(result));
+        });
+    auto result3 = executePromise3.get_future().get();
+    BOOST_REQUIRE(result3);
+    // The hop runs against a code-less account: the v1 lane's deterministic answer for a
+    // call to a non-existent address is REVERT / CallAddressError. This is the
+    // address-independence half: whichever address the scheduler substitutes, the hop
+    // fails the same way and the CREATE2 still yields 0x0.
+    BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::REVERT);
+    BOOST_CHECK_EQUAL(result3->status(), (int32_t)TransactionStatus::CallAddressError);
+    BOOST_CHECK_EQUAL(result3->message(), "Error contract address.");
+    BOOST_CHECK_EQUAL(result3->gasAvailable(), 2921590);  // pinned: the hop's gasLeft
+    BOOST_TEST_MESSAGE("rejected CREATE2 hop: type=" << static_cast<int>(result3->type())
+                                                     << " status=" << result3->status()
+                                                     << " gasLeft=" << result3->gasAvailable());
+
+    // --------------------------------
+    // Give the failed hop back to the creator's frame: it replays, the CREATE2 yields
+    // 0x0, and the frame finishes returning that zero — status, gas and output pinned.
+    // --------------------------------
+    result3->setSeq(1331);
+    std::promise<ExecutionMessage::UniquePtr> executePromise4;
+    executor->dmcExecuteTransaction(std::move(result3),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise4.set_value(std::move(result));
+        });
+    auto result4 = executePromise4.get_future().get();
+    BOOST_REQUIRE(result4);
+    BOOST_CHECK_EQUAL(result4->type(), ExecutionMessage::FINISHED);
+    BOOST_CHECK_EQUAL(result4->contextID(), 131);
+    BOOST_CHECK_EQUAL(result4->status(), 0);
+    BOOST_CHECK_EQUAL(result4->evmStatus(), 0);
+    BOOST_CHECK_EQUAL(result4->data().size(), 32u);
+    BOOST_CHECK(std::all_of(result4->data().begin(), result4->data().end(),
+        [](bcos::byte b) { return b == 0; }));  // the CREATE2 pushed 0x0
+    BOOST_CHECK_LT(result4->gasAvailable(), gas);
+    BOOST_CHECK_EQUAL(result4->gasAvailable(), 2967952);  // pinned: the frame's gasLeft
+    BOOST_TEST_MESSAGE("rejected CREATE2 final frame: status="
+                       << result4->status() << " gasLeft=" << result4->gasAvailable()
+                       << " out=" << result4->data().size());
+}
+
+// The call() host callback's deterministic negative-gas arm (review F1 keeps it): a gas
+// that underflowed u256 -> int64 must answer EVMC_OUT_OF_GAS rather than enter the VM on
+// a wrapped budget. It fires before the context is touched, so the fnTable slot is
+// exercised directly; every other throwing path inside call() now propagates to
+// TransactionExecutive::go()'s ladder instead of being translated here.
+BOOST_AUTO_TEST_CASE(negativeGasCallFailsClosedInsteadOfTerminating)
+{
+    auto const* host = bcos::executor::getHostInterface();
+    BOOST_REQUIRE(host && host->call);
+
+    evmc_message msg{};
+    msg.kind = EVMC_CALL;
+    msg.gas = -1;  // u256->int64 overflow shape the arm exists for
+    auto result = host->call(nullptr, &msg);
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_OUT_OF_GAS);
+    BOOST_CHECK_EQUAL(result.gas_left, 0);
 }
 
 BOOST_AUTO_TEST_CASE(performance)

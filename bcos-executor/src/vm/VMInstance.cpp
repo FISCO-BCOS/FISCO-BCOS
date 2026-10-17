@@ -46,6 +46,10 @@ VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view cod
 {
     assert(m_evmcVm->is_abi_compatible());
     static_cast<evmone::VM*>(m_evmcVm->get_raw_pointer())->hash_fn = evm_hash_fn;
+    static_cast<evmone::VM*>(m_evmcVm->get_raw_pointer())->create_address_fn =
+        evm_create_address_fn;
+    static_cast<evmone::VM*>(m_evmcVm->get_raw_pointer())->create2_address_fn =
+        evm_create2_address_fn;
     // Set the options.
     if (m_evmcVm->get_raw_pointer()->set_option != nullptr)
     {  // baseline interpreter could not work with precompiled
@@ -73,13 +77,20 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
                           .release_raw());
     }
 
-    // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
-    // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION). Cached analysis is still used.
+    // Fresh VM per execute: evmone pools one ExecutionState per depth inside the VM
+    // (0.24: `std::vector<ExecutionState> m_execution_states`, `get_execution_state(depth)`)
+    // and its `reset()` clears memory/return-data/gas-refund but NOT the stack
+    // (execution_state.hpp), so reusing a VM across executions can start the next one on
+    // the previous stack's content. The 0.21-era observation (EVMC_BAD_JUMP_DESTINATION
+    // after reset-and-reuse) is consistent with that; the workaround is carried forward
+    // as-is (review F5). Cached analysis is still used.
     // NOTE(perf): this is the correctness-first path for now; benchmark-backed pooling can be
     // considered only after evmone reset/reuse guarantees are validated.
     evmc::VM evm{evmc_create_evmone()};
     auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
     evmoneVm->hash_fn = evm_hash_fn;
+    evmoneVm->create_address_fn = evm_create_address_fn;
+    evmoneVm->create2_address_fn = evm_create2_address_fn;
     return Result(evmone::baseline::execute(
         *evmoneVm, *_hostContext.hostInterface, hostCtx, m_revision, *_msg, *m_analysis));
 }

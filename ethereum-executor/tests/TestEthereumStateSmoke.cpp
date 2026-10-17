@@ -22,6 +22,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "bcos-task/TBBWait.h"
+#include <bcos-utilities/DataConvertUtility.h>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -226,10 +227,10 @@ void testL1PolicyPrecompileDispatch()
     CHECK(EthL1Policy::isPrecompile(
         EVMC_PRAGUE, addressFromHex("0x000000000000000000000000000000000000000b")));
     // The warm-account check and the dispatch check are the same predicate.
-    CHECK(EthL1Policy::isPrecompile(EVMC_CANCUN,
-               addressFromHex("0x0000000000000000000000000000000000000001")) ==
-          eth_evm::is_precompile(EVMC_CANCUN,
-              addressFromHex("0x0000000000000000000000000000000000000001")));
+    CHECK(EthL1Policy::isPrecompile(
+              EVMC_CANCUN, addressFromHex("0x0000000000000000000000000000000000000001")) ==
+          eth_evm::is_precompile(
+              EVMC_CANCUN, addressFromHex("0x0000000000000000000000000000000000000001")));
 }
 
 void testEthereumStateInstantiation()
@@ -273,14 +274,15 @@ void testHasStorageIgnoresTombstones()
     using TombstoneStorage =
         bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
             bcos::executor_v1::StateValue,
-            bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
+            bcos::storage2::memory_storage::Attribute(
+                bcos::storage2::memory_storage::ORDERED |
                 bcos::storage2::memory_storage::LOGICAL_DELETION)>;
     TombstoneStorage storage;
     const auto addr = addressFromHex("0x2000000000000000000000000000000000000000");
-    const auto slotKey = bytes32FromHex(
-        "0x0000000000000000000000000000000000000000000000000000000000000001");
-    const auto slotValue = bytes32FromHex(
-        "0x00000000000000000000000000000000000000000000000000000000000000ff");
+    const auto slotKey =
+        bytes32FromHex("0x0000000000000000000000000000000000000000000000000000000000000001");
+    const auto slotValue =
+        bytes32FromHex("0x00000000000000000000000000000000000000000000000000000000000000ff");
 
     // Lifecycle 1: a live contract with one storage slot.
     {
@@ -370,6 +372,69 @@ void testEthereumStateBinaryMode()
 
 }  // namespace
 
+
+// The lane's own EIP-197 pairing precompile, pinned with frozen vectors. Generator
+// literals shared with the v1 lane's EvmPrecompiledTest; the matching two-pair cell is
+// (G1, G2) || (G1, -G2) — the y coordinates field-negated — whose product is 1; the
+// non-canonical cell adds the field modulus to the G2 x_im coefficient (same point
+// mathematically, an encoding >= p that the parse must REJECT).
+void testEcpairingVectors()
+{
+    uint8_t out[32];
+    auto run = [&](std::string const& hex, size_t inputSize) {
+        auto input = bcos::fromHex(hex);
+        CHECK(input.size() == inputSize);
+        auto result = eth_evm::ecpairing_execute(input.data(), input.size(), out, sizeof(out));
+        return result;
+    };
+
+    // Empty input: the product over zero pairs is 1.
+    {
+        auto r = run("", 0);
+        CHECK(r.status_code == EVMC_SUCCESS);
+        CHECK(out[31] == 0x01);
+    }
+    // (G1, G2) || (G1, -G2): the two pairings cancel, product = 1.
+    {
+        auto r = run(
+            "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000"
+            "000000000000000000000000000000000000000002198e9393920d483a7260bfb731fb5d25f1aa493335a9"
+            "e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed09"
+            "0689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab7180"
+            "8dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa0000000000000000000000000000000000000000000000"
+            "0000000000000000010000000000000000000000000000000000000000000000000000000000000002198e"
+            "9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e"
+            "5c4479674322d4f75edadd46debd5cd992f6ed275dc4a288d1afb3cbb1ac09187524c7db36395df7be3b99"
+            "e673b13a075a65ec1d9befcd05a5323e6da4d435f3b617cdb3af83285c2df711ef39c01571827f9d",
+            384);
+        CHECK(r.status_code == EVMC_SUCCESS);
+        CHECK(out[31] == 0x01);
+    }
+    // G2 x_im + p: non-canonical G2 encoding — the parse must reject it.
+    {
+        auto r =
+            run("0000000000000000000000000000000000000000000000000000000000000001000000000000000000"
+                "000000000000000000000000000000000000000000000249f2e206733ee8642ab1056db37cb583892b"
+                "b3c49e1bb19fd40511ce877010091800deef121f1e76426a00665e5c4479674322d4f75edadd46debd"
+                "5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5"
+                "db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa",
+                192);
+        CHECK(r.status_code == EVMC_PRECOMPILE_FAILURE);
+    }
+    // A single non-trivial pair: e(G1, G2) != 1, result 0.
+    {
+        auto r =
+            run("0000000000000000000000000000000000000000000000000000000000000001000000000000000000"
+                "0000000000000000000000000000000000000000000002198e9393920d483a7260bfb731fb5d25f1aa"
+                "493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd"
+                "5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5"
+                "db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa",
+                192);
+        CHECK(r.status_code == EVMC_SUCCESS);
+        CHECK(out[31] == 0x00);
+    }
+}
+
 int main()
 {
     testU256EvmcRoundTrip();
@@ -383,6 +448,7 @@ int main()
     testEthereumStateInstantiation();
     testHasStorageIgnoresTombstones();
     testEthereumStateBinaryMode();
+    testEcpairingVectors();
 
     if (g_failures > 0)
     {

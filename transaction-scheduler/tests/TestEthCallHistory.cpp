@@ -18,8 +18,8 @@
  *        flat-state reads from a past block's MPT root; the View stacked on it gives the
  *        call read-your-writes; BaselineScheduler::callAtBlock wires blockNumber -> header
  *        stateRoot -> historical stack -> executor, with explicit refusals for beyond-latest
- *        blocks and non-scenario-B chains; getExecutable bypasses the global executable
- *        cache for historical storages.
+ *        blocks and non-scenario-B chains; getExecutable serves the shared
+ *        content-addressed executable cache for historical and latest lookups alike.
  */
 
 #include "SharedBaselineSchedulerMock.h"
@@ -230,8 +230,8 @@ public:
         // This fixture drives the Ethereum lane (executor_version = 2), where finishExecute
         // commits the txsRoot over EIP-2718 wire bytes (calculateEthereumTransactionRoot) —
         // it throws on a FISCO-shaped payload, so the filler transaction is Web3-shaped.
-        block->appendTransaction(bcos::test::sharedmock::makeWeb3FillerTx(
-            static_cast<uint64_t>(number), *hashImpl));
+        block->appendTransaction(
+            bcos::test::sharedmock::makeWeb3FillerTx(static_cast<uint64_t>(number), *hashImpl));
 
         Error::Ptr execError;
         protocol::BlockHeader::Ptr executedHeader;
@@ -352,14 +352,9 @@ public:
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 
-// The trait getExecutable consults: the marker propagates through View and Rollbackable,
-// and plain storages stay non-historical (negative control).
-static_assert(hostcontext::isHistoricalStorage<HCHistoricalBackend>());
-static_assert(hostcontext::isHistoricalStorage<HCHistoricalView>());
-static_assert(hostcontext::isHistoricalStorage<Rollbackable<HCHistoricalView>>());
-static_assert(!hostcontext::isHistoricalStorage<HCViewType>());
-static_assert(!hostcontext::isHistoricalStorage<Rollbackable<HCViewType>>());
-static_assert(!hostcontext::isHistoricalStorage<HCMutableStorage>());
+// (The historical-storage trait that used to be pinned here is gone: getExecutable's cache
+// is content-addressed now — the key carries the code hash — so historical and latest
+// lookups share it safely and no bypass, and no trait to steer it, remains.)
 
 BOOST_FIXTURE_TEST_SUITE(TestEthCallHistory, EthCallHistoryFixture)
 
@@ -571,49 +566,172 @@ BOOST_AUTO_TEST_CASE(callAtBlockRefusalPaths)
     BOOST_CHECK(!zeroRootReceipt);
 }
 
-// getExecutable must not serve a historical call from the global address-keyed executable
-// cache, nor fill that cache from one: the cache is shared with latest-state execution and
-// code at an address can differ between the pinned block and today.
-BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
+// getExecutable serves and fills a content-addressed cache: the key is the code hash
+// plus the revision, so an entry can never be served for code the state does not hold
+// (no address-only poisoning), replacing the code at an address builds a fresh executable
+// instead of serving a stale analysis, and historical lookups can share the cache safely.
+BOOST_AUTO_TEST_CASE(executableCacheIsContentAddressed)
 {
     auto headers = runCanonicalChain();
 
-    // A unique address so this test owns its global-cache entry.
+    // A unique address so this test owns its global-cache entries.
     evmc_address cachedAddress{};
     cachedAddress.bytes[0] = 0xCE;
     cachedAddress.bytes[19] = 0x01;
 
-    // Poison the global cache with an executable for that address.
     bytes fakeCode{0x60, 0x00, 0x60, 0x00, 0xF3};  // trivial EVM bytes
+    auto const fakeCodeHash =
+        hostcontext::executableCodeKey(bytesConstRef{fakeCode.data(), fakeCode.size()});
     auto poisoned =
         std::make_shared<hostcontext::Executable>(bytesConstRef{fakeCode.data(), fakeCode.size()});
-    task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(), cachedAddress, poisoned));
 
+    // A cache fill bound to fakeCode's hash must not be served while state holds no code at
+    // the address — the key only matches once state carries that code.
+    task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{fakeCodeHash, EVMC_CANCUN}, poisoned));
+
+    auto plainView = multiLayerStorage.fork();
+    plainView.newMutable();
+    Rollbackable<decltype(plainView)> plainRollbackable(plainView);
+    auto absentResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_CHECK(!absentResult);
+
+    // Seed the same code in state: the cached executable is now the right one to serve.
+    {
+        ledger::account::EVMAccount<decltype(plainRollbackable)> account(
+            plainRollbackable, cachedAddress, ledger::account::AddressTableMode::Hex);
+        task::syncWait(account.setCode(fakeCode, "", fakeCodeHash));
+    }
+    auto servedResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_CHECK_EQUAL(servedResult.get(), poisoned.get());
+
+    // Replace the code at the same address: a fresh executable must be built — a stale
+    // analysis must never execute the old code after an in-place upgrade/redeploy.
+    bytes otherCode{0x60, 0x01, 0x60, 0x01, 0xF3};
+    auto const otherCodeHash =
+        hostcontext::executableCodeKey(bytesConstRef{otherCode.data(), otherCode.size()});
+    {
+        ledger::account::EVMAccount<decltype(plainRollbackable)> account(
+            plainRollbackable, cachedAddress, ledger::account::AddressTableMode::Hex);
+        task::syncWait(account.setCode(otherCode, "", otherCodeHash));
+    }
+    auto freshResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(freshResult);
+    BOOST_CHECK(freshResult.get() != poisoned.get());
+
+    // Cross-revision cell: the same code analysed under another revision must be a
+    // distinct entry — a key that ignored the revision half would serve the CANCUN
+    // analysis here (same shared_ptr).
+    auto pragueResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, cachedAddress, EVMC_PRAGUE, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(pragueResult);
+    BOOST_CHECK(pragueResult.get() != freshResult.get());
+
+    // Historical lookups resolve against the root they are pinned to — this address has no
+    // leaf at the block-1 root, so its code resolves to nothing regardless of the cache.
     auto latestView = multiLayerStorage.fork();
     HCHistoricalBackend historicalBackend(
         latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
-    Rollbackable<HCHistoricalView> rollbackable(historicalView);
-
-    // Historical storage: the poisoned cache entry must NOT be served. The address has no
-    // leaf at the block-1 root, so its code resolves to nothing — "no executable".
-    auto historicalResult = task::syncWait(hostcontext::getExecutable(
-        rollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    Rollbackable<HCHistoricalView> historicalRollbackable(historicalView);
+    auto historicalResult = task::syncWait(hostcontext::getExecutable(historicalRollbackable,
+        cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
     BOOST_CHECK(!historicalResult);
 
-    // Positive control: a latest-state storage IS served from the cache for the same
-    // address, proving the bypass above is what made the difference.
+    // Clean up the global cache so no other test sees these entries, then verify the
+    // removal by reading back every key this case could have filled.
+    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_PRAGUE}));
+    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{fakeCodeHash, EVMC_CANCUN}));
+    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_CANCUN}));
+    for (auto const& spent : {hostcontext::ExecutableCacheKey{fakeCodeHash, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_PRAGUE}})
+    {
+        BOOST_CHECK(!task::syncWait(storage2::readOne(hostcontext::getCacheExecutables(), spent)));
+    }
+}
+
+// Hash-less accounts (old-version contracts whose code lives in the table's CODE field,
+// with no CODE_HASH row at all) cache under the content key: the second lookup serves the
+// same executable instead of re-analysing, and a second hash-less account with a
+// different body never collides with the first one's entry. (A present CODE_HASH row is
+// a usable key by itself: every writer stores it as the body's own hash — review F3.)
+BOOST_AUTO_TEST_CASE(executableCacheCoversHashlessAccounts)
+{
+    // A unique address so this test owns its global-cache entry.
+    evmc_address hashlessAddress{};
+    hashlessAddress.bytes[0] = 0xAD;
+    hashlessAddress.bytes[19] = 0x02;
+
     auto plainView = multiLayerStorage.fork();
     plainView.newMutable();
     Rollbackable<decltype(plainView)> plainRollbackable(plainView);
-    auto latestResult = task::syncWait(hostcontext::getExecutable(
-        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
-    BOOST_CHECK_EQUAL(latestResult.get(), poisoned.get());
 
-    // Clean up the global cache so no other test sees this entry.
-    task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(), cachedAddress));
+    // Old-version shape: a CODE row in the contract table and no CODE_HASH row. setCode
+    // would write the hash row, so seed the raw row here.
+    bytes legacyCode{0x60, 0x02, 0x60, 0x02, 0xF3};
+    auto const tableName =
+        ledger::account::accountTableName(hashlessAddress, ledger::account::AddressTableMode::Hex);
+    {
+        storage::Entry codeEntry;
+        codeEntry.set(
+            std::string_view{reinterpret_cast<const char*>(legacyCode.data()), legacyCode.size()});
+        task::syncWait(storage2::writeOne(plainRollbackable,
+            executor_v1::StateKey{tableName, ledger::ACCOUNT_TABLE_FIELDS::CODE},
+            std::move(codeEntry)));
+    }
+
+    auto first = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, hashlessAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(first);
+    auto second = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, hashlessAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(second);
+    // Served from the content key — same shared_ptr, no re-analysis.
+    BOOST_CHECK_EQUAL(second.get(), first.get());
+
+    // A second hash-less address with a different body must get its own executable —
+    // content keying, not "some hash-less account" keying.
+    evmc_address secondHashless{};
+    secondHashless.bytes[0] = 0xAD;
+    secondHashless.bytes[19] = 0x03;
+    bytes secondCode{0x60, 0x03, 0x60, 0x03, 0xF3};
+    {
+        storage::Entry secondEntry;
+        secondEntry.set(
+            std::string_view{reinterpret_cast<const char*>(secondCode.data()), secondCode.size()});
+        task::syncWait(storage2::writeOne(plainRollbackable,
+            executor_v1::StateKey{ledger::account::accountTableName(
+                                      secondHashless, ledger::account::AddressTableMode::Hex),
+                ledger::ACCOUNT_TABLE_FIELDS::CODE},
+            std::move(secondEntry)));
+    }
+    auto secondResult = task::syncWait(hostcontext::getExecutable(
+        plainRollbackable, secondHashless, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
+    BOOST_REQUIRE(secondResult);
+    BOOST_CHECK(secondResult.get() != first.get());
+
+    // Clean up every entry this case could have filled, then verify the removal by
+    // reading back.
+    auto const contentKey =
+        hostcontext::executableCodeKey(bytesConstRef{legacyCode.data(), legacyCode.size()});
+    auto const secondKey =
+        hostcontext::executableCodeKey(bytesConstRef{secondCode.data(), secondCode.size()});
+    for (auto const& spent : {hostcontext::ExecutableCacheKey{contentKey, EVMC_CANCUN},
+             hostcontext::ExecutableCacheKey{secondKey, EVMC_CANCUN}})
+    {
+        task::syncWait(storage2::removeOne(hostcontext::getCacheExecutables(), spent));
+        BOOST_CHECK(!task::syncWait(storage2::readOne(hostcontext::getCacheExecutables(), spent)));
+    }
 }
+
 
 BOOST_AUTO_TEST_SUITE_END()
 

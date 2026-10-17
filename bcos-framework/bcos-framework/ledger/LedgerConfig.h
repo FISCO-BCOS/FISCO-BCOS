@@ -31,8 +31,8 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
-#include <limits>
 #include <evmc/evmc.hpp>
+#include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <optional>
@@ -410,7 +410,8 @@ inline constexpr int MAX_GOVERNANCE_EXECUTOR_VERSION =
     static_cast<int>(magic_enum::enum_values<ExecutorLane>().back());
 
 /// Convert a canonical EVM fork name (case-insensitive, e.g. "cancun"/"osaka") to an
-/// EVMC revision. Returns nullopt for unknown names so callers can fall back to a default.
+/// EVMC revision. Returns nullopt for unknown — and deliberately refused — names; every
+/// caller halts loudly on nullopt rather than falling back to a default.
 inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
 {
     std::string n(name);
@@ -427,9 +428,15 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_SPURIOUS_DRAGON;
     if (n == "byzantium")
         return EVMC_BYZANTIUM;
-    if (n == "constantinople")
-        return EVMC_CONSTANTINOPLE;
-    if (n == "petersburg" || n == "constantinoplefix")
+    // evmone 0.23 removed the Constantinople revision and retargets its opcodes to
+    // Petersburg. Constantinople and Petersburg do NOT have identical EVM semantics:
+    // EIP-1283 (SSTORE net gas metering) is active in Constantinople and reverted in
+    // Petersburg, so the same SSTORE is charged differently — and this binary has no
+    // EIP-1283 metering to run. ConstantinopleFix names the same schedule as Petersburg;
+    // accepting either legacy spelling would still silently retarget a persisted row
+    // instead of letting the operator choose, so both spellings are refused and
+    // `petersburg` stays explicit.
+    if (n == "petersburg")
         return EVMC_PETERSBURG;
     if (n == "istanbul" || n == "muirglacier" || n == "muir glacier")
         return EVMC_ISTANBUL;
@@ -447,6 +454,13 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_PRAGUE;
     if (n == "osaka")
         return EVMC_OSAKA;
+    // `amsterdam` is deliberately NOT accepted: the revision's EIP-8037/8038 state_gas
+    // dimension has no consumer in this binary (state_gas is written as {} at every
+    // message construction site and read nowhere), so accepting the name would run a
+    // chain under a revision this binary cannot price — exactly the silent mixed-binary
+    // outcome the halt-loudly policy below rejects unknown names to prevent. The name is
+    // still emitted by evmcRevisionName so that the no-default total switch there keeps
+    // being a compile-time guard; re-add this arm in the PR that wires state_gas.
     if (n == "experimental")
         return EVMC_EXPERIMENTAL;
     return std::nullopt;
@@ -472,8 +486,6 @@ inline std::string_view evmcRevisionName(evmc_revision rev)
         return "spuriousdragon";
     case EVMC_BYZANTIUM:
         return "byzantium";
-    case EVMC_CONSTANTINOPLE:
-        return "constantinople";
     case EVMC_PETERSBURG:
         return "petersburg";
     case EVMC_ISTANBUL:
@@ -492,6 +504,11 @@ inline std::string_view evmcRevisionName(evmc_revision rev)
         return "prague";
     case EVMC_OSAKA:
         return "osaka";
+    case EVMC_AMSTERDAM:
+        // Nameable but NOT config-selectable in this binary (state_gas is unwired, so
+        // evmcRevisionFromName refuses the name); the arm stays so this no-default switch
+        // remains total.
+        return "amsterdam";
     case EVMC_EXPERIMENTAL:
         return "experimental";
     }
@@ -581,9 +598,8 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
         if (parsed.error == ConfigUint64Error::outOfRange)
         {
             BOOST_THROW_EXCEPTION(
-                InvalidOpEip1559Config()
-                << errinfo_comment(
-                       "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
+                InvalidOpEip1559Config() << errinfo_comment(
+                    "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
         }
         if (!parsed.value.has_value())
         {
@@ -610,9 +626,9 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
     // parser would refuse.
     if (auto const problem = opEip1559ParamsRowProblem(params))
     {
-        BOOST_THROW_EXCEPTION(InvalidOpEip1559Config() << errinfo_comment(
-                                  "op_eip1559_params value carries a " + *problem + ": " +
-                                  std::string(value)));
+        BOOST_THROW_EXCEPTION(
+            InvalidOpEip1559Config() << errinfo_comment(
+                "op_eip1559_params value carries a " + *problem + ": " + std::string(value)));
     }
     return params;
 }

@@ -2946,8 +2946,10 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                     InvalidConfig() << errinfo_comment(
                         "executor.evm_revision is invalid: " + evmcRevisionStr +
                         ", supported revisions: frontier/homestead/tangerinewhistle/"
-                        "spuriousdragon/byzantium/constantinople/petersburg/istanbul/berlin/"
-                        "london/paris/shanghai/cancun/prague/osaka"));
+                        "spuriousdragon/byzantium/petersburg/istanbul/berlin/"
+                        "london/paris/shanghai/cancun/prague/osaka "
+                        "(aliases also accepted: tangerine whistle/spurious dragon/"
+                        "eip150/eip158/muirglacier/muir glacier/merge)"));
             }
         }
 

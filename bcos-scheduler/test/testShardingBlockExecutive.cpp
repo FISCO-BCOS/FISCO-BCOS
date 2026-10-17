@@ -24,6 +24,7 @@
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
+#include <future>
 #include <boost/test/unit_test.hpp>
 
 
@@ -270,10 +271,24 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest1)
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
+    // Wait for every asyncCommit callback before returning: the callbacks run on
+    // the executor thread, and BOOST_CHECK on a non-test thread (plus a callback
+    // landing after the test ends) races the boost.test framework — observed once
+    // as a SIGSEGV at the NEXT test case's entry (the previous test's log line
+    // lands after the next banner). Assert on the main thread after the wait.
+    std::promise<Error::UniquePtr> stoppedCommit;
     blockExecutive->stop();
-    blockExecutive->asyncCommit([&](Error::UniquePtr error) { BOOST_CHECK(error); });
+    blockExecutive->asyncCommit(
+        [&stoppedCommit](Error::UniquePtr error) { stoppedCommit.set_value(std::move(error)); });
+    auto stoppedError = stoppedCommit.get_future().get();
+    BOOST_CHECK(stoppedError);
+
+    std::promise<Error::UniquePtr> startedCommit;
     blockExecutive->start();
-    blockExecutive->asyncCommit([&](Error::UniquePtr error) { BOOST_CHECK(!error); });
+    blockExecutive->asyncCommit(
+        [&startedCommit](Error::UniquePtr error) { startedCommit.set_value(std::move(error)); });
+    auto startedError = startedCommit.get_future().get();
+    BOOST_CHECK(!startedError);
 }
 
 BOOST_AUTO_TEST_CASE(asyncCommitTest2)
@@ -306,16 +321,22 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest2)
     auto blockExecutive = std::make_shared<bcos::scheduler::BlockExecutive>(
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
+    // Same wait-then-assert shape as asyncCommitTest1 above: no callback may
+    // outlive the test, and no BOOST_CHECK on the executor thread.
+    std::promise<Error::UniquePtr> stoppedCommit;
     blockExecutive->stop();
-    blockExecutive->asyncCommit([&](Error::UniquePtr error) {
-        BOOST_CHECK(error);
-        SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2  END----------------";
-    });
+    blockExecutive->asyncCommit(
+        [&stoppedCommit](Error::UniquePtr error) { stoppedCommit.set_value(std::move(error)); });
+    auto stoppedError = stoppedCommit.get_future().get();
+    BOOST_CHECK(stoppedError);
+
+    std::promise<Error::UniquePtr> startedCommit;
     blockExecutive->start();
-    blockExecutive->asyncCommit([&](Error::UniquePtr error) {
-        BOOST_CHECK(error);
-        SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2  END----------------";
-    });
+    blockExecutive->asyncCommit(
+        [&startedCommit](Error::UniquePtr error) { startedCommit.set_value(std::move(error)); });
+    auto startedError = startedCommit.get_future().get();
+    BOOST_CHECK(startedError);
+    SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2  END----------------";
 }
 
 BOOST_AUTO_TEST_CASE(asyncNotify)

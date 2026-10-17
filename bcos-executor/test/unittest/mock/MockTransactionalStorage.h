@@ -31,7 +31,30 @@ public:
         std::function<void(Error::UniquePtr, std::optional<storage::Entry>)> _callback) noexcept
         override
     {
+        // Test-only fault injection (review F2 regression): when armed for an exact
+        // (table, key) pair, answer with a storage error — StorageWrapper::
+        // getRowInternal converts an Error response into a thrown bcos::Error, the
+        // real storage-fault shape the host callbacks see.
+        if (m_faultTable == table && m_faultKey == _key)
+        {
+            std::cerr << "F2TEST: fault FIRED table=" << table << " key=" << _key << std::endl;
+            _callback(BCOS_ERROR_UNIQUE_PTR(-1, "injected storage fault (F2 test)"),
+                std::nullopt);
+            return;
+        }
         m_inner->asyncGetRow(table, _key, std::move(_callback));
+    }
+
+    void armRowFault(std::string table, std::string key)
+    {
+        m_faultTable = std::move(table);
+        m_faultKey = std::move(key);
+    }
+
+    void disarmRowFault()
+    {
+        m_faultTable.clear();
+        m_faultKey.clear();
     }
 
     void asyncGetRows(std::string_view table,
@@ -110,6 +133,8 @@ public:
     }
 
     bcos::storage::StateStorage::Ptr m_inner;
+    std::string m_faultTable;
+    std::string m_faultKey;
     bcos::crypto::Hash::Ptr m_hashImpl;
 };
 }  // namespace bcos::test

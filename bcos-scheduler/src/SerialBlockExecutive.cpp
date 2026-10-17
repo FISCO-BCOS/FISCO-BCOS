@@ -9,30 +9,29 @@
 using namespace bcos::scheduler;
 
 SerialBlockExecutive::SerialBlockExecutive(bcos::protocol::Block::Ptr block,
-        SchedulerImpl* scheduler, size_t startContextID,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool)
-    : BlockExecutive(std::move(block), scheduler, startContextID,
-                std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
-                std::move(_txPool))
+    SchedulerImpl* scheduler, size_t startContextID,
+    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+    bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+    bcos::txpool::TxPoolInterface::Ptr _txPool)
+  : BlockExecutive(std::move(block), scheduler, startContextID,
+        std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
+        std::move(_txPool))
 {}
 
 SerialBlockExecutive::SerialBlockExecutive(bcos::protocol::Block::Ptr block,
-        SchedulerImpl* scheduler, size_t startContextID,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string& _gasPrice,
-        bool _syncBlock)
-    : BlockExecutive(std::move(block), scheduler, startContextID,
-                std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
-                std::move(_txPool), _gasLimit, _gasPrice, _syncBlock)
+    SchedulerImpl* scheduler, size_t startContextID,
+    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+    bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+    bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string& _gasPrice,
+    bool _syncBlock)
+  : BlockExecutive(std::move(block), scheduler, startContextID,
+        std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
+        std::move(_txPool), _gasLimit, _gasPrice, _syncBlock)
 {}
 
 SerialBlockExecutive::~SerialBlockExecutive() = default;
 
-void SerialBlockExecutive::serialPrepareExecutor()
-{}
+void SerialBlockExecutive::serialPrepareExecutor() {}
 
 
 void SerialBlockExecutive::prepare()
@@ -196,31 +195,31 @@ void SerialBlockExecutive::serialExecute(
         if (tx->to().empty())
         {
             auto newSeq = tx->seq();
+            std::string address;
             if (tx->createSalt())
             {
-                // TODO: Add sender in this process(consider compat with ethereum)
-                tx->setTo(bcos::newCreate2EVMAddress(
-                    m_scheduler->getHashImpl(), tx->from(), tx->data(), *(tx->createSalt())));
+                // A producer still speaking the pre-0.24 protocol hands the salt down
+                // and expects the EIP-1014 address: derive it with the shared helper
+                // (the same formula the host-side create2 hook uses) instead of
+                // silently re-addressing the create with the legacy formula.
+                address = bcos::newCreate2EVMAddress(
+                    m_scheduler->getHashImpl(), tx->from(), tx->data(), *(tx->createSalt()));
+            }
+            else if (m_scheduler->ledgerConfig().features().get(
+                         ledger::Features::Flag::feature_evm_address))
+            {
+                // EOA create contract
+                auto const sender = tx->origin();
+                Address senderAddress(sender, Address::FromHex);
+                address = bcos::newLegacyEVMAddressString(senderAddress.ref(), tx->nonce());
             }
             else
             {
-                std::string address;
-                if (m_scheduler->ledgerConfig().features().get(
-                        ledger::Features::Flag::feature_evm_address))
-                {
-                    // EOA create contract
-                    auto const sender = tx->origin();
-                    Address senderAddress(sender, Address::FromHex);
-                    address = bcos::newLegacyEVMAddressString(senderAddress.ref(), tx->nonce());
-                }
-                else
-                {
-                    address = bcos::newEVMAddress(m_scheduler->getHashImpl(),
-                        m_block->blockHeader()->number(), tx->contextID(), newSeq);
-                }
-
-                tx->setTo(std::move(address));
+                address = bcos::newEVMAddress(m_scheduler->getHashImpl(),
+                    m_block->blockHeader()->number(), tx->contextID(), newSeq);
             }
+
+            tx->setTo(std::move(address));
         }
 
         updateWeb3NonceMap(tx);

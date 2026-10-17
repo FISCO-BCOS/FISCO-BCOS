@@ -347,6 +347,21 @@ jobs:
             echo "::error::EEST pass rate ${PASS_RATE:-unknown}% is below 100% threshold"
             exit 1
           fi
+          # Skips leave the pass-rate denominator, so a shrinking corpus would stay
+          # green at 100% — bound Total and Skipped too (review F4). Tripwire values
+          # for fixtures_stable v5.4.0 (~90650 tests, ~978 skips); adjust them
+          # deliberately when the corpus version moves.
+          TOTAL_TESTS=$(sed -nE 's/.*Total tests:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
+          SKIPPED_TESTS=$(sed -nE 's/.*Skipped tests:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
+          echo "EEST totals: ${TOTAL_TESTS:-unknown} tests, ${SKIPPED_TESTS:-unknown} skipped"
+          if [ -z "${TOTAL_TESTS}" ] || [ "${TOTAL_TESTS}" -lt 90000 ]; then
+            echo "::error::EEST total tests ${TOTAL_TESTS:-unknown} is below the 90000 floor (corpus shrink?)"
+            exit 1
+          fi
+          if [ -z "${SKIPPED_TESTS}" ] || [ "${SKIPPED_TESTS}" -gt 2000 ]; then
+            echo "::error::EEST skipped tests ${SKIPPED_TESTS:-unknown} is above the 2000 ceiling (skip matcher over-refusing?)"
+            exit 1
+          fi
           echo "::notice::EEST pass rate ${PASS_RATE}% meets the 100% threshold"
       - name: Upload fisco-bcos binary artifact
         if: matrix.os == 'ubuntu-26.04'

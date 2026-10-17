@@ -263,9 +263,13 @@ inline bcos::executor::Eip2930AccessList makeAccessListMultiAccount(
 }
 
 // --- CREATE2 message builder (caller must keep @p initcode storage alive) ---
+// evmc ABI 19: evmc_message no longer carries create2_salt. The message is built
+// with an empty recipient; the host-side getMessage() (transaction-level path)
+// derives the address from the zero salt, while nested creates get their
+// recipient precomputed by evmone.
 
 inline evmc_message makeCreate2Message(
-    evmc_address sender, evmc_bytes32 salt, bcos::bytesConstRef initcode, int64_t gas)
+    evmc_address sender, bcos::bytesConstRef initcode, int64_t gas)
 {
     evmc_message message{};
     message.kind = EVMC_CREATE2;
@@ -277,7 +281,6 @@ inline evmc_message makeCreate2Message(
     message.input_data = initcode.data();
     message.input_size = initcode.size();
     message.value = {};
-    message.create2_salt = salt;
     message.code_address = {};
     message.code = nullptr;
     message.code_size = 0;

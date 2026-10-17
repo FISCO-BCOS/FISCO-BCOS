@@ -1919,6 +1919,17 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
         // evmcRevisionName is a total switch, so it must always yield a non-empty name.
         BOOST_REQUIRE(!name.empty());
         auto decoded = ledger::evmcRevisionFromName(name);
+        // EVMC_AMSTERDAM is nameable (evmcRevisionName stays a total switch, so a future
+        // evmc bump still breaks the build there) but is deliberately not config-selectable
+        // in this binary: its EIP-8037/8038 state_gas dimension has no consumer here, so
+        // accepting the name would price the chain under a revision this binary cannot
+        // execute. Pin that asymmetry instead of round-tripping it.
+        if (r == EVMC_AMSTERDAM)
+        {
+            BOOST_CHECK_MESSAGE(!decoded.has_value(),
+                "evmcRevisionFromName must refuse \"amsterdam\" until state_gas is wired");
+            continue;
+        }
         BOOST_REQUIRE_MESSAGE(decoded.has_value(),
             "evmcRevisionName(" << rev << ") = \"" << name
                                 << "\" is not accepted by evmcRevisionFromName");
@@ -1931,6 +1942,30 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
         ledger::applyEVMCRevisionConfig(parsed, encoded);
         BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
         BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(0)), rev);
+    }
+
+    // The constantinople spellings cannot be reached through the loop above (ABI 19 has
+    // no EVMC_CONSTANTINOPLE value), so pin their refusal explicitly: Constantinople's
+    // EIP-1283 SSTORE metering differs from Petersburg's, and ConstantinopleFix names
+    // the same schedule as Petersburg — accepting either would silently retarget a
+    // persisted row under different gas pricing. Re-acceptance here must turn this red.
+    for (auto const* refused : {"constantinople", "constantinoplefix", "amsterdam"})
+    {
+        BOOST_CHECK_MESSAGE(!ledger::evmcRevisionFromName(refused),
+            "evmcRevisionFromName must refuse the spelling: " << refused);
+    }
+    // And the refusal is halt-loudly where a persisted row would consume it: the
+    // apply path throws instead of retargeting to petersburg.
+    for (auto const* refused : {"constantinople", "constantinoplefix", "amsterdam"})
+    {
+        // A persisted row naming the refused spelling (100000:<name>) must throw
+        // instead of retargeting the chain onto the petersburg schedule. Pin the
+        // typed error: an unrelated throw keeping this green is a false pass
+        // (review F5).
+        auto encoded = std::to_string(100000) + ':' + refused;
+        LedgerConfig parsed;
+        BOOST_CHECK_THROW(
+            ledger::applyEVMCRevisionConfig(parsed, encoded), ledger::InvalidEVMCRevisionConfig);
     }
 }
 

@@ -94,7 +94,7 @@ struct EthL1Policy
         // trip the maxPriorityGasPrice assert (debug) or silently run as legacy
         // (release), diverging from geth.
         if (txKind > 4)
-            return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
         const auto maxGasPrice = ethMaxGasPrice(tx, callParams);
         const auto maxPriorityGasPrice = ethMaxPriorityGasPrice(tx, callParams);
         const auto hasTo = protocol::ethToAddress(tx).has_value();
@@ -104,7 +104,7 @@ struct EthL1Policy
         {
         case 3:  // blob
             if (rev < EVMC_CANCUN)
-                return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+                return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
             if (!hasTo)
                 return make_error_code(evm::ErrorCode::CREATE_BLOB_TX);
             if (blobHashes.empty())
@@ -114,7 +114,7 @@ struct EthL1Policy
 
             assert(block.blob_base_fee.has_value());
             if (ethMaxBlobGasPrice(tx) < *block.blob_base_fee)
-                return make_error_code(evm::ErrorCode::BLOB_FEE_CAP_LESS_THAN_BLOCKS);
+                return make_error_code(evm::ErrorCode::INSUFFICIENT_MAX_FEE_PER_BLOB_GAS);
 
             if (std::ranges::any_of(blobHashes, [](const auto& h) { return h[0] != 0x01; }))
                 return make_error_code(evm::ErrorCode::INVALID_BLOB_HASH_VERSION);
@@ -125,7 +125,7 @@ struct EthL1Policy
 
         case 4:  // set_code
             if (rev < EVMC_PRAGUE)
-                return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+                return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
             if (!hasTo)
                 return make_error_code(evm::ErrorCode::CREATE_SET_CODE_TX);
             if (tx.authorizationList().empty())
@@ -141,16 +141,17 @@ struct EthL1Policy
         case 3:  // blob
         case 2:  // eip1559
             if (rev < EVMC_LONDON)
-                return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+                return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
 
             if (maxPriorityGasPrice > maxGasPrice)
                 return make_error_code(
-                    evm::ErrorCode::TIP_GT_FEE_CAP);  // Priority gas price is too high.
+                    evm::ErrorCode::PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS);  // Priority gas price
+                                                                             // is too high.
             [[fallthrough]];
 
         case 1:  // access_list
             if (rev < EVMC_BERLIN)
-                return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+                return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
             [[fallthrough]];
 
         case 0:;  // legacy
@@ -162,8 +163,7 @@ struct EthL1Policy
     /// cost checked against the balance in validateTransaction. L1: the blob
     /// fee (moved verbatim); an L2 would add its L1 data fee here.
     static bcos::u512 additionalMaxCost(protocol::Transaction const& tx,
-        EthBlockInfo const& /*block*/, evmc_revision /*rev*/,
-        EthCallParams const& /*callParams*/)
+        EthBlockInfo const& /*block*/, evmc_revision /*rev*/, EthCallParams const& /*callParams*/)
     {
         bcos::u512 extra = 0;
         if (tx.web3TypedTxKind() == 3)  // blob
@@ -211,7 +211,8 @@ struct EthL1Policy
     /// (checked by access_account before the get_or_insert, so no ghost
     /// account is journalled). L1: none — plain precompiles are warm via
     /// isPrecompile after insertion, matching evmone.
-    static bool isAlwaysWarmPrecompile(evmc_revision /*rev*/, evmc::address const& /*addr*/) noexcept
+    static bool isAlwaysWarmPrecompile(
+        evmc_revision /*rev*/, evmc::address const& /*addr*/) noexcept
     {
         return false;
     }
@@ -247,8 +248,8 @@ struct EthL1Policy
     template <class Storage>
     static int64_t settleFees(EthereumState<Storage>& state, EthBlockInfo const& block,
         evmc_revision rev, int64_t minGasCost, int64_t gasLimit, int64_t gasLeft,
-        int64_t delegationRefund, int64_t evmRefund, uint256 txMaxCost,
-        uint256 effectiveGasPrice, uint256 priorityGasPrice, EthAccount& senderAcc)
+        int64_t delegationRefund, int64_t evmRefund, uint256 txMaxCost, uint256 effectiveGasPrice,
+        uint256 priorityGasPrice, EthAccount& senderAcc)
     {
         auto gas_used = gasLimit - gasLeft;
 
@@ -261,7 +262,8 @@ struct EthL1Policy
         // EIP-7623: The gas used by the transaction must be at least the min_gas_cost.
         gas_used = std::max(gas_used, minGasCost);
 
-        senderAcc.balance += txMaxCost - uint256(static_cast<uint64_t>(gas_used)) * effectiveGasPrice;
+        senderAcc.balance +=
+            txMaxCost - uint256(static_cast<uint64_t>(gas_used)) * effectiveGasPrice;
         state.touch(block.coinbase).balance +=
             uint256(static_cast<uint64_t>(gas_used)) * priorityGasPrice;
         return gas_used;

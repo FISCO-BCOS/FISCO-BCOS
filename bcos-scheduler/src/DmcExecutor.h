@@ -116,8 +116,6 @@ protected:
 
     void handleCreateMessage(ExecutiveState::Ptr executive);
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);
-    std::string newCreate2EVMAddress(
-        const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
     bool isCall();
 
 protected:

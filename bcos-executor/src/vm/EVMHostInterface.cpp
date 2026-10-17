@@ -34,6 +34,8 @@
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
+#include <boost/exception/diagnostic_information.hpp>
+#include <limits>
 
 using namespace std;
 
@@ -142,6 +144,39 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
         (void)_context;
         (void)_addr;
         return toEvmC(h256(0));
+    }
+}
+
+// evmc ABI 19: the VM reads the sender's nonce itself to compute CREATE addresses
+// (evmone instructions_calls.cpp create_impl) and to enforce EIP-2681; the value
+// must match the nonce the executive reads when it assigns the created address.
+uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr)
+{
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
+    try
+    {
+        return hostContext.getNonce(_addr);
+    }
+    catch (bcos::Error& _e)
+    {
+        // A storage/parse fault. It cannot be left to propagate (review F1): an
+        // exception cannot cross the VM — evmc::VM::execute is noexcept (evmc.hpp:722)
+        // and the unwind dies inside evmone's instruction frames (verified: letting one
+        // through aborts with libc++abi "terminating due to uncaught exception of type
+        // bcos::Error"). Answer fail-closed per EIP-2681 (MAX_NONCE makes evmone reject
+        // the CREATE) and record the fault with its family: go() rethrows it into the
+        // ladder arm this family would have reached — bcos::Error reverts the frame —
+        // so the ladder's decision holds without the impossible propagation.
+        hostContext.recordHostFault(_e.errorMessage(), /*halting=*/false);
+        return std::numeric_limits<uint64_t>::max();
+    }
+    catch (...)
+    {
+        // The non-bcos family: the ladder's std::exception arm halts the node, and the
+        // recorded fault reproduces exactly that in go() (it must not become a receipt).
+        hostContext.recordHostFault(boost::current_exception_diagnostic_information(),
+            /*halting=*/true);
+        return std::numeric_limits<uint64_t>::max();
     }
 }
 
@@ -272,23 +307,7 @@ evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
     return toEvmC(hostContext.blockHash(_number));
 }
 
-// evmc_result create(HostContext& _txContext, evmc_message const* _msg) noexcept
-// {
-//     return _txContext.externalRequest(_msg);
-// int64_t gas = _msg->gas;
-// // u256 value = fromEvmC(_msg->value);
-// bytesConstRef init = {_msg->input_data, _msg->input_size};
-// u256 salt = fromEvmC(_msg->create2_salt);
-// evmc_opcode opcode =
-//     _msg->kind == EVMC_CREATE ? evmc_opcode::OP_CREATE : evmc_opcode::OP_CREATE2;
-
-// // HostContext::create takes the sender address from .myAddress().
-// assert(fromEvmC(_msg->sender) == _txContext.myAddress());
-
-// return _txContext.create(gas, init, opcode, salt);
-// }
-
-evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
+evmc_result call(evmc_host_context* _context, const evmc_message* _msg)
 {
     // gas maybe smaller than 0 since outside gas is u256 and evmc_message is
     // int64_t so gas maybe smaller than 0 in some extreme cases
@@ -296,33 +315,80 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
     if (_msg->gas < 0)
     {
         EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow") << LOG_KV("cur gas", _msg->gas);
-        BOOST_THROW_EXCEPTION(protocol::GasOverflow());
+        return evmc_result{.status_code = EVMC_OUT_OF_GAS,
+            .gas_left = 0,
+            .gas_refund = 0,
+            .state_gas = {},
+            .output_data = nullptr,
+            .output_size = 0,
+            .release = nullptr};
     }
 
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-
-    return hostContext.externalRequest(_msg);
+    try
+    {
+        return hostContext.externalRequest(_msg);
+    }
+    catch (bcos::Error& _e)
+    {
+        // A fault while building/serving the sub-call. The catch is load-bearing, not a
+        // fail-open answer (review F1): the exception cannot cross the VM —
+        // evmc::VM::execute is noexcept (evmc.hpp:722) and the unwind dies inside
+        // evmone's instruction frames (verified: a raw throw aborts with libc++abi
+        // "terminating due to uncaught exception of type bcos::Error"), so dropping the
+        // catch turns a node fault into std::terminate instead of the ladder's decision.
+        // Record the fault with its family and answer fail-closed; go() rethrows it into
+        // the ladder arm the family would have reached — bcos::Error reverts the whole
+        // frame, never a committed receipt other nodes would not produce.
+        hostContext.recordHostFault(_e.errorMessage(), /*halting=*/false);
+        return evmc_result{.status_code = EVMC_INTERNAL_ERROR,
+            .gas_left = 0,
+            .gas_refund = 0,
+            .state_gas = {},
+            .output_data = nullptr,
+            .output_size = 0,
+            .release = nullptr};
+    }
+    catch (...)
+    {
+        // The non-bcos family: the ladder's std::exception arm halts the node; go()
+        // reproduces that (the fault must not ride a failed sub-call answer into a
+        // receipt).
+        hostContext.recordHostFault(boost::current_exception_diagnostic_information(),
+            /*halting=*/true);
+        return evmc_result{.status_code = EVMC_INTERNAL_ERROR,
+            .gas_left = 0,
+            .gas_refund = 0,
+            .state_gas = {},
+            .output_data = nullptr,
+            .output_size = 0,
+            .release = nullptr};
+    }
 }
 
 /// function table
 // clang-format off
+// Designated initializers (C++20) keep each function pointer bound to its named
+// slot: evmc ABI 13..19 inserted get_nonce mid-struct, which would silently
+// shift every positional initializer that follows it.
 evmc_host_interface const fnTable = {
-    accountExists,
-    getStorage,
-    setStorage,
-    getBalance,
-    getCodeSize,
-    getCodeHash,
-    copyCode,
-    selfdestruct,
-    call,
-    getTxContext,
-    getBlockHash,
-    log,
-    access_account,
-    access_storage,
-    getTransientStorage,
-    setTransientStorage,
+    .account_exists = accountExists,
+    .get_storage = getStorage,
+    .set_storage = setStorage,
+    .get_balance = getBalance,
+    .get_nonce = getNonce,
+    .get_code_size = getCodeSize,
+    .get_code_hash = getCodeHash,
+    .copy_code = copyCode,
+    .selfdestruct = selfdestruct,
+    .call = call,
+    .get_tx_context = getTxContext,
+    .get_block_hash = getBlockHash,
+    .emit_log = log,
+    .access_account = access_account,
+    .access_storage = access_storage,
+    .get_transient_storage = getTransientStorage,
+    .set_transient_storage = setTransientStorage,
 };
 // clang-format on
 

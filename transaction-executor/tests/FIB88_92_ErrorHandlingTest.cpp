@@ -82,12 +82,12 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 300 * 10000,
+            .state_gas = {},
             .recipient = {},
             .sender = {},
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
             .input_size = helloworldBytecodeBinary.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};
@@ -100,7 +100,7 @@ public:
         syncWait(hostContext.prepare());
         auto result = syncWait(hostContext.execute());
         BOOST_REQUIRE_EQUAL(result.status_code, 0);
-        helloworldAddress = result.create_address;
+        helloworldAddress = hostContext.message().recipient;
     }
 };
 
@@ -133,12 +133,12 @@ BOOST_AUTO_TEST_CASE(FIB88_InsufficientBalanceConsumesAllGas)
             .flags = 0,
             .depth = 0,
             .gas = GAS_LIMIT,
+            .state_gas = {},
             .recipient = recipient,
             .sender = sender,
             .input_data = nullptr,
             .input_size = 0,
             .value = bcos::toEvmC(bcos::u256(1000)),  // value > balance
-            .create2_salt = {},
             .code_address = recipient,
             .code = nullptr,
             .code_size = 0};
@@ -176,12 +176,12 @@ BOOST_AUTO_TEST_CASE(FIB88_NotFoundCodeRevertPreservesGas)
             .flags = 0,
             .depth = 0,
             .gas = GAS_LIMIT,
+            .state_gas = {},
             .recipient = nonExistentAddr,
             .sender = {},
             .input_data = dummyInput.data(),
             .input_size = dummyInput.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = nonExistentAddr,
             .code = nullptr,
             .code_size = 0};
@@ -216,12 +216,12 @@ BOOST_AUTO_TEST_CASE(FIB88_NotFoundCodeStaticCallReturnsSuccess)
             .flags = EVMC_STATIC,
             .depth = 0,
             .gas = GAS_LIMIT,
+            .state_gas = {},
             .recipient = nonExistentAddr,
             .sender = {},
             .input_data = dummyInput.data(),
             .input_size = dummyInput.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = nonExistentAddr,
             .code = nullptr,
             .code_size = 0};
@@ -281,12 +281,12 @@ BOOST_AUTO_TEST_CASE(FIB91_AuthCheckInsideTryBlock)
             .flags = 0,
             .depth = 0,
             .gas = 1000000,
+            .state_gas = {},
             .recipient = helloworldAddress,
             .sender = {},
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
-            .create2_salt = {},
             .code_address = helloworldAddress,
             .code = nullptr,
             .code_size = 0};
@@ -373,12 +373,12 @@ BOOST_AUTO_TEST_CASE(FIB88_FlagOff_InsufficientBalancePreservesGas)
             .flags = 0,
             .depth = 0,
             .gas = GAS_LIMIT,
+            .state_gas = {},
             .recipient = recipient,
             .sender = sender,
             .input_data = nullptr,
             .input_size = 0,
             .value = bcos::toEvmC(bcos::u256(1000)),
-            .create2_salt = {},
             .code_address = recipient,
             .code = nullptr,
             .code_size = 0};

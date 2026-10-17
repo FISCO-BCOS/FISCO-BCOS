@@ -77,12 +77,12 @@ public:
             .flags = 0,
             .depth = 0,
             .gas = 1'000'000,
+            .state_gas = {},  // evmc ABI 19 (EIP-8037)
             .recipient = recipient,
             .sender = {},
             .input_data = nullptr,
             .input_size = 0,
             .value = {},
-            .create2_salt = {},
             .code_address = {},
             .code = nullptr,
             .code_size = 0};

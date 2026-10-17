@@ -120,7 +120,7 @@ public:
         // no-op row.
         feature_raw_address = 54,
         feature_rpbft_vrf_type_secp256k1 = 55,
-        feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
+        feature_balance_policy2 = 56,  // 转账白名单 Transfer whitelist
         // RESERVED, never reuse. Bit 57 was feature_l2_ethereum_compat on the
         // release-3.18.0 development line (introduced by #5273 before any release shipped),
         // the "Ethereum-compatible lane" switch. The lane is now decided by executor_version
@@ -131,9 +131,9 @@ public:
         // a genesis still carrying `feature_l2_ethereum_compat=1` fails loudly at load instead
         // of silently enabling nothing.
         reserved_removed_l2_ethereum_compat = 57,
-        feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
-                                          // Ethereum MPT root from this flag's activation
-                                          // block on (spec 2026-04-24 design3 4.3)
+        feature_mpt_state_root = 58,  // MPT lazy-build: block stateRoot switches to the
+                                      // Ethereum MPT root from this flag's activation
+                                      // block on (spec 2026-04-24 design3 4.3)
         // Takes the next unused number per the rule above, rather than the slot next to
         // bugfix_statestorage_hash_v3_17 it occupies on release-3.17.0: inserting it there would
         // renumber every feature_ flag after it and silently move their on-chain bits.
@@ -156,13 +156,34 @@ public:
                                                     // hasher's hash("") (keccak on a non-SM
                                                     // chain) for a code-less live account, 0 for
                                                     // an absent/empty one; was true / 0.
+        bugfix_nested_create_creator_nonce = 62,    // v2 executor bumps the creating contract's
+                                                    // nonce on every nested CREATE (EVM message
+                                                    // depth != 0, absent nonce counts as 0 like
+                                                    // the get_nonce callback). Off: the historical
+                                                    // gate (web3 tx && m_level != 0) and the
+                                                    // throwing increaseNonce() semantics stay in
+                                                    // force, so existing chains see no new nonce
+                                                    // rows.
+        bugfix_evm_pairing_canonical_g2 = 63,       // v1 executor's alt_bn128 pairing precompile
+                                                    // (0x08) rejects non-canonical G2 encodings —
+        // any coordinate >= the base field prime — per
+        // EIP-197. Off (default): the historical
+        // behaviour of the 0.21 dependency (the
+        // Montgomery-form field ops reduced x+kP to x,
+        // so such encodings were accepted and computed
+        // a verdict), so pre-upgrade blocks replay
+        // verbatim. v1 lane only: the eth lane's
+        // mirror (ethereum-executor/EVMPrecompiles.cpp)
+        // stays strict unconditionally — it is the
+        // EIP-conformance lane, pinned by the EEST
+        // corpus and frozen vectors.
     };
 
     // feature_flags bit = enum value. Pin the newest flag so a value beyond
     // magic_enum's default reflection range [-128,127] is caught at compile time.
     // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
     // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
-    static_assert(magic_enum::enum_contains(Flag::bugfix_eip161_1052_account_semantics),
+    static_assert(magic_enum::enum_contains(Flag::bugfix_evm_pairing_canonical_g2),
         "newest Flag fell outside magic_enum's reflection range — check enum values");
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,

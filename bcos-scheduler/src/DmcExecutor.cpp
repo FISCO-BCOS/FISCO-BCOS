@@ -28,8 +28,7 @@ bool DmcExecutor::hasFinished()
     return m_executivePool.empty();
 }
 
-void DmcExecutor::setSchedulerOutHandler(
-    std::function<void(ExecutiveState::Ptr)> onSchedulerOut)
+void DmcExecutor::setSchedulerOutHandler(std::function<void(ExecutiveState::Ptr)> onSchedulerOut)
 {
     f_onSchedulerOut = std::move(onSchedulerOut);
 }
@@ -45,14 +44,12 @@ void DmcExecutor::setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitch
     f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
 }
 
-void DmcExecutor::setOnGetCodeHandler(
-    std::function<bcos::bytes(std::string_view)> onGetCodeEvent)
+void DmcExecutor::setOnGetCodeHandler(std::function<bcos::bytes(std::string_view)> onGetCodeEvent)
 {
     f_onGetCodeEvent = std::move(onGetCodeEvent);
 }
 
-void DmcExecutor::setGetAddrHandler(
-    std::function<std::string(const std::string_view&)> getFromFunc)
+void DmcExecutor::setGetAddrHandler(std::function<std::string(const std::string_view&)> getFromFunc)
 {
     f_getAddr = std::move(getFromFunc);
 }
@@ -65,8 +62,7 @@ void DmcExecutor::triggerSwitch()
     }
 }
 
-void DmcExecutor::forEachExecutive(
-    std::function<void(ContextID, ExecutiveState::Ptr)> handler)
+void DmcExecutor::forEachExecutive(std::function<void(ContextID, ExecutiveState::Ptr)> handler)
 {
     m_executivePool.forEach(ExecutivePool::MessageHint::ALL,
         [handler = std::move(handler)](ContextID contextID, ExecutiveState::Ptr executiveState) {
@@ -75,8 +71,7 @@ void DmcExecutor::forEachExecutive(
         });
 }
 
-void DmcExecutor::preExecute()
-{}
+void DmcExecutor::preExecute() {}
 
 bool DmcExecutor::hasContractTableChanged()
 {
@@ -437,14 +432,17 @@ void DmcExecutor::handleCreateMessage(
             auto newSeq = currentSeq;
             if (message->createSalt())
             {
-                message->setTo(
-                    newCreate2EVMAddress(message->from(), message->data(), *(message->createSalt())));
+                // A producer still speaking the pre-0.24 protocol hands the salt down
+                // and expects the EIP-1014 address: derive it with the shared helper
+                // (the same formula the host-side create2 hook uses) instead of
+                // silently re-addressing the create with the legacy formula.
+                message->setTo(bcos::newCreate2EVMAddress(
+                    m_hashImpl, message->from(), message->data(), *(message->createSalt())));
             }
             else
             {
                 // Note: no need to compatible with EIP-86, because dmc not compatible to eth
-                message->setTo(
-                    newEVMAddress(m_block->blockHeader()->number(), contextID, newSeq));
+                message->setTo(newEVMAddress(m_block->blockHeader()->number(), contextID, newSeq));
             }
         }
         break;
@@ -793,10 +791,4 @@ void DmcExecutor::scheduleOut(ExecutiveState::Ptr executiveState)
 std::string DmcExecutor::newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq)
 {
     return bcos::newEVMAddress(m_hashImpl, blockNumber, contextID, seq);
-}
-
-std::string DmcExecutor::newCreate2EVMAddress(
-    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
-{
-    return bcos::newCreate2EVMAddress(m_hashImpl, _sender, _init, _salt);
 }

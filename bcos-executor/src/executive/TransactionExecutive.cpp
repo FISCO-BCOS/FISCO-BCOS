@@ -50,13 +50,13 @@
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/Common.h"
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <memory>
 #include <string>
-#include <boost/algorithm/string.hpp>
 
 
 using namespace std;
@@ -144,24 +144,18 @@ CallParameters::UniquePtr TransactionExecutive::externalCall(CallParameters::Uni
     // a new address
     if (isCreate && std::empty(input->receiveAddress))
     {
-        if (input->createSalt)
+        // contract create contract (nested CREATE2 rides a pre-derived receiveAddress since
+        // evmc ABI 19 removed evmc_message::create2_salt — the executor no longer carries a
+        // salt here, so this branch only derives opcode-less internal creates)
+        if (m_blockContext.features().get(ledger::Features::Flag::feature_evm_address))
         {
-            newAddress = bcos::newCreate2EVMAddress(m_hashImpl, input->senderAddress,
-                bytesConstRef(input->data.data(), input->data.size()), *(input->createSalt));
+            auto senderBytes = fromHex(input->senderAddress);
+            newAddress = bcos::newLegacyEVMAddressString(ref(senderBytes), input->nonce);
         }
         else
         {
-            // contract create contract
-            if (m_blockContext.features().get(ledger::Features::Flag::feature_evm_address))
-            {
-                auto senderBytes = fromHex(input->senderAddress);
-                newAddress = bcos::newLegacyEVMAddressString(ref(senderBytes), input->nonce);
-            }
-            else
-            {
-                newAddress =
-                    bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
-            }
+            newAddress =
+                bcos::newEVMAddress(m_hashImpl, m_blockContext.number(), m_contextID, newSeq);
         }
 
         input->receiveAddress = newAddress;
@@ -1032,7 +1026,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 evmcMessage.value = toEvmC(h256(0));
             }
-            evmcMessage.create2_salt = toEvmC(0x0_cppui256);
 
             evmcMessage.input_data = hostContext.data().data();
             evmcMessage.input_size = hostContext.data().size();
@@ -1071,6 +1064,10 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto vm = m_blockContext.getVMFactory()->create(
                 vmKind, revision, crypto::HashType(), code, true);
             auto ret = vm.execute(hostContext, &evmcMessage);
+            // A host-side fault recorded by a fail-closed callback cannot ride a
+            // sub-call failure the parent frame survives: rethrow it into the catch
+            // ladder arm its family would have reached (review F1).
+            hostContext.throwIfHostFault();
 
             auto callResults = hostContext.takeCallParameters();
             // clear unnecessary logs
@@ -1251,6 +1248,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 hostContext.codeHash(), bytes_view((uint8_t*)code.data(), code.size()));
             auto evmcMessage = getEVMCMessage(m_blockContext, hostContext);
             auto ret = vm.execute(hostContext, &evmcMessage);
+            // Same whole-frame fault check as the create branch (review F1).
+            hostContext.throwIfHostFault();
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
 
@@ -1410,7 +1409,7 @@ std::shared_ptr<precompiled::Precompiled> bcos::executor::TransactionExecutive::
 std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
     const string& _a, bytesConstRef _in) const
 {
-    return m_evmPrecompiled->at(_a)->execute(_in);
+    return m_evmPrecompiled->at(_a)->execute(_in, m_blockContext.features());
 }
 
 int64_t TransactionExecutive::costOfPrecompiled(const string& _a, bytesConstRef _in) const

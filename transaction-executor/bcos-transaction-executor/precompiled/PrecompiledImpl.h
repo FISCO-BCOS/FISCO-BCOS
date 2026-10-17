@@ -8,6 +8,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/Overloaded.h"
+#include <bcos-utilities/BoostLog.h>
 #include <evmc/evmc.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
@@ -15,7 +16,6 @@
 #include <memory>
 #include <range/v3/algorithm/copy.hpp>
 #include <variant>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::executor_v1
 {
@@ -47,11 +47,10 @@ inline EVMCResult buildBuiltinPrecompiledResult(bool success, auto const& output
             .status_code = success ? EVMC_SUCCESS : EVMC_REVERT,
             .gas_left = gasLeft,
             .gas_refund = 0,
+            .state_gas = {},
             .output_data = buffer.release(),
             .output_size = output.size(),
             .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-            .create_address = {},
-            .padding = {},
         },
         success ? protocol::TransactionStatus::None :
                   protocol::TransactionStatus::RevertInstruction};
@@ -81,12 +80,13 @@ inline EVMCResult callBuiltinPrecompiled(executor::PrecompiledContract const& pr
                 features.get(ledger::Features::Flag::bugfix_v1_error_handling));
         }
         auto [success, output] =
-            precompiledContract.execute({message.input_data, message.input_size});
+            precompiledContract.execute({message.input_data, message.input_size}, features);
         return buildBuiltinPrecompiledResult(success, output, message.gas - gasCost);
     }
 
     // Legacy path: execute first, then compute cost (no validation).
-    auto [success, output] = precompiledContract.execute({message.input_data, message.input_size});
+    auto [success, output] =
+        precompiledContract.execute({message.input_data, message.input_size}, features);
     const auto gas = precompiledContract.cost({message.input_data, message.input_size});
     return buildBuiltinPrecompiledResult(
         success, output, message.gas - gas.template convert_to<int64_t>());
@@ -136,11 +136,10 @@ inline EVMCResult callBcosPrecompiled(
                 .status_code = EVMC_SUCCESS,
                 .gas_left = response->m_gasLeft,
                 .gas_refund = 0,
+                .state_gas = {},
                 .output_data = buffer.release(),
                 .output_size = params->m_execResult.size(),
                 .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-                .create_address = {},
-                .padding = {},
             },
             protocol::TransactionStatus::None};
     }

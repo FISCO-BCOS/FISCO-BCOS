@@ -8,6 +8,7 @@
 #include "CompatTestFixture.h"
 #include "vm/Precompiled.h"
 #include <Common.h>
+#include <bcos-framework/ledger/Features.h>
 #include <boost/test/unit_test.hpp>
 #include <vector>
 
@@ -22,7 +23,7 @@ BOOST_AUTO_TEST_CASE(FC_M_modexp_compatibility)
 {
     // Small vector from legacy ForwardCompatibility / EvmPrecompiledTest: 2^8 mod 10 = 6
     auto run = [](bytes const& input) {
-        return executor::PrecompiledRegistrar::executor("modexp")(ref(input));
+        return executor::PrecompiledRegistrar::executor("modexp")(ref(input), ledger::Features{});
     };
     auto r = run(compatMakeModexpInput({0x02}, {0x08}, {0x0a}));
     BOOST_REQUIRE(r.first);
@@ -38,7 +39,8 @@ BOOST_AUTO_TEST_CASE(FC_M_modexp_7_pow_0_mod_11)
     input.push_back(0x07);
     input.push_back(0x00);
     input.push_back(0x0B);
-    auto result = executor::PrecompiledRegistrar::executor("modexp")(ref(input));
+    auto result =
+        executor::PrecompiledRegistrar::executor("modexp")(ref(input), ledger::Features{});
     BOOST_CHECK(result.first);
     BOOST_REQUIRE_EQUAL(result.second.size(), 1u);
     BOOST_CHECK_EQUAL(static_cast<unsigned>(result.second[0]), 1u);
@@ -52,7 +54,8 @@ BOOST_AUTO_TEST_CASE(FC_M_modexp_mod_zero_empty)
     inputZeroMod[95] = 0;
     inputZeroMod.push_back(0x02);
     inputZeroMod.push_back(0x03);
-    auto resultZeroMod = executor::PrecompiledRegistrar::executor("modexp")(ref(inputZeroMod));
+    auto resultZeroMod =
+        executor::PrecompiledRegistrar::executor("modexp")(ref(inputZeroMod), ledger::Features{});
     BOOST_CHECK(resultZeroMod.first);
     BOOST_CHECK(resultZeroMod.second.empty());
 }
@@ -64,7 +67,8 @@ BOOST_AUTO_TEST_CASE(FC_M_modexp_large_boundary)
     shortInput[31] = 1;
     shortInput[63] = 1;
     shortInput[95] = 7;
-    auto r = executor::PrecompiledRegistrar::executor("modexp")(ref(shortInput));
+    auto r =
+        executor::PrecompiledRegistrar::executor("modexp")(ref(shortInput), ledger::Features{});
     BOOST_REQUIRE(r.first);
     BOOST_CHECK_EQUAL(r.second.size(), 7u);
     BOOST_CHECK(r.second == bytes(7, 0));
@@ -74,7 +78,7 @@ BOOST_AUTO_TEST_CASE(FC_M_modexp_large_boundary)
 BOOST_AUTO_TEST_CASE(FC_M_modexp_base_zero)
 {
     auto in = compatMakeModexpInput({0x00}, {0x03}, {0x0b});  // 0^3 mod 11 = 0
-    auto r = executor::PrecompiledRegistrar::executor("modexp")(ref(in));
+    auto r = executor::PrecompiledRegistrar::executor("modexp")(ref(in), ledger::Features{});
     BOOST_REQUIRE(r.first);
     BOOST_REQUIRE_EQUAL(r.second.size(), 1u);
     BOOST_CHECK_EQUAL(r.second[0], 0);
@@ -84,7 +88,7 @@ BOOST_AUTO_TEST_CASE(FC_M_modexp_base_zero)
 BOOST_AUTO_TEST_CASE(FC_M_modexp_exp_zero)
 {
     auto in = compatMakeModexpInput({0x07}, {0x00}, {0x0b});  // 7^0 mod 11 = 1
-    auto r = executor::PrecompiledRegistrar::executor("modexp")(ref(in));
+    auto r = executor::PrecompiledRegistrar::executor("modexp")(ref(in), ledger::Features{});
     BOOST_REQUIRE(r.first);
     BOOST_REQUIRE_EQUAL(r.second.size(), 1u);
     BOOST_CHECK_EQUAL(r.second[0], 1);
@@ -108,7 +112,7 @@ BOOST_AUTO_TEST_CASE(FC_M_modexp_right_padding)
     in.push_back(0x00);  // base[1] = trailing zero → base = [0x02, 0x00] = 512
     in.push_back(0x03);  // exp = 3
     in.push_back(0x05);  // mod = 5
-    auto r = executor::PrecompiledRegistrar::executor("modexp")(ref(in));
+    auto r = executor::PrecompiledRegistrar::executor("modexp")(ref(in), ledger::Features{});
     BOOST_REQUIRE(r.first);
     BOOST_REQUIRE_EQUAL(r.second.size(), 1u);
     BOOST_CHECK_EQUAL(r.second[0], 3);  // 512^3 mod 5 = 2^3 mod 5 = 3
@@ -127,7 +131,7 @@ BOOST_AUTO_TEST_CASE(FC_M_modexp_mod_zero_nonzero_len)
     in.push_back(0x00);  // mod byte 1 = 0
     in.push_back(0x00);  // mod byte 2 = 0
     in.push_back(0x00);  // mod byte 3 = 0 → mod == 0
-    auto r = executor::PrecompiledRegistrar::executor("modexp")(ref(in));
+    auto r = executor::PrecompiledRegistrar::executor("modexp")(ref(in), ledger::Features{});
     BOOST_REQUIRE(r.first);
     BOOST_CHECK_EQUAL(r.second.size(), 3u);
     BOOST_CHECK(r.second == bytes(3, 0));  // all-zeros, length = modLen
