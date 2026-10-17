@@ -34,10 +34,17 @@
 
 namespace bcos
 {
+namespace ledger
+{
+class Features;
+}
 namespace executor
 {
 class BlockContext;
-using PrecompiledExecutor = std::function<std::pair<bool, bytes>(bytesConstRef)>;
+// The executor receives the block's feature flags so consensus-relevant parses can be
+// gated (e.g. bugfix_evm_pairing_canonical_g2); executors that need no flag ignore it.
+using PrecompiledExecutor =
+    std::function<std::pair<bool, bytes>(bytesConstRef, const ledger::Features& features)>;
 using PrecompiledPricer = std::function<bigint(bytesConstRef)>;
 
 DERIVE_BCOS_EXCEPTION(ExecutorNotFound);
@@ -71,11 +78,12 @@ private:
     std::unordered_map<std::string, PrecompiledPricer> m_pricers;
 };
 
-#define ETH_REGISTER_PRECOMPILED(Name)                                                        \
-    static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name(bytesConstRef _in); \
-    static bcos::executor::PrecompiledExecutor __eth_registerPrecompiledFactory##Name =       \
-        ::bcos::executor::PrecompiledRegistrar::registerExecutor(                             \
-            #Name, &__eth_registerPrecompiledFunction##Name);                                 \
+#define ETH_REGISTER_PRECOMPILED(Name)                                                  \
+    static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name(              \
+        bytesConstRef _in, const ledger::Features& features);                           \
+    static bcos::executor::PrecompiledExecutor __eth_registerPrecompiledFactory##Name = \
+        ::bcos::executor::PrecompiledRegistrar::registerExecutor(                       \
+            #Name, &__eth_registerPrecompiledFunction##Name);                           \
     static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name
 #define ETH_REGISTER_PRECOMPILED_PRICER(Name)                                    \
     static bigint __eth_registerPricerFunction##Name(bytesConstRef _in);         \
@@ -96,7 +104,7 @@ public:
         u256 const& _startingBlock = 0);
 
     bigint cost(bytesConstRef _in) const;
-    std::pair<bool, bytes> execute(bytesConstRef _in) const;
+    std::pair<bool, bytes> execute(bytesConstRef _in, const ledger::Features& _features) const;
 
     u256 const& startingBlock() const;
 

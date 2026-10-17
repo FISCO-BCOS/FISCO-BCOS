@@ -164,13 +164,26 @@ public:
                                                     // throwing increaseNonce() semantics stay in
                                                     // force, so existing chains see no new nonce
                                                     // rows.
+        bugfix_evm_pairing_canonical_g2 = 63,       // v1 executor's alt_bn128 pairing precompile
+                                                    // (0x08) rejects non-canonical G2 encodings —
+        // any coordinate >= the base field prime — per
+        // EIP-197. Off (default): the historical
+        // behaviour of the 0.21 dependency (the
+        // Montgomery-form field ops reduced x+kP to x,
+        // so such encodings were accepted and computed
+        // a verdict), so pre-upgrade blocks replay
+        // verbatim. v1 lane only: the eth lane's
+        // mirror (ethereum-executor/EVMPrecompiles.cpp)
+        // stays strict unconditionally — it is the
+        // EIP-conformance lane, pinned by the EEST
+        // corpus and frozen vectors.
     };
 
     // feature_flags bit = enum value. Pin the newest flag so a value beyond
     // magic_enum's default reflection range [-128,127] is caught at compile time.
     // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
     // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
-    static_assert(magic_enum::enum_contains(Flag::bugfix_nested_create_creator_nonce),
+    static_assert(magic_enum::enum_contains(Flag::bugfix_evm_pairing_canonical_g2),
         "newest Flag fell outside magic_enum's reflection range — check enum values");
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,
