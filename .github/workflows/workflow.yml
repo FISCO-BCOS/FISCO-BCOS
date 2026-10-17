@@ -259,7 +259,15 @@ jobs:
       - name: Build
         run: |
           cd build
-          cmake --build .
+          # Bound the job count: with the repo-wide unity build one translation unit folds up to
+          # 16 sources together, and the heaviest ones peak at ~3.7 GB of compiler RSS measured
+          # with the CI flags (test-bcos-rpc / test-transaction-scheduler). Leaving --parallel
+          # unset lets the generator use every core, so several of those can run at once on a
+          # 4 vCPU runner - ~14.7 GB against its 16 GB budget - and this step has been dying a
+          # runner "lost communication"/SIGTERM instead of a compile error. --parallel 3 caps the
+          # worst case near 11 GB and matches the coverage job, which is the heaviest build in
+          # this workflow and the stable one precisely because it already bounds parallelism.
+          cmake --build . --parallel 3
       - name: ccache stats
         # always(): the hit rate and cache size are the evidence for the cache sizing, and a
         # failed or timed-out build is exactly the run whose numbers are wanted.
@@ -815,7 +823,11 @@ jobs:
       - name: Build
         run: |
           cd build
-          cmake --build .
+          # Same reasoning as the build matrix: unity folds up to 16 sources into one TU, the
+          # heaviest peak at ~3.7 GB of compiler RSS, and an unbounded job count multiplies that
+          # against a 16 GB runner. This job has been failing with a runner shutdown/SIGTERM
+          # rather than a compile error; --parallel 3 bounds it and matches the coverage job.
+          cmake --build . --parallel 3
       - name: ccache stats
         # always(): see the build matrix — stats must survive a failed/timed-out build.
         if: always()
