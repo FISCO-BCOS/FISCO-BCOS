@@ -6,6 +6,7 @@
 #include "bcos-scheduler/src/DmcStepRecorder.h"
 #include "bcos-scheduler/src/GraphKeyLocks.h"
 #include "mock/MockDmcExecutor.h"
+#include <bcos-crypto/bcos-crypto/ChecksumAddress.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -69,6 +70,47 @@ bcos::protocol::ExecutionMessage::UniquePtr createMessage(
     message->setFrom("0xeeffaabb");
     message->setTo(toAddress);
     return message;
+}
+
+BOOST_AUTO_TEST_CASE(handleCreateMessageFollowsTheCreateSaltFormula)
+{
+    // A producer still speaking the pre-0.24 protocol hands createSalt down with an
+    // empty `to` and expects the EIP-1014 address: the DMC lane must derive it through
+    // the shared helper (the same formula the host-side create2 hook uses), not
+    // silently re-address the create with the legacy FISCO formula.
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto block = blockFactory->createBlock();
+    auto blockHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
+    blockHeader->setNumber(1);
+    blockHeader->calculateHash(*hashImpl);
+    block->setBlockHeader(blockHeader);
+    // handleCreateMessage is protected; lift it for the wiring pin.
+    class TestableDmcExecutor : public bcos::scheduler::DmcExecutor
+    {
+    public:
+        using bcos::scheduler::DmcExecutor::DmcExecutor;
+        using bcos::scheduler::DmcExecutor::handleCreateMessage;
+    };
+    auto executor = std::make_shared<TestableDmcExecutor>(
+        "DmcExecutorSalt", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder, false);
+
+    constexpr auto type = static_cast<int>(bcos::protocol::ExecutionMessage::Type::MESSAGE);
+    auto salted = createMessage(0, 0, type, "", false);
+    salted->setData(bcos::bytes{0x60, 0x00, 0x60, 0x00, 0x53});
+    salted->setCreateSalt(bcos::u256(0x1234));
+    executor->handleCreateMessage(salted, 7);
+    const auto expected =
+        bcos::newCreate2EVMAddress(hashImpl, salted->from(), salted->data(), bcos::u256(0x1234));
+    BOOST_CHECK(!salted->to().empty());
+    BOOST_CHECK_EQUAL(salted->to(), expected);
+
+    // The same message without a salt keeps the legacy FISCO formula — a different
+    // address, so the two derivations cannot silently substitute for each other.
+    auto legacy = createMessage(0, 0, type, "", false);
+    legacy->setData(bcos::bytes{0x60, 0x00, 0x60, 0x00, 0x53});
+    executor->handleCreateMessage(legacy, 7);
+    BOOST_CHECK(!legacy->to().empty());
+    BOOST_CHECK_NE(legacy->to(), expected);
 }
 
 BOOST_AUTO_TEST_CASE(stateSwitchTest)
