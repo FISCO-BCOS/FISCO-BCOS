@@ -53,7 +53,6 @@
 #include <boost/lexical_cast.hpp>
 
 #include <algorithm>
-#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <optional>

@@ -13,7 +13,8 @@
 #include <opstack-executor/OpCommon.h>          // OpConsensusError / OpStorageError
 #include <opstack-executor/OpEthBlockSteps.h>   // preBlockOpEthSteps / finalizeOpEthBlockResult
 #include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult
-#include <opstack-executor/OpEthDeposit.h>  // DepositTx / decodeOpDepositEnvelope / OP_DEPOSIT_TX_TYPE
+// DepositTx / decodeOpDepositEnvelope / OP_DEPOSIT_TX_TYPE
+#include <opstack-executor/OpEthDeposit.h>
 #include <opstack-executor/OpEthExecutor.h>      // OpEthExecutor / OpEthBlockContext
 #include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
 #include <opstack-executor/OpForkSpec.h>         // opForkSpecAt / opForkTimestampSec
@@ -82,7 +83,8 @@ namespace opeth = bcos::executor_v1::opstack;
 namespace
 {
 
-constexpr uint64_t c_chainId = opstack_test::c_opChainId;  // 8453 — single home: support/T8nCorpus.h
+constexpr uint64_t c_chainId =
+    opstack_test::c_opChainId;  // 8453 — single home: support/T8nCorpus.h
 const bcos::Address c_sender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
                                                                              // sender
 
