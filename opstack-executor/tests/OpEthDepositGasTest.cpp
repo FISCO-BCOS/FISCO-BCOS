@@ -14,6 +14,7 @@
 // too; the Bedrock/Regolith fork matrix is covered on this layer by OpEthForkMatrixTest and
 // is not duplicated.
 
+#include "support/T8nCorpus.h"  // opstack_test::c_opChainId (single home, review round-1 F3)
 #include <opstack-executor/OpEthDeposit.h>
 #include <opstack-executor/OpForkSpec.h>
 #include <ethereum-executor/EthereumHost.h>      // EthCallParams
@@ -29,6 +30,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>  // toQuantity (chain id from the single home)
 #include <boost/test/unit_test.hpp>
 #include <evmone/evmone.h>
 
@@ -401,7 +403,8 @@ BOOST_AUTO_TEST_CASE(KarstDepositAbove7825CapAdmittedButNormalTxRejected)
     // Version 2 (EIP-1559): the legacy (V0) factory overload drops gasLimit entirely —
     // only the typed path carries it (TransactionFactoryImpl.cpp's V0 short-circuit).
     auto tx = txFactory->createTransaction(2, "0x00000000000000000000000000000000000000bb",
-        bcos::bytes{0x0a}, "0x0", 100000, "0x2105", "1", 7, /*_abi=*/{}, /*_value=*/{},
+        bcos::bytes{0x0a}, "0x0", 100000, bcos::toQuantity(opstack_test::c_opChainId), "1", 7,
+        /*_abi=*/{}, /*_value=*/{},
         /*_gasPrice=*/{}, MAX_TX_GAS_LIMIT + 1, /*_maxFeePerGas=*/"0x3e8",
         /*_maxPriorityFeePerGas=*/"0x1");
     eth::EthBlockInfo blk{};
