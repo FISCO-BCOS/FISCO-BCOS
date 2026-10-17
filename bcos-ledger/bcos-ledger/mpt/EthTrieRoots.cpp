@@ -19,6 +19,7 @@
  */
 #include "EthTrieRoots.h"
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <charconv>
@@ -152,7 +153,9 @@ bcos::bytes encodeReceiptLeaf(
     bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType)
 {
     constexpr std::uint8_t c_legacyTxType = 0x00;
-    constexpr std::uint8_t c_depositTxType = 0x7e;
+    // Alias of the ONE home in bcos::protocol (Transaction.h, review round-1 F2) — the
+    // receipt-leaf shape byte and the executor/RPC deposit gates key on one value.
+    constexpr std::uint8_t c_depositTxType = bcos::protocol::c_depositTxType;
 
     // RLP bool semantics: true -> 0x01, false -> 0x80 (raw push; the UnsignedByte encode path
     // mis-handles bool). Payload = rlp([status, cumGas, bloom, logs]) + (deposit) [nonce, version].
