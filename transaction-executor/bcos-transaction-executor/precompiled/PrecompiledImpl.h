@@ -122,7 +122,7 @@ inline EVMCResult callBcosPrecompiled(
     auto contractAddress = address2HexString(message.code_address);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
-        authCheck);
+        authCheck, features);
 
     auto params = std::make_shared<precompiled::PrecompiledExecResult>();
     params->m_sender = address2HexString(message.sender);

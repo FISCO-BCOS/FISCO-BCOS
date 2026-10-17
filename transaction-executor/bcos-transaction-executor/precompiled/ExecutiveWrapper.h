@@ -47,15 +47,17 @@ private:
     std::unique_ptr<executor::BlockContext> m_blockContext;
     Caller m_externalCaller;
     PrecompiledManager const& m_precompiledManager;
+    ledger::Features m_features;
 
 public:
     ExecutiveWrapper(std::unique_ptr<executor::BlockContext> blockContext,
         std::string contractAddress, int64_t contextID, int64_t seq, Caller externalCaller,
-        PrecompiledManager const& precompiledManager)
+        PrecompiledManager const& precompiledManager, ledger::Features features)
       : executor::TransactionExecutive(*blockContext, std::move(contractAddress), contextID, seq),
         m_blockContext(std::move(blockContext)),
         m_externalCaller(std::move(externalCaller)),
-        m_precompiledManager(precompiledManager)
+        m_precompiledManager(precompiledManager),
+        m_features(std::move(features))
     {}
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(std::string_view _address,
@@ -89,13 +91,18 @@ public:
                 input->codeAddress = bcos::newEVMAddress(
                     m_hashImpl, m_blockContext->number(), m_contextID, seq() + 1);
                 input->receiveAddress = input->codeAddress;
-                // Publish the consumed base (review F6): a second internalCreate through
-                // this wrapper must derive from the NEXT value. Nothing else advances
-                // this counter on the wrapper path — the EVM lane's ++m_seq lives in the
-                // v2 HostContext, and each dispatch receives this executive's seq by
-                // value — so two creates through one wrapper used to derive f(seq+1)
-                // twice and land both stubs on one address.
-                m_seq = seq() + 1;
+                // Publish the consumed base (review F6), gated on bit 66: a second
+                // internalCreate through this wrapper must derive from the NEXT value.
+                // Nothing else advances this counter on the wrapper path — the EVM lane's
+                // ++m_seq lives in the v2 HostContext, and each dispatch receives this
+                // executive's seq by value — so two creates through one wrapper used to
+                // derive f(seq+1) twice and land both stubs on one address. Off, the
+                // historical snapshot semantics is kept so historical blocks replay
+                // byte-identically.
+                if (m_features.get(ledger::Features::Flag::bugfix_internal_create_seq))
+                {
+                    m_seq = seq() + 1;
+                }
             }
             EXECUTIVE_WRAPPER(TRACE) << "codeAddress:" << input->codeAddress;
             auto [hostContext, callResults] = create(std::move(input));
@@ -167,7 +174,7 @@ public:
 
 inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blockHeader,
     std::string contractAddress, ExternalCaller auto externalCaller, auto const& precompiledManager,
-    int64_t contextID, int64_t seq, bool authCheck)
+    int64_t contextID, int64_t seq, bool authCheck, ledger::Features features)
 {
     auto storageWrapper =
         std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
@@ -178,6 +185,6 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
         std::move(blockContext), std::move(contractAddress), contextID, seq,
-        std::move(externalCaller), precompiledManager);
+        std::move(externalCaller), precompiledManager, std::move(features));
 }
 }  // namespace bcos::executor_v1

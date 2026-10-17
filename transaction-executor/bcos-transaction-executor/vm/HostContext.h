@@ -1043,7 +1043,9 @@ private:
         auto result = m_executable->m_vmInstance.execute(m_hostInterface,
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
             ref.input_data, ref.input_size, &HostContext::createAddressHook,
-            &HostContext::create2AddressHook);
+            &HostContext::create2AddressHook,
+            m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_v2_status_mapper_ordinary_failures));
         // Whole-frame fault check (review F1): a fault recorded by a fail-closed EVMC
         // callback must fail this frame, not ride the callback's sub-op-level answer.
         throwIfHostFault();
@@ -1196,7 +1198,9 @@ private:
         auto result = m_executable->m_vmInstance.execute(m_hostInterface,
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
             (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size(),
-            &HostContext::createAddressHook, &HostContext::create2AddressHook);
+            &HostContext::createAddressHook, &HostContext::create2AddressHook,
+            m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_v2_status_mapper_ordinary_failures));
         throwIfHostFault();  // same whole-frame check as the create branch (review F1)
         co_return result;
     }

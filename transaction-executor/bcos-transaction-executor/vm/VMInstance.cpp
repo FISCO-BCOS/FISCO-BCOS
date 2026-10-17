@@ -40,7 +40,8 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     const evmc_message* msg, const uint8_t* code, size_t codeSize,
     evmc_address (*createAddressFn)(struct evmc_host_context*, const evmc_address*, uint64_t),
     evmc_address (*create2AddressFn)(struct evmc_host_context*, const evmc_address*,
-        const evmc_bytes32*, const uint8_t*, size_t))
+        const evmc_bytes32*, const uint8_t*, size_t),
+    bool mapOrdinaryFailures)
 {
     // The no-defaults signature makes an omitted hook a compile error; an explicit
     // nullptr must fail loudly too (an assert would vanish under NDEBUG and silently
@@ -68,7 +69,11 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     // (and, on SM-crypto chains, a different hasher).
     evmoneVm->create_address_fn = createAddressFn;
     evmoneVm->create2_address_fn = create2AddressFn;
-    return EVMCResult(evmone::baseline::execute(*evmoneVm, *host, context, rev, *msg, *m_analysis));
+    auto result = evmone::baseline::execute(*evmoneVm, *host, context, rev, *msg, *m_analysis);
+    // Bit 65 decides the receipt mapping for ordinary EVM failures; off keeps the
+    // historical throw-and-relabel path (prepare() must see the same flag).
+    return EVMCResult(
+        result, evmcStatusToTransactionStatus(result.status_code, mapOrdinaryFailures));
 }
 
 void bcos::executor_v1::VMInstance::enableDebugOutput() {}

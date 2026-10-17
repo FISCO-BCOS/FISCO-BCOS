@@ -1698,9 +1698,11 @@ BOOST_AUTO_TEST_CASE(twoInternalCreatesThroughOneWrapperDeriveDistinctAddresses)
         r.status_code = EVMC_FAILURE;
         return EVMCResult{r};
     };
+    auto createFeatures = ledgerConfig.features();
+    createFeatures.set(ledger::Features::Flag::bugfix_internal_create_seq);
     auto wrapper = bcos::executor_v1::buildLegacyExecutive(storage, blockHeader,
         /*contractAddress=*/"1000000000000000000000000000000000000002", caller,
-        *precompiledManager, /*contextID=*/7, /*seq=*/41, /*authCheck=*/false);
+        *precompiledManager, /*contextID=*/7, /*seq=*/41, /*authCheck=*/false, createFeatures);
 
     auto makeCreateInput = [] {
         auto input = std::make_unique<bcos::executor::CallParameters>(
@@ -1740,6 +1742,21 @@ BOOST_AUTO_TEST_CASE(twoInternalCreatesThroughOneWrapperDeriveDistinctAddresses)
     // success AND the failure path (pre-fix, both creates derived f(seq+1) twice).
     BOOST_CHECK_EQUAL(seqAfterFirst, seqBefore + 1);
     BOOST_CHECK_EQUAL(seqAfterSecond, seqBefore + 2);
+
+    // Gate OFF (bit 66 clear, the historical default): the snapshot semantics stays —
+    // the counter never advances, so historical blocks replay byte-identically.
+    auto offWrapper = bcos::executor_v1::buildLegacyExecutive(storage, blockHeader,
+        /*contractAddress=*/"1000000000000000000000000000000000000003", caller,
+        *precompiledManager, /*contextID=*/7, /*seq=*/41, /*authCheck=*/false,
+        ledgerConfig.features());
+    auto const offSeqBefore = offWrapper->seq();
+    try
+    {
+        static_cast<void>(offWrapper->externalCall(makeCreateInput()));
+    }
+    catch (...)
+    {}
+    BOOST_CHECK_EQUAL(offWrapper->seq(), offSeqBefore);
     // Consequence: the two derive bases differ, so the two link addresses differ
     // (newEVMAddress is injective in seq for fixed block/context).
     BOOST_CHECK_NE(

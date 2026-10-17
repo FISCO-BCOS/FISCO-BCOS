@@ -190,13 +190,29 @@ public:
                                                     // a difference. Takes 64 because 63 is occupied
                                                     // by bugfix_evm_pairing_canonical_g2 on the
                                                     // same line.
+        bugfix_v2_status_mapper_ordinary_failures = 65,  // v2 lane receipt construction maps the
+                                                    // ordinary EVM failure statuses
+                                                    // (BAD_JUMP_DESTINATION, INVALID_MEMORY_ACCESS,
+                                                    // STATIC_MODE_VIOLATION) instead of letting the
+                                                    // mapper's default throw relabel them
+                                                    // EVMC_INTERNAL_ERROR in execute()'s catch arm.
+                                                    // Off: the historical relabel (status
+                                                    // Unknown/OutOfGas, gas 0/ref->gas per
+                                                    // bugfix_v1_error_handling), so pre-existing
+                                                    // blocks replay byte-identically.
+        bugfix_internal_create_seq = 66,            // Precompiled-initiated creates publish the
+                                                    // consumed seq base, so two creates through one
+                                                    // ExecutiveWrapper derive distinct addresses
+                                                    // instead of colliding on f(seq+1). Off: the
+                                                    // historical snapshot semantics, so blocks
+                                                    // replay byte-identically.
     };
 
     // feature_flags bit = enum value. Pin the newest flag so a value beyond
     // magic_enum's default reflection range [-128,127] is caught at compile time.
     // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
     // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
-    static_assert(magic_enum::enum_contains(Flag::bugfix_dmc_create_address_rule),
+    static_assert(magic_enum::enum_contains(Flag::bugfix_internal_create_seq),
         "newest Flag fell outside magic_enum's reflection range — check enum values");
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,

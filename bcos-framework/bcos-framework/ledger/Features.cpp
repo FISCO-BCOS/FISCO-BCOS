@@ -223,7 +223,9 @@ void Features::setUpgradeFeatures(
                     }},
             {.to = protocol::BlockVersion::V3_18_0_VERSION,
                 .flags = {Flag::bugfix_eip161_1052_account_semantics,
-                    Flag::bugfix_dmc_create_address_rule}}});
+                    Flag::bugfix_dmc_create_address_rule,
+                    Flag::bugfix_v2_status_mapper_ordinary_failures,
+                    Flag::bugfix_internal_create_seq}}});
     for (const auto& upgradeFeatures : upgradeRoadmap)
     {
         if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&

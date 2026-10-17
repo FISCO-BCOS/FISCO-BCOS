@@ -41,7 +41,7 @@ inline task::Task<void> createAuthTable(auto& storage, protocol::BlockHeader con
     auto senderAddress = address2HexString(message.sender);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
-        true);
+        true, ledgerConfig.features());
 
     executive->creatAuthTable(tableName, originAddress, senderAddress, blockHeader.version());
     co_return;
@@ -55,7 +55,7 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     auto contractAddress = address2HexString(message.code_address);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
-        true);
+        true, features);
 
     auto params = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
     params->senderAddress = address2HexString(message.sender);

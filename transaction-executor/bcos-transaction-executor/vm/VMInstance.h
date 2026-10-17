@@ -56,7 +56,8 @@ public:
         evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize,
         evmc_address (*createAddressFn)(struct evmc_host_context*, const evmc_address*, uint64_t),
         evmc_address (*create2AddressFn)(struct evmc_host_context*, const evmc_address*,
-            const evmc_bytes32*, const uint8_t*, size_t));
+            const evmc_bytes32*, const uint8_t*, size_t),
+        bool mapOrdinaryFailures);
 
     void enableDebugOutput();
 

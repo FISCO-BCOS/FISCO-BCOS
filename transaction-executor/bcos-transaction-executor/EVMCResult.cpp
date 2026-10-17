@@ -111,7 +111,7 @@ bcos::executor_v1::fillErrorOutputInPlace(
 }
 
 bcos::protocol::TransactionStatus bcos::executor_v1::evmcStatusToTransactionStatus(
-    evmc_status_code status)
+    evmc_status_code status, bool mapOrdinaryFailures)
 {
     switch (status)
     {
@@ -130,17 +130,24 @@ bcos::protocol::TransactionStatus bcos::executor_v1::evmcStatusToTransactionStat
     case EVMC_INVALID_INSTRUCTION:
     case EVMC_UNDEFINED_INSTRUCTION:
         return protocol::TransactionStatus::BadInstruction;
-    // Ordinary EVM outcomes (review F3): all three are mapped by the twin
-    // evmcStatusToErrorMessage table below — leaving them on the default: throw
-    // turned every bad-jump / static-violation tx into an exception relabelled
-    // EVMC_INTERNAL_ERROR by execute()'s catch arm (with the error-handling flag
-    // OFF, gas_left = ref->gas: a failed contract refunded ALL its gas).
+    // Ordinary EVM outcomes (review F3), gated on bit 65: all three are mapped by the
+    // twin evmcStatusToErrorMessage table below. Off, the historical default: throw —
+    // execute()'s catch arm relabels EVMC_INTERNAL_ERROR (with the error-handling flag
+    // OFF, gas_left = ref->gas: a failed contract refunded ALL its gas), so historical
+    // blocks replay unchanged. On, they map to their own statuses and keep evmone's
+    // gas_left.
     case EVMC_BAD_JUMP_DESTINATION:
-        return protocol::TransactionStatus::BadJumpDestination;
+        if (mapOrdinaryFailures)
+            return protocol::TransactionStatus::BadJumpDestination;
+        BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     case EVMC_INVALID_MEMORY_ACCESS:
-        return protocol::TransactionStatus::StackUnderflow;
+        if (mapOrdinaryFailures)
+            return protocol::TransactionStatus::StackUnderflow;
+        BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     case EVMC_STATIC_MODE_VIOLATION:
-        return protocol::TransactionStatus::Unknown;
+        if (mapOrdinaryFailures)
+            return protocol::TransactionStatus::Unknown;
+        BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     default:
         BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     }

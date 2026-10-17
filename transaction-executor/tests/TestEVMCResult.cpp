@@ -500,24 +500,34 @@ BOOST_AUTO_TEST_CASE(makeErrorEVMCResult_clampEnabled_negativeGasClampedToZero)
 // them into UnknownEVMCStatus relabelled INTERNAL_ERROR by execute()'s catch arm.
 // Each pin asserts the mapped enum (mirroring the message table), and the VM-result
 // ctor now constructs instead of throwing.
-BOOST_AUTO_TEST_CASE(evmcStatusToTransactionStatus_maps_ordinary_evm_failures)
+// Ordinary EVM failure statuses (review F3) are gated on bit 65. OFF (the default,
+// historical): the mapper throws and execute()'s catch arm relabels the receipt
+// EVMC_INTERNAL_ERROR — the old behaviour, so historical blocks replay unchanged.
+// ON: each maps to its own status (mirroring the twin message table) and the VM-result
+// keeps evmone's gas_left.
+BOOST_AUTO_TEST_CASE(evmcStatusToTransactionStatus_ordinary_evm_failuresFollowTheGate)
 {
-    BOOST_CHECK_EQUAL(evmcStatusToTransactionStatus(EVMC_BAD_JUMP_DESTINATION),
-        TransactionStatus::BadJumpDestination);
-    BOOST_CHECK_EQUAL(evmcStatusToTransactionStatus(EVMC_INVALID_MEMORY_ACCESS),
-        TransactionStatus::StackUnderflow);
-    BOOST_CHECK_EQUAL(
-        evmcStatusToTransactionStatus(EVMC_STATIC_MODE_VIOLATION), TransactionStatus::Unknown);
-    // The ctor path VMInstance::execute returns through:
     for (evmc_status_code status :
         {EVMC_BAD_JUMP_DESTINATION, EVMC_INVALID_MEMORY_ACCESS, EVMC_STATIC_MODE_VIOLATION})
     {
+        // Gate OFF: the historical throw (relabelled by the caller's catch arm).
+        BOOST_CHECK_THROW(evmcStatusToTransactionStatus(status), bcos::Exception);
         evmc_result r{};
         r.status_code = status;
-        EVMCResult mapped{r};
-        BOOST_CHECK_EQUAL(static_cast<int>(mapped.status),
-            static_cast<int>(evmcStatusToTransactionStatus(status)));
+        BOOST_CHECK_THROW(static_cast<void>(EVMCResult{r}), bcos::Exception);
+
+        // Gate ON: mapped through both the mapper and the two-arg ctor path.
+        auto const mapped = evmcStatusToTransactionStatus(status, /*mapOrdinaryFailures=*/true);
+        BOOST_CHECK_EQUAL(
+            static_cast<int>(EVMCResult{r, mapped}.status), static_cast<int>(mapped));
     }
+    BOOST_CHECK_EQUAL(evmcStatusToTransactionStatus(EVMC_BAD_JUMP_DESTINATION, true),
+        TransactionStatus::BadJumpDestination);
+    BOOST_CHECK_EQUAL(evmcStatusToTransactionStatus(EVMC_INVALID_MEMORY_ACCESS, true),
+        TransactionStatus::StackUnderflow);
+    BOOST_CHECK_EQUAL(
+        evmcStatusToTransactionStatus(EVMC_STATIC_MODE_VIOLATION, true),
+        TransactionStatus::Unknown);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
