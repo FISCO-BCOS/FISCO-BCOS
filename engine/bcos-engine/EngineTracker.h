@@ -72,8 +72,11 @@ struct ResolvedForkchoice
     /// EL-mode relaxation: the CL is the forkchoice authority, so a canonical head may
     /// jump arbitrarily far ahead of the tracked head (the devp2p sync loop committed
     /// the blocks in between without a per-block FCU). Default false keeps the strict
-    /// +1 rule the block-producing lanes rely on; the jump still requires
-    /// headCanonical, so a non-canonical head is rejected on every lane.
+    /// +1 rule for lanes where the local producer is the forkchoice authority (the
+    /// legacy FISCO lane); CL-authoritative producing lanes opt in explicitly — the OP
+    /// lane unconditionally, the Eth lane when an external payload verifier is wired.
+    /// The jump still requires headCanonical, so a non-canonical head is rejected on
+    /// every lane.
     bool allowCanonicalHeadJump = false;
 };
 

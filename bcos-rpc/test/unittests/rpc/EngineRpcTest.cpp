@@ -237,9 +237,14 @@ BOOST_FIXTURE_TEST_SUITE(EngineRpcTest, EngineRpcTestFixture)
 
 BOOST_AUTO_TEST_CASE(exchangeCapabilities)
 {
+    // Engine-API shape: params[0] is itself the array of capabilities. The flat
+    // ["cap", "cap"] form this test used to send is the exact non-array params[0]
+    // that the review-F36 hardening now answers with -32602 (fail-open fix).
+    Json::Value caps(Json::arrayValue);
+    caps.append("engine_newPayloadV2");
+    caps.append("engine_newPayloadV3");
     Json::Value params(Json::arrayValue);
-    params.append("engine_newPayloadV2");
-    params.append("engine_newPayloadV3");
+    params.append(caps);
 
     Json::Value response;
     CALL_ENGINE(exchangeCapabilities, params, response);

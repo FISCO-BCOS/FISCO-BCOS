@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthL1Attributes.cpp
 /// @brief Implementation of OpEthL1Attributes.h. The calldata layout and the
 ///        sourceHash derivation are ported byte-for-byte from
@@ -11,10 +13,12 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <opstack-executor/OpEthCommitments.h>  // isOpEthJovianActive (the ONE Jovian predicate)
 #include <algorithm>
 #include <array>
 #include <span>
 #include <stdexcept>
+#include <boost/throw_exception.hpp>
 
 namespace bcos::executor_v1::opstack
 {
@@ -65,8 +69,8 @@ inline constexpr std::size_t c_baseFeeOffset = 36;
 inline constexpr std::size_t c_blobBaseFeeOffset = 68;
 inline constexpr std::size_t c_blockHashOffset = 100;
 inline constexpr std::size_t c_batcherHashOffset = 132;
-inline constexpr std::size_t c_operatorFeeScalarOffset = 164;
-inline constexpr std::size_t c_operatorFeeConstantOffset = 168;
+inline constexpr std::size_t c_operatorFeeScalarOffset = OP_ETH_L1_OPERATOR_FEE_SCALAR_OFFSET;
+inline constexpr std::size_t c_operatorFeeConstantOffset = OP_ETH_L1_OPERATOR_FEE_CONSTANT_OFFSET;
 }  // namespace
 
 bcos::bytes encodeOpEthDepositEnvelope(const DepositTx& dep)
@@ -135,8 +139,8 @@ DepositTx buildOpEthL1AttributesDeposit(const OpEthL1BlockInfo& l1Info, bool jov
     bcos::toBigEndian(l1Info.number, numberField);
     storeU256BE(dataSpan.subspan(c_baseFeeOffset, 32), l1Info.baseFee);
     storeU256BE(dataSpan.subspan(c_blobBaseFeeOffset, 32), l1Info.blobBaseFee);
-    std::copy_n(l1Info.blockHash.bytes, sizeof(evmc::bytes32),
-        deposit.data.begin() + c_blockHashOffset);
+    std::copy_n(
+        l1Info.blockHash.bytes, sizeof(evmc::bytes32), deposit.data.begin() + c_blockHashOffset);
     std::copy_n(l1Info.batcherHash.bytes, sizeof(evmc::bytes32),
         deposit.data.begin() + c_batcherHashOffset);
     storeU32BE(dataSpan.subspan(c_operatorFeeScalarOffset, 4), l1Info.operatorFeeScalar);
@@ -156,24 +160,22 @@ bcos::bytes synthesizeOpEthL1AttributesEnvelope(const OpForkSchedule& schedule,
 {
     if (isUnsetOpEthL1BlockInfo(l1Info))
     {
-        throw std::invalid_argument(
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
             "synthesizeOpEthL1AttributesEnvelope: refuse to synthesize L1-attributes from an "
-            "unset L1BlockInfo (number, time, and blockHash are all zero)");
+            "unset L1BlockInfo (number, time, and blockHash are all zero)"));
     }
     if (isUnsetOpEthSystemConfig(l1Info))
     {
-        throw std::invalid_argument(
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
             "synthesizeOpEthL1AttributesEnvelope: refuse to synthesize L1-attributes with an "
-            "unset SystemConfig (baseFeeScalar and batcherHash must be non-zero)");
+            "unset SystemConfig (baseFeeScalar and batcherHash must be non-zero)"));
     }
     // Jovian layout only once the PARENT is Jovian too — on the activation block itself
     // the child is Jovian but the parent is not, and op-node still emits Isthmus there.
-    auto const jovianAt = [&schedule](int64_t internalTimestampMs) {
-        return bcos::ledger::resolveOpFork(schedule, opForkTimestampSec(internalTimestampMs)) >=
-               OpFork::Jovian;
-    };
-    const bool jovianLayout =
-        jovianAt(l2InternalTimestampMs) && jovianAt(parentInternalTimestampMs);
+    // The comparison is isOpEthJovianActive (OpEthCommitments.h), the single predicate
+    // the engine and sync lanes share — a third local derivation drifts silently.
+    const bool jovianLayout = isOpEthJovianActive(schedule, l2InternalTimestampMs) &&
+                              isOpEthJovianActive(schedule, parentInternalTimestampMs);
     return synthesizeOpEthL1AttributesDeposit(l1Info, jovianLayout);
 }
 }  // namespace bcos::executor_v1::opstack

@@ -1,0 +1,351 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file ImportedStoreIndexTest.cpp
+ * @brief Height-index and liveness invariants of the staged import plane's store.
+ */
+
+#include "engine/bcos-engine/ImportedStore.h"
+#include <bcos-utilities/Common.h>
+#include <boost/test/unit_test.hpp>
+
+namespace
+{
+bcos::h256 hashOf(char tag)
+{
+    bcos::h256 out{};
+    out[0] = static_cast<bcos::byte>(tag);
+    return out;
+}
+
+// Field-by-field on a value-initialized block: an aggregate initializer naming only the
+// three ancestry fields leaves the eight payload members uninitialized, which gcc's
+// -Wmissing-field-initializers (CI is -Werror) rejects. The other members are irrelevant
+// to the height-index/liveness invariants under test.
+bcos::engine::ImportedBlock block(char tag, char parent, bcos::protocol::BlockNumber number)
+{
+    bcos::engine::ImportedBlock out{};
+    out.hash = hashOf(tag);
+    out.parent = hashOf(parent);
+    out.number = number;
+    return out;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_SUITE(ImportedStoreIndexTest)
+
+// put() and occupantAt() must share ONE occupancy notion. An allowed same-height
+// coexistence (canonical occupant awaiting its own FCU) used to leave the height
+// index naming the FIRST importer, so a child of the second sibling resolved
+// occupantAt(parentHeight) to a block the engine no longer considers the occupant.
+BOOST_AUTO_TEST_CASE(AllowedCoexistenceReKeysTheHeightIndex)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 1)));
+    // Second import at height 1 is allowed because the caller vouches the occupant
+    // is canonical (ancestor-sibling shape, §4.3).
+    BOOST_CHECK(store.put(block('B', 0, 1), /*vouchedCanonicalOccupant=*/hashOf('A')));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('B'));
+    BOOST_CHECK(store.hasBlock(hashOf('A')));
+    BOOST_CHECK(store.hasBlock(hashOf('B')));
+}
+
+// A switch at/below the old tip abandons BELOW-head old-branch blocks too: they are
+// not ancestors of the new head and must be detached (and vacate their heights),
+// otherwise the next legal import at those heights answers SYNCING forever.
+BOOST_AUTO_TEST_CASE(BelowTipSwitchDetachesAbandonedBranchBelowHead)
+{
+    bcos::engine::ImportedStore store;
+    // A(0) - B(1) - C(2); D(1) is a sibling of B.
+    BOOST_CHECK(store.put(block('A', 0, 0)));
+    BOOST_CHECK(store.put(block('B', 'A', 1)));
+    BOOST_CHECK(store.put(block('C', 'B', 2)));
+    BOOST_CHECK(store.put(block('D', 'A', 1), /*vouchedCanonicalOccupant=*/hashOf('B')));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('D'));
+
+    // Switch-SetCanonical to D at height 1 (below the old tip 2).
+    store.adoptCanonicalHead(1, hashOf('D'));
+
+    // D is the head; A is its below-head ancestor — both stay live.
+    BOOST_CHECK(store.hasBlock(hashOf('D')));
+    BOOST_CHECK(store.hasBlock(hashOf('A')));
+    BOOST_CHECK_EQUAL(*store.occupantAt(0), hashOf('A'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('D'));
+    // The abandoned B/C branch keeps its bodies (hash-addressable) but vacates the
+    // heights and no longer blocks future imports via put()'s descendant guard.
+    BOOST_CHECK(store.hasBlock(hashOf('B')));
+    BOOST_CHECK(store.hasBlock(hashOf('C')));
+    BOOST_CHECK(!store.occupantAt(2).has_value());
+
+    // The next legal import at height 2 (child of D) is accepted: B's in-store child
+    // C no longer guards the height.
+    BOOST_CHECK(store.put(block('E', 'D', 2)));
+    BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('E'));
+}
+
+// A forward switch (new head above the old tip) keeps the old behaviour: everything
+// on the new chain stays live, off-chain blocks above the head detach.
+BOOST_AUTO_TEST_CASE(ForwardSwitchKeepsChainLiveness)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 0)));
+    BOOST_CHECK(store.put(block('B', 'A', 1)));
+    BOOST_CHECK(store.put(block('C', 'B', 2)));
+    store.adoptCanonicalHead(2, hashOf('C'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(0), hashOf('A'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('B'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('C'));
+}
+
+// M7: a sparse store (intermediate body never staged) must not detach a live
+// canonical ancestor: block 100 is a live ancestor of 102 while 101 was never
+// imported, so the walk cannot decide ancestry — and must NOT detach.
+BOOST_AUTO_TEST_CASE(SparseStoreKeepsLiveAncestor)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 100)));
+    // Sparse: 101 is skipped — only 100 and 102 are staged, with 102's parent = 101.
+    BOOST_CHECK(store.put(block('C', 'B', 102)));
+    store.adoptCanonicalHead(102, hashOf('C'));
+    // A is a live canonical ancestor (the walk from C cannot reach it, so the store
+    // must NOT detach it).
+    BOOST_CHECK(store.hasBlock(hashOf('A')));  // body stays
+    // The canonical height index keeps A at 100 (not detached => not erased).
+    BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
+}
+
+// M8: a switch-away-and-back must re-index the re-livened block — the old
+// erase-only fix-up left occupantAt answering nullopt for a live block.
+BOOST_AUTO_TEST_CASE(SwitchAwayAndBackReindexesLiveOccupant)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 1)));
+    BOOST_CHECK(store.put(block('B', 'A', 2)));
+    // Switch to a sibling chain: A' at 1 (canonical occupant shape).
+    BOOST_CHECK(store.put(block('D', 0, 1), /*vouchedCanonicalOccupant=*/hashOf('A')));
+    store.adoptCanonicalHead(1, hashOf('D'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('D'));
+    BOOST_CHECK(!store.occupantAt(2).has_value());  // B detached, height 2 vacated
+    // Switch back to the original chain: B re-livened, A stays live at 1.
+    store.adoptCanonicalHead(2, hashOf('B'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('A'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('B'));
+}
+
+// R1: a parent cycle (A.parent=Q, Q.parent=A) below a sparsely-linked head makes
+// the ancestry walk UNDECIDABLE, same as a sparse store — the store must not detach.
+// descendsFrom's guard exhaustion once answered true (fail-open), letting the
+// below-head pass detach a block whose liveness it could not decide; the walk now
+// returns false on exhaustion, mirroring descendsFrom.
+BOOST_AUTO_TEST_CASE(CyclicParentWalkKeepsUndecidableAncestor)
+{
+    bcos::engine::ImportedStore store;
+    // A and Q form a 2-cycle; C's parent was never staged (sparse link to the cycle).
+    BOOST_CHECK(store.put(block('A', 'Q', 100)));
+    BOOST_CHECK(store.put(block('Q', 'A', 101)));
+    BOOST_CHECK(store.put(block('C', 'B', 102)));
+    store.adoptCanonicalHead(102, hashOf('C'));
+    // A's liveness cannot be decided (its own walk cycles; the head walk hits the
+    // unstaged B) — the store must keep it: body hash-addressable, height kept.
+    auto const gotA = store.get(hashOf('A'));
+    BOOST_REQUIRE(gotA);
+    BOOST_CHECK(!gotA->detached);
+    BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
+}
+
+// Rebuild arbitration must be deterministic: a canonical ancestor always wins its
+// height over a live off-lineage sibling (whose sparse ancestry keeps it stored but
+// must not let it occupy the canonical chain's slot).
+BOOST_AUTO_TEST_CASE(CanonicalAncestorWinsHeightOverLiveSibling)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 100)));
+    BOOST_CHECK(store.put(block('B', 'A', 101)));
+    BOOST_CHECK(store.put(block('C', 'B', 102)));
+    // Sibling at the same height as A, with an unstored parent. The head's chain is
+    // complete (C->B->A), so height 100 is DECIDED to belong to A and the below-head
+    // detach fires on S (an undecided sparse head range would be the stay-live case) —
+    // S must not take height 100 from the canonical ancestor, and its body stays
+    // hash-addressable for re-import. hasBlock is addressability (true for detached
+    // bodies), so the detach itself is asserted on the stored entry.
+    BOOST_CHECK(store.put(block('S', 0, 100), /*vouchedCanonicalOccupant=*/hashOf('A')));
+    store.adoptCanonicalHead(102, hashOf('C'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(102), hashOf('C'));
+    BOOST_CHECK(store.hasBlock(hashOf('S')));  // still hash-addressable for re-import
+    BOOST_REQUIRE(store.get(hashOf('S')));
+    BOOST_CHECK(store.get(hashOf('S'))->detached);  // decided non-ancestor of the head
+}
+
+// Two live children of the head at head+1 tie at one height (both off-lineage). The
+// rebuild's fill pass must resolve the tie by the LOWEST hash — identically across
+// import orders and standard libraries — never by hash-bucket order.
+BOOST_AUTO_TEST_CASE(SameHeightOffLineageTieResolvesDeterministically)
+{
+    auto const expected = hashOf('X') < hashOf('Y') ? hashOf('X') : hashOf('Y');
+    for (bool flipOrder : {false, true})
+    {
+        bcos::engine::ImportedStore store;
+        BOOST_CHECK(store.put(block('A', 0, 100)));
+        BOOST_CHECK(store.put(block('B', 'A', 101)));
+        if (!flipOrder)
+        {
+            BOOST_CHECK(store.put(block('X', 'B', 102)));
+            BOOST_CHECK(store.put(block('Y', 'B', 102), /*vouchedCanonicalOccupant=*/hashOf('X')));
+        }
+        else
+        {
+            BOOST_CHECK(store.put(block('Y', 'B', 102)));
+            BOOST_CHECK(store.put(block('X', 'B', 102), /*vouchedCanonicalOccupant=*/hashOf('Y')));
+        }
+        store.adoptCanonicalHead(101, hashOf('B'));
+        BOOST_CHECK_EQUAL(*store.occupantAt(102), expected);
+    }
+}
+
+// review F5: the canonical-lineage arbitration had NO tie rule (bare insert_or_assign
+// let unordered_map order pick the winner). Non-monotonic staged numbering can put two
+// ancestors of the head at one height (P.parent=Q, both reporting number 5 under head
+// H(n=6)); both are on-lineage, the winner must be the LOWEST hash in either insertion
+// order — the same rule the off-lineage pass uses.
+BOOST_AUTO_TEST_CASE(SameHeightOnLineageTieResolvesDeterministically)
+{
+    auto const expected = hashOf('P') < hashOf('Q') ? hashOf('P') : hashOf('Q');
+    for (bool flipOrder : {false, true})
+    {
+        bcos::engine::ImportedStore store;
+        if (!flipOrder)
+        {
+            BOOST_CHECK(store.put(block('Q', 0, 5)));
+            BOOST_CHECK(store.put(block('P', 'Q', 5)));
+        }
+        else
+        {
+            BOOST_CHECK(store.put(block('P', 'Q', 5)));
+            BOOST_CHECK(store.put(block('Q', 0, 5)));
+        }
+        BOOST_CHECK(store.put(block('H', 'P', 6)));
+        store.adoptCanonicalHead(6, hashOf('H'));
+        BOOST_CHECK_EQUAL(*store.occupantAt(5), expected);
+    }
+}
+
+// The detach must actually FIRE when ancestry is decidable: an old-branch block at a
+// height the new chain occupies is detached and its height re-keyed to the new chain's
+// block. (The walk from the head passes the candidate's height via the sibling, so the
+// answer is decided; contrast SparseStoreKeepsLiveAncestor, where the walk can't reach
+// the candidate's height and nothing detaches.)
+BOOST_AUTO_TEST_CASE(BelowHeadOldBranchBlockDetachedWhenDecided)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 100)));
+    BOOST_CHECK(
+        store.put(block('D', 0, 100), /*vouchedCanonicalOccupant=*/hashOf('A')));  // sibling
+                                                                                   // at 100
+    BOOST_CHECK(store.put(block('B', 'D', 101)));
+    BOOST_CHECK(store.put(block('C', 'B', 102)));
+    store.adoptCanonicalHead(102, hashOf('C'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('D'));  // the sibling, not A
+    BOOST_CHECK(store.hasBlock(hashOf('A')));                // body stays for re-import
+    // The detach itself, not just its index side effect: the head walk (C→B→D) passed
+    // height 100 without finding A, so A's liveness was DECIDED false and the flag
+    // must be set — occupantAt(100)==D would hold even if the detach no-oped (the
+    // canonical-lineage pass writes D regardless; hasBlock is addressability only).
+    BOOST_REQUIRE(store.get(hashOf('A')));
+    BOOST_CHECK(store.get(hashOf('A'))->detached);
+}
+
+// put()'s descendant guard: a live same-height occupant WITH a live imported child
+// refuses an unvouched overwrite (the child would be orphaned onto a foreign parent);
+// the caller's canonical voucher is the one bypass.
+BOOST_AUTO_TEST_CASE(DescendantConflictRefusesUnvouchedOverwrite)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 0)));
+    BOOST_CHECK(store.put(block('B', 'A', 1)));
+    BOOST_CHECK(store.put(block('C', 'B', 2)));
+    // D at B's height, unvouched: B is live and C (a live child of B) guards it.
+    BOOST_CHECK(!store.put(block('D', 'A', 1)));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('B'));
+    // The canonical voucher (the caller decided B is canonical) is the documented bypass.
+    BOOST_CHECK(store.put(block('D', 'A', 1), /*vouchedCanonicalOccupant=*/hashOf('B')));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('D'));
+}
+
+// A same-hash re-import re-livens a detached body and re-keys its height through the
+// shared arbitration (the fix for the re-liven being an unchecked last-wins assign).
+BOOST_AUTO_TEST_CASE(SameHashReimportRelivensAndRekeys)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 0)));
+    BOOST_CHECK(store.put(block('B', 'A', 1)));
+    BOOST_CHECK(store.put(block('C', 'B', 2)));
+    BOOST_CHECK(store.put(block('D', 'A', 1), /*vouchedCanonicalOccupant=*/hashOf('B')));
+    store.adoptCanonicalHead(1, hashOf('D'));
+    BOOST_CHECK(!store.occupantAt(2).has_value());  // C detached, height 2 vacated
+
+    // Re-import C itself: the same-hash path re-livens the body and re-keys height 2.
+    BOOST_CHECK(store.put(block('C', 'B', 2)));
+    BOOST_REQUIRE(store.get(hashOf('C')));
+    BOOST_CHECK(!store.get(hashOf('C'))->detached);
+    BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('C'));
+}
+
+// Without a voucher the same-height occupant is arbitrated by the LOWEST hash, so the
+// answer is identical whichever sibling arrived first (the shared rule's tie half).
+BOOST_AUTO_TEST_CASE(UnvouchedSameHeightTieIsOrderIndependent)
+{
+    auto const expected = hashOf('X') < hashOf('Y') ? hashOf('X') : hashOf('Y');
+    for (bool flipOrder : {false, true})
+    {
+        bcos::engine::ImportedStore store;
+        BOOST_CHECK(store.put(block('A', 0, 0)));
+        // Neither sibling has imported children, so both imports are allowed unvouched.
+        if (!flipOrder)
+        {
+            BOOST_CHECK(store.put(block('X', 'A', 1)));
+            BOOST_CHECK(store.put(block('Y', 'A', 1)));
+        }
+        else
+        {
+            BOOST_CHECK(store.put(block('Y', 'A', 1)));
+            BOOST_CHECK(store.put(block('X', 'A', 1)));
+        }
+        BOOST_CHECK_EQUAL(*store.occupantAt(1), expected);
+    }
+}
+
+// A head whose body was never staged (a ledger-committed head, or a restart) cannot
+// make the ancestry walk decide anything, so the below-head pass falls back to the
+// number rule (detach) instead of leaving every old occupant live (SYNCING forever);
+// and the bodyless head is never indexed.
+BOOST_AUTO_TEST_CASE(AdoptWithUnstagedHeadDetachesBelowAndSkipsIndex)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 1)));
+    BOOST_CHECK(store.put(block('B', 'A', 2)));
+
+    store.adoptCanonicalHead(2, hashOf('Z'));  // Z was never put()
+    BOOST_CHECK(!store.hasBlock(hashOf('Z')));
+    BOOST_CHECK(!store.occupantAt(2).has_value());  // bodyless head is not indexed
+    BOOST_CHECK(!store.occupantAt(1).has_value());  // A detached by the number rule
+    BOOST_REQUIRE(store.get(hashOf('A')));
+    BOOST_CHECK(store.get(hashOf('A'))->detached);
+    // Re-importing the real block at 2 is legal again (A is detached, not guarding).
+    BOOST_CHECK(store.put(block('B', 'A', 2)));
+    BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('B'));
+}
+
+BOOST_AUTO_TEST_SUITE_END()

@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthReceipt.h
 /// @brief OP Stack receipt metadata for the ethereum-executor-based OP path —
 ///        the bcos-evm-free counterpart of OpTransition.cpp's OpReceiptMeta /
@@ -12,12 +14,12 @@
 
 #pragma once
 
-#include <ethereum-executor/EVMSupport.h>
-#include <opstack-executor/OpFeeParams.h>
-#include <opstack-executor/OpRollupCost.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <ethereum-executor/EVMSupport.h>
+#include <opstack-executor/OpFeeParams.h>
+#include <opstack-executor/OpRollupCost.h>
 #include <array>
 #include <cstdint>
 #include <evmc/evmc.hpp>
@@ -81,8 +83,14 @@ struct OpReceiptMeta
     std::optional<intx::uint256> l1_blob_base_fee;  // = fee.blob_base_fee
     std::optional<uint32_t> l1_base_fee_scalar;
     std::optional<uint32_t> l1_blob_base_fee_scalar;
-    std::optional<intx::uint256> l1_fee;  // = l1_cost
-    std::optional<uint64_t> l1_gas_used;  // Fjord+; wire index 11
+    std::optional<intx::uint256> l1_fee;         // = l1_cost
+    std::optional<intx::uint256> l1_fee_scalar;  // Bedrock-era RAW slot-6 scalar — the
+                                                 // LEGACY pricing path (pre-Ecotone, plus
+                                                 // the first Ecotone block whose L1Block
+                                                 // Ecotone params read zero); op-geth
+                                                 // reports it as L1FeeScalar
+    std::optional<uint64_t> l1_gas_used;         // wire index 11; Fjord formula, but the
+                                                 // legacy (Bedrock–Delta) branch fills it too
     // operator (Isthmus+)
     std::optional<intx::uint256> operator_fee;    // FISCO extension: actually-charged value
                                                   // (op-geth receipt has no such field)
@@ -115,9 +123,11 @@ inline OpReceiptMeta deriveOpReceiptMeta(const OpTxSnapshot& snapshot,
     {
         // Bedrock–Delta (op-geth pre-Ecotone receipt): L1GasUsed is the overhead-inclusive
         // legacy gas; the blob-base-fee and 32-bit scalar fields do not exist pre-Ecotone (the
-        // legacy scalar is a whole-slot uint256 that does not fit the uint32 meta field, and
-        // op-geth reports it separately as L1FeeScalar — left out here).
+        // legacy scalar is a whole-slot uint256 that does not fit the uint32 meta field, so
+        // it rides the framework's u256 l1_fee_scalar — the RAW slot-6 word — and the RPC
+        // renders it as op-geth's FeeScalar = scalar/1e6 decimal).
         m.l1_gas_used = *snapshot.legacy_l1_gas_used;
+        m.l1_fee_scalar = fee.l1_fee_scalar;
     }
     else
     {
@@ -213,6 +223,8 @@ inline bcos::protocol::OpStackReceiptMeta toOpStackMeta(const OpReceiptMeta& met
         out.da_footprint = *meta.da_footprint;
     if (meta.l1_gas_used)
         out.l1_gas_used = *meta.l1_gas_used;
+    if (meta.l1_fee_scalar)
+        out.l1_fee_scalar = intxToBcosU256(*meta.l1_fee_scalar);
     if (meta.operator_fee)
         out.operator_fee = intxToBcosU256(*meta.operator_fee);
     return out;

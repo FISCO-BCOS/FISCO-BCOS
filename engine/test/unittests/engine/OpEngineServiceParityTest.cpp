@@ -33,6 +33,7 @@
 #include "engine/bcos-engine/EngineTracker.h"
 #include "engine/bcos-engine/OpEngineService.inl"
 
+#include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
 #include "support/GoldenSample.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -62,7 +63,8 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Exceptions.h>
-#include <opstack-executor/OpEthL1Attributes.h>  // synthesize fixture: DepositTx / OP_ETH_* constants
+// synthesize fixture: DepositTx / OP_ETH_* constants
+#include <opstack-executor/OpEthL1Attributes.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
@@ -83,30 +85,13 @@
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
+
+using opstack_test::TrivialCheckpointStorage;
 namespace memory_storage = bcos::storage2::memory_storage;
 
 namespace op_engine_parity_test
 {
 
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
@@ -145,6 +130,16 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
 {
     bcos::h256 culprit;
     bool rejectAsCapacity = false;
+    // Models the scheduler's tagged recoverable refusals (sibling/gap/pending racing
+    // the build): no culprit hash — the OpSiblingReorgUnsupported tag alone, which is
+    // the shape the build loop must answer SYNCING for instead of throwing
+    // OpExecutionInternalError (review F3).
+    bool siblingReorgRefusal = false;
+    // Models a delegate consensus rejection on the EXECUTE side (classifyException's
+    // OpConsensusError -> OpConsensusRejected): no culprit hash, no tag — the shape the
+    // build loop must answer INVALID for, exactly as mapDelegateError does on the
+    // newPayload lane (review F5).
+    bool consensusRejectExecute = false;
     bool failFirst = true;
     bool failCommit = false;
     /// Fail this many commitBlock calls then succeed. Used by the fallback pin.
@@ -170,6 +165,22 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
         override
     {
         ++executeCalls;
+        if (siblingReorgRefusal)
+        {
+            auto error = BCOS_ERROR_PTR((int)bcos::scheduler::SchedulerError::InvalidBlockNumber,
+                "Discontinuous execute block number! expect: 1 input: 2");
+            *error << bcos::engine::OpSiblingReorgUnsupported{true};
+            callback(std::move(error), nullptr, false);
+            return;
+        }
+        if (consensusRejectExecute)
+        {
+            callback(
+                BCOS_ERROR_PTR((int)bcos::scheduler::SchedulerError::OpConsensusRejected,
+                    "op block: consensus rejected the candidate"),
+                nullptr, false);
+            return;
+        }
         if (failFirst && executeCalls == 1)
         {
             auto error = BCOS_ERROR_PTR(-1, "op block: reject sealed tx");
@@ -571,6 +582,31 @@ void registerParentHeader(MLS& multiLayerStorage, bcos::protocol::BlockFactory& 
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
+// registerParentHeader with a caller-chosen Holocene extraData (the original fixes
+// {denominator 250, elasticity 6}); used by the pricing-dispatch boundary cases.
+void registerParentHeaderWithExtraData(MLS& multiLayerStorage,
+    bcos::protocol::BlockFactory& blockFactory, int64_t number, int64_t timestampMs,
+    std::string_view extraDataHex)
+{
+    auto header = blockFactory.blockHeaderFactory()->createBlockHeader();
+    header->setNumber(number);
+    header->setTimestamp(timestampMs);
+    header->setGasLimit(30'000'000);
+    header->setGasUsed(0);
+    header->setExtraData(bcos::fromHex(extraDataHex));
+    header->setBaseFee(bcos::u256(1'000'000'000));
+    bcos::bytes encoded;
+    header->encode(encoded);
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    bcos::storage::Entry entry;
+    entry.set(std::move(encoded));
+    bcos::task::syncWait(bcos::storage2::writeOne(view,
+        StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(number)},
+        std::move(entry)));
+    bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+}
+
 bcos::engine::NewPayloadRequest makeValidIsthmusNewPayload(
     bcos::protocol::BlockFactory& blockFactory, bcos::h256 const& parentHash,
     bcos::protocol::BlockNumber blockNumber)
@@ -683,11 +719,12 @@ struct OpServicePair
     explicit OpServicePair(bool allowSynthesizedL1Attributes = false,
         bcos::scheduler::SchedulerInterface::Ptr delegateIn = nullptr,
         std::shared_ptr<bcos::engine::DACaps> daCapsIn = nullptr,
-        bcos::ledger::OpForkSchedule forkSchedule = {})
+        bcos::ledger::OpForkSchedule forkSchedule = {},
+        std::optional<bcos::engine::OpEip1559Params> eip1559In = std::nullopt)
       : scheduler(forkSchedule, {}),
         delegate(std::move(delegateIn)),
         service(memPool, storage, scheduler, blockFactory, bcos::engine::c_defaultBlockTxCountLimit,
-            delegate, std::move(daCapsIn), allowSynthesizedL1Attributes)
+            delegate, std::move(daCapsIn), allowSynthesizedL1Attributes, eip1559In)
     {}
 };
 
@@ -888,14 +925,14 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
 
     bcos::h256 const targetHash(0x42);
     bcos::engine::PayloadID const targetPayloadId = "0xdeadbeef";
-    constexpr bcos::protocol::BlockNumber kTargetNumber = 7;
+    constexpr bcos::protocol::BlockNumber cTargetNumber = 7;
 
     {
         auto guard = tracker.lockExclusive();
         auto entry = std::make_shared<bcos::engine::BuiltPayload>();
         entry->executionPayload.blockHash = targetHash;
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(kTargetNumber);
+        header->setNumber(cTargetNumber);
         (void)bcos::engine::publishBuiltPayload(guard, artifacts, targetPayloadId, targetHash,
             entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
     }
@@ -913,7 +950,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         auto shared = tracker.lockShared();
         initialHeader = bcos::engine::detail::findBuiltHeader(shared, artifacts, targetHash);
         BOOST_REQUIRE(initialHeader);
-        BOOST_CHECK_EQUAL(initialHeader->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(initialHeader->number(), cTargetNumber);
 
         writer.emplace([&] {
             try
@@ -956,7 +993,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         auto shared = tracker.lockShared();
         auto stableHeader = bcos::engine::detail::findBuiltHeader(shared, artifacts, targetHash);
         BOOST_REQUIRE(stableHeader);
-        BOOST_CHECK_EQUAL(stableHeader->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(stableHeader->number(), cTargetNumber);
         BOOST_CHECK_EQUAL(stableHeader.get(), initialHeader.get());
     }
 }
@@ -1125,6 +1162,124 @@ BOOST_AUTO_TEST_CASE(op_build_culprit_hash_evicts_through_retry_loop)
 {
     // BC — structured OpCulpritTxHash on a sealed pool tx is evicted via removeByHash.
     driveBuildWithCulprit(/*capacityReject=*/false);
+}
+
+BOOST_AUTO_TEST_CASE(op_build_tagged_recoverable_refusal_answers_syncing)
+{
+    // F3 — a tagged recoverable refusal (sibling/gap/pending racing the build, no
+    // culprit hash) must answer SYNCING on the FCU build path, exactly as
+    // mapDelegateError does on the newPayload lane. Before the tag inspection the
+    // loop fell through to OpExecutionInternalError, i.e. a -32603 internal fault —
+    // the answer this case pins away.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->siblingReorgRefusal = true;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    pair.memPool.pool.push_back(decoded.tx);
+
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing));
+    BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_CHECK_GE(delegate->executeCalls, 1);
+}
+
+BOOST_AUTO_TEST_CASE(op_build_consensus_rejected_answers_invalid)
+{
+    // F5 — a delegate consensus rejection on the FCU build path must answer INVALID
+    // with the validation error, exactly as mapDelegateError does on the newPayload
+    // lane ("OpConsensusRejected is the ONLY code the service may answer INVALID
+    // for"). Before classification was routed through mapDelegateError, the build
+    // tail threw OpExecutionInternalError (-32603) for this code — the lane asymmetry
+    // this case pins away. Deliberately the twin of
+    // op_build_tagged_recoverable_refusal_answers_syncing: same setup, only the
+    // delegate error class differs.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    delegate->consensusRejectExecute = true;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    pair.memPool.pool.push_back(decoded.tx);
+
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    BOOST_CHECK(result.payloadStatus.validationError->find("consensus rejected") !=
+                std::string::npos);
+    BOOST_CHECK_GE(delegate->executeCalls, 1);
+}
+
+BOOST_AUTO_TEST_CASE(op_build_substitutes_declared_eip1559_pair_into_extradata)
+{
+    // F14 — the DECLARED triple must reach the built block: zero-attribute
+    // eip1559Params substitute the declared pair (not the OP-mainnet preset), and
+    // the served payload's extraData is where the substitution is observable. The
+    // values deliberately differ from the preset (6/50/250) so a regression that
+    // reads the preset, swaps denominator/denominatorCanyon, or drops the declared
+    // wiring entirely cannot pass by coincidence. Layout per JovianExtraDataTest:
+    // big-endian denominator then elasticity.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    bcos::engine::OpEip1559Params const declared{
+        .elasticity = 2, .denominator = 40, .denominatorCanyon = 200};
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate,
+        /*daCapsIn=*/nullptr, /*forkSchedule=*/{}, declared);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    pair.memPool.pool.push_back(decoded.tx);
+
+    auto attrs = makeOpPayloadAttributes();  // eip1559Params = 8 zero bytes (the trigger)
+    attrs.minBaseFee = std::nullopt;
+    attrs.noTxPool = false;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = bcos::task::syncWait(pair.service.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(payload != nullptr);
+    // The empty schedule keeps every block on the Isthmus baseline, i.e. past
+    // Holocene: extraData carries the 9-byte Holocene layout — version byte 0x00,
+    // then the substituted pair big-endian. The declared triple is {2, 40, 200};
+    // the substituted parameter is denominatorCanyon=200 (0xc8), matching the
+    // preset spelling JovianExtraDataTest pins (0xfa=250 there).
+    bcos::bytes const expected{0x00, 0x00, 0x00, 0x00, 0xc8, 0x00, 0x00, 0x00, 0x02};
+    BOOST_CHECK_MESSAGE(payload->executionPayload.extraData == expected,
+        "extraData " << bcos::toHexStringWithPrefix(payload->executionPayload.extraData)
+                     << " != declared pair " << bcos::toHexStringWithPrefix(expected));
 }
 
 static void driveBuildWithSenderNonceChain(bool capacityReject)
@@ -1744,8 +1899,47 @@ BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal
     // Dropped-pending code: only that fault falls through to the execute path where the
     // missing withdrawalsRoot is detected.
     delegate->tagPendingDropped = true;
-    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
-        bcos::engine::OpExecutionInternalError);
+    // review F34: the type alone cannot distinguish this node fault from any other
+    // OpExecutionInternalError — pin errinfo_comment (OpEngineService.inl:951), the
+    // same predicate checkBothExceptionMessages applies to its two parity actions.
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(pair.service.newPayload(request, 4)),
+        bcos::engine::OpExecutionInternalError,
+        [](bcos::engine::OpExecutionInternalError const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr && *comment == "executed header is missing withdrawalsRoot";
+        });
+}
+
+BOOST_AUTO_TEST_CASE(op_fcu_build_missing_executed_withdrawals_root_is_internal_error)
+{
+    // review F1: the build lane classifies the SAME node fault the same way as the
+    // newPayload case above — the scheduler stamps withdrawalsRoot, so its absence
+    // during an FCU-with-attributes build is -32603 (OpExecutionInternalError),
+    // never an INVALID verdict the CL would act on.
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    auto attrs = makeOpPayloadAttributes();
+    attrs.minBaseFee = std::nullopt;
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+    delegate->stampWithdrawalsRoot = false;
+    // review F34: same predicate on the build lane (OpEngineService.inl:601) — both lanes
+    // must carry the IDENTICAL errinfo_comment, not merely the same exception type.
+    BOOST_CHECK_EXCEPTION(
+        bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3)),
+        bcos::engine::OpExecutionInternalError,
+        [](bcos::engine::OpExecutionInternalError const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr && *comment == "executed header is missing withdrawalsRoot";
+        });
 }
 
 /// mapDelegateError's routing is the load-bearing half of the delegate-concurrency
@@ -2297,6 +2491,165 @@ BOOST_AUTO_TEST_CASE(op_golden_vector_rebuild_matches_op_geth_block_hash)
     auto const rebuilt = bcos::protocol::EthBlockHeader::computeHash(*header);
     auto const golden = bcos::h256(sample.golden["blockHash"].asString());
     BOOST_CHECK_EQUAL(rebuilt.hex(), golden.hex());
+}
+
+BOOST_AUTO_TEST_CASE(preHolocenePricingRejectsZeroParameters)
+{
+    // The loader and the SYS_CONFIG row parser refuse zeros; the helper itself fails
+    // closed for a params producer that bypasses both (divide-by-zero guards).
+    using bcos::engine::calcOpBaseFeePreHolocene;
+    using bcos::engine::InvalidEngineEncoding;
+    using bcos::engine::OpEip1559Params;
+    auto const bad = [](OpEip1559Params p, bool canyon) {
+        return calcOpBaseFeePreHolocene(
+            bcos::u256(30'000'000), bcos::u256(15'000'000), bcos::u256(1'000'000'000), canyon, p);
+    };
+    BOOST_CHECK_EXCEPTION(
+        (void)bad({.elasticity = 0, .denominator = 50, .denominatorCanyon = 250}, false),
+        InvalidEngineEncoding, [](auto const& e) {
+            return std::string_view(e.what()).find("zero") != std::string_view::npos;
+        });
+    BOOST_CHECK_THROW(
+        (void)bad({.elasticity = 6, .denominator = 0, .denominatorCanyon = 250}, false),
+        InvalidEngineEncoding);
+    BOOST_CHECK_THROW((void)bad({.elasticity = 6, .denominator = 50, .denominatorCanyon = 0}, true),
+        InvalidEngineEncoding);
+    // denominatorCanyon is inert while Canyon is off — the guard must not fire on it.
+    BOOST_CHECK_NO_THROW(
+        (void)bad({.elasticity = 6, .denominator = 50, .denominatorCanyon = 0}, false));
+}
+
+// F15: the fork dispatch INSIDE the build path, pinned at both boundaries. The
+// dispatch (calcOpBaseFeeForParent, OpEngineService.h) has three inputs a flip can
+// silently change: the PARENT's Holocene activation selects the arm (Holocene+ reads
+// the parent's own extraData, pre-Holocene the chain's declared triple), and the
+// CHILD's Canyon activation selects the denominator. Same parent, same child, only
+// the schedule and the child timestamp move:
+//
+//   parent: number 0, ts 1'699'000'000s (internal ms 1'699'000'000'000)
+//           gasLimit 30M, gasUsed 0, baseFee 1e9, extraData {denominator 200, elasticity 10}
+//   child:  ts 1'700'000'000s; the declared/attr triple is all-zero, so the engine
+//           substitutes the legacy preset {elasticity 6, denominator 50, denominatorCanyon 250}
+//
+// Pre-Holocene arm (parent below holocene_time), elasticity 6 → target 5M, used 0:
+//   canyon-active child   -> decrease 1e9 * 5M/5M / 250 = 4e6  -> 996'000'000
+//   pre-canyon child      -> decrease 1e9 * 5M/5M / 50  = 2e7  -> 980'000'000
+// Holocene arm (parent at/after holocene_time), parent extraData elasticity 10 →
+// target 3M, used 0:
+//   decrease 1e9 * 3M/3M / 200 = 5e6                          -> 995'000'000
+BOOST_AUTO_TEST_CASE(pricingDispatchPinsHoloceneAndCanyonBoundaries)
+{
+    // Fixture order lesson (the case was born red at 52ffc26d7): m_isthmusTime left at
+    // its default means "Isthmus is the zero-start baseline" (OpForkSchedule.h) — the
+    // resolver then answers Isthmus for EVERY parent, the Holocene arm runs, and the
+    // Canyon arm is unreachable. The pre-Holocene arm needs the FULL ladder explicitly
+    // scheduled (ordered: canyon <= holocene <= isthmus) with the parent below holocene
+    // and the child at/above isthmus (the FCU build lane requires an Isthmus+ child).
+    auto const build = [](bcos::ledger::OpForkSchedule const& schedule, int64_t childTsMs) {
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate, nullptr, schedule);
+        delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+        auto decoded = makeDecodableWeb3Tx(1);
+        auto attrs = makeOpPayloadAttributes();
+        attrs.timestamp = static_cast<uint64_t>(childTsMs);
+        attrs.minBaseFee = std::nullopt;
+        attrs.transactions = std::vector<std::string>{decoded.rawHex};
+        auto const hash =
+            bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+        registerVerifiedBlock(pair.storage, hash, 0);
+        // Parent at 1'699'000'000s with the Holocene-shaped extraData {den 200, elas 10}.
+        registerParentHeaderWithExtraData(
+            pair.storage, *pair.blockFactory, 0, 1'699'000'000'000, "00000000c80000000a");
+
+        auto built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+        BOOST_REQUIRE_EQUAL(static_cast<int>(built.payloadStatus.status),
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+        BOOST_REQUIRE(built.payloadId.has_value());
+        auto payload = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
+        BOOST_REQUIRE(payload);
+        return payload->executionPayload.baseFeePerGas;
+    };
+
+    // (a) pre-Holocene parent (Bedrock rung), Canyon-active Isthmus+ child: the
+    // pre-Holocene arm with denominatorCanyon = 250 (preset): 1e9 - 1e9/250 = 996M.
+    // KEYING DISCRIMINATOR (review F11): both rungs sit STRICTLY BETWEEN the parent
+    // (1'699.0s) and the child (1'700.0s), so a regression that keys the Holocene arm
+    // on the CHILD timestamp instead of the parent flips this cell to the Holocene-arm
+    // answer 995M — this is the fixture that catches a parent/child keying swap; the
+    // replay-layer suites (ts-0 single-rung schedules) cannot see it.
+    bcos::ledger::OpForkSchedule canyonBeforeChild;
+    canyonBeforeChild.m_canyonTime = 1'699'200'000;
+    canyonBeforeChild.m_holoceneTime = 1'699'500'000;
+    canyonBeforeChild.m_isthmusTime = 1'699'900'000;
+    BOOST_CHECK(build(canyonBeforeChild, 1'700'000'000'000) == bcos::u256(996'000'000));
+
+    // (c) parent AT holocene_time: the Holocene arm reads the parent's own extraData
+    // {den 200, elas 10}: gasTarget = 30M/10, delta = target (gasUsed 0) -> 1e9 - 1e9/200
+    // = 995M.
+    bcos::ledger::OpForkSchedule holoceneAtParent;
+    holoceneAtParent.m_canyonTime = 1'698'000'000;
+    holoceneAtParent.m_holoceneTime = 1'699'000'000;  // == the parent's timestamp
+    holoceneAtParent.m_isthmusTime = 1'699'900'000;
+    BOOST_CHECK(build(holoceneAtParent, 1'700'000'000'000) == bcos::u256(995'000'000));
+
+    // (b) child BEFORE canyon (plain denominator 50): structurally unreachable on the
+    // FCU build lane — an ordered ladder forces Isthmus+ children to be Canyon-active
+    // (canyon <= holocene <= isthmus <= child), and the build lane rejects pre-Isthmus
+    // children. Pin the child-side keying on the newPayload VALIDATION lane instead:
+    // it recomputes the expected baseFee (OpEngineService.inl) and rejects mismatches,
+    // so supplying the CANYON answer (996M) must draw the baseFee rejection while the
+    // correct pre-Canyon answer (980M = 1e9 - 1e9/50) must not.
+    {
+        bcos::ledger::OpForkSchedule childBeforeCanyon;
+        childBeforeCanyon.m_canyonTime = 1'699'400'000;
+        childBeforeCanyon.m_holoceneTime = 1'699'500'000;
+        childBeforeCanyon.m_isthmusTime = 1'699'900'000;
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        OpServicePair pair(
+            /*allowSynthesizedL1Attributes=*/false, delegate, nullptr, childBeforeCanyon);
+        auto const parent =
+            bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2");
+        registerVerifiedBlock(pair.storage, parent, 0);
+        registerParentHeaderWithExtraData(
+            pair.storage, *pair.blockFactory, 0, 1'699'000'000'000, "00000000c80000000a");
+
+        auto makePayload = [&](bcos::u256 baseFee) {
+            auto request = makeValidIsthmusNewPayload(*pair.blockFactory, parent, 1);
+            request.executionPayload.timestamp = 1'699'300'000'000ULL;  // before canyon
+            request.executionPayload.baseFeePerGas = std::move(baseFee);
+            auto const txRoot = EngineOpScheduler::computeTxRoot(
+                bcos::engine::detail::rawEnvelopes(request.executionPayload));
+            auto header = bcos::engine::engine_common::op::rebuildOpEthHeader(
+                pair.blockFactory->blockHeaderFactory(), request.executionPayload, txRoot,
+                *request.parentBeaconBlockRoot);
+            request.executionPayload.blockHash =
+                bcos::protocol::EthBlockHeader::computeHash(*header);
+            // Same-hash replay shortcut: registering SYS_HASH_2_NUMBER[hash] lets the
+            // validator answer Valid immediately after the baseFee check (:866-879 in
+            // OpEngineService.inl) — no execution path is entered, so the (b) arm stays
+            // a pure pricing assertion and needs no deeper fixture.
+            registerVerifiedBlock(pair.storage, request.executionPayload.blockHash, 1);
+            return request;
+        };
+        auto const mismatch =
+            bcos::task::syncWait(pair.service.newPayload(makePayload(bcos::u256(996'000'000)), 4));
+        BOOST_CHECK_MESSAGE(
+            mismatch.validationError.has_value() &&
+                mismatch.validationError->find("baseFeePerGas does not match") != std::string::npos,
+            "pre-Canyon child must NOT expect the Canyon answer: "
+                << (mismatch.validationError ? *mismatch.validationError : "<no error>"));
+        auto const correct =
+            bcos::task::syncWait(pair.service.newPayload(makePayload(bcos::u256(980'000'000)), 4));
+        BOOST_CHECK_MESSAGE(
+            !correct.validationError.has_value() ||
+                correct.validationError->find("baseFeePerGas does not match") == std::string::npos,
+            "pre-Canyon child must expect the plain-denominator answer (980M): "
+                << (correct.validationError ? *correct.validationError : "<no error>"));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

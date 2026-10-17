@@ -21,7 +21,9 @@
 
 #pragma once
 
+#include "support/E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26)
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -34,7 +36,6 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
@@ -56,6 +57,7 @@
 
 namespace bcos::engine::eth_test
 {
+using opstack_test::TrivialCheckpointStorage;  // review F46: scoped, not global
 
 using RealGlobalStateMutableStorage = bcos::storage2::memory_storage::MemoryStorage<
     bcos::executor_v1::StateKey, bcos::executor_v1::StateValue,
@@ -68,19 +70,6 @@ using RealGlobalStateBackendStorage =
             bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::CONCURRENT),
         std::hash<bcos::executor_v1::StateKey>>;
 
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& s) : m_storage(s) {}
-    Storage& open() { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    std::optional<CheckpointName> latestCheckpointName() const { return std::nullopt; }
-    std::optional<CheckpointName> oldestCheckpointName() const { return std::nullopt; }
-};
 
 using RealGlobalCheckpointBackend = TrivialCheckpointStorage<bcos::executor_v1::StateKey,
     bcos::executor_v1::StateValue, RealGlobalStateBackendStorage>;

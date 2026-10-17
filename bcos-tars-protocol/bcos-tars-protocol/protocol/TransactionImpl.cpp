@@ -41,10 +41,10 @@
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
-// EIP-2718 deposit transaction type byte (OP Stack). Matches
-// rpc::TransactionType::Deposit in bcos-rpc; defined here as a local literal because
-// bcos-tars-protocol sits below bcos-rpc and must not depend on it.
-constexpr uint8_t kDepositTxType = 0x7e;
+// EIP-2718 deposit transaction type byte (OP Stack). Alias of the ONE home in
+// bcos::protocol (Transaction.h, review round-1 F2): the historical local literal existed
+// only because the home used to live in bcos-rpc, which sits above this module.
+constexpr uint8_t kDepositTxType = bcos::protocol::c_depositTxType;
 
 #define WEB3_ACCESS_LIST_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
 

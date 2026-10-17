@@ -19,6 +19,7 @@
 // direct; ⑤⑥⑦ are policy/host-level direct.
 
 #include "support/DualRunHarness.h"
+#include "support/T8nCorpus.h"  // opstack_test::c_corpusParentHashHex (the corpus parent)
 
 #include <opstack-executor/OpEthCommitments.h>   // computeOpEthTransactionsRoot
 #include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
@@ -72,8 +73,7 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeForkHeader(
     h->setNumber(number);
     h->setTimestamp((0x3f2 + number) * 1000);  // ms (FISCO convention)
     h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = number - 1,
-        .blockHash =
-            bcos::h256{"0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"}});
+        .blockHash = bcos::h256{std::string(opstack_test::c_corpusParentHashHex)}});
     h->setCoinbase(bcos::Address{bcos::bytesConstRef{kCoinbase.bytes, sizeof(kCoinbase.bytes)}});
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});
@@ -109,7 +109,7 @@ bcos::bytes signEip1559(bcos::crypto::KeyPairInterface const& keyPair, uint64_t 
 {
     bcos::rpc::Web3Transaction w3;
     w3.type = bcos::rpc::TransactionType::EIP1559;
-    w3.chainId = kOpChainId;
+    w3.chainId = c_opChainId;
     w3.nonce = nonce;
     w3.maxPriorityFeePerGas = maxPriority;
     w3.maxFeePerGas = maxFee;
@@ -814,9 +814,9 @@ BOOST_AUTO_TEST_CASE(PrecompileMaxInputSize)
     opeth::OpPolicy const jovianPolicy{opeth::OP_JOVIAN_SPEC, block};
     opeth::OpPolicy const isthmusPolicy{opeth::OP_ISTHMUS_SPEC, block};
 
-    constexpr size_t kJovianBn256Limit = 81'984;
-    std::vector<uint8_t> const overCap(kJovianBn256Limit + 1, 0xaa);
-    std::vector<uint8_t> const atCap(kJovianBn256Limit, 0xaa);
+    constexpr size_t c_jovianBn256Limit = 81'984;
+    std::vector<uint8_t> const overCap(c_jovianBn256Limit + 1, 0xaa);
+    std::vector<uint8_t> const atCap(c_jovianBn256Limit, 0xaa);
     auto msg = [&](uint8_t const* input, size_t size, int64_t gas) {
         evmc_message m{};
         m.kind = EVMC_CALL;
@@ -859,7 +859,7 @@ BOOST_AUTO_TEST_CASE(AlwaysWarmPrecompilesNoGhost)
     eth::EthBlockInfo block{};
     opeth::OpPolicy const opPolicy{opeth::OP_JOVIAN_SPEC, block};
     eth::EthereumHost<opstack_test::MutableStorage, opeth::OpPolicy> opHost{EVMC_PRAGUE, vm,
-        opState, block, {}, std::nullopt, eth::EthCallParams{}, kOpChainId, opPolicy};
+        opState, block, {}, std::nullopt, eth::EthCallParams{}, c_opChainId, opPolicy};
 
     BOOST_CHECK_EQUAL(static_cast<int>(opHost.access_account(opeth::OP_P256_VERIFY_ADDRESS)),
         static_cast<int>(EVMC_ACCESS_WARM));
@@ -873,7 +873,7 @@ BOOST_AUTO_TEST_CASE(AlwaysWarmPrecompilesNoGhost)
     eth::EthereumState<opstack_test::MutableStorage> l1State{l1Storage};
     eth::EthL1Policy const l1Policy{};
     eth::EthereumHost<opstack_test::MutableStorage, eth::EthL1Policy> l1Host{EVMC_PRAGUE, vm,
-        l1State, block, {}, std::nullopt, eth::EthCallParams{}, kOpChainId, l1Policy};
+        l1State, block, {}, std::nullopt, eth::EthCallParams{}, c_opChainId, l1Policy};
 
     // 0x08 is a Prague precompile: warm on first access, but only AFTER the ghost insert.
     BOOST_CHECK_EQUAL(static_cast<int>(l1Host.access_account(evmc::address{0x08})),

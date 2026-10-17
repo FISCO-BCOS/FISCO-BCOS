@@ -19,6 +19,8 @@
 
 #include "FeeHistory.h"
 #include <bcos-framework/engine/OpBaseFee.h>
+#include <bcos-framework/engine/OpEip1559Params.h>
+#include <bcos-framework/engine/OpTime.h>
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
@@ -83,7 +85,9 @@ std::vector<u256> bcos::rpc::rewardPercentiles(std::vector<RewardSample> samples
     return row;
 }
 
-u256 bcos::rpc::nextOpBaseFee(protocol::BlockHeader const& parent)
+u256 bcos::rpc::nextOpBaseFee(protocol::BlockHeader const& parent,
+    std::optional<engine::OpEip1559Params> eip1559, ledger::OpForkSchedule const& schedule,
+    std::uint64_t expectedChildTsSec)
 {
     auto const extra = parent.extraData();
     if (!extra.empty())
@@ -92,12 +96,25 @@ u256 bcos::rpc::nextOpBaseFee(protocol::BlockHeader const& parent)
                             extra[0] == engine::c_jovianExtraDataVersion;
         return engine::calcOpBaseFee(parent, jovian);
     }
-    auto const childIsCanyon = parent.withdrawalsRoot().has_value();
-    return engine::calcOpBaseFeeFromFields(parent.gasLimit(), parent.gasUsed(),
-        parent.baseFee().value_or(0), parent.blobGasUsed(), {}, /*parentIsHolocene=*/false,
-        /*parentIsJovian=*/false,
-        childIsCanyon ? engine::c_eip1559DenominatorCanyon : engine::c_eip1559DenominatorBedrock,
-        engine::c_eip1559ElasticityCanyon);
+    // Pre-Holocene parent: the step sizes from the chain's DECLARED triple (the
+    // op_eip1559_params SYS_CONFIG row written at genesis from [op_eip1559]) — the
+    // same numbers the engine's zero-attribute-params substitution uses, so the
+    // prediction cannot drift from what the next block actually carries. Undeclared
+    // chains fall back to c_legacyOpEip1559Params (bcos-framework's
+    // engine/OpEip1559Params.h — effectiveOpEip1559), which is
+    // exactly the pair those chains have always priced with.
+    auto const params = engine::effectiveOpEip1559(eip1559);
+    // The CHILD's Canyon activation resolves through the fork schedule at the caller's
+    // expected child time — the same resolveOpFork keying the engine applies when the
+    // block lands (review F2: the former parent-shape proxy — withdrawalsRoot — read the
+    // activation block as pre-Canyon and answered the Bedrock denominator where the
+    // engine answers the Canyon one; op-geth child-keys its fee-history prediction the
+    // same way, eth/gasprice/feehistory.go:93). The formula itself is the shared helper
+    // (OpBaseFee.h).
+    auto const childIsCanyon =
+        ledger::resolveOpFork(schedule, expectedChildTsSec) >= ledger::OpFork::Canyon;
+    return engine::calcOpBaseFeePreHolocene(
+        parent.gasLimit(), parent.gasUsed(), parent.baseFee().value_or(0), childIsCanyon, params);
 }
 
 task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& ledger,
@@ -109,6 +126,17 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
     if (blockCount == 0)
     {
         co_return result;
+    }
+    // review F8: the upper-side guard below left the lower side open — a negative
+    // newest wrapped uint64(newest)+1 to 0, skipped the loop and dereferenced the null
+    // `last` header (UB in this coroutine). The shared tag resolver rejects >INT64_MAX
+    // and clamps safe/finalized at 0, so no in-tree caller produces this today; the
+    // guard exists for direct/out-of-tree callers and keeps the contract total.
+    if (newest < 0 || head < 0)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "negative block number: requested " + std::to_string(newest) +
+                               ", head " + std::to_string(head)));
     }
     if (newest > head)
     {
@@ -128,10 +156,12 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
     Json::Value blobFees(Json::arrayValue);
     Json::Value blobRatios(Json::arrayValue);
     protocol::BlockHeader::Ptr last;
+    protocol::BlockHeader::Ptr previous;
     for (auto number = oldest; number <= newest; ++number)
     {
         auto const block = co_await ledger::getBlockData(ledger, number,
             ledger::HEADER | (wantRewards ? (ledger::TRANSACTIONS | ledger::RECEIPTS) : 0));
+        previous = last;
         last = block->blockHeader();
         auto const baseFee = protocol::blockBaseFee(*last);
         baseFees.append(toQuantity(baseFee));
@@ -162,7 +192,27 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
         }
         rewards.append(std::move(row));
     }
-    baseFees.append(toQuantity(nextOpBaseFee(*last)));
+    // The trailing prediction prices the block AFTER `newest`: feed it the chain's
+    // declared triple so a pre-Holocene tail cannot price with the legacy preset on a
+    // chain that declared its own pair (the same substitution the engine performs), and
+    // the fork schedule keyed at the expected child time (review F2). The child's
+    // timestamp is not known yet — estimate it from the chain's observed cadence (the
+    // two newest headers in range); a single-header range falls back to op-geth's +1s
+    // convention (eth/gasprice/feehistory.go:93). An absent schedule row is the OP
+    // lane's Isthmus baseline (resolveOpFork's fallback) — the same default the engine's
+    // seam holds, so both key the Canyon arm identically.
+    auto const declared = co_await ledger::getLedgerConfig(ledger);
+    std::uint64_t const cadenceMs =
+        (previous && last->timestamp() > previous->timestamp()) ?
+            static_cast<std::uint64_t>(last->timestamp() - previous->timestamp()) :
+            1000;
+    auto const expectedChildTsSec = engine::unixSecondsFromInternalMillis(
+        static_cast<std::uint64_t>(last->timestamp()) + cadenceMs);
+    auto const schedule = (declared && declared->opForkSchedule().has_value()) ?
+                              *declared->opForkSchedule() :
+                              ledger::OpForkSchedule{};
+    baseFees.append(toQuantity(nextOpBaseFee(*last,
+        declared ? declared->opEip1559Params() : std::nullopt, schedule, expectedChildTsSec)));
     result["baseFeePerGas"] = std::move(baseFees);
     result["gasUsedRatio"] = std::move(ratios);
     if (wantRewards)

@@ -32,6 +32,7 @@
 #include <bcos-utilities/Bloom.h>
 #include <algorithm>
 #include <array>
+#include <boost/throw_exception.hpp>
 #include <cassert>
 #include <cstdint>
 #include <evmc/evmc.hpp>
@@ -369,7 +370,7 @@ public:
         // (evmone guarantees it; under NDEBUG the assert is gone and the consensus surface
         // tolerates no wrap).
         if (gasUsed < 0)
-            throw std::runtime_error("opTransition: negative gas_used");
+            BOOST_THROW_EXCEPTION(std::runtime_error("opTransition: negative gas_used"));
 
         std::vector<protocol::LogEntry> logs;
         for (auto const& l : host.take_logs())

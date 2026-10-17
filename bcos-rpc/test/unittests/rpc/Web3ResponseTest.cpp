@@ -19,9 +19,11 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
-#include <string_view>
 
-#include <boost/test/unit_test.hpp>
+#include <string_view>
+#include <tuple>
+#include <vector>
+
 using namespace bcos;
 using namespace bcos::rpc;
 
@@ -543,6 +545,44 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
     BOOST_CHECK(result["logs"].isArray());
 }
 
+/// l1FeeScalar renders the RAW L1Block slot-6 scalar exactly as op-geth's scaled
+/// big.Float 'g' marshalling (scalar/1e6): plain decimal with the fractional part kept
+/// ("0.684", "1", "2.000001", "340.282366", "100000"), but exponent form when the
+/// decimal exponent is < -4 or >= 6 — rawScalar < 100 ("1e-06", "5e-05", "9.9e-05") and
+/// rawScalar >= 1e12 ("1e+06", "1.234567e+06"); the boundary cells 100 ("0.0001") and
+/// 1e11 ("100000") stay decimal (review F3; vectors produced by executing op-geth's own
+/// intToScaledFloat + gen_receipt_json.go marshalling). An absent field emits nothing.
+BOOST_AUTO_TEST_CASE(combineReceiptResponseRendersL1FeeScalar)
+{
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x88;
+    for (auto [rawScalar, expected] :
+        std::vector<std::tuple<uint64_t, const char*>>{{684000, "0.684"}, {1'000'000, "1"},
+            {2'000'001, "2.000001"}, {340'282'366, "340.282366"}, {0, "0"}, {1, "1e-06"},
+            {5, "5e-06"}, {50, "5e-05"}, {99, "9.9e-05"}, {100, "0.0001"}, {200, "0.0002"},
+            {500, "0.0005"}, {100'000'000'000ULL, "100000"}, {1'000'000'000'000ULL, "1e+06"},
+            {1'234'567'000'000ULL, "1.234567e+06"}})
+    {
+        auto tx = makeWeb3Tx(m_blockFactory, chainId, groupId);
+        auto receipt = makeReceipt(m_blockFactory);
+        protocol::OpStackReceiptMeta meta;
+        meta.l1_fee_scalar = bcos::u256(rawScalar);
+        receipt->setOpStackMeta(meta);
+
+        Json::Value result(Json::objectValue);
+        combineReceiptResponse(result, *receipt, *tx, blockHash);
+        BOOST_CHECK_EQUAL(result["l1FeeScalar"].asString(), expected);
+    }
+    // Absent field: no key at all (never a default value), per the D7 gate.
+    {
+        auto tx = makeWeb3Tx(m_blockFactory, chainId, groupId);
+        auto receipt = makeReceipt(m_blockFactory);
+        Json::Value result(Json::objectValue);
+        combineReceiptResponse(result, *receipt, *tx, blockHash);
+        BOOST_CHECK(!result.isMember("l1FeeScalar"));
+    }
+}
+
 /// The per-log branch needs a NON-EMPTY logs vector: log.address must be the EIP-55
 /// checksum of the raw 20 bytes and log.transactionIndex a hex quantity. The base emitted
 /// toQuantity(transactionIndex) on an already-hex string ("0x307833") and the raw-byte
@@ -855,6 +895,102 @@ BOOST_AUTO_TEST_CASE(combineTxResponseDepositMinimalFields)
     BOOST_CHECK(!result.isMember("blobVersionedHashes"));
 }
 
+/// The ledger-stored deposit tx for the receipt-driven tests below: takeToTarsTransaction
+/// puts the full 0x7e envelope in extraTransactionBytes (isDepositTx() true) and the
+/// manual extraTransactionHash keeps combineTxResponse's tx.hash() from throwing.
+std::shared_ptr<bcostars::protocol::TransactionImpl> makeDepositTxImpl()
+{
+    bcos::rpc::Web3Transaction web3Deposit;
+    web3Deposit.type = bcos::rpc::TransactionType::Deposit;
+    web3Deposit.from = bcos::Address("0xdead000000000000000000000000000000000011");
+    web3Deposit.sourceHash =
+        bcos::h256("6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    web3Deposit.mint = bcos::u256("0x16345785d8a0000");
+    web3Deposit.nonce = 0;
+    web3Deposit.isSystemTx = false;
+
+    auto tarsTx = web3Deposit.takeToTarsTransaction();
+    bcos::h256 arbitraryHash("0101010101010101010101010101010101010101010101010101010101010101");
+    tarsTx.extraTransactionHash.assign(arbitraryHash.begin(), arbitraryHash.end());
+    return std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+}
+
+/// A deposit's tx nonce is the receipt's DEPOSIT nonce, never the account nonce, and the
+/// fee-market effectiveGasPrice overlay must not run on deposits (review round-1 F1 + the
+/// F9 pin it rides with): the receipt overload is the path every
+/// eth_getTransactionByHash-with-a-receipt caller goes through, and no in-tree case drove
+/// it with a deposit before. Values are distinct from every sibling case (0x12/0x13/0x77)
+/// so a wrong-field or no-fill regression cannot pass by coincidence.
+BOOST_AUTO_TEST_CASE(combineTxResponseReceiptOverloadFillsDepositNonceAndSkipsGasPrice)
+{
+    auto deposit = makeDepositTxImpl();
+    auto receipt = makeReceipt(m_blockFactory);  // transactionIndex 0, blockNumber 12
+    protocol::OpStackReceiptMeta meta;
+    meta.deposit_nonce = 18;
+    meta.deposit_receipt_version = 19;
+    receipt->setOpStackMeta(meta);
+    receipt->setEffectiveGasPrice("0x77");
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x99;
+    Json::Value result = Json::objectValue;
+    combineTxResponse(result, *deposit, *receipt, blockHash);
+
+    // The receipt fill overwrote the deposit branch's "0x0" nonce with the deposit nonce.
+    BOOST_CHECK_EQUAL(result["nonce"].asString(), "0x12");
+    BOOST_CHECK_EQUAL(result["depositReceiptVersion"].asString(), "0x13");
+    // F9: the overlay is deposit-gated — an effectiveGasPrice-carrying receipt must not
+    // stamp gasPrice over the deposit branch's pinned 0x0.
+    BOOST_CHECK_EQUAL(result["gasPrice"].asString(), "0x0");
+    // The overload takes index/number from the receipt (not the caller).
+    BOOST_CHECK_EQUAL(result["transactionIndex"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["blockNumber"].asString(), "0xc");
+
+    // Control, the overlay's other arm: the SAME receipt shape on a NON-deposit tx still
+    // applies the overlay — pins that the skip is the deposit gate, not an unconditional
+    // drop of effectiveGasPrice. The nonce check pins the fill's gate: the deposit nonce
+    // (0x12) must never land on a non-deposit tx (whatever its own nonce rendering is).
+    auto normal = makeWeb3Tx(m_blockFactory, chainId, groupId);
+    auto normalReceipt = makeReceipt(m_blockFactory);
+    normalReceipt->setEffectiveGasPrice("0x77");
+    Json::Value normalResult = Json::objectValue;
+    combineTxResponse(normalResult, *normal, *normalReceipt, blockHash);
+    BOOST_CHECK_EQUAL(normalResult["gasPrice"].asString(), "0x77");
+    BOOST_CHECK_NE(normalResult["nonce"].asString(), "0x12");
+}
+
+/// The full-block path (eth_getBlockByNumber(full)) pairs txs with receipts POSITIONALLY;
+/// its deposit gate must fill the same fields the receipt overload does. The only other
+/// fullTxs=true case runs on an empty tx list and never enters the loop.
+BOOST_AUTO_TEST_CASE(combineBlockResponseFullTxsFillsDepositNonceFromReceipt)
+{
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(1);
+    header->setGasUsed(u256(21000));
+    header->setTimestamp(1000);
+    header->calculateHash(*hashImpl);
+    block->setBlockHeader(header);
+    block->appendTransaction(makeDepositTxImpl());
+    auto receipt = makeReceipt(m_blockFactory);
+    protocol::OpStackReceiptMeta meta;
+    meta.deposit_nonce = 18;
+    meta.deposit_receipt_version = 19;
+    receipt->setOpStackMeta(meta);
+    block->appendReceipt(receipt);
+
+    Json::Value result = Json::objectValue;
+    combineBlockResponse(result, *block, /*fullTxs=*/true);
+
+    BOOST_REQUIRE(result["transactions"].isArray());
+    BOOST_REQUIRE_EQUAL(result["transactions"].size(), 1U);
+    auto const& txJson = result["transactions"][0U];
+    BOOST_CHECK_EQUAL(txJson["type"].asString(), "0x7e");
+    BOOST_CHECK_EQUAL(txJson["nonce"].asString(), "0x12");
+    BOOST_CHECK_EQUAL(txJson["depositReceiptVersion"].asString(), "0x13");
+}
+
 // Read-side EIP-4844 blob transaction: blobVersionedHashes / maxFeePerBlobGas branches.
 BOOST_AUTO_TEST_CASE(combineTxResponseBlob4844)
 {
@@ -1056,8 +1192,8 @@ BOOST_AUTO_TEST_CASE(combineTxResponseVFieldFromTarsSignature)
         bcostars::protocol::TransactionImpl txImpl(
             [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
         Json::Value result = Json::objectValue;
-        combineTxResponse(result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/1,
-            bcos::crypto::HashType{});
+        combineTxResponse(
+            result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/1, bcos::crypto::HashType{});
         return result;
     };
 

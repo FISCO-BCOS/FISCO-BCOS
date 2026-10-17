@@ -248,9 +248,10 @@ inline bcos::u256 calcOpBaseFeeFromFields(bcos::u256 const& parentGasLimit,
 /// activation — op-geth CalcBaseFee calls config.BaseFeeChangeDenominator(time) with the CHILD
 /// timestamp (consensus/misc/eip1559/eip1559.go:72; params/config.go:1349-1359), while the
 /// Holocene decode is keyed on parent.Time. Callers resolve childIsCanyon through the fork
-/// schedule (engine: seam predicate; sync validator: resolveOpFork); the RPC fee-history
-/// prediction keys on the parent's header shape (a documented one-boundary approximation —
-/// the next block's exact timestamp is unknown to a prediction). A zero Canyon denominator
+/// schedule (engine: seam predicate; sync validator: resolveOpFork; the RPC fee-history
+/// prediction: resolveOpFork at an expected child time estimated from the chain's cadence —
+/// the child-time estimate, not the keying source, is that prediction's residual
+/// approximation). A zero Canyon denominator
 /// with Canyon active is a config fault: op-geth panics (config.go:1352-1354); we fail closed.
 [[nodiscard]] inline bcos::u256 calcOpBaseFeePreHolocene(bcos::u256 const& parentGasLimit,
     bcos::u256 const& parentGasUsed, bcos::u256 const& parentBaseFee, bool childIsCanyon,

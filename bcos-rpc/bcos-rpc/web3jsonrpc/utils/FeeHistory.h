@@ -19,12 +19,15 @@
 
 #pragma once
 
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-task/Task.h>
 #include <json/json.h>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -54,11 +57,26 @@ std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
 /// The next block's base fee after @p parent under the OP EIP-1559 rule (op-geth CalcBaseFee).
 /// The era comes from the parent header's shape, which a validated OP chain fixes: non-empty
 /// extraData = Holocene+ parent (parameters decoded from it; 17 bytes / 0x01 = Jovian, which
-/// adds the DA-footprint metering and minBaseFee floor); empty extraData = pre-Holocene, with
-/// elasticity 6 and denominator 250 when the child is Canyon, else 50. The child counts as
-/// Canyon when the parent carries withdrawalsRoot (every Canyon+ OP header does), so only the
-/// Canyon activation block itself is predicted with the Bedrock denominator.
-u256 nextOpBaseFee(protocol::BlockHeader const& parent);
+/// adds the DA-footprint metering and minBaseFee floor); empty extraData = pre-Holocene, priced
+/// with the legacy FALLBACK preset {elasticity 6; denominator 250 when the child is Canyon,
+/// else 50} — the eip1559 argument below overrides it when the chain declares a triple.
+/// The CHILD's Canyon activation comes from the fork schedule at @p expectedChildTsSec — the
+/// same resolveOpFork keying the engine applies when the block actually lands (review F2: the
+/// former parent-shape proxy — withdrawalsRoot — was a whole block late at the Canyon
+/// activation block and answered the Bedrock denominator there; op-geth child-keys likewise,
+/// eth/gasprice/feehistory.go:93).
+/// eip1559: the chain's DECLARED triple (from the op_eip1559_params SYS_CONFIG row);
+/// nullopt prices with c_legacyOpEip1559Params. Only the pre-Holocene arm reads it.
+/// schedule: the chain's resolved fork schedule; an all-unset schedule is the OP lane's
+/// Isthmus baseline (resolveOpFork), matching the engine's default.
+/// expectedChildTsSec: Unix SECONDS of the block being priced (the schedule's domain —
+/// convert internal ms through bcos::engine::unixSecondsFromInternalMillis).
+// No default on @p eip1559 / @p schedule / @p expectedChildTsSec: pricing a declared
+// chain with the legacy preset, or the next block with the parent's fork shape, is a
+// silent wrong answer, so callers must name each input explicitly.
+u256 nextOpBaseFee(protocol::BlockHeader const& parent,
+    std::optional<engine::OpEip1559Params> eip1559, ledger::OpForkSchedule const& schedule,
+    std::uint64_t expectedChildTsSec);
 
 /// eth_feeHistory for blocks [newest - blockCount + 1, newest] of an OP-lane ledger whose head
 /// is @p head. blockCount 0 answers {"oldestBlock": "0x0"}; above c_maxFeeHistoryBlocks it is

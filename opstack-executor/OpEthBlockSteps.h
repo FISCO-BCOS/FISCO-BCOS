@@ -1,3 +1,5 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
 /// @file OpEthBlockSteps.h
 /// @brief The block-level pre/post steps of the OP production execution paths
 ///        (OpScheduler::execute and OpBlockVerifier::verifyAndCommit) on the
@@ -31,6 +33,7 @@
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/protocol/TransactionReceiptNormalize.h>
 #include <bcos-framework/storage2/RollbackableStorage.h>
+#include <bcos-ledger/LedgerMethods.h>   // getBlockData (parent-header fetch)
 #include <bcos-ledger/mpt/Constants.h>   // emptyRootHash
 #include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateRoot
 #include <bcos-task/Task.h>
@@ -40,7 +43,8 @@
 #include <ethereum-executor/EthereumTransition.h>  // eth::finalizeState
 #include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError / detail conversions
 #include <opstack-executor/OpEthBlockExecute.h>  // buildOpEthBlockInfo / sealOpEthBlock / ...
-#include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult / computeOpEthTransactionsRoot
+// OpEthExecuteBlockResult / computeOpEthTransactionsRoot
+#include <opstack-executor/OpEthCommitments.h>
 #include <opstack-executor/OpEthDeposit.h>         // DepositTx / OP_DEPOSIT_TX_TYPE
 #include <opstack-executor/OpExecutionPolicy.h>    // OpPolicy
 #include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source
@@ -57,6 +61,27 @@
 namespace bcos::executor_v1::opstack
 {
 namespace eth = bcos::executor_v1::eth;
+
+/// Fetch the committed header at @p number (the ledger's HEADER view), translating the
+/// framework's NotFoundBlockHeader into nullptr so each caller keeps its own fail-closed
+/// message for a missing parent (OpScheduler's activation gate and incremental-root
+/// guard, OpBlockVerifier's activation gate). The ONE implementation of a fetch the
+/// three call sites used to copy; nullptr means a missing row or a header-less block.
+template <class ViewType>
+[[nodiscard]] bcos::task::Task<bcos::protocol::BlockHeader::Ptr> fetchCommittedHeaderOrNull(
+    ViewType& view, bcos::protocol::BlockNumber number, bcos::protocol::BlockFactory& blockFactory)
+{
+    try
+    {
+        auto block =
+            co_await bcos::ledger::getBlockData(view, number, bcos::ledger::HEADER, blockFactory);
+        co_return block ? block->blockHeader() : nullptr;
+    }
+    catch (bcos::ledger::NotFoundBlockHeader const&)
+    {
+        co_return nullptr;
+    }
+}
 
 /// Adapt the per-block OpRecentBlockHashes into the new layer's BlockHashLookup
 /// function. The second (currentHeight) parameter is unused: OpRecentBlockHashes
@@ -86,7 +111,7 @@ task::Task<void> preBlockOpEthSteps(Storage& view, bcos::protocol::BlockHeader c
     OpForkSpec const& spec, RawTxRange const& rawTxBytes, std::vector<DepositTx> const& deposits,
     evmc::VM& vm, std::shared_ptr<OpStorageErrorSlot> const& errorSlot,
     std::optional<OpRecentBlockHashes<Storage>>& hashes, std::optional<std::string>& hashErr,
-    std::optional<uint16_t>& daFootprintGasScalar)
+    std::optional<uint16_t>& daFootprintGasScalar, bool noUserTxActivationBlock)
 {
     // buildOpEthBlockInfo's leniency rule is the legacy toBlockInfo one
     // (pre-Ecotone optionals zero-filled — dead EVM inputs pre-Cancun);
@@ -171,6 +196,24 @@ task::Task<void> preBlockOpEthSteps(Storage& view, bcos::protocol::BlockHeader c
         if (auto scalar =
                 opEthJovianDaFootprintGasScalar(std::span<uint8_t const>{data.data(), data.size()}))
             daFootprintGasScalar = *scalar;
+
+        // Schedule-driven activation gate (alloy-op-evm block/mod.rs:869): EVERY envelope
+        // must be a deposit. The op-geth shape check above inspects only the last tx, so a
+        // user tx hidden between deposits would pass it — upstream's consensus rule does
+        // not have that blind spot, and this scan is the restored gate the cutover port
+        // dropped. There is no post-exec SDM envelope on this lane to exempt.
+        if (noUserTxActivationBlock)
+        {
+            for (auto const& raw : rawTxBytes)
+            {
+                if (raw.empty() || raw[0] != OP_DEPOSIT_TX_TYPE)
+                {
+                    throw bcos::evm::OpConsensusError(
+                        "op block: unexpected non-deposit transaction in fork-activation "
+                        "block (post-Jovian fork-activation blocks are deposits-only)");
+                }
+            }
+        }
     }
     co_return;
 }
@@ -233,13 +276,14 @@ task::Task<OpEthExecuteBlockResult> finalizeOpEthBlockResult(Storage& view,
     // Internal-invariant guard: a caller programming error, not a block-content
     // rejection, hence std::logic_error rather than OpConsensusError (as legacy).
     if (rawTxBytes.size() != receipts.size())
-        throw std::logic_error("op block: receipts/rawTxBytes length mismatch (caller bug)");
+        BOOST_THROW_EXCEPTION(
+            std::logic_error("op block: receipts/rawTxBytes length mismatch (caller bug)"));
     std::vector<uint8_t> txTypes;
     txTypes.reserve(rawTxBytes.size());
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
     {
         if (rawTxBytes[i].empty())  // defensive: the per-tx loop already rejects these
-            throw std::logic_error("op block: empty envelope (caller bug)");
+            BOOST_THROW_EXCEPTION(std::logic_error("op block: empty envelope (caller bug)"));
         txTypes.emplace_back(opEthClassifyTxType(rawTxBytes[i][0]));
     }
 

@@ -1,5 +1,24 @@
-// opstack-executor/tests/support/SeedPreStateTest.cpp
+/*
+ *  Copyright (C) 2026 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/// @file opstack-executor/tests/support/SeedPreStateTest.cpp
+/// @brief Shared seed-state helper tests (see the header for the contract).
+
 #include "SeedPreState.h"
+#include "E2eCheckpointStorage.h"  // opstack_test::TrivialCheckpointStorage (review F26, same-dir)
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -10,29 +29,13 @@
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
+
+using opstack_test::TrivialCheckpointStorage;
 namespace memory_storage = bcos::storage2::memory_storage;
 
 namespace
 {
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
-    Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
-    {
-        return std::nullopt;
-    }
-};
+
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
 using BackendMemStorage = memory_storage::MemoryStorage<StateKey, StateValue,
@@ -93,8 +96,8 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
     const auto addr = opstack_test::jsonAddress("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf");
     auto acct = bcos::executor_v1::eth::ethViewAccount(view, addr);
     BOOST_REQUIRE(bcos::task::syncWait(acct.exists()));
-    BOOST_CHECK(bcos::task::syncWait(acct.balance()) ==
-                opstack_test::jsonU256("0x56bc75e2d63100000"));
+    BOOST_CHECK(
+        bcos::task::syncWait(acct.balance()) == opstack_test::jsonU256("0x56bc75e2d63100000"));
     BOOST_CHECK_EQUAL(bcos::task::syncWait(acct.nonce()).value_or(""), "0");
     const auto l1 = opstack_test::jsonAddress("0x4200000000000000000000000000000000000015");
     auto l1Acct = bcos::executor_v1::eth::ethViewAccount(view, l1);
