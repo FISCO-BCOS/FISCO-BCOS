@@ -100,9 +100,23 @@ u256 bcos::rpc::nextOpBaseFee(protocol::BlockHeader const& parent)
         engine::c_eip1559ElasticityCanyon);
 }
 
+u256 bcos::rpc::nextEthBaseFee(protocol::BlockHeader const& parent)
+{
+    // Standard London EIP-1559 (elasticity 2, denominator 8): the pure-Ethereum lane carries no
+    // OP extraData, so the fixed pair applies and blobGasUsed does not meter the base fee (it
+    // prices blobs through excessBlobGas). Reuse the shared EIP-1559 core with
+    // parentIsHolocene/parentIsJovian both false so no extraData is read. A missing baseFee on
+    // the parent reads as 0 — the next block then prices at the floor, matching geth's
+    // "unset base fee" behaviour on a chain that has not minted a fee-bearing block yet.
+    return engine::calcOpBaseFeeFromFields(parent.gasLimit(), parent.gasUsed(),
+        parent.baseFee().value_or(0), /*parentBlobGasUsed=*/std::nullopt, /*parentExtraData=*/{},
+        /*parentIsHolocene=*/false, /*parentIsJovian=*/false,
+        /*fallbackDenominator=*/8, /*fallbackElasticity=*/2);
+}
+
 task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& ledger,
     protocol::BlockNumber newest, protocol::BlockNumber head, std::uint64_t blockCount,
-    std::vector<double> const& percentiles)
+    std::vector<double> const& percentiles, bool isOpStackLane)
 {
     Json::Value result(Json::objectValue);
     result["oldestBlock"] = "0x0";
@@ -162,7 +176,7 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
         }
         rewards.append(std::move(row));
     }
-    baseFees.append(toQuantity(nextOpBaseFee(*last)));
+    baseFees.append(toQuantity(isOpStackLane ? nextOpBaseFee(*last) : nextEthBaseFee(*last)));
     result["baseFeePerGas"] = std::move(baseFees);
     result["gasUsedRatio"] = std::move(ratios);
     if (wantRewards)

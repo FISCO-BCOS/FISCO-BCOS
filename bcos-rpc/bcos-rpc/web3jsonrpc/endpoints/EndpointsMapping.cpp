@@ -130,8 +130,10 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getFilterLogs)] = &Endpoints::getFilterLogs;
     m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
     m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
-    // OP-lane methods (op-batcher / op-proposer / op-node): the handlers answer MethodNotFound
-    // on any other executor_version (requireOpStackLane).
+    // Ethereum/OP-lane methods (op-batcher / op-proposer / op-node / txmgr): the handlers
+    // answer MethodNotFound on the legacy FISCO lane (requireEthereumLane or the in-handler
+    // usesEthereumFeeSemantics gate).
+    m_handlers[methodString(EthMethod::eth_blobBaseFee)] = &Endpoints::blobBaseFee;
     m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     m_handlers[methodString(EthMethod::eth_getBlockReceipts)] = &Endpoints::getBlockReceipts;
     m_handlers[methodString(EthMethod::txpool_status)] = &Endpoints::txpoolStatus;

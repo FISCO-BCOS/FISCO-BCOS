@@ -60,10 +60,19 @@ std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
 /// Canyon activation block itself is predicted with the Bedrock denominator.
 u256 nextOpBaseFee(protocol::BlockHeader const& parent);
 
-/// eth_feeHistory for blocks [newest - blockCount + 1, newest] of an OP-lane ledger whose head
+/// The next block's base fee after @p parent under the standard EIP-1559 rule (geth
+/// consensus/misc/eip1559/eip1559.go CalcBaseFee with the London parameters): the pure-Ethereum
+/// lane (executor_version == ETHEREUM_EXECUTOR_VERSION) has no OP extraData, so the parameters
+/// are the fixed London elasticity 2 / denominator 8, and blobGasUsed never meters the base fee
+/// (EIP-4844 prices blobs through excessBlobGas, not the base fee).
+u256 nextEthBaseFee(protocol::BlockHeader const& parent);
+
+/// eth_feeHistory for blocks [newest - blockCount + 1, newest] of a ledger whose head
 /// is @p head. blockCount 0 answers {"oldestBlock": "0x0"}; above c_maxFeeHistoryBlocks it is
 /// clamped; newest > head is InvalidParams. Deposits enter the rewards with tip 0.
+/// @p isOpStackLane selects the next-block base-fee projection: the OP extraData rule for the OP
+/// lane, the standard EIP-1559 rule for the Ethereum lane.
 task::Task<Json::Value> buildOpFeeHistory(ledger::LedgerInterface& ledger,
     protocol::BlockNumber newest, protocol::BlockNumber head, std::uint64_t blockCount,
-    std::vector<double> const& percentiles);
+    std::vector<double> const& percentiles, bool isOpStackLane);
 }  // namespace bcos::rpc

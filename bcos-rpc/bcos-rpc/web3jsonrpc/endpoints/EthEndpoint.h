@@ -81,9 +81,12 @@ public:
     task::Task<std::tuple<protocol::BlockNumber, protocol::BlockNumber>> getBlockNumberAndHeadByTag(
         std::string_view blockTag);
     task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
-    // OP lane only (requireOpStackLane): the Web3 surface op-batcher / op-proposer call.
+    // Ethereum/OP lane only (requireEthereumLane / executor_version >= 2): geth-standard
+    // methods with no meaning on the legacy FISCO lane.
+    task::Task<void> blobBaseFee(const Json::Value&, Json::Value&);
     task::Task<void> feeHistory(const Json::Value&, Json::Value&);
     task::Task<void> getBlockReceipts(const Json::Value&, Json::Value&);
+    // OP lane only (requireOpStackLane): the OP mempool snapshot the batcher/proposer call.
     task::Task<void> txpoolStatus(const Json::Value&, Json::Value&);
     task::Task<void> txpoolContent(const Json::Value&, Json::Value&);
     task::Task<void> getProof(const Json::Value&, Json::Value&);
