@@ -39,7 +39,6 @@ target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
 # data port (ports-data/) under the tests manifest feature
 target_compile_definitions(${TEST_BINARY_NAME} PRIVATE
     ETHEREUM_TESTS_DIR="${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/ethereum-tests")
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 # add_test(NAME test-ledger WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 include(SearchTestCases)
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "${EXCLUDE_SUITES}" "")

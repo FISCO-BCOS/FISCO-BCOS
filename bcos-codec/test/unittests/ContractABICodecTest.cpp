@@ -26,9 +26,12 @@
 #include <boost/algorithm/hex.hpp>
 
 #include <boost/test/unit_test.hpp>
-using namespace std;
+using std::string;
+using std::vector;
+using namespace std::literals;
 using namespace bcos;
-using namespace bcos::codec;
+using bcos::codec::fromString32;
+using bcos::codec::toString32;
 using namespace bcos::codec::abi;
 using namespace bcos::crypto;
 

@@ -40,5 +40,4 @@ set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUIL
 # bcos::consensus;` at file scope, making `ConsensusNodeList` ambiguous. Pinning this
 # test out of the unity batches keeps unity ordering robust as new test files are added.
 set_source_files_properties("unittests/txpool/TxPoolStorageTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")

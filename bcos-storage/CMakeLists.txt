@@ -19,7 +19,6 @@ target_include_directories(storage PUBLIC
 target_link_libraries(storage PUBLIC ${LIB_LIST})
 set_source_files_properties(
   "bcos-storage/CheckpointRocksDBStorage.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(storage PROPERTIES UNITY_BUILD "ON")
 
 if (APPLE)
   target_link_libraries(storage PUBLIC "-framework SystemConfiguration")

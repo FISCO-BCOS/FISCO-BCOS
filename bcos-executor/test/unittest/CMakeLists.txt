@@ -25,10 +25,10 @@ set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 #    unity TUs with this Boost version (registration symbols are uniquified);
 #  - the release-3.17.0-era opt-outs (DAGTest / DagTransferPrecompiledTest /
 #    SmallBankPrecompiledTest) were verified safe on GCC 14.
-# Default batch size (8): measured GCC 14/Debug on a 20-core box — test target clean
-# rebuild ~150s -> ~120-145s wall, ~2200s -> ~1500-1800s CPU; batch 4 was strictly
-# worse (more repeated header parsing, no wall-clock gain).
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
+# Default batch size (repo-wide default is UNITY_BUILD_BATCH_SIZE=16; measured GCC 14/Debug
+# on a 20-core box with batch 8 — test target clean rebuild ~150s -> ~120-145s wall,
+# ~2200s -> ~1500-1800s CPU; batch 4 was strictly worse (more repeated header parsing,
+# no wall-clock gain).
 # CompatStaticGuardsTest locates repo sources from __FILE__. With UNITY_BUILD off the compiler
 # sees a path relative to its own working directory, while ctest runs the binary from the build
 # root, so the relative form resolves to the wrong place. Give the test an absolute anchor.

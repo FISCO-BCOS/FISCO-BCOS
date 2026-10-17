@@ -10,7 +10,13 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
-using namespace bcos::rpc;
+using bcos::rpc::decodeBlobTxNetworkWrapper;
+using bcos::rpc::encodeBlobTxNetworkWrapper;
+using bcos::rpc::isBlobTxNetworkWrapper;
+using bcos::rpc::Web3Transaction;
+using bcos::rpc::BLOB_TX_BLOB_SIZE;
+using bcos::rpc::BLOB_TX_COMMITMENT_SIZE;
+using bcos::rpc::BLOB_TX_PROOF_SIZE;
 
 namespace bcos::test
 {
@@ -19,7 +25,7 @@ namespace
 Web3Transaction makeBlobTx(std::size_t blobCount)
 {
     Web3Transaction tx;
-    tx.type = TransactionType::EIP4844;
+    tx.type = bcos::rpc::TransactionType::EIP4844;
     tx.chainId = 1;
     tx.nonce = 7;
     tx.maxPriorityFeePerGas = u256(100);
@@ -69,7 +75,7 @@ BOOST_AUTO_TEST_CASE(roundtripPreservesTransactionAndSidecar)
     engine::BlobTxSidecar decodedSidecar;
     decodeBlobTxNetworkWrapper(
         bcos::bytesConstRef(wrapper.data(), wrapper.size()), decoded, decodedSidecar);
-    BOOST_CHECK(decoded.type == TransactionType::EIP4844);
+    BOOST_CHECK(decoded.type == bcos::rpc::TransactionType::EIP4844);
     BOOST_CHECK_EQUAL(decoded.nonce, 7);
     BOOST_REQUIRE(decoded.to.has_value());
     BOOST_CHECK(*decoded.to == *tx.to);

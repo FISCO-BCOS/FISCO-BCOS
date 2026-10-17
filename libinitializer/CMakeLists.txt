@@ -17,7 +17,6 @@ target_link_libraries(protocol_init PUBLIC
 # pbft_init: used by fisco-bcos-air, NodeService, storage-tool, archive-tool, hsm-tool
 add_library(pbft_init PBFTInitializer.cpp ProPBFTInitializer.cpp)
 target_link_libraries(pbft_init PUBLIC protocol_init ledger tool sealer rpbft pbft sync storage)
-set_target_properties(pbft_init PROPERTIES UNITY_BUILD "ON")
 add_dependencies(pbft_init BuildInfo.h)
 
 # --- init: merged from front_init, txpool_init, mempool_init, ledger_init, baseline_init, lightnodeinit ---
@@ -53,7 +52,6 @@ if(WITH_LIGHTNODE)
     target_sources(init PRIVATE LightNodeInitializer.cpp LightNodeInitializer.h)
     target_link_libraries(init PUBLIC bcos-lightnode bcos-concepts bcos-legacy)
 endif()
-set_target_properties(init PROPERTIES UNITY_BUILD "ON")
 add_dependencies(init BuildInfo.h)
 
 if (TESTS)

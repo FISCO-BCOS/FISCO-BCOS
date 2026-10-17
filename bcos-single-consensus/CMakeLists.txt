@@ -10,7 +10,6 @@ target_include_directories(single-consensus PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-single-consensus>)
 target_link_libraries(single-consensus PUBLIC bcos-framework bcos-task bcos-utilities bcos-crypto ledger)
-set_target_properties(single-consensus PROPERTIES UNITY_BUILD "ON")
 
 include(GNUInstallDirs)
 install(TARGETS single-consensus EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

@@ -45,7 +45,6 @@ set_source_files_properties(
     "unittests/rpc/EthGetProofIntegrationTest.cpp" "unittests/rpc/FullChainFixtureInst.cpp"
     "unittests/rpc/DebugChallengerDataPlaneTest.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
 enable_testing()

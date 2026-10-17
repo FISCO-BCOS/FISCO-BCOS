@@ -14,7 +14,12 @@
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::executor::critical;
-using namespace std;
+using std::exception;
+using std::make_shared;
+using std::mutex;
+using std::string;
+using std::string_view;
+using std::vector;
 
 ExecutiveDagFlow::ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory,
     std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
