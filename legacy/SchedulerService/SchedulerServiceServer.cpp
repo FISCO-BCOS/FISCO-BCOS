@@ -22,6 +22,7 @@
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include <bcos-tars-protocol/ErrorConverter.h>
+#include <bcos-tars-protocol/client/ExecutorServiceClient.h>
 #include <bcos-tars-protocol/protocol/BlockImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
