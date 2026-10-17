@@ -136,7 +136,7 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
 /// from==OP_DEPOSITOR satisfies isOpEthL1AttributesTx. data is empty — under Isthmus (pre-Jovian)
 /// preBlockOpEthSteps skips the Jovian DA-footprint shape checks; isOpEthL1AttributesTx is
 /// content-only and never validates calldata (precedent: the empty-data deposit in
-/// OpBlockInjectorTest passes likewise).
+/// OpBlockInjectorTest — a #5687 (B2) suite — passes likewise).
 opeth::DepositTx makeDeposit()
 {
     opeth::DepositTx dep;

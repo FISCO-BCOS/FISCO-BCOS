@@ -28,11 +28,12 @@ namespace opstack_test
 /// The two CRITICAL differential stems of the t8n corpus: the 8-fork synthetic ladder
 /// (1000 blocks, regolith->jovian) and the real-derivation devnet snapshot. The stems
 /// are derived by the producers (the generator prints LADDER-STEM; chainexport derives
-/// digest8); this array is the ONE place the "critical" designation is pinned. Two
-/// consumers enforce it: OpT8nReplayTest (each must be dispatched through the replay
-/// loop) and OpGoldenCorpusProvenanceTest (each must be listed in the corpus'
-/// vectors/SHA256SUMS with matching bytes, so a rewritten vector cannot shrink the
-/// gate silently).
+/// digest8); this array is the ONE place the "critical" designation is pinned. Its two
+/// consumers ride in #5687 (B2) and enforce it once that PR restacks on this one — no
+/// consumer exists in THIS tree (review round-1 F5): OpT8nReplayTest (each stem must be
+/// dispatched through the replay loop) and OpGoldenCorpusProvenanceTest (each must be
+/// listed in the corpus' vectors/SHA256SUMS with matching bytes, so a rewritten vector
+/// cannot shrink the gate silently).
 inline constexpr std::array<std::string_view, 2> c_t8nCriticalStems{
     "ladder_1000_69292b10", "devnet_1875-2274_c38db356"};
 

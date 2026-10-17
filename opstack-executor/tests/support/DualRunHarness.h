@@ -178,8 +178,9 @@ inline bcos::protocol::Transaction::Ptr buildFiscoTx(
 
 /// Envelope → tars transaction for the suites that hold the pre-cutover helper name.
 /// buildFiscoTxFromEnvelope is the same envelope bridge buildFiscoTx provides; the alias
-/// exists so the ported suites (OpT8nReplayTest, OpBlockInjectorTest) call one shared
-/// definition instead of each keeping a private copy.
+/// exists so the ported suites call one shared definition instead of each keeping a
+/// private copy — they ride in #5687 (B2: OpT8nReplayTest, OpBlockInjectorTest), so the
+/// alias has no caller in THIS tree yet (review round-1 F5).
 inline bcos::protocol::Transaction::Ptr buildFiscoTxFromEnvelope(
     bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
 {
