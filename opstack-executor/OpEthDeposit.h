@@ -35,6 +35,7 @@
 #include <evmc/evmc.hpp>
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
+#include <boost/throw_exception.hpp>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -210,8 +211,8 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
     // op-geth state_transition.go preCheck: "Don't touch the gas pool for system transactions"
     // pre-Regolith; Regolith rejects them outright (ErrSystemTxNotSupported, block-level error).
     if (dep.isSystemTx && spec.regolith_deposit_fixes)
-        throw std::runtime_error(
-            "op deposit: is_system_tx not supported since Regolith (block error)");
+        BOOST_THROW_EXCEPTION(std::runtime_error(
+            "op deposit: is_system_tx not supported since Regolith (block error)"));
     const bool preRegolith = !spec.regolith_deposit_fixes;
     const bool unmeteredSystemTx = dep.isSystemTx && preRegolith;
     // Pre-Regolith receipt gas accounting (op-geth innerExecute / execute failure branch):
@@ -351,7 +352,7 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
     }
 
     if (receiptGasUsed < 0)
-        throw std::runtime_error("opRunDeposit: negative gas_used");
+        BOOST_THROW_EXCEPTION(std::runtime_error("opRunDeposit: negative gas_used"));
     auto out = rf.createReceipt(bcos::u256{static_cast<uint64_t>(receiptGasUsed)},
         !dep.to.has_value() ? toFiscoContractAddress(dep.from, preNonce) : std::string{},
         std::move(logs), toFiscoOpStatus(receiptStatus),
