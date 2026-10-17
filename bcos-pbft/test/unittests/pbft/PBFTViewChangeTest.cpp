@@ -103,11 +103,14 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     BOOST_CHECK(futureCache->index() == futureBlockIndex);
     BOOST_CHECK(futureCache->prePrepare());
 
-    // Poll until all nodes reach preCommit (2 caches each), with timeout
+    // Poll until all nodes reach preCommit (2 caches each). The budget is generous because
+    // this loop drives the fake nodes itself: on a loaded runner (macOS is the slow one here)
+    // 3s was not always enough, and when it ran out the test silently carried on and failed
+    // later at a cache lookup with no hint that the precondition had never been met.
     auto precommitStartT = std::chrono::steady_clock::now();
     bool allInPrecommit = false;
     while (!allInPrecommit &&
-           std::chrono::steady_clock::now() - precommitStartT < std::chrono::seconds(3))
+           std::chrono::steady_clock::now() - precommitStartT < std::chrono::seconds(30))
     {
         for (auto const& otherNode : fakerMap)
         {
@@ -127,7 +130,12 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
         if (!allInPrecommit)
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-    // assume five nodes into preCommit
+    // Every later check indexes these caches, so a timeout has to stop the test here with a
+    // message that names the precondition instead of surfacing as a null prePrepare() below.
+    BOOST_REQUIRE_MESSAGE(allInPrecommit,
+        "nodes did not all reach preCommit within 30s: expected 2 caches per node, saw fewer on "
+            << fakerMap.size() << " nodes");
+    // the precondition is now proven above, so these nodes are in preCommit
     size_t precommitSize = 5;
     for (size_t i = 0; i < std::min(precommitSize, fakerMap.size()); i++)
     {
