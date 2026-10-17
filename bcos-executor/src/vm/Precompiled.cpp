@@ -371,9 +371,19 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
         if (!g1.has_value() || !validate(*g1))
             return {false, bytes(32, 0)};
 
-        // G2 EVM ABI feeds the imaginary coefficient before the real one for each Fq²
-        // (evmone 0.24 parses coordinates through bounded Fq elements instead of raw
-        // uint256 loads — a value >= p must reject, not wrap).
+        // G2 EVM ABI feeds the imaginary coefficient before the real one for each Fq².
+        // Behaviour change vs evmone 0.21 (disclosed in the PR description): the old
+        // parse loaded the four coordinates as raw uint256 with no bound, and the
+        // Montgomery-form field ops reduced x+kp to x — a non-canonical encoding of a
+        // valid point was ACCEPTED and computed a pairing verdict. The bounded
+        // Fq::from_bytes parse rejects any coordinate >= p per EIP-197. Replaying a
+        // pre-upgrade block whose pairing input used such an encoding therefore fails
+        // the precompile where it succeeded (receipt/gas/state-root divergence) — taken
+        // as a correctness fix, since EIP-197 requires rejection and no conforming
+        // tooling emits these encodings. No Features flag gates this: the precompile
+        // executor signature (PrecompiledExecutor: bytesConstRef in, result out)
+        // carries no execution context, so the per-chain Features set is not reachable
+        // here without widening the registrar/dispatch interface.
         const auto gx_real = Fq::from_bytes(std::span<const uint8_t, 32>{ptr + 96, 32});
         const auto gx_imag = Fq::from_bytes(std::span<const uint8_t, 32>{ptr + 64, 32});
         const auto gy_real = Fq::from_bytes(std::span<const uint8_t, 32>{ptr + 160, 32});

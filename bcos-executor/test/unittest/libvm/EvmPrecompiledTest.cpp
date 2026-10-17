@@ -755,6 +755,55 @@ BOOST_AUTO_TEST_CASE(alt_bn128_pairing_result_zero)
         BOOST_CHECK_EQUAL(out[i], 0);
 }
 
+BOOST_AUTO_TEST_CASE(alt_bn128_pairing_rejects_noncanonical_g2_encoding)
+{
+    // EIP-197 canonicity: every G2 coordinate must encode a value < the field modulus p.
+    // The pre-upgrade (evmone 0.21) parse loaded the coordinates as raw uint256, and the
+    // Montgomery-form field ops reduced x+kp to x — the non-canonical encoding of a valid
+    // point below was ACCEPTED and computed a verdict. The bounded Fq::from_bytes parse
+    // must reject it instead. The discriminating pair: the same single pair as
+    // alt_bn128_pairing_result_zero (G1=(1,2), G2 generator) with a1_x replaced by
+    // a1_x + P — same point mathematically, different encoding, verdict must flip.
+    //
+    //   a1_x = 0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2
+    //   P    = 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47 (base field
+    //   prime) sum  = 0x49f2e206733ee8642ab1056db37cb583892bb3c49e1bb19fd40511ce87701009 (>= P)
+    bytes input = bcos::fromHex(
+        // G1: (1, 2)
+        "0000000000000000000000000000000000000000000000000000000000000001"
+        "0000000000000000000000000000000000000000000000000000000000000002"
+        // G2: the generator with a1_x + P (non-canonical encoding of the same point)
+        "49f2e206733ee8642ab1056db37cb583892bb3c49e1bb19fd40511ce87701009"  // a1_x + P
+        "1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed"  // a0_x
+        "090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"  // a1_y
+        "12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"  // a0_y
+    );
+    BOOST_REQUIRE_EQUAL(input.size(), 192u);
+    auto [ok, out] = exec("alt_bn128_pairing_product", input);
+    // The encoding is non-canonical (a1_x >= p) — the precompile must fail closed.
+    BOOST_CHECK(!ok);
+    BOOST_REQUIRE_EQUAL(out.size(), 32u);
+    for (size_t i = 0; i < 32; ++i)
+        BOOST_CHECK_EQUAL(out[i], 0);
+
+    // Canonical twin (a1_x without +p): the identical point IS accepted and computes
+    // the same verdict as alt_bn128_pairing_result_zero — proving the rejection above
+    // fires on the encoding, not on the point.
+    bytes canonical = bcos::fromHex(
+        "0000000000000000000000000000000000000000000000000000000000000001"
+        "0000000000000000000000000000000000000000000000000000000000000002"
+        "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2"  // a1_x
+        "1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed"  // a0_x
+        "090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"  // a1_y
+        "12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"  // a0_y
+    );
+    auto [okCanonical, outCanonical] = exec("alt_bn128_pairing_product", canonical);
+    BOOST_CHECK(okCanonical);
+    BOOST_REQUIRE_EQUAL(outCanonical.size(), 32u);
+    for (size_t i = 0; i < 32; ++i)
+        BOOST_CHECK_EQUAL(outCanonical[i], 0);
+}
+
 // ===== point_evaluation ============================================================
 // EIP-4844 KZG point evaluation precompile.
 
