@@ -545,17 +545,23 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
     BOOST_CHECK(result["logs"].isArray());
 }
 
-/// l1FeeScalar renders the RAW L1Block slot-6 scalar as op-geth's scaled decimal
-/// (scalar/1e6): 684000 -> "0.684", 1000000 -> "1", 2000001 -> "2.000001", and an
-/// absent field emits nothing. These vectors pin the decimal contract itself (the old
-/// truncating quantity path rendered 684000 as "0x0").
+/// l1FeeScalar renders the RAW L1Block slot-6 scalar exactly as op-geth's scaled
+/// big.Float 'g' marshalling (scalar/1e6): plain decimal with the fractional part kept
+/// ("0.684", "1", "2.000001", "340.282366", "100000"), but exponent form when the
+/// decimal exponent is < -4 or >= 6 — rawScalar < 100 ("1e-06", "5e-05", "9.9e-05") and
+/// rawScalar >= 1e12 ("1e+06", "1.234567e+06"); the boundary cells 100 ("0.0001") and
+/// 1e11 ("100000") stay decimal (review F3; vectors produced by executing op-geth's own
+/// intToScaledFloat + gen_receipt_json.go marshalling). An absent field emits nothing.
 BOOST_AUTO_TEST_CASE(combineReceiptResponseRendersL1FeeScalar)
 {
     bcos::crypto::HashType blockHash;
     blockHash[0] = 0x88;
     for (auto [rawScalar, expected] :
         std::vector<std::tuple<uint64_t, const char*>>{{684000, "0.684"}, {1'000'000, "1"},
-            {2'000'001, "2.000001"}, {340'282'366, "340.282366"}})
+            {2'000'001, "2.000001"}, {340'282'366, "340.282366"}, {0, "0"}, {1, "1e-06"},
+            {5, "5e-06"}, {50, "5e-05"}, {99, "9.9e-05"}, {100, "0.0001"}, {200, "0.0002"},
+            {500, "0.0005"}, {100'000'000'000ULL, "100000"}, {1'000'000'000'000ULL, "1e+06"},
+            {1'234'567'000'000ULL, "1.234567e+06"}})
     {
         auto tx = makeWeb3Tx(m_blockFactory, chainId, groupId);
         auto receipt = makeReceipt(m_blockFactory);

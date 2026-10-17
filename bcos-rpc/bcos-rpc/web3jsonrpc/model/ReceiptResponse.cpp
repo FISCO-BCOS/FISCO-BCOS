@@ -35,18 +35,47 @@
 
 /// op-geth renders the pre-Ecotone FeeScalar as `scalar/1e6` through a *big.Float
 /// marshalled by encoding/json (core/types/rollup_cost.go intToScaledFloat,
-/// gen_receipt_json.go:40): a decimal JSON string that keeps the fractional part and
-/// trims trailing zeros ("0.684", "1", "2.000001"). The raw remainder is always six
-/// digits wide (the divisor is 1e6), so a u256 whole part plus a u64 remainder
-/// reproduces that rendering at the magnitudes the field carries. Known divergence:
-/// big.Float's 'g' formatting switches to exponent form for values below 1e-4 —
-/// rawScalar < 100 renders as "1e-06" there vs "0.000001" here — so tiny scalars do
-/// not match byte-for-byte; L1 fee scalars in practice sit far inside the agreeing
-/// plain-decimal range.
+/// gen_receipt_json.go:40, big.Float.AppendText = Append(b, 'g', -1)). The 'g' contract,
+/// pinned by executing that code shape (review F3): plain decimal with the fractional
+/// part kept and trailing zeros trimmed ("0.684", "1", "2.000001", "100000"), but
+/// exponent form when the decimal exponent is < -4 or >= 6 ("5e-06", "9.9e-05",
+/// "1e+06", "1.234567e+06"). The value is exactly rawScalar x 10^-6, so the digit
+/// string of rawScalar (trailing zeros stripped) is the shortest mantissa and the
+/// exponent follows from it. Caveat: op-geth's big.Float quotient rounds at very high
+/// bit widths, so a pathological u256 scalar may render its shortest-repr digits there
+/// vs the exact digits here — far outside any plausible L1 fee scalar.
 namespace
 {
 std::string formatL1FeeScalar(const bcos::u256& rawScalar)
 {
+    if (rawScalar == 0)
+    {
+        return "0";
+    }
+    auto digits = rawScalar.str();
+    std::size_t stripped = 0;
+    while (digits.size() > 1 && digits.back() == '0')
+    {
+        digits.pop_back();
+        ++stripped;
+    }
+    // value = digits x 10^(stripped - 6) = d0.d1.. x 10^exp
+    auto const exp = static_cast<int64_t>(digits.size() - 1) + static_cast<int64_t>(stripped) - 6;
+    if (exp < -4 || exp >= 6)
+    {
+        std::string mantissa(1, digits.front());
+        if (digits.size() > 1)
+        {
+            mantissa += '.' + digits.substr(1);
+        }
+        auto expDigits =
+            std::to_string(exp < 0 ? static_cast<uint64_t>(-exp) : static_cast<uint64_t>(exp));
+        if (expDigits.size() < 2)
+        {
+            expDigits.insert(expDigits.begin(), '0');
+        }
+        return mantissa + "e" + (exp < 0 ? "-" : "+") + expDigits;
+    }
     const bcos::u256 c_feeScalarScale{1'000'000};
     auto const whole = (rawScalar / c_feeScalarScale).str();
     auto const fraction = static_cast<uint64_t>(rawScalar % c_feeScalarScale);
@@ -54,8 +83,8 @@ std::string formatL1FeeScalar(const bcos::u256& rawScalar)
     {
         return whole;
     }
-    auto digits = std::to_string(fraction);
-    auto fractional = std::string(6 - digits.size(), '0') + std::move(digits);
+    auto fractionDigits = std::to_string(fraction);
+    auto fractional = std::string(6 - fractionDigits.size(), '0') + std::move(fractionDigits);
     while (fractional.back() == '0')
     {
         fractional.pop_back();
