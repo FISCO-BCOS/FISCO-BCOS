@@ -89,7 +89,10 @@ struct EESTForkPost
     int dataIndex = 0;
     int gasIndex = 0;
     int valueIndex = 0;
-    std::string stateRoot;                     // "hash" — expected state root
+    std::string stateRoot;  // "hash" — expected state root; the state-test verdict
+                             // refuses to score a root-only post (vacuity guard) and
+                             // reports this root on mismatch; full root comparison is
+                             // deferred until the corpus is provisioned locally
     std::string logsHash;                      // "logs"
     std::string txBytes;                       // "txbytes" — RLP-encoded transaction
     std::string expectException;               // exception name (empty = success expected)

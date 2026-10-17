@@ -494,4 +494,30 @@ BOOST_AUTO_TEST_CASE(makeErrorEVMCResult_clampEnabled_negativeGasClampedToZero)
     BOOST_CHECK_EQUAL(result.gas_left, 0);
 }
 
+
+// Ordinary EVM failure statuses must map (review F3) — the twin message table has
+// carried all three since the beginning; the status table's default: throw turned
+// them into UnknownEVMCStatus relabelled INTERNAL_ERROR by execute()'s catch arm.
+// Each pin asserts the mapped enum (mirroring the message table), and the VM-result
+// ctor now constructs instead of throwing.
+BOOST_AUTO_TEST_CASE(evmcStatusToTransactionStatus_maps_ordinary_evm_failures)
+{
+    BOOST_CHECK_EQUAL(evmcStatusToTransactionStatus(EVMC_BAD_JUMP_DESTINATION),
+        TransactionStatus::BadJumpDestination);
+    BOOST_CHECK_EQUAL(evmcStatusToTransactionStatus(EVMC_INVALID_MEMORY_ACCESS),
+        TransactionStatus::StackUnderflow);
+    BOOST_CHECK_EQUAL(
+        evmcStatusToTransactionStatus(EVMC_STATIC_MODE_VIOLATION), TransactionStatus::Unknown);
+    // The ctor path VMInstance::execute returns through:
+    for (evmc_status_code status :
+        {EVMC_BAD_JUMP_DESTINATION, EVMC_INVALID_MEMORY_ACCESS, EVMC_STATIC_MODE_VIOLATION})
+    {
+        evmc_result r{};
+        r.status_code = status;
+        EVMCResult mapped{r};
+        BOOST_CHECK_EQUAL(static_cast<int>(mapped.status),
+            static_cast<int>(evmcStatusToTransactionStatus(status)));
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

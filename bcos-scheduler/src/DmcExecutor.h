@@ -26,6 +26,7 @@
 #include "ExecutivePool.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/protocol/Block.h>
 #include <tbb/concurrent_set.h>
 #include <tbb/concurrent_unordered_map.h>
@@ -53,7 +54,8 @@ public:
     DmcExecutor(std::string name, std::string contractAddress, bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
-                DmcStepRecorder::Ptr dmcRecorder, bool isCall);
+        DmcStepRecorder::Ptr dmcRecorder, bool isCall,
+        ledger::Features features = {});
 
         virtual ~DmcExecutor();
 
@@ -125,6 +127,7 @@ protected:
     bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
     GraphKeyLocks::Ptr m_keyLocks;
     bcos::crypto::Hash::Ptr m_hashImpl;
+    ledger::Features m_features;  // empty-to create-address rule gate (review F2)
     DmcStepRecorder::Ptr m_dmcRecorder;
     ExecutivePool m_executivePool;
     bool m_hasContractTableChanged = false;

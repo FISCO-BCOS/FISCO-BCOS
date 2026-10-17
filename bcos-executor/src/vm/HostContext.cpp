@@ -181,7 +181,7 @@ std::string evmAddress2String(const evmc_address& address)
 
 void HostContext::throwIfHostFault() const
 {
-    if (m_hostFault.empty())
+    if (!m_hasHostFault)
     {
         return;
     }
@@ -294,11 +294,14 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
         // Bugfix:
         // To compat with lower version,
-        // we must set output_size larger than 0 to trigger OUT_OF_GAS
-        static auto response = std::make_unique<CallParameters>(CallParameters::MESSAGE);
-        response->data = bytes(130 * 1024 * 1024);
-        result.output_size = response->data.size();
-        result.output_data = response->data.data();
+        // we must set output_size larger than 0 to trigger OUT_OF_GAS.
+        // The buffer is zero-filled and never written after initialisation (review
+        // F15): it used to be a per-call assignment onto a shared static — a data
+        // race across concurrent blocks plus a fresh 130 MB allocation per call.
+        // Magic-static initialisation is thread-safe and the contents are read-only.
+        static const bytes c_legacyOutput(130 * 1024 * 1024, 0);
+        result.output_size = c_legacyOutput.size();
+        result.output_data = const_cast<uint8_t*>(c_legacyOutput.data());
         EXECUTOR_LOG(WARNING) << LOG_DESC(
                                      "delegatecall/callcode is unsupported in your compatibility "
                                      "version(3.0.0), please update it to 3.1.0(or after) using "
@@ -904,7 +907,8 @@ evmc_address HostContext::create2AddressForOpcode(
 {
     // Pre-bugfix chains reject the CREATE2 request outright, and the value the opcode
     // pushed historically was 0x0: evmone 0.21 echoed the host's result.create_address,
-    // which the rejection path left empty. ABI 19 removed that echo and evmone now
+    // which the rejection path left empty. ABI 18 removed that echo (with
+    // create2_salt; ABI 19 only added state_gas — evmc CHANGELOG 0.23/0.24) and evmone now
     // pushes its own derivation, so the hook must answer the zero address here or the
     // rejected create pushes a derived address where history recorded zero.
     if (!m_executive->blockContext().features().get(

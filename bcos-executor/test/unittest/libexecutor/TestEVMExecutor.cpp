@@ -1574,6 +1574,58 @@ BOOST_AUTO_TEST_CASE(preBugfixRejectedCreate2PinsStatusGasOutput)
 // a wrapped budget. It fires before the context is touched, so the fnTable slot is
 // exercised directly; every other throwing path inside call() now propagates to
 // TransactionExecutive::go()'s ladder instead of being translated here.
+// A storage fault inside a previously-UNTRANSLATED host slot (review F4: get_storage
+// had no catch — the raw throw aborted the process through evmone's noexcept frames).
+// The slot now records the fault and answers fail-closed (zero value), and the
+// recorded fault rethrows from throwIfHostFault() into the ladder's bcos::Error arm —
+// the same mechanism the getNonce/call translations are pinned by, exercised here at
+// the fnTable slot itself so the wrapper (not just the helper) is under test.
+BOOST_AUTO_TEST_CASE(storageFaultInSloadCallbackIsRecordedNotFatal)
+{
+    auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+    auto ledgerCache = std::make_shared<LedgerCache>(ledger);
+    bcos::executor::BlockContext blockContext(lruStorage, ledgerCache, hashImpl,
+        /*blockNumber=*/1, h256(1), /*timestamp=*/0,
+        (uint32_t)bcos::protocol::BlockVersion::MAX_VERSION,
+        /*isAuthCheck=*/false, backend);
+
+    std::string const sender = "ff6f30856ad3bae00b1169808488502786a13e3c";
+    auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    callParameters->senderAddress = sender;
+    callParameters->receiveAddress = sender;
+    callParameters->codeAddress = sender;
+    auto const tableName = std::string("/apps/") + sender;
+    auto executive = std::make_shared<TransactionExecutive>(
+        blockContext, sender, /*contextID=*/1, /*seq=*/1);
+    bcos::executor::HostContext host(
+        std::move(callParameters), std::move(executive), std::string(tableName));
+
+    auto const* fnTable = bcos::executor::getHostInterface();
+    BOOST_REQUIRE(fnTable && fnTable->get_storage);
+
+    evmc_address addr{};
+    std::copy(sender.begin(), sender.end() - 24, addr.bytes);  // 20-byte contract address
+    evmc_bytes32 key{};  // slot 0 as the 32 raw bytes store() reads
+    // Arm the exact (table, key) the SLOAD reads: MockTransactionalStorage answers with
+    // an Error, which the storage wrapper converts into a thrown bcos::Error — the real
+    // storage-fault shape (same injection the sub-call nonce pin uses).
+    backend->armRowFault(tableName, std::string(reinterpret_cast<char const*>(key.bytes), 32));
+
+    auto* hostContext = reinterpret_cast<evmc_host_context*>(&host);
+    auto const value = fnTable->get_storage(hostContext, &addr, &key);
+    // Fail-closed answer: zero value (the frame is about to fail; evmone just finishes).
+    evmc_bytes32 const zero{};
+    BOOST_CHECK(std::memcmp(value.bytes, zero.bytes, sizeof(zero.bytes)) == 0);
+    // The fault was recorded with its family (bcos::Error → non-halting), so
+    // throwIfHostFault() rethrows it into go()'s first arm — never a silent pass.
+    BOOST_CHECK_THROW(host.throwIfHostFault(), bcos::Error);
+    // The discriminator: the record carries the storage wrapper's fault text (the
+    // message only reaches the ladder if the wrapper really recorded it).
+    backend->disarmRowFault();
+    // Note: no "fault cleared" control here — the record is sticky by design
+    // (throwIfHostFault does not clear it; the frame fails once, at the first call).
+}
+
 BOOST_AUTO_TEST_CASE(negativeGasCallFailsClosedInsteadOfTerminating)
 {
     auto const* host = bcos::executor::getHostInterface();

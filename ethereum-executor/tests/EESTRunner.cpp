@@ -385,6 +385,9 @@ std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
         {
             std::cerr << "Warning: Failed to parse fixture '" << it.key().asString()
                       << "': " << e.what() << std::endl;
+            // Count, never swallow: a parser regression must shrink the reported corpus
+            // loudly — the pass-rate denominator is only honest if rejects are counted.
+            ++g_loadFailures;
         }
     }
 
@@ -557,6 +560,8 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
         {
             std::cerr << "Warning: Failed to parse blockchain fixture '" << it.key().asString()
                       << "': " << e.what() << std::endl;
+            // Same accounting as the state-test parse catch above: counted, never swallowed.
+            ++g_loadFailures;
         }
     }
 
@@ -639,12 +644,14 @@ std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
         return std::nullopt;
     }
 
-    // A plain name outside the tables: keep executing its fixtures under the newest
-    // handled revision (a future fork must not be mis-executed as an older one), but say
-    // so — this line is the diagnostic the name-shape heuristics used to do without.
+    // A plain name outside the tables cannot be resolved to a schedule this binary
+    // knows: executing it under the newest revision would silently pass or fail
+    // fixtures under wrong rules and still count them in the pass-rate denominator.
+    // Skip and count instead — a future fork's fixtures stay unexecuted (visible as
+    // skips) until this binary learns the schedule.
     std::cerr << "Info: unknown fork name '" << forkName
-              << "'; running its fixtures under the newest revision" << std::endl;
-    return EVMC_OSAKA;
+              << "'; skipping its fixtures (no schedule in this binary)" << std::endl;
+    return std::nullopt;
 }
 }  // namespace bcos::test
 
@@ -1477,6 +1484,23 @@ public:
             !executionThrew && receipt &&
             (receipt->status() == 0 ||
                 receipt->status() == static_cast<int32_t>(protocol::TransactionStatus::None));
+
+        // Vacuity guard (review F8): the verdict below only inspects post.state
+        // accounts. A fixture whose post entry carries ONLY the state root ("hash")
+        // has no accounts to compare, so an empty loop would score ANY non-throwing
+        // run as a pass. Refuse to score that shape: count it as a load failure so a
+        // corpus/format drift that drops per-account posts is loud, never green.
+        if (post.state.empty() && !post.stateRoot.empty())
+        {
+            std::ostringstream oss;
+            oss << "SKIP-REJECT: " << fixture.name << " [" << forkName
+                << "] post entry has only the state root (expected " << post.stateRoot
+                << ") and no per-account state — verdict would be vacuous";
+            printLine(oss.str());
+            g_failureDetails.push_back({fixture.name, forkName, "vacuous post (root-only)"});
+            ++g_loadFailures;
+            return false;
+        }
 
         // When expectException is empty but the transaction failed, the test
         // may still be correct if the post-state matches (transaction reverted

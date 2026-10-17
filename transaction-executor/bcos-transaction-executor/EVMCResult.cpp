@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EVMCResult.cpp
+ */
+
 #include <range/v3/algorithm/copy.hpp>
 
 #include "EVMCResult.h"
@@ -112,6 +130,17 @@ bcos::protocol::TransactionStatus bcos::executor_v1::evmcStatusToTransactionStat
     case EVMC_INVALID_INSTRUCTION:
     case EVMC_UNDEFINED_INSTRUCTION:
         return protocol::TransactionStatus::BadInstruction;
+    // Ordinary EVM outcomes (review F3): all three are mapped by the twin
+    // evmcStatusToErrorMessage table below — leaving them on the default: throw
+    // turned every bad-jump / static-violation tx into an exception relabelled
+    // EVMC_INTERNAL_ERROR by execute()'s catch arm (with the error-handling flag
+    // OFF, gas_left = ref->gas: a failed contract refunded ALL its gas).
+    case EVMC_BAD_JUMP_DESTINATION:
+        return protocol::TransactionStatus::BadJumpDestination;
+    case EVMC_INVALID_MEMORY_ACCESS:
+        return protocol::TransactionStatus::StackUnderflow;
+    case EVMC_STATIC_MODE_VIOLATION:
+        return protocol::TransactionStatus::Unknown;
     default:
         BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     }

@@ -1,3 +1,5 @@
+#include "../bcos-transaction-executor/precompiled/ExecutiveWrapper.h"
+#include "../bcos-transaction-executor/precompiled/PrecompiledImpl.h"
 #include "../bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "TestBytecode.h"
@@ -1312,10 +1314,18 @@ BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
     {
         const char* name;
         bcos::crypto::Hash::Ptr hasher;
+        // Frozen literals (review F17): the expectation must not be computed by the
+        // same helper the hook delegates to — that oracle is self-referential and a
+        // wrong shared formula would pass. Frozen from the first run at 0b9a4d835
+        // (block 0, contextID 0, seq 41 + 1); the sm3 cell is the one that
+        // discriminates against an upstream-keccak revert.
+        std::string_view expected;
     };
     const std::array<HasherCase, 2> cases{
-        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>()},
-        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>()},
+        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>(),
+            "51ecad688184962f355d19ee5ba27905f06ecd3b"},
+        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>(),
+            "954a006a3445efe79e69d0f2e5d4c5d6f7dbb23a"},
     };
 
     for (auto const& hasherCase : cases)
@@ -1330,7 +1340,7 @@ BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
         const auto legacyAddr =
             nonWeb3.createAddressForOpcode(sender, nonce.convert_to<uint64_t>());
         BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{legacyAddr.bytes, sizeof(legacyAddr.bytes)}),
-            bcos::newEVMAddress(*hasherCase.hasher, blockHeader.number(), 0, 42));
+            hasherCase.expected);
 
         // Web3: the nonce-derived EIP branch, matching upstream's own derivation.
         int64_t web3Seq = 41;
@@ -1338,10 +1348,12 @@ BOOST_AUTO_TEST_CASE(createAddressForOpcodeFollowsTheLaneFormulas)
             rollbackableStorage, rollbackableTransientStorage, blockHeader, dummy, sender, "", 0,
             web3Seq, *precompiledManager, ledgerConfig, *hasherCase.hasher, true, nonce,
             bcos::task::syncWait);
+        // Frozen literal (review F17): keccak(rlp(sender, nonce)) is hasher-independent
+        // by definition (EIP-161), so one cell covers both hasher cases — computed
+        // once out-of-tree, never by the helper under test.
         const auto eipAddr = web3.createAddressForOpcode(sender, nonce.convert_to<uint64_t>());
         BOOST_CHECK_EQUAL(bcos::toHex(bytesConstRef{eipAddr.bytes, sizeof(eipAddr.bytes)}),
-            bcos::newLegacyEVMAddressString(
-                bytesConstRef{sender.bytes, sizeof(sender.bytes)}, nonce));
+            "2d087d4eb4563e34016c39a3b793edc710b44457");
     }
 }
 
@@ -1452,6 +1464,20 @@ BOOST_AUTO_TEST_CASE(depth0CreateBumpsUnderOffGateOnly)
         ledgerConfig.setFeatures(ledger::Features{});  // flag OFF — the historical gate
         runDepth0Create(creatorOff);
         BOOST_CHECK_EQUAL(nonceRowOf(creatorOff), "6");
+    }
+
+    // Absent row under the OFF gate (review F16): the historical gate bumps via
+    // increaseNonce(), which throws NonceNotInitialized for a never-initialized
+    // account — an absent row STAYS absent. This is the discriminating cell for the
+    // OFF-path compatibility claim ("existing chains see no new nonce rows"): the
+    // flag-ON gate writes 0+1 on the same shape (creatorNonceFlagBumpsPerNestedCreate),
+    // so a regression that starts materializing rows under OFF turns this red.
+    evmc_address creatorOffAbsent{};
+    creatorOffAbsent.bytes[19] = 0xC4;
+    {
+        ledgerConfig.setFeatures(ledger::Features{});  // flag OFF
+        runDepth0Create(creatorOffAbsent);
+        BOOST_CHECK_EQUAL(nonceRowOf(creatorOffAbsent), "<absent>");
     }
 }
 
@@ -1571,10 +1597,18 @@ BOOST_AUTO_TEST_CASE(create2OpcodeDeploysAtTheHookAddress)
     {
         const char* name;
         bcos::crypto::Hash::Ptr hasher;
+        // Frozen literals (review F17): the expectation must not be computed by the
+        // same helper the hook delegates to — that oracle is self-referential and a
+        // wrong shared formula would pass. Frozen from the first run at 0b9a4d835
+        // (block 0, contextID 0, seq 41 + 1); the sm3 cell is the one that
+        // discriminates against an upstream-keccak revert.
+        std::string_view expected;
     };
     const std::array<HasherCase, 2> cases{
-        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>()},
-        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>()},
+        HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>(),
+            "51ecad688184962f355d19ee5ba27905f06ecd3b"},
+        HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>(),
+            "954a006a3445efe79e69d0f2e5d4c5d6f7dbb23a"},
     };
 
     int64_t hasherIndex = 0;
@@ -1647,6 +1681,123 @@ BOOST_AUTO_TEST_CASE(create2OpcodeDeploysAtTheHookAddress)
         BOOST_CHECK_EQUAL(size, 32u);
         ++hasherIndex;
     }
+}
+
+
+
+// Two internalCreates through ONE ExecutiveWrapper must derive DISTINCT addresses
+// (review F6): the derive base is seq()+1 and nothing on the wrapper path advanced
+// the counter, so the second create used to land on the first one's address. The
+// wrapper now publishes the consumed base; buildBfsPath fails gracefully without a
+// BFS tree (REVERT result), which is all the pin needs — the derived codeAddress
+// rides back on the returned CallParameters.
+BOOST_AUTO_TEST_CASE(twoInternalCreatesThroughOneWrapperDeriveDistinctAddresses)
+{
+    auto caller = []([[maybe_unused]] evmc_message const&) -> EVMCResult {
+        evmc_result r{};
+        r.status_code = EVMC_FAILURE;
+        return EVMCResult{r};
+    };
+    auto wrapper = bcos::executor_v1::buildLegacyExecutive(storage, blockHeader,
+        /*contractAddress=*/"1000000000000000000000000000000000000002", caller,
+        *precompiledManager, /*contextID=*/7, /*seq=*/41, /*authCheck=*/false);
+
+    auto makeCreateInput = [] {
+        auto input = std::make_unique<bcos::executor::CallParameters>(
+            bcos::executor::CallParameters::MESSAGE);
+        input->internalCreate = true;
+        input->senderAddress = "ff6f30856ad3bae00b1169808488502786a13e3c";
+        // The wrapper decodes (tableName, codeString) from data for the BFS link —
+        // any decodable pair reaches the derive before the (failing) BFS step.
+        input->data = bcos::codec::abi::ContractABICodec(
+            *bcos::executor::GlobalHashImpl::g_hashImpl)
+                          .abiIn("__dummy_", std::string("t"), std::string("c"));
+        input->gas = 1'000'000;
+        return input;
+    };
+
+    // create() below may throw deep in the child executive (this bare-memory fixture
+    // has no BFS tree; an unmapped status also surfaces as UnknownEVMCStatus) — the
+    // pin tolerates that: the invariant is that the PUBLISH survives the failure, so
+    // a retried create derives from the next value instead of colliding.
+    auto const seqBefore = wrapper->seq();
+    try
+    {
+        static_cast<void>(wrapper->externalCall(makeCreateInput()));
+    }
+    catch (...)
+    {}
+    auto const seqAfterFirst = wrapper->seq();
+    try
+    {
+        static_cast<void>(wrapper->externalCall(makeCreateInput()));
+    }
+    catch (...)
+    {}
+    auto const seqAfterSecond = wrapper->seq();
+
+    // The publish: each internalCreate consumes one value of the counter — on the
+    // success AND the failure path (pre-fix, both creates derived f(seq+1) twice).
+    BOOST_CHECK_EQUAL(seqAfterFirst, seqBefore + 1);
+    BOOST_CHECK_EQUAL(seqAfterSecond, seqBefore + 2);
+    // Consequence: the two derive bases differ, so the two link addresses differ
+    // (newEVMAddress is injective in seq for fixed block/context).
+    BOOST_CHECK_NE(
+        bcos::newEVMAddress(*hashImpl, blockHeader.number(), 7, seqAfterFirst),
+        bcos::newEVMAddress(*hashImpl, blockHeader.number(), 7, seqAfterSecond));
+}
+
+// A node fault (bcos::Error) escaping a bcos precompiled must NOT become a
+// PrecompiledError REVERT receipt (review F7): it rethrows so executeCall()'s
+// FIB-88/92 arm decides the frame — the same fault class through an EVMC callback
+// fails the whole frame. A contract-domain throw (bcos::Exception derivative) keeps
+// the REVERT receipt.
+BOOST_AUTO_TEST_CASE(bcosPrecompiledNodeFaultRethrowsWhileLogicErrorReverts)
+{
+    struct StubPrecompiled : bcos::precompiled::Precompiled
+    {
+        bool throwNodeFault = true;
+        explicit StubPrecompiled(bcos::crypto::Hash::Ptr hashImpl, bool nodeFault) :
+            bcos::precompiled::Precompiled(std::move(hashImpl)), throwNodeFault(nodeFault)
+        {}
+        std::shared_ptr<bcos::precompiled::PrecompiledExecResult> call(
+            std::shared_ptr<bcos::executor::TransactionExecutive>,
+            std::shared_ptr<bcos::precompiled::PrecompiledExecResult>) override
+        {
+            if (throwNodeFault)
+            {
+                throw bcos::Error::buildError(
+                    "F7 pin", -1, "injected storage fault (F7 pin)");
+            }
+            BOOST_THROW_EXCEPTION(bcos::InvalidParameter{});
+        }
+    };
+    auto caller = []([[maybe_unused]] evmc_message const&) -> EVMCResult {
+        evmc_result r{};
+        r.status_code = EVMC_FAILURE;
+        return EVMCResult{r};
+    };
+
+    auto const features = ledgerConfig.features();
+    evmc_message const message = [] {
+        evmc_message m{};
+        m.kind = EVMC_CALL;
+        m.gas = 1'000'000;
+        return m;
+    }();
+
+    auto nodeFault = std::make_shared<StubPrecompiled>(hashImpl, /*nodeFault=*/true);
+    BOOST_CHECK_EXCEPTION(
+        bcos::executor_v1::callBcosPrecompiled(nodeFault, storage, blockHeader, message, {},
+            caller, *precompiledManager, /*contextID=*/1, /*seq=*/1, false, features),
+        bcos::Error,
+        [](auto const& e) { return std::string(e.errorMessage()).find("F7 pin") != std::string::npos; });
+
+    auto logicError = std::make_shared<StubPrecompiled>(hashImpl, /*nodeFault=*/false);
+    auto reverted = bcos::executor_v1::callBcosPrecompiled(logicError, storage, blockHeader,
+        message, {}, caller, *precompiledManager, 1, 1, false, features);
+    BOOST_CHECK_EQUAL(reverted.status_code, EVMC_REVERT);
+    BOOST_CHECK_EQUAL(reverted.status, bcos::protocol::TransactionStatus::PrecompiledError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

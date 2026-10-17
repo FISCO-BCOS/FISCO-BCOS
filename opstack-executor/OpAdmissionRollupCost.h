@@ -37,6 +37,14 @@
 namespace bcos::executor_v1::opstack
 {
 
+/// The admission path could not resolve a committed header for the txpool's head
+/// (state view built from a block that is not committed). Named so callers classify
+/// on type (review F22).
+struct OpAdmissionHeaderUnavailable : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
 /// The L1Block fee parameters as of @p head, read through the head header's state root
 /// (HistoricalStateBackend, the view coCallAtBlock serves historical eth_call from), not from
 /// the live committed plane: a commit merges that plane bucket by bucket with no point-in-time
@@ -73,9 +81,12 @@ task::Task<OpFeeParams> loadOpFeeParamsAtHead(MultiLayerStorage& storage,
     }
     if (header == nullptr || protocol::canonicalBlockHash(*header) != head.hash())
     {
-        BOOST_THROW_EXCEPTION(std::runtime_error(
+        // Named type (review F22): a bare std::runtime_error here was unclassifiable
+        // without what() matching. std::runtime_error base kept so the txpool
+        // admission path's existing catches keep working unchanged.
+        throw OpAdmissionHeaderUnavailable(
             fmt::format("admission: no committed header for head {} with hash {}",
-                head.blockNumber(), head.hash().hex())));
+                head.blockNumber(), head.hash().hex()));
     }
     // One backend per read: HistoricalStateBackend is single-coroutine by design.
     HistoricalBackend backend(latestView, header->stateRoot(),

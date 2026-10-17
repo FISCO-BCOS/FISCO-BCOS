@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file TransactionExecutorImpl.h
+ */
+
 #pragma once
 
 #include "RollbackableStorage.h"
@@ -240,8 +258,8 @@ public:
                 // still pays at least the 21000-gas base cost (geth's intrinsic gas for
                 // an empty tx). If balance < intrinsic cost, drain what's left. This
                 // prevents free spam from repeatedly submitting under-funded transactions.
-                constexpr static int64_t INTRINSIC_GAS = 21000;
-                const auto intrinsicCost = u256(INTRINSIC_GAS) * gasPrice;
+                constexpr static int64_t c_intrinsicGas = 21000;
+                const auto intrinsicCost = u256(c_intrinsicGas) * gasPrice;
                 const auto penalty = std::min(senderBalance, intrinsicCost);
                 if (penalty > 0)
                 {
@@ -322,9 +340,9 @@ public:
                 if (auto gasPrice = u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
                     gasPrice > 0)
                 {
-                    constexpr static const auto GAS_PRICE_DIGITS = 256;
+                    constexpr static const auto c_gasPriceDigits = 256;
                     m_data->m_gasPriceStr =
-                        "0x" + gasPrice.str(GAS_PRICE_DIGITS, std::ios_base::hex);
+                        "0x" + gasPrice.str(c_gasPriceDigits, std::ios_base::hex);
 
                     auto balanceUsed = m_data->m_gasUsed * gasPrice;
                     auto senderAccount = getAccount(m_data->m_hostContext, evmcMessage.sender);

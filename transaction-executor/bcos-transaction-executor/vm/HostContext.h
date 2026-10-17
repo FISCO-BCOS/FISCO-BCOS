@@ -216,16 +216,19 @@ public:
     /// converts to a revert (review F1), or aborting the process outright (F10).
     /// First fault wins: the fail-closed answers let the frame keep running, so a
     /// later fault must not overwrite the one that decided the frame's failure.
+    // Presence flag, not message emptiness (review F5): an empty message is a
+    // legitimate record (Error built with only a code) and must still fail the frame.
     void recordHostFault(std::string message)
     {
-        if (m_hostFault.empty())
+        if (!m_hasHostFault)
         {
             m_hostFault = std::move(message);
+            m_hasHostFault = true;
         }
     }
     void throwIfHostFault() const
     {
-        if (!m_hostFault.empty())
+        if (m_hasHostFault)
         {
             BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "EVM host-side fault: " + m_hostFault));
         }
@@ -238,6 +241,7 @@ private:
     /// mem-init list order below matches declaration order.
     const evmc_host_interface* m_hostInterface = nullptr;
     mutable std::string m_hostFault;
+    mutable bool m_hasHostFault = false;
 
     std::reference_wrapper<Storage> m_rollbackableStorage;
     std::reference_wrapper<TransientStorage> m_rollbackableTransientStorage;

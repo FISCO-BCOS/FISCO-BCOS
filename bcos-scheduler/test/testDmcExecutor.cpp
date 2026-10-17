@@ -2,6 +2,7 @@
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
+#include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
 #include "bcos-scheduler/src/GraphKeyLocks.h"
@@ -401,6 +402,73 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     BOOST_CHECK_EQUAL(dmcFlagStruct.paused, 1);
     BOOST_CHECK_EQUAL(dmcFlagStruct.round, 1);
     // dmcExecutor->go(executorCallback);
+}
+
+
+// Empty-to create addresses follow the version-gated lane rule (review F2):
+// with bugfix_dmc_create_address_rule AND feature_evm_address on, the DMC lane derives
+// the same keccak(rlp(sender, nonce)) address as SerialBlockExecutive; with the flag off
+// (or feature_evm_address off) it keeps the historical formula, so replay is unchanged.
+BOOST_AUTO_TEST_CASE(emptyToCreateAddressFollowsFeatureGateTest)
+{
+    auto const from = std::string("0x00000000000000000000000000000000000000aa");
+    auto const nonce = std::string("7");
+
+    auto run = [&](ledger::Features features) -> std::string {
+        auto block = blockFactory->createBlock();
+        auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(3);
+        header->calculateHash(*cryptoSuite->hashImpl());
+        block->setBlockHeader(header);
+
+        auto dmc = std::make_shared<DmcExecutor>("DmcExecutor-create", "0xaabbccdd", block,
+            executor1, keyLocks, std::make_shared<Keccak256>(), dmcRecorder, false, features);
+
+        std::string capturedTo;
+        dmc->setSchedulerOutHandler([&capturedTo](ExecutiveState::Ptr state) {
+            capturedTo = std::string(state->message->to());
+        });
+        dmc->setOnNeedSwitchEventHandler([] {});
+        dmc->setOnTxFinishedHandler([](protocol::ExecutionMessage::UniquePtr) {});
+
+        auto message = std::make_unique<executor::NativeExecutionMessage>();
+        message->setType(protocol::ExecutionMessage::MESSAGE);
+        message->setContextID(9);
+        message->setSeq(4);
+        message->setDepth(0);
+        message->setFrom(from);
+        message->setOrigin(from);
+        message->setNonce(nonce);
+        message->setTo("");
+        message->setGasAvailable(1000000);
+        dmc->submit(std::move(message), false);
+
+        dmc->prepare();
+        dmc->go([](bcos::Error::UniquePtr, DmcExecutor::Status) {});
+        return capturedTo;
+    };
+
+    ledger::Features gated;
+    gated.set(ledger::Features::Flag::bugfix_dmc_create_address_rule);
+    gated.set(ledger::Features::Flag::feature_evm_address);
+    auto const gatedTo = run(gated);
+
+    // The gate makes the DMC arm match the serial lane's derivation exactly.
+    auto const serialTo = bcos::newLegacyEVMAddressString(
+        bytesConstRef{boost::algorithm::unhex(from.substr(2))}, nonce);
+    BOOST_CHECK_EQUAL(gatedTo, serialTo);
+
+    // Flag off (the historical default): the formula address — different from the serial
+    // rule, and non-empty (the derivation still ran).
+    auto const legacyTo = run(ledger::Features{});
+    BOOST_CHECK(!legacyTo.empty());
+    BOOST_CHECK_NE(legacyTo, serialTo);
+
+    // feature_evm_address on but the gate flag off: still the formula address.
+    ledger::Features flagOnly;
+    flagOnly.set(ledger::Features::Flag::feature_evm_address);
+    auto const flagOnlyTo = run(flagOnly);
+    BOOST_CHECK_EQUAL(flagOnlyTo, legacyTo);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

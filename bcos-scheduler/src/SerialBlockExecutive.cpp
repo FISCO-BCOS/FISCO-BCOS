@@ -196,6 +196,11 @@ void SerialBlockExecutive::serialExecute(
         {
             auto newSeq = tx->seq();
             std::string address;
+            // Review F2 (both halves): a salted create keeps the EIP-1014 address (the
+            // pre-0.24 wire shape); the unsalted empty-to address follows the
+            // version-gated lane rule — DmcExecutor's arm now matches this one when
+            // bugfix_dmc_create_address_rule is on, and keeps the historical formula when
+            // it is off, so existing chains replay identically.
             if (tx->createSalt())
             {
                 // A producer still speaking the pre-0.24 protocol hands the salt down

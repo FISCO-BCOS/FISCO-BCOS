@@ -270,9 +270,8 @@ BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
 
 // EVMC_EXPERIMENTAL is evmone's bucket for in-development EIPs (semantics change between
 // releases), not a released fork. Pinning a v2 chain to it would tie consensus to the
-// binary, so it must be rejected at config load in both the single-revision and the
-// fork-transition forms (the round-trip helper still accepts it — the two name tables
-// agree; this is a config-policy decision).
+// binary. evmcRevisionFromName refuses the spelling itself (single rule source, aligned
+// with the genesis loader), so both keys reject it through the unknown-revision gate.
 BOOST_AUTO_TEST_CASE(evmcExperimentalRejected)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -297,7 +296,7 @@ BOOST_AUTO_TEST_CASE(evmcExperimentalRejected)
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(base + "evm_revision=experimental\n"), InvalidConfig,
-            [](auto const& e) { return errinfoContains(e, "evm_revision=experimental"); });
+            [](auto const& e) { return errinfoContains(e, "is invalid: experimental"); });
     }
     // Fork transition to experimental -> rejected.
     {
@@ -306,7 +305,7 @@ BOOST_AUTO_TEST_CASE(evmcExperimentalRejected)
                                   base + "evm_revision_forks=0:experimental\n"),
             InvalidConfig,
             [](auto const& e) {
-                return errinfoContains(e, "evm_revision_forks revision \"experimental\"");
+                return errinfoContains(e, "invalid revision \"experimental\"");
             });
     }
     // Control: a released revision is still accepted (with the lane-mandatory sections).

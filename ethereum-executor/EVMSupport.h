@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EVMSupport.h
+ */
+
 /// @file EVMSupport.h
 /// @brief Self-contained EVM support utilities for the pure-Ethereum executor:
 ///        keccak256, validation error codes, blob parameters/price, CREATE /
@@ -292,7 +310,7 @@ inline const bcos::u256 SECP256K1N_OVER_2 =
     fromEvmcBE(intx::be::store<evmc::bytes32>(evmone::crypto::secp256k1::Curve::ORDER / 2));
 
 /// EIP-7702 authorization magic byte (prefix of the signing hash).
-inline constexpr uint8_t kSetCodeMagic = 0x05;
+inline constexpr uint8_t c_setCodeMagic = 0x05;
 
 /// EIP-7702: The cost of authorization that sets delegation to an account that didn't exist
 /// before. Defined in bcos-framework/protocol/TxGasModel.h -- it is part of the intrinsic-gas
@@ -318,7 +336,7 @@ inline std::optional<evmc::address> recoverAuthority(protocol::Authorization con
     // signing hash = keccak256(0x05 || rlp([chain_id, address, nonce])).
     bcos::bytes msg;
     msg.reserve(1 + tuple.size());
-    msg.push_back(kSetCodeMagic);
+    msg.push_back(c_setCodeMagic);
     msg.insert(msg.end(), tuple.begin(), tuple.end());
 
     const auto h = keccak256(evmc::bytes_view{msg.data(), msg.size()});

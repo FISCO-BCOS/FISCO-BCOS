@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpExecutionPolicy.h
+ */
+
 /// @file OpExecutionPolicy.h
 /// @brief The OP Stack execution policy for the ethereum-executor: an EthL1Policy
 ///        extension carrying the per-block OpForkSpec + OpFeeParams and the
@@ -8,8 +26,10 @@
 ///
 /// Ported from bcos-evm/opstack (OpTransition.cpp's opValidate/opTransition
 /// and OpHost.cpp's three overrides) onto the EthExecutionPolicy hook surface;
-/// every formula and constant is byte-for-byte the bcos-evm original (the
-/// dual-run harness in tests/ pins the equivalence against the old path).
+/// every formula and constant is byte-for-byte the bcos-evm original (equivalence
+/// was dual-run-verified once; today's standing pins are the determinism twin in
+/// OpEthForkMatrixTest — the new layer twice from independent forks — plus the
+/// t8n goldens, which are the independent oracle).
 ///
 /// Unlike the stateless EthL1Policy, OpPolicy carries runtime state, so its
 /// hooks are non-static member functions (the hook call sites — `policy.hook(...)`
@@ -331,12 +351,12 @@ public:
             return evmc::Result{EVMC_INTERNAL_ERROR, gas_left};
         }
 
-        constexpr size_t kMaxOutput = 32;
+        constexpr size_t c_maxOutput = 32;
         // Heap buffer with a release callback, matching eth::evm::call_precompile's
         // ownership convention (the caller's evmc::Result releases it).
-        const auto output_data = new (std::nothrow) uint8_t[kMaxOutput];
+        const auto output_data = new (std::nothrow) uint8_t[c_maxOutput];
         const auto exec =
-            eth::evm::p256verify_execute(msg.input_data, msg.input_size, output_data, kMaxOutput);
+            eth::evm::p256verify_execute(msg.input_data, msg.input_size, output_data, c_maxOutput);
 
         if (exec.status_code == EVMC_SUCCESS && exec.output_size > 0)
         {
@@ -369,6 +389,13 @@ public:
     /// The OP receipt shape (ported opTransition's projection): FISCO 0/1 status, the
     /// return-data output, the 256-byte logsBloom (encodeReceiptLeaf requires it), the
     /// creation contractAddress, the OP metadata snapshot and the hex effective gas price.
+    /// A receipt gasUsed below zero is an internal invariant violation, never a
+    /// contract outcome (review F22: was a bare std::runtime_error).
+    struct NegativeGasUsed : std::runtime_error
+    {
+        using std::runtime_error::runtime_error;
+    };
+
     template <class Host>
     protocol::TransactionReceipt::Ptr buildReceipt(Host& host, evmc::Result const& result,
         int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber) const
@@ -377,7 +404,7 @@ public:
         // (evmone guarantees it; under NDEBUG the assert is gone and the consensus surface
         // tolerates no wrap).
         if (gasUsed < 0)
-            throw std::runtime_error("opTransition: negative gas_used");
+            throw NegativeGasUsed("opTransition: negative gas_used");
 
         std::vector<protocol::LogEntry> logs;
         for (auto const& l : host.take_logs())

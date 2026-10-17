@@ -132,11 +132,16 @@ public:
     /// arriving after a non-bcos fault must not turn the exit(1) decision into a revert
     /// receipt. The first fault's message is kept (it names the exception that decided
     /// the family); a later halting fault still upgrades the family to halt.
+    // Presence is tracked by its own flag (review F5): the message is diagnostic
+    // text and can legitimately be empty (an Error built with only a code), so
+    // gating on m_hostFault.empty() silently dropped empty-message faults —
+    // exactly the node faults this record exists to make loud.
     void recordHostFault(std::string message, bool halting)
     {
-        if (m_hostFault.empty())
+        if (!m_hasHostFault)
         {
             m_hostFault = std::move(message);
+            m_hasHostFault = true;
         }
         m_hostFaultHalting = m_hostFaultHalting || halting;
     }
@@ -247,6 +252,7 @@ private:
 
     std::list<CallParameters::UniquePtr> m_responseStore;
     std::string m_hostFault;
+    bool m_hasHostFault = false;
     bool m_hostFaultHalting = false;
 
     /// Per-transaction warm set; cached at construction to avoid BucketMap lookup on every

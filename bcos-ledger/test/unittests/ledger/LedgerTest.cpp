@@ -1924,10 +1924,10 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
         // in this binary: its EIP-8037/8038 state_gas dimension has no consumer here, so
         // accepting the name would price the chain under a revision this binary cannot
         // execute. Pin that asymmetry instead of round-tripping it.
-        if (r == EVMC_AMSTERDAM)
+        if (r == EVMC_AMSTERDAM || r == EVMC_EXPERIMENTAL)
         {
-            BOOST_CHECK_MESSAGE(!decoded.has_value(),
-                "evmcRevisionFromName must refuse \"amsterdam\" until state_gas is wired");
+            BOOST_CHECK_MESSAGE(
+                !decoded.has_value(), "evmcRevisionFromName must refuse the spelling: " << name);
             continue;
         }
         BOOST_REQUIRE_MESSAGE(decoded.has_value(),
@@ -1949,7 +1949,7 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
     // EIP-1283 SSTORE metering differs from Petersburg's, and ConstantinopleFix names
     // the same schedule as Petersburg — accepting either would silently retarget a
     // persisted row under different gas pricing. Re-acceptance here must turn this red.
-    for (auto const* refused : {"constantinople", "constantinoplefix", "amsterdam"})
+    for (auto const* refused : {"constantinople", "constantinoplefix", "amsterdam", "experimental"})
     {
         BOOST_CHECK_MESSAGE(!ledger::evmcRevisionFromName(refused),
             "evmcRevisionFromName must refuse the spelling: " << refused);
@@ -2041,6 +2041,36 @@ BOOST_AUTO_TEST_CASE(evmcRevisionUnknownNamesFailClosed)
     // Valid mixed transitions still parse (the happy path is untouched).
     ledger::applyEVMCRevisionConfig(parsed, "0:cancun,100:osaka");
     BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100), EVMC_OSAKA);
+}
+
+// A bare name alongside transition entries is a shape the encoder can never produce
+// (encodeEVMCRevisionConfig always spells every entry as "block:forkName"), so such a
+// row is hand-written or foreign. It used to parse "successfully" by silently dropping
+// the transitions and governing every block under the bare name — a halt-loudly
+// neighbour above refuses every other ambiguous cell, and this shape must not be the
+// exception. Re-acceptance must turn this red (review F20).
+BOOST_AUTO_TEST_CASE(evmcRevisionMixedBareAndTransitionRefused)
+{
+    for (std::string_view bad : {"cancun,3:prague", "3:prague,cancun", "cancun,0:prague,100:osaka"})
+    {
+        LedgerConfig parsed;
+        BOOST_CHECK_EXCEPTION(ledger::applyEVMCRevisionConfig(parsed, bad),
+            ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+                return boost::diagnostic_information(e).find("mixed evmc_revision config value") !=
+                       std::string::npos;
+            });
+    }
+    // Control: the pure shapes still parse (bare-only and transition-only).
+    LedgerConfig bare;
+    ledger::applyEVMCRevisionConfig(bare, "cancun");
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*bare.evmcRevisionForBlock(0)), static_cast<int>(EVMC_CANCUN));
+    LedgerConfig transitions;
+    ledger::applyEVMCRevisionConfig(transitions, "0:cancun,100:prague");
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*transitions.evmcRevisionForBlock(99)), static_cast<int>(EVMC_CANCUN));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(*transitions.evmcRevisionForBlock(100)), static_cast<int>(EVMC_PRAGUE));
 }
 
 // The evmc row codec's accepted domain round-trips: every shape an honest loader can

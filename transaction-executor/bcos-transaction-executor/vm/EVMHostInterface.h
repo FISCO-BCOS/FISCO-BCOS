@@ -54,6 +54,11 @@ struct EVMHostInterface
     // has to let evmone finish the frame without further faults. getNonce's
     // MAX_NONCE is the one value with semantics of its own (EIP-2681 reject); the
     // rest return zero-shaped answers.
+    //
+    // One deliberate exception (disclosed in the PR body): the gas<0 arm of call()
+    // below does NOT catch — it throws GasOverflow, keeping its pre-existing landing
+    // (only the externalCall dispatch is fault-translated). A negative gas budget is
+    // a deterministic caller bug, not a node fault, so the ladder decides it.
 
     static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept
     {

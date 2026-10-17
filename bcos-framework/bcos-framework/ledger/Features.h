@@ -177,13 +177,26 @@ public:
         // stays strict unconditionally — it is the
         // EIP-conformance lane, pinned by the EEST
         // corpus and frozen vectors.
+
+        bugfix_dmc_create_address_rule = 64,        // Scheduler: the DMC lane derives a top-level
+                                                    // create's (empty-to) address with the SAME
+                                                    // rule as SerialBlockExecutive — honour
+                                                    // feature_evm_address (keccak(rlp(sender,
+                                                    // nonce))) instead of always using the
+                                                    // (block, context, seq) formula. Off: the DMC
+                                                    // lane keeps the formula address, so existing
+                                                    // chains replay byte-identically; only a chain
+                                                    // that also enables feature_evm_address observes
+                                                    // a difference. Takes 64 because 63 is occupied
+                                                    // by bugfix_evm_pairing_canonical_g2 on the
+                                                    // same line.
     };
 
     // feature_flags bit = enum value. Pin the newest flag so a value beyond
     // magic_enum's default reflection range [-128,127] is caught at compile time.
     // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
     // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
-    static_assert(magic_enum::enum_contains(Flag::bugfix_evm_pairing_canonical_g2),
+    static_assert(magic_enum::enum_contains(Flag::bugfix_dmc_create_address_rule),
         "newest Flag fell outside magic_enum's reflection range — check enum values");
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,

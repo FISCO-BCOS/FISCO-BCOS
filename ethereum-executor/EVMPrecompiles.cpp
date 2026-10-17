@@ -842,18 +842,21 @@ evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcep
     const auto [gas_cost, max_output_size] = analyze(input, rev);
     const auto gas_left = msg.gas - gas_cost;
     if (gas_left < 0)
-        return evmc::Result{EVMC_OUT_OF_GAS};
+        return evmc::Result{EVMC_OUT_OF_GAS, 0, 0, {.left = msg.state_gas}};
 
     // Allocate buffer for the precompile's output and pass its ownership to evmc::Result.
     const auto output_data = new (std::nothrow) uint8_t[max_output_size];  // TODO: handle nullptr.
     const auto [status_code, output_size] =
         execute(msg.input_data, msg.input_size, output_data, max_output_size);
     // evmc ABI 19: evmc_result gained state_gas after gas_refund; positional init would
-    // hand the old zero padding slot to it — bind by name.
+    // hand the old zero padding slot to it — bind by name. The value mirrors upstream
+    // (test/state/precompiles.cpp): the caller's reservoir passes through untouched on
+    // both return paths; state_gas has no consumer in this binary until amsterdam
+    // pricing lands, but the mirror contract says carry it, not zero it.
     const evmc_result result{.status_code = status_code,
         .gas_left = status_code == EVMC_SUCCESS ? gas_left : 0,
         .gas_refund = 0,
-        .state_gas = {},
+        .state_gas = {.left = msg.state_gas},
         .output_data = output_data,
         .output_size = output_size,
         .release = [](const evmc_result* res) noexcept { delete[] res->output_data; }};
