@@ -56,6 +56,24 @@ jobs:
       # CCACHE_-prefixed environment variables, and this is a cache-key component for
       # actions/cache, not a ccache option.
       CACHE_SCOPE: ${{ matrix.os }}
+      # vcpkg binary caching. vcpkg already enables a "files" provider by default, but it
+      # points at an ephemeral per-run location ($HOME/.cache/vcpkg/archives,
+      # %LOCALAPPDATA%\vcpkg\archives), so nothing survives to the next run - the configure
+      # log says "Restored 0 package(s)". Redirecting it into the workspace lets
+      # actions/cache persist the archives across runs.
+      #
+      # Why this matters more than it looks: a vcpkg archive is keyed by the package ABI hash,
+      # and that hash folds in the *compiler executable* (see the triplet_abi entry in vcpkg's
+      # own ABI debug output). A hosted runner image that ships a new MSVC/GCC therefore moves
+      # every package's ABI at once, and restoring the whole build/vcpkg_installed tree then
+      # invalidates all of it - the Windows leg reported an actions/cache hit yet rebuilt 100
+      # packages in 58 minutes. Per-package archives fail independently, so only the packages
+      # whose ABI actually moved get rebuilt.
+      #
+      # files,<dir>,readwrite adds the workspace location alongside the default provider.
+      # PR runs keep readwrite here on purpose: they never run the Save step below, so the
+      # archives they build are simply discarded with the runner instead of being published.
+      VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/.vcpkg-archives,readwrite'
     strategy:
       fail-fast: false
       matrix:
@@ -102,6 +120,22 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.os }}-cache-key-v4
+      # Per-package vcpkg archives (see VCPKG_BINARY_SOURCES above). Restoring never writes on its
+      # own; the "Save vcpkg archives" step below publishes them for non-PR runs only, so a PR
+      # just warms from whatever a base-branch push left behind.
+      # The key carries github.run_id because actions/cache entries are immutable: a fixed key
+      # would freeze the archives at their first upload and never pick up newly built packages.
+      # A fresh key per run invalidates nothing, though - restore-keys' prefix always finds the
+      # newest entry, and archives are content-addressed by ABI hash, so a stale or missing one
+      # only costs that single package rather than the whole tree.
+      - name: Restore vcpkg archives
+        uses: actions/cache/restore@v4
+        id: vcpkg-archives
+        with:
+          path: ${{ github.workspace }}/.vcpkg-archives
+          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          restore-keys: |
+            vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-
       # ccache persists the compiler output keyed on source+flags content (not mtime), so a
       # warm cache reuses .o across runs and only recompiles the files that actually changed.
       # The key is compiler/OS/arch-scoped (a .o is not portable across those) and deliberately
@@ -256,6 +290,18 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.os }}-cache-key-v4
+      # The archives are written by vcpkg during Configure, so this has to sit after it - and it
+      # is the step that makes a later ABI bump cheap: whatever this run had to build from source
+      # is now an archive, so the next run with a new compiler restores it instead of rebuilding.
+      # Non-PR only, like the vcpkg_installed cache above. !cancelled() lets a build that was
+      # superseded mid-compile still publish the archives it did produce; !failure() because a
+      # failed configure must not publish whatever partial set it left behind.
+      - name: Save vcpkg archives
+        if: '!cancelled() && !failure() && github.event_name != ''pull_request'''
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-archives
+          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
       - name: Build
         run: |
           cd build
@@ -507,6 +553,10 @@ jobs:
       CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: "true"
       CCACHE_COMPRESSLEVEL: "1"
+      # vcpkg binary caching into the workspace; see the build matrix's env comment for why
+      # this matters (the archive key folds in the compiler, so a toolchain bump invalidates
+      # the whole vcpkg_installed tree and used to force a ~45 minute rebuild from source).
+      VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/.vcpkg-archives,readwrite'
     steps:
       - uses: actions/checkout@v3
         with:
@@ -545,6 +595,17 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-coverage-cache-key-v2
+      # Per-package vcpkg archives (VCPKG_BINARY_SOURCES above); the "Save vcpkg archives" step
+      # after Configure publishes them for non-PR runs. Same run_id-keyed restore as the build
+      # matrix - see the comment there.
+      - name: Restore vcpkg archives
+        uses: actions/cache/restore@v4
+        id: vcpkg-archives
+        with:
+          path: ${{ github.workspace }}/.vcpkg-archives
+          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          restore-keys: |
+            vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-
       - name: Compute ccache bucket
         id: ccache-bucket
         shell: bash
@@ -594,6 +655,12 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-coverage-cache-key-v2
+      - name: Save vcpkg archives
+        if: '!cancelled() && !failure() && github.event_name != ''pull_request'''
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-archives
+          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
       - name: Build
         run: |
           cd build
@@ -746,6 +813,10 @@ jobs:
       CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: "true"
       CCACHE_COMPRESSLEVEL: "1"
+      # vcpkg binary caching into the workspace; see the build matrix's env comment for why
+      # this matters (the archive key folds in the compiler, so a toolchain bump invalidates
+      # the whole vcpkg_installed tree and used to force a ~45 minute rebuild from source).
+      VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/.vcpkg-archives,readwrite'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -772,6 +843,17 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+      # Per-package vcpkg archives (VCPKG_BINARY_SOURCES above); the "Save vcpkg archives" step
+      # after Configure publishes them for non-PR runs. Same run_id-keyed restore as the build
+      # matrix - see the comment there.
+      - name: Restore vcpkg archives
+        uses: actions/cache/restore@v4
+        id: vcpkg-archives
+        with:
+          path: ${{ github.workspace }}/.vcpkg-archives
+          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          restore-keys: |
+            vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-
       - name: Compute ccache bucket
         id: ccache-bucket
         shell: bash
@@ -820,6 +902,12 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+      - name: Save vcpkg archives
+        if: '!cancelled() && !failure() && github.event_name != ''pull_request'''
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-archives
+          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
       - name: Build
         run: |
           cd build
