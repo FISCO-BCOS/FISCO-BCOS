@@ -305,8 +305,8 @@ BOOST_AUTO_TEST_CASE(revertLogsClearedWithFeature)
         base.output_data = nullptr;
         base.output_size = 0;
         base.release = nullptr;
-        execCtx.m_data->m_evmcResult.emplace(base);
-        execCtx.m_data->m_evmcResult->status = bcos::protocol::TransactionStatus::RevertInstruction;
+        execCtx.m_data->m_evmcResult.emplace(
+            base, bcos::protocol::TransactionStatus::RevertInstruction);
 
         // Finish and verify logs cleared
         auto receipt = co_await execCtx.finish();
@@ -354,8 +354,8 @@ BOOST_AUTO_TEST_CASE(revertLogsRemainWithoutFeature)
         base.output_data = nullptr;
         base.output_size = 0;
         base.release = nullptr;
-        execCtx.m_data->m_evmcResult.emplace(base);
-        execCtx.m_data->m_evmcResult->status = bcos::protocol::TransactionStatus::RevertInstruction;
+        execCtx.m_data->m_evmcResult.emplace(
+            base, bcos::protocol::TransactionStatus::RevertInstruction);
 
         // Finish and verify logs remain (bugfix is off)
         auto receipt = co_await execCtx.finish();

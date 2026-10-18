@@ -1696,7 +1696,7 @@ BOOST_AUTO_TEST_CASE(twoInternalCreatesThroughOneWrapperDeriveDistinctAddresses)
     auto caller = []([[maybe_unused]] evmc_message const&) -> EVMCResult {
         evmc_result r{};
         r.status_code = EVMC_FAILURE;
-        return EVMCResult{r};
+        return EVMCResult{r, protocol::TransactionStatus::Unknown};
     };
     auto createFeatures = ledgerConfig.features();
     createFeatures.set(ledger::Features::Flag::bugfix_internal_create_seq);
@@ -1792,7 +1792,7 @@ BOOST_AUTO_TEST_CASE(bcosPrecompiledNodeFaultRethrowsWhileLogicErrorReverts)
     auto caller = []([[maybe_unused]] evmc_message const&) -> EVMCResult {
         evmc_result r{};
         r.status_code = EVMC_FAILURE;
-        return EVMCResult{r};
+        return EVMCResult{r, protocol::TransactionStatus::Unknown};
     };
 
     auto const features = ledgerConfig.features();

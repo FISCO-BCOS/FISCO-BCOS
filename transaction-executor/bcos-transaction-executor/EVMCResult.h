@@ -30,7 +30,8 @@ namespace bcos::executor_v1
 class EVMCResult : public evmc_result
 {
 public:
-    explicit EVMCResult(evmc_result from);
+    // The status is always explicit: the bit-65 mapper policy is a caller decision,
+    // so a constructor that silently applied the default one would hide the flag.
     EVMCResult(evmc_result from, protocol::TransactionStatus statusCode);
     EVMCResult(const EVMCResult&) = delete;
     EVMCResult(EVMCResult&& from) noexcept;

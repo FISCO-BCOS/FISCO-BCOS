@@ -38,10 +38,6 @@ static void cleanEVMCResult(evmc_result& from)
     from.output_size = 0;
 }
 
-bcos::executor_v1::EVMCResult::EVMCResult(evmc_result from)
-  : evmc_result(from), status{evmcStatusToTransactionStatus(from.status_code)}
-{}
-
 bcos::executor_v1::EVMCResult::EVMCResult(evmc_result from, protocol::TransactionStatus statusCode)
   : evmc_result(from), status(statusCode)
 {}

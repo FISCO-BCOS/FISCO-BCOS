@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(testConstructorWithEvmcResult)
     // Test constructor with EVMC_SUCCESS
     {
         auto evmcResult = createSimpleEvmcResult(EVMC_SUCCESS, 100);
-        EVMCResult result(evmcResult);
+        EVMCResult result(evmcResult, TransactionStatus::None);
 
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
         BOOST_CHECK_EQUAL(result.gas_left, 100);
@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(testConstructorWithEvmcResult)
     // Test constructor with EVMC_REVERT
     {
         auto evmcResult = createSimpleEvmcResult(EVMC_REVERT, 50);
-        EVMCResult result(evmcResult);
+        EVMCResult result(evmcResult, TransactionStatus::RevertInstruction);
 
         BOOST_CHECK_EQUAL(result.status_code, EVMC_REVERT);
         BOOST_CHECK_EQUAL(result.gas_left, 50);
@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(testConstructorWithEvmcResult)
     // Test constructor with EVMC_OUT_OF_GAS
     {
         auto evmcResult = createSimpleEvmcResult(EVMC_OUT_OF_GAS, 0);
-        EVMCResult result(evmcResult);
+        EVMCResult result(evmcResult, TransactionStatus::OutOfGas);
 
         BOOST_CHECK_EQUAL(result.status_code, EVMC_OUT_OF_GAS);
         BOOST_CHECK_EQUAL(result.gas_left, 0);
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(testMoveConstructor)
 {
     std::string testOutput = "test output data";
     auto evmcResult = createSimpleEvmcResult(EVMC_SUCCESS, 100, testOutput);
-    EVMCResult result1(evmcResult);
+    EVMCResult result1(evmcResult, TransactionStatus::None);
 
     // Store original data for verification
     auto originalGasLeft = result1.gas_left;
@@ -146,8 +146,8 @@ BOOST_AUTO_TEST_CASE(testMoveAssignment)
     auto evmcResult1 = createSimpleEvmcResult(EVMC_SUCCESS, 100, testOutput);
     auto evmcResult2 = createSimpleEvmcResult(EVMC_REVERT, 50);
 
-    EVMCResult result1(evmcResult1);
-    EVMCResult result2(evmcResult2);
+    EVMCResult result1(evmcResult1, TransactionStatus::None);
+    EVMCResult result2(evmcResult2, TransactionStatus::RevertInstruction);
 
     // Store original data for verification
     auto originalGasLeft = result1.gas_left;
@@ -390,7 +390,7 @@ BOOST_AUTO_TEST_CASE(testDestructor)
             // but we can verify memory is properly freed
         };
 
-        EVMCResult result(evmcResult);
+        EVMCResult result(evmcResult, TransactionStatus::None);
 
         // Verify data is set
         BOOST_CHECK_GT(result.output_size, 0);
@@ -411,7 +411,7 @@ BOOST_AUTO_TEST_CASE(testResourceManagement)
         auto evmcResult = createSimpleEvmcResult(EVMC_SUCCESS, 100, testOutput);
 
         // Create EVMCResult - this should take ownership
-        EVMCResult result(evmcResult);
+        EVMCResult result(evmcResult, TransactionStatus::None);
 
         // Verify data is accessible
         BOOST_TEST(result.output_data != nullptr);
@@ -430,7 +430,7 @@ BOOST_AUTO_TEST_CASE(testResourceManagement)
         std::string testOutput = "test output for move operations";
         auto evmcResult = createSimpleEvmcResult(EVMC_SUCCESS, 100, testOutput);
 
-        EVMCResult result1(evmcResult);
+        EVMCResult result1(evmcResult, TransactionStatus::None);
         const auto* originalOutputData = result1.output_data;
 
         // Move to result2
@@ -510,14 +510,15 @@ BOOST_AUTO_TEST_CASE(evmcStatusToTransactionStatus_ordinary_evm_failuresFollowTh
     for (evmc_status_code status :
         {EVMC_BAD_JUMP_DESTINATION, EVMC_INVALID_MEMORY_ACCESS, EVMC_STATIC_MODE_VIOLATION})
     {
-        // Gate OFF: the historical throw (relabelled by the caller's catch arm).
+        // Gate OFF: the historical throw from the mapper itself (relabelled by the
+        // caller's catch arm). There is no longer a constructor that could hide the
+        // policy, so this is the only place the default is observable.
         BOOST_CHECK_THROW(evmcStatusToTransactionStatus(status), bcos::Exception);
+
+        // Gate ON: mapped through both the mapper and the ctor path.
+        auto const mapped = evmcStatusToTransactionStatus(status, /*mapOrdinaryFailures=*/true);
         evmc_result r{};
         r.status_code = status;
-        BOOST_CHECK_THROW(static_cast<void>(EVMCResult{r}), bcos::Exception);
-
-        // Gate ON: mapped through both the mapper and the two-arg ctor path.
-        auto const mapped = evmcStatusToTransactionStatus(status, /*mapOrdinaryFailures=*/true);
         BOOST_CHECK_EQUAL(
             static_cast<int>(EVMCResult{r, mapped}.status), static_cast<int>(mapped));
     }
