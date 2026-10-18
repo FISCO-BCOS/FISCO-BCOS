@@ -42,7 +42,8 @@ namespace executor
 {
 class BlockContext;
 // The executor receives the block's feature flags so consensus-relevant parses can be
-// gated (e.g. bugfix_evm_pairing_canonical_g2); executors that need no flag ignore it.
+// gated (e.g. bugfix_precompiled_node_fault_rethrow); executors that need no flag ignore
+// it.
 using PrecompiledExecutor =
     std::function<std::pair<bool, bytes>(bytesConstRef, const ledger::Features& features)>;
 using PrecompiledPricer = std::function<bigint(bytesConstRef)>;

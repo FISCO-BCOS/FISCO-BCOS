@@ -225,9 +225,11 @@ BOOST_AUTO_TEST_CASE(feature)
         // bugfix_nested_create_creator_nonce = 62: v2 nested-CREATE
         // creator-nonce bump, opt-in so existing chains keep the historical gate.
         "bugfix_nested_create_creator_nonce",
-        // bugfix_evm_pairing_canonical_g2 = 63: v1 lane's alt_bn128 pairing
-        // G2-canonicity verdict, opt-in so existing chains keep the 0.21 wrap.
-        "bugfix_evm_pairing_canonical_g2",
+        // reserved_retired_evm_pairing_canonical_g2 = 63: the bit the v1 pairing
+        // precompile's G2-canonicity gate used to occupy. The gate is now
+        // unconditional (it is the EIP-197 rule and the 0.21 behaviour), so the
+        // slot carries no behaviour; the number stays taken so 64+ do not move.
+        "reserved_retired_evm_pairing_canonical_g2",
         // bugfix_dmc_create_address_rule = 64: the DMC lane honours feature_evm_address
         // for empty-to create addresses (same rule as SerialBlockExecutive) when on;
         // off keeps the historical formula so replay is unchanged.
@@ -261,7 +263,7 @@ BOOST_AUTO_TEST_CASE(retiredOpJovianBitIsReservedNotReusable)
     // Same pin for the newly added consensus bit: the enum value IS the on-chain
     // feature_flags bit position.
     BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::bugfix_nested_create_creator_nonce), 62);
-    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::bugfix_evm_pairing_canonical_g2), 63);
+    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::reserved_retired_evm_pairing_canonical_g2), 63);
     BOOST_CHECK(!Features::contains("feature_op_jovian"));
     BOOST_CHECK_THROW(Features::string2Flag("feature_op_jovian"), std::exception);
 

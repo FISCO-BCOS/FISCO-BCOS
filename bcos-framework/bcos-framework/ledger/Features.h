@@ -164,19 +164,13 @@ public:
                                                     // throwing increaseNonce() semantics stay in
                                                     // force, so existing chains see no new nonce
                                                     // rows.
-        bugfix_evm_pairing_canonical_g2 = 63,       // v1 executor's alt_bn128 pairing precompile
-                                                    // (0x08) rejects non-canonical G2 encodings —
-        // any coordinate >= the base field prime — per
-        // EIP-197. Off (default): the historical
-        // behaviour of the 0.21 dependency (the
-        // Montgomery-form field ops reduced x+kP to x,
-        // so such encodings were accepted and computed
-        // a verdict), so pre-upgrade blocks replay
-        // verbatim. v1 lane only: the eth lane's
-        // mirror (ethereum-executor/EVMPrecompiles.cpp)
-        // stays strict unconditionally — it is the
-        // EIP-conformance lane, pinned by the EEST
-        // corpus and frozen vectors.
+        // Reserved: the v1 alt_bn128 pairing precompile used to gate G2 canonicity on
+        // this bit. The bounded coordinate parse turned out to be both the EIP-197 rule
+        // and the pre-upgrade evmone 0.21 behaviour (its pairing_check gated every
+        // coordinate through is_field_element and returned nullopt), so the precompile
+        // rejects non-canonical encodings unconditionally and there is nothing left to
+        // gate. The number stays taken so the bits above it do not move.
+        reserved_retired_evm_pairing_canonical_g2 = 63,
 
         bugfix_dmc_create_address_rule = 64,        // Scheduler: the DMC lane derives a top-level
                                                     // create's (empty-to) address with the SAME
@@ -188,8 +182,8 @@ public:
                                                     // chains replay byte-identically; only a chain
                                                     // that also enables feature_evm_address observes
                                                     // a difference. Takes 64 because 63 is occupied
-                                                    // by bugfix_evm_pairing_canonical_g2 on the
-                                                    // same line.
+                                                    // by the retired pairing bit on the same
+                                                    // line.
         bugfix_v2_status_mapper_ordinary_failures = 65,  // v2 lane receipt construction maps the
                                                     // ordinary EVM failure statuses
                                                     // (BAD_JUMP_DESTINATION, INVALID_MEMORY_ACCESS,

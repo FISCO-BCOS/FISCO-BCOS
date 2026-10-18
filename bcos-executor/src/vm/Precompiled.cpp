@@ -358,8 +358,10 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in, const ledger::Feat
 }
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)
-(bytesConstRef _in, const ledger::Features& features)
+(bytesConstRef _in, [[maybe_unused]] const ledger::Features& features)
 {
+    // No feature flag gates canonicity: the bounded parse is both the EIP-197 rule and
+    // the pre-upgrade 0.21 behaviour, so every chain answers this input identically.
     static constexpr size_t PAIR_SIZE = 192;
     if (_in.size() % PAIR_SIZE != 0)
         return {false, bytes(32, 0)};
@@ -375,29 +377,14 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)
             return {false, bytes(32, 0)};
 
         // G2 EVM ABI feeds the imaginary coefficient before the real one for each Fq².
-        // Canonicity is gated on bugfix_evm_pairing_canonical_g2 (bit 63). ON: the
-        // bounded Fq::from_bytes parse rejects any coordinate >= the base field prime
-        // per EIP-197. OFF (default): the historical behaviour of the 0.21 dependency —
-        // raw uint256 loads whose Montgomery-form field ops reduced x+kP to x, so a
-        // non-canonical encoding of a valid point was ACCEPTED and computed a verdict.
-        // The OFF arm reduces mod P before constructing the element, which is the same
-        // reduction the 0.21 Montgomery conversion performed (to_mont(x+kP) = x·R mod
-        // p), so pre-upgrade blocks replay verbatim. v1 lane only: the eth lane's
-        // mirror stays strict unconditionally (EIP-conformance lane, EEST-pinned).
-        const auto canonicalOnly =
-            features.get(ledger::Features::Flag::bugfix_evm_pairing_canonical_g2);
-        const auto loadG2Coord = [&canonicalOnly](const uint8_t* word) -> std::optional<Fq> {
-            auto element = Fq::from_bytes(std::span<const uint8_t, 32>{word, 32});
-            if (element || canonicalOnly)
-                return element;
-            using namespace intx::literals;
-            constexpr auto P =
-                0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
-            auto value = intx::be::unsafe::load<intx::uint256>(word);
-            value %= P;
-            std::array<uint8_t, 32> reduced{};
-            intx::be::store(reduced, value);
-            return Fq::from_bytes(std::span<const uint8_t, 32>{reduced.data(), 32});
+        // Every coordinate is parsed with the bounded Fq::from_bytes, so a value >= the
+        // base field prime is rejected per EIP-197. This is also what the pre-upgrade
+        // evmone 0.21 dependency did: its pairing_check gated all six coordinates through
+        // is_field_element (v < Curve::FIELD_PRIME) and returned nullopt, which the caller
+        // maps to a precompile failure — so pre-upgrade blocks replay byte for byte. The
+        // eth lane's mirror (ethereum-executor/EVMPrecompiles.cpp) is strict the same way.
+        const auto loadG2Coord = [](const uint8_t* word) -> std::optional<Fq> {
+            return Fq::from_bytes(std::span<const uint8_t, 32>{word, 32});
         };
         const auto gx_real = loadG2Coord(ptr + 96);
         const auto gx_imag = loadG2Coord(ptr + 64);

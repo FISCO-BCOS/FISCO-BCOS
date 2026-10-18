@@ -33,24 +33,14 @@ namespace bcos::test
 {
 
 // ---------------------------------------------------------------------------
-// Helper: call a named precompile and return the result pair
+// Helper: call a named precompile and return the result pair.
+// The precompiles covered here take no consensus feature flag, so the call shape
+// always passes the historical feature set (all bugfix flags off).
 // ---------------------------------------------------------------------------
-static std::pair<bool, bytes> exec(
-    std::string_view name, bytesConstRef input, const ledger::Features& features)
-{
-    return executor::PrecompiledRegistrar::executor(std::string(name))(input, features);
-}
-
-static std::pair<bool, bytes> exec(
-    std::string_view name, const bytes& input, const ledger::Features& features)
-{
-    return exec(name, ref(input), features);
-}
-
-// Default call shape: the historical feature set (all bugfix flags off).
 static std::pair<bool, bytes> exec(std::string_view name, bytesConstRef input)
 {
-    return exec(name, input, ledger::Features{});
+    return executor::PrecompiledRegistrar::executor(std::string(name))(
+        input, ledger::Features{});
 }
 
 static std::pair<bool, bytes> exec(std::string_view name, const bytes& input)
@@ -769,12 +759,13 @@ BOOST_AUTO_TEST_CASE(alt_bn128_pairing_result_zero)
         BOOST_CHECK_EQUAL(out[i], 0);
 }
 
-BOOST_AUTO_TEST_CASE(alt_bn128_pairing_noncanonical_g2_follows_the_bugfix_flag)
+BOOST_AUTO_TEST_CASE(alt_bn128_pairing_rejects_noncanonical_g2_encoding)
 {
-    // Canonicity is gated on bugfix_evm_pairing_canonical_g2 (bit 63). The
-    // discriminating pair: the same single pair as alt_bn128_pairing_result_zero
-    // (G1=(1,2), G2 generator) with a1_x replaced by a1_x + P — same point
-    // mathematically, different encoding.
+    // A G2 coordinate >= the base field prime is a non-canonical encoding and must be
+    // rejected (EIP-197). This is also what the pre-upgrade evmone 0.21 dependency did:
+    // its pairing_check gated every coordinate through is_field_element and returned
+    // nullopt, which the caller maps to a precompile failure — so no feature flag gates
+    // this, and pre-upgrade blocks replay byte for byte.
     //
     //   a1_x = 0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2
     //   P    = 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47
@@ -792,9 +783,18 @@ BOOST_AUTO_TEST_CASE(alt_bn128_pairing_noncanonical_g2_follows_the_bugfix_flag)
     );
     BOOST_REQUIRE_EQUAL(input.size(), 192u);
 
-    // Canonical twin (a1_x without +P): accepted under BOTH flag states, same verdict
-    // as alt_bn128_pairing_result_zero — proving the flag arms below fire on the
-    // encoding, not on the point.
+    // The non-canonical encoding fails closed, with no feature row set.
+    {
+        auto [ok, out] = exec("alt_bn128_pairing_product", input);
+        BOOST_CHECK(!ok);
+        BOOST_REQUIRE_EQUAL(out.size(), 32u);
+        for (size_t i = 0; i < 32; ++i)
+            BOOST_CHECK_EQUAL(out[i], 0);
+    }
+
+    // The canonical twin (a1_x without +P) is accepted and yields the same verdict as
+    // alt_bn128_pairing_result_zero, proving the rejection above fires on the encoding
+    // and not on the point.
     bytes canonical = bcos::fromHex(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000002"
@@ -804,33 +804,9 @@ BOOST_AUTO_TEST_CASE(alt_bn128_pairing_noncanonical_g2_follows_the_bugfix_flag)
         "12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"  // a0_y
     );
     BOOST_REQUIRE_EQUAL(canonical.size(), 192u);
-
-    ledger::Features strict{};
-    strict.set(ledger::Features::Flag::bugfix_evm_pairing_canonical_g2);
-    for (auto const& features : {ledger::Features{}, strict})
     {
-        auto [okCanonical, outCanonical] = exec("alt_bn128_pairing_product", canonical, features);
-        BOOST_CHECK(okCanonical);
-        BOOST_REQUIRE_EQUAL(outCanonical.size(), 32u);
-        for (size_t i = 0; i < 32; ++i)
-            BOOST_CHECK_EQUAL(outCanonical[i], 0);
-    }
-
-    // Flag OFF (default, existing chains): the historical wrap — the 0.21 Montgomery
-    // conversion reduced x+kP to x, so the non-canonical encoding computes the SAME
-    // verdict as its canonical twin. Pre-upgrade blocks replay verbatim.
-    {
-        auto [ok, out] = exec("alt_bn128_pairing_product", input);
+        auto [ok, out] = exec("alt_bn128_pairing_product", canonical);
         BOOST_CHECK(ok);
-        BOOST_REQUIRE_EQUAL(out.size(), 32u);
-        for (size_t i = 0; i < 32; ++i)
-            BOOST_CHECK_EQUAL(out[i], 0);
-    }
-
-    // Flag ON: strict EIP-197 — the non-canonical encoding fails closed.
-    {
-        auto [ok, out] = exec("alt_bn128_pairing_product", input, strict);
-        BOOST_CHECK(!ok);
         BOOST_REQUIRE_EQUAL(out.size(), 32u);
         for (size_t i = 0; i < 32; ++i)
             BOOST_CHECK_EQUAL(out[i], 0);
