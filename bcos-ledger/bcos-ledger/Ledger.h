@@ -55,12 +55,9 @@ public:
     using CacheType =
         boost::compute::detail::lru_cache<int64_t, std::shared_ptr<std::vector<h256>>>;
 
-    static constexpr int c_defaultMerkleTreeCacheSize = 100;
-
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage, size_t _blockLimit,
-        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr,
-        int merkleTreeCacheSize = c_defaultMerkleTreeCacheSize,
+        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr, int merkleTreeCacheSize = 100,
         bcos::IOServicePool::Ptr _ioServicePool = nullptr)
       : m_blockFactory(std::move(_blockFactory)),
         m_stateStorage(std::move(_storage)),

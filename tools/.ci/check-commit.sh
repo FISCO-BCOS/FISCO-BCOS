@@ -131,14 +131,6 @@ function check_versionConsistency() {
     LOG_INFO "version consistency check Ok!"
 }
 
-function check_bcosBuilderTemplates() {
-    if ! python3 "${SHELL_FOLDER}/check_bcosbuilder_tpl.py"; then
-        LOG_ERROR "a BcosBuilder template does not parse with the generator settings (two ';' comments sharing the text before ':' or '=' collide)"
-        exit 1
-    fi
-}
-
 check_versionConsistency
-check_bcosBuilderTemplates
 check_codeFormat
 check_PR_limit

@@ -8,8 +8,7 @@ SchedulerFactory::SchedulerFactory(ExecutorManager::Ptr executorManager,
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute, size_t keyPageSize,
-    bcos::IOServicePool::Ptr ioServicePool)
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute, size_t keyPageSize)
   : m_executorManager(std::move(executorManager)),
     m_ledger(std::move(ledger)),
     m_storage(std::move(storage)),
@@ -20,16 +19,14 @@ SchedulerFactory::SchedulerFactory(ExecutorManager::Ptr executorManager,
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
     m_isSerialExecute(isSerialExecute),
-    m_keyPageSize(keyPageSize),
-    m_ioServicePool(std::move(ioServicePool))
+    m_keyPageSize(keyPageSize)
 {}
 
 SchedulerImpl::Ptr SchedulerFactory::build(int64_t schedulerTermId)
 {
     auto scheduler = std::make_shared<SchedulerImpl>(m_executorManager, m_ledger, m_storage,
         m_executionMessageFactory, m_blockFactory, m_txPool, m_transactionSubmitResultFactory,
-        m_hashImpl, m_isAuthCheck, m_isSerialExecute, schedulerTermId, m_keyPageSize,
-        m_ioServicePool);
+        m_hashImpl, m_isAuthCheck, m_isSerialExecute, schedulerTermId, m_keyPageSize);
     scheduler->fetchConfig();
 
     scheduler->registerBlockNumberReceiver(m_blockNumberReceiver);

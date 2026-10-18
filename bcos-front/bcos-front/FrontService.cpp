@@ -350,9 +350,9 @@ void FrontService::stop()
         // libinitializer/FrontServiceInitializer.cpp capture TxPool / BlockSync / PBFT by value,
         // and those modules hold this FrontService back through their configs, so keeping the
         // lambdas after stop() keeps the whole graph alive and its destructors (thread joins,
-        // io_context teardown) never run. The node's io pool may still be delivering a message
-        // that entered onReceiveMessage before the gateway (AIR) or the tars server (Pro)
-        // stopped, hence the locks.
+        // io_context teardown) never run. In MAX the tars server joins its handle threads before
+        // destroyApp reaches us; in AIR the shared io pool may still be delivering a message that
+        // entered onReceiveMessage before Gateway::stop() returned, hence the locks.
         {
             WriteGuard l(x_moduleID2MessageDispatcher);
             m_moduleID2MessageDispatcher.clear();
@@ -664,7 +664,7 @@ task::Task<Error::Ptr> FrontService::onReceiveGroupNodeInfo(
         Guard guard(x_groupNodeInfo);
         m_groupNodeInfo = _groupNodeInfo;
     }
-    // To be considered: How to ensure orderly notifications in the pro mode
+    // To be considered: How to ensure orderly notifications in the pro/max mode
     FRONT_LOG(INFO) << LOG_DESC("onReceiveGroupNodeInfo") << LOG_KV("groupID", _groupID)
                     << LOG_KV("nodeIDs.size()",
                            (_groupNodeInfo ? _groupNodeInfo->nodeIDList().size() : 0));

@@ -1,0 +1,40 @@
+#include "TransactionReceipt.tars"
+module bcostars {
+struct ExecutionMessage
+{
+    1 require int type;
+    2 optional vector<byte> transactionHash;
+    3 require long contextID;
+    4 require long seq;
+    5 optional string origin;
+    6 optional string from;
+    7 optional string to;
+    8 optional string abi;
+    9 optional int depth;
+    10 require bool create = false;
+    11 optional bool internalCreate = false;
+    12 optional bool internalCall = false;
+    13 optional long gasAvailable;
+    14 optional vector<byte> data;
+    15 require bool staticCall = false;
+    16 optional string salt;
+    17 optional int status;
+    18 optional string message;
+    19 optional vector<LogEntry> logEntries;
+    20 optional string         newEVMContractAddress;
+    21 optional vector<string> keyLocks;
+    22 optional string         keyLockAcquired;
+    23 require  bool           delegateCall = false;
+    24 optional string         delegateCallAddress;
+    25 optional vector<byte>   delegateCallCode;
+    26 optional string         delegateCallSender;
+    27 optional int            evmStatus;
+    28 optional bool           hasContractTableChanged = false;
+    29 optional string         value;
+    30 optional string         gasPrice;
+    31 optional long           gasLimit;
+    32 optional string         maxFeePerGas;
+    33 optional string         maxPriorityFeePerGas;
+    34 optional string         effectiveGasPrice;
+};
+};
