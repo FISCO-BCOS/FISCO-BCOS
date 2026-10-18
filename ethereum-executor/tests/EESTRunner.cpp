@@ -53,6 +53,11 @@ using namespace bcos::storage2;
 using namespace bcos::executor_v1;
 namespace fs = std::filesystem;
 
+// Fixtures that failed to load or parse. Declared here rather than beside the
+// other run counters below: the loaders that bump it are defined inside the
+// namespace blocks that follow, so the definition has to precede them.
+std::atomic<int> g_loadFailures{0};
+
 // =============================================================================
 //  Fixture loader — out-of-line definitions of the functions declared in
 //  EESTRunner.h (moved out of the header so only the data structures stay
@@ -689,7 +694,6 @@ std::atomic<int> g_unexpectedFailure{0};
 // carries its domain and a loader regression can't silently raise the pass rate.
 std::atomic<int> g_skippedFiles{0};
 std::atomic<int> g_skippedTests{0};  // fixtures whose fork has no revision here
-std::atomic<int> g_loadFailures{0};
 
 // Failure details for summary
 struct FailureDetail
