@@ -37,17 +37,21 @@ public:
     virtual void addPrepareCache(PBFTMessageInterface::Ptr _prepareProposal)
     {
         addCache(m_prepareCacheList, m_prepareReqWeight, _prepareProposal);
-        PBFT_LOG(INFO) << LOG_DESC("addPrepareCache") << printPBFTMsgInfo(_prepareProposal)
-                       << m_config->printCurrentState()
-                       << LOG_KV("weight", m_prepareReqWeight[_prepareProposal->hash()]);
+        PBFT_LOG(DEBUG) << LOG_DESC("PrepareReceived") << LOG_KV("index", _prepareProposal->index())
+                        << LOG_KV("hash", _prepareProposal->hash().abridged())
+                        << LOG_KV("view", _prepareProposal->view())
+                        << LOG_KV("fromIdx", _prepareProposal->generatedFrom())
+                        << LOG_KV("weight", m_prepareReqWeight[_prepareProposal->hash()]);
     }
 
     virtual void addCommitCache(PBFTMessageInterface::Ptr _commitProposal)
     {
         addCache(m_commitCacheList, m_commitReqWeight, _commitProposal);
-        PBFT_LOG(INFO) << LOG_DESC("addCommitCache") << printPBFTMsgInfo(_commitProposal)
-                       << m_config->printCurrentState()
-                       << LOG_KV("weight", m_commitReqWeight[_commitProposal->hash()]);
+        PBFT_LOG(DEBUG) << LOG_DESC("CommitReceived") << LOG_KV("index", _commitProposal->index())
+                        << LOG_KV("hash", _commitProposal->hash().abridged())
+                        << LOG_KV("view", _commitProposal->view())
+                        << LOG_KV("fromIdx", _commitProposal->generatedFrom())
+                        << LOG_KV("weight", m_commitReqWeight[_commitProposal->hash()]);
     }
 
     virtual void addPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg)
@@ -71,9 +75,11 @@ public:
             m_exceptionPrePrepareList.push_back(m_prePrepare);
         }
         m_prePrepare = _prePrepareMsg;
-        PBFT_LOG(INFO) << LOG_DESC("addPrePrepareCache") << printPBFTMsgInfo(_prePrepareMsg)
-                       << LOG_KV("sys", _prePrepareMsg->consensusProposal()->systemProposal())
-                       << m_config->printCurrentState();
+        // round start for Report's roundMs: the first prePrepare cached for this index
+        m_config->notePrePrepareCached(_prePrepareMsg->index(), utcSteadyTime());
+        PBFT_LOG(DEBUG) << LOG_DESC("addPrePrepareCache") << printPBFTMsgInfo(_prePrepareMsg)
+                        << LOG_KV("sys", _prePrepareMsg->consensusProposal()->systemProposal())
+                        << m_config->printCurrentState();
     }
 
     void addExceptionPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg)
@@ -106,10 +112,12 @@ public:
     virtual void addCheckPointMsg(PBFTMessageInterface::Ptr _checkPointMsg)
     {
         addCache(m_checkpointCacheList, m_checkpointCacheWeight, _checkPointMsg);
-        PBFT_LOG(INFO) << LOG_DESC("addCheckPointMsg") << printPBFTMsgInfo(_checkPointMsg)
-                       << LOG_KV("Idx", m_config->nodeIndex())
-                       << LOG_KV("weight", m_checkpointCacheWeight[_checkPointMsg->hash()])
-                       << LOG_KV("minRequiredWeight", m_config->minRequiredQuorum());
+        PBFT_LOG(DEBUG) << LOG_DESC("CheckpointReceived")
+                        << LOG_KV("index", _checkPointMsg->index())
+                        << LOG_KV("hash", _checkPointMsg->hash().abridged())
+                        << LOG_KV("fromIdx", _checkPointMsg->generatedFrom())
+                        << LOG_KV("weight", m_checkpointCacheWeight[_checkPointMsg->hash()])
+                        << LOG_KV("minRequiredWeight", m_config->minRequiredQuorum());
     }
 
     virtual bool checkAndCommitStableCheckPoint();
@@ -232,6 +240,8 @@ protected:
     PBFTProposalInterface::Ptr m_checkpointProposal = nullptr;
     // time record for checkPoint start
     std::uint64_t m_checkPointStartTime = 0;
+    // how many times the checkpoint of this index has been re-broadcast after a timeout
+    std::uint64_t m_checkPointResendCount = 0;
 
     CollectionCacheType m_checkpointCacheList;
     QuorumRecoderType m_checkpointCacheWeight;
