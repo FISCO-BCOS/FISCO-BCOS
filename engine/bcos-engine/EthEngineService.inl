@@ -25,8 +25,8 @@
 #include <range/v3/view/indirect.hpp>
 #include <range/v3/view/transform.hpp>
 
-#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/protocol/BlobSchedule.h>
+#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-rlp-protocol/EthPoSHeaderValidation.h>
@@ -66,9 +66,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     std::vector<bcos::bytes> decodedForcedTxs;
     if (payloadAttributes != nullptr)
     {
-        if (auto validationError = engine_common::validatePayloadAttributes(
-                *payloadAttributes, version, &decodedForcedTxs,
-                m_externalPayloadVerifier != nullptr);
+        if (auto validationError = engine_common::validatePayloadAttributes(*payloadAttributes,
+                version, &decodedForcedTxs, m_externalPayloadVerifier != nullptr);
             validationError.has_value())
         {
             co_return ForkchoiceUpdatedResult{
@@ -186,8 +185,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             BCOS_LOG(INFO) << LOG_BADGE("EthEngineService")
                            << LOG_DESC("forkchoice head behind the tip: chain rewound")
                            << LOG_KV("head", forkchoiceState.headBlockHash.abridged())
-                           << LOG_KV("newTip", *headBlockNumber)
-                           << LOG_KV("oldTip", ledgerTip);
+                           << LOG_KV("newTip", *headBlockNumber) << LOG_KV("oldTip", ledgerTip);
             ledgerTip = *headBlockNumber;
         }
     }
@@ -264,8 +262,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         auto parentBlock = co_await bcos::ledger::getBlockData(
             view, *headBlockNumber, bcos::ledger::HEADER, *m_blockFactory);
         l1Input.emplace();
-        l1Input->parentHeader =
-            bcos::protocol::EthBlockHeader(*parentBlock->blockHeader()).data();
+        l1Input->parentHeader = bcos::protocol::EthBlockHeader(*parentBlock->blockHeader()).data();
         l1Input->l1Context = co_await m_externalPayloadVerifier->deriveL1Context(
             l1Input->parentHeader, payloadAttributes->timestamp / 1000);
     }
@@ -317,21 +314,21 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
                 if (!m_memPool.hasBlobSidecar(sealedTx->hash()))
                 {
                     blobSkippedSenders.insert(std::move(sender));
-                    BCOS_LOG(WARNING)
-                        << LOG_BADGE("EthEngineService")
-                        << LOG_DESC("seal: skipping blob transaction without sidecar")
-                        << LOG_KV("hash", sealedTx->hash().hexPrefixed());
+                    BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService")
+                                      << LOG_DESC("seal: skipping blob transaction without sidecar")
+                                      << LOG_KV("hash", sealedTx->hash().hexPrefixed());
                     continue;
                 }
                 if (sealedBlobs + sealedTx->blobVersionedHashes().size() > maxBlobs)
                 {
                     blobSkippedSenders.insert(std::move(sender));
-                    BCOS_LOG(INFO) << LOG_BADGE("EthEngineService")
-                                   << LOG_DESC("seal: block blob budget spent; leaving blob "
-                                               "transaction pooled")
-                                   << LOG_KV("hash", sealedTx->hash().hexPrefixed())
-                                   << LOG_KV("sealedBlobs", sealedBlobs)
-                                   << LOG_KV("maxBlobs", maxBlobs);
+                    BCOS_LOG(INFO)
+                        << LOG_BADGE("EthEngineService")
+                        << LOG_DESC(
+                               "seal: block blob budget spent; leaving blob "
+                               "transaction pooled")
+                        << LOG_KV("hash", sealedTx->hash().hexPrefixed())
+                        << LOG_KV("sealedBlobs", sealedBlobs) << LOG_KV("maxBlobs", maxBlobs);
                     continue;
                 }
                 sealedBlobs += sealedTx->blobVersionedHashes().size();
@@ -412,10 +409,10 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             {
                 continue;
             }
-            auto const found = m_memPool.visitBlobSidecar(tx.decoded->hash(),
-                [&bundle](engine::BlobTxSidecar const& sidecar) {
-                    bundle.commitments.insert(bundle.commitments.end(),
-                        sidecar.commitments.begin(), sidecar.commitments.end());
+            auto const found = m_memPool.visitBlobSidecar(
+                tx.decoded->hash(), [&bundle](engine::BlobTxSidecar const& sidecar) {
+                    bundle.commitments.insert(bundle.commitments.end(), sidecar.commitments.begin(),
+                        sidecar.commitments.end());
                     bundle.proofs.insert(
                         bundle.proofs.end(), sidecar.proofs.begin(), sidecar.proofs.end());
                     bundle.blobs.insert(
@@ -424,8 +421,9 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             if (!found)
             {
                 BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService")
-                                  << LOG_DESC("getPayload: blob transaction without sidecar in "
-                                              "the built payload")
+                                  << LOG_DESC(
+                                         "getPayload: blob transaction without sidecar in "
+                                         "the built payload")
                                   << LOG_KV("hash", tx.decoded->hash().hexPrefixed());
                 continue;
             }
@@ -471,11 +469,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     // EL mode validates against the vanilla L1 dialect (validateExecutionPayloadL1);
     // the OP/single-node wiring keeps the OP-flavored gate, lifted for blob envelopes
     // only when the chain admits them (executor_version==2).
-    auto validationError = m_externalPayloadVerifier ?
-                               detail::validateExecutionPayloadL1(
-                                   request.executionPayload, version) :
-                               detail::validateExecutionPayload(
-                                   request.executionPayload, version, m_allowBlobTransactions);
+    auto validationError =
+        m_externalPayloadVerifier ?
+            detail::validateExecutionPayloadL1(request.executionPayload, version) :
+            detail::validateExecutionPayload(
+                request.executionPayload, version, m_allowBlobTransactions);
     if (validationError.has_value())
     {
         // The shape/semantic validators only check shape/semantic rules — a failure
@@ -534,8 +532,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             rpc::Web3Transaction web3Tx;
             if (auto result = web3Tx.tryDecode(rawRef); !result.has_value())
             {
-                co_return engine_common::makeStatus(PayloadValidationStatus::Invalid,
-                    std::nullopt,
+                co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                     std::string("blob transaction envelope is undecodable: ") +
                         result.error().message);
             }
@@ -554,10 +551,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         // EL mode (Prague+) requires the list present but it may be non-empty (EIP-7685
         // requests commit to the header requestsHash); the OP lane keeps the
         // present-but-empty rule.
-        auto const requestsError = m_externalPayloadVerifier ?
-                                       !request.executionRequests.has_value() :
-                                       !request.executionRequests.has_value() ||
-                                           !request.executionRequests->empty();
+        auto const requestsError =
+            m_externalPayloadVerifier ?
+                !request.executionRequests.has_value() :
+                !request.executionRequests.has_value() || !request.executionRequests->empty();
         if (requestsError)
         {
             co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
@@ -621,7 +618,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             miss = NewPayloadMiss::ParentUnknown;
         }
         else if (auto existingId = guard.payloadIdForHash(request.executionPayload.blockHash);
-                 !existingId)
+            !existingId)
         {
             miss = NewPayloadMiss::NotBuiltHere;
         }
@@ -664,10 +661,9 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         {
             requestsHash = detail::calculateRequestsHash(*request.executionRequests);
         }
-        if (auto hashError =
-                detail::matchReconstructedEthBlockHash(m_blockFactory->blockHeaderFactory(),
-                    request.executionPayload, request.parentBeaconBlockRoot, *forkVersion,
-                    requestsHash);
+        if (auto hashError = detail::matchReconstructedEthBlockHash(
+                m_blockFactory->blockHeaderFactory(), request.executionPayload,
+                request.parentBeaconBlockRoot, *forkVersion, requestsHash);
             hashError.has_value())
         {
             co_return engine_common::makeStatus(
@@ -763,7 +759,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     // source is the shared verifier instance). The if-constexpr keeps storages without a
     // committed-plane fork (unit-test stubs) compiling — they can never wire a reorg
     // window, so there is nothing to capture.
-    auto const reorgWindow = m_externalPayloadVerifier ? m_externalPayloadVerifier->reorgWindow() : 0;
+    auto const reorgWindow =
+        m_externalPayloadVerifier ? m_externalPayloadVerifier->reorgWindow() : 0;
     if constexpr (requires { m_globalStateStorage.forkCommitted(); })
     {
         if (localArtifact && localView && reorgWindow > 0)
@@ -788,8 +785,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                     if (auto artifactIt = m_artifacts.find(payloadId);
                         artifactIt != m_artifacts.end())
                     {
-                        artifactIt->second.view =
-                            std::make_shared<ViewType>(std::move(*localView));
+                        artifactIt->second.view = std::make_shared<ViewType>(std::move(*localView));
                         localView.reset();
                     }
                 }
@@ -806,8 +802,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             if (rollbackJournal)
             {
                 auto guard = m_tracker.lockExclusive();
-                if (auto artifactIt = m_artifacts.find(payloadId);
-                    artifactIt != m_artifacts.end())
+                if (auto artifactIt = m_artifacts.find(payloadId); artifactIt != m_artifacts.end())
                 {
                     // Refcount copy (nothrow): a deep copy here would be the one throwing
                     // statement between the capture's catch and pushView, and a bad_alloc
@@ -867,8 +862,9 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             }
             bcos::bytes encodedWithdrawals;
             encodedWithdrawals.reserve(withdrawalsPayload.size() + 8);
-            bcos::codec::rlp::encodeHeader(encodedWithdrawals,
-                bcos::codec::rlp::Header{.isList = true, .payloadLength = withdrawalsPayload.size()});
+            bcos::codec::rlp::encodeHeader(
+                encodedWithdrawals, bcos::codec::rlp::Header{.isList = true,
+                                        .payloadLength = withdrawalsPayload.size()});
             encodedWithdrawals.insert(
                 encodedWithdrawals.end(), withdrawalsPayload.begin(), withdrawalsPayload.end());
             bcos::storage::Entry withdrawalsEntry;
@@ -1029,8 +1025,7 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
              scheduler_v1::TransactionScheduler<SchedulerType,
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
-task::Task<PayloadStatus>
-EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
+task::Task<PayloadStatus> EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     SchedulerType>::newPayloadExternal(const NewPayloadRequest& request)
 {
     auto const& payload = request.executionPayload;
@@ -1118,7 +1113,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
         view, parentNumber, bcos::ledger::HEADER, *m_blockFactory);
     external.parentHeader = bcos::protocol::EthBlockHeader(*parentBlock->blockHeader()).data();
 
-    auto result = co_await m_externalPayloadVerifier->verifyAndCommit(m_globalStateStorage, external);
+    auto result =
+        co_await m_externalPayloadVerifier->verifyAndCommit(m_globalStateStorage, external);
     switch (result.outcome)
     {
     case engine_common::ExternalPayloadOutcome::Valid:
@@ -1343,9 +1339,9 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
         emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
         emptyHeader->setExtraData(std::move(extraData));
-        auto emptyResolution = co_await engine_common::resolveEngineBlockStateRoot(view,
-            *emptyHeader, ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(),
-            *m_blockFactory, *m_commitObserver);
+        auto emptyResolution =
+            co_await engine_common::resolveEngineBlockStateRoot(view, *emptyHeader, ledgerConfig,
+                *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory, *m_commitObserver);
         emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setGasUsed(0);
@@ -1402,9 +1398,9 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     u256 const totalGasUsed = commitments.gasUsed;
     Bloom const& logsBloom = commitments.logsBloom;
 
-    auto resolution = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
-        ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory,
-        *m_commitObserver);
+    auto resolution =
+        co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader, ledgerConfig,
+            *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory, *m_commitObserver);
     h256 const stateRoot = resolution.stateRoot;
     blockHeader->setReceiptsRoot(receiptRoot);
     blockHeader->setTxsRoot(txRoot);
@@ -1434,11 +1430,10 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
                  std::vector<protocol::Transaction::Ptr>>
 task::Task<typename EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
     SchedulerType>::BuildPayloadResult>
-EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::
-    buildL1Payload(const ForkchoiceState& forkchoiceState,
-        const PayloadAttributes& payloadAttributes, bcos::protocol::BlockNumber nextBlockNumber,
-        std::vector<EngineTransaction> engineTransactions, ViewType& view,
-        L1BuildInput const& l1Input) const
+EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerType>::buildL1Payload(
+    const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
+    bcos::protocol::BlockNumber nextBlockNumber, std::vector<EngineTransaction> engineTransactions,
+    ViewType& view, L1BuildInput const& l1Input) const
 {
     auto const& l1Context = l1Input.l1Context;
     auto const forkVersion = l1Context.forkVersion;
@@ -1465,11 +1460,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
         catch (std::exception const& e)
         {
-            BOOST_THROW_EXCEPTION(InvalidPayloadAttributes{}
-                                  << bcos::errinfo_comment{
-                                         std::string("EngineService: malformed ") +
-                                         std::string(engine_common::c_l1GasLimitTargetKey) +
-                                         " SYS_CONFIG value: " + e.what()});
+            BOOST_THROW_EXCEPTION(InvalidPayloadAttributes{} << bcos::errinfo_comment{
+                                      std::string("EngineService: malformed ") +
+                                      std::string(engine_common::c_l1GasLimitTargetKey) +
+                                      " SYS_CONFIG value: " + e.what()});
         }
         u256 const parentLimit = l1Input.parentHeader.gasLimit;
         u256 const bound = parentLimit / protocol::kGasLimitBoundDivisor;
@@ -1509,8 +1503,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         rawTransactions.push_back(tx.raw);
         if (tx.decoded)
         {
-            blobGasUsed +=
-                tx.decoded->blobVersionedHashes().size() * protocol::BLOB_GAS_PER_BLOB;
+            blobGasUsed += tx.decoded->blobVersionedHashes().size() * protocol::BLOB_GAS_PER_BLOB;
         }
     }
 
@@ -1577,11 +1570,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         ethHeader.parentBeaconRoot = payloadAttributes.parentBeaconBlockRoot;
     }
 
-    auto built = co_await m_externalPayloadVerifier->buildL1Block(view,
-        engine_common::ExternalBuildBlock{.ethHeader = ethHeader,
-            .parentHeader = l1Input.parentHeader,
-            .rawTransactions = rawTransactions,
-            .rawWithdrawals = rawWithdrawals});
+    auto built = co_await m_externalPayloadVerifier->buildL1Block(
+        view, engine_common::ExternalBuildBlock{.ethHeader = ethHeader,
+                  .parentHeader = l1Input.parentHeader,
+                  .rawTransactions = rawTransactions,
+                  .rawWithdrawals = rawWithdrawals});
     if (!built.ok)
     {
         // A transaction the pool admitted but the block cannot execute (a decode or
@@ -1607,11 +1600,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         .feeRecipient = payloadAttributes.suggestedFeeRecipient,
         .timestamp = payloadAttributes.timestamp,
         .blockNumber = nextBlockNumber,
-        .withdrawals = forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI ?
-                           std::optional<std::vector<WithdrawalV1>>(
-                               payloadAttributes.withdrawals.value_or(
-                                   std::vector<WithdrawalV1>{})) :
-                           std::nullopt,
+        .withdrawals =
+            forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI ?
+                std::optional<std::vector<WithdrawalV1>>(
+                    payloadAttributes.withdrawals.value_or(std::vector<WithdrawalV1>{})) :
+                std::nullopt,
         .blobGasUsed = forkVersion >= bcos::protocol::EthBlockVersion::CANCUN ?
                            std::optional<u256>(blobGasUsed) :
                            std::nullopt,
@@ -1642,8 +1635,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     blockHeader->setTxsRoot(built.computation.txsRoot);
     blockHeader->setGasUsed(built.computation.gasUsed);
     detail::finalizeEthBlockHeader(*blockHeader, executionPayload,
-        payloadAttributes.parentBeaconBlockRoot, forkVersion, withdrawalsHash,
-        built.requestsHash);
+        payloadAttributes.parentBeaconBlockRoot, forkVersion, withdrawalsHash, built.requestsHash);
     executionPayload.blockHash = blockHeader->hash();
 
     co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),

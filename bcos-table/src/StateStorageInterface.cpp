@@ -55,8 +55,7 @@ std::optional<Table> StateStorageInterface::createTable(
     std::string _tableName, std::string _valueFields)
 {
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> createPromise;
-    asyncCreateTable(
-        std::move(_tableName), std::move(_valueFields),
+    asyncCreateTable(std::move(_tableName), std::move(_valueFields),
         [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
             createPromise.set_value({std::move(error), std::move(table)});
         });

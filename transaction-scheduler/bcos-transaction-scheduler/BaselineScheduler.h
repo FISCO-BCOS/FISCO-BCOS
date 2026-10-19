@@ -14,6 +14,7 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/MPTDeltaLayer.h"
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_group.h>
@@ -31,7 +32,6 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {

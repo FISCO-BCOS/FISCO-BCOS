@@ -21,9 +21,9 @@
 #include "SealerConfig.h"
 #include "bcos-framework/protocol/TransactionMetaData.h"
 #include <atomic>
+#include <deque>
 #include <functional>
 #include <tuple>
-#include <deque>
 
 namespace bcos::sealer
 {

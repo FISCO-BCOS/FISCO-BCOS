@@ -36,7 +36,11 @@ class FakeConsensus : public ConsensusInterface
 {
 public:
     using Ptr = std::shared_ptr<FakeConsensus>;
-    FakeConsensus() { m_taskPool = std::make_shared<IOServicePool>(1, "task"); m_strand = std::make_unique<Strand>(m_taskPool); }
+    FakeConsensus()
+    {
+        m_taskPool = std::make_shared<IOServicePool>(1, "task");
+        m_strand = std::make_unique<Strand>(m_taskPool);
+    }
     ~FakeConsensus() override {}
 
 
@@ -54,8 +58,7 @@ public:
     // the sync module calls this interface to check block
     void asyncCheckBlock(Block::Ptr, std::function<void(Error::Ptr, bool)> _onVerifyFinish) override
     {
-        m_strand->post(
-            [_onVerifyFinish, this]() { _onVerifyFinish(nullptr, m_checkBlockResult); });
+        m_strand->post([_onVerifyFinish, this]() { _onVerifyFinish(nullptr, m_checkBlockResult); });
     }
 
     // the sync module calls this interface to notify new block

@@ -36,7 +36,11 @@ class FakeTxPool : public TxPoolInterface
 {
 public:
     using Ptr = std::shared_ptr<FakeTxPool>;
-    FakeTxPool() { m_worker = std::make_shared<IOServicePool>(1, "txpool"); m_strand = std::make_unique<Strand>(m_worker); }
+    FakeTxPool()
+    {
+        m_worker = std::make_shared<IOServicePool>(1, "txpool");
+        m_strand = std::make_unique<Strand>(m_worker);
+    }
     ~FakeTxPool() override {}
 
     void start() override {}

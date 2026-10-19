@@ -19,10 +19,10 @@
  */
 
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <map>
 #include <random>
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

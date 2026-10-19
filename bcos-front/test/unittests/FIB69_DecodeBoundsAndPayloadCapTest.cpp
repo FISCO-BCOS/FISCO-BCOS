@@ -22,8 +22,10 @@
 #include <boost/asio/detail/socket_ops.hpp>
 #include <boost/test/unit_test.hpp>
 
-namespace bcos::test {
-namespace {
+namespace bcos::test
+{
+namespace
+{
 
 /// Build a minimal valid FrontMessage wire buffer.
 /// moduleID(2) + uuidLength(1) + uuid(actualUuidSize bytes) + ext(2) + [no payload]

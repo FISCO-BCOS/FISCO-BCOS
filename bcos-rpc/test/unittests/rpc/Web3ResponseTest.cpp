@@ -1056,8 +1056,8 @@ BOOST_AUTO_TEST_CASE(combineTxResponseVFieldFromTarsSignature)
         bcostars::protocol::TransactionImpl txImpl(
             [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
         Json::Value result = Json::objectValue;
-        combineTxResponse(result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/1,
-            bcos::crypto::HashType{});
+        combineTxResponse(
+            result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/1, bcos::crypto::HashType{});
         return result;
     };
 

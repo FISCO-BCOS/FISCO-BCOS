@@ -19,11 +19,11 @@
  */
 #pragma once
 
-#include "Block.h"
-#include "HeaderChain.h"
+#include "../eth/Protocol.h"
 #include "../rlpx/Messages.h"
 #include "../rlpx/Session.h"
-#include "../eth/Protocol.h"
+#include "Block.h"
+#include "HeaderChain.h"
 
 namespace bcos::devp2p::sync
 {

@@ -71,8 +71,7 @@ BOOST_AUTO_TEST_CASE(allFieldsCopied)
     BOOST_CHECK(h.stateRoot == genesis.m_stateRoot);
     BOOST_CHECK(h.txsRoot == genesis.m_transactionsRoot);
     BOOST_CHECK(h.receiptsRoot == genesis.m_receiptsRoot);
-    BOOST_CHECK(std::equal(
-        h.logsBloom.begin(), h.logsBloom.end(), genesis.m_logsBloom.begin()));
+    BOOST_CHECK(std::equal(h.logsBloom.begin(), h.logsBloom.end(), genesis.m_logsBloom.begin()));
     BOOST_CHECK(h.difficulty == genesis.m_difficulty);
     BOOST_CHECK(h.gasLimit == genesis.m_gasLimit);
     BOOST_CHECK(h.gasUsed == genesis.m_gasUsed);

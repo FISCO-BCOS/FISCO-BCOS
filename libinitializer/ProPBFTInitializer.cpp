@@ -44,7 +44,8 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
   : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler,
         _storage, _frontService, _nodeTimeMaintenance, _ioServicePool)
 {
-    m_timer = std::make_shared<Timer>(*_ioServicePool->getIOService(), m_timerSchedulerInterval, "node info report");
+    m_timer = std::make_shared<Timer>(
+        *_ioServicePool->getIOService(), m_timerSchedulerInterval, "node info report");
 
     std::vector<tars::TC_Endpoint> endPoints;
     auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
@@ -84,17 +85,17 @@ void ProPBFTInitializer::reportNodeInfo()
     });
 
     // notify groupInfo to gateway
-    bcos::task::wait([](bcos::gateway::GatewayInterface::Ptr _gateway,
-                         bcos::group::GroupInfo::Ptr _groupInfo,
-                         ProPBFTInitializer* _self) -> bcos::task::Task<void> {
-        auto error = co_await _gateway->notifyGroupInfo(std::move(_groupInfo));
-        if (error && _self->m_running)
-        {
-            INITIALIZER_LOG(WARNING)
-                << LOG_DESC("notifyGroupInfo to gateway failed")
-                << LOG_KV("code", error->errorCode()) << LOG_KV("msg", error->errorMessage());
-        }
-    }(m_gateway, m_groupInfo, this));
+    bcos::task::wait(
+        [](bcos::gateway::GatewayInterface::Ptr _gateway, bcos::group::GroupInfo::Ptr _groupInfo,
+            ProPBFTInitializer* _self) -> bcos::task::Task<void> {
+            auto error = co_await _gateway->notifyGroupInfo(std::move(_groupInfo));
+            if (error && _self->m_running)
+            {
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("notifyGroupInfo to gateway failed")
+                    << LOG_KV("code", error->errorCode()) << LOG_KV("msg", error->errorMessage());
+            }
+        }(m_gateway, m_groupInfo, this));
 }
 
 void ProPBFTInitializer::start()

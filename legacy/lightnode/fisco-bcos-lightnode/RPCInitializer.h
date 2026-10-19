@@ -15,6 +15,7 @@
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/BoostLog.h>
 #include <json/forwards.h>
 #include <json/value.h>
 #include <legacy/bcos-ledger/LedgerImpl.h>
@@ -22,7 +23,6 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <memory>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::lightnode
 {

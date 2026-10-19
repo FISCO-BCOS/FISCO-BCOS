@@ -31,8 +31,7 @@ class DownloadRequest
 public:
     using Ptr = std::shared_ptr<DownloadRequest>;
     using UniquePtr = std::unique_ptr<DownloadRequest>;
-    DownloadRequest(bcos::protocol::BlockNumber _fromNumber, size_t _size,
-        size_t _interval = 0,
+    DownloadRequest(bcos::protocol::BlockNumber _fromNumber, size_t _size, size_t _interval = 0,
         int32_t _dataFlag = (bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS))
       : m_fromNumber(_fromNumber), m_size(_size), m_dataFlag(_dataFlag), m_interval(_interval)
     {}

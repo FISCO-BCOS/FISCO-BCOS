@@ -73,10 +73,7 @@ struct MockMemPool
         m_addedTransactions.clear();
     }
 
-    void remove(std::vector<bcos::crypto::HashType> hashes)
-    {
-        m_removedHashes = std::move(hashes);
-    }
+    void remove(std::vector<bcos::crypto::HashType> hashes) { m_removedHashes = std::move(hashes); }
 
     std::vector<protocol::Transaction::Ptr> get(std::vector<bcos::crypto::HashType> hashes)
     {
@@ -160,10 +157,7 @@ struct NonCopyableMemPool
         m_addedTransactions.clear();
     }
 
-    void remove(std::vector<bcos::crypto::HashType> /*hashes*/)
-    {
-        m_addedTransactions.clear();
-    }
+    void remove(std::vector<bcos::crypto::HashType> /*hashes*/) { m_addedTransactions.clear(); }
 
     std::vector<protocol::Transaction::Ptr> get(std::vector<bcos::crypto::HashType> /*hashes*/)
     {

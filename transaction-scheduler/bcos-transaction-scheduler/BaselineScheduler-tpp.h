@@ -44,8 +44,8 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
-#include "bcos-ledger/mpt/EthereumBlockRoots.h"
 #include "bcos-ledger/mpt/Errors.h"
+#include "bcos-ledger/mpt/EthereumBlockRoots.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-ledger/mpt/StateRoots.h"
 #include "bcos-ledger/mpt/ViewNodeStorage.h"
@@ -162,8 +162,9 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     // processing branch above fills — so it is computed strictly AFTER that branch. The legacy
     // Merkle arm is unaffected by the move (receipt->hash() is cached by the executor and the
     // finishExecute mutations never clear dataHash), keeping legacy output identical.
-    receiptRoot = ethereumRoots ? ledger::mpt::calculateEthereumReceiptsRoot(receipts, transactions) :
-                                  calculateReceiptRoot(receipts, block, hashImpl);
+    receiptRoot = ethereumRoots ?
+                      ledger::mpt::calculateEthereumReceiptsRoot(receipts, transactions) :
+                      calculateReceiptRoot(receipts, block, hashImpl);
 
     newBlockHeader.setGasUsed(totalGasUsed);
     newBlockHeader.setTxsRoot(transactionRoot);
@@ -820,13 +821,12 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
                 latestView, blockNumber, self->m_blockFactory.get());
             if (ledgerConfig->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
             {
-                callback(
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                        fmt::format("eth_call: historical call at block {} requires the "
-                                    "full-fidelity MPT of an Ethereum-lane chain "
-                                    "(executor_version >= 2, scenario B); this chain's state "
-                                    "at that block is not completely committed to an MPT",
-                            blockNumber)),
+                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                             fmt::format("eth_call: historical call at block {} requires the "
+                                         "full-fidelity MPT of an Ethereum-lane chain "
+                                         "(executor_version >= 2, scenario B); this chain's state "
+                                         "at that block is not completely committed to an MPT",
+                                 blockNumber)),
                     nullptr);
                 co_return;
             }
@@ -959,8 +959,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop
 };
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
-void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::
-    resetMPTCommitObserver()
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::resetMPTCommitObserver()
 {
     // Blocking lock, unlike coCommitBlock's try_to_lock: wait out any in-flight commit so
     // that once this returns, no thread will ever dereference the previous observer from the

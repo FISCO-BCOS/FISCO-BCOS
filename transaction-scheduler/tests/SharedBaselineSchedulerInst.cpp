@@ -21,6 +21,6 @@ namespace bcos::scheduler_v1
 template class BaselineScheduler<test::sharedmock::SharedMultiLayerStorage,
     test::sharedmock::SharedMockExecutor, test::sharedmock::SharedMockScheduler,
     ledger::LedgerInterface>;
-template class BaselineScheduler<test::fullchain::FCMultiLayerStorage,
-    test::fullchain::FCExecutor, test::fullchain::FCWritingScheduler, ledger::Ledger>;
+template class BaselineScheduler<test::fullchain::FCMultiLayerStorage, test::fullchain::FCExecutor,
+    test::fullchain::FCWritingScheduler, ledger::Ledger>;
 }  // namespace bcos::scheduler_v1

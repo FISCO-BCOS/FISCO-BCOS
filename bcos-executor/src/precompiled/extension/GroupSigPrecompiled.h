@@ -31,7 +31,7 @@ class GroupSigPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<GroupSigPrecompiled>;
     GroupSigPrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~GroupSigPrecompiled(){};
+    virtual ~GroupSigPrecompiled() {};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,

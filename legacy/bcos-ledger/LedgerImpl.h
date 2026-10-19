@@ -193,7 +193,8 @@ protected:
         co_return abiStr;
     }
 
-    task::Task<void> impl_getTransactions(::ranges::range auto const& hashes, ::ranges::range auto& out)
+    task::Task<void> impl_getTransactions(
+        ::ranges::range auto const& hashes, ::ranges::range auto& out)
     {
         bcos::concepts::resizeTo(out, ::ranges::size(hashes));
         using DataType = ::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>;

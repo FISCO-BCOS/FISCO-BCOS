@@ -32,8 +32,8 @@ class Secp256k1KeyPair : public KeyPair
 {
 public:
     using Ptr = std::shared_ptr<Secp256k1KeyPair>;
-  Secp256k1KeyPair();
-  explicit Secp256k1KeyPair(SecretPtr _secretKey);
-  virtual PublicPtr priToPub(SecretPtr _secret);
+    Secp256k1KeyPair();
+    explicit Secp256k1KeyPair(SecretPtr _secretKey);
+    virtual PublicPtr priToPub(SecretPtr _secret);
 };
 }  // namespace bcos::crypto

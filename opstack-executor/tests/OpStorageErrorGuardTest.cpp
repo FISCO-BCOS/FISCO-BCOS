@@ -71,18 +71,14 @@ struct FaultyStorage
     MutableStorage& m_inner;
     bool m_armed = true;
 
-    auto readOne(auto key, auto&&... args)
-        -> bcos::task::Task<std::optional<bcos::storage::Entry>>
+    auto readOne(auto key, auto&&... args) -> bcos::task::Task<std::optional<bcos::storage::Entry>>
     {
         if (m_armed)
             throw std::runtime_error("injected storage fault");
         co_return co_await m_inner.readOne(std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto range(auto&&... args)
-    {
-        return m_inner.range(std::forward<decltype(args)>(args)...);
-    }
+    auto range(auto&&... args) { return m_inner.range(std::forward<decltype(args)>(args)...); }
 };
 }  // namespace
 
@@ -147,8 +143,8 @@ BOOST_AUTO_TEST_CASE(GuardPoisonsAndThrowIfPoisonedThrowsOpStorageError)
         }
         }
         BOOST_CHECK(guard.poisoned());
-        BOOST_CHECK(guard.slot()->firstErrorMessage().find("injected storage fault") !=
-                    std::string::npos);
+        BOOST_CHECK(
+            guard.slot()->firstErrorMessage().find("injected storage fault") != std::string::npos);
         BOOST_CHECK_THROW(guard.throwIfPoisoned(), bcos::evm::engine::OpStorageError);
     }
 }
@@ -168,7 +164,7 @@ BOOST_AUTO_TEST_CASE(SharedSlotAggregatesAcrossInstancesFirstErrorWins)
     OpStorageErrorGuard guardA(stateA, slot);
     OpStorageErrorGuard guardB(stateB, slot);
 
-    (void)stateA.find(kAddr);  // poisons the shared slot
+    (void)stateA.find(kAddr);        // poisons the shared slot
     BOOST_CHECK(guardB.poisoned());  // visible without any read on B
     BOOST_CHECK_THROW(guardB.throwIfPoisoned(), bcos::evm::engine::OpStorageError);
 

@@ -44,8 +44,8 @@ class PermissionPrecompiledInterface : public bcos::precompiled::Precompiled
 {
 public:
     using Ptr = std::shared_ptr<PermissionPrecompiledInterface>;
-    PermissionPrecompiledInterface(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl){};
-    virtual ~PermissionPrecompiledInterface(){};
+    PermissionPrecompiledInterface(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl) {};
+    virtual ~PermissionPrecompiledInterface() {};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive>, PrecompiledExecResult::Ptr) override
