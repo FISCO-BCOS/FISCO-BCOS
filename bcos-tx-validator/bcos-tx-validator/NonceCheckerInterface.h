@@ -25,7 +25,8 @@
 #include <bcos-utilities/BoostLog.h>
 #include <tbb/concurrent_unordered_set.h>
 
-#define NONCECHECKER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXPOOL") << LOG_BADGE("NonceChecker")
+#define NONCECHECKER_LOG(LEVEL) \
+    BCOS_MODULE_LOG(TXPOOL, LEVEL) << LOG_BADGE("TXPOOL") << LOG_BADGE("NonceChecker")
 
 namespace bcos::txvalidator
 {

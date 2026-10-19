@@ -28,11 +28,14 @@
 #include "bcos-pbft/pbft/interfaces/PBFTMessageFactory.h"
 #include "bcos-pbft/pbft/interfaces/PBFTStorage.h"
 #include "bcos-pbft/pbft/utilities/Common.h"
+#include "bcos-pbft/pbft/utilities/PBFTBlockStat.h"
 #include "bcos-pbft/pbft/utilities/PBFTMsgVersion.h"
 #include "bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
+#include <map>
+#include <mutex>
 
 namespace bcos::consensus
 {
@@ -40,8 +43,7 @@ class PBFTConfig : public ConsensusConfig, public std::enable_shared_from_this<P
 {
 public:
     using Ptr = std::shared_ptr<PBFTConfig>;
-    PBFTConfig(boost::asio::io_context& _ioService,
-        bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    PBFTConfig(boost::asio::io_context& _ioService, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
@@ -60,8 +62,7 @@ public:
         m_connectedNodeList(std::make_shared<bcos::crypto::NodeIDSet>()),
         m_blockFactory(std::move(_blockFactory))
     {
-        m_pbftTimer =
-            std::make_shared<PBFTTimer>(_ioService, consensusTimeout(), "pbftTimer");
+        m_pbftTimer = std::make_shared<PBFTTimer>(_ioService, consensusTimeout(), "pbftTimer");
         // Note: the pullTxsTimeout must be smaller than consensusTimeout to fetch txs before
         // viewchange when there has no-synced txs pullTxsTimeout is larger than 3000ms
     }
@@ -243,8 +244,8 @@ public:
 
     virtual void resetNewViewState(ViewType _view)
     {
-        PBFT_LOG(INFO) << LOG_DESC("resetNewViewState") << LOG_KV("m_view", m_view)
-                       << LOG_KV("_view", _view);
+        PBFT_LOG(DEBUG) << LOG_DESC("resetNewViewState") << LOG_KV("m_view", m_view)
+                        << LOG_KV("_view", _view);
         if (m_view > _view)
         {
             return;
@@ -377,9 +378,39 @@ public:
     bool canHandleNewProposal();
     bool canHandleNewProposal(PBFTBaseMessageInterface::Ptr _msg);
 
-    void registerFastViewChangeHandler(std::function<void()> _fastViewChangeHandler)
+    void registerFastViewChangeHandler(std::function<void(ViewChangeReason)> _fastViewChangeHandler)
     {
         m_fastViewChangeHandler = std::move(_fastViewChangeHandler);
+    }
+    // reason-less overload kept for callers that only count invocations (tests)
+    void registerFastViewChangeHandler(std::function<void()> _fastViewChangeHandler)
+    {
+        m_fastViewChangeHandler = [handler = std::move(_fastViewChangeHandler)](
+                                      ViewChangeReason) { handler(); };
+    }
+
+    /// per-block receive counters, printed as BlockStat right after ^^^^^^^^Report
+    PBFTBlockStatCounters& blockStat() { return m_blockStat; }
+
+    /// Records when the prePrepare for _index entered the local cache (first one wins); Report
+    /// prints the distance to the commit as roundMs.
+    void notePrePrepareCached(bcos::protocol::BlockNumber _index, int64_t _steadyTimeMs)
+    {
+        std::lock_guard<std::mutex> lock(x_prePrepareCachedTime);
+        m_prePrepareCachedTime.try_emplace(_index, _steadyTimeMs);
+    }
+    /// -1 when no prePrepare time was recorded for _index; drops entries <= _index.
+    int64_t takeRoundMs(bcos::protocol::BlockNumber _index, int64_t _nowSteadyMs)
+    {
+        std::lock_guard<std::mutex> lock(x_prePrepareCachedTime);
+        int64_t roundMs = -1;
+        if (auto it = m_prePrepareCachedTime.find(_index); it != m_prePrepareCachedTime.end())
+        {
+            roundMs = _nowSteadyMs - it->second;
+        }
+        m_prePrepareCachedTime.erase(
+            m_prePrepareCachedTime.begin(), m_prePrepareCachedTime.upper_bound(_index));
+        return roundMs;
     }
 
     virtual void setConnectedNodeList(bcos::crypto::NodeIDSet&& _connectedNodeList)
@@ -514,7 +545,11 @@ protected:
     bcos::crypto::NodeIDSetPtr m_connectedNodeList;
     SharedMutex x_connectedNodeList;
 
-    std::function<void()> m_fastViewChangeHandler;
+    std::function<void(ViewChangeReason)> m_fastViewChangeHandler;
+
+    PBFTBlockStatCounters m_blockStat;
+    std::mutex x_prePrepareCachedTime;
+    std::map<bcos::protocol::BlockNumber, int64_t> m_prePrepareCachedTime;
 
     std::function<bool(bcos::crypto::NodeIDPtr)> m_faultyDiscriminator;
 
