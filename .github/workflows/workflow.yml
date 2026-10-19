@@ -70,7 +70,8 @@ jobs:
       # packages in 58 minutes. Per-package archives fail independently, so only the packages
       # whose ABI actually moved get rebuilt.
       #
-      # files,<dir>,readwrite adds the workspace location alongside the default provider.
+      # clear;files,<dir>,readwrite drops vcpkg's default files provider (the ephemeral per-run
+      # location named above) and replaces it with the workspace location.
       # PR runs keep readwrite here on purpose: they never run the Save step below, so the
       # archives they build are simply discarded with the runner instead of being published.
       VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/.vcpkg-archives,readwrite'
@@ -121,21 +122,31 @@ jobs:
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.os }}-cache-key-v4
       # Per-package vcpkg archives (see VCPKG_BINARY_SOURCES above). Restoring never writes on its
-      # own; the "Save vcpkg archives" step below publishes them for non-PR runs only, so a PR
-      # just warms from whatever a base-branch push left behind.
-      # The key carries github.run_id because actions/cache entries are immutable: a fixed key
-      # would freeze the archives at their first upload and never pick up newly built packages.
-      # A fresh key per run invalidates nothing, though - restore-keys' prefix always finds the
-      # newest entry, and archives are content-addressed by ABI hash, so a stale or missing one
-      # only costs that single package rather than the whole tree.
+      # own; the "Save vcpkg archives" step below publishes them for master/release-* non-PR runs
+      # only, so a PR or a feature-branch push just warms from whatever a base-branch push left
+      # behind.
+      # The key is scoped per build leg (CACHE_SCOPE = matrix.os) because the legs do not install
+      # the same packages: TESTS appends the tests vcpkg manifest feature and the static leg
+      # configures TESTS=OFF, so an unscoped key would let whichever leg saves first publish an
+      # archive set that is missing packages the other legs then have to rebuild from source.
+      # The bucket is the UTC date, like the ccache key below: actions/cache entries are
+      # immutable, so a fixed key would freeze the archives at their first upload, while a fresh
+      # run_id key would write one entry per run per leg and put LRU pressure on the repository's
+      # 10GB cache budget. One entry per scope per day, warming from the previous day via
+      # restore-keys; archives are content-addressed by ABI hash, so a stale or missing one only
+      # costs that single package rather than the whole tree.
+      - name: Compute archives bucket
+        id: archives-bucket
+        shell: bash
+        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
       - name: Restore vcpkg archives
         uses: actions/cache/restore@v4
         id: vcpkg-archives
         with:
           path: ${{ github.workspace }}/.vcpkg-archives
-          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          key: vcpkg-archives-${{ env.CACHE_SCOPE }}-${{ runner.os }}-${{ runner.arch }}-v1-${{ steps.archives-bucket.outputs.day }}
           restore-keys: |
-            vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-
+            vcpkg-archives-${{ env.CACHE_SCOPE }}-${{ runner.os }}-${{ runner.arch }}-v1-
       # ccache persists the compiler output keyed on source+flags content (not mtime), so a
       # warm cache reuses .o across runs and only recompiles the files that actually changed.
       # The key is compiler/OS/arch-scoped (a .o is not portable across those) and deliberately
@@ -293,20 +304,28 @@ jobs:
       # The archives are written by vcpkg during Configure, so this has to sit after it - and it
       # is the step that makes a later ABI bump cheap: whatever this run had to build from source
       # is now an archive, so the next run with a new compiler restores it instead of rebuilding.
-      # Non-PR only, like the vcpkg_installed cache above. !cancelled() lets a build that was
-      # superseded mid-compile still publish the archives it did produce; !failure() because a
-      # failed configure must not publish whatever partial set it left behind.
+      # Master/release-* non-PR runs only: a feature-branch push would write entries no other
+      # branch can read while still consuming the shared 10GB cache budget, and the daily bucket
+      # already bounds each scope to one entry per day. !cancelled() && !failure() runs the save
+      # after a non-fatal earlier-step failure but skips it when the run is cancelled or the
+      # configure failed (a failed configure must not publish whatever partial set it left
+      # behind); a run superseded by concurrency cancel-in-progress is a cancellation, so it is
+      # skipped too. Keep this key byte-identical to the Restore step above.
+      - name: Report vcpkg archives size
+        if: '!cancelled() && !failure()'
+        shell: bash
+        run: du -sh "${{ github.workspace }}/.vcpkg-archives" || true
       - name: Save vcpkg archives
-        if: '!cancelled() && !failure() && github.event_name != ''pull_request'''
+        if: '!cancelled() && !failure() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-''))'
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.vcpkg-archives
-          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          key: vcpkg-archives-${{ env.CACHE_SCOPE }}-${{ runner.os }}-${{ runner.arch }}-v1-${{ steps.archives-bucket.outputs.day }}
       - name: Build
         run: |
           cd build
           # Bound the job count: with the repo-wide unity build one translation unit folds up to
-          # 16 sources together, and the heaviest ones peak at ~3.7 GB of compiler RSS measured
+          # 8 sources together, and the heaviest ones peak at ~3.7 GB of compiler RSS measured
           # with the CI flags (test-bcos-rpc / test-transaction-scheduler). Leaving --parallel
           # unset lets the generator use every core, so several of those can run at once on a
           # 4 vCPU runner - ~14.7 GB against its 16 GB budget - and this step has been dying a
@@ -596,16 +615,20 @@ jobs:
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-coverage-cache-key-v2
       # Per-package vcpkg archives (VCPKG_BINARY_SOURCES above); the "Save vcpkg archives" step
-      # after Configure publishes them for non-PR runs. Same run_id-keyed restore as the build
-      # matrix - see the comment there.
+      # after Configure publishes them for master/release-* non-PR runs. Scoped per job with a
+      # daily bucket, same as the build matrix - see the comment there.
+      - name: Compute archives bucket
+        id: archives-bucket
+        shell: bash
+        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
       - name: Restore vcpkg archives
         uses: actions/cache/restore@v4
         id: vcpkg-archives
         with:
           path: ${{ github.workspace }}/.vcpkg-archives
-          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          key: vcpkg-archives-coverage-${{ runner.os }}-${{ runner.arch }}-v1-${{ steps.archives-bucket.outputs.day }}
           restore-keys: |
-            vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-
+            vcpkg-archives-coverage-${{ runner.os }}-${{ runner.arch }}-v1-
       - name: Compute ccache bucket
         id: ccache-bucket
         shell: bash
@@ -655,12 +678,18 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-coverage-cache-key-v2
+      # Gated like the build matrix: master/release-* non-PR runs only, daily bucket. Keep this
+      # key byte-identical to the Restore step above.
+      - name: Report vcpkg archives size
+        if: '!cancelled() && !failure()'
+        shell: bash
+        run: du -sh "${{ github.workspace }}/.vcpkg-archives" || true
       - name: Save vcpkg archives
-        if: '!cancelled() && !failure() && github.event_name != ''pull_request'''
+        if: '!cancelled() && !failure() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-''))'
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.vcpkg-archives
-          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          key: vcpkg-archives-coverage-${{ runner.os }}-${{ runner.arch }}-v1-${{ steps.archives-bucket.outputs.day }}
       - name: Build
         run: |
           cd build
@@ -844,16 +873,20 @@ jobs:
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
       # Per-package vcpkg archives (VCPKG_BINARY_SOURCES above); the "Save vcpkg archives" step
-      # after Configure publishes them for non-PR runs. Same run_id-keyed restore as the build
-      # matrix - see the comment there.
+      # after Configure publishes them for master/release-* non-PR runs. Scoped per job with a
+      # daily bucket, same as the build matrix - see the comment there.
+      - name: Compute archives bucket
+        id: archives-bucket
+        shell: bash
+        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
       - name: Restore vcpkg archives
         uses: actions/cache/restore@v4
         id: vcpkg-archives
         with:
           path: ${{ github.workspace }}/.vcpkg-archives
-          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          key: vcpkg-archives-l2-${{ runner.os }}-${{ runner.arch }}-v1-${{ steps.archives-bucket.outputs.day }}
           restore-keys: |
-            vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-
+            vcpkg-archives-l2-${{ runner.os }}-${{ runner.arch }}-v1-
       - name: Compute ccache bucket
         id: ccache-bucket
         shell: bash
@@ -902,16 +935,22 @@ jobs:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+      # Gated like the build matrix: master/release-* non-PR runs only, daily bucket. Keep this
+      # key byte-identical to the Restore step above.
+      - name: Report vcpkg archives size
+        if: '!cancelled() && !failure()'
+        shell: bash
+        run: du -sh "${{ github.workspace }}/.vcpkg-archives" || true
       - name: Save vcpkg archives
-        if: '!cancelled() && !failure() && github.event_name != ''pull_request'''
+        if: '!cancelled() && !failure() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-''))'
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.vcpkg-archives
-          key: vcpkg-archives-${{ runner.os }}-${{ runner.arch }}-v1-${{ github.run_id }}
+          key: vcpkg-archives-l2-${{ runner.os }}-${{ runner.arch }}-v1-${{ steps.archives-bucket.outputs.day }}
       - name: Build
         run: |
           cd build
-          # Same reasoning as the build matrix: unity folds up to 16 sources into one TU, the
+          # Same reasoning as the build matrix: unity folds up to 8 sources into one TU, the
           # heaviest peak at ~3.7 GB of compiler RSS, and an unbounded job count multiplies that
           # against a 16 GB runner. This job has been failing with a runner shutdown/SIGTERM
           # rather than a compile error; --parallel 3 bounds it and matches the coverage job.

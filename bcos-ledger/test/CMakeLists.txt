@@ -22,6 +22,10 @@ list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
 set(TEST_BINARY_NAME test-bcos-ledger)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
+# main/main.cpp defines BOOST_TEST_MODULE; merged into the unity batch
+# the boost.test entry macro is disabled, breaking the link with undefined
+# init_unit_test_suite.
+set_source_files_properties("main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/bcos-framework)
 # header-only bcos-storage/KeyPrefixes.h ("/mpt/" node-row keys), same as the ledger target

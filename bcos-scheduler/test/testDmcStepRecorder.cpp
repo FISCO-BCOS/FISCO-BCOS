@@ -87,5 +87,35 @@ BOOST_AUTO_TEST_CASE(Test)
 
     BOOST_CHECK(res1 == res2);
 }
-}  // namespace bcos::test
+
+BOOST_AUTO_TEST_CASE(ShortAddress)
+{
+    // A Solidity contract-creation message carries an empty to (BlockExecutive sets create and
+    // never calls setTo), so every deploy executed through DMC reaches the short-address path of
+    // getAddressChecksum. The checksum must stay deterministic for it rather than reading out of
+    // bounds - reverting the padding loop turns this red under ASan.
+    auto makeMessage = [] {
+        auto message = std::make_unique<bcos::executor::NativeExecutionMessage>();
+        message->setStaticCall(false);
+        message->setType(protocol::ExecutionMessage::Type(0));
+        message->setContextID(1);
+        message->setSeq(1);
+        message->setOrigin("aabbccdd");
+        message->setFrom("eeffaabb");
+        message->setTo("");
+        return message;
+    };
+
+    std::vector<std::string> sums;
+    for (size_t i = 0; i < 2; i++)
+    {
+        DmcStepRecorder::Ptr recorder = std::make_shared<DmcStepRecorder>();
+        recorder->recordSend(m_address, 0, makeMessage());
+        recorder->nextDmcRound();
+        sums.push_back(recorder->dumpAndClearChecksum());
+    }
+    BOOST_CHECK(sums[0] == sums[1]);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

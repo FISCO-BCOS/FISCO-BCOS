@@ -109,6 +109,8 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     // later at a cache lookup with no hint that the precondition had never been met.
     auto precommitStartT = std::chrono::steady_clock::now();
     bool allInPrecommit = false;
+    size_t deficientNode = 0;
+    size_t deficientCaches = 0;
     while (!allInPrecommit &&
            std::chrono::steady_clock::now() - precommitStartT < std::chrono::seconds(30))
     {
@@ -124,6 +126,8 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
             if (cacheProc->caches().size() < 2)
             {
                 allInPrecommit = false;
+                deficientNode = otherNode.first;
+                deficientCaches = cacheProc->caches().size();
                 break;
             }
         }
@@ -133,8 +137,8 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     // Every later check indexes these caches, so a timeout has to stop the test here with a
     // message that names the precondition instead of surfacing as a null prePrepare() below.
     BOOST_REQUIRE_MESSAGE(allInPrecommit,
-        "nodes did not all reach preCommit within 30s: expected 2 caches per node, saw fewer on "
-            << fakerMap.size() << " nodes");
+        "nodes did not all reach preCommit within 30s: expected 2 caches per node, node "
+            << deficientNode << " had " << deficientCaches);
     // the precondition is now proven above, so these nodes are in preCommit
     size_t precommitSize = 5;
     for (size_t i = 0; i < std::min(precommitSize, fakerMap.size()); i++)

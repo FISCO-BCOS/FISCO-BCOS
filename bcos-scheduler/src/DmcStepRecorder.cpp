@@ -70,10 +70,12 @@ uint32_t DmcStepRecorder::getAddressChecksum(std::string_view address)
     uint32_t ret = 0;
 
     // Only the leading 4 bytes take part in the checksum, so read no further than
-    // what the address actually holds: a message built by a mock executor can carry
-    // an empty or shorter address. Missing bytes are folded in as zero, which keeps
-    // the value unchanged for real addresses (>= 4 bytes) and stays deterministic
-    // for the short ones instead of reading out of bounds.
+    // what the address actually holds: a Solidity contract-creation transaction
+    // reaches here with an empty to (BlockExecutive sets create and never calls
+    // setTo), so every deploy executed through DMC hits this path, and test mocks
+    // can carry short addresses too. Missing bytes are folded in as zero, which
+    // keeps the value unchanged for real addresses (>= 4 bytes) and stays
+    // deterministic for the short ones instead of reading out of bounds.
     auto length = std::min<size_t>(4, address.size());
     for (size_t i = 0; i < length; i++)
     {

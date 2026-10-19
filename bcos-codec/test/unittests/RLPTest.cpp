@@ -243,8 +243,8 @@ BOOST_AUTO_TEST_CASE(vectorsEncode)
 BOOST_AUTO_TEST_CASE(stringsDecode)
 {
     BOOST_CHECK_EQUAL(toHex(decodeRlp<bcos::bytes>("00"sv)), "00");
-    BOOST_CHECK_EQUAL(
-        toHex(decodeRlp<bcos::bytes>("8D6F62636465666768696A6B6C6D"sv)), "6f62636465666768696a6b6c6d");
+    BOOST_CHECK_EQUAL(toHex(decodeRlp<bcos::bytes>("8D6F62636465666768696A6B6C6D"sv)),
+        "6f62636465666768696a6b6c6d");
     BOOST_CHECK_EQUAL(toHex(decodeRlp<bcos::bytes>("C0", UnexpectedList)), "");
     BOOST_CHECK_EQUAL(decodeRlp<std::string>("83646f67"sv), "dog");
     BOOST_CHECK_EQUAL(decodeRlp<std::string>("83636174"sv), "cat");
@@ -297,7 +297,8 @@ BOOST_AUTO_TEST_CASE(uint256Decode)
     BOOST_CHECK_EQUAL(decodeRlp<u256>("8AFFFFFFFFFFFFFFFFFF7C"sv), u256("0xFFFFFFFFFFFFFFFFFF7C"));
     BOOST_CHECK_EQUAL(decodeRlp<u256>("8f10203e405060708090a0b0c0d0e0f2"sv),
         u256("0x10203E405060708090A0B0C0D0E0F2"));
-    BOOST_CHECK_EQUAL(decodeRlp<u256>("9c0100020003000400050006000700080009000a0b4b000c000d000e01"sv),
+    BOOST_CHECK_EQUAL(
+        decodeRlp<u256>("9c0100020003000400050006000700080009000a0b4b000c000d000e01"sv),
         u256("0x0100020003000400050006000700080009000A0B4B000C000D000E01"));
 
     decodeRlp<u256>("8BFFFFFFFFFFFFFFFFFF7C"sv, InputTooShort);
@@ -311,15 +312,17 @@ BOOST_AUTO_TEST_CASE(uint256Decode)
 
 BOOST_AUTO_TEST_CASE(vectorsDecode)
 {
-    BOOST_CHECK(checkVectorEqual(decodeRlp<std::vector<uint64_t>>("c0"sv), std::vector<uint64_t>{}));
+    BOOST_CHECK(
+        checkVectorEqual(decodeRlp<std::vector<uint64_t>>("c0"sv), std::vector<uint64_t>{}));
     BOOST_CHECK(checkVectorEqual(decodeRlp<std::vector<uint64_t>>("c883ffccb583ffc0b5"sv),
         std::vector<uint64_t>({0xFFCCB5, 0xFFC0B5})));
     BOOST_CHECK(checkVectorEqual(decodeRlp<std::vector<uint32_t>>("c883ffccb583ffc0b5"sv),
         std::vector<uint32_t>({0xFFCCB5, 0xFFC0B5})));
     BOOST_CHECK(checkVectorEqual(decodeRlp<std::vector<std::string>>("c88363617483646f67"sv),
         std::vector<std::string>({"cat", "dog"})));
-    BOOST_CHECK(checkVectorEqual(decodeRlp<std::vector<std::string>>("cc83646f6783676f6483636174"sv),
-        std::vector<std::string>({"dog", "god", "cat"})));
+    BOOST_CHECK(
+        checkVectorEqual(decodeRlp<std::vector<std::string>>("cc83646f6783676f6483636174"sv),
+            std::vector<std::string>({"dog", "god", "cat"})));
     // multi vector test 1
     {
         std::string zw;

@@ -25,7 +25,7 @@ set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 #    unity TUs with this Boost version (registration symbols are uniquified);
 #  - the release-3.17.0-era opt-outs (DAGTest / DagTransferPrecompiledTest /
 #    SmallBankPrecompiledTest) were verified safe on GCC 14.
-# Default batch size (repo-wide default is UNITY_BUILD_BATCH_SIZE=16; measured GCC 14/Debug
+# Default batch size (repo-wide default is UNITY_BUILD_BATCH_SIZE=8; measured GCC 14/Debug
 # on a 20-core box with batch 8 — test target clean rebuild ~150s -> ~120-145s wall,
 # ~2200s -> ~1500-1800s CPU; batch 4 was strictly worse (more repeated header parsing,
 # no wall-clock gain).
