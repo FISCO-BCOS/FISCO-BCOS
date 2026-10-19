@@ -56,7 +56,8 @@ struct EVMHostInterface
     // rest return zero-shaped answers.
     //
     // One deliberate exception (disclosed in the PR body): the gas<0 arm of call()
-    // below does NOT catch — it throws GasOverflow, keeping its pre-existing landing
+    // below does NOT catch — it refuses the budget with a deterministic
+    // EVMC_OUT_OF_GAS result before the VM is entered
     // (only the externalCall dispatch is fault-translated). A negative gas budget is
     // a deterministic caller bug, not a node fault, so the ladder decides it.
 
@@ -407,8 +408,8 @@ struct EVMHostInterface
         }
         catch (...)
         {
-            // Only the externalCall dispatch is translated; the GasOverflow throw above
-            // keeps its own (pre-existing) landing.
+            // Only the externalCall dispatch is translated; the gas<0 refusal above
+            // never reaches here (it returns EVMC_OUT_OF_GAS before entering the VM).
             hostContext.recordHostFault(boost::current_exception_diagnostic_information());
             return evmc_result{.status_code = EVMC_INTERNAL_ERROR,
                 .gas_left = 0,

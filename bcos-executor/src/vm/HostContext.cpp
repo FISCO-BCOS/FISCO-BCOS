@@ -936,6 +936,15 @@ evmc_address HostContext::create2AddressForOpcode(
     if (!m_executive->blockContext().features().get(
             ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
     {
+        // R6 F7: 0.24's patched create_impl still calls access_account on the
+        // rejected CREATE2's pushed recipient (the zero address) for rev >= Berlin;
+        // 0.21 never warmed it. Mark it so the creation-time query answers cold
+        // without inserting, exactly like the other three derivation sites.
+        if (m_eip2929Access)
+        {
+            evmc_address zero{};
+            m_eip2929Access->markAddressCreatedByHook(zero);
+        }
         return {};
     }
     // The exact formula TransactionExecutive::externalCall's CREATE2 branch stored

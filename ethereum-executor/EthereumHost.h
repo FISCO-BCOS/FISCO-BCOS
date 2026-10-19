@@ -617,7 +617,7 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     // evmc ABI 19: evmc::Result no longer carries the created address; the caller
     // reads it off the message's recipient (set by evmone for nested creates, by
     // prepare_message for transaction-level ones).
-    return evmc::Result{result.status_code, gas_left, result.gas_refund};
+    return evmc::Result{result.status_code, gas_left, result.gas_refund, result.state_gas};
 }
 
 template <class Storage, class Policy>

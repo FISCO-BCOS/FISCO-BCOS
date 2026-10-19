@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(PointEvaluatePrecompiledTest)
     static std::string pointE("point_evaluation");
     PrecompiledExecutor const& executor = PrecompiledRegistrar::executor(pointE);
     bytesConstRef input_ref(in.data(), in.size());
-    std::pair<bool, bytes> out = executor(input_ref, ledger::Features{});
+    std::pair<bool, bytes> out = executor(input_ref);
     BOOST_CHECK(out.first);
     BOOST_CHECK((out.second.size() == 64));
     intx::uint256 fieldElementsPerBlob{intx::be::unsafe::load<intx::uint256>(out.second.data())};
@@ -53,28 +53,28 @@ BOOST_AUTO_TEST_CASE(PointEvaluatePrecompiledTest)
     // change hash version
     in[0] = 0x2;
     bytesConstRef input_ref1(in.data(), in.size());
-    auto out1 = executor(input_ref1, ledger::Features{});
+    auto out1 = executor(input_ref1);
     BOOST_CHECK(!out1.first);
     in[0] = 0x1;
 
     // keep version byte but corrupt the remaining versioned_hash bytes
     in[1] ^= 0x1;
     bytesConstRef input_ref1a(in.data(), in.size());
-    auto out1a = executor(input_ref1a, ledger::Features{});
+    auto out1a = executor(input_ref1a);
     BOOST_CHECK(!out1a.first);
     in[1] ^= 0x1;
 
     // truncate input
     in.pop_back();
     bytesConstRef input_ref2(in.data(), in.size());
-    auto out2 = executor(input_ref2, ledger::Features{});
+    auto out2 = executor(input_ref2);
     BOOST_CHECK(!out2.first);
     in.push_back(0xba);
 
     // extra input
     in.push_back(0);
     bytesConstRef input_ref3(in.data(), in.size());
-    auto out3 = executor(input_ref3, ledger::Features{});
+    auto out3 = executor(input_ref3);
     BOOST_CHECK(!out3.first);
     in.pop_back();
 
@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(PointEvaluatePrecompiledTest)
     z += kBlsModulus;
     intx::le::unsafe::store(&in[32], z);
     bytesConstRef input_ref4(in.data(), in.size());
-    auto out4 = executor(input_ref4, ledger::Features{});
+    auto out4 = executor(input_ref4);
     BOOST_CHECK(!out4.first);
 }
 

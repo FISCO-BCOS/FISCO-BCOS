@@ -100,7 +100,7 @@ public:
     /// identity and key-lock scope), so it tracks the scheduler-handed-back counter
     /// instead (R5 F1) — f(createDerivationSeq() + 1) then equals the base's
     /// scheduler-side f(currentSeq).
-    virtual int64_t createDerivationSeq() const noexcept { return m_seq; }
+    virtual int64_t createDerivationSeq() const { return m_seq; }
 
     // in delegatecall this is codeAddress
     std::string_view contractAddress() const { return m_contractAddress; }

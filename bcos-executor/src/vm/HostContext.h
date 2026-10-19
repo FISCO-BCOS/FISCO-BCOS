@@ -145,6 +145,10 @@ public:
         }
         m_hostFaultHalting = m_hostFaultHalting || halting;
     }
+
+    /// R6 F3 read-side: a frame that already recorded a host fault stops driving
+    /// the host and the scheduler (translateHostFault / call short-circuit on it).
+    bool hasHostFault() const { return m_hasHostFault; }
     std::string const& hostFault() const { return m_hostFault; }
     void throwIfHostFault() const;
 

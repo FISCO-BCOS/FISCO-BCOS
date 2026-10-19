@@ -24,18 +24,18 @@ if(CMAKE_HOST_APPLE)
         endif()
     endif()
     if(BLST_SDK_PATH)
-            # build.sh resolves CFLAGS with ${CFLAGS:-default}: a non-empty value
-            # REPLACES the upstream defaults (-O2 -fno-builtin -fPIC -Wall -Wextra
-            # -Werror) rather than appending to them. Repeat them so the sysroot
-            # rides along without disarming optimization, -fno-builtin's
-            # constant-time property or the warning gate. -Werror alone is
-            # deliberately not re-armed: the REF is pinned, so a future toolchain's
-            # new warning could break every build with no way to fix it here
-            # (review F3).
-            set(BLST_CFLAGS
-                "-O2 -fno-builtin -fPIC -Wall -Wextra -isysroot ${BLST_SDK_PATH}")
-        endif()
+        # build.sh resolves CFLAGS with ${CFLAGS:-default}: a non-empty value
+        # REPLACES the upstream defaults (-O2 -fno-builtin -fPIC -Wall -Wextra
+        # -Werror) rather than appending to them. Repeat them so the sysroot
+        # rides along without disarming optimization, -fno-builtin's
+        # constant-time property or the warning gate. -Werror alone is
+        # deliberately not re-armed: the REF is pinned, so a future toolchain's
+        # new warning could break every build with no way to fix it here
+        # (review F3).
+        set(BLST_CFLAGS
+            "-O2 -fno-builtin -fPIC -Wall -Wextra -isysroot ${BLST_SDK_PATH}")
     endif()
+endif()
 if(CMAKE_C_OSX_DEPLOYMENT_TARGET_FLAG AND CMAKE_OSX_DEPLOYMENT_TARGET)
     set(BLST_CC "${BLST_CC} ${CMAKE_C_OSX_DEPLOYMENT_TARGET_FLAG}${CMAKE_OSX_DEPLOYMENT_TARGET}")
 endif()

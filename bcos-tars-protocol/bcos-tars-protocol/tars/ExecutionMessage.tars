@@ -37,6 +37,6 @@ module bcostars
         32 optional string maxFeePerGas;
         33 optional string maxPriorityFeePerGas;
         34 optional string effectiveGasPrice;
-        35 optional long schedulerSeq = 0;
+        35 optional long schedulerSeq = -1;
     };
 };

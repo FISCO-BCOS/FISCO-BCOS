@@ -97,10 +97,9 @@ bigint PrecompiledContract::cost(bytesConstRef _in) const
     return m_cost(_in);
 }
 
-std::pair<bool, bytes> PrecompiledContract::execute(
-    bytesConstRef _in, const ledger::Features& _features) const
+std::pair<bool, bytes> PrecompiledContract::execute(bytesConstRef _in) const
 {
-    return m_execute(_in, _features);
+    return m_execute(_in);
 }
 
 u256 const& PrecompiledContract::startingBlock() const
@@ -178,13 +177,13 @@ std::vector<std::string> Precompiled::getParallelTag(bytesConstRef)
 
 namespace
 {
-ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
 {
     // When supported_version> = v2.4.0, ecRecover uniformly calls the ECDSA verification function
     return bcos::crypto::ecRecover(_in);
 }
 
-ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
 {
     bytes output(evmone::crypto::SHA256_HASH_SIZE, 0);
     evmone::crypto::sha256(reinterpret_cast<std::byte*>(output.data()),
@@ -192,7 +191,7 @@ ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in, const ledger::Features& feat
     return {true, std::move(output)};
 }
 
-ETH_REGISTER_PRECOMPILED(ripemd160)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(ripemd160)(bytesConstRef _in)
 {
     bytes output(32, 0);
     evmone::crypto::ripemd160(reinterpret_cast<std::byte*>(output.data() + 12),
@@ -200,7 +199,7 @@ ETH_REGISTER_PRECOMPILED(ripemd160)(bytesConstRef _in, const ledger::Features& f
     return {true, std::move(output)};
 }
 
-ETH_REGISTER_PRECOMPILED(identity)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(identity)(bytesConstRef _in)
 {
     return {true, _in.toBytes()};
 }
@@ -228,7 +227,7 @@ bigint parseBigEndianRightPadded(bytesConstRef _in, bigint const& _begin, bigint
     return ret;
 }
 
-ETH_REGISTER_PRECOMPILED(modexp)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(modexp)(bytesConstRef _in)
 {
     // EIP-198: big-number modular exponentiation (base^exp) % mod.
     // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-198.md
@@ -323,7 +322,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(modexp)(bytesConstRef _in)
     return multComplexity(maxLength) * max<bigint>(adjustedExpLength, 1) / 20;
 }
 
-ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
 {
     using namespace evmone::crypto::bn254;  // evmone 0.24: evmmax::bn254 moved here.
 
@@ -340,7 +339,7 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in, const ledger::Feat
     return {true, std::move(output)};
 }
 
-ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
 {
     using namespace evmone::crypto::bn254;  // evmone 0.24: evmmax::bn254 moved here.
 
@@ -358,7 +357,7 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in, const ledger::Feat
 }
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)
-(bytesConstRef _in, [[maybe_unused]] const ledger::Features& features)
+(bytesConstRef _in)
 {
     // No feature flag gates canonicity: the bounded parse is both the EIP-197 rule and
     // the pre-upgrade 0.21 behaviour, so every chain answers this input identically.
@@ -412,7 +411,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(alt_bn128_pairing_product)
     return 45000 + k * 34000;
 }
 
-ETH_REGISTER_PRECOMPILED(blake2_compression)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(blake2_compression)(bytesConstRef _in)
 {
     static constexpr size_t totalInputSize = 213;
     if (_in.size() != totalInputSize)
@@ -463,7 +462,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(blake2_compression)
 
 // The precompiled contract for point evaluation, EIP-4844:
 // https://eips.ethereum.org/EIPS/eip-4844#point-evaluation-precompile
-ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
 {
     static constexpr size_t versioned_hash_size = 32;
     static constexpr size_t z_end_bound = 64;
@@ -507,7 +506,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(point_evaluation)(bytesConstRef _in)
 
 // EIP-2537 BLS12-381 precompiles (Prague-gated via HostContext)
 
-ETH_REGISTER_PRECOMPILED(bls12_g1add)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(bls12_g1add)(bytesConstRef _in)
 {
     constexpr size_t INPUT_SIZE = 256;
     if (_in.size() != INPUT_SIZE)
@@ -526,7 +525,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(bls12_g1add)(bytesConstRef)
     return u256(375);
 }
 
-ETH_REGISTER_PRECOMPILED(bls12_g1msm)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(bls12_g1msm)(bytesConstRef _in)
 {
     constexpr size_t PAIR_SIZE = 160;
     if (_in.empty() || _in.size() % PAIR_SIZE != 0)
@@ -562,7 +561,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(bls12_g1msm)(bytesConstRef _in)
     return u256(12000 * static_cast<int64_t>(discount) * static_cast<int64_t>(k) / 1000);
 }
 
-ETH_REGISTER_PRECOMPILED(bls12_g2add)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(bls12_g2add)(bytesConstRef _in)
 {
     constexpr size_t INPUT_SIZE = 512;
     if (_in.size() != INPUT_SIZE)
@@ -581,7 +580,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(bls12_g2add)(bytesConstRef)
     return u256(600);
 }
 
-ETH_REGISTER_PRECOMPILED(bls12_g2msm)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(bls12_g2msm)(bytesConstRef _in)
 {
     constexpr size_t PAIR_SIZE = 288;
     if (_in.empty() || _in.size() % PAIR_SIZE != 0)
@@ -617,7 +616,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(bls12_g2msm)(bytesConstRef _in)
     return u256(22500 * static_cast<int64_t>(discount) * static_cast<int64_t>(k) / 1000);
 }
 
-ETH_REGISTER_PRECOMPILED(bls12_pairing_check)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(bls12_pairing_check)(bytesConstRef _in)
 {
     constexpr size_t PAIR_SIZE = 384;
     if (_in.empty() || _in.size() % PAIR_SIZE != 0)
@@ -641,7 +640,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(bls12_pairing_check)(bytesConstRef _in)
     return u256(37700 + 32600 * k);
 }
 
-ETH_REGISTER_PRECOMPILED(bls12_map_fp_to_g1)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(bls12_map_fp_to_g1)(bytesConstRef _in)
 {
     constexpr size_t INPUT_SIZE = 64;
     if (_in.size() != INPUT_SIZE)
@@ -659,7 +658,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(bls12_map_fp_to_g1)(bytesConstRef)
     return u256(5500);
 }
 
-ETH_REGISTER_PRECOMPILED(bls12_map_fp2_to_g2)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(bls12_map_fp2_to_g2)(bytesConstRef _in)
 {
     constexpr size_t INPUT_SIZE = 128;
     if (_in.size() != INPUT_SIZE)
@@ -681,7 +680,7 @@ ETH_REGISTER_PRECOMPILED_PRICER(bls12_map_fp2_to_g2)(bytesConstRef)
 // Input: 160 bytes = msg_hash(32) ++ r(32) ++ s(32) ++ x(32) ++ y(32)
 // Output: 32 bytes with last byte 0x01 on success, empty on wrong-size or failed verify
 // Address: 0x0100 (Osaka-gated via callBuiltInPrecompiled guard)
-ETH_REGISTER_PRECOMPILED(p256verify)(bytesConstRef _in, const ledger::Features& features)
+ETH_REGISTER_PRECOMPILED(p256verify)(bytesConstRef _in)
 {
     static constexpr size_t INPUT_SIZE = 160;
     if (_in.size() != INPUT_SIZE)

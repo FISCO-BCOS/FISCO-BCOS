@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(KzgKnownAnswer)
     bytes input = bcos::fromHex(inputHex);
     BOOST_REQUIRE_EQUAL(input.size(), 192U);
 
-    auto [ok, out] = exec(bytesConstRef(input.data(), input.size()), ledger::Features{});
+    auto [ok, out] = exec(bytesConstRef(input.data(), input.size()));
     BOOST_CHECK(ok);
 
     // Success output = 64 bytes: FIELD_ELEMENTS_PER_BLOB (0x1000) || BLS_MODULUS.
@@ -86,14 +86,13 @@ BOOST_AUTO_TEST_CASE(KzgKnownAnswer)
     // Corrupted versioned hash (flip the high byte) -> failure, empty output.
     bytes bad = input;
     bad[0] ^= 0xff;
-    auto [badOk, badOut] = exec(bytesConstRef(bad.data(), bad.size()), ledger::Features{});
+    auto [badOk, badOut] = exec(bytesConstRef(bad.data(), bad.size()));
     BOOST_CHECK(!badOk);
     BOOST_CHECK(badOut.empty());
 
     // Wrong-length input -> failure (impl rejects size != 192).
     bytes truncated(input.begin(), input.begin() + 160);
-    auto [shortOk, shortOut] =
-        exec(bytesConstRef(truncated.data(), truncated.size()), ledger::Features{});
+    auto [shortOk, shortOut] = exec(bytesConstRef(truncated.data(), truncated.size()));
     BOOST_CHECK(!shortOk);
     BOOST_CHECK(shortOut.empty());
 }

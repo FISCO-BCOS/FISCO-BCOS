@@ -45,8 +45,7 @@ class BlockContext;
 // gated. No registered v1 executor reads the parameter today — the only consumer is
 // the v2 dispatch (transaction-executor/.../PrecompiledImpl.h) — and the parameter is
 // threaded here so a v1 executor can gate a parse without an interface change.
-using PrecompiledExecutor =
-    std::function<std::pair<bool, bytes>(bytesConstRef, const ledger::Features& features)>;
+using PrecompiledExecutor = std::function<std::pair<bool, bytes>(bytesConstRef)>;
 using PrecompiledPricer = std::function<bigint(bytesConstRef)>;
 
 DERIVE_BCOS_EXCEPTION(ExecutorNotFound);
@@ -80,12 +79,11 @@ private:
     std::unordered_map<std::string, PrecompiledPricer> m_pricers;
 };
 
-#define ETH_REGISTER_PRECOMPILED(Name)                                                  \
-    static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name(              \
-        bytesConstRef _in, const ledger::Features& features);                           \
-    static bcos::executor::PrecompiledExecutor __eth_registerPrecompiledFactory##Name = \
-        ::bcos::executor::PrecompiledRegistrar::registerExecutor(                       \
-            #Name, &__eth_registerPrecompiledFunction##Name);                           \
+#define ETH_REGISTER_PRECOMPILED(Name)                                                        \
+    static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name(bytesConstRef _in); \
+    static bcos::executor::PrecompiledExecutor __eth_registerPrecompiledFactory##Name =       \
+        ::bcos::executor::PrecompiledRegistrar::registerExecutor(                             \
+            #Name, &__eth_registerPrecompiledFunction##Name);                                 \
     static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name
 #define ETH_REGISTER_PRECOMPILED_PRICER(Name)                                    \
     static bigint __eth_registerPricerFunction##Name(bytesConstRef _in);         \
@@ -106,7 +104,7 @@ public:
         u256 const& _startingBlock = 0);
 
     bigint cost(bytesConstRef _in) const;
-    std::pair<bool, bytes> execute(bytesConstRef _in, const ledger::Features& _features) const;
+    std::pair<bool, bytes> execute(bytesConstRef _in) const;
 
     u256 const& startingBlock() const;
 

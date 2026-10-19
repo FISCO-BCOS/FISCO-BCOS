@@ -39,7 +39,7 @@ namespace bcos::test
 // ---------------------------------------------------------------------------
 static std::pair<bool, bytes> exec(std::string_view name, bytesConstRef input)
 {
-    return executor::PrecompiledRegistrar::executor(std::string(name))(input, ledger::Features{});
+    return executor::PrecompiledRegistrar::executor(std::string(name))(input);
 }
 
 static std::pair<bool, bytes> exec(std::string_view name, const bytes& input)
@@ -985,9 +985,7 @@ static bytes makeModexpInput(bytes base, bytes exp, bytes mod)
 BOOST_AUTO_TEST_CASE(modexpCompatibility)
 {
     using bcos::executor::PrecompiledRegistrar;
-    auto run = [](bytes input) {
-        return PrecompiledRegistrar::executor("modexp")(ref(input), ledger::Features{});
-    };
+    auto run = [](bytes input) { return PrecompiledRegistrar::executor("modexp")(ref(input)); };
 
     {
         auto r = run(makeModexpInput({0x02}, {0x08}, {0x0a}));

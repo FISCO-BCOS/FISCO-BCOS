@@ -174,7 +174,7 @@ public:
     bcos::crypto::HashType m_transactionHash;
     int64_t m_contextID = 0;
     int64_t m_seq = 0;
-    int64_t m_schedulerSeq = 0;
+    int64_t m_schedulerSeq = -1;
 
     std::string m_origin;
     std::string m_from;

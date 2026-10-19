@@ -1409,7 +1409,7 @@ std::shared_ptr<precompiled::Precompiled> bcos::executor::TransactionExecutive::
 std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
     const string& _a, bytesConstRef _in) const
 {
-    return m_evmPrecompiled->at(_a)->execute(_in, m_blockContext.features());
+    return m_evmPrecompiled->at(_a)->execute(_in);
 }
 
 int64_t TransactionExecutive::costOfPrecompiled(const string& _a, bytesConstRef _in) const

@@ -62,6 +62,13 @@ static_assert(alignof(h256) == alignof(evmc_bytes32), "Hash types alignment mism
 template <class Answer, class Fn>
 Answer translateHostFault(HostContext& hostContext, Fn&& fn, Answer failClosed)
 {
+    // R6 F3: a frame that already recorded a host fault is about to fail — stop
+    // talking to the host and the scheduler at the first fault instead of driving
+    // further MESSAGE/KEY_LOCK hops the DMC dead-lock detector then observes.
+    if (hostContext.hasHostFault())
+    {
+        return failClosed;
+    }
     try
     {
         return fn();
@@ -375,6 +382,14 @@ evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
 
 evmc_result call(evmc_host_context* _context, const evmc_message* _msg)
 {
+    // R6 F3: same short-circuit as translateHostFault — a recorded fault means
+    // the frame is about to fail; do not dispatch another external request hop.
+    if (reinterpret_cast<HostContext*>(_context)->hasHostFault())
+    {
+        evmc_result stopped{};
+        stopped.status_code = EVMC_INTERNAL_ERROR;
+        return stopped;
+    }
     // gas maybe smaller than 0 since outside gas is u256 and evmc_message is
     // int64_t so gas maybe smaller than 0 in some extreme cases
     // * origin code: assert(_msg->gas >= 0)

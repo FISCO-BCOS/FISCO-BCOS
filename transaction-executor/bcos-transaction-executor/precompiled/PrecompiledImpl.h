@@ -98,13 +98,12 @@ inline EVMCResult callBuiltinPrecompiled(executor::PrecompiledContract const& pr
                 features.get(ledger::Features::Flag::bugfix_v1_error_handling));
         }
         auto [success, output] =
-            precompiledContract.execute({message.input_data, message.input_size}, features);
+            precompiledContract.execute({message.input_data, message.input_size});
         return buildBuiltinPrecompiledResult(success, output, message.gas - gasCost);
     }
 
     // Legacy path: execute first, then compute cost (no validation).
-    auto [success, output] =
-        precompiledContract.execute({message.input_data, message.input_size}, features);
+    auto [success, output] = precompiledContract.execute({message.input_data, message.input_size});
     const auto gas = precompiledContract.cost({message.input_data, message.input_size});
     return buildBuiltinPrecompiledResult(
         success, output, message.gas - gas.template convert_to<int64_t>());
