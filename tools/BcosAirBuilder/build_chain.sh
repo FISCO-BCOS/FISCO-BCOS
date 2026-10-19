@@ -1606,7 +1606,7 @@ generate_common_ini() {
     ;enable_rotate_by_hour=true
     enable_rate_collector=false
     ; flush every log line to disk immediately (default false: lines are flushed
-    ; when the log queue drains, and at least every 100ms)
+    ; when the log queue drains; under sustained load at most 100ms plus up to 63 lines of write latency)
     ;flush=false
 EOF
 }

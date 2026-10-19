@@ -3,7 +3,7 @@
 
 **bcos-utilities 日志破坏性变更**：
 
-* 日志管线替换为整行异步 fast path，不再支持自定义 `log.format` 配置项（配置该项会在日志中输出 ERROR 并被忽略）；`log.flush` 默认值由 `true` 改为 `false`（改为队列排空时刷盘且至多 100ms 兜底，逐行刷盘可显式配置 `flush=true` 恢复）
+* 日志管线替换为整行异步 fast path，不再支持自定义 `log.format` 配置项（配置该项会在日志中输出 ERROR 并被忽略）；`log.flush` 默认值由 `true` 改为 `false`（改为队列排空时刷盘，持续洪泛下兜底上界为 100ms + 至多 63 行的写盘延迟，逐行刷盘可显式配置 `flush=true` 恢复）
 * 删除 stat 日志通道及以下导出符号：`FileLoggerHandler`、`StatFileLogger`、`StatFileLoggerHandler`、`c_statLogLevel`、`setStatLogLevel`，下游如有链接引用需移除；同时删除已安装公共头 `BoostLogThreadNameAttribute.h`（含 `bcos::log::thread_name`、`bcos::log::thread_name_impl`），下游如有 `#include` 引用需移除
 * 合入 upstream release-3.18.0 的 per-module 日志级别（`BCOS_MODULE_LOG`/`setModuleLogLevel`，实现移植到整行 fast path，不经过 boost::log core）、`log.enable_block_stat` BlockStat 开关及共识路径命名事件日志；测试工具 `LogCapture` 改为注册 whole-line sink 捕获日志
 

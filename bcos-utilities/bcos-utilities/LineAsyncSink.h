@@ -24,9 +24,12 @@
  *  producer first requests a bounded drain of the backlog (so earlier lines
  *  keep their base-behaviour ordering ahead of the abort), then writes the
  *  FATAL line synchronously — it can neither be dropped nor delayed past the
- *  backend's abort(). If the backend itself is wedged the line goes to
- *  stderr and the process aborts directly, so a stuck log volume cannot
- *  turn the fail-stop into a hang.
+ *  backend's abort(). The drain wait and the backend-lock acquisition are
+ *  bounded: if the lock cannot be taken in time (a wedged backend holding
+ *  it) the line goes to stderr and the process aborts directly. A backend
+ *  whose write itself blocks (e.g. a hung log volume reached while the
+ *  worker is idle) can still stall the abort; closing that residual is a
+ *  design change tracked in #5701.
  *
  *  The hand-off is one mutex + two std::deque<uint32_t> (free/ready slot
  *  indices), the same architecture spdlog's async thread pool uses. A
@@ -160,8 +163,7 @@ public:
     {
         std::unique_lock<std::mutex> lock(m_mutex);
         std::erase(m_clients, _client);
-        m_idleCv.wait(lock,
-            [this, _client]() { return m_active.find(_client) == m_active.end(); });
+        m_idleCv.wait(lock, [this, _client]() { return m_active.find(_client) == m_active.end(); });
     }
 
 private:
@@ -174,8 +176,7 @@ private:
         {
             {
                 std::unique_lock<std::mutex> lock(m_mutex);
-                m_cv.wait(
-                    lock, [this]() { return m_dirty.load(std::memory_order_acquire); });
+                m_cv.wait(lock, [this]() { return m_dirty.load(std::memory_order_acquire); });
                 m_dirty.store(false, std::memory_order_release);
                 snapshot = m_clients;
             }
@@ -183,8 +184,7 @@ private:
             {
                 {
                     std::lock_guard<std::mutex> lock(m_mutex);
-                    if (std::find(m_clients.begin(), m_clients.end(), client) ==
-                        m_clients.end())
+                    if (std::find(m_clients.begin(), m_clients.end(), client) == m_clients.end())
                     {
                         continue;  // removed after the snapshot was taken
                     }
@@ -267,9 +267,12 @@ public:
         // First drain the backlog the way flush() does: the base's single
         // FIFO guaranteed every line logged before a FATAL reached the
         // backend before the abort, and that ordering is what makes the
-        // lines preceding a FATAL explain it. Both the drain wait and the
-        // backend acquisition below are bounded, so a wedged backend cannot
-        // turn the fail-stop into a hang.
+        // lines preceding a FATAL explain it. The drain wait and the backend
+        // acquisition below are both bounded: while the worker holds the
+        // backend lock, a wedged backend cannot turn the fail-stop into a
+        // hang. A backend whose write itself blocks (a hung log volume
+        // reached while the worker is idle) can still stall the abort;
+        // closing that residual is a design change tracked in #5701.
         if (_level == LogLevel::FATAL)
         {
             {
@@ -470,8 +473,8 @@ private:
 
     // Flood-path flush: only the bookkeeping runs under m_queueMutex, the
     // backend flush itself runs after releasing it, so a slow file flush
-    // does not stall producers in writeLine(). Runs on the feeding worker
-    // only, so m_lastFlush needs no wider synchronization.
+    // does not stall producers in writeLine(). m_lastFlush stays guarded by
+    // m_queueMutex, same as the locked variant above.
     void maybeFlush()
     {
         {

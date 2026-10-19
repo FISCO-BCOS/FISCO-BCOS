@@ -8,12 +8,16 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
+#include <string>
+#include <vector>
 
 using namespace bcos;
 
@@ -97,6 +101,59 @@ BOOST_AUTO_TEST_CASE(initLogRejectsTooSmallFileSize)
     auto pt = fromIni("[log]\nenable=false\nmax_log_file_size=50\n");  // < 100MB
     BoostLogInitializer init;
     BOOST_CHECK_THROW(init.initLog(pt, bcos::FileLogger, "test"), std::runtime_error);
+}
+
+// Drives the real boost text file backend end to end: every other case sets
+// enable=false, which skips registerLineSink, so Sink::consumeLine — and its
+// default-constructed record_view() assumption against the installed boost
+// version — would otherwise have no coverage. One marked line must land in
+// the produced file with the documented severity|timestamp|thread|message
+// layout.
+BOOST_AUTO_TEST_CASE(initLogEnabledWritesThroughRealBackend)
+{
+    auto path = makeTempLogDir("enabled");
+    auto pt = fromIni("[log]\nenable=true\nlevel=info\nlog_path=" + path +
+                      "\nenable_rotate_by_hour=false\nmax_log_file_size=200\n");
+    {
+        BoostLogInitializer init;
+        init.initLog(pt, bcos::FileLogger, "test");
+        BCOS_LOG(INFO) << "realBackendMarker";
+        init.stopLogging();  // drains the backlog and flushes the backend
+    }
+
+    std::string content;
+    for (auto const& entry : std::filesystem::directory_iterator(path))
+    {
+        if (entry.is_regular_file())
+        {
+            std::ifstream in(entry.path());
+            std::stringstream ss;
+            ss << in.rdbuf();
+            content += ss.str();
+        }
+    }
+    std::filesystem::remove_all(path);
+
+    auto const marker = content.find("realBackendMarker");
+    BOOST_REQUIRE_NE(marker, std::string::npos);
+    auto begin = content.rfind('\n', marker);
+    begin = (begin == std::string::npos) ? 0 : begin + 1;
+    auto end = content.find('\n', marker);
+    auto const line = content.substr(begin, end - begin);
+    std::vector<std::string> fields;
+    std::size_t pos = 0;
+    for (int i = 0; i < 3; ++i)
+    {
+        auto const sep = line.find('|', pos);
+        BOOST_REQUIRE_NE(sep, std::string::npos);
+        fields.emplace_back(line.substr(pos, sep - pos));
+        pos = sep + 1;
+    }
+    fields.emplace_back(line.substr(pos));
+    BOOST_CHECK_EQUAL(fields[0], "info");
+    BOOST_REQUIRE_EQUAL(fields[1].size(), 26u);  // YYYY-MM-DD HH:MM:SS.ffffff
+    BOOST_CHECK_NE(fields[2].find("-0x"), std::string::npos);
+    BOOST_CHECK_EQUAL(fields[3], "realBackendMarker");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

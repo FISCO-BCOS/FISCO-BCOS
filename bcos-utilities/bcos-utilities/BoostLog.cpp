@@ -22,10 +22,10 @@
  * @date 2024-01-18
  * @brief: add file collector
  */
-#include "GzTools.h"
 #include "BoostLog.h"
 #include "BoostLogCollector.h"
 #include "Common.h"
+#include "GzTools.h"
 #include "LineAsyncSink.h"
 #include "Log.h"
 #include <boost/date_time/time_facet.hpp>
@@ -64,13 +64,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <ctime>
+#include <list>
 #include <memory>
 #include <optional>
 #include <shared_mutex>
 #include <utility>
 #include <vector>
-#include <list>
-#include <utility>
 namespace bcos
 {
 std::string const FileLogger = "FileLogger";
@@ -80,8 +79,7 @@ std::string const FileLogger = "FileLogger";
 static_assert(static_cast<int>(LogLevel::TRACE) == boost::log::trivial::severity_level::trace);
 static_assert(static_cast<int>(LogLevel::DEBUG) == boost::log::trivial::severity_level::debug);
 static_assert(static_cast<int>(LogLevel::INFO) == boost::log::trivial::severity_level::info);
-static_assert(
-    static_cast<int>(LogLevel::WARNING) == boost::log::trivial::severity_level::warning);
+static_assert(static_cast<int>(LogLevel::WARNING) == boost::log::trivial::severity_level::warning);
 static_assert(static_cast<int>(LogLevel::ERROR) == boost::log::trivial::severity_level::error);
 static_assert(static_cast<int>(LogLevel::FATAL) == boost::log::trivial::severity_level::fatal);
 
@@ -208,9 +206,13 @@ bool hasLineSinks() noexcept
 }
 
 // Fans the line out to every registered whole-line sink. The shared lock is
-// held across writeLine: it only takes the sink's queue mutex (the FATAL path
-// excepted, which aborts the process anyway), so producers never block a
-// reader on backend I/O, and register/unregister are rare by construction.
+// held across writeLine: normally that is only the sink's queue critical
+// section, so producers never block a reader on backend I/O. The FATAL path
+// is the exception: it can hold the shared lock for up to
+// 2 x FatalDrainTimeout (bounded drain + bounded backend acquisition), and a
+// throwing backend makes it return without aborting — so
+// register/unregister can stall up to two seconds against an in-flight
+// FATAL. register/unregister are rare by construction.
 void commitLine(LogLevel _level, std::string_view _message)
 {
     thread_local std::string prefix;

@@ -48,7 +48,9 @@ BOOST_AUTO_TEST_CASE(lineSinkSuppressesBackendException)
     std::atomic<int> consumed{0};
     auto backend = boost::make_shared<AlwaysThrowingBackend>();
     backend->m_consumed = &consumed;
-    bcos::log::LineAsyncSink<AlwaysThrowingBackend> sink(backend);
+    // default-capacity sink is ~1.3 MB of slot array: keep it off the stack
+    auto sinkPtr = std::make_shared<bcos::log::LineAsyncSink<AlwaysThrowingBackend>>(backend);
+    auto& sink = *sinkPtr;
 
     sink.writeLine(bcos::LogLevel::INFO, "p|", "FIB-184 trigger line");
     // flush() waits for the throwing backend to run on the shared LineFeeder

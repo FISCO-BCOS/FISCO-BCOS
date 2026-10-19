@@ -20,6 +20,7 @@
 #pragma once
 #include <bcos-utilities/LineAsyncSink.h>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -38,13 +39,23 @@ private:
         explicit CaptureSink(std::shared_ptr<std::ostringstream> _stream)
           : m_stream(std::move(_stream))
         {}
+        // commitLine fans out under a shared lock, so producers on different
+        // threads reach this concurrently — serialize the insertion, as the
+        // base's synchronous_sink did.
         void writeLine(LogLevel, std::string_view, std::string_view _message) override
         {
+            std::lock_guard lock(m_mutex);
             *m_stream << _message << '\n';
+        }
+        std::string str()
+        {
+            std::lock_guard lock(m_mutex);
+            return m_stream->str();
         }
 
     private:
         std::shared_ptr<std::ostringstream> m_stream;
+        std::mutex m_mutex;
     };
 
 public:
@@ -61,7 +72,16 @@ public:
     /// one record per line
     std::string text()
     {
-        stop();
+        if (m_sink)
+        {
+            // unregisterLineSink waits for in-flight writeLine calls, so the
+            // locked read below sees everything collected.
+            log::unregisterLineSink(m_sink.get());
+            auto text = m_sink->str();
+            m_sink.reset();
+            return text;
+        }
+        std::lock_guard lock(m_streamMutex);
         return m_stream->str();
     }
 
@@ -77,5 +97,7 @@ private:
 
     std::shared_ptr<std::ostringstream> m_stream;
     std::shared_ptr<CaptureSink> m_sink;
+    // only used when text() runs after stop() detached the sink
+    std::mutex m_streamMutex;
 };
 }  // namespace bcos::test

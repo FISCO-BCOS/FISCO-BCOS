@@ -7,8 +7,8 @@
  * @file LineAsyncSinkTest.cpp
  */
 
-#include "bcos-utilities/Common.h"
 #include "bcos-utilities/LineAsyncSink.h"
+#include "bcos-utilities/Common.h"
 #include "bcos-utilities/LogStream.h"
 #include <boost/smart_ptr/make_shared_object.hpp>
 #include <boost/test/unit_test.hpp>
@@ -147,12 +147,10 @@ BOOST_AUTO_TEST_CASE(unnamedThreadKeepsUnnamedThreadField)
     auto sink = std::make_shared<FakeSink>(backend);
     bcos::log::registerLineSink(sink);
 
-    std::thread worker(
-        []()
-        {
-            bcos::pthread_setThreadName("");  // unnamed thread (always the case on Windows)
-            bcos::log::commitLine(LogLevel::INFO, "unnamedThreadMessage");
-        });
+    std::thread worker([]() {
+        bcos::pthread_setThreadName("");  // unnamed thread (always the case on Windows)
+        bcos::log::commitLine(LogLevel::INFO, "unnamedThreadMessage");
+    });
     worker.join();
     sink->flush();
     bcos::log::unregisterLineSink(sink.get());
@@ -204,8 +202,7 @@ BOOST_AUTO_TEST_CASE(overflowDropsAreCountedReportedAndFatalSurvives)
 
     // FATAL bypasses the exhausted pool: it is written synchronously, so this
     // call blocks until the backend frees up but is never dropped.
-    std::thread fatalWriter(
-        [&] { sink.writeLine(LogLevel::FATAL, "p|", "fatalMessage"); });
+    std::thread fatalWriter([&] { sink.writeLine(LogLevel::FATAL, "p|", "fatalMessage"); });
     std::this_thread::sleep_for(100ms);
     backend->gate = true;
     fatalWriter.join();
@@ -235,18 +232,20 @@ BOOST_AUTO_TEST_CASE(overflowDropsAreCountedReportedAndFatalSurvives)
     sink.stop();
 }
 
+// default-capacity sinks are ~1.3 MB of slot array: keep them off the stack
 BOOST_AUTO_TEST_CASE(throwingBackendNeverKillsFeedingThread)
 {
     auto backend = boost::make_shared<FakeBackend>();
     backend->throwOnConsume = 2;
     backend->throwOnFlush = 1;
-    FakeSink sink(backend);
+    auto sinkPtr = std::make_shared<FakeSink>(backend);
+    auto& sink = *sinkPtr;
 
     for (int i = 0; i < 3; ++i)
     {
         sink.writeLine(LogLevel::INFO, "p|", "msg" + std::to_string(i));
     }
-    sink.flush();  // the flush throw is swallowed as well
+    sink.flush();                                       // the flush throw is swallowed as well
     BOOST_CHECK_EQUAL(backend->snapshot().size(), 1u);  // two consumeLine throws swallowed
 
     // the feeding thread is still alive and draining
@@ -261,7 +260,8 @@ BOOST_AUTO_TEST_CASE(throwingBackendNeverKillsFeedingThread)
 BOOST_AUTO_TEST_CASE(fatalDeliveredAfterStop)
 {
     auto backend = boost::make_shared<FakeBackend>();
-    FakeSink sink(backend);
+    auto sinkPtr = std::make_shared<FakeSink>(backend);
+    auto& sink = *sinkPtr;
     sink.stop();
 
     sink.writeLine(LogLevel::INFO, "p|", "droppedAfterStop");
@@ -279,7 +279,8 @@ BOOST_AUTO_TEST_CASE(queueDrainFlushesWithoutExplicitFlush)
 {
     auto backend = boost::make_shared<FakeBackend>();
     {
-        FakeSink sink(backend);
+        auto sinkPtr = std::make_shared<FakeSink>(backend);
+        auto& sink = *sinkPtr;
         sink.writeLine(LogLevel::INFO, "p|", "first");
         for (int i = 0; i < 200 && backend->flushCount() == 0; ++i)
         {
@@ -307,7 +308,8 @@ BOOST_AUTO_TEST_CASE(fatalDrainsQueuedBacklogBeforeWriting)
 {
     auto backend = boost::make_shared<FakeBackend>();
     backend->gate = false;  // hold the feeding thread inside consumeLine
-    FakeSink sink(backend);
+    auto sinkPtr = std::make_shared<FakeSink>(backend);
+    auto& sink = *sinkPtr;
     for (int i = 0; i < 3; ++i)
     {
         sink.writeLine(LogLevel::INFO, "p|", "queued" + std::to_string(i));
@@ -340,15 +342,12 @@ BOOST_AUTO_TEST_CASE(multiProducerConservationUnderOverflow)
     producers.reserve(Producers);
     for (unsigned p = 0; p < Producers; ++p)
     {
-        producers.emplace_back(
-            [p, &sink]
+        producers.emplace_back([p, &sink] {
+            for (unsigned i = 0; i < LinesPerProducer; ++i)
             {
-                for (unsigned i = 0; i < LinesPerProducer; ++i)
-                {
-                    sink.writeLine(LogLevel::INFO, "p|",
-                        std::to_string(p) + "-" + std::to_string(i));
-                }
-            });
+                sink.writeLine(LogLevel::INFO, "p|", std::to_string(p) + "-" + std::to_string(i));
+            }
+        });
     }
     for (auto& producer : producers)
     {
