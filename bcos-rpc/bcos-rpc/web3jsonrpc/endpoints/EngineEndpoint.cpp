@@ -170,8 +170,8 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
     auto& engineService = m_nodeService->engineService();
     if (!engineService)
     {
-        // The engine service may be absent (e.g. a MAX/tars node without
-        // op_engine_rpc wiring). Return a clean JSON-RPC error instead of
+        // The engine service may be absent (e.g. a tars node, which never wires
+        // the Engine API). Return a clean JSON-RPC error instead of
         // dereferencing null under release builds (where assert is compiled out).
         buildEngineNotAvailableError(response);
         co_return;

@@ -101,12 +101,12 @@ protected:
     /// _enableMinerApi registers the OP miner namespace (miner_setMaxDASize) on this listener.
     /// Off by default: it writes the node-wide DA caps, so only a listener private to
     /// op-batcher / op-conductor should enable it. The switch is per listener and the key
-    /// follows the listener: the op-engine port reads [op_engine_rpc] enable_miner_api, the web3
-    /// port reads [web3_rpc] enable_miner_api (see RpcFactory.cpp).
+    /// follows the listener: the Engine API port reads [engine_rpc] enable_miner_api (OP lane
+    /// only), the web3 port reads [web3_rpc] enable_miner_api (see RpcFactory.cpp).
     /// _enableDebugApi registers the geth debug namespace (debug_dbGet / debug_getRawHeader /
     /// debug_executePayload) on this listener. Off by default: it serves the fault-proof
-    /// preimage oracle (kona-host), not general clients. Per listener like miner: the op-engine
-    /// port reads [op_engine_rpc] enable_debug_api, the web3 port [web3_rpc] enable_debug_api.
+    /// preimage oracle (kona-host), not general clients. Per listener like miner: the Engine API
+    /// port reads NodeConfig::engineApiDebugApi(), the web3 port [web3_rpc] enable_debug_api.
     bcos::rpc::Web3JsonRpcImpl::Ptr buildWeb3JsonRpc(int sendTxTimeout,
         boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
         bool _enableEngineRpc = false, bool _enableMinerApi = false, bool _enableDebugApi = false);

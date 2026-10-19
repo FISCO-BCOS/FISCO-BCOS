@@ -52,7 +52,7 @@ public:
         bool _produceEmptyBlocks = true,
         bcos::crypto::HashType _prevRandao = bcos::crypto::HashType{},
         std::string _feeRecipient = "0x0000000000000000000000000000000000000000",
-        std::uint64_t _fixedTimestamp = 0);
+        std::uint64_t _fixedTimestamp = 0, bool _l1Dialect = false);
 
     ~SingleNodeConsensus();
 
@@ -79,10 +79,14 @@ private:
     std::uint64_t m_blockIntervalMs;
     bool m_produceEmptyBlocks;
     bcos::crypto::HashType m_prevRandao;
-    /// Coinbase, parsed once in the constructor (a malformed [consensus] fee_recipient fails
+    /// Coinbase, parsed once in the constructor (a malformed [debug] fee_recipient fails
     /// at startup instead of failing on the first block tick).
     bcos::Address m_feeRecipient;
     std::uint64_t m_fixedTimestamp;
+    /// getPayload / newPayload method versions: the L1 pair when the EngineService is the
+    /// executor_version 2 one (_l1Dialect), else the Karst pair.
+    std::uint32_t m_getPayloadVersion;
+    std::uint32_t m_newPayloadVersion;
 
     /// CL-side head tracking. newPayload() persists the ledger block tables — including
     /// SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — via ledger::prewriteBlockToBuffer

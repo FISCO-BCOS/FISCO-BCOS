@@ -16,8 +16,6 @@
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/EVMAccount.h>
-#include <bcos-framework/ledger/Features.h>
-#include <bcos-framework/ledger/FeaturesStorage.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -1348,16 +1346,14 @@ private:
     /// Build LedgerConfig without header.hash() (throws on an OP header). The executor_version
     /// is pinned to the OP lane: this scheduler only runs on executor_version >=
     /// OPSTACK_EXECUTOR_VERSION chains, and the consumers that branch on the lane
-    /// (computeMptStateDelta's l2Mode, shouldBuildMPT) must see it.
+    /// (computeMptStateDelta's l2Mode, shouldBuildMPT) must see it. No Features: the OP lane
+    /// forks on its timestamp schedule only.
     task::Task<ledger::LedgerConfig::Ptr> loadLedgerConfig(
         ViewType& view, protocol::BlockNumber number)
     {
         auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(number);
         ledgerConfig->setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, view, number);
-        ledgerConfig->setFeatures(features);
         co_return ledgerConfig;
     }
 
@@ -1645,9 +1641,6 @@ private:
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(blockNumber);
         ledgerConfig->setTimestamp(header.timestamp());
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, latestView, blockNumber);
-        ledgerConfig->setFeatures(features);
         ledgerConfig->setEVMCRevision(spec.rev);
 
         // Fresh mutable layer over the historical MPT; call writes are not persisted.

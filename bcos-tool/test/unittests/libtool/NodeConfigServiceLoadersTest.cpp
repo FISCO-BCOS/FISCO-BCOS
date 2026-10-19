@@ -61,17 +61,6 @@ BOOST_AUTO_TEST_CASE(web3RpcConfigDefaultsAndPopulated)
 }
 
 
-BOOST_AUTO_TEST_CASE(gatewayConfigDefaultsAndPopulated)
-{
-    LoaderProbe a;
-    a.loadGatewayConfig({});
-    LoaderProbe b;
-    auto pt =
-        fromIni("[p2p]\nlisten_ip=0.0.0.0\nlisten_port=30300\nsm_ssl=true\nnodes_file=n.json\n");
-    BOOST_CHECK_NO_THROW(b.loadGatewayConfig(pt));
-}
-
-
 BOOST_AUTO_TEST_CASE(certConfigDefaultsAndPopulated)
 {
     LoaderProbe a;

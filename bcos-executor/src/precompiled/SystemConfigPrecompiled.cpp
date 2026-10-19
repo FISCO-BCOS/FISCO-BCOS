@@ -133,8 +133,9 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             // a chain replaying blocks that predate 3.18.0 must keep whatever the old binary
             // accepted, or resync diverges. The gate is the on-chain compatibility version, not
             // the binary's, so a chain still at < 3.18.0 running a 3.18.0 binary is NOT covered
-            // here; there the boot refusals in Initializer::init (no [op_fork_timestamps], no
-            // [op_engine_rpc]) are what stop such a node, fail-stop rather than a second lane.
+            // here; there the boot refusals in Initializer::init (the OP slot: no Engine or
+            // follow_devp2p block driver, no [op_fork_timestamps]; slot 2: no evmc_revision row)
+            // are what stop such a node, fail-stop rather than a second lane.
             if (versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0 &&
                 _value >= ledger::ETHEREUM_EXECUTOR_VERSION) [[unlikely]]
             {

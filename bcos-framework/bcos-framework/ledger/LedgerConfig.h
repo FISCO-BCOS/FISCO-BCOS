@@ -32,6 +32,7 @@
 #include <cctype>
 #include <charconv>
 #include <evmc/evmc.hpp>
+#include <functional>
 #include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
@@ -335,13 +336,20 @@ private:
     std::map<bcos::protocol::BlockNumber, evmc_revision> m_forkTransitions;
 };
 
-/// The latest EVM revision supported by the ethereum-executor. This is a fallback only:
-/// NodeConfig::loadExecutorConfig requires an explicit evm_revision for executor_version>=2,
-/// so a fresh v2 chain always persists its revision on-chain, and the startup path refuses
-/// to boot a v2 chain whose row is absent (no binary-side default). The constant applies
-/// solely on the (defensive) v2-missing-config path in getLedgerConfig, plus test /
-/// EEST-runner convenience.
+/// The base revision encodeEVMCRevisionConfig writes when a fork list has no block-0 entry.
+/// No genesis writes an evmc_revision row any more (a v2 chain derives its revision from
+/// [fork_timestamps], see EvmcRevisionSchedule); the codec stays for rows already on disk and
+/// for tests.
 inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
+
+/// executor_version=2 (the L1 EL lane): the EVM revision of a block with @p timestampSeconds
+/// and @p difficulty (0 = PoS), as the genesis [fork_timestamps] schedule assigns it. The lane
+/// records no evmc_revision row; the block verifier stamps the revision per block itself
+/// (fillExecutionLedgerConfig), and every other reader (the eth_call / eth_estimateGas dry
+/// run, transaction admission) is handed this function by the Initializer, built over
+/// scheduler_v1::evmcRevisionForTimestamp. Empty on every other lane.
+using EvmcRevisionSchedule =
+    std::function<evmc_revision(int64_t timestampSeconds, u256 const& difficulty)>;
 
 /// The executor-slot ladder: which scheduler an executor_version value selects. The
 /// values are the MultiVersionScheduler slot indices and the on-chain decimal string.
@@ -400,6 +408,14 @@ inline constexpr bool isOpLaneVersion(int executorVersion)
 {
     return executorVersion >= OPSTACK_EXECUTOR_VERSION;
 }
+
+/// The compatibility version of every Ethereum-lane chain (executor_version >= 2). These
+/// lanes fork on the Ethereum / OP schedule only: genesis [version] is ignored, no
+/// compatibility_version row is written, and shared code that still needs a compat number
+/// (block header version, genesis pin, table layout) reads this constant. It is part of the
+/// genesis pin, so it must never move with the binary's MAX_VERSION.
+inline constexpr auto ETHEREUM_LANE_COMPATIBILITY_VERSION =
+    static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION);
 
 /// The highest executor_version a TRANSACTION may set: the newest defined lane, derived
 /// from the ladder above and never hand-copied — wiring a new lane moves the bound with

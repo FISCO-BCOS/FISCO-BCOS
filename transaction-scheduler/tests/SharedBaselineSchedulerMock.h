@@ -110,17 +110,19 @@ struct SharedMockExecutor
     evmc_bytes32 m_probeSlot{};
     evmc_bytes32 m_writeValue{};
     protocol::BlockNumber m_lastExecutedHeaderNumber{-1};
+    std::optional<evmc_revision> m_lastExecutedRevision;
     bool m_checkTimestamp99{};
 
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int /*contextID*/, ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
+        int /*contextID*/, ledger::LedgerConfig const& ledgerConfig, bool /*call*/)
     {
         if (m_checkTimestamp99 && transaction.version() == 99)
         {
             BOOST_CHECK_EQUAL(blockHeader.timestamp(), 10088);
         }
         m_lastExecutedHeaderNumber = blockHeader.number();
+        m_lastExecutedRevision = ledgerConfig.evmcRevision();
         if (m_mode == Mode::Trivial)
         {
             co_return {};

@@ -2,7 +2,6 @@
 
 #include "bcos-tool/Exceptions.h"
 #include <bcos-utilities/BoostLog.h>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/throw_exception.hpp>
 
 namespace bcos::ledger
@@ -33,18 +32,22 @@ void Features::validate(std::string_view flag) const
     validate(*value);
 }
 
+void Features::validateDependencies(Flag flag) const
+{
+    for (auto dependency : getFeatureDependencies(flag))
+    {
+        if (!get(dependency))
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidSetFeature{} << errinfo_comment(
+                    "must set " + std::string(magic_enum::enum_name(dependency)) + " first"));
+        }
+    }
+}
+
 void Features::validate(Flag flag) const
 {
-    if (flag == Flag::feature_balance_precompiled && !get(Flag::feature_balance))
-    {
-        BOOST_THROW_EXCEPTION(
-            bcos::tool::InvalidSetFeature{} << errinfo_comment("must set feature_balance first"));
-    }
-    if (flag == Flag::feature_balance_policy1 && !get(Flag::feature_balance_precompiled))
-    {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
-                              << errinfo_comment("must set feature_balance_precompiled first"));
-    }
+    validateDependencies(flag);
     // DEPRECATED, inert. feature_raw_address used to gate the binary account-table
     // encoding; the encoding is a node-local physical layout now (published by the boot-time
     // detection as ledger::account::nodeAddressTableMode()), so the flag drives nothing.
@@ -75,15 +78,18 @@ bool Features::get(Flag flag) const
 
 std::set<Features::Flag> Features::getFeatureDependencies(Flag flag)
 {
-    boost::ignore_unused(flag);
-    return {};
-}
-
-void Features::enableDependencyFeatures(Flag flag)
-{
-    for (const auto& dependence : getFeatureDependencies(flag))
+    switch (flag)
     {
-        set(dependence);
+    case Flag::feature_balance_precompiled:
+        return {Flag::feature_balance};
+    case Flag::feature_balance_policy1:
+        return {Flag::feature_balance_precompiled};
+    case Flag::feature_evm_prague:
+        return {Flag::feature_evm_cancun};
+    case Flag::feature_evm_osaka:
+        return {Flag::feature_evm_prague};
+    default:
+        return {};
     }
 }
 

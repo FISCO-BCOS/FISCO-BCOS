@@ -317,7 +317,7 @@ BOOST_AUTO_TEST_SUITE_END()
 
 // ─── OP-Stack shapes over a full RLPx session ────────────────────────────────
 // The serving side is shape-agnostic (SyncPeerServer serves raw header RLP), so
-// these cases exercise exactly what the opstack-el sync driver wires up in
+// these cases exercise exactly what the [debug] follow_devp2p sync driver wires up in
 // production: an OP-shaped served chain + makeOpHeaderValidator injected through
 // BlockExchange::setHeaderValidator.
 BOOST_AUTO_TEST_SUITE(OpSyncTest)

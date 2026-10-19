@@ -58,7 +58,6 @@ std::string opGenesis(std::string const& executorTail, std::string const& opSect
         "1234567890123456789012345678901234567890123456789012345678901234";
     return "[version]\ncompatibility_version=3.18.0\n"
            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-           "[web3]\nchain_id=1\n"
            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
            "node.0=" +
            node +
@@ -69,7 +68,7 @@ std::string opGenesis(std::string const& executorTail, std::string const& opSect
            executorTail + opSections + ethLaneGenesisSections();
 }
 
-/// The OP lane's accepted [executor] tail: version 3, no evm_revision.
+/// The OP lane's accepted [executor] tail: version 3.
 std::string opExecutor()
 {
     return "version=3\n";
@@ -241,9 +240,8 @@ BOOST_AUTO_TEST_CASE(valuesExceedingUint32Rejected)
 BOOST_AUTO_TEST_CASE(sectionWithoutOpLaneRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(
-        cfg.loadGenesisConfigFromString(opGenesis(
-            "version=2\nevm_revision=prague\n", "[op_eip1559]\nelasticity=2\ndenominator=8\n")),
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
+                              "version=2\n", "[op_eip1559]\nelasticity=2\ndenominator=8\n")),
         InvalidConfig, [](auto const& e) {
             return errinfoContains(e, "[op_eip1559] requires executor.version >= 3 (OP lane)");
         });

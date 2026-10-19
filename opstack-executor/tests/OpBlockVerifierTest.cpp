@@ -385,15 +385,12 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
         opeth::opForkSpecAt(f.forkSchedule, static_cast<uint64_t>(ethHeader.timestamp));
     auto header = vdetail::projectOpP2pHeader(ethHeader, *f.blockFactory);
 
-    bcos::ledger::Features features;
-    bcos::task::syncWait(bcos::ledger::readFromStorage(features, view, number));
     bcos::ledger::LedgerConfig execLedgerConfig;
     execLedgerConfig.setBlockNumber(number);
     // Mirror OpBlockVerifier::verifyAndCommit: the executor_version is pinned to the OP lane
     // (computeMptStateDelta's l2Mode and the parent-root rule branch on it).
     execLedgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
     execLedgerConfig.setEVMCRevision(spec.rev);
-    execLedgerConfig.setFeatures(features);
 
     std::vector<bcos::protocol::Transaction::Ptr> transactions;
     std::vector<bcos::bytesConstRef> rawRefs;
@@ -437,8 +434,8 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
         opeth::finalizeOpEthBlockResult(view, *header, execLedgerConfig, spec, sharedError,
             receipts, rawRefs, ctx.cumulativeGasUsed, hashErr, /*skipStateRootBuild=*/true));
 
-    auto const parentRoot = bcos::task::syncWait(bcos::ledger::mpt::parentStateRootFor(
-        view, bcos::ledger::OPSTACK_EXECUTOR_VERSION, features, number, *f.blockFactory));
+    auto const parentRoot = bcos::task::syncWait(bcos::ledger::mpt::parentStateRootFor(view,
+        bcos::ledger::OPSTACK_EXECUTOR_VERSION, bcos::ledger::Features{}, number, *f.blockFactory));
     auto delta = bcos::task::syncWait(
         bcos::ledger::mpt::computeMptStateDelta(view, parentRoot, execLedgerConfig, false));
     return opeth::opEthCommitmentsOf(
