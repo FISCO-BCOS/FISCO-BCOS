@@ -32,7 +32,7 @@ class HelloWorldPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<HelloWorldPrecompiled>;
     HelloWorldPrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~HelloWorldPrecompiled(){};
+    virtual ~HelloWorldPrecompiled() {};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,

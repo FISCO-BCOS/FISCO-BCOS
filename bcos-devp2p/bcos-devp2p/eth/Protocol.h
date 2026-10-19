@@ -170,9 +170,9 @@ bcos::codec::rlp::RlpResult<NewBlockHashesMessage> decodeNewBlockHashes(bytesCon
 // geth's own soft limits are far lower (it announces ~256 hashes and serves
 // ~256 pooled txs per request); these are wire-shape ceilings, not policy.
 // ---------------------------------------------------------------------------
-inline constexpr size_t kMaxTxsPerMessage = 1024;        // Transactions / PooledTransactions
-inline constexpr size_t kMaxAnnouncedHashes = 4096;      // NewPooledTransactionHashes
-inline constexpr size_t kMaxGetPooledTransactions = 256; // serving cap for GetPooledTransactions
+inline constexpr size_t kMaxTxsPerMessage = 1024;         // Transactions / PooledTransactions
+inline constexpr size_t kMaxAnnouncedHashes = 4096;       // NewPooledTransactionHashes
+inline constexpr size_t kMaxGetPooledTransactions = 256;  // serving cap for GetPooledTransactions
 
 // Transactions (0x02): RLP list of EIP-2718 envelopes. Same element rules as
 // the BlockBodies transactions list (a legacy tx is a bare RLP list element, a

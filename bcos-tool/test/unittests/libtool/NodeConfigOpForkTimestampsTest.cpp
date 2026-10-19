@@ -15,8 +15,8 @@
 // derives the revision from this schedule per block), and only the entries equal to 0
 // reach the genesis pin.
 
-#include "ExceptionCheck.h"
 #include "EthLaneGenesisFixture.h"
+#include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
@@ -104,10 +104,9 @@ BOOST_AUTO_TEST_CASE(decreasingScheduleRejected)
 
     // Non-adjacent pair, full ladder: ecotone cannot precede canyon.
     NodeConfig ladder(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(ladder.loadGenesisConfigFromString(
-                              opGenesis(opExecutor(),
-                                  "[op_fork_timestamps]\nisthmus_time=5000\ncanyon_time=2000\n"
-                                  "ecotone_time=1000\n")),
+    BOOST_CHECK_EXCEPTION(ladder.loadGenesisConfigFromString(opGenesis(opExecutor(),
+                              "[op_fork_timestamps]\nisthmus_time=5000\ncanyon_time=2000\n"
+                              "ecotone_time=1000\n")),
         InvalidConfig, [](auto const& e) {
             return errinfoContains(e, "fork activation times must be non-decreasing");
         });
@@ -123,8 +122,8 @@ BOOST_AUTO_TEST_CASE(unscheduledIntermediateForksAllowed)
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, kNever);
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, 1000U);
 
-    auto jump = loadOk(opGenesis(
-        opExecutor(), "[op_fork_timestamps]\nisthmus_time=500\ncanyon_time=100\n"));
+    auto jump = loadOk(
+        opGenesis(opExecutor(), "[op_fork_timestamps]\nisthmus_time=500\ncanyon_time=100\n"));
     BOOST_REQUIRE(jump.opForkSchedule().has_value());
     BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_regolithTime, kNever);
     BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_canyonTime, 100U);
@@ -362,8 +361,7 @@ BOOST_AUTO_TEST_CASE(sentinelAsDeclaredTimestampRejected)
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
                               "[op_fork_timestamps]\njovian_time=18446744073709551615\n")),
-        InvalidConfig,
-        [](auto const& e) { return errinfoContains(e, "not-scheduled sentinel"); });
+        InvalidConfig, [](auto const& e) { return errinfoContains(e, "not-scheduled sentinel"); });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

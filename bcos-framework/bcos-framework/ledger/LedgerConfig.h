@@ -31,8 +31,8 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
-#include <limits>
 #include <evmc/evmc.hpp>
+#include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <optional>
@@ -581,9 +581,8 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
         if (parsed.error == ConfigUint64Error::outOfRange)
         {
             BOOST_THROW_EXCEPTION(
-                InvalidOpEip1559Config()
-                << errinfo_comment(
-                       "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
+                InvalidOpEip1559Config() << errinfo_comment(
+                    "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
         }
         if (!parsed.value.has_value())
         {
@@ -610,9 +609,9 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
     // parser would refuse.
     if (auto const problem = opEip1559ParamsRowProblem(params))
     {
-        BOOST_THROW_EXCEPTION(InvalidOpEip1559Config() << errinfo_comment(
-                                  "op_eip1559_params value carries a " + *problem + ": " +
-                                  std::string(value)));
+        BOOST_THROW_EXCEPTION(
+            InvalidOpEip1559Config() << errinfo_comment(
+                "op_eip1559_params value carries a " + *problem + ": " + std::string(value)));
     }
     return params;
 }

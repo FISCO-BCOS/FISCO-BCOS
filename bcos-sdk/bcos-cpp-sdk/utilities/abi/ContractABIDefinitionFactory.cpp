@@ -22,10 +22,10 @@
 #include <bcos-cpp-sdk/utilities/Common.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
+#include <boost/algorithm/string.hpp>
 #include <cstring>
 #include <stdexcept>
 #include <type_traits>
-#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::cppsdk;

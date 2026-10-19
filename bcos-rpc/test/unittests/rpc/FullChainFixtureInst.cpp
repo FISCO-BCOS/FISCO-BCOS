@@ -7,11 +7,11 @@
 // SKIP_UNITY_BUILD_INCLUSION like the FullChainFixture consumer itself: the fixture
 // header pulls RocksDB / testutils headers whose names collide with the
 // using-directives other unity-merged TUs carry.
-#include "transaction-scheduler/tests/FullChainFixture.h"
 #include "bcos-transaction-scheduler/BaselineScheduler-tpp.h"
+#include "transaction-scheduler/tests/FullChainFixture.h"
 
 namespace bcos::scheduler_v1
 {
-template class BaselineScheduler<test::fullchain::FCMultiLayerStorage,
-    test::fullchain::FCExecutor, test::fullchain::FCWritingScheduler, ledger::Ledger>;
+template class BaselineScheduler<test::fullchain::FCMultiLayerStorage, test::fullchain::FCExecutor,
+    test::fullchain::FCWritingScheduler, ledger::Ledger>;
 }  // namespace bcos::scheduler_v1

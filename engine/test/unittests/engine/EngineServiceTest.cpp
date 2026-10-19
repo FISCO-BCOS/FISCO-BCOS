@@ -219,7 +219,8 @@ SvcBloomEngineServiceImpl makeBloomEngineServiceImpl(
 using SvcTestEngineServiceImpl =
     EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
 
-SvcTestEngineServiceImpl makeEngineServiceImpl(MemPoolImpl& memPool, RealGlobalStateStorage& storage)
+SvcTestEngineServiceImpl makeEngineServiceImpl(
+    MemPoolImpl& memPool, RealGlobalStateStorage& storage)
 {
     return SvcTestEngineServiceImpl(
         memPool, storage, sharedStubExecutor(), sharedStubScheduler(), svcTestBlockFactory());
@@ -263,8 +264,8 @@ public:
                                      "injected prewrite failure"));
             return;
         }
-        SvcCommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs), std::move(block),
-            std::move(callback), writeTxsAndReceipts, std::move(features),
+        SvcCommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_failNext{true};
@@ -292,8 +293,8 @@ public:
                 std::this_thread::yield();
             }
         }
-        SvcCommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs), std::move(block),
-            std::move(callback), writeTxsAndReceipts, std::move(features),
+        SvcCommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_firstEntered{false};
@@ -514,7 +515,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
 
     auto initialForkchoice = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, initialForkchoice,
-        c_svcTrackedInitialBlockNumber, c_svcTrackedInitialBlockNumber, c_svcTrackedInitialBlockNumber);
+        c_svcTrackedInitialBlockNumber, c_svcTrackedInitialBlockNumber,
+        c_svcTrackedInitialBlockNumber);
     auto payloadAttributes = makePayloadAttributesV3();
     auto initialResult =
         task::syncWait(engineService.updateForkchoice(initialForkchoice, &payloadAttributes, 3));
@@ -548,8 +550,8 @@ BOOST_AUTO_TEST_CASE(new_payload_rejects_missing_required_v3_fields)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcValidationBlockNumber,
-        c_svcValidationBlockNumber, c_svcValidationBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState,
+        c_svcValidationBlockNumber, c_svcValidationBlockNumber, c_svcValidationBlockNumber);
     auto payloadAttributes = makePayloadAttributesV3();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
@@ -619,8 +621,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_sequential_head_block_number)
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto initialForkchoice = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, initialForkchoice, c_svcReorgStartBlockNumber,
-        c_svcReorgStartBlockNumber, c_svcReorgStartBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, initialForkchoice,
+        c_svcReorgStartBlockNumber, c_svcReorgStartBlockNumber, c_svcReorgStartBlockNumber);
     auto initialResult =
         task::syncWait(engineService.updateForkchoice(initialForkchoice, nullptr, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(initialResult.payloadStatus.status),
@@ -630,8 +632,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_sequential_head_block_number)
         h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
         h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
         h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")};
-    setForkchoiceBlockNumbers(globalStateStorageFixture, reorgForkchoice, c_svcReorgTargetBlockNumber,
-        c_svcReorgTargetBlockNumber, c_svcReorgTargetBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, reorgForkchoice,
+        c_svcReorgTargetBlockNumber, c_svcReorgTargetBlockNumber, c_svcReorgTargetBlockNumber);
 
     svcCheckForkchoiceComment(
         [&]() { task::syncWait(engineService.updateForkchoice(reorgForkchoice, nullptr, 3)); },
@@ -1145,8 +1147,8 @@ BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
     auto retryStatus = task::syncWait(engineService.newPayload(honest, 3));
     BOOST_CHECK_EQUAL(
         static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
-    auto persisted =
-        svcReadPersistedHeader(globalStateStorageFixture.backendStorage, c_svcInitialBlockNumber + 1);
+    auto persisted = svcReadPersistedHeader(
+        globalStateStorageFixture.backendStorage, c_svcInitialBlockNumber + 1);
     BOOST_REQUIRE(persisted);
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
         toHexStringWithPrefix(payload->executionPayload.extraData));
@@ -1196,8 +1198,8 @@ BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
     auto duplicateFuture = duplicateDone.get_future();
     std::thread duplicateAttempt(
         [&]() { duplicateDone.set_value(task::syncWait(engineService.newPayload(honest, 3))); });
-    BOOST_CHECK(duplicateFuture.wait_for(std::chrono::milliseconds(200)) ==
-                std::future_status::timeout);
+    BOOST_CHECK(
+        duplicateFuture.wait_for(std::chrono::milliseconds(200)) == std::future_status::timeout);
 
     gatedLedger->m_release = true;
     firstAttempt.join();
@@ -1211,8 +1213,8 @@ BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
 
     // The block's ledger rows landed — the header row is readable with the payload's
     // extraData.
-    auto persisted =
-        svcReadPersistedHeader(globalStateStorageFixture.backendStorage, c_svcInitialBlockNumber + 1);
+    auto persisted = svcReadPersistedHeader(
+        globalStateStorageFixture.backendStorage, c_svcInitialBlockNumber + 1);
     BOOST_REQUIRE(persisted);
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
         toHexStringWithPrefix(payload->executionPayload.extraData));
@@ -1593,7 +1595,8 @@ BOOST_AUTO_TEST_CASE(committed_header_carries_the_same_jovian_extra_data_as_the_
     payloadAttributes.eip1559Params = bytes(8, 0);
     payloadAttributes.minBaseFee = 0;
 
-    auto ledger = std::make_shared<SvcCommitLedger>(svcTestBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto ledger =
+        std::make_shared<SvcCommitLedger>(svcTestBlockFactory(), nullptr, /*blockLimit=*/100);
     auto engineService =
         makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, ledger);
 
@@ -1610,8 +1613,8 @@ BOOST_AUTO_TEST_CASE(committed_header_carries_the_same_jovian_extra_data_as_the_
     BOOST_REQUIRE_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 
-    auto persisted =
-        svcReadPersistedHeader(globalStateStorageFixture.backendStorage, c_svcInitialBlockNumber + 1);
+    auto persisted = svcReadPersistedHeader(
+        globalStateStorageFixture.backendStorage, c_svcInitialBlockNumber + 1);
     BOOST_REQUIRE(persisted);
     // Byte-for-byte with the payload the CL was handed, and equal to the Jovian vector.
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
@@ -1765,8 +1768,8 @@ BOOST_AUTO_TEST_CASE(new_payload_v4_rejects_nonempty_lists_and_missing_fields)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcValidationBlockNumber,
-        c_svcValidationBlockNumber, c_svcValidationBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState,
+        c_svcValidationBlockNumber, c_svcValidationBlockNumber, c_svcValidationBlockNumber);
     auto payloadAttributes = makeKarstPayloadAttributes();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
     auto result =

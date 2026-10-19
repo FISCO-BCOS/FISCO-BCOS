@@ -18,8 +18,8 @@
 ///   - the ledger config pins the EVM revision to Shanghai, matching the
 ///     evm_version the contract was compiled for.
 
-#include "../EthereumExecutor.h"
 #include "../EVMSupport.h"
+#include "../EthereumExecutor.h"
 #include "../tests/TestMemoryStorage.h"
 #include "benchmark/BenchmarkERC20.h"
 
@@ -87,9 +87,9 @@ struct ERC20Fixture
             m_backendStorage, blockHeader, transaction, 0, ledgerConfig, false);
         if (receipt->status() != 0)
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error(fmt::format(
-                "ERC-20 setup transaction failed, status: {}, {}", receipt->status(),
-                receipt->message())));
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error(fmt::format("ERC-20 setup transaction failed, status: {}, {}",
+                    receipt->status(), receipt->message())));
         }
     }
 
@@ -116,17 +116,16 @@ struct ERC20Fixture
                 m_backendStorage, blockHeader, transaction, 0, ledgerConfig, false);
             if (receipt->status() != 0)
             {
-                BOOST_THROW_EXCEPTION(std::runtime_error(fmt::format(
-                    "ERC-20 deploy failed, status: {}, {}", receipt->status(),
-                    receipt->message())));
+                BOOST_THROW_EXCEPTION(
+                    std::runtime_error(fmt::format("ERC-20 deploy failed, status: {}, {}",
+                        receipt->status(), receipt->message())));
             }
         }());
 
         for (uint64_t i = 1; i <= benchmark_erc20::USER_COUNT; ++i)
         {
             auto input = m_abiCodec.abiIn("transfer(address,uint256)",
-                benchmark_erc20::userAddress(i),
-                bcos::u256(benchmark_erc20::USER_INITIAL_BALANCE));
+                benchmark_erc20::userAddress(i), bcos::u256(benchmark_erc20::USER_INITIAL_BALANCE));
             auto fundTransaction = benchmark_erc20::makeTransaction(
                 bcos::ref(input), m_contractAddress, m_deployer, m_deployerNonce++);
             task::syncWait(setupTransaction(fundTransaction));
@@ -162,10 +161,10 @@ static void erc20_approve(benchmark::State& state)
         uint64_t iteration = 0;
         for (auto const& it : state)
         {
-            auto transaction = benchmark_erc20::makeTransaction(bcos::ref(input),
-                fixture.m_contractAddress,
-                benchmark_erc20::userAddress(iteration % benchmark_erc20::USER_COUNT + 1),
-                iteration / benchmark_erc20::USER_COUNT);
+            auto transaction =
+                benchmark_erc20::makeTransaction(bcos::ref(input), fixture.m_contractAddress,
+                    benchmark_erc20::userAddress(iteration % benchmark_erc20::USER_COUNT + 1),
+                    iteration / benchmark_erc20::USER_COUNT);
             auto receipt = co_await fixture.m_executor.executeTransaction(fixture.m_backendStorage,
                 fixture.blockHeader, transaction, 0, fixture.ledgerConfig, false);
             if (receipt->status() != 0)

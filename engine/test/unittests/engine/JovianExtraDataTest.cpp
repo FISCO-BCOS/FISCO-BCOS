@@ -131,7 +131,7 @@ BOOST_AUTO_TEST_CASE(holocene_without_min_base_fee_encodes_nine_bytes)
 BOOST_AUTO_TEST_CASE(missing_eip1559_params_keeps_extra_data_empty)
 {
     BOOST_CHECK(engine::detail::encodeOptimismExtraData(makeAttributes(std::nullopt, std::nullopt))
-                    .empty());
+            .empty());
 }
 
 // minBaseFee without eip1559Params leaves the params half of the 17-byte form
@@ -161,10 +161,10 @@ BOOST_AUTO_TEST_CASE(mixed_zero_eip1559_params_are_rejected)
 {
     BOOST_CHECK(engine_common::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x0000000000000006"), 0), 3)
-                    .has_value());
+            .has_value());
     BOOST_CHECK(engine_common::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000000"), 0), 3)
-                    .has_value());
+            .has_value());
     BOOST_CHECK(
         !engine_common::validatePayloadAttributes(makeAttributes(bytes(8, 0), 0), 3).has_value());
     BOOST_CHECK(engine_common::validatePayloadAttributes(
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
         // version, so any error below is attributable to the new gate.
         BOOST_REQUIRE(
             !engine_common::validatePayloadAttributes(attributesForVersion(version), version)
-                 .has_value());
+                .has_value());
 
         auto holocene = attributesForVersion(version);
         holocene.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
@@ -225,10 +225,10 @@ BOOST_AUTO_TEST_CASE(eip1559_fields_are_rejected_below_version_three)
     // V3 is the version op-node actually uses, so both forms stay valid there.
     BOOST_CHECK(!engine_common::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), std::nullopt), 3)
-                     .has_value());
+            .has_value());
     BOOST_CHECK(!engine_common::validatePayloadAttributes(
         makeAttributes(fromHexWithPrefix("0x000000fa00000006"), 7), 3)
-                     .has_value());
+            .has_value());
 }
 
 // encodeOptimismExtraData is an exported detail:: entry point reachable from

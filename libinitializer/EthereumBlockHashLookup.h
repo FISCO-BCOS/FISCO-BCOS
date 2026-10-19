@@ -8,9 +8,9 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/TBBWait.h"
 #include <evmc/evmc.h>
-#include <evmc/evmc.hpp>
 #include <algorithm>
 #include <cstddef>
+#include <evmc/evmc.hpp>
 
 namespace bcos::initializer
 {
@@ -57,8 +57,7 @@ evmc::bytes32 ethBlockHashLookupFromStorage(
     if (hashOpt.has_value())
     {
         auto const& hash = *hashOpt;
-        std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
-            result.bytes);
+        std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)), result.bytes);
     }
     return result;
 }

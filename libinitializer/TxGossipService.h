@@ -73,8 +73,8 @@ public:
     using SendFn = std::function<void(uint16_t frameId, bcos::bytes payload)>;
     /// Fills the resume-dependent PeerConfig fields (head hash, fork-id) fresh at every
     /// (re)connect — the sync loop computes them from the local head.
-    using PeerConfigFactory = std::function<devp2p::rlpx::PeerConfig(
-        devp2p::rlpx::PeerConfig const& bootnode)>;
+    using PeerConfigFactory =
+        std::function<devp2p::rlpx::PeerConfig(devp2p::rlpx::PeerConfig const& bootnode)>;
 
     /// What handlePeerMessage settled on: Closed = the peer said Disconnect (or breached
     /// the protocol) and the pump should tear the session down.
@@ -121,8 +121,8 @@ public:
     /// Spawn the peer pump threads (at most c_maxGossipPeers, one per bootnode slot,
     /// round-robin over the rest on failure). No-op when already running or the bootnode
     /// list is empty.
-    void start(devp2p::rlpx::EccKeyPair localKey,
-        std::vector<devp2p::rlpx::PeerConfig> bootnodes, PeerConfigFactory configFactory)
+    void start(devp2p::rlpx::EccKeyPair localKey, std::vector<devp2p::rlpx::PeerConfig> bootnodes,
+        PeerConfigFactory configFactory)
     {
         if (bootnodes.empty() || m_running.exchange(true))
         {
@@ -136,8 +136,8 @@ public:
                 pumpLoop(slot, slots, localKey, bootnodes, configFactory);
             });
         }
-        INITIALIZER_LOG(INFO) << LOG_DESC("TxGossip: started")
-                              << LOG_KV("peers", slots) << LOG_KV("bootnodes", bootnodes.size());
+        INITIALIZER_LOG(INFO) << LOG_DESC("TxGossip: started") << LOG_KV("peers", slots)
+                              << LOG_KV("bootnodes", bootnodes.size());
     }
 
     /// Stop the pumps and join. A pump parked in recvMessage wakes at the socket I/O
@@ -162,8 +162,8 @@ public:
     /// whose write fails is logged and skipped — announcement is best-effort, the next
     /// admission announces again. Not gated on running(): stop() clears the peer list, so
     /// a late call simply finds nobody to tell.
-    void announceLocalTransaction(crypto::HashType const& txHash, uint8_t type, uint64_t size,
-        bcos::bytes envelope)
+    void announceLocalTransaction(
+        crypto::HashType const& txHash, uint8_t type, uint64_t size, bcos::bytes envelope)
     {
         cacheRaw(txHash, std::move(envelope));
         devp2p::eth::NewPooledTransactionHashesMessage announce{
@@ -174,8 +174,8 @@ public:
         {
             try
             {
-                peer->send(devp2p::eth::frameId(devp2p::eth::msg::NewPooledTransactionHashes),
-                    payload);
+                peer->send(
+                    devp2p::eth::frameId(devp2p::eth::msg::NewPooledTransactionHashes), payload);
             }
             catch (std::exception const& e)
             {
@@ -204,8 +204,8 @@ public:
         }
         if (frameId == devp2p::rlpx::baseMsg::Disconnect)
         {
-            INITIALIZER_LOG(INFO)
-                << LOG_DESC("TxGossip: peer disconnected") << LOG_KV("peer", peer.describe);
+            INITIALIZER_LOG(INFO) << LOG_DESC("TxGossip: peer disconnected")
+                                  << LOG_KV("peer", peer.describe);
             return PeerVerdict::Closed;
         }
         if (frameId == eth::frameId(eth::msg::Transactions))
@@ -285,7 +285,8 @@ public:
                 logMalformed(peer, "GetPooledTransactions", decoded.error().message);
                 return PeerVerdict::Ok;
             }
-            eth::PooledTransactionsMessage reply{.requestId = decoded->requestId, .transactions = {}};
+            eth::PooledTransactionsMessage reply{
+                .requestId = decoded->requestId, .transactions = {}};
             for (auto const& hash : decoded->hashes)
             {
                 if (reply.transactions.size() >= c_maxHashesPerRequest)
@@ -297,8 +298,8 @@ public:
                     reply.transactions.push_back(std::move(*raw));
                 }
             }
-            peer.send(eth::frameId(eth::msg::PooledTransactions),
-                eth::encodePooledTransactions(reply));
+            peer.send(
+                eth::frameId(eth::msg::PooledTransactions), eth::encodePooledTransactions(reply));
             return PeerVerdict::Ok;
         }
         // Every other frame (block-sync codes, NewBlock, receipts, unknown): this session
@@ -355,8 +356,8 @@ private:
             }
         }
         auto tx = m_memPool.get(std::vector<crypto::HashType>{hash}).front();
-        if (!tx || tx->type() !=
-                       static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+        if (!tx ||
+            tx->type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
         {
             return std::nullopt;
         }
@@ -368,9 +369,9 @@ private:
         }
         catch (std::exception const& e)
         {
-            INITIALIZER_LOG(WARNING) << LOG_DESC("TxGossip: cannot reassemble pooled transaction")
-                                     << LOG_KV("hash", hash.abridged())
-                                     << LOG_KV("error", e.what());
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("TxGossip: cannot reassemble pooled transaction")
+                << LOG_KV("hash", hash.abridged()) << LOG_KV("error", e.what());
             return std::nullopt;
         }
         if (tx->blobVersionedHashes().empty())
@@ -425,9 +426,8 @@ private:
             m_rawCacheOrder.push_back(hash);
             m_rawCache.emplace(hash, std::move(raw));
         }
-        while (!m_rawCacheOrder.empty() &&
-               (m_rawCacheOrder.size() > c_rawCacheMaxEntries ||
-                   m_rawCacheBytes > c_rawCacheMaxBytes))
+        while (!m_rawCacheOrder.empty() && (m_rawCacheOrder.size() > c_rawCacheMaxEntries ||
+                                               m_rawCacheBytes > c_rawCacheMaxBytes))
         {
             auto it = m_rawCache.find(m_rawCacheOrder.front());
             if (it != m_rawCache.end())
@@ -474,8 +474,8 @@ private:
             }
             for (std::size_t i = 0; i < sidecar->commitments.size(); ++i)
             {
-                if (crypto::kzg::versionedHashFromCommitment(
-                        bcos::ref(sidecar->commitments[i])) != web3Tx.blobVersionedHashes[i])
+                if (crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar->commitments[i])) !=
+                    web3Tx.blobVersionedHashes[i])
                 {
                     return countDrop(peer, "blob sidecar commitment/versioned hash mismatch");
                 }
@@ -534,8 +534,7 @@ private:
         }
         if (status != protocol::TransactionStatus::None)
         {
-            return countDrop(peer,
-                "admission refused: " + std::string(protocol::toString(status)));
+            return countDrop(peer, "admission refused: " + std::string(protocol::toString(status)));
         }
         try
         {
@@ -543,8 +542,7 @@ private:
                 taken != protocol::TransactionStatus::None &&
                 taken != protocol::TransactionStatus::AlreadyInTxPool)
             {
-                return countDrop(
-                    peer, "pool refused: " + std::string(protocol::toString(taken)));
+                return countDrop(peer, "pool refused: " + std::string(protocol::toString(taken)));
             }
         }
         catch (std::exception const& e)
@@ -620,8 +618,7 @@ private:
                             break;
                         }
                         if (handlePeerMessage(*peer, message->id,
-                                bcos::bytesConstRef(
-                                    message->data.data(), message->data.size())) ==
+                                bcos::bytesConstRef(message->data.data(), message->data.size())) ==
                             PeerVerdict::Closed)
                         {
                             break;

@@ -18,8 +18,8 @@
  *        generator output to the node loader.
  */
 
-#include "ExceptionCheck.h"
 #include "EthLaneGenesisFixture.h"
+#include "ExceptionCheck.h"
 #include "NodeConfigLoaderProbe.h"
 #include <boost/test/unit_test.hpp>
 
@@ -128,19 +128,17 @@ BOOST_AUTO_TEST_CASE(sectionWithoutCanonicalFailsClosed)
 BOOST_AUTO_TEST_CASE(unknownKeyIsRejectedLikeTheSiblingLoaders)
 {
     LoaderProbe probe;
-    BOOST_CHECK_EXCEPTION(
-        probe.loadOpForkSchedule(
-            fromIni("[op_fork_schedule]\n"
-                    "canonical=0:isthmus\n"
-                    "jovian_time=1000\n")),
+    BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
+                                                           "canonical=0:isthmus\n"
+                                                           "jovian_time=1000\n")),
         InvalidConfig, [](auto const& e) { return errinfoContains(e, "unrecognised key"); });
-    BOOST_CHECK_EXCEPTION(
-        probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
-                                         "canonica=0:isthmus\n")),
+    BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
+                                                           "canonica=0:isthmus\n")),
         InvalidConfig, [](auto const& e) { return errinfoContains(e, "unrecognised key"); });
     // The recognised key alone still loads (the whitelist does not over-reject).
-    probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
-                                     "canonical=0:isthmus\n"));
+    probe.loadOpForkSchedule(
+        fromIni("[op_fork_schedule]\n"
+                "canonical=0:isthmus\n"));
     BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
 }
 

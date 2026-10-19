@@ -9,8 +9,7 @@ bcos::executor_v1::Precompiled::Precompiled(
   : m_precompiled(std::move(precompiled)), m_flag(flag)
 {}
 
-bcos::executor_v1::Precompiled::Precompiled(
-    decltype(m_precompiled) precompiled, size_t size)
+bcos::executor_v1::Precompiled::Precompiled(decltype(m_precompiled) precompiled, size_t size)
   : m_precompiled(std::move(precompiled)), m_size(size)
 {}
 

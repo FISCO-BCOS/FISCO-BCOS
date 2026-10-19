@@ -52,8 +52,8 @@ TxDAGFlow::Ptr ExecutiveDagFlow::prepareDagFlow(const BlockContext& blockContext
     ExecutiveFactory::Ptr executiveFactory, std::vector<std::unique_ptr<CallParameters>>& inputs,
     std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
 {
-    critical::CriticalFieldsInterface::Ptr criticals =
-        generateDagCriticals(blockContext, std::move(executiveFactory), inputs, std::move(abiCache));
+    critical::CriticalFieldsInterface::Ptr criticals = generateDagCriticals(
+        blockContext, std::move(executiveFactory), inputs, std::move(abiCache));
     return generateDagFlow(blockContext, std::move(criticals));
 }
 
@@ -273,8 +273,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                         {
                             DAGFLOW_LOG(TRACE)
                                 << "generateDags: isParallelPrecompiled " << LOG_KV("address", to);
-                            auto criticals = vector<string>(
-                                p->getParallelTag(ref(params->data)));
+                            auto criticals = vector<string>(p->getParallelTag(ref(params->data)));
                             conflictFields = make_shared<vector<bytes>>();
                             for (string& critical : criticals)
                             {
@@ -384,10 +383,10 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                                 bool isSmCrypto = blockContext.hashHandler()->getHashImplType() ==
                                                   crypto::HashImplType::Sm3Hash;
 
-                                DAGFLOW_LOG(TRACE) << "generateDags: " << LOG_DESC("ABI loaded")
-                                                   << LOG_KV("address", to)
-                                                   << LOG_KV("selector", toHex(selector))
-                                                   << LOG_KV("ABI", abiStr);
+                                DAGFLOW_LOG(TRACE)
+                                    << "generateDags: " << LOG_DESC("ABI loaded")
+                                    << LOG_KV("address", to) << LOG_KV("selector", toHex(selector))
+                                    << LOG_KV("ABI", abiStr);
                                 auto functionAbi = FunctionAbi::deserialize(
                                     abiStr, selector.toBytes(), isSmCrypto);
                                 if (!functionAbi)

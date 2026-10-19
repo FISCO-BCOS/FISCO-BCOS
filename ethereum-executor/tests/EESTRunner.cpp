@@ -1769,8 +1769,8 @@ public:
                 // system_call_block_start read as block_hashes.get_block_hash(number - 1).
                 // A failure is tolerated (upstream asserts success — a release-mode no-op —
                 // and silently continues): the post-state check remains the arbiter.
-                auto sysErr = task::tbb::syncWait(eth::systemCallBlockStart(storage,
-                    executor.vm(), bi, blockHashes.get_block_hash(bi.number - 1), blockRev));
+                auto sysErr = task::tbb::syncWait(eth::systemCallBlockStart(storage, executor.vm(),
+                    bi, blockHashes.get_block_hash(bi.number - 1), blockRev));
                 if (sysErr.has_value() && !g_opts.quiet)
                 {
                     printLine("block-start system call skipped: " + *sysErr);

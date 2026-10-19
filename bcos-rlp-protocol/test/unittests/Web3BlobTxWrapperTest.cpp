@@ -10,13 +10,13 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
+using bcos::rpc::BLOB_TX_BLOB_SIZE;
+using bcos::rpc::BLOB_TX_COMMITMENT_SIZE;
+using bcos::rpc::BLOB_TX_PROOF_SIZE;
 using bcos::rpc::decodeBlobTxNetworkWrapper;
 using bcos::rpc::encodeBlobTxNetworkWrapper;
 using bcos::rpc::isBlobTxNetworkWrapper;
 using bcos::rpc::Web3Transaction;
-using bcos::rpc::BLOB_TX_BLOB_SIZE;
-using bcos::rpc::BLOB_TX_COMMITMENT_SIZE;
-using bcos::rpc::BLOB_TX_PROOF_SIZE;
 
 namespace bcos::test
 {
@@ -36,8 +36,8 @@ Web3Transaction makeBlobTx(std::size_t blobCount)
     tx.maxFeePerBlobGas = u256(50);
     for (std::size_t i = 0; i < blobCount; ++i)
     {
-        tx.blobVersionedHashes.emplace_back(h256(
-            std::string("0x01") + std::string(62, static_cast<char>('a' + i))));
+        tx.blobVersionedHashes.emplace_back(
+            h256(std::string("0x01") + std::string(62, static_cast<char>('a' + i))));
     }
     tx.signatureR.assign(32, byte{0x12});
     tx.signatureS.assign(32, byte{0x34});
@@ -153,9 +153,9 @@ BOOST_AUTO_TEST_CASE(malformedWrapperThrows)
     truncated.resize(wrapper.size() / 2);
     Web3Transaction decoded;
     engine::BlobTxSidecar decodedSidecar;
-    BOOST_CHECK_THROW(decodeBlobTxNetworkWrapper(
-                          bcos::bytesConstRef(truncated.data(), truncated.size()), decoded,
-                          decodedSidecar),
+    BOOST_CHECK_THROW(
+        decodeBlobTxNetworkWrapper(
+            bcos::bytesConstRef(truncated.data(), truncated.size()), decoded, decodedSidecar),
         codec::rlp::RlpDecodeException);
 
     // A blob with the wrong size (131071 bytes).
@@ -163,16 +163,16 @@ BOOST_AUTO_TEST_CASE(malformedWrapperThrows)
     badSidecar.blobs.front().pop_back();
     // encode does not validate sizes, only counts — the decoder must reject.
     auto const badWrapper = encodeBlobTxNetworkWrapper(tx, badSidecar);
-    BOOST_CHECK_THROW(decodeBlobTxNetworkWrapper(
-                          bcos::bytesConstRef(badWrapper.data(), badWrapper.size()), decoded,
-                          decodedSidecar),
+    BOOST_CHECK_THROW(
+        decodeBlobTxNetworkWrapper(
+            bcos::bytesConstRef(badWrapper.data(), badWrapper.size()), decoded, decodedSidecar),
         codec::rlp::RlpDecodeException);
 
     // Not a wrapper at all (the stripped form).
     auto const stripped = tx.encode();
-    BOOST_CHECK_THROW(decodeBlobTxNetworkWrapper(
-                          bcos::bytesConstRef(stripped.data(), stripped.size()), decoded,
-                          decodedSidecar),
+    BOOST_CHECK_THROW(
+        decodeBlobTxNetworkWrapper(
+            bcos::bytesConstRef(stripped.data(), stripped.size()), decoded, decodedSidecar),
         codec::rlp::RlpDecodeException);
 }
 

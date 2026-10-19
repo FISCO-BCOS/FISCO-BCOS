@@ -268,8 +268,8 @@ public:
         // FISCO-shaped payload. The legacy lane keeps the plain filler transaction.
         if (g_mwExecutorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            block->appendTransaction(bcos::test::sharedmock::makeWeb3FillerTx(
-                static_cast<uint64_t>(number), *hashImpl));
+            block->appendTransaction(
+                bcos::test::sharedmock::makeWeb3FillerTx(static_cast<uint64_t>(number), *hashImpl));
         }
         else
         {
@@ -378,7 +378,8 @@ public:
         return merged.root;
     }
 
-    static h256 storageTrieOracle(std::map<h256, bcos::bytes> const& slots)  // slot -> 32-byte raw value
+    static h256 storageTrieOracle(std::map<h256, bcos::bytes> const& slots)  // slot -> 32-byte raw
+                                                                             // value
     {
         namespace mpt = bcos::ledger::mpt;
         std::map<h256, std::optional<bcos::bytes>> changes;

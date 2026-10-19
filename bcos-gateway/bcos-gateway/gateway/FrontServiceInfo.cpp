@@ -31,7 +31,8 @@ bool bcos::gateway::FrontServiceInfo::unreachable()
         return false;
     }
 
-    return !bcostars::checkConnection("FrontService", "unreachable", m_frontServicePrx, nullptr, false);
+    return !bcostars::checkConnection(
+        "FrontService", "unreachable", m_frontServicePrx, nullptr, false);
 }
 
 std::string const& bcos::gateway::FrontServiceInfo::nodeID() const

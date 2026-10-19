@@ -63,8 +63,7 @@ std::shared_ptr<bytes> AwsKmsWrapper::encryptContents(const std::shared_ptr<byte
     Aws::KMS::Model::EncryptRequest request;
     request.SetKeyId(m_keyId);
 
-    Aws::Utils::ByteBuffer plaintextBlob(
-        contents->data(), contents->size());
+    Aws::Utils::ByteBuffer plaintextBlob(contents->data(), contents->size());
     request.SetPlaintext(plaintextBlob);
 
     auto outcome = m_kmsClient->Encrypt(request);

@@ -135,8 +135,7 @@ public:
 
         auto verifierHolder = m_sharedVerifier ? m_sharedVerifier :
                                                  std::make_shared<Verifier>(*m_scheduler,
-                                                     *m_executor, *m_blockFactory,
-                                                     m_commitObserver,
+                                                     *m_executor, *m_blockFactory, m_commitObserver,
                                                      m_nodeConfig->ethereumReorgWindow());
         Verifier& verifier = *verifierHolder;
         auto const forks = EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig);
@@ -160,9 +159,8 @@ public:
         for (auto const& file : files)
         {
             auto const fileBytes = readFile(file);
-            for (auto const& item :
-                splitRlpItems(bcos::bytesConstRef(fileBytes.data(), fileBytes.size()),
-                    file.string()))
+            for (auto const& item : splitRlpItems(
+                     bcos::bytesConstRef(fileBytes.data(), fileBytes.size()), file.string()))
             {
                 importOneBlock(verifier, item, file.string(), forks, chainId, mergeBlock,
                     stateRootCalc, parentHeader, summary);
@@ -192,12 +190,10 @@ private:
         {
             // ec-scoped iteration: a mid-walk failure lands in ec (the tool's own
             // message below) instead of escaping as std::filesystem_error.
-            for (fs::directory_iterator it(_path, ec), end; !ec && it != end;
-                 it.increment(ec))
+            for (fs::directory_iterator it(_path, ec), end; !ec && it != end; it.increment(ec))
             {
                 std::error_code entryEc;
-                if (it->is_regular_file(entryEc) && !entryEc &&
-                    it->path().extension() == ".rlp")
+                if (it->is_regular_file(entryEc) && !entryEc && it->path().extension() == ".rlp")
                 {
                     files.push_back(it->path());
                 }
@@ -267,8 +263,7 @@ private:
             {
                 BOOST_THROW_EXCEPTION(std::runtime_error(
                     "--import-blocks: malformed RLP framing in " + _source + " at offset " +
-                    std::to_string(_buffer.size() - view.size()) + ": " +
-                    header.error().message));
+                    std::to_string(_buffer.size() - view.size()) + ": " + header.error().message));
             }
             auto const itemLength = (view.size() - cursor.size()) + header->payloadLength;
             items.emplace_back(view.data(), view.data() + itemLength);
@@ -315,9 +310,8 @@ private:
     /// Decode, verify and commit one block item; on success advance _parentHeader and
     /// count it imported, on ANY failure log a WARNING, count it skipped and leave
     /// _parentHeader untouched.
-    void importOneBlock(Verifier& _verifier, bcos::bytes const& _item,
-        std::string const& _source, scheduler_v1::EvmcForkTimestamps const& _forks,
-        uint64_t _chainId, uint64_t _mergeBlock,
+    void importOneBlock(Verifier& _verifier, bcos::bytes const& _item, std::string const& _source,
+        scheduler_v1::EvmcForkTimestamps const& _forks, uint64_t _chainId, uint64_t _mergeBlock,
         typename Verifier::template StateRootCalculator<ViewType> const& _stateRootCalc,
         bcos::protocol::EthBlockHeaderData& _parentHeader, BlockImportSummary& _summary);
 
@@ -333,8 +327,8 @@ private:
 };
 
 inline void EthereumBlockImporter::importOneBlock(Verifier& _verifier, bcos::bytes const& _item,
-    std::string const& _source, scheduler_v1::EvmcForkTimestamps const& _forks,
-    uint64_t _chainId, uint64_t _mergeBlock,
+    std::string const& _source, scheduler_v1::EvmcForkTimestamps const& _forks, uint64_t _chainId,
+    uint64_t _mergeBlock,
     typename Verifier::template StateRootCalculator<ViewType> const& _stateRootCalc,
     bcos::protocol::EthBlockHeaderData& _parentHeader, BlockImportSummary& _summary)
 {
@@ -363,8 +357,9 @@ inline void EthereumBlockImporter::importOneBlock(Verifier& _verifier, bcos::byt
     {
         ++_summary.skipped;
         INITIALIZER_LOG(WARNING)
-            << LOG_DESC("import-blocks: parent hash does not link to the current import "
-                        "head, skipping")
+            << LOG_DESC(
+                   "import-blocks: parent hash does not link to the current import "
+                   "head, skipping")
             << LOG_KV("number", blockData.header.number)
             << LOG_KV("hash", blockHash.hex().substr(0, 18))
             << LOG_KV("parentHash", blockData.header.parentInfo.blockHash.hex().substr(0, 18))
@@ -401,18 +396,17 @@ inline void EthereumBlockImporter::importOneBlock(Verifier& _verifier, bcos::byt
     try
     {
         auto result = task::syncWait(_verifier.verifyAndCommit(
-            m_globalStateStorageInitializer->storage(), *m_ledger, blockData.header,
-            _parentHeader, blockData.transactions, rawWithdrawals, _forks, _chainId, rawUncles,
-            _mergeBlock, [this](bcos::bytes const& raw) { return decodeRaw(raw); },
-            _stateRootCalc));
+            m_globalStateStorageInitializer->storage(), *m_ledger, blockData.header, _parentHeader,
+            blockData.transactions, rawWithdrawals, _forks, _chainId, rawUncles, _mergeBlock,
+            [this](bcos::bytes const& raw) { return decodeRaw(raw); }, _stateRootCalc));
         if (!result.valid)
         {
             ++_summary.skipped;
             INITIALIZER_LOG(WARNING)
                 << LOG_DESC("import-blocks: block verification failed, skipping")
                 << LOG_KV("number", blockData.header.number)
-                << LOG_KV("hash", blockHash.hex().substr(0, 18))
-                << LOG_KV("source", _source) << LOG_KV("error", result.error);
+                << LOG_KV("hash", blockHash.hex().substr(0, 18)) << LOG_KV("source", _source)
+                << LOG_KV("error", result.error);
             return;
         }
         // The block is committed — advance the running parent and the summary
@@ -420,10 +414,9 @@ inline void EthereumBlockImporter::importOneBlock(Verifier& _verifier, bcos::byt
         // mis-report this block as skipped and desync the rest of the run.
         _parentHeader = blockData.header;
         ++_summary.imported;
-        INITIALIZER_LOG(DEBUG)
-            << LOG_DESC("import-blocks: committed block")
-            << LOG_KV("number", blockData.header.number)
-            << LOG_KV("hash", blockHash.hex().substr(0, 18));
+        INITIALIZER_LOG(DEBUG) << LOG_DESC("import-blocks: committed block")
+                               << LOG_KV("number", blockData.header.number)
+                               << LOG_KV("hash", blockHash.hex().substr(0, 18));
         if (_summary.imported % 1000 == 0)
         {
             INITIALIZER_LOG(INFO) << LOG_DESC("import-blocks: progress")

@@ -32,8 +32,8 @@ class AwsKmsWrapper : public KeyEncryptInterface
 public:
     explicit AwsKmsWrapper(
         const std::string& region, const std::string& accessKey, const std::string& secretKey);
-    explicit AwsKmsWrapper(
-        const std::string& region, const std::string& accessKey, const std::string& secretKey, std::string keyId);
+    explicit AwsKmsWrapper(const std::string& region, const std::string& accessKey,
+        const std::string& secretKey, std::string keyId);
     explicit AwsKmsWrapper(std::shared_ptr<Aws::KMS::KMSClient> kmsClient, std::string keyId = {})
       : m_kmsClient(std::move(kmsClient)), m_keyId(std::move(keyId))
     {}
@@ -45,7 +45,10 @@ public:
     std::shared_ptr<bytes> decryptContents(const std::shared_ptr<bytes>& ciphertext) override;
     std::shared_ptr<bytes> decryptFile(const std::string& inputFilePath) override;
 
-    void setKmsClient(const std::shared_ptr<Aws::KMS::KMSClient>& kmsClient) { m_kmsClient = kmsClient; }
+    void setKmsClient(const std::shared_ptr<Aws::KMS::KMSClient>& kmsClient)
+    {
+        m_kmsClient = kmsClient;
+    }
 
 private:
     std::shared_ptr<Aws::KMS::KMSClient> m_kmsClient;

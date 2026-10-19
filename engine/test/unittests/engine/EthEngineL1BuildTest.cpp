@@ -407,8 +407,8 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
             key, std::forward<decltype(args)>(args)...);
     }
 
-    auto readSomeRaw(
-        ::ranges::input_range auto keys, auto&&... args) -> task::Task<std::vector<DataValue>>
+    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<std::vector<DataValue>>
     {
         if (accountReadGate->load(std::memory_order_acquire) ||
             accountReadThrowRemaining->load(std::memory_order_acquire) > 0)
@@ -429,8 +429,8 @@ struct FaultyBackendStorage : RealGlobalStateBackendStorage
             std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto readSome(::ranges::input_range auto keys,
-        auto&&... args) -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
+    auto readSome(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
     {
         if (accountReadGate->load(std::memory_order_acquire) ||
             accountReadThrowRemaining->load(std::memory_order_acquire) > 0)

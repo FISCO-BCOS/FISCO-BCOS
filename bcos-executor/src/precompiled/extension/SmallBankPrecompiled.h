@@ -37,7 +37,7 @@ public:
 
     SmallBankPrecompiled(crypto::Hash::Ptr hashImpl, std::string _tableName);
 
-    ~SmallBankPrecompiled() override{};
+    ~SmallBankPrecompiled() override {};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,

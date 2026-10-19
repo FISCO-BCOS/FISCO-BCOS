@@ -41,8 +41,8 @@ public:
         bool _syncArchivedBlockBody = false);
     virtual ~BlockSyncFactory() = default;
 
-    virtual BlockSync::Ptr createBlockSync(boost::asio::io_context& _ioContext,
-        bcos::IOServicePool::Ptr _ioServicePool);
+    virtual BlockSync::Ptr createBlockSync(
+        boost::asio::io_context& _ioContext, bcos::IOServicePool::Ptr _ioServicePool);
 
 private:
     bcos::crypto::PublicPtr m_nodeId;

@@ -264,8 +264,7 @@ public:
     task::Task<std::tuple<Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>> getGroupNodeInfo(
         const std::string& /*_groupID*/) override
     {
-        co_return std::make_tuple(
-            Error::Ptr(nullptr), bcos::gateway::GroupNodeInfo::Ptr(nullptr));
+        co_return std::make_tuple(Error::Ptr(nullptr), bcos::gateway::GroupNodeInfo::Ptr(nullptr));
     }
     task::Task<std::tuple<Error::Ptr, gateway::GatewayInfo::Ptr, gateway::GatewayInfosPtr>>
     getPeers() override
@@ -298,8 +297,8 @@ public:
     {
         co_return nullptr;
     }
-    task::Task<Error::Ptr> removeTopic(const std::string& _clientID,
-        const std::vector<std::string>& _topicList) override
+    task::Task<Error::Ptr> removeTopic(
+        const std::string& _clientID, const std::vector<std::string>& _topicList) override
     {
         co_return nullptr;
     }
@@ -337,8 +336,7 @@ public:
     {
         co_return nullptr;
     }
-    bcos::task::Task<void> broadcastMessage(
-        uint16_t type, int moduleID,
+    bcos::task::Task<void> broadcastMessage(uint16_t type, int moduleID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override
     {
         for (const auto& node : m_nodeIDList)
@@ -376,16 +374,13 @@ public:
         {
             // the fake gateway invokes the callback synchronously; forward its error so the
             // fake honours the same contract as the real sendResponse
-            m_fakeGateWay->asyncSendResponse(
-                _id, _moduleId, _nodeID, _responseData, [&error](Error::Ptr _error) {
-                    error = std::move(_error);
-                });
+            m_fakeGateWay->asyncSendResponse(_id, _moduleId, _nodeID, _responseData,
+                [&error](Error::Ptr _error) { error = std::move(_error); });
         }
         co_return error;
     }
 
-    bcos::task::Task<SendResult> sendMessageByNodeID(int _moduleId,
-        bcos::crypto::NodeIDPtr _nodeId,
+    bcos::task::Task<SendResult> sendMessageByNodeID(int _moduleId, bcos::crypto::NodeIDPtr _nodeId,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
         uint32_t _timeout) override
     {

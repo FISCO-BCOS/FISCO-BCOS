@@ -23,8 +23,8 @@
  */
 #pragma once
 
-#include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/security/StorageEncryptInterface.h>
+#include <bcos-framework/storage/StorageInterface.h>
 #include <rocksdb/db.h>
 #include <tbb/parallel_for.h>
 
@@ -39,7 +39,8 @@ class RocksDBStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
-    explicit RocksDBStorage(std::unique_ptr<::rocksdb::DB, std::function<void(::rocksdb::DB*)>>&& db,
+    explicit RocksDBStorage(
+        std::unique_ptr<::rocksdb::DB, std::function<void(::rocksdb::DB*)>>&& db,
         const bcos::security::StorageEncryptInterface::Ptr dataEncryption);
 
     ~RocksDBStorage() {}
@@ -54,9 +55,9 @@ public:
 
     // due to the blocking of m_db->MultiGet, this interface is actually a synchronous interface
     void asyncGetRows(std::string_view table,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access |
-                ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
         override;

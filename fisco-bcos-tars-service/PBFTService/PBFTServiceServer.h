@@ -75,7 +75,8 @@ public:
         tars::TarsCurrentPtr _current) override;
 
     bcostars::Error asyncNotifyConnectedNodes(
-        const std::vector<std::vector<tars::Char>>& connectedNodes, tars::TarsCurrentPtr current) override
+        const std::vector<std::vector<tars::Char>>& connectedNodes,
+        tars::TarsCurrentPtr current) override
     {
         current->setResponse(false);
 

@@ -19,12 +19,12 @@
  * @date 2021-04-26
  */
 #include "bcos-pbft/pbft/engine/PBFTTimer.h"
-#include <chrono>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <thread>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -35,7 +35,8 @@ class FakeTimer : public Timer
 {
 public:
     explicit FakeTimer(boost::asio::io_context& _ioService, uint64_t _timeout)
-      : Timer(_ioService, _timeout, "fakeTimer") {}
+      : Timer(_ioService, _timeout, "fakeTimer")
+    {}
     ~FakeTimer() override {}
     void setTriggerTimeout(bool _triggerTimeout) { m_triggerTimeout = _triggerTimeout; }
     bool triggerTimeout() { return m_triggerTimeout; }

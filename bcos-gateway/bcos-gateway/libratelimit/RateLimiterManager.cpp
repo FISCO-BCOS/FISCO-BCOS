@@ -18,9 +18,9 @@
  * @date 2022-06-30
  */
 
+#include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
-#include "bcos-gateway/libratelimit/RateLimiterManager.h"
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -130,7 +130,8 @@ void RateLimiterManager::initP2pBasicMsgTypes()
     }
 }
 
-bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(const std::string& _rateLimiterKey)
+bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(
+    const std::string& _rateLimiterKey)
 {
     std::shared_lock lock(x_rateLimiters);
     auto it = m_rateLimiters.find(_rateLimiterKey);
@@ -142,7 +143,8 @@ bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getRateLimiter(
     return nullptr;
 }
 
-std::pair<bool, bcos::ratelimiter::RateLimiterInterface::Ptr> RateLimiterManager::registerRateLimiter(
+std::pair<bool, bcos::ratelimiter::RateLimiterInterface::Ptr>
+RateLimiterManager::registerRateLimiter(
     const std::string& _rateLimiterKey, bcos::ratelimiter::RateLimiterInterface::Ptr _rateLimiter)
 {
     bool result = false;
@@ -184,7 +186,8 @@ bool RateLimiterManager::removeRateLimiter(const std::string& _rateLimiterKey)
     return result;
 }
 
-bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(const std::string& _group)
+bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLimiter(
+    const std::string& _group)
 {
     if (!m_enableOutGroupRateLimit)
     {
@@ -318,7 +321,8 @@ bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getInRateLimite
     return result.first ? rateLimiter : result.second;
 }
 
-bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(const std::string& _connIP)
+bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getConnRateLimiter(
+    const std::string& _connIP)
 {
     if (!m_enableOutConRateLimit)
     {

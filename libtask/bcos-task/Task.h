@@ -16,9 +16,9 @@
 
 #pragma once
 #include "bcos-utilities/Exceptions.h"
-#include <atomic>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <atomic>
 #include <coroutine>
 #include <exception>
 #include <memory>
@@ -101,10 +101,7 @@ public:
         constexpr std::suspend_always initial_suspend() noexcept { return {}; }
         constexpr std::suspend_never final_suspend() noexcept { return {}; }
         constexpr void return_void() noexcept {}
-        void unhandled_exception()
-        {
-            std::rethrow_exception(std::current_exception());
-        }
+        void unhandled_exception() { std::rethrow_exception(std::current_exception()); }
         TaskPure get_return_object()
         {
             auto handle = std::coroutine_handle<promise_type>::from_promise(
@@ -171,10 +168,7 @@ struct GetResultAwaitable
         // the data inline.
         return false;
     }
-    std::tuple<Resp...> await_resume() noexcept
-    {
-        return std::move(m_result.data);
-    }
+    std::tuple<Resp...> await_resume() noexcept { return std::move(m_result.data); }
 
     static void complete(Result& result, Resp... resp)
     {
@@ -203,21 +197,26 @@ template <class TaskType>
 struct Awaitable
 {
     explicit Awaitable(std::coroutine_handle<typename TaskType::promise_type> handle)
-      { m_continuation.handle = std::move(handle);}
+    {
+        m_continuation.handle = std::move(handle);
+    }
     Awaitable(const Awaitable&) = delete;
     Awaitable(Awaitable&&) noexcept = default;
     Awaitable& operator=(const Awaitable&) = delete;
     Awaitable& operator=(Awaitable&&) noexcept = default;
     ~Awaitable() noexcept = default;
 
-    bool await_ready() const noexcept { return !m_continuation.handle || m_continuation.handle.done(); }
+    bool await_ready() const noexcept
+    {
+        return !m_continuation.handle || m_continuation.handle.done();
+    }
     std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle)
     {
-        // This transformation operation is safe 
+        // This transformation operation is safe
         // when Awaitable is constructed by coroutine_handle<typename TaskType::promise_type>
         // but unsafe when Awaitable is constructed by other ways
-        auto nextHandle = 
-            std::coroutine_handle<typename TaskType::promise_type>::from_address(m_continuation.handle.address());
+        auto nextHandle = std::coroutine_handle<typename TaskType::promise_type>::from_address(
+            m_continuation.handle.address());
         m_continuation.handle = handle;
         nextHandle.promise().m_continuation = std::addressof(m_continuation);
         return nextHandle;

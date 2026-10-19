@@ -213,8 +213,8 @@ BOOST_AUTO_TEST_CASE(ExclusionAtGenerateLevel)
     account.nonce = 1;
     auto const stateRoot = seedStateTrieFlushed(storage, {{makeAddress(0xab), account}});
 
-    auto missing = bcos::task::syncWait(generateProof(storage, stateRoot, makeAddress(0xcd),
-        std::span<bcos::h256 const>{}, /*fullTrie=*/false));
+    auto missing = bcos::task::syncWait(generateProof(
+        storage, stateRoot, makeAddress(0xcd), std::span<bcos::h256 const>{}, /*fullTrie=*/false));
     BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(missing));
     BOOST_CHECK(std::get<ProofErrorCode>(missing) == ProofErrorCode::AccountNotInMPT);
 }

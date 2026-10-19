@@ -20,11 +20,11 @@
  */
 #pragma once
 
-#include "Block.h"
-#include "HeaderValidator.h"
+#include "../eth/Protocol.h"
 #include "../rlpx/Messages.h"
 #include "../rlpx/Session.h"
-#include "../eth/Protocol.h"
+#include "Block.h"
+#include "HeaderValidator.h"
 #include <functional>
 #include <stdexcept>
 
@@ -63,8 +63,7 @@ struct HeaderRuleViolation : public std::runtime_error
 class HeaderChain
 {
 public:
-    HeaderChain(uint64_t _nextNumber, bcos::h256 _anchorHash,
-        uint64_t _maxHeadersPerRequest = 192);
+    HeaderChain(uint64_t _nextNumber, bcos::h256 _anchorHash, uint64_t _maxHeadersPerRequest = 192);
 
     // With a known anchor header (the local block before nextNumber), every
     // downloaded header is additionally validated against Ethereum PoS rules.

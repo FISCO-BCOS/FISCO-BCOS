@@ -77,5 +77,3 @@ inline std::ostream& operator<<(std::ostream& _out, JwtError _error)
     return _out;
 }
 }  // namespace bcos::rpc
-
-

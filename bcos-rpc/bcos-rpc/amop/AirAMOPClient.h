@@ -22,8 +22,8 @@
 #include "AMOPClient.h"
 
 #include <bcos-task/Wait.h>
-#include <utility>
 #include <bcos-utilities/BoostLog.h>
+#include <utility>
 
 namespace bcos::rpc
 {

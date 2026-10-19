@@ -16,7 +16,6 @@
  */
 
 #include "FakeGateway.h"
-#include <chrono>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontServiceFactory.h>
@@ -25,6 +24,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <thread>
 

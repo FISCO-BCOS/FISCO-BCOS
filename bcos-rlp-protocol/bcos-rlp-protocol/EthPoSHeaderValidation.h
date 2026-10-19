@@ -40,7 +40,7 @@ constexpr uint64_t kElasticityMultiplier = 2;
 constexpr uint64_t kBaseFeeMaxChangeDenominator = 8;
 constexpr u256 kInitialBaseFee{1000000000};  // 1 gwei
 constexpr uint64_t kMaxExtraDataSize = 32;
-constexpr uint64_t kGasPerBlob = 1U << 17;  // 131072 (BlobTxBlobGasPerBlob)
+constexpr uint64_t kGasPerBlob = 1U << 17;    // 131072 (BlobTxBlobGasPerBlob)
 constexpr uint64_t kBlobBaseCost = 1U << 13;  // 8192 (EIP-7918 reserve-price factor)
 
 // EIP-7840 blob schedule per fork: the canonical table (blob counts + update
@@ -119,12 +119,12 @@ inline bool isForkActive(uint64_t _forkTime, int64_t _timestamp)
 // schedule — EIP-7918 changes only the excess-blob-gas UPDATE rule.
 inline BlobGasSchedule blobScheduleFor(PoSChainConfig const& _config, int64_t _timestamp)
 {
-    return toGasSchedule(protocol::blobScheduleForTimestamp(
-        protocol::BlobForkTimes{.cancunTime = _config.cancunTime,
-            .pragueTime = _config.pragueTime,
-            .bpo1Time = _config.bpo1Time,
-            .bpo2Time = _config.bpo2Time},
-        static_cast<uint64_t>(_timestamp)));
+    return toGasSchedule(
+        protocol::blobScheduleForTimestamp(protocol::BlobForkTimes{.cancunTime = _config.cancunTime,
+                                               .pragueTime = _config.pragueTime,
+                                               .bpo1Time = _config.bpo1Time,
+                                               .bpo2Time = _config.bpo2Time},
+            static_cast<uint64_t>(_timestamp)));
 }
 
 // EIP-1559: the base fee of the next block (the block after `_parent`).
@@ -158,8 +158,7 @@ inline u256 computeNextBaseFee(bcos::protocol::EthBlockHeaderData const& _parent
 // excess values here come from peer headers, so absurd inputs saturate (treated
 // as "very expensive", the same side of the reserve-price branch geth lands on)
 // instead of wrapping.
-inline u256 fakeExponential(
-    u256 const& _factor, u256 const& _numerator, u256 const& _denominator)
+inline u256 fakeExponential(u256 const& _factor, u256 const& _numerator, u256 const& _denominator)
 {
     u512 output = 0;
     u256 acc = _factor * _denominator;
@@ -176,9 +175,8 @@ inline u256 fakeExponential(
         ++i;
     }
     auto const result = output / u512(_denominator);
-    return result > u512(std::numeric_limits<u256>::max()) ?
-               std::numeric_limits<u256>::max() :
-               u256(result);
+    return result > u512(std::numeric_limits<u256>::max()) ? std::numeric_limits<u256>::max() :
+                                                             u256(result);
 }
 
 // EIP-4844 / EIP-7918: the excess blob gas of the next block (the block after
@@ -206,13 +204,12 @@ inline u256 computeNextExcessBlobGas(bcos::protocol::EthBlockHeaderData const& _
         // BlobConfig.blobPrice.
         u256 const reservePrice = kBlobBaseCost * _parent.baseFee.value_or(0);
         u256 const blobPrice =
-            fakeExponential(u256{1}, parentExcess, _schedule.baseFeeUpdateFraction) *
-            kGasPerBlob;
+            fakeExponential(u256{1}, parentExcess, _schedule.baseFeeUpdateFraction) * kGasPerBlob;
         if (reservePrice > blobPrice)
         {
-            u256 const scaledExcess =
-                parentBlobGasUsed * (_schedule.maxBlobGas - _schedule.targetBlobGas) /
-                _schedule.maxBlobGas;
+            u256 const scaledExcess = parentBlobGasUsed *
+                                      (_schedule.maxBlobGas - _schedule.targetBlobGas) /
+                                      _schedule.maxBlobGas;
             return parentExcess + scaledExcess;
         }
     }
@@ -221,8 +218,7 @@ inline u256 computeNextExcessBlobGas(bcos::protocol::EthBlockHeaderData const& _
 
 namespace detail
 {
-inline std::optional<std::string> validateBaseFee(
-    bcos::protocol::EthBlockHeaderData const& _header,
+inline std::optional<std::string> validateBaseFee(bcos::protocol::EthBlockHeaderData const& _header,
     bcos::protocol::EthBlockHeaderData const& _parent, PoSChainConfig const& _config)
 {
     bool londonActive = isForkActive(_config.londonTime, _header.timestamp);
@@ -252,15 +248,13 @@ inline std::optional<std::string> validateBaseFee(
     return std::nullopt;
 }
 
-inline std::optional<std::string> validateBlobGas(
-    bcos::protocol::EthBlockHeaderData const& _header,
+inline std::optional<std::string> validateBlobGas(bcos::protocol::EthBlockHeaderData const& _header,
     bcos::protocol::EthBlockHeaderData const& _parent, PoSChainConfig const& _config)
 {
     auto const schedule = blobScheduleFor(_config, _header.timestamp);
     if (_header.blobGasUsed.has_value())
     {
-        if (*_header.blobGasUsed > schedule.maxBlobGas ||
-            *_header.blobGasUsed % kGasPerBlob != 0)
+        if (*_header.blobGasUsed > schedule.maxBlobGas || *_header.blobGasUsed % kGasPerBlob != 0)
         {
             return "invalid blobGasUsed";
         }
@@ -279,9 +273,8 @@ inline std::optional<std::string> validateBlobGas(
                 return "excessBlobGas must be zero at Cancun activation";
             }
         }
-        else if (*_header.excessBlobGas !=
-                 computeNextExcessBlobGas(_parent, schedule,
-                     isForkActive(_config.osakaTime, _header.timestamp)))
+        else if (*_header.excessBlobGas != computeNextExcessBlobGas(_parent, schedule,
+                                               isForkActive(_config.osakaTime, _header.timestamp)))
         {
             return "excessBlobGas does not match the EIP-4844/7918 recomputation";
         }
@@ -361,12 +354,11 @@ inline std::optional<std::string> validateForkFieldPresence(
 // caller; this focuses on the per-header field rules. Blocks before the merge
 // (PoW, `number < mergeBlock`) follow PoW rules — difficulty is non-zero and
 // ommers are allowed — while merged blocks follow PoS rules.
-inline HeaderValidationResult validateHeaderPoS(
-    bcos::protocol::EthBlockHeaderData const& _header,
+inline HeaderValidationResult validateHeaderPoS(bcos::protocol::EthBlockHeaderData const& _header,
     bcos::protocol::EthBlockHeaderData const& _parent, PoSChainConfig const& _config)
 {
-    const bool pos = _config.mergeBlock == 0 ||
-                     static_cast<uint64_t>(_header.number) >= _config.mergeBlock;
+    const bool pos =
+        _config.mergeBlock == 0 || static_cast<uint64_t>(_header.number) >= _config.mergeBlock;
     if (pos)
     {
         // PoS: difficulty must be zero, the nonce must be all-zero and no ommers.

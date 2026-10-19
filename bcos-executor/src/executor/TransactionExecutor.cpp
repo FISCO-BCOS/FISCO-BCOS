@@ -76,6 +76,8 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
@@ -88,8 +90,6 @@
 #include <mutex>
 #include <shared_mutex>
 #include <string>
-#include <tbb/blocked_range.h>
-#include <tbb/parallel_for.h>
 #include <utility>
 #include <vector>
 
@@ -283,10 +283,11 @@ void TransactionExecutor::initEvmEnvironment()
     // The Ethereum lane (executor_version >= ETHEREUM_EXECUTOR_VERSION) hides the
     // FISCO-private precompiles (kL2DisabledSet). The lane is genesis-fixed, so the
     // boot-time ledgerConfig snapshot is authoritative for the predicate lifetime.
-    const bool ethLane = m_ledgerCache->ledgerConfig().executorVersion() >=
-                         ledger::ETHEREUM_EXECUTOR_VERSION;
+    const bool ethLane =
+        m_ledgerCache->ledgerConfig().executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
     m_precompiled->insert(SYS_CONFIG_ADDRESS, std::move(sysConfig), disabledInL2(ethLane));
-    m_precompiled->insert(CONSENSUS_ADDRESS, std::move(consensusPrecompiled), disabledInL2(ethLane));
+    m_precompiled->insert(
+        CONSENSUS_ADDRESS, std::move(consensusPrecompiled), disabledInL2(ethLane));
     m_precompiled->insert(
         TABLE_MANAGER_ADDRESS, std::move(tableManagerPrecompiled), disabledInL2(ethLane));
     m_precompiled->insert(KV_TABLE_ADDRESS, std::move(kvTablePrecompiled), disabledInL2(ethLane));
@@ -302,8 +303,8 @@ void TransactionExecutor::initEvmEnvironment()
                 return features.get(ledger::Features::Flag::feature_paillier);
             },
             disabledInL2(ethLane)));
-    m_precompiled->insert(
-        GROUP_SIG_ADDRESS, std::make_shared<GroupSigPrecompiled>(m_hashImpl), disabledInL2(ethLane));
+    m_precompiled->insert(GROUP_SIG_ADDRESS, std::make_shared<GroupSigPrecompiled>(m_hashImpl),
+        disabledInL2(ethLane));
     m_precompiled->insert(
         RING_SIG_ADDRESS, std::make_shared<RingSigPrecompiled>(m_hashImpl), disabledInL2(ethLane));
     m_precompiled->insert(
@@ -440,9 +441,10 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
                                 << "NextBlockHeader request: "
                                 << LOG_KV("blockVersion", blockHeader->version())
                                 << LOG_KV("schedulerTermId", schedulerTermId)
-                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
-                                                            blockHeader->parentInfo().blockHash.abridged() :
-                                                            "null");
+                                << LOG_KV("parentHash",
+                                       blockHeader->number() > 0 ?
+                                           blockHeader->parentInfo().blockHash.abridged() :
+                                           "null");
         setBlockVersion(blockHeader->version());
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -540,9 +542,10 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
         EXECUTOR_NAME_LOG(INFO) << BLOCK_NUMBER(blockHeader->number()) << "NextBlockHeader success"
                                 << LOG_KV("number", blockHeader->number())
-                                << LOG_KV("parentHash", blockHeader->number() > 0 ?
-                                                            blockHeader->parentInfo().blockHash.abridged() :
-                                                            "null");
+                                << LOG_KV("parentHash",
+                                       blockHeader->number() > 0 ?
+                                           blockHeader->parentInfo().blockHash.abridged() :
+                                           "null");
         callback(nullptr);
     }
     catch (std::exception& e)

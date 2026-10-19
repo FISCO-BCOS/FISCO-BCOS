@@ -50,13 +50,13 @@
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/Common.h"
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <memory>
 #include <string>
-#include <boost/algorithm/string.hpp>
 
 
 using std::exception;

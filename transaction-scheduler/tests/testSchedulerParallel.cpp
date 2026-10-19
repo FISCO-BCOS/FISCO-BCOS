@@ -115,8 +115,8 @@ struct MockConflictExecutor
         task::Task<void> prepare()
         {
             auto input = transaction->input();
-            auto inputNum = boost::lexical_cast<int>(
-                std::string_view((const char*)input.data(), input.size()));
+            auto inputNum =
+                boost::lexical_cast<int>(std::string_view((const char*)input.data(), input.size()));
             fromAddress = std::to_string(inputNum % MOCK_USER_COUNT);
             toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
             co_return;
@@ -126,8 +126,8 @@ struct MockConflictExecutor
         {
             StateKey fromKey{"t_test"sv, fromAddress};
             auto fromEntry = co_await storage2::readOne(*storage, fromKey);
-            fromEntry->set(boost::lexical_cast<std::string>(
-                boost::lexical_cast<int>(fromEntry->get()) - 1));
+            fromEntry->set(
+                boost::lexical_cast<std::string>(boost::lexical_cast<int>(fromEntry->get()) - 1));
             co_await storage2::writeOne(*storage, fromKey, *fromEntry);
 
             // Read toKey and +1

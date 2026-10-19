@@ -55,10 +55,10 @@ public:
     void asyncGetRow(std::string_view _key,
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept;
 
-    void asyncGetRows(
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
-            keys,
+    void asyncGetRows(::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                               ::ranges::category::random_access |
+                                                               ::ranges::category::sized>
+                          keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)>
             _callback) noexcept;
 

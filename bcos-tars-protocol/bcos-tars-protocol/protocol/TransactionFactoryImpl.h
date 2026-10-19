@@ -37,9 +37,8 @@ public:
 
     bcos::protocol::Transaction::Ptr createTransaction() override;
     bcos::protocol::Transaction::Ptr createTransaction(bcos::protocol::Transaction& input) override;
-    bcos::protocol::Transaction::Ptr createTransaction(
-        bcos::bytesConstRef txData, bool checkSig = true, bool checkHash = false,
-        bool tainted = true) override;
+    bcos::protocol::Transaction::Ptr createTransaction(bcos::bytesConstRef txData,
+        bool checkSig = true, bool checkHash = false, bool tainted = true) override;
 
     std::shared_ptr<bcos::protocol::Transaction> createTransaction(int32_t _version,
         std::string _to, bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,

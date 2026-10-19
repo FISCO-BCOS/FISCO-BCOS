@@ -312,7 +312,8 @@ bool EthereumHost<Storage, Policy>::account_exists(const address& addr) const no
 }
 
 template <class Storage, class Policy>
-bytes32 EthereumHost<Storage, Policy>::get_storage(const address& addr, const bytes32& key) const noexcept
+bytes32 EthereumHost<Storage, Policy>::get_storage(
+    const address& addr, const bytes32& key) const noexcept
 {
     return m_state.get_storage(addr, key).current;
 }
@@ -439,7 +440,8 @@ size_t EthereumHost<Storage, Policy>::copy_code(const address& addr, size_t code
 }
 
 template <class Storage, class Policy>
-bool EthereumHost<Storage, Policy>::selfdestruct(const address& addr, const address& beneficiary) noexcept
+bool EthereumHost<Storage, Policy>::selfdestruct(
+    const address& addr, const address& beneficiary) noexcept
 {
     if (m_state.find(beneficiary) == nullptr)
         m_state.journal_create(beneficiary, false);
@@ -479,7 +481,8 @@ bool EthereumHost<Storage, Policy>::selfdestruct(const address& addr, const addr
 }
 
 template <class Storage, class Policy>
-std::optional<evmc_message> EthereumHost<Storage, Policy>::prepare_message(evmc_message msg) noexcept
+std::optional<evmc_message> EthereumHost<Storage, Policy>::prepare_message(
+    evmc_message msg) noexcept
 {
     assert(msg.kind != EVMC_EOFCREATE);
     if (msg.depth == 0 || msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
@@ -694,8 +697,7 @@ evmc_tx_context EthereumHost<Storage, Policy>::get_tx_context() const noexcept
     }
 
     const auto sender = m_txContext.has_value() ? m_txContext->sender : address{};
-    const auto* blob_hashes =
-        m_txContext.has_value() ? m_txContext->blobHashes.data() : nullptr;
+    const auto* blob_hashes = m_txContext.has_value() ? m_txContext->blobHashes.data() : nullptr;
     const auto blob_hashes_count = m_txContext.has_value() ? m_txContext->blobHashes.size() : 0;
 
     return evmc_tx_context{
@@ -744,8 +746,8 @@ bytes32 EthereumHost<Storage, Policy>::get_block_hash(int64_t block_number) cons
 }
 
 template <class Storage, class Policy>
-void EthereumHost<Storage, Policy>::emit_log(const address& addr, const uint8_t* data, size_t data_size,
-    const bytes32 topics[], size_t topics_count) noexcept
+void EthereumHost<Storage, Policy>::emit_log(const address& addr, const uint8_t* data,
+    size_t data_size, const bytes32 topics[], size_t topics_count) noexcept
 {
     m_logs.push_back({addr, {data, data_size}, {topics, topics + topics_count}});
 }

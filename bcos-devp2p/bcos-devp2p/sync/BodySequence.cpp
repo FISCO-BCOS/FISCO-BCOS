@@ -40,9 +40,8 @@ std::vector<Block> BodySequence::requestBodies(
     {
         request.hashes.push_back(header.hash);
     }
-    _session.sendMessage(
-        rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockBodies)),
-            eth::encodeGetBlockBodies(request)});
+    _session.sendMessage(rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockBodies)),
+        eth::encodeGetBlockBodies(request)});
 
     // Peers freely broadcast transactions/new blocks while we wait for the
     // BlockBodies reply — ignore them (and answer Ping) and keep waiting.
@@ -50,8 +49,8 @@ std::vector<Block> BodySequence::requestBodies(
     std::vector<Block> out;
     while (true)
     {
-        auto response = unwrapOrThrow(
-            _session.recvMessage(), "BodySequence: failed to decode a frame: ");
+        auto response =
+            unwrapOrThrow(_session.recvMessage(), "BodySequence: failed to decode a frame: ");
         if (response.id == rlpx::baseMsg::Ping)
         {
             _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, {}});

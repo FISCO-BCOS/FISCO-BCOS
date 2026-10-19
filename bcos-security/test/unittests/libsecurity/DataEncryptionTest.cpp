@@ -69,14 +69,13 @@ BOOST_AUTO_TEST_CASE(testHsmDecryptLengthGuards)
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
     HsmDataEncryption hsmDataEncryption(nodeConfig);
     std::array<uint8_t, 8> shortBlob{};
-    BOOST_CHECK_THROW(
-        hsmDataEncryption.decrypt(shortBlob.data(), shortBlob.size()), DecryptFailed);
+    BOOST_CHECK_THROW(hsmDataEncryption.decrypt(shortBlob.data(), shortBlob.size()), DecryptFailed);
 
     bcos::crypto::HsmSM4Crypto sm4("/nonexistent/libsdf.so");
     std::array<unsigned char, 16> iv{};
     std::array<unsigned char, 16> cipher{};
-    BOOST_CHECK_THROW(sm4.symmetricDecryptWithInternalKey(
-                          cipher.data(), 0, 0, iv.data(), iv.size()),
+    BOOST_CHECK_THROW(
+        sm4.symmetricDecryptWithInternalKey(cipher.data(), 0, 0, iv.data(), iv.size()),
         std::runtime_error);
 }
 

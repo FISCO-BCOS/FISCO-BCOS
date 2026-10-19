@@ -66,7 +66,7 @@ class Header256Hash : public Hash
 public:
     typedef std::shared_ptr<Header256Hash> Ptr;
     Header256Hash() = default;
-    virtual ~Header256Hash(){};
+    virtual ~Header256Hash() {};
     HashType hash(bytesConstRef _data) const override
     {
         std::hash<std::string_view> hash;

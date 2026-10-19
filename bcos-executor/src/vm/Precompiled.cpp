@@ -23,6 +23,7 @@
 #include "../Common.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "wedpr-crypto/WedprCrypto.h"
+#include <bcos-utilities/BoostLog.h>
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -38,7 +39,6 @@
 #include <evmone_precompiles/sha256.hpp>
 #include <intx/intx.hpp>
 #include <span>
-#include <bcos-utilities/BoostLog.h>
 
 using std::max;
 using std::min;
