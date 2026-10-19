@@ -29,6 +29,16 @@
 #include <thread>
 #include <tuple>
 
+// The regression test below deliberately leaks coroutine frames; suppress LSan for it when the
+// binary is built with AddressSanitizer (GCC defines __SANITIZE_ADDRESS__, clang does not).
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
+#include <sanitizer/lsan_interface.h>
+#define BCOS_TASK_TEST_HAS_LSAN 1
+#endif
+
 using namespace bcos::task;
 
 BOOST_AUTO_TEST_SUITE(OneShotTest)
@@ -69,7 +79,8 @@ BOOST_AUTO_TEST_CASE(CompleteAfterSuspendResumesTheAwaiter)
     BOOST_CHECK_EQUAL(delivered->load(), 7);
 }
 
-// Exactly-once: after the first completion every further completion is a no-op that reports it lost.
+// Exactly-once: after the first completion every further completion is a no-op that reports it
+// lost.
 BOOST_AUTO_TEST_CASE(SecondCompletionIsANoOp)
 {
     auto value = syncWait([]() -> Task<int> {
@@ -120,8 +131,8 @@ BOOST_AUTO_TEST_CASE(ConcurrentProducersSettleExactlyOnce)
     }
 }
 
-// Teardown path: cancel() ends a PARKED wait without a value, and await_resume() rethrows the reason
-// instead of returning a default-constructed value that could be read as a real result.
+// Teardown path: cancel() ends a PARKED wait without a value, and await_resume() rethrows the
+// reason instead of returning a default-constructed value that could be read as a real result.
 BOOST_AUTO_TEST_CASE(CancelResumesParkedAwaiterWithTheError)
 {
     auto once = std::make_shared<OneShot<int>>();
@@ -148,6 +159,51 @@ BOOST_AUTO_TEST_CASE(CancelResumesParkedAwaiterWithTheError)
     teardown.join();
 
     BOOST_CHECK(cancelled->load());
+    BOOST_CHECK(once->settled());
+}
+
+// Regression test for the noexcept boundary on the settle path. When the consumer was launched
+// with task::wait and does NOT catch the cancellation, cancel() resumes the parked consumer
+// inline and the rethrow unwinds through the whole wait chain — the consumer's
+// PromiseBase::unhandled_exception, final_suspend's symmetric transfer into wait()'s
+// executeTask frame, Awaitable::await_resume() and AsyncTask's unhandled_exception() — and
+// escapes resume() back into cancel()'s caller. When publish() was noexcept, that escape hit
+// std::terminate; the caller must be able to catch it, exactly as with
+// GetResultAwaitable::complete() (and as Session::postCallback's try/catch assumes).
+BOOST_AUTO_TEST_CASE(CancelEscapesToCallerWhenWaitLaunchedConsumerDoesNotCatch)
+{
+    auto once = std::make_shared<OneShot<int>>();
+
+    // LSan: on this path the exception escapes resume() before either frame reaches the
+    // final_suspend that would destroy it, so the consumer frame and the executeTask frame leak —
+    // the inherent price of letting the exception out instead of terminating. Their allocations
+    // happen inside wait() below, so suppress leak tracking for that region only.
+#if BCOS_TASK_TEST_HAS_LSAN
+    __lsan_disable();
+#endif
+
+    wait([once]() -> Task<void> {
+        auto [value] = co_await *once;  // parks; the cancellation rethrow is NOT caught here
+        (void)value;
+        co_return;
+    }());
+
+    bool caught = false;
+    try
+    {
+        once->cancel(std::make_exception_ptr(std::runtime_error("torn down")));
+    }
+    catch (const std::runtime_error& error)
+    {
+        caught = true;
+        BOOST_CHECK_EQUAL(error.what(), std::string("torn down"));
+    }
+
+#if BCOS_TASK_TEST_HAS_LSAN
+    __lsan_enable();
+#endif
+
+    BOOST_CHECK(caught);
     BOOST_CHECK(once->settled());
 }
 

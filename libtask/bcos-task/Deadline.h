@@ -34,42 +34,75 @@ namespace bcos::task
 {
 namespace detail
 {
-// Self-contained sleep awaitable: the timer lives inside the awaitable, i.e. inside the awaiting
-// coroutine's frame, so it stays alive across the suspension and is cancelled+destroyed for free
-// when the frame is resumed or destroyed.
+// Shared wait state for SleepAwaitable. It must NOT live in the coroutine frame: destroying a
+// steady_timer cancels its wait, but asio still delivers the pending handler (with
+// operation_aborted) afterwards, so a handler that captured frame members would write into freed
+// memory once the awaiting frame is gone. The handler captures this shared state instead, and
+// touches the coroutine only through `handle`, gated on `alive`.
+struct SleepState
+{
+    SleepState(boost::asio::io_context& ioService, uint32_t durationMs)
+      : timer(ioService, std::chrono::milliseconds(durationMs))
+    {}
+
+    boost::asio::steady_timer timer;
+    boost::system::error_code error;
+    std::coroutine_handle<> handle;
+    // Cleared by ~SleepAwaitable before it cancels the timer, so the queued handler no-ops instead
+    // of resuming a destroyed coroutine.
+    std::atomic_bool alive{true};
+};
+
 struct SleepAwaitable
 {
-    boost::asio::steady_timer m_timer;
-    boost::system::error_code m_error;
+    std::shared_ptr<SleepState> m_state;
 
     SleepAwaitable(boost::asio::io_context& ioService, uint32_t durationMs)
-      : m_timer(ioService, std::chrono::milliseconds(durationMs))
+      : m_state(std::make_shared<SleepState>(ioService, durationMs))
     {}
+
+    SleepAwaitable(const SleepAwaitable&) = delete;
+    SleepAwaitable& operator=(const SleepAwaitable&) = delete;
+
+    // The awaitable lives in the awaiting coroutine's frame, so this runs when the frame is
+    // destroyed mid-wait: cancel the timer (the handler still runs once, with operation_aborted)
+    // and close the handler's only path back into the frame.
+    ~SleepAwaitable()
+    {
+        m_state->alive.store(false, std::memory_order_release);
+        (void)m_state->timer.cancel();
+    }
 
     static constexpr bool await_ready() noexcept { return false; }
 
-    // The handler writes the error into this frame-owned member and resumes; the timer may then be
-    // destroyed without cancelling an in-flight wait.
+    // The handler captures the shared state, never `this`: it may run after the frame (and this
+    // awaitable) is gone, in which case `alive` is false and it returns without resuming.
     void await_suspend(std::coroutine_handle<> handle)
     {
-        m_timer.async_wait(
-            [this, handle](const boost::system::error_code& error)
+        m_state->handle = handle;
+        m_state->timer.async_wait(
+            [state = m_state](const boost::system::error_code& error)
             {
-                m_error = error;
-                handle.resume();
+                if (!state->alive.load(std::memory_order_acquire))
+                {
+                    return;
+                }
+                state->error = error;
+                state->handle.resume();
             });
     }
 
-    boost::system::error_code await_resume() const noexcept { return m_error; }
+    boost::system::error_code await_resume() const noexcept { return m_state->error; }
 };
 }  // namespace detail
 
 // Suspend the calling coroutine for `durationMs` on `ioContext`.
 //
 // The wait completes with boost::system::error_code{} on expiry or
-// boost::asio::error::operation_aborted when the timer was cancelled. The timer is owned by the
-// awaiting coroutine's frame, so a caller that returns early simply leaves it to be destroyed
-// (which cancels it) — no cancel/re-arm bookkeeping.
+// boost::asio::error::operation_aborted when the timer was cancelled. The wait state is shared
+// with the timer's handler (see detail::SleepState), so destroying the awaiting frame mid-wait is
+// safe: the cancellation handler observes the dead frame and no-ops instead of resuming it — no
+// cancel/re-arm bookkeeping.
 //
 // This replaces the hand-built `task::makeFireAwaitable<error_code>([&timer](auto handler) {
 // timer.async_wait(std::move(handler)); }, operation_aborted)` idiom, which every backoff /
@@ -89,15 +122,17 @@ inline task::Task<boost::system::error_code> awaitableSleep(
 // cannot recall it. A queued expiry that then ran unchecked would cancel the NEXT operation on the
 // same socket. A per-arm generation counter closes that window: every arm() and every disarm()
 // bumps its own generation, and an expiry only fires when its arm's generation is still current. A
-// stale expiry therefore does nothing, whichever thread it runs on and whichever thread re-armed
-// the deadline.
+// stale expiry therefore does nothing, whether it was queued before the disarm or before the
+// re-arm.
 //
-// THREADING CONTRACT: the timer is serviced on `ioService()`, so `timeoutHandler` and the timer's
-// own completion run there; arm()/disarm() are expected from the same executor but are correct from
-// any thread — generation, armed and expired are atomic, and cancel() is safe to call from any
-// thread. Atomicity is load-bearing rather than defensive precisely because a caller may resume on
-// a different context than the socket's: Host::clientConnect, for example, resumes on the
-// resolver's context when resolveConnect reports a resolve failure.
+// THREADING CONTRACT: arm(), disarm() and destruction must be serialized with the timer's handlers
+// on the timer's executor — its io_context. The atomics close the late-expiry race WITHIN that
+// executor; they do not make cross-thread arm()/disarm() safe: an expiry handler that has passed
+// its generation gate could still be interleaved with another thread's disarm()+arm(), and would
+// then cancel the NEW arm's operation and set expired back to true. A caller that resumes on a
+// different context must post() back to this executor first — Host::clientConnect does exactly
+// that, posting cancel() onto the socket's io_context because resolveConnect can resume it on the
+// resolver's context.
 class Deadline
 {
 public:
@@ -141,11 +176,12 @@ public:
     void arm(TimeoutHandler timeoutHandler)
     {
         auto state = m_state;
-        // A fresh generation per arm is the entire late-expiry guard. arm() bumps it BEFORE touching
-        // the timer, so the bump lands ahead of any handler that basic_waitable_timer hands back
-        // synchronously while the expiry changes. The handler compares against the generation it was
-        // armed with, so anything queued by an earlier arm — a natural expiry, one that lost the race
-        // against a successful operation, or asio's own submit-on-re-arm — is rejected.
+        // A fresh generation per arm is the entire late-expiry guard. arm() bumps it BEFORE
+        // touching the timer, so the bump lands ahead of any handler that basic_waitable_timer
+        // hands back synchronously while the expiry changes. The handler compares against the
+        // generation it was armed with, so anything queued by an earlier arm — a natural expiry,
+        // one that lost the race against a successful operation, or asio's own submit-on-re-arm —
+        // is rejected.
         const auto armedGeneration = state->generation.fetch_add(1, std::memory_order_acq_rel) + 1;
         state->armed.store(true, std::memory_order_release);
         state->expired.store(false, std::memory_order_release);
@@ -180,8 +216,8 @@ public:
             });
     }
 
-    // Disarm, and invalidate any expiry that is already queued. Safe to call when never armed, from
-    // any thread. Unlike the old armed-flag protocol this does NOT require the caller to still hold
+    // Disarm, and invalidate any expiry that is already queued. Safe to call when never armed.
+    // Unlike the old armed-flag protocol this does NOT require the caller to still hold
     // the completed operation's result: the generation bump alone refuses the stale expiry, so a
     // queued expiry can never cancel the next operation on the same socket.
     void disarm()

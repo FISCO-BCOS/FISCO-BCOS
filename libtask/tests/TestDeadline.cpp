@@ -16,10 +16,12 @@
  * @brief Unit tests for Deadline: expiry, disarm, destruction, and the late-expiry guard that stops
  *        an already-QUEUED expiry from cancelling the NEXT operation on the same socket.
  *
- * The late-expiry tests drive the io_context with poll()/poll_one() on the test thread instead of a
- * background runner. That is the whole point of them: a handler must be sitting in the ready queue
- * (queued but not yet run) while the test disarms and re-arms underneath it. With a live runner
- * thread the queued handler simply runs, and the race cannot be reproduced.
+ * The late-expiry tests drive the io_context with poll()/poll_one() on the test thread instead of
+ * a background runner, and stage the race for real: advanceClock() expires the timer without
+ * running anything, then moveExpiredHandlerToReadyQueue() wakes the scheduler so the expired
+ * handler is moved into the ready queue — queued but not yet run — while the test disarms and
+ * re-arms underneath it. With a live runner thread the queued handler simply runs, and the race
+ * cannot be reproduced.
  * @file TestDeadline.cpp
  */
 #include "bcos-task/Deadline.h"
@@ -28,6 +30,7 @@
 #include <boost/asio/error.hpp>
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/post.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -48,8 +51,8 @@ std::size_t poll(boost::asio::io_context& io)
     return io.poll();
 }
 
-// Runs the io_context's handlers on a background thread, the way a node services a socket. Used only
-// by the tests that have no queued-handler race to stage (real expiry, disarm, sleep).
+// Runs the io_context's handlers on a background thread, the way a node services a socket. Used
+// only by the tests that have no queued-handler race to stage (real expiry, disarm, sleep).
 class IORunner
 {
 public:
@@ -98,6 +101,20 @@ void advanceClock(std::chrono::milliseconds duration)
     {
         std::this_thread::sleep_for(1ms);
     }
+}
+
+// Moves an EXPIRED timer's handler from asio's timer queue into the io_context's ready queue,
+// WITHOUT running it — the state cancel()/expires_after() cannot recall, which is exactly what
+// Deadline's generation guard exists for. The sentinel is posted first, so it sits at the head of
+// the ready queue: poll_one() wakes the scheduler (which moves every expired timer handler into
+// the ready queue) but executes only the head — the sentinel. The timer must already be armed and
+// expired (see advanceClock) before this call.
+void moveExpiredHandlerToReadyQueue(boost::asio::io_context& io)
+{
+    bool sentinelRan = false;
+    boost::asio::post(io, [&sentinelRan] { sentinelRan = true; });
+    BOOST_REQUIRE_EQUAL(io.poll_one(), 1);
+    BOOST_REQUIRE(sentinelRan);
 }
 }  // namespace
 
@@ -181,35 +198,40 @@ BOOST_AUTO_TEST_CASE(RearmAfterExpiryStillFires)
 
 // THE regression test. This is the exact race Deadline exists for.
 //
-// A per-read timer expires at the same moment the read completes successfully. The coroutine resumes
-// on the read's completion, calls disarm(), and starts the NEXT read with a fresh arm(). The expiry
-// handler for the PREVIOUS read was already moved to the io_context's ready queue by then, and
-// cancel() cannot recall it. If it ran unchecked it would cancel the NEXT read on the same socket —
-// which is why the guard must reject it, not just "cancel and hope".
+// A per-read timer expires at the same moment the read completes successfully. The coroutine
+// resumes on the read's completion, calls disarm(), and starts the NEXT read with a fresh arm().
+// The expiry handler for the PREVIOUS read was already moved to the io_context's ready queue by
+// then, and cancel() cannot recall it. If it ran unchecked it would cancel the NEXT read on the
+// same socket — which is why the guard must reject it, not just "cancel and hope".
 //
-// Steps 1-3 keep the io_context from being polled, so the old expiry is still queued when the
-// re-arm happens. Step 4 is the assertion: it must have been rejected.
+// Steps 1-3 stage the race for real: the old expiry sits in the ready queue (queued but not run)
+// while the test disarms and re-arms underneath it. Step 4 is the assertion: the stale handler must
+// run — poll() reports exactly it — and the guard must reject it.
 BOOST_AUTO_TEST_CASE(QueuedExpiryCannotCancelTheNextOperation)
 {
     boost::asio::io_context io;
-    Deadline deadline(io, 5);
+    // A 50ms timeout keeps step 4 deterministic: the gap between the re-arm and the poll is
+    // microseconds, so the fresh deadline cannot expire while the stale handler runs.
+    Deadline deadline(io, 50);
     int staleCalls = 0;
     int nextCalls = 0;
 
-    // 1. The previous read arms its deadline and the timer expires.
+    // 1. The previous read arms its deadline, the timer expires, and its handler is moved into the
+    //    ready queue, where cancel() cannot recall it.
     deadline.arm([&staleCalls](boost::system::error_code) { ++staleCalls; });
     advanceClock(200ms);
+    moveExpiredHandlerToReadyQueue(io);
 
     // 2. The previous read completes successfully and the owner disarms — but the expiry handler is
     //    already queued, so it is not "gone".
     deadline.disarm();
 
-    // 3. The next read arms a fresh, long deadline.
+    // 3. The next read arms a fresh deadline.
     deadline.arm([&nextCalls](boost::system::error_code) { ++nextCalls; });
     BOOST_CHECK(!deadline.expired());
 
     // 4. Drive the queue. The stale expiry must prove it cannot cancel the next operation.
-    (void)poll(io);
+    BOOST_CHECK_EQUAL(poll(io), 1);
     BOOST_CHECK_EQUAL(staleCalls, 0);
     BOOST_CHECK_EQUAL(nextCalls, 0);
     BOOST_CHECK(!deadline.expired());
@@ -222,24 +244,26 @@ BOOST_AUTO_TEST_CASE(QueuedExpiryCannotCancelTheNextOperation)
     deadline.disarm();
 }
 
-// The same guard must hold when the owner re-arms WITHOUT an intervening disarm(). This shape is not
-// used in the tree, but it pins down the ordering inside arm(): the generation must be bumped before
-// the timer is re-armed, because basic_waitable_timer can hand a previously queued handler straight
-// back while its expiry changes.
+// The same guard must hold when the owner re-arms WITHOUT an intervening disarm(). This shape is
+// not used in the tree, but it pins down the ordering inside arm(): the generation must be bumped
+// before the timer is re-armed, because a handler already queued by the previous arm can still run
+// after the expiry changes — expires_after() cannot recall it from the ready queue.
 BOOST_AUTO_TEST_CASE(QueuedExpirySurvivesARearmWithoutDisarm)
 {
     boost::asio::io_context io;
-    Deadline deadline(io, 5);
+    Deadline deadline(io, 50);
     int staleCalls = 0;
     int nextCalls = 0;
 
     deadline.arm([&staleCalls](boost::system::error_code) { ++staleCalls; });
     advanceClock(200ms);
+    moveExpiredHandlerToReadyQueue(io);
 
-    // No disarm() here on purpose.
+    // No disarm() here on purpose: the re-arm itself must invalidate the queued expiry.
     deadline.arm([&nextCalls](boost::system::error_code) { ++nextCalls; });
 
-    (void)poll(io);
+    // The stale expiry runs — poll() reports exactly it — and the guard must reject it.
+    BOOST_CHECK_EQUAL(poll(io), 1);
     BOOST_CHECK_EQUAL(staleCalls, 0);
     BOOST_CHECK_EQUAL(nextCalls, 0);
     deadline.disarm();
@@ -253,13 +277,15 @@ BOOST_AUTO_TEST_CASE(DestructionRejectsQueuedExpiry)
     int staleCalls = 0;
 
     {
-        Deadline deadline(io, 5);
+        Deadline deadline(io, 50);
         deadline.arm([&staleCalls](boost::system::error_code) { ++staleCalls; });
         advanceClock(200ms);
+        moveExpiredHandlerToReadyQueue(io);
         // ~Deadline runs here with the expiry already queued.
     }
 
-    (void)poll(io);
+    // The queued expiry runs — poll() reports exactly it — and must be rejected.
+    BOOST_CHECK_EQUAL(poll(io), 1);
     BOOST_CHECK_EQUAL(staleCalls, 0);
 }
 
@@ -326,6 +352,22 @@ BOOST_AUTO_TEST_CASE(AwaitableSleepResumesAfterTheDuration)
     const auto elapsed = std::chrono::steady_clock::now() - started;
     BOOST_CHECK(!error);
     BOOST_CHECK(elapsed >= 15ms);
+}
+
+// Destroying the awaiting coroutine's frame mid-wait must not resume a destroyed coroutine or
+// write into freed frame memory: ~SleepAwaitable cancels the timer and marks the shared state
+// dead, and asio still delivers the pending handler (with operation_aborted), which must no-op.
+// Under ASan this catches the original bug: the handler wrote into the freed frame.
+BOOST_AUTO_TEST_CASE(AwaitableSleepFrameDestroyedMidWaitDoesNotResume)
+{
+    boost::asio::io_context io;
+    {
+        auto task = awaitableSleep(io, 60000);
+        task.start();  // suspends inside SleepAwaitable; the wait is pending on `io`
+    }  // ~Task destroys the frame; ~SleepAwaitable cancels the timer and marks the state dead
+
+    // The cancelled wait's handler is still delivered; it must observe the dead state and no-op.
+    BOOST_CHECK_EQUAL(poll(io), 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -213,4 +213,87 @@ BOOST_AUTO_TEST_CASE(closeWakesParkedProducerWithFalse)
     BOOST_CHECK(!syncWait(channel.waitWritable()));
 }
 
+BOOST_AUTO_TEST_CASE(byteBudgetIsReleasedOnPopWithoutSizeOf)
+{
+    // sizeOf defaults to 1-per-item: with a byte budget but no sizeOf, every item counts as one
+    // byte, and popping must release it again.
+    Channel<int> channel(inlinePoster(), 100, /*maxBytes=*/50);
+    for (int i = 0; i < 200; ++i)
+    {
+        BOOST_CHECK(channel.push(i));
+        BOOST_CHECK_EQUAL(syncWait(channel.recv()), i);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(waitWritableFailsFastWhenCountCapIsZero)
+{
+    Channel<int> channel(inlinePoster(), 0);
+    BOOST_CHECK(!channel.push(1));
+    // A zero maxCount rejects every push: parking would wait for a pop that can never help.
+    BOOST_CHECK(!syncWait(channel.waitWritable()));
+}
+
+BOOST_AUTO_TEST_CASE(waitWritableFailsFastWhenPushExceedsWholeBudget)
+{
+    Channel<std::string> channel(inlinePoster(), 16, /*maxBytes=*/10,
+        [](const std::string& value) { return value.size(); });
+    // An item bigger than the whole byte budget can never fit, however much is drained.
+    BOOST_CHECK(!syncWait(channel.waitWritable(11)));
+    // The channel stays usable for pushes that do fit.
+    BOOST_CHECK(channel.push("12345"));
+    BOOST_CHECK(syncWait(channel.waitWritable(5)));
+}
+
+BOOST_AUTO_TEST_CASE(secondRecvDisplacesAndFailsFirstWaiter)
+{
+    Channel<int> channel(inlinePoster(), 16);
+    std::promise<std::string> first;
+    std::promise<int> second;
+
+    bcos::task::wait([](Channel<int>& ch, std::promise<std::string>& out) -> Task<void> {
+        try
+        {
+            co_await ch.recv();
+            out.set_value("no exception");
+        }
+        catch (const std::exception& e)
+        {
+            out.set_value(e.what());
+        }
+    }(channel, first));
+
+    // A second parked recv() displaces the first: it is woken with an exception through the
+    // (inline) poster instead of being stranded.
+    bcos::task::wait([](Channel<int>& ch, std::promise<int>& out) -> Task<void> {
+        out.set_value(co_await ch.recv());
+    }(channel, second));
+
+    BOOST_CHECK_EQUAL(first.get_future().get(), "channel waiter displaced by a second recv()");
+    BOOST_CHECK(channel.push(7));
+    BOOST_CHECK_EQUAL(second.get_future().get(), 7);
+}
+
+BOOST_AUTO_TEST_CASE(secondWaitWritableDisplacesAndFailsFirstWaiter)
+{
+    Channel<int> channel(inlinePoster(), 1);
+    BOOST_CHECK(channel.push(1));  // full
+
+    std::promise<bool> first;
+    std::promise<bool> second;
+
+    bcos::task::wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
+        out.set_value(co_await ch.waitWritable());
+    }(channel, first));
+
+    // A second parked waitWritable() displaces the first, which is woken with false.
+    bcos::task::wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
+        out.set_value(co_await ch.waitWritable());
+    }(channel, second));
+
+    BOOST_CHECK(!first.get_future().get());
+    // The surviving waiter is still woken by a drain.
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 1);
+    BOOST_CHECK(second.get_future().get());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

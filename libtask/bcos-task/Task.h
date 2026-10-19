@@ -224,14 +224,17 @@ struct Awaitable
     Awaitable& operator=(Awaitable&&) noexcept = default;
     ~Awaitable() noexcept = default;
 
-    bool await_ready() const noexcept { return !m_continuation.handle || m_continuation.handle.done(); }
+    bool await_ready() const noexcept
+    {
+        return !m_continuation.handle || m_continuation.handle.done();
+    }
     std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle)
     {
         // This transformation operation is safe 
         // when Awaitable is constructed by coroutine_handle<typename TaskType::promise_type>
         // but unsafe when Awaitable is constructed by other ways
-        auto nextHandle = 
-            std::coroutine_handle<typename TaskType::promise_type>::from_address(m_continuation.handle.address());
+        auto nextHandle = std::coroutine_handle<typename TaskType::promise_type>::from_address(
+            m_continuation.handle.address());
         m_continuation.handle = handle;
         nextHandle.promise().m_continuation = std::addressof(m_continuation);
         return nextHandle;

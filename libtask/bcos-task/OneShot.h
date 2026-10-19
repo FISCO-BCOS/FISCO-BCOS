@@ -63,11 +63,11 @@ namespace bcos::task
 //
 // LIFETIME CONTRACT (the one thing a caller must get right): the OneShot must outlive the co_await,
 // and one that still has a PARKED awaiter must be settled before it is destroyed. Settling is what
-// wakes the frame; a destructor cannot do it, because in the common frame-embedded shape the slot is
-// destroyed by the dying frame itself and resuming from there would re-enter a coroutine that is
-// being torn down. A frame-embedded slot is safe because Task::destroy() reclaims a suspended frame
-// without needing it to be resumed; a heap-owned slot is safe because the sink that owns it drains
-// its waiters in its own teardown path.
+// wakes the frame; a destructor cannot do it, because in the common frame-embedded shape the slot
+// is destroyed by the dying frame itself and resuming from there would re-enter a coroutine that
+// is being torn down. A frame-embedded slot is safe because Task::destroy() reclaims a suspended
+// frame without needing it to be resumed; a heap-owned slot is safe because the sink that owns it
+// drains its waiters in its own teardown path.
 //
 // Threading: complete() and cancel() may be called from any thread; the awaiting coroutine is
 // resumed on whichever thread settled it. A caller that needs the continuation to run on a specific
@@ -103,6 +103,8 @@ public:
     // counterpart of complete() on every teardown path — a host shutdown, a dropped request, a
     // session closed under a parked sender. A parked (or later) awaiter rethrows `error` from
     // await_resume(); with no error given it throws std::runtime_error("one-shot slot cancelled").
+    // If the parked awaiter does not catch that rethrow, it propagates back out of cancel() to
+    // the caller (see publish() — this is why the settle path is not noexcept).
     // Calling it after complete() is a no-op, so a value that did arrive is never lost.
     bool cancel(std::exception_ptr error = nullptr)
     {
@@ -123,17 +125,20 @@ public:
 
     // Await the slot. `co_await once` and `co_await *oncePtr` both work. The returned
     // awaitable holds a reference into this object, which must outlive the co_await.
-    GetResultAwaitable<Values...> operator co_await() { return GetResultAwaitable<Values...>(m_result); }
+    GetResultAwaitable<Values...> operator co_await()
+    {
+        return GetResultAwaitable<Values...>(m_result);
+    }
 
 private:
     // The shared state is task::GetResultAwaitable's Result: the exactly-once claim, the suspend
     // handshake (INIT/SUSPENDED/DONE) and the fast path are all implemented there and are shared
-    // with the frame-embedded users of that primitive. This class only adds ownership ergonomics and
-    // the cancel path.
+    // with the frame-embedded users of that primitive. This class only adds ownership ergonomics
+    // and the cancel path.
     using Result = GetResultAwaitable<Values...>::Result;
 
-    // The exactly-once claim, shared with GetResultAwaitable::complete() so that a cancel() racing a
-    // complete() settles the wait exactly once.
+    // The exactly-once claim, shared with GetResultAwaitable::complete() so that a cancel() racing
+    // a complete() settles the wait exactly once.
     bool claim() noexcept
     {
         auto expected = false;
@@ -143,8 +148,13 @@ private:
 
     // Publish the settled state: resume the parked awaiter, or let a later co_await take the
     // await_ready() fast path. Mirrors GetResultAwaitable::complete()'s handshake so both settle
-    // paths are interchangeable.
-    void publish() noexcept
+    // paths are interchangeable — including the exception contract: resume() runs the awaiter
+    // INLINE, so an awaiter that does not catch (e.g. a task::wait consumer whose await_resume()
+    // rethrows a cancellation) lets the exception propagate back out of publish() to the caller
+    // of complete()/cancel(). Like complete(), this is therefore deliberately NOT noexcept —
+    // marking it noexcept would turn an uncaught consumer exception into std::terminate on the
+    // settling thread.
+    void publish()
     {
         typename Result::State expected = Result::State::INIT;
         if (m_result.state.compare_exchange_strong(expected, Result::State::DONE,
