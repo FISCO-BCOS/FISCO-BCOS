@@ -187,9 +187,8 @@ uint64_t legacyTxDataGas(evmc::bytes_view env, bool regolithActive) noexcept
 LegacyL1Cost computeLegacyL1Cost(
     const OpFeeParams& params, evmc::bytes_view signedTxEnvelope, bool regolithActive) noexcept
 {
-    const auto gasUsed =
-        intx::uint512{legacyTxDataGas(signedTxEnvelope, regolithActive)} +
-        intx::uint512{params.l1_fee_overhead};
+    const auto gasUsed = intx::uint512{legacyTxDataGas(signedTxEnvelope, regolithActive)} +
+                         intx::uint512{params.l1_fee_overhead};
     const auto truncatedGasUsed = static_cast<uint64_t>(gasUsed);  // op-geth big.Int.Uint64()
 
     // op-geth l1CostHelper: fee = gasUsed * l1BaseFee * scalar / 1e6 in big.Int (no wrap).

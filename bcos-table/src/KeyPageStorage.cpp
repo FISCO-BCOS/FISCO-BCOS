@@ -28,8 +28,7 @@ namespace bcos::storage
 {
 KeyPageStorage::KeyPageStorage(std::shared_ptr<StorageInterface> _prev, bool setRowWithDirtyFlag,
     size_t _pageSize, uint32_t _blockVersion,
-    std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables,
-    bool _ignoreNotExist)
+    std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables, bool _ignoreNotExist)
   : storage::StateStorageInterface(std::move(_prev)),
     m_blockVersion(_blockVersion),
     m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),

@@ -86,14 +86,8 @@ private:
 
 struct AwsKmsGlobalFixture
 {
-    AwsKmsGlobalFixture()
-    {
-        Aws::InitAPI(options);
-    }
-    ~AwsKmsGlobalFixture()
-    {
-        Aws::ShutdownAPI(options);
-    }
+    AwsKmsGlobalFixture() { Aws::InitAPI(options); }
+    ~AwsKmsGlobalFixture() { Aws::ShutdownAPI(options); }
     Aws::SDKOptions options;
 };
 

@@ -172,41 +172,42 @@ public:
         // gate. The number stays taken so the bits above it do not move.
         reserved_retired_evm_pairing_canonical_g2 = 63,
 
-        bugfix_dmc_create_address_rule = 64,        // Scheduler: the DMC lane derives a top-level
-                                                    // create's (empty-to) address with the SAME
-                                                    // rule as SerialBlockExecutive — honour
-                                                    // feature_evm_address (keccak(rlp(sender,
-                                                    // nonce))) instead of always using the
-                                                    // (block, context, seq) formula. Off: the DMC
-                                                    // lane keeps the formula address, so existing
-                                                    // chains replay byte-identically; only a chain
-                                                    // that also enables feature_evm_address observes
-                                                    // a difference. Takes 64 because 63 is occupied
-                                                    // by the retired pairing bit on the same
-                                                    // line.
-        bugfix_v2_status_mapper_ordinary_failures = 65,  // v2 lane receipt construction maps the
-                                                    // ordinary EVM failure statuses
-                                                    // (BAD_JUMP_DESTINATION, INVALID_MEMORY_ACCESS,
-                                                    // STATIC_MODE_VIOLATION) instead of letting the
-                                                    // mapper's default throw relabel them
-                                                    // EVMC_INTERNAL_ERROR in execute()'s catch arm.
-                                                    // Off: the historical relabel (status
-                                                    // Unknown/OutOfGas, gas 0/ref->gas per
-                                                    // bugfix_v1_error_handling), so pre-existing
-                                                    // blocks replay byte-identically.
-        bugfix_internal_create_seq = 66,            // Precompiled-initiated creates publish the
-                                                    // consumed seq base, so two creates through one
-                                                    // ExecutiveWrapper derive distinct addresses
-                                                    // instead of colliding on f(seq+1). Off: the
-                                                    // historical snapshot semantics, so blocks
-                                                    // replay byte-identically.
-        bugfix_precompiled_node_fault_rethrow = 67, // bcos precompiled dispatch: a bcos::Error
-                                                    // (node/infra fault: storage I/O, row decode)
-                                                    // rethrows to executeCall()'s FIB-88/92 arm
-                                                    // instead of being sealed as a
-                                                    // PrecompiledError REVERT receipt. Off: the
-                                                    // pre-existing REVERT receipt is kept, so
-                                                    // historical blocks replay byte-identically.
+        bugfix_dmc_create_address_rule = 64,  // Scheduler: the DMC lane derives a top-level
+                                              // create's (empty-to) address with the SAME
+                                              // rule as SerialBlockExecutive — honour
+                                              // feature_evm_address (keccak(rlp(sender,
+                                              // nonce))) instead of always using the
+                                              // (block, context, seq) formula. Off: the DMC
+                                              // lane keeps the formula address, so existing
+                                              // chains replay byte-identically; only a chain
+                                              // that also enables feature_evm_address observes
+                                              // a difference. Takes 64 because 63 is occupied
+                                              // by the retired pairing bit on the same
+                                              // line.
+        bugfix_v2_status_mapper_ordinary_failures =
+            65,                           // v2 lane receipt construction maps the
+                                          // ordinary EVM failure statuses
+                                          // (BAD_JUMP_DESTINATION, INVALID_MEMORY_ACCESS,
+                                          // STATIC_MODE_VIOLATION) instead of letting the
+                                          // mapper's default throw relabel them
+                                          // EVMC_INTERNAL_ERROR in execute()'s catch arm.
+                                          // Off: the historical relabel (status
+                                          // Unknown/OutOfGas, gas 0/ref->gas per
+                                          // bugfix_v1_error_handling), so pre-existing
+                                          // blocks replay byte-identically.
+        bugfix_internal_create_seq = 66,  // Precompiled-initiated creates publish the
+                                          // consumed seq base, so two creates through one
+                                          // ExecutiveWrapper derive distinct addresses
+                                          // instead of colliding on f(seq+1). Off: the
+                                          // historical snapshot semantics, so blocks
+                                          // replay byte-identically.
+        bugfix_precompiled_node_fault_rethrow = 67,  // bcos precompiled dispatch: a bcos::Error
+                                                     // (node/infra fault: storage I/O, row decode)
+                                                     // rethrows to executeCall()'s FIB-88/92 arm
+                                                     // instead of being sealed as a
+                                                     // PrecompiledError REVERT receipt. Off: the
+                                                     // pre-existing REVERT receipt is kept, so
+                                                     // historical blocks replay byte-identically.
     };
 
     // feature_flags bit = enum value. Pin the newest flag so a value beyond

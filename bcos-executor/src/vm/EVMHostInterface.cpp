@@ -108,8 +108,7 @@ evmc_bytes32 getStorage(
     evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(context);
-    return translateHostFault(
-        hostContext, [&] { return hostContext.store(key); }, evmc_bytes32{});
+    return translateHostFault(hostContext, [&] { return hostContext.store(key); }, evmc_bytes32{});
 }
 
 evmc_bytes32 getTransientStorage(
@@ -129,8 +128,7 @@ evmc_storage_status setStorage(evmc_host_context* context,
     // refund) is the neutral fail-closed choice (v2 lane mirror).
     return translateHostFault(
         hostContext,
-        [&]() -> evmc_storage_status
-        {
+        [&]() -> evmc_storage_status {
             evmc_storage_status status;
             if (hostContext.features().get(ledger::Features::Flag::bugfix_evm_storage_status))
             {
@@ -259,8 +257,7 @@ size_t copyCode(evmc_host_context* _context, const evmc_address* _addr, size_t _
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     return translateHostFault(
         hostContext,
-        [&]() -> size_t
-        {
+        [&]() -> size_t {
             if (hostContext.features().get(
                     ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
             {
@@ -289,20 +286,17 @@ bool selfdestruct(evmc_host_context* _context, [[maybe_unused]] const evmc_addre
     [[maybe_unused]] const evmc_address* _beneficiary) noexcept
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    translateHostFault(
-        hostContext,
-        [&]
+    translateHostFault(hostContext, [&] {
+        const auto& blockContext = hostContext.getTransactionExecutive()->blockContext();
+        EXECUTOR_LOG(DEBUG) << "EVM suicide start ";
+        if (blockContext.features().get(ledger::Features::Flag::feature_balance))
         {
-            const auto& blockContext = hostContext.getTransactionExecutive()->blockContext();
-            EXECUTOR_LOG(DEBUG) << "EVM suicide start ";
-            if (blockContext.features().get(ledger::Features::Flag::feature_balance))
-            {
-                hostContext.selfdestruct(_addr, _beneficiary);
-            }
-            EXECUTOR_LOG(DEBUG) << "selfdestruct successful";
+            hostContext.selfdestruct(_addr, _beneficiary);
+        }
+        EXECUTOR_LOG(DEBUG) << "selfdestruct successful";
 
-            hostContext.suicide();  // FISCO BCOS has no _beneficiary
-        });
+        hostContext.suicide();  // FISCO BCOS has no _beneficiary
+    });
     // EIP-3529 (London): SELFDESTRUCT gas refund is removed entirely.
     // EIP-6780 (Cancun+): account deletion only when created in same tx;
     //   no gas refund in either case ("Note that no refund is given since EIP-3529").
@@ -317,14 +311,10 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
 {
     (void)_addr;
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    translateHostFault(
-        hostContext,
-        [&]
-        {
-            h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
-            hostContext.log(
-                h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
-        });
+    translateHostFault(hostContext, [&] {
+        h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
+        hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
+    });
 }
 
 evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
@@ -343,7 +333,8 @@ evmc_access_status access_storage(
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     return translateHostFault(
-        hostContext, [&] { return hostContext.accessStorage(*_addr, *_key, hostContext.revision()); },
+        hostContext,
+        [&] { return hostContext.accessStorage(*_addr, *_key, hostContext.revision()); },
         EVMC_ACCESS_WARM);
 }
 
@@ -352,8 +343,7 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     return translateHostFault(
         hostContext,
-        [&]() -> evmc_tx_context
-        {
+        [&]() -> evmc_tx_context {
             // FIXME: the evmc_tx_context should init use the transaction info
             evmc_tx_context result{};
             auto origin = fromHex(hostContext.origin());

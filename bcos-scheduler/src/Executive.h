@@ -3,9 +3,9 @@
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <bcos-utilities/Error.h>
+#include <list>
 #include <sstream>
 #include <stack>
-#include <list>
 
 namespace bcos::scheduler
 {

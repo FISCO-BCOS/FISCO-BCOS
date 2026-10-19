@@ -52,12 +52,12 @@ public:
      */
     void start() override {}
     void stop() override {}
-    task::Task<std::tuple<Error::Ptr, bcos::gateway::GatewayInfo::Ptr,
-        bcos::gateway::GatewayInfosPtr>>
+    task::Task<
+        std::tuple<Error::Ptr, bcos::gateway::GatewayInfo::Ptr, bcos::gateway::GatewayInfosPtr>>
     getPeers() override
     {
-        co_return std::make_tuple(Error::Ptr(nullptr),
-            bcos::gateway::GatewayInfo::Ptr(nullptr), bcos::gateway::GatewayInfosPtr(nullptr));
+        co_return std::make_tuple(Error::Ptr(nullptr), bcos::gateway::GatewayInfo::Ptr(nullptr),
+            bcos::gateway::GatewayInfosPtr(nullptr));
     }
     /**
      * @brief: get nodeIDs from gateway
@@ -68,8 +68,7 @@ public:
         const std::string& _groupID) override
     {
         boost::ignore_unused(_groupID);
-        co_return std::make_tuple(
-            Error::Ptr(nullptr), bcos::gateway::GroupNodeInfo::Ptr(nullptr));
+        co_return std::make_tuple(Error::Ptr(nullptr), bcos::gateway::GroupNodeInfo::Ptr(nullptr));
     }
 
     /**
@@ -108,8 +107,7 @@ public:
     {
         co_return nullptr;
     }
-    task::Task<Error::Ptr> removeTopic(
-        std::string const&, std::vector<std::string> const&) override
+    task::Task<Error::Ptr> removeTopic(std::string const&, std::vector<std::string> const&) override
     {
         co_return nullptr;
     }

@@ -519,15 +519,13 @@ BOOST_AUTO_TEST_CASE(evmcStatusToTransactionStatus_ordinary_evm_failuresFollowTh
         auto const mapped = evmcStatusToTransactionStatus(status, /*mapOrdinaryFailures=*/true);
         evmc_result r{};
         r.status_code = status;
-        BOOST_CHECK_EQUAL(
-            static_cast<int>(EVMCResult{r, mapped}.status), static_cast<int>(mapped));
+        BOOST_CHECK_EQUAL(static_cast<int>(EVMCResult{r, mapped}.status), static_cast<int>(mapped));
     }
     BOOST_CHECK_EQUAL(evmcStatusToTransactionStatus(EVMC_BAD_JUMP_DESTINATION, true),
         TransactionStatus::BadJumpDestination);
     BOOST_CHECK_EQUAL(evmcStatusToTransactionStatus(EVMC_INVALID_MEMORY_ACCESS, true),
         TransactionStatus::StackUnderflow);
-    BOOST_CHECK_EQUAL(
-        evmcStatusToTransactionStatus(EVMC_STATIC_MODE_VIOLATION, true),
+    BOOST_CHECK_EQUAL(evmcStatusToTransactionStatus(EVMC_STATIC_MODE_VIOLATION, true),
         TransactionStatus::Unknown);
 }
 

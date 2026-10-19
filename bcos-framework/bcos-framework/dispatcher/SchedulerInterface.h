@@ -100,7 +100,7 @@ public:
     virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr)> callback) = 0;
 
-    virtual void stop(){};
-    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig){};
+    virtual void stop() {};
+    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) {};
 };
 }  // namespace bcos::scheduler

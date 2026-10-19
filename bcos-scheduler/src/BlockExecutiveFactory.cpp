@@ -32,9 +32,9 @@ using namespace bcos::scheduler;
 using namespace bcos::ledger;
 
 BlockExecutiveFactory::BlockExecutiveFactory(bool isSerialExecute, size_t keyPageSize)
-    : m_isSerialExecute(isSerialExecute),
-        m_contract2ShardCache(std::make_shared<ShardCache>(128)),
-        m_keyPageSize(keyPageSize)
+  : m_isSerialExecute(isSerialExecute),
+    m_contract2ShardCache(std::make_shared<ShardCache>(128)),
+    m_keyPageSize(keyPageSize)
 {}
 
 BlockExecutiveFactory::~BlockExecutiveFactory() = default;

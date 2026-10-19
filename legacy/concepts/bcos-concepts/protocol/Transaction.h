@@ -10,8 +10,7 @@
 namespace bcos::concepts::transaction
 {
 template <class TransactionDataType>
-concept TransactionData = requires(TransactionDataType transactionData)
-{
+concept TransactionData = requires(TransactionDataType transactionData) {
     requires std::integral<decltype(transactionData.version)>;
     transactionData.chainID;
     transactionData.groupID;
@@ -23,8 +22,7 @@ concept TransactionData = requires(TransactionDataType transactionData)
 };
 
 template <class TransactionType>
-concept Transaction = requires(TransactionType transaction)
-{
+concept Transaction = requires(TransactionType transaction) {
     TransactionType{};
     requires TransactionData<decltype(transaction.data)>;
     transaction.dataHash;

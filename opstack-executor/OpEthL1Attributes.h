@@ -33,11 +33,11 @@
 
 #pragma once
 
+#include <bcos-utilities/Common.h>
 #include <opstack-executor/OpEthBlockExecute.h>  // OP_ETH_*_L1_ATTRIBUTES_LEN / Jovian selector
 #include <opstack-executor/OpEthDeposit.h>       // DepositTx / OP_DEPOSITOR (via OpFeeParams.h)
 #include <opstack-executor/OpFeeParams.h>        // OP_DEPOSITOR / OP_L1_BLOCK
 #include <opstack-executor/OpForkSpec.h>         // OpForkSchedule / opForkTimestampSec
-#include <bcos-utilities/Common.h>
 #include <array>
 #include <cstdint>
 #include <evmc/evmc.hpp>

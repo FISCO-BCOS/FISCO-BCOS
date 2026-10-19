@@ -35,10 +35,10 @@ namespace bcos::devp2p::sync
 struct Block
 {
     bcos::protocol::EthBlockHeaderData header;
-    bcos::h256 hash;       // keccak256(header RLP)
+    bcos::h256 hash;  // keccak256(header RLP)
     bcos::bytes headerRlp;
-    std::vector<bcos::bytes> transactions;   // opaque EIP-2718 encodings
-    std::vector<bcos::bytes> uncles;         // raw header RLP (empty on PoS)
+    std::vector<bcos::bytes> transactions;                // opaque EIP-2718 encodings
+    std::vector<bcos::bytes> uncles;                      // raw header RLP (empty on PoS)
     std::optional<std::vector<bcos::bytes>> withdrawals;  // raw EIP-4895 RLP, Shanghai+
 
     uint64_t number() const { return static_cast<uint64_t>(header.number); }

@@ -47,12 +47,10 @@ BOOST_AUTO_TEST_CASE(NarrowGasUsedRejectsAboveInt64)
     // Receipt gasUsed narrowing: int64-range passes, above throws OpConsensusError (the
     // INVALID side of the INVALID/-32603 boundary — OpEthExecutor's finish step relies on it).
     BOOST_CHECK_EQUAL(narrowGasUsed(bcos::u256(0)), 0);
-    BOOST_CHECK_EQUAL(
-        narrowGasUsed(bcos::u256(std::numeric_limits<int64_t>::max())),
+    BOOST_CHECK_EQUAL(narrowGasUsed(bcos::u256(std::numeric_limits<int64_t>::max())),
         std::numeric_limits<int64_t>::max());
     BOOST_CHECK_THROW(
-        (void)narrowGasUsed(bcos::u256(std::numeric_limits<int64_t>::max()) + 1),
-        OpConsensusError);
+        (void)narrowGasUsed(bcos::u256(std::numeric_limits<int64_t>::max()) + 1), OpConsensusError);
     // The decimal receipt-field form passes the value through verbatim.
     BOOST_CHECK_EQUAL(decimalCumulative(0), "0");
     BOOST_CHECK_EQUAL(

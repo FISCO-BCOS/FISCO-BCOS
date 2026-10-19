@@ -27,8 +27,8 @@ public:
     bcos::task::Task<bcos::Error::Ptr> onReceiveMessage(
         std::string _groupID, bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data) override;
 
-    bcos::task::Task<bcos::Error::Ptr> onReceiveBroadcastMessage(std::string _groupID,
-        bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data) override;
+    bcos::task::Task<bcos::Error::Ptr> onReceiveBroadcastMessage(
+        std::string _groupID, bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data) override;
 
     bcos::task::Task<bcos::Error::Ptr> sendResponse(std::string _id, int _moduleID,
         bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data) override;

@@ -1,4 +1,3 @@
-#include <bcos-utilities/IOServicePool.h>
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -22,10 +21,11 @@
 #include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
-#include <future>
 #include <boost/test/unit_test.hpp>
+#include <future>
 
 
 using namespace std;
@@ -48,7 +48,7 @@ public:
         bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory,
         bcos::protocol::TransactionFactory::Ptr transactionFactory,
         bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory)
-      : BlockFactoryImpl(cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory){};
+      : BlockFactoryImpl(cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory) {};
 
     ~MockBlockFactory() override = default;
 

@@ -92,7 +92,8 @@ struct MockStorage
         co_return std::nullopt;
     }
 
-    auto readOne(auto&& key, storage2::BYPASS_READ_SET_TYPE untracked) -> task::Task<std::optional<int>>
+    auto readOne(auto&& key, storage2::BYPASS_READ_SET_TYPE untracked)
+        -> task::Task<std::optional<int>>
     {
         co_return std::make_optional(100);
     }

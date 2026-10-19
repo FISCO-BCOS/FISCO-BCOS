@@ -263,7 +263,8 @@ BOOST_AUTO_TEST_CASE(retiredOpJovianBitIsReservedNotReusable)
     // Same pin for the newly added consensus bit: the enum value IS the on-chain
     // feature_flags bit position.
     BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::bugfix_nested_create_creator_nonce), 62);
-    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::reserved_retired_evm_pairing_canonical_g2), 63);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(Features::Flag::reserved_retired_evm_pairing_canonical_g2), 63);
     BOOST_CHECK(!Features::contains("feature_op_jovian"));
     BOOST_CHECK_THROW(Features::string2Flag("feature_op_jovian"), std::exception);
 
@@ -701,7 +702,6 @@ BOOST_AUTO_TEST_CASE(testDependenciesFeatures)
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_address));
     // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_cancun));
 }
-
 
 
 // The newest version set activates the DMC create-address rule flag (review F2):

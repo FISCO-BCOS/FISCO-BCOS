@@ -73,7 +73,8 @@ void SchedulerServiceClient::getCode(
         {}
         ~Callback() override {}
 
-        void callback_getCode(const bcostars::Error& ret, const std::vector<tars::Char>& code) override
+        void callback_getCode(
+            const bcostars::Error& ret, const std::vector<tars::Char>& code) override
         {
             bcos::bytes outCode(code.begin(), code.end());
 

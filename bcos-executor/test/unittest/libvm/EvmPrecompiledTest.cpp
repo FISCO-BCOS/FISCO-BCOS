@@ -39,8 +39,7 @@ namespace bcos::test
 // ---------------------------------------------------------------------------
 static std::pair<bool, bytes> exec(std::string_view name, bytesConstRef input)
 {
-    return executor::PrecompiledRegistrar::executor(std::string(name))(
-        input, ledger::Features{});
+    return executor::PrecompiledRegistrar::executor(std::string(name))(input, ledger::Features{});
 }
 
 static std::pair<bool, bytes> exec(std::string_view name, const bytes& input)

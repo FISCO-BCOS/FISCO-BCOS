@@ -73,9 +73,8 @@ BOOST_AUTO_TEST_CASE(downloadChainFromFakePeer)
         // Download the whole chain from block 0. The anchor is block 0's parent
         // (zero hash).
         sync::BlockExchange exchange(0, h256{});
-        exchange.downloadRange(established.session, chain.size(), [&](sync::Block const& block) {
-            downloaded.push_back(block);
-        });
+        exchange.downloadRange(established.session, chain.size(),
+            [&](sync::Block const& block) { downloaded.push_back(block); });
 
         BOOST_REQUIRE_EQUAL(downloaded.size(), chain.size());
         for (size_t i = 0; i < chain.size(); ++i)
@@ -105,8 +104,7 @@ BOOST_AUTO_TEST_CASE(brokenParentChainRejected)
         bcos::bytes rlp;
         bcos::codec::rlp::encode(rlp, chain[1].header);
         chain[1].headerRlp = rlp;  // the server serves the raw RLP, so re-encode it
-        chain[1].hash = bcos::crypto::keccak256Hash(
-            bcos::bytesConstRef(rlp.data(), rlp.size()));
+        chain[1].hash = bcos::crypto::keccak256Hash(bcos::bytesConstRef(rlp.data(), rlp.size()));
     }
 
     rlpx::EccKeyPair serverKey;
@@ -123,8 +121,7 @@ BOOST_AUTO_TEST_CASE(brokenParentChainRejected)
             test::serveRequests(established.session, chain);
         }
         catch (...)
-        {
-        }
+        {}
     });
 
     rlpx::PeerConfig clientConfig;
@@ -138,8 +135,7 @@ BOOST_AUTO_TEST_CASE(brokenParentChainRejected)
 
         sync::BlockExchange exchange(0, h256{});
         BOOST_CHECK_THROW(
-            exchange.downloadRange(established.session, chain.size(),
-                [](sync::Block const&) {}),
+            exchange.downloadRange(established.session, chain.size(), [](sync::Block const&) {}),
             std::runtime_error);
     }  // close the client connection
 
@@ -166,8 +162,7 @@ BOOST_AUTO_TEST_CASE(downloadChainWithPoSValidation)
             test::serveRequests(established.session, chain);
         }
         catch (...)
-        {
-        }
+        {}
     });
 
     rlpx::PeerConfig clientConfig;
@@ -218,8 +213,7 @@ BOOST_AUTO_TEST_CASE(posValidationRejectsBadBaseFee)
         bcos::bytes rlp;
         bcos::codec::rlp::encode(rlp, chain[1].header);
         chain[1].headerRlp = rlp;
-        chain[1].hash = bcos::crypto::keccak256Hash(
-            bcos::bytesConstRef(rlp.data(), rlp.size()));
+        chain[1].hash = bcos::crypto::keccak256Hash(bcos::bytesConstRef(rlp.data(), rlp.size()));
     }
 
     rlpx::EccKeyPair serverKey;
@@ -236,8 +230,7 @@ BOOST_AUTO_TEST_CASE(posValidationRejectsBadBaseFee)
             test::serveRequests(established.session, chain);
         }
         catch (...)
-        {
-        }
+        {}
     });
 
     rlpx::PeerConfig clientConfig;
@@ -258,9 +251,8 @@ BOOST_AUTO_TEST_CASE(posValidationRejectsBadBaseFee)
         // HeaderRuleViolation to the deterministic-failure path (no retry
         // against further bootnodes), so this must not regress to a plain
         // std::runtime_error (which would be classified as transient).
-        BOOST_CHECK_THROW(
-            exchange.downloadRange(established.session, chain.size() - 1,
-                [](sync::Block const&) {}),
+        BOOST_CHECK_THROW(exchange.downloadRange(
+                              established.session, chain.size() - 1, [](sync::Block const&) {}),
             sync::HeaderRuleViolation);
     }  // close the client connection
 
@@ -283,8 +275,7 @@ BOOST_AUTO_TEST_CASE(firstHeaderParentMismatchThrowsTyped)
         bcos::bytes rlp;
         bcos::codec::rlp::encode(rlp, chain[0].header);
         chain[0].headerRlp = rlp;
-        chain[0].hash = bcos::crypto::keccak256Hash(
-            bcos::bytesConstRef(rlp.data(), rlp.size()));
+        chain[0].hash = bcos::crypto::keccak256Hash(bcos::bytesConstRef(rlp.data(), rlp.size()));
     }
 
     rlpx::EccKeyPair serverKey;
@@ -301,8 +292,7 @@ BOOST_AUTO_TEST_CASE(firstHeaderParentMismatchThrowsTyped)
             test::serveRequests(established.session, chain);
         }
         catch (...)
-        {
-        }
+        {}
     });
 
     rlpx::PeerConfig clientConfig;
@@ -316,8 +306,7 @@ BOOST_AUTO_TEST_CASE(firstHeaderParentMismatchThrowsTyped)
 
         sync::BlockExchange exchange(0, h256{});
         BOOST_CHECK_THROW(
-            exchange.downloadRange(established.session, chain.size(),
-                [](sync::Block const&) {}),
+            exchange.downloadRange(established.session, chain.size(), [](sync::Block const&) {}),
             sync::ParentHashMismatch);
     }  // close the client connection
 
@@ -554,8 +543,8 @@ BOOST_AUTO_TEST_CASE(canyonHeaderMissingWithdrawalsHashThrows)
     runOpRound(chain, [&](rlpx::Session& session) {
         sync::HeaderChain headers(1, chain[0].header, sync::ChainConfig{});
         headers.setHeaderValidator(sync::makeOpHeaderValidator(config));
-        BOOST_CHECK_THROW(headers.requestHeaders(session, chain.size() - 1),
-            sync::HeaderRuleViolation);
+        BOOST_CHECK_THROW(
+            headers.requestHeaders(session, chain.size() - 1), sync::HeaderRuleViolation);
     });
 }
 
@@ -572,8 +561,8 @@ BOOST_AUTO_TEST_CASE(holoceneHeaderBadExtraDataThrows)
     runOpRound(chain, [&](rlpx::Session& session) {
         sync::HeaderChain headers(1, chain[0].header, sync::ChainConfig{});
         headers.setHeaderValidator(sync::makeOpHeaderValidator(config));
-        BOOST_CHECK_THROW(headers.requestHeaders(session, chain.size() - 1),
-            sync::HeaderRuleViolation);
+        BOOST_CHECK_THROW(
+            headers.requestHeaders(session, chain.size() - 1), sync::HeaderRuleViolation);
     });
 }
 

@@ -1595,8 +1595,8 @@ BOOST_AUTO_TEST_CASE(storageFaultInSloadCallbackIsRecordedNotFatal)
     callParameters->receiveAddress = sender;
     callParameters->codeAddress = sender;
     auto const tableName = std::string("/apps/") + sender;
-    auto executive = std::make_shared<TransactionExecutive>(
-        blockContext, sender, /*contextID=*/1, /*seq=*/1);
+    auto executive =
+        std::make_shared<TransactionExecutive>(blockContext, sender, /*contextID=*/1, /*seq=*/1);
     bcos::executor::HostContext host(
         std::move(callParameters), std::move(executive), std::string(tableName));
 

@@ -61,9 +61,9 @@ std::shared_ptr<bytes> HsmKeyEncryption::decryptContents(const std::shared_ptr<b
 {
     if (contents->size() < SM4_IV_DATA_SIZE)
     {
-        BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(
-                                  "HsmKeyEncryption: ciphertext too short, size: " +
-                                  std::to_string(contents->size())));
+        BOOST_THROW_EXCEPTION(
+            DecryptFailed() << errinfo_comment("HsmKeyEncryption: ciphertext too short, size: " +
+                                               std::to_string(contents->size())));
     }
     size_t cipherDataSize = contents->size() - SM4_IV_DATA_SIZE;
     bytes decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(

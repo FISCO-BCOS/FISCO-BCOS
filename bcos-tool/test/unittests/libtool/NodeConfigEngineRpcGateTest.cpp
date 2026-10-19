@@ -79,7 +79,8 @@ BOOST_AUTO_TEST_CASE(engineRpcAndOpEngineRpcRejected)
 BOOST_AUTO_TEST_CASE(engineRpcAndSingleNodeConsensusRejected)
 {
     LoaderProbe probe;
-    auto pt = fromIni("[engine_rpc]\nenable=true\n[consensus]\nenable_single_node_consensus=true\n");
+    auto pt =
+        fromIni("[engine_rpc]\nenable=true\n[consensus]\nenable_single_node_consensus=true\n");
     probe.loadEngineRpcConfig(pt);
     BOOST_CHECK_THROW(probe.loadSingleNodeConsensusConfig(pt), InvalidConfig);
 
@@ -123,16 +124,18 @@ BOOST_AUTO_TEST_CASE(ethereumDepositContractAddress)
     {
         LoaderProbe probe;
         auto pt = fromIni(
-            "[ethereum]\nmode=el\ndeposit_contract_address=0x7f02c3E3c98b133055b8b348b2ac625669182295\n");
+            "[ethereum]\nmode=el\ndeposit_contract_address="
+            "0x7f02c3E3c98b133055b8b348b2ac625669182295\n");
         BOOST_CHECK_NO_THROW(probe.loadEthereumConfig(pt));
-        BOOST_CHECK_EQUAL(
-            probe.ethereumDepositContractAddress().hex(), "7f02c3e3c98b133055b8b348b2ac625669182295");
+        BOOST_CHECK_EQUAL(probe.ethereumDepositContractAddress().hex(),
+            "7f02c3e3c98b133055b8b348b2ac625669182295");
     }
     // Non-hex and wrong-length values are rejected.
     {
         LoaderProbe probe;
         auto pt = fromIni(
-            "[ethereum]\nmode=el\ndeposit_contract_address=0xzz02c3e3c98b133055b8b348b2ac625669182295\n");
+            "[ethereum]\nmode=el\ndeposit_contract_address="
+            "0xzz02c3e3c98b133055b8b348b2ac625669182295\n");
         BOOST_CHECK_THROW(probe.loadEthereumConfig(pt), InvalidConfig);
     }
     {

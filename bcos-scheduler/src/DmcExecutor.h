@@ -33,7 +33,7 @@
 #include <string>
 
 #define DMC_LOG(LEVEL) SCHEDULER_LOG(LEVEL) << LOG_BADGE("DMC")
-//#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
+// #define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
 class DmcExecutor : public std::enable_shared_from_this<DmcExecutor>
@@ -54,10 +54,9 @@ public:
     DmcExecutor(std::string name, std::string contractAddress, bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
-        DmcStepRecorder::Ptr dmcRecorder, bool isCall,
-        ledger::Features features = {});
+        DmcStepRecorder::Ptr dmcRecorder, bool isCall, ledger::Features features = {});
 
-        virtual ~DmcExecutor();
+    virtual ~DmcExecutor();
 
     virtual void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
     bool prepare();        // return true if has schedule out message

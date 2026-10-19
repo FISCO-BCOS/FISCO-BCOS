@@ -74,8 +74,8 @@ void BaseStorage<enableLRU>::asyncGetPrimaryKeys(std::string_view table,
             auto&& error, auto&& remoteKeys) mutable {
             if (error)
             {
-                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(StorageError::ReadError,
-                             "Get primary keys from prev failed!", *error),
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                             StorageError::ReadError, "Get primary keys from prev failed!", *error),
                     std::vector<std::string>());
                 return;
             }
@@ -155,8 +155,8 @@ void BaseStorage<enableLRU>::asyncGetRow(std::string_view tableView, std::string
                 Error::UniquePtr error, std::optional<Entry> entry) {
                 if (error)
                 {
-                    _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(StorageError::ReadError,
-                                  "Get row from storage failed!", *error),
+                    _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                                  StorageError::ReadError, "Get row from storage failed!", *error),
                         {});
                     return;
                 }
@@ -181,14 +181,13 @@ void BaseStorage<enableLRU>::asyncGetRow(std::string_view tableView, std::string
 template <bool enableLRU>
 void BaseStorage<enableLRU>::asyncGetRows(std::string_view tableView,
     ::ranges::any_view<std::string_view,
-        ::ranges::category::input | ::ranges::category::random_access |
-            ::ranges::category::sized>
+        ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
         keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
 {
     std::vector<std::optional<Entry>> results(keys.size());
-    auto missinges = std::tuple<std::vector<std::string_view>,
-        std::vector<std::tuple<std::string, size_t>>>();
+    auto missinges =
+        std::tuple<std::vector<std::string_view>, std::vector<std::tuple<std::string, size_t>>>();
 
     std::atomic_ulong existsCount = 0;
 
@@ -232,8 +231,8 @@ void BaseStorage<enableLRU>::asyncGetRows(std::string_view tableView,
                 auto&& error, std::vector<std::optional<Entry>>&& entries) mutable {
                 if (error)
                 {
-                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(StorageError::ReadError,
-                                 "async get perv rows failed!", *error),
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                                 StorageError::ReadError, "async get perv rows failed!", *error),
                         std::vector<std::optional<Entry>>());
                     return;
                 }
@@ -243,8 +242,8 @@ void BaseStorage<enableLRU>::asyncGetRows(std::string_view tableView,
                     auto& entry = entries[i];
                     if (entry)
                     {
-                        results[std::get<1>(missingIndexes[i])].emplace(importExistingEntry(table,
-                            std::move(std::get<0>(missingIndexes[i])), std::move(*entry)));
+                        results[std::get<1>(missingIndexes[i])].emplace(importExistingEntry(
+                            table, std::move(std::get<0>(missingIndexes[i])), std::move(*entry)));
                     }
                 }
 
@@ -263,8 +262,8 @@ void BaseStorage<enableLRU>::asyncSetRow(std::string_view tableView, std::string
 {
     if (m_readOnly)
     {
-        callback(BCOS_ERROR_UNIQUE_PTR(
-            StorageError::ReadOnly, "Try to operate a read-only storage"));
+        callback(
+            BCOS_ERROR_UNIQUE_PTR(StorageError::ReadOnly, "Try to operate a read-only storage"));
         return;
     }
 
@@ -288,8 +287,8 @@ void BaseStorage<enableLRU>::asyncSetRow(std::string_view tableView, std::string
     }
     else
     {
-        auto [iter, inserted] =
-            bucket->container.emplace(Data{std::string(tableView), std::string(keyView), std::move(entry)});
+        auto [iter, inserted] = bucket->container.emplace(
+            Data{std::string(tableView), std::string(keyView), std::move(entry)});
         boost::ignore_unused(inserted);
         it = iter;
     }
@@ -312,8 +311,9 @@ void BaseStorage<enableLRU>::asyncSetRow(std::string_view tableView, std::string
 
 template <bool enableLRU>
 void BaseStorage<enableLRU>::parallelTraverse(bool onlyDirty,
-    std::function<bool(const std::string_view& table, const std::string_view& key,
-        const Entry& entry)> callback) const
+    std::function<bool(
+        const std::string_view& table, const std::string_view& key, const Entry& entry)>
+        callback) const
 {
     std::lock_guard<std::mutex> lock(x_cacheMutex);
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m_buckets.size()),
@@ -365,34 +365,35 @@ crypto::HashType BaseStorage<enableLRU>::hash(
                             (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION;
 
     std::vector<bcos::crypto::HashType> hashes(m_buckets.size());
-    tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_buckets.size()), [&, this](auto const& range) {
-        for (auto i = range.begin(); i < range.end(); ++i)
-        {
-            auto& bucket = m_buckets[i];
-
-            bcos::crypto::HashType bucketHash(0);
-            for (auto& it : bucket.container)
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0U, m_buckets.size()), [&, this](auto const& range) {
+            for (auto i = range.begin(); i < range.end(); ++i)
             {
-                auto& entry = it.entry;
-                if (entry.dirty())
-                {
-                    bcos::crypto::HashType entryHash;
-                    if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-                    {
-                        entryHash = entry.hash(it.table, it.key, *hashImpl, blockVersion);
-                    }
-                    else
-                    {
-                        entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
-                                    entry.hash(it.table, it.key, *hashImpl, blockVersion);
-                    }
-                    bucketHash ^= entryHash;
-                }
-            }
+                auto& bucket = m_buckets[i];
 
-            hashes[i] ^= bucketHash;
-        }
-    });
+                bcos::crypto::HashType bucketHash(0);
+                for (auto& it : bucket.container)
+                {
+                    auto& entry = it.entry;
+                    if (entry.dirty())
+                    {
+                        bcos::crypto::HashType entryHash;
+                        if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+                        {
+                            entryHash = entry.hash(it.table, it.key, *hashImpl, blockVersion);
+                        }
+                        else
+                        {
+                            entryHash = hashImpl->hash(it.table) ^ hashImpl->hash(it.key) ^
+                                        entry.hash(it.table, it.key, *hashImpl, blockVersion);
+                        }
+                        bucketHash ^= entryHash;
+                    }
+                }
+
+                hashes[i] ^= bucketHash;
+            }
+        });
 
     for (auto const& it : hashes)
     {
@@ -425,8 +426,7 @@ void BaseStorage<enableLRU>::rollback(const Recoder& recoder)
                 if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                 {
                     STORAGE_LOG(TRACE) << "Revert exists: " << change.table << " | "
-                                       << toHex(change.key) << " | "
-                                       << toHex(change.entry->get());
+                                       << toHex(change.key) << " | " << toHex(change.entry->get());
                 }
 
                 updateCapacity = change.entry->size() - it->entry.size();
@@ -440,11 +440,11 @@ void BaseStorage<enableLRU>::rollback(const Recoder& recoder)
                 if (c_fileLogLevel <= bcos::LogLevel::TRACE)
                 {
                     STORAGE_LOG(TRACE) << "Revert deleted: " << change.table << " | "
-                                       << toHex(change.key) << " | "
-                                       << toHex(change.entry->get());
+                                       << toHex(change.key) << " | " << toHex(change.entry->get());
                 }
                 updateCapacity = change.entry->size();
-                bucket->container.emplace(Data{change.table, change.key, std::move(*(change.entry))});
+                bucket->container.emplace(
+                    Data{change.table, change.key, std::move(*(change.entry))});
             }
         }
         else
@@ -545,7 +545,8 @@ void BaseStorage<enableLRU>::updateMRUAndCheck(Bucket& bucket, typename Containe
     if constexpr (enableLRU)
     {
         auto seqIt = bucket.container.template get<1>().iterator_to(*it);
-        bucket.container.template get<1>().relocate(bucket.container.template get<1>().end(), seqIt);
+        bucket.container.template get<1>().relocate(
+            bucket.container.template get<1>().end(), seqIt);
 
         size_t clearCount = 0;
         while (bucket.capacity > m_maxCapacity && !bucket.container.empty())

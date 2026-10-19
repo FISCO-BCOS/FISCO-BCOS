@@ -22,9 +22,9 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/ed25519/Ed25519KeyPair.h>
+#include <bcos-utilities/BoostLog.h>
 #include <wedpr-crypto/WedprCrypto.h>
 #include <memory>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -83,10 +83,9 @@ PublicPtr bcos::crypto::ed25519Recover(const HashType& _messageHash, bytesConstR
     auto ed25519Pub = std::make_shared<KeyImpl>(ED25519_PUBLIC_LEN, ref(signature->pub()));
     if (!ed25519Verify(ed25519Pub, _messageHash, _signatureData))
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidSignature() << errinfo_comment(
-                "invalid signature: ed25519 recover failed, msgHash : " + _messageHash.hex() +
-                ", signature:" + toHex(_signatureData)));
+        BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
+                                  "invalid signature: ed25519 recover failed, msgHash : " +
+                                  _messageHash.hex() + ", signature:" + toHex(_signatureData)));
     }
     return ed25519Pub;
 }

@@ -18,9 +18,9 @@
  * @date: 2021-01-18
  */
 
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/BoostLogCollector.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/BoostLogCollector.h"
+#include "bcos-utilities/Common.h"
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace std;

@@ -1684,7 +1684,6 @@ BOOST_AUTO_TEST_CASE(create2OpcodeDeploysAtTheHookAddress)
 }
 
 
-
 // Two internalCreates through ONE ExecutiveWrapper must derive DISTINCT addresses
 // (review F6): the derive base is seq()+1 and nothing on the wrapper path advanced
 // the counter, so the second create used to land on the first one's address. The
@@ -1701,8 +1700,8 @@ BOOST_AUTO_TEST_CASE(twoInternalCreatesThroughOneWrapperDeriveDistinctAddresses)
     auto createFeatures = ledgerConfig.features();
     createFeatures.set(ledger::Features::Flag::bugfix_internal_create_seq);
     auto wrapper = bcos::executor_v1::buildLegacyExecutive(storage, blockHeader,
-        /*contractAddress=*/"1000000000000000000000000000000000000002", caller,
-        *precompiledManager, /*contextID=*/7, /*seq=*/41, /*authCheck=*/false, createFeatures);
+        /*contractAddress=*/"1000000000000000000000000000000000000002", caller, *precompiledManager,
+        /*contextID=*/7, /*seq=*/41, /*authCheck=*/false, createFeatures);
 
     auto makeCreateInput = [] {
         auto input = std::make_unique<bcos::executor::CallParameters>(
@@ -1711,9 +1710,9 @@ BOOST_AUTO_TEST_CASE(twoInternalCreatesThroughOneWrapperDeriveDistinctAddresses)
         input->senderAddress = "ff6f30856ad3bae00b1169808488502786a13e3c";
         // The wrapper decodes (tableName, codeString) from data for the BFS link —
         // any decodable pair reaches the derive before the (failing) BFS step.
-        input->data = bcos::codec::abi::ContractABICodec(
-            *bcos::executor::GlobalHashImpl::g_hashImpl)
-                          .abiIn("__dummy_", std::string("t"), std::string("c"));
+        input->data =
+            bcos::codec::abi::ContractABICodec(*bcos::executor::GlobalHashImpl::g_hashImpl)
+                .abiIn("__dummy_", std::string("t"), std::string("c"));
         input->gas = 1'000'000;
         return input;
     };
@@ -1746,9 +1745,8 @@ BOOST_AUTO_TEST_CASE(twoInternalCreatesThroughOneWrapperDeriveDistinctAddresses)
     // Gate OFF (bit 66 clear, the historical default): the snapshot semantics stays —
     // the counter never advances, so historical blocks replay byte-identically.
     auto offWrapper = bcos::executor_v1::buildLegacyExecutive(storage, blockHeader,
-        /*contractAddress=*/"1000000000000000000000000000000000000003", caller,
-        *precompiledManager, /*contextID=*/7, /*seq=*/41, /*authCheck=*/false,
-        ledgerConfig.features());
+        /*contractAddress=*/"1000000000000000000000000000000000000003", caller, *precompiledManager,
+        /*contextID=*/7, /*seq=*/41, /*authCheck=*/false, ledgerConfig.features());
     auto const offSeqBefore = offWrapper->seq();
     try
     {
@@ -1759,8 +1757,7 @@ BOOST_AUTO_TEST_CASE(twoInternalCreatesThroughOneWrapperDeriveDistinctAddresses)
     BOOST_CHECK_EQUAL(offWrapper->seq(), offSeqBefore);
     // Consequence: the two derive bases differ, so the two link addresses differ
     // (newEVMAddress is injective in seq for fixed block/context).
-    BOOST_CHECK_NE(
-        bcos::newEVMAddress(*hashImpl, blockHeader.number(), 7, seqAfterFirst),
+    BOOST_CHECK_NE(bcos::newEVMAddress(*hashImpl, blockHeader.number(), 7, seqAfterFirst),
         bcos::newEVMAddress(*hashImpl, blockHeader.number(), 7, seqAfterSecond));
 }
 
@@ -1774,8 +1771,8 @@ BOOST_AUTO_TEST_CASE(bcosPrecompiledNodeFaultRethrowsWhileLogicErrorReverts)
     struct StubPrecompiled : bcos::precompiled::Precompiled
     {
         bool throwNodeFault = true;
-        explicit StubPrecompiled(bcos::crypto::Hash::Ptr hashImpl, bool nodeFault) :
-            bcos::precompiled::Precompiled(std::move(hashImpl)), throwNodeFault(nodeFault)
+        explicit StubPrecompiled(bcos::crypto::Hash::Ptr hashImpl, bool nodeFault)
+          : bcos::precompiled::Precompiled(std::move(hashImpl)), throwNodeFault(nodeFault)
         {}
         std::shared_ptr<bcos::precompiled::PrecompiledExecResult> call(
             std::shared_ptr<bcos::executor::TransactionExecutive>,
@@ -1783,8 +1780,7 @@ BOOST_AUTO_TEST_CASE(bcosPrecompiledNodeFaultRethrowsWhileLogicErrorReverts)
         {
             if (throwNodeFault)
             {
-                throw bcos::Error::buildError(
-                    "F7 pin", -1, "injected storage fault (F7 pin)");
+                throw bcos::Error::buildError("F7 pin", -1, "injected storage fault (F7 pin)");
             }
             BOOST_THROW_EXCEPTION(bcos::InvalidParameter{});
         }
@@ -1816,10 +1812,11 @@ BOOST_AUTO_TEST_CASE(bcosPrecompiledNodeFaultRethrowsWhileLogicErrorReverts)
     auto onFeatures = features;
     onFeatures.set(ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow);
     BOOST_CHECK_EXCEPTION(
-        bcos::executor_v1::callBcosPrecompiled(nodeFault, storage, blockHeader, message, {},
-            caller, *precompiledManager, /*contextID=*/1, /*seq=*/1, false, onFeatures),
-        bcos::Error,
-        [](auto const& e) { return std::string(e.errorMessage()).find("F7 pin") != std::string::npos; });
+        bcos::executor_v1::callBcosPrecompiled(nodeFault, storage, blockHeader, message, {}, caller,
+            *precompiledManager, /*contextID=*/1, /*seq=*/1, false, onFeatures),
+        bcos::Error, [](auto const& e) {
+            return std::string(e.errorMessage()).find("F7 pin") != std::string::npos;
+        });
 
     auto logicError = std::make_shared<StubPrecompiled>(hashImpl, /*nodeFault=*/false);
     auto reverted = bcos::executor_v1::callBcosPrecompiled(logicError, storage, blockHeader,

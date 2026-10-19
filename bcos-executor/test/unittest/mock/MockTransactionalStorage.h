@@ -38,8 +38,7 @@ public:
         if (m_faultTable == table && m_faultKey == _key)
         {
             std::cerr << "F2TEST: fault FIRED table=" << table << " key=" << _key << std::endl;
-            _callback(BCOS_ERROR_UNIQUE_PTR(-1, "injected storage fault (F2 test)"),
-                std::nullopt);
+            _callback(BCOS_ERROR_UNIQUE_PTR(-1, "injected storage fault (F2 test)"), std::nullopt);
             return;
         }
         m_inner->asyncGetRow(table, _key, std::move(_callback));
@@ -58,8 +57,9 @@ public:
     }
 
     void asyncGetRows(std::string_view table,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<storage::Entry>>)>
             _callback) noexcept override

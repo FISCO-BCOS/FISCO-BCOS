@@ -33,8 +33,7 @@ public:
     TablePrecompiled(crypto::Hash::Ptr _hashImpl);
     ~TablePrecompiled() override = default;
 
-    PrecompiledExecResult::Ptr call(
-        executor::TransactionExecutive::Ptr _executive,
+    PrecompiledExecResult::Ptr call(executor::TransactionExecutive::Ptr _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
 
 private:
