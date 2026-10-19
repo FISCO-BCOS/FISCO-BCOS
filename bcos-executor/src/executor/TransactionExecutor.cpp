@@ -2673,6 +2673,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     callParameters->contextID = input.contextID();
     callParameters->seq = input.seq();
+    callParameters->schedulerSeq = input.schedulerSeq();
     constexpr static auto addressSize = Address::SIZE * 2;
     if (staticCall)
     {

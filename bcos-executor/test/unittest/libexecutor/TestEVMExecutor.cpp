@@ -367,6 +367,11 @@ BOOST_AUTO_TEST_CASE(externalCall)
     storage::Entry entry;
     entry.set(bcos::storage::serialize::encode(se));
     backend->setRow(ledger::SYS_CONFIG, "feature_evm_address", entry);
+    // R5 F1: this fixture drives the DMC lane (dmcExecuteTransaction), where the
+    // create hook's EIP branch — like DmcExecutor's own empty-to arm — additionally
+    // requires bugfix_dmc_create_address_rule; enable it so the keccak derivation
+    // under test stays reachable (without it the hook takes the lane's formula).
+    backend->setRow(ledger::SYS_CONFIG, "bugfix_dmc_create_address_rule", entry);
     std::string ABin =
         "608060405234801561001057600080fd5b5061037f806100206000396000f3fe60806040523480156100105760"
         "0080fd5b506004361061002b5760003560e01c80635b975a7314610030575b600080fd5b61005c600480360360"
@@ -503,8 +508,9 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result2->from(), std::string(address));
     // evmc ABI 19: the created address arrives in `to` and must survive the scheduler hop
     // (the resume path stores at the address the CREATE pushed). THIS FIXTURE ENABLES
-    // feature_evm_address (SYS_CONFIG row set to "1" above), so the create_address_fn
-    // hook's EIP branch derives it — newLegacyEVMAddress(creator, creatorNonce) =
+    // feature_evm_address AND bugfix_dmc_create_address_rule (SYS_CONFIG rows above —
+    // the DMC lane's EIP-branch gate), so the create_address_fn hook's EIP branch
+    // derives it — newLegacyEVMAddress(creator, creatorNonce) =
     // keccak(rlp(creator, nonce))[12:], the same value evmone's own derivation produces.
     // Contract A (ff6f3085…) holds nonce 0 here (no nonce-initialization feature is
     // active), so the address is pinned both literally and through the formula: a size
@@ -754,6 +760,11 @@ BOOST_AUTO_TEST_CASE(storageFaultDuringSubcallFailsWholeFrame)
     storage::Entry entry;
     entry.set(bcos::storage::serialize::encode(se));
     backend->setRow(ledger::SYS_CONFIG, "feature_evm_address", entry);
+    // R5 F1: this fixture drives the DMC lane (dmcExecuteTransaction), where the
+    // create hook's EIP branch — like DmcExecutor's own empty-to arm — additionally
+    // requires bugfix_dmc_create_address_rule; enable it so the keccak derivation
+    // under test stays reachable (without it the hook takes the lane's formula).
+    backend->setRow(ledger::SYS_CONFIG, "bugfix_dmc_create_address_rule", entry);
     std::string ABin =
         "608060405234801561001057600080fd5b5061037f806100206000396000f3fe60806040523480156100105760"
         "0080fd5b506004361061002b5760003560e01c80635b975a7314610030575b600080fd5b61005c600480360360"
@@ -941,8 +952,9 @@ BOOST_AUTO_TEST_CASE(storageFaultDuringSubcallFailsWholeFrame)
     BOOST_CHECK_EQUAL(result2->from(), std::string(address));
     // evmc ABI 19: the created address arrives in `to` and must survive the scheduler hop
     // (the resume path stores at the address the CREATE pushed). THIS FIXTURE ENABLES
-    // feature_evm_address (SYS_CONFIG row set to "1" above), so the create_address_fn
-    // hook's EIP branch derives it — newLegacyEVMAddress(creator, creatorNonce) =
+    // feature_evm_address AND bugfix_dmc_create_address_rule (SYS_CONFIG rows above —
+    // the DMC lane's EIP-branch gate), so the create_address_fn hook's EIP branch
+    // derives it — newLegacyEVMAddress(creator, creatorNonce) =
     // keccak(rlp(creator, nonce))[12:], the same value evmone's own derivation produces.
     // Contract A (ff6f3085…) holds nonce 0 here (no nonce-initialization feature is
     // active), so the address is pinned both literally and through the formula: a size

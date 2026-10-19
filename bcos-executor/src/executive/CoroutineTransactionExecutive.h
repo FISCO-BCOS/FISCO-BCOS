@@ -54,6 +54,9 @@ public:
     CoroutineTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
         int64_t contextID, int64_t seq);
 
+    bool isSerialSchedulerLane() const noexcept override { return false; }
+    int64_t createDerivationSeq() const noexcept override { return m_schedulerLastSeq; }
+
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;  // start a new
     // coroutine to
     // execute
@@ -84,6 +87,10 @@ public:
     std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper();
 
 protected:
+    /// R5 F1: the DMC scheduler's last-consumed seq for this tx context, handed back
+    /// on every resumed message (ExecutionMessage::schedulerSeq). Only
+    /// createDerivationSeq() reads it — m_seq stays the scheduler's routing identity.
+    int64_t m_schedulerLastSeq = 0;
     CallParameters::UniquePtr m_exchangeMessage = nullptr;
     std::shared_ptr<SyncStorageWrapper> m_syncStorageWrapper;
 

@@ -126,6 +126,14 @@ public:
     virtual int64_t seq() const = 0;
     virtual void setSeq(int64_t seq) = 0;
 
+    /// DMC scheduler -> executor: the tx-context's last-consumed seq at the moment the
+    /// parent frame this message resumes (ExecutiveState::currentSeq - 1). The DMC
+    /// coroutine lane's CREATE hook derives the nested-create address from this counter
+    /// so it reproduces the scheduler-side f(currentSeq) the pre-upgrade binary produced;
+    /// producers that never set it leave the default 0 (serial lane, EL lanes, old peers).
+    virtual int64_t schedulerSeq() const = 0;
+    virtual void setSchedulerSeq(int64_t schedulerSeq) = 0;
+
     virtual std::string_view origin() const = 0;  // readable format
     virtual void setOrigin(std::string origin) = 0;
 

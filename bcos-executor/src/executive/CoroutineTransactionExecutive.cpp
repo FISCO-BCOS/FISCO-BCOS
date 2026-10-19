@@ -23,6 +23,9 @@ CoroutineTransactionExecutive::CoroutineTransactionExecutive(
         [this](auto&& PH1) { externalAcquireKeyLocks(std::forward<decltype(PH1)>(PH1)); },
         m_recoder))
 {
+    // R5 F1: before the first scheduler hand-back, the derivation base is the entry
+    // seq — the same value the scheduler's empty-to arm derived with on the base.
+    m_schedulerLastSeq = seq;
     m_storageWrapper = m_syncStorageWrapper.get();
 }
 
@@ -157,6 +160,15 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
 
     // When resume, exchangeMessage set to output
     auto output = std::move(getExchangeMessageRef());
+
+    // R5 F1: the DMC scheduler hands the tx-context's last-consumed seq back on every
+    // resumed message; adopt it as the CREATE-hook derivation base so the next
+    // nested create derives f(currentSeq) exactly like the base's scheduler-side arm.
+    // Monotonic guard: 0 means the producer never set it (serial lane, old peers).
+    if (output->schedulerSeq > m_schedulerLastSeq)
+    {
+        m_schedulerLastSeq = output->schedulerSeq;
+    }
 
     if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
     {

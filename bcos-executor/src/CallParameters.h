@@ -55,6 +55,10 @@ struct CallParameters
 
     int64_t contextID = 0;
     int64_t seq = 0;
+    /// Copied from the resumed ExecutionMessage::schedulerSeq (R5 F1): the DMC
+    /// scheduler's last-consumed seq for this tx context. Executor-local — never
+    /// serialized back out; consumed by CoroutineTransactionExecutive::externalCall.
+    int64_t schedulerSeq = 0;
 
     std::string senderAddress;   // common field, readable format
     std::string codeAddress;     // common field, readable format

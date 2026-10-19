@@ -92,6 +92,7 @@ BOOST_AUTO_TEST_CASE(handleCreateMessageFollowsTheCreateSaltFormula)
     public:
         using bcos::scheduler::DmcExecutor::DmcExecutor;
         using bcos::scheduler::DmcExecutor::handleCreateMessage;
+        using bcos::scheduler::DmcExecutor::handleExecutiveMessage;
     };
     auto executor = std::make_shared<TestableDmcExecutor>("DmcExecutorSalt", "0xaabbccdd", block,
         executor1, keyLocks, hashImpl, dmcRecorder, false, ledger::Features{});
@@ -405,6 +406,48 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     // dmcExecutor->go(executorCallback);
 }
 
+
+// [R5 F1] Every parent-resume arm of the DMC scheduler stamps the resumed message
+// with the tx-context's last-consumed seq (ExecutiveState::currentSeq - 1), so the
+// coroutine parent's CREATE hook can derive f(currentSeq) like the base's
+// scheduler-side arm did. Pinned on the classic FINISHED arm: the child's frame at
+// seq 12 finishes, the parent (entered at seq 9) resumes, and the message carries
+// seq=9 for routing plus schedulerSeq=6 = currentSeq(7) - 1 for the derivation.
+BOOST_AUTO_TEST_CASE(finishedResumeHandsBackSchedulerSeq)
+{
+    auto block = blockFactory->createBlock();
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(3);
+    header->calculateHash(*cryptoSuite->hashImpl());
+    block->setBlockHeader(header);
+
+    struct ResumeProbeExecutor : public DmcExecutor
+    {
+        using DmcExecutor::DmcExecutor;
+        using DmcExecutor::handleExecutiveMessage;
+    };
+    ResumeProbeExecutor dmc("DmcExecutor-resume", "0xaabbccdd", block, executor1, keyLocks,
+        std::make_shared<Keccak256>(), dmcRecorder, false, ledger::Features{});
+
+    auto message = std::make_unique<executor::NativeExecutionMessage>();
+    message->setType(protocol::ExecutionMessage::FINISHED);
+    message->setContextID(9);
+    message->setSeq(12);
+    message->setFrom("0xaabbccdd");
+    message->setTo("0xaabbccdd");  // == m_contractAddress: reach the FINISHED arm
+
+    auto state = std::make_shared<scheduler::ExecutiveState>(9, std::move(message), false);
+    state->callStack.push(9);   // the parent frame's entry seq
+    state->callStack.push(12);  // the finished child
+    state->currentSeq = 7;      // six hops consumed so far in this tx context
+
+    auto& stateMessage = state->message;
+    auto hint = dmc.handleExecutiveMessage(state);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(hint), static_cast<int>(DmcExecutor::MessageHint::NEED_SEND));
+    BOOST_CHECK_EQUAL(stateMessage->seq(), 9);           // routing: parent's entry seq
+    BOOST_CHECK_EQUAL(stateMessage->schedulerSeq(), 6);  // derivation: currentSeq - 1
+}
 
 // Empty-to create addresses follow the version-gated lane rule (review F2):
 // with bugfix_dmc_create_address_rule AND feature_evm_address on, the DMC lane derives

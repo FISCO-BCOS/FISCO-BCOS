@@ -880,7 +880,17 @@ evmc_bytes32 HostContext::getBalance(const evmc_address* _addr)
 evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uint64_t nonce) const
 {
     evmc_address out{};
-    if (m_executive->blockContext().features().get(ledger::Features::Flag::feature_evm_address))
+    auto& exec = *m_executive;
+    // EIP-style branch gate: SerialBlockExecutive honours keccak under
+    // feature_evm_address alone; DmcExecutor's arm additionally requires
+    // bugfix_dmc_create_address_rule, so the hook follows the same lane split
+    // (R5 F1) — otherwise the pushed address and the scheduler's derivation disagree.
+    const bool eipStyle =
+        exec.blockContext().features().get(ledger::Features::Flag::feature_evm_address) &&
+        (exec.isSerialSchedulerLane() ||
+            exec.blockContext().features().get(
+                ledger::Features::Flag::bugfix_dmc_create_address_rule));
+    if (eipStyle)
     {
         // EIP-style: keccak(rlp(sender, nonce)) — the same value evmone's own
         // derivation would produce (the hook receives the get_nonce result);
@@ -888,17 +898,27 @@ evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uin
         const auto addrStr = bcos::newLegacyEVMAddressString(
             bytesConstRef{sender.bytes, sizeof(sender.bytes)}, u256(nonce));
         boost::algorithm::unhex(addrStr, out.bytes);
+        if (m_eip2929Access)
+        {
+            m_eip2929Access->markAddressCreatedByHook(out);
+        }
         return out;
     }
     // Legacy formula: same inputs as TransactionExecutive::externalCall's nested-create
     // assignment (hash(blockNumber, contextID, seq+1) via the block's hash handler),
     // so the address the CREATE opcode pushes is exactly where externalCall — which
     // honors a non-empty receiveAddress — stores the contract. Replay-stable under
-    // the DMC per-hop frame replay (a nonce-derived address is not).
-    auto& exec = *m_executive;
+    // the DMC per-hop frame replay (a nonce-derived address is not). The seq base is
+    // createDerivationSeq(): m_seq on the serial lane, the scheduler-handed-back
+    // counter on the DMC lane (R5 F1) — under both lanes the hook then derives the
+    // same f(...) the scheduler-side empty-to arm produced on the base.
     const auto addrStr = bcos::newEVMAddress(exec.blockContext().hashHandler(),
-        exec.blockContext().number(), exec.contextID(), exec.seq() + 1);
+        exec.blockContext().number(), exec.contextID(), exec.createDerivationSeq() + 1);
     boost::algorithm::unhex(addrStr, out.bytes);
+    if (m_eip2929Access)
+    {
+        m_eip2929Access->markAddressCreatedByHook(out);
+    }
     return out;
 }
 
@@ -926,6 +946,10 @@ evmc_address HostContext::create2AddressForOpcode(
     const auto addrStr = bcos::newCreate2EVMAddress(
         exec.blockContext().hashHandler(), evmAddress2String(sender), initCode, fromEvmC(salt));
     boost::algorithm::unhex(addrStr, out.bytes);
+    if (m_eip2929Access)
+    {
+        m_eip2929Access->markAddressCreatedByHook(out);
+    }
     return out;
 }
 

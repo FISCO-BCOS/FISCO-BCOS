@@ -217,6 +217,15 @@ public:
             return EVMC_ACCESS_COLD;
         }
         auto& accessState = eip2929AccessState();
+        // R5 F2, flag off: 0.24's create_impl warms the just-derived address; 0.21
+        // never did. Answer the creation warm-up query cold WITHOUT inserting, so
+        // the first genuine touch pays the cold fee exactly like the base.
+        if (!m_executive->blockContext().features().get(
+                ledger::Features::Flag::bugfix_evm2929_created_address_warm) &&
+            accessState.consumeCreationWarmupQuery(addr))
+        {
+            return EVMC_ACCESS_COLD;
+        }
         return accessState.warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 

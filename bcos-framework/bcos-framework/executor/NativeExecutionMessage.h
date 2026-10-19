@@ -28,6 +28,9 @@ public:
     int64_t seq() const override { return m_seq; }
     void setSeq(int64_t seq) override { m_seq = seq; }
 
+    int64_t schedulerSeq() const override { return m_schedulerSeq; }
+    void setSchedulerSeq(int64_t schedulerSeq) override { m_schedulerSeq = schedulerSeq; }
+
     std::string_view origin() const override { return m_origin; }
     void setOrigin(std::string origin) override { m_origin = std::move(origin); }
 
@@ -171,6 +174,7 @@ public:
     bcos::crypto::HashType m_transactionHash;
     int64_t m_contextID = 0;
     int64_t m_seq = 0;
+    int64_t m_schedulerSeq = 0;
 
     std::string m_origin;
     std::string m_from;

@@ -547,6 +547,10 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         }
 
         message->setSeq(executiveState->callStack.top());
+        // R5 F1: hand the tx-context's last consumed seq to the resumed parent, so its
+        // CREATE hook derives the next nested-create address from the same counter the
+        // scheduler-side empty-to arm used before the hook took over the derivation.
+        message->setSchedulerSeq(executiveState->currentSeq - 1);
         message->setCreate(false);
         return MessageHint::NEED_SEND;
     }
@@ -669,6 +673,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
         assert(!executiveState->callStack.empty());
 
         message->setSeq(executiveState->callStack.top());
+        message->setSchedulerSeq(executiveState->currentSeq - 1);
         message->setCreate(false);
         return MessageHint::NEED_SEND;
     }
@@ -695,6 +700,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
         executiveState->revertStack.pop();
         executiveState->isRevertStackMessage = true;
         message->setSeq(seq);
+        message->setSchedulerSeq(executiveState->currentSeq - 1);
         message->setFrom(std::string(message->to()));  // record parent address
         message->setTo(std::string(to));
         message->setCreate(false);
@@ -718,6 +724,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
                 executiveState->revertStack.pop();
                 executiveState->isRevertStackMessage = true;
                 message->setSeq(seq);
+                message->setSchedulerSeq(executiveState->currentSeq - 1);
                 message->setFrom(std::string(message->to()));  // record parent address
                 message->setTo(std::string(to));
                 message->setCreate(false);
@@ -739,6 +746,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
         }
 
         message->setSeq(executiveState->callStack.top());
+        message->setSchedulerSeq(executiveState->currentSeq - 1);
         message->setCreate(false);
         return MessageHint::NEED_SEND;
     }
