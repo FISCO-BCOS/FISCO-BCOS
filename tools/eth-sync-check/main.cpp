@@ -624,8 +624,8 @@ std::string padHex(std::string const& hex, size_t len, std::string const& what)
 /// --genesis2ini: convert a standard geth genesis.json into the EL-mode
 /// config.genesis (INI) the node parses via NodeConfig::loadGenesisConfig. The
 /// output contract is the node's parser, not geth: [fork_timestamps] requires the
-/// full london..prague ladder (a fork the JSON leaves unscheduled inherits the
-/// previous fork's time, with a warning comment), storage slots/values are
+/// full london..prague ladder (a required fork the JSON leaves unscheduled is refused
+/// with the reason; an unscheduled optional fork is left out), storage slots/values are
 /// 0x-prefixed 64-hex, balances/nonces are decimal, and the fork-gated
 /// [eth_genesis_header] keys are emitted only when the JSON carries the field
 /// (absent key = omitted RLP field). state_root and hash are computed here with
@@ -647,8 +647,8 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // An empty (or absent) alloc is a valid EL-mode genesis: the alloc loop
         // below emits no [alloc.*] sections and computeGenesisStateTrie returns
         // the canonical empty-trie root, matching geth's empty-alloc stateRoot.
-        // (NodeConfig::validateL2Invariants exempts [ethereum] mode=el from the
-        // non-empty-alloc invariant; the L2/OP lanes still require allocs.)
+        // (NodeConfig::validateL2Invariants exempts executor.version=2 from the
+        // non-empty-alloc invariant; the OP lane still requires allocs.)
         if (!root.isMember("config") || !root["config"].isObject())
         {
             throw std::runtime_error("genesis.json is missing the config object");
@@ -700,84 +700,56 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             }
         }
 
-        // [fork_timestamps] requires the london..prague ladder (readForkTimestamp
-        // throws on an absent key), and UINT64_MAX is the ladder's terminal
-        // "never activates" value (NodeConfig's ladder check treats it as such),
-        // so an unscheduled fork is emitted as UINT64_MAX — NOT inherited from
-        // the previous fork: inheriting 0 would ACTIVATE the fork from genesis
-        // (e.g. Prague on a Cancun chain makes the verifier demand requestsHash
-        // that Cancun-era blocks do not carry).
-        uint64_t const kNever = std::numeric_limits<uint64_t>::max();
-        // The emitted ladder activates London from genesis (london_time=0) unless
-        // the chain is pre-London forever (below), but geth activates London
-        // BLOCK-based: Genesis.ToBlock consults g.Config.IsLondon(0), i.e.
-        // config.londonBlock must be present and 0. A genesis whose config lacks
-        // londonBlock (the smoke/genesis fixtures carry an empty config) mints a
-        // header WITHOUT baseFee in geth, so the baseFee default below must key
-        // off the JSON, not off the emitted ladder.
+        // [fork_timestamps] requires the london..prague ladder (readForkTimestamp throws on an
+        // absent key) and refuses the UINT64_MAX not-scheduled sentinel (parseForkTimestamp),
+        // so a required fork the JSON leaves unscheduled has no representation: refuse it
+        // here with the reason. It is NOT inherited from the previous fork: inheriting 0 would
+        // ACTIVATE it from genesis (e.g. Prague on a Cancun chain makes the verifier demand a
+        // requestsHash Cancun-era blocks do not carry). The optional post-Prague tail is
+        // emitted only when scheduled.
+        uint64_t const kMaxTime = std::numeric_limits<uint64_t>::max();
+        // The emitted ladder activates London from genesis (london_time=0), but geth
+        // activates London BLOCK-based: Genesis.ToBlock consults g.Config.IsLondon(0), i.e.
+        // config.londonBlock must be present and 0. A genesis whose config lacks londonBlock
+        // (the smoke/genesis fixtures carry an empty config) mints a header WITHOUT baseFee in
+        // geth, so the baseFee default below must key off the JSON, not off the ladder.
         auto const londonBlock = jsonQuantity(config, "londonBlock");
         bool const londonAtGenesis = londonBlock && *londonBlock == 0;
-        // geth reads an ABSENT config.londonBlock as "London never activates": a
-        // genesis without baseFeePerGas then stays pre-London forever. The faithful
-        // representation is a pre-London-shaped header (baseFee left unset below)
-        // plus a ladder in which no fork ever activates — NOT the self-contradictory
-        // london_time=0 + baseFee-less header, whose block 1 import would be
-        // rejected either way. The EL lane still cannot EXECUTE pre-London blocks
-        // (the EVM revision floor is London), but the genesis is served
-        // byte-exactly, which is what the hive smoke/genesis suite checks.
-        bool const preLondonForever =
-            !jsonQuantity(root, "baseFeePerGas") && !londonAtGenesis && !londonBlock;
-        uint64_t const parisTime = preLondonForever ? kNever : 0;  // 0: TTD == 0, PoS from genesis
-        bool forkNeverSeen = false;
-        auto forkTime = [&](char const* jsonKey) -> uint64_t {
+        // geth reads an ABSENT config.londonBlock as "London never activates": a genesis
+        // without baseFeePerGas then stays pre-London forever, which needs london_time and
+        // paris_time unscheduled -- not representable.
+        if (!jsonQuantity(root, "baseFeePerGas") && !londonAtGenesis && !londonBlock)
+        {
+            throw std::runtime_error(
+                "no baseFeePerGas and no config.londonBlock: the chain is pre-London forever, "
+                "but [fork_timestamps] requires london_time and paris_time to be scheduled "
+                "(the EL lane is London+ only)");
+        }
+        uint64_t const parisTime = 0;  // TTD == 0: PoS from genesis
+        auto requiredForkTime = [&](char const* jsonKey, char const* iniKey) -> uint64_t {
             auto value = jsonQuantity(config, jsonKey);
             if (!value)
             {
-                forkNeverSeen = true;
-                return kNever;
+                throw std::runtime_error(std::string("config.") + jsonKey +
+                                         " is not scheduled, but [fork_timestamps]." + iniKey +
+                                         " is required (london..prague must all be scheduled)");
             }
-            if (*value > u256(kNever))
-            {
-                throw std::runtime_error(
-                    std::string("config.") + jsonKey + " exceeds uint64: " + value->str());
-            }
-            // A scheduled fork after an unscheduled one breaks the parser's
-            // non-decreasing ladder check — reject here with a clearer message.
-            if (forkNeverSeen)
+            if (*value >= u256(kMaxTime))
             {
                 throw std::runtime_error(
                     std::string("config.") + jsonKey +
-                    " is scheduled while an earlier fork is absent (fork times must "
-                    "form a prefix: once a fork is unscheduled, all later forks must "
-                    "be unscheduled too)");
+                    " does not fit a scheduled uint64 timestamp: " + value->str());
             }
             return static_cast<uint64_t>(*value);
         };
-        auto shanghaiTime = forkTime("shanghaiTime");
-        auto cancunTime = forkTime("cancunTime");
-        auto pragueTime = forkTime("pragueTime");
-        // The post-Prague tail is optional in the parser (absent = not scheduled),
-        // so these keys are emitted only when the JSON carries them.
+        auto shanghaiTime = requiredForkTime("shanghaiTime", "shanghai_time");
+        auto cancunTime = requiredForkTime("cancunTime", "cancun_time");
+        auto pragueTime = requiredForkTime("pragueTime", "prague_time");
+        // The post-Prague tail is optional in the parser (absent = not scheduled), so these
+        // keys are emitted only when the JSON carries them.
         auto osakaTime = jsonQuantity(config, "osakaTime");
         auto bpo1Time = jsonQuantity(config, "bpo1Time");
         auto bpo2Time = jsonQuantity(config, "bpo2Time");
-        if (preLondonForever && (shanghaiTime != kNever || cancunTime != kNever ||
-                                    pragueTime != kNever || osakaTime || bpo1Time || bpo2Time))
-        {
-            // geth's checkConfigForkOrder rejects a timestamp fork without London;
-            // mirror that instead of emitting a chain that is pre-London and
-            // post-Shanghai at the same time.
-            throw std::runtime_error(
-                "config schedules a post-London fork time while config.londonBlock is "
-                "absent (geth rejects a timestamp fork without London)");
-        }
-        if (preLondonForever)
-        {
-            warnings.push_back(
-                "no baseFeePerGas and no config.londonBlock: emitting a pre-London "
-                "schedule (no fork ever activates); the EL lane serves the genesis "
-                "byte-exactly but cannot execute pre-London blocks");
-        }
 
         // --- allocs: normalized once, used for both the trie and the INI ---
         ledger::GenesisConfig genesis;
@@ -874,9 +846,8 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // in either direction, so an active fork's fields must be emitted
         // consistently.
         auto forkActiveAtGenesis = [&](uint64_t forkTime) {
-            // timestamp is range-checked above (<= int64 max / 1000), and the
-            // shared predicate maps forkTime 0 -> active and UINT64_MAX (kNever)
-            // -> inactive, exactly the two cases this call site distinguishes.
+            // timestamp is range-checked above (<= int64 max / 1000); the shared
+            // predicate maps forkTime 0 -> active.
             return bcos::protocol::isForkActive(forkTime, static_cast<int64_t>(timestamp));
         };
         std::optional<u256> baseFee, blobGasUsed, excessBlobGas;
@@ -894,7 +865,7 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             // pre-London" (the same constant the validator uses).
             baseFee = h.baseFee = protocol::kInitialBaseFee;
         }
-        else if (!preLondonForever)
+        else
         {
             // londonBlock present and non-zero: London activates mid-chain, which
             // the timestamp ladder cannot express — and geth leaves baseFee nil
@@ -907,8 +878,6 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
                 "is timestamp-based and activates London at genesis, so the header "
                 "must carry a base fee)");
         }
-        // else preLondonForever: geth leaves baseFee nil, and the ladder below
-        // keeps every fork inactive, so the header shape and the schedule agree.
         // consume-generated genesis files name it "withdrawalsRoot" (the fixture
         // header field); accept the geth-config-style "withdrawalsHash" too.
         auto const* withdrawalsKey =
@@ -977,10 +946,6 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             << "    sm_crypto=false\n"
             << "    group_id=group0\n"
             << "    chain_id=" << chainId->str() << "\n\n"
-            << "[web3]\n"
-            << "    chain_id=" << chainId->str() << "\n\n"
-            << "[version]\n"
-            << "    compatibility_version=3.18.0\n\n"
             << "[consensus]\n"
             << "    consensus_type=pbft\n"
             << "    block_tx_count_limit=1000\n"
@@ -993,14 +958,12 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             << "    is_auth_check=false\n"
             << "    auth_admin_account=0x0000000000000000000000000000000000000000\n"
             << "    is_serial_execute=true\n\n"
-            << "[ethereum]\n"
-            << "    mode=el\n\n"
             << "[fork_timestamps]\n";
         for (auto const& warning : warnings)
         {
             ini << "    ; WARNING: " << warning << "\n";
         }
-        ini << "    london_time=" << (preLondonForever ? kNever : 0) << "\n"
+        ini << "    london_time=" << 0 << "\n"
             << "    paris_time=" << parisTime << "\n"
             << "    merge_block=0\n"
             << "    shanghai_time=" << shanghaiTime << "\n"

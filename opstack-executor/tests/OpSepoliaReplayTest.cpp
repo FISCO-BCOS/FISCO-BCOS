@@ -425,7 +425,6 @@ void runReplay(ReplayOptions const& options)
     bcos::tool::NodeConfig nodeConfig(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     nodeConfig.loadGenesisConfig(options.genesisPath);
     auto const& genesis = nodeConfig.genesisConfig();
-    BOOST_REQUIRE_MESSAGE(genesis.m_opStackELMode, "genesis must declare opstack-el mode");
     BOOST_REQUIRE_MESSAGE(
         genesis.m_ethGenesisHeader.has_value(), "genesis must carry [eth_genesis_header]");
     BOOST_REQUIRE_MESSAGE(

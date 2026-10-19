@@ -60,7 +60,7 @@ struct ConfigUint64Result
 };
 
 /// The single implementation behind the [op_fork_timestamps] / [op_eip1559] loaders and the
-/// canonical [op_fork_schedule] codec: three copies of this loop had already diverged (one
+/// op_fork_schedule SYS_CONFIG row codec: three copies of this loop had already diverged (one
 /// gained the sentinel refusal, another a uint32 bound, the third rejected hex). Each caller
 /// maps @c error to its own message.
 [[nodiscard]] inline ConfigUint64Result parseConfigUint64(

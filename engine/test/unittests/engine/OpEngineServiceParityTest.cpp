@@ -985,7 +985,7 @@ BOOST_AUTO_TEST_CASE(op_fcu_rejects_non_canonical_safe)
 
 BOOST_AUTO_TEST_CASE(op_fcu_rejects_empty_txs_when_synthesis_disabled)
 {
-    // op_engine_rpc / op-geth: do not invent an L1-attributes deposit.
+    // Production [engine_rpc] / op-geth: do not invent an L1-attributes deposit.
     OpServicePair pair(/*allowSynthesizedL1Attributes=*/false);
     auto attrs = makeOpPayloadAttributes();
     attrs.minBaseFee = std::nullopt;

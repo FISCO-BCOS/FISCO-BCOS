@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file OpForkId.h
- * @brief EIP-2124 fork-id for OP-Stack chains (the opstack-el sync handshake).
+ * @brief EIP-2124 fork-id for OP-Stack chains (the [debug] follow_devp2p sync handshake).
  *
  * Sourced from op-geth (optimism branch):
  *  - core/forkid/forkid.go gatherForks collects fork points by REFLECTION over

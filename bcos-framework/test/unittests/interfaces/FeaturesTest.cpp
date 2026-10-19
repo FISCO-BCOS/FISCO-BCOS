@@ -1,4 +1,5 @@
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-tool/Exceptions.h"
 #include "protocol/Protocol.h"
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
@@ -204,44 +205,24 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_raw_address",
         "feature_rpbft_vrf_type_secp256k1",
         "feature_balance_policy2",
-        // Bit 57 is reserved, not reusable: it was feature_l2_ethereum_compat on the
-        // release-3.18.0 development line, but the Ethereum lane is now decided by
-        // executor_version (>= 2) alone. It is still declared so the next flag added cannot
-        // take its on-chain bit.
-        "reserved_removed_l2_ethereum_compat",
         "feature_mpt_state_root",
-        // Last, matching Flag's declaration: bugfix_nonce_ordering takes the next unused enum
-        // value (59) rather than the slot next to bugfix_statestorage_hash_v3_17 it occupies on
-        // release-3.17.0, because the enum value is the on-chain feature_flags bit position and
-        // inserting it mid-list would move every feature_ flag's bit. This list mirrors
-        // declaration order, so it follows the enum, not the other way round.
         "bugfix_nonce_ordering",
-        // Bit 60 is reserved, not reusable: it was feature_op_jovian on release-3.18.0 and the
-        // OP lane now activates forks from [op_fork_timestamps] instead. It is still declared
-        // so the next flag added cannot take its on-chain bit.
-        "reserved_removed_op_jovian",
-        // bugfix_eip161_1052_account_semantics = 61 (#5371/#5372), next unused value.
         "bugfix_eip161_1052_account_semantics",
-        // bugfix_nested_create_creator_nonce = 62: v2 nested-CREATE
-        // creator-nonce bump, opt-in so existing chains keep the historical gate.
+        // bugfix_nested_create_creator_nonce: v2 nested-CREATE creator-nonce bump,
+        // opt-in so existing chains keep the historical gate.
         "bugfix_nested_create_creator_nonce",
-        // reserved_retired_evm_pairing_canonical_g2 = 63: the bit the v1 pairing
-        // precompile's G2-canonicity gate used to occupy. The gate is now
-        // unconditional (it is the EIP-197 rule and the 0.21 behaviour), so the
-        // slot carries no behaviour; the number stays taken so 64+ do not move.
-        "reserved_retired_evm_pairing_canonical_g2",
-        // bugfix_dmc_create_address_rule = 64: the DMC lane honours feature_evm_address
-        // for empty-to create addresses (same rule as SerialBlockExecutive) when on;
-        // off keeps the historical formula so replay is unchanged.
+        // bugfix_dmc_create_address_rule: the DMC lane honours feature_evm_address for
+        // empty-to create addresses (same rule as SerialBlockExecutive) when on; off keeps
+        // the historical formula so replay is unchanged.
         "bugfix_dmc_create_address_rule",
-        // bugfix_v2_status_mapper_ordinary_failures = 65: maps the three ordinary EVM
-        // failure statuses instead of the default relabel; off = historical receipts.
+        // bugfix_v2_status_mapper_ordinary_failures: maps the three ordinary EVM failure
+        // statuses instead of the default relabel; off = historical receipts.
         "bugfix_v2_status_mapper_ordinary_failures",
-        // bugfix_internal_create_seq = 66: two creates through one ExecutiveWrapper get
-        // distinct addresses; off = historical snapshot semantics.
+        // bugfix_internal_create_seq: two creates through one ExecutiveWrapper get distinct
+        // addresses; off = historical snapshot semantics.
         "bugfix_internal_create_seq",
-        // bugfix_precompiled_node_fault_rethrow = 67: node faults rethrow to the FIB arm
-        // instead of a PrecompiledError REVERT; off = the pre-existing receipt.
+        // bugfix_precompiled_node_fault_rethrow: node faults rethrow to the FIB arm instead of
+        // a PrecompiledError REVERT; off = the pre-existing receipt.
         "bugfix_precompiled_node_fault_rethrow",
     };
     // clang-format on
@@ -252,74 +233,46 @@ BOOST_AUTO_TEST_CASE(feature)
     }
 }
 
-// The enum value IS the on-chain feature_flags bit position, so bit 60 staying occupied by the
-// reserved placeholder is a consensus constant, not a cosmetic detail: the name-order list above
-// passes just as happily if the next flag added silently takes 60. Pin the number, and pin that
-// the retired NAME no longer resolves — a genesis still carrying feature_op_jovian=true must
-// fail at load rather than quietly enable nothing.
-BOOST_AUTO_TEST_CASE(retiredOpJovianBitIsReservedNotReusable)
+// A flag exists only by its name: every declared name resolves back to itself.
+BOOST_AUTO_TEST_CASE(allFlagNamesRoundTrip)
 {
-    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::reserved_removed_op_jovian), 60);
-    // Same pin for the newly added consensus bit: the enum value IS the on-chain
-    // feature_flags bit position.
-    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::bugfix_nested_create_creator_nonce), 62);
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(Features::Flag::reserved_retired_evm_pairing_canonical_g2), 63);
-    BOOST_CHECK(!Features::contains("feature_op_jovian"));
-    BOOST_CHECK_THROW(Features::string2Flag("feature_op_jovian"), std::exception);
-
-    // The reserved slot carries no behaviour of its own: it is off in a default Features and
-    // packs to exactly bit 60 when set, which is what keeps it un-reusable.
-    Features features;
-    BOOST_CHECK(!features.get(Features::Flag::reserved_removed_op_jovian));
-    features.set(Features::Flag::reserved_removed_op_jovian);
-    BOOST_CHECK_EQUAL(features.toFlagsNumber(), bcos::u256(1) << 60);
+    for (auto name : Features::featureKeys())
+    {
+        BOOST_CHECK(Features::contains(name));
+        BOOST_CHECK_EQUAL(magic_enum::enum_name(Features::string2Flag(name)), name);
+    }
 }
 
-// The enum value IS the on-chain feature_flags bit position, so bit 57 staying occupied by the
-// reserved placeholder is a consensus constant, not a cosmetic detail. Pin the number, and pin
-// that the retired NAME no longer resolves — a genesis still carrying
-// feature_l2_ethereum_compat=1 must fail at load rather than quietly enable nothing: the
-// Ethereum lane is now expressed by executor_version (>= 2), not by a feature flag.
-BOOST_AUTO_TEST_CASE(retiredL2EthereumCompatBitIsReservedNotReusable)
+// Retired names must not resolve: a genesis still carrying one of them fails at load instead of
+// silently enabling nothing.
+BOOST_AUTO_TEST_CASE(retiredNamesAreRejected)
 {
-    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::reserved_removed_l2_ethereum_compat), 57);
-    BOOST_CHECK(!Features::contains("feature_l2_ethereum_compat"));
-    BOOST_CHECK_THROW(Features::string2Flag("feature_l2_ethereum_compat"), NoSuchFeatureError);
-
-    // The reserved slot carries no behaviour of its own: it is off in a default Features and
-    // packs to exactly bit 57 when set, which is what keeps it un-reusable.
-    Features features;
-    BOOST_CHECK(!features.get(Features::Flag::reserved_removed_l2_ethereum_compat));
-    features.set(Features::Flag::reserved_removed_l2_ethereum_compat);
-    BOOST_CHECK_EQUAL(features.toFlagsNumber(), bcos::u256(1) << 57);
+    for (auto name : {"feature_l2_ethereum_compat", "feature_op_jovian",
+             "reserved_removed_l2_ethereum_compat", "reserved_removed_op_jovian"})
+    {
+        BOOST_CHECK(!Features::contains(name));
+        BOOST_CHECK_THROW(Features::string2Flag(name), NoSuchFeatureError);
+    }
 }
 
-BOOST_AUTO_TEST_CASE(toFlagsNumber)
+BOOST_AUTO_TEST_CASE(evmForkFlagsRequireThePreviousFork)
 {
-    // empty feature set packs to 0
-    Features none;
-    BOOST_CHECK_EQUAL(none.toFlagsNumber(), bcos::u256(0));
+    Features features;
+    BOOST_CHECK_THROW(features.validate("feature_evm_prague"), bcos::tool::InvalidSetFeature);
+    BOOST_CHECK_THROW(features.validate("feature_evm_osaka"), bcos::tool::InvalidSetFeature);
 
-    // bit = the flag's explicit enum value
-    Features one;
-    one.set(Features::Flag::feature_mpt_state_root);
-    auto mptBit = static_cast<size_t>(Features::Flag::feature_mpt_state_root);
-    BOOST_CHECK_EQUAL(one.toFlagsNumber(), bcos::u256(1) << mptBit);
+    features.set(Features::Flag::feature_evm_cancun);
+    BOOST_CHECK_NO_THROW(features.validate("feature_evm_prague"));
+    BOOST_CHECK_THROW(features.validate("feature_evm_osaka"), bcos::tool::InvalidSetFeature);
 
-    // bugfix_revert has value 0 -> bit 0; multiple set flags OR together
-    Features two;
-    two.set(Features::Flag::bugfix_revert);
-    two.set(Features::Flag::feature_mpt_state_root);
-    BOOST_CHECK_EQUAL(two.toFlagsNumber(), (bcos::u256(1) << 0) | (bcos::u256(1) << mptBit));
+    features.set(Features::Flag::feature_evm_prague);
+    BOOST_CHECK_NO_THROW(features.validate("feature_evm_osaka"));
 }
 
 BOOST_AUTO_TEST_CASE(flagCountWithinReflectionRange)
 {
-    // feature_flags packs each flag at bit = its enum value; magic_enum's
-    // default reflection range is [-128,128]. Keep the enum within it (mirrors
-    // the static_assert in Features.h) so no flag is silently dropped from
-    // get/set/string2Flag/feature_flags.
+    // magic_enum's default reflection range is [-128,128]; a flag outside it would silently
+    // drop out of get/set/string2Flag.
     BOOST_CHECK_LE(magic_enum::enum_count<Features::Flag>(), 128U);
 }
 
