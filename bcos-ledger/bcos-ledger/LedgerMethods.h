@@ -61,8 +61,8 @@ struct InvalidConsensusType : public bcos::Exception
 {
 };
 
-inline task::Immediate<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/,
-    auto& ledger, GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
+inline task::Immediate<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/, auto& ledger,
+    GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
 {
     return {ledger.buildGenesisBlock(genesis, ledgerConfig)};
 }

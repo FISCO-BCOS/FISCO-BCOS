@@ -220,8 +220,8 @@ struct GetResultAwaitable
             return;
         }
         auto expected = Result::State::SUSPENDED;
-        (void)m_result.state.compare_exchange_strong(expected, Result::State::INIT,
-            std::memory_order_acq_rel, std::memory_order_acquire);
+        (void)m_result.state.compare_exchange_strong(
+            expected, Result::State::INIT, std::memory_order_acq_rel, std::memory_order_acquire);
     }
 
     bool await_ready() noexcept
