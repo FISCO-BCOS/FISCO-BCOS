@@ -138,17 +138,20 @@ public:
                                          // keeps the formula address, so existing chains replay
                                          // byte-identically; only a chain that also enables
                                          // feature_evm_address observes a difference.
-        bugfix_v2_status_mapper_ordinary_failures,  // v2 lane receipt construction maps the
-                                                    // ordinary EVM failure statuses
-                                                    // (BAD_JUMP_DESTINATION,
-                                                    // INVALID_MEMORY_ACCESS,
-                                                    // STATIC_MODE_VIOLATION) instead of letting
-                                                    // the mapper's default throw relabel them
-                                                    // EVMC_INTERNAL_ERROR in execute()'s catch
-                                                    // arm. Off: the historical relabel (status
-                                                    // Unknown/OutOfGas, gas 0/ref->gas per
-                                                    // bugfix_v1_error_handling), so pre-existing
-                                                    // blocks replay byte-identically.
+        bugfix_baseline_status_mapper_ordinary_failures,  // baseline lane (transaction-executor)
+                                                          // receipt construction maps the ordinary
+                                                          // EVM failure statuses
+                                                          // (BAD_JUMP_DESTINATION,
+                                                          // INVALID_MEMORY_ACCESS,
+                                                          // STATIC_MODE_VIOLATION) instead of
+                                                          // letting the mapper's default throw
+                                                          // relabel them EVMC_INTERNAL_ERROR in
+                                                          // execute()'s catch arm. Off: the
+                                                          // historical relabel (status
+                                                          // Unknown/OutOfGas, gas 0/ref->gas per
+                                                          // bugfix_v1_error_handling), so
+                                                          // pre-existing blocks replay
+                                                          // byte-identically.
         bugfix_internal_create_seq,  // Precompiled-initiated creates publish the consumed seq
                                      // base, so two creates through one ExecutiveWrapper derive
                                      // distinct addresses instead of colliding on f(seq+1). Off:

@@ -215,9 +215,9 @@ BOOST_AUTO_TEST_CASE(feature)
         // empty-to create addresses (same rule as SerialBlockExecutive) when on; off keeps
         // the historical formula so replay is unchanged.
         "bugfix_dmc_create_address_rule",
-        // bugfix_v2_status_mapper_ordinary_failures: maps the three ordinary EVM failure
+        // bugfix_baseline_status_mapper_ordinary_failures: maps the three ordinary EVM failure
         // statuses instead of the default relabel; off = historical receipts.
-        "bugfix_v2_status_mapper_ordinary_failures",
+        "bugfix_baseline_status_mapper_ordinary_failures",
         // bugfix_internal_create_seq: two creates through one ExecutiveWrapper get distinct
         // addresses; off = historical snapshot semantics.
         "bugfix_internal_create_seq",
@@ -667,7 +667,7 @@ BOOST_AUTO_TEST_CASE(newestVersionSetActivatesDmcCreateAddressRule)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_dmc_create_address_rule), true);
     BOOST_CHECK_EQUAL(
-        features.get(Features::Flag::bugfix_v2_status_mapper_ordinary_failures), true);
+        features.get(Features::Flag::bugfix_baseline_status_mapper_ordinary_failures), true);
     BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_internal_create_seq), true);
     BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_precompiled_node_fault_rethrow), true);
 

@@ -147,11 +147,17 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
 
     if (_callParameters->m_sender != authAddress)
     {
+        // A caller other than the AuthManager is an ordinary user mistake, not a node
+        // fault: any contract can reach this line. Throw the contract-domain
+        // PrecompiledError like every other rejection in this file (it reverts on both
+        // dispatch lanes), never a bcos::Error — with
+        // bugfix_precompiled_node_fault_rethrow on, a bcos::Error here would burn the
+        // whole frame as INTERNAL_ERROR for a deterministic authorization failure.
         PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled")
                               << LOG_DESC("sender is not from AuthManager")
                               << LOG_KV("sender", _callParameters->m_sender);
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(
-            CODE_NO_AUTHORIZED, "ContractAuthMgrPrecompiled: sender is not from AuthManager"));
+        BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{} << errinfo_comment(
+                                  "ContractAuthMgrPrecompiled: sender is not from AuthManager"));
     }
     auto selector = selector2Func.find(func);
     if (selector != selector2Func.end())

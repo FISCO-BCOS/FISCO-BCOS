@@ -240,14 +240,17 @@ BOOST_AUTO_TEST_CASE(executeAndCall)
     }());
 }
 
-// [F2 v2 mirror regression] A fault inside a noexcept EVMC callback (only
-// getNonce swallows on this lane) must fail the WHOLE frame after the VM
-// returns, not masquerade as a legitimate EIP-2681 nonce rejection the parent
-// frame survives. Inject the real fault shape — a corrupt (unparseable) nonce
-// row on the creating contract — then drive its nested CREATE: the callback's
-// parse throws, the catch records the host fault, and execute() rethrows it
-// out of the task for the scheduler-level catch arms to classify. Without the
-// fix the call completes "successfully" with the create merely failed.
+// [F2 v2 mirror regression] A fault inside a noexcept EVMC callback must fail
+// the WHOLE frame after the VM returns, not masquerade as a legitimate
+// EIP-2681 nonce rejection the parent frame survives. EVERY faulting callback
+// on this lane now records the fault and answers fail-closed (see
+// dataCallbackFaultIsRecordedNotFatal) — getNonce is the representative here,
+// not the only one. Inject the real fault shape — a corrupt (unparseable)
+// nonce row on the creating contract — then drive its nested CREATE: the
+// callback's parse throws, the catch records the host fault, and execute()
+// rethrows it out of the task for the scheduler-level catch arms to classify.
+// Without the fix the call completes "successfully" with the create merely
+// failed.
 BOOST_AUTO_TEST_CASE(storageFaultInNonceCallbackFailsWholeFrameV2)
 {
     // Corrupt the deployed contract's own nonce row: helloworld's nested
@@ -279,6 +282,70 @@ BOOST_AUTO_TEST_CASE(storageFaultInNonceCallbackFailsWholeFrameV2)
         co_await account.setNonce(std::string("0"));
         auto ok = co_await call("deployAndCall(int256)", {}, false, bcos::s256(999));
         BOOST_CHECK_EQUAL(ok.status_code, 0);
+    }());
+}
+
+// [R5 F3 regression] A host fault recorded in a CHILD frame must reach the parent
+// frame's record: externalCall copies the child's fault after the child's execute()
+// returns (the child converts its own fault into a plain EVMC_INTERNAL_ERROR result —
+// the exception never crosses the boundary), so without the copy a faulted sub-call
+// leaves the parent's record clear and the top-level frame could finish SUCCESS and
+// seal a receipt over it. Same fault shape as the F2 mirror above, one level down:
+// the parent frame drives externalCall into helloworld.deployAndCall, and the CHILD's
+// nested-create hook parses the corrupt nonce row.
+BOOST_AUTO_TEST_CASE(storageFaultInChildFrameReachesParentRecordV2)
+{
+    syncWait([this]() -> Task<void> {
+        bcos::ledger::account::EVMAccount account(
+            storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("not-a-number"));
+        co_return;
+    }());
+
+    syncWait([this]() -> Task<void> {
+        // The parent frame at an unrelated caller: its own code never runs —
+        // externalCall is driven directly, so the ONLY way the parent's record can
+        // fill is the child->parent propagation under test.
+        evmc_address caller{};
+        caller.bytes[19] = 0xC3;
+        evmc_message parentMsg{};
+        parentMsg.kind = EVMC_CALL;
+        parentMsg.depth = 0;
+        parentMsg.gas = 10'000'000;
+        parentMsg.recipient = caller;
+        parentMsg.sender = caller;
+        parentMsg.code_address = caller;
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> parent(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, parentMsg, caller, "",
+            0, seq, *precompiledManager, ledgerConfig, *hashImpl, /*web3Tx=*/false, 0,
+            bcos::task::syncWait);
+        BOOST_CHECK(!parent.hasHostFault());
+
+        // Child frame: CALL helloworld.deployAndCall(999) — its nested CREATE parses
+        // the corrupt nonce row inside the child's getNonce callback.
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(999));
+        evmc_message nested{};
+        nested.kind = EVMC_CALL;
+        nested.depth = 1;
+        nested.gas = 1'000'000;
+        nested.recipient = helloworldAddress;
+        nested.sender = caller;
+        nested.code_address = helloworldAddress;
+        nested.input_data = input.data();
+        nested.input_size = input.size();
+        auto result = syncWait(parent.externalCall(nested));
+
+        // The child converts its fault into EVMC_INTERNAL_ERROR ...
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
+        // ... and the record must have reached the parent (red before the
+        // propagation: this is exactly the receipt the reviewer's F3 seals).
+        BOOST_CHECK(parent.hasHostFault());
+
+        // Repair: later tests in this suite call the same contract.
+        bcos::ledger::account::EVMAccount account(
+            storage, helloworldAddress, bcos::ledger::account::AddressTableMode::Hex);
+        co_await account.setNonce(std::string("0"));
     }());
 }
 

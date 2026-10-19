@@ -234,6 +234,13 @@ public:
         }
     }
 
+    /// Read-side of the record for the PARENT frame: externalCall must propagate a
+    /// child frame's host fault onto this frame's record (a faulted sub-call cannot
+    /// leave a SUCCESS top-level receipt behind), while the record itself stays
+    /// per-frame so it can never leak across transactions.
+    bool hasHostFault() const noexcept { return m_hasHostFault; }
+    std::string const& hostFaultMessage() const noexcept { return m_hostFault; }
+
 private:
     /// EVMC host interface table (formerly the inherited `interface` field of the
     /// concretized evmc_host_context; the evmc type is upstream-opaque again).
@@ -871,6 +878,14 @@ public:
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
+        // The child's own execute() already converted its fault into a plain
+        // EVMC_INTERNAL_ERROR result — the exception never crosses this boundary, so
+        // without this copy the parent's record stays clear and the top-level frame
+        // could finish SUCCESS and seal a receipt over a failed sub-call.
+        if (hostcontext.hasHostFault())
+        {
+            recordHostFault(hostcontext.hostFaultMessage());
+        }
         auto& logs = hostcontext.logs();
         if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
@@ -1045,7 +1060,7 @@ private:
             ref.input_data, ref.input_size, &HostContext::createAddressHook,
             &HostContext::create2AddressHook,
             m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::bugfix_v2_status_mapper_ordinary_failures));
+                ledger::Features::Flag::bugfix_baseline_status_mapper_ordinary_failures));
         // Whole-frame fault check (review F1): a fault recorded by a fail-closed EVMC
         // callback must fail this frame, not ride the callback's sub-op-level answer.
         throwIfHostFault();
@@ -1200,7 +1215,7 @@ private:
             (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size(),
             &HostContext::createAddressHook, &HostContext::create2AddressHook,
             m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::bugfix_v2_status_mapper_ordinary_failures));
+                ledger::Features::Flag::bugfix_baseline_status_mapper_ordinary_failures));
         throwIfHostFault();  // same whole-frame check as the create branch (review F1)
         co_return result;
     }
