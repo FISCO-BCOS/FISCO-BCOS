@@ -23,7 +23,7 @@ namespace bcos::test
 {
 namespace
 {
-CryptoSuite::Ptr makeSuite()
+CryptoSuite::Ptr makeBlockImplSuite()
 {
     return std::make_shared<CryptoSuite>(
         std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(fromTarsAndInnerAccessors)
 // including setReceipt's lazy resize of the receipts vector.
 BOOST_AUTO_TEST_CASE(transactionAndReceiptByIndex)
 {
-    auto suite = makeSuite();
+    auto suite = makeBlockImplSuite();
     TransactionFactoryImpl txFactory(suite);
     auto block = std::make_shared<BlockImpl>();
 

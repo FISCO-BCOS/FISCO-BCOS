@@ -39,7 +39,7 @@ class RocksDBStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
-    explicit RocksDBStorage(std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>&& db,
+    explicit RocksDBStorage(std::unique_ptr<::rocksdb::DB, std::function<void(::rocksdb::DB*)>>&& db,
         const bcos::security::StorageEncryptInterface::Ptr dataEncryption);
 
     ~RocksDBStorage() {}
@@ -84,15 +84,15 @@ public:
         std::string_view, const std::variant<const gsl::span<std::string_view const>,
                               const gsl::span<std::string const>>&) noexcept override;
 
-    rocksdb::DB& rocksDB() { return *m_db; }
+    ::rocksdb::DB& rocksDB() { return *m_db; }
 
     void stop() override;
 
 private:
-    Error::Ptr checkStatus(rocksdb::Status const& status);
-    std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
+    Error::Ptr checkStatus(::rocksdb::Status const& status);
+    std::shared_ptr<::rocksdb::WriteBatch> m_writeBatch = nullptr;
     std::mutex m_writeBatchMutex;
-    std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>> m_db;
+    std::unique_ptr<::rocksdb::DB, std::function<void(::rocksdb::DB*)>> m_db;
 
     // Security Storage
     bcos::security::StorageEncryptInterface::Ptr m_dataEncryption{nullptr};

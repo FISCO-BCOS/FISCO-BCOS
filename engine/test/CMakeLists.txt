@@ -44,18 +44,4 @@ endif()
 target_compile_definitions(${TEST_BINARY_NAME} PRIVATE ${_t8n_defs})
 
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties(
-    "unittests/engine/OpEngineServiceParityTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties(
-    "unittests/engine/OpEngineServiceExecParityTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties(
-    "unittests/engine/OpEngineReviewFixTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties(
-    "unittests/engine/EthEngineServiceParityTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties(
-    "unittests/engine/EthEngineServiceMPTStateRootTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties(
-    "unittests/engine/EthEngineServiceTransactionalTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties(
-    "unittests/engine/EthEngineL1BuildTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")

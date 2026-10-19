@@ -27,9 +27,6 @@ target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-cryp
 # TODO: move typed-tx RLP decode to bcos-codec to drop executor -> rpc dependency.
 target_link_libraries(executor PRIVATE rpc)
 
-set_source_files_properties(
-    "src/vm/VMFactory.cpp"
-    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # Exclude CoroutineTransactionExecutive from unity build to allow per-file
 # ASan flags. boost::context coroutines trigger false-positive
 # stack-use-after-scope errors under -fsanitize-address-use-after-scope.

@@ -32,7 +32,7 @@ if(FULLNODE)
     # manifest feature, so the KZG headers are unavailable in the other configurations.
     target_compile_definitions(${TEST_BINARY_NAME} PRIVATE BCOS_CRYPTO_WITH_KZG)
 endif()
-set_source_files_properties("unittests/main.cpp" "unittests/testMerkle.cpp" "unittests/Secp256k1RecoverTest.cpp" "unittests/Ed25519RecoverTest.cpp" "unittests/SM2RecoverTest.cpp" "unittests/ChecksumAddressExtraTest.cpp" "unittests/HashImplHasherTest.cpp" "unittests/SignatureRoundtripTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("unittests/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" "")
 
 # Regression guard against the bundled-secp256k1 link hijack (see the script header).

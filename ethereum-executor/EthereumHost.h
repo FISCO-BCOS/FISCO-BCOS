@@ -27,7 +27,11 @@
 
 namespace bcos::executor_v1::eth
 {
-using namespace evmc::literals;
+// Narrow using-declaration: a namespace-scope `using namespace evmc::literals` here
+// leaks all of ::evmc (literals is an inline namespace) into every TU that does
+// `using namespace bcos::executor_v1::eth`, making bare `bytes` ambiguous with
+// bcos::bytes. Only operator""_address is needed.
+using evmc::literals::operator""_address;
 
 // Forward declaration only: the complete policy lives in EthExecutionPolicy.h
 // (which includes this header). It is complete at every instantiation point —

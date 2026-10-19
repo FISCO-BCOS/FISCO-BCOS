@@ -11,7 +11,7 @@ find_package(Boost REQUIRED unit_test_framework serialization)
 
 target_link_libraries(${TEST_BINARY_NAME} scheduler ledger bcos-crypto
 Boost::unit_test_framework protocol-tars Boost::serialization storage security)
-set_source_files_properties("main.cpp" "testDmcExecutor.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 add_test(NAME test-scheduler WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 # include(SearchTestCases)

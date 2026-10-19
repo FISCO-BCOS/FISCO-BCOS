@@ -77,7 +77,7 @@ using MWCheckpointBackend = bcos::test::sharedmock::SharedCheckpointBackend;
 using MWMultiLayerStorage = bcos::test::sharedmock::SharedMultiLayerStorage;
 
 /// Read one trie-node row from the backend under its ordinary StateKey.
-std::optional<bytes> backendNode(MWBackendStorage& backend, h256 const& hash)
+std::optional<bcos::bytes> backendNode(MWBackendStorage& backend, h256 const& hash)
 {
     auto entry = task::syncWait(storage2::readOne(backend, storage2::mptNodeStateKey(hash)));
     if (!entry)
@@ -85,7 +85,7 @@ std::optional<bytes> backendNode(MWBackendStorage& backend, h256 const& hash)
         return std::nullopt;
     }
     auto raw = entry->get();
-    return bytes(raw.begin(), raw.end());
+    return bcos::bytes(raw.begin(), raw.end());
 }
 
 /// Count the backend rows living in the "/mpt/" table (committed trie nodes).
@@ -264,7 +264,7 @@ public:
         blockHeader->setVersion(blockVersion);
         blockHeader->calculateHash(*hashImpl);
         // Ethereum-lane blocks must carry an EIP-2718 transaction: finishExecute commits the
-        // txsRoot over the wire bytes (calculateEthereumTransactionRoot), which throws on a
+        // txsRoot over the wire bcos::bytes (calculateEthereumTransactionRoot), which throws on a
         // FISCO-shaped payload. The legacy lane keeps the plain filler transaction.
         if (g_mwExecutorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
@@ -273,7 +273,7 @@ public:
         }
         else
         {
-            bytes input;
+            bcos::bytes input;
             block->appendTransaction(transactionFactory->createTransaction(
                 0, "to", input, std::to_string(number), 100, "chain", "group", 0));
         }
@@ -322,7 +322,7 @@ public:
 
     void writeHeaderToBackend(protocol::BlockHeader::Ptr const& header)
     {
-        bytes headerBuffer;
+        bcos::bytes headerBuffer;
         header->encode(headerBuffer);
         storage::Entry entry;
         entry.set(std::move(headerBuffer));
@@ -367,27 +367,27 @@ public:
     static h256 mptOracle(std::map<Address, bcos::ledger::mpt::Account> const& accounts)
     {
         namespace mpt = bcos::ledger::mpt;
-        std::map<h256, std::optional<bytes>> accountChanges;
+        std::map<h256, std::optional<bcos::bytes>> accountChanges;
         for (auto const& [address, account] : accounts)
         {
             accountChanges[mpt::accountKeyHash(address)] = account.encode();
         }
-        memory_storage::MemoryStorage<h256, bytes, memory_storage::ORDERED> scratch;
+        memory_storage::MemoryStorage<h256, bcos::bytes, memory_storage::ORDERED> scratch;
         auto merged =
             task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), accountChanges));
         return merged.root;
     }
 
-    static h256 storageTrieOracle(std::map<h256, bytes> const& slots)  // slot -> 32-byte raw value
+    static h256 storageTrieOracle(std::map<h256, bcos::bytes> const& slots)  // slot -> 32-byte raw value
     {
         namespace mpt = bcos::ledger::mpt;
-        std::map<h256, std::optional<bytes>> changes;
+        std::map<h256, std::optional<bcos::bytes>> changes;
         for (auto const& [slot, rawValue] : slots)
         {
             changes[mpt::slotKeyHash(slot)] =
                 mpt::encodeStorageValue(bytesConstRef(rawValue.data(), rawValue.size()));
         }
-        memory_storage::MemoryStorage<h256, bytes, memory_storage::ORDERED> scratch;
+        memory_storage::MemoryStorage<h256, bcos::bytes, memory_storage::ORDERED> scratch;
         auto merged = task::syncWait(mpt::commitTrie(scratch, mpt::emptyRootHash(), changes));
         return merged.root;
     }
@@ -480,7 +480,7 @@ BOOST_AUTO_TEST_CASE(scenarioATransition)
     accountA.balance = 42;
     accountA.nonce = 1;  // from the flat rows block 500 wrote — first-touch metadata read
     accountA.storageRoot =
-        storageTrieOracle({{slot, bytes(slotValueRaw.begin(), slotValueRaw.end())}});
+        storageTrieOracle({{slot, bcos::bytes(slotValueRaw.begin(), slotValueRaw.end())}});
     BOOST_CHECK_EQUAL(
         header502->stateRoot(), mptOracle({{addressA, accountA}, {addressB, accountB}}));
     commitOneBlock(header502);
@@ -625,7 +625,7 @@ BOOST_AUTO_TEST_CASE(commitAtomicityAndObserverTiming)
     BOOST_CHECK_GT(record.newNodeCount, 0);
     BOOST_CHECK(record.allNodesInBackendAtCallback);  // fired AFTER the nodes landed
 
-    // Post-hoc: every delta node readable from the backend under its digest, bytes equal.
+    // Post-hoc: every delta node readable from the backend under its digest, bcos::bytes equal.
     for (auto const& [hash, rlp] : record.delta.newNodes)
     {
         auto stored = backendNode(backendStorage, hash);
@@ -735,8 +735,8 @@ BOOST_AUTO_TEST_CASE(viewNodeStorageBatchReadWrite)
     h256 absent;
     absent[0] = 0xC3;
 
-    std::vector<std::pair<h256, bytes>> nodes{
-        {hashA, bytes{0x01, 0x02}}, {hashB, bytes{0x03, 0x04, 0x05}}};
+    std::vector<std::pair<h256, bcos::bytes>> nodes{
+        {hashA, bcos::bytes{0x01, 0x02}}, {hashB, bcos::bytes{0x03, 0x04, 0x05}}};
     task::syncWait(nodeStorage.writeSome(nodes));
 
     // Written through the batch path, readable as ordinary "/mpt/" rows of the mutable layer.
@@ -817,7 +817,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockPublishesNoExecuteTimeHeader)
 
 // Guard: a stray row under the reserved "/mpt/" table in the block's TOP delta layer must be
 // skipped by the build's account scan — parseAccountTable only accepts the account-table
-// shapes ("/apps/<40-hex>", "/s/<20 raw bytes>") — never classified as an account, and must
+// shapes ("/apps/<40-hex>", "/s/<20 raw bcos::bytes>") — never classified as an account, and must
 // not perturb the state root.
 BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
 {
