@@ -71,7 +71,7 @@ jobs:
         # `key:` field (no shell), and the previous step already validated it
         # is a 40-char hex SHA.
         id: opcache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: /tmp/op-fork
           key: op-fork-${{ steps.pin.outputs.commit }}
@@ -133,3 +133,11 @@ jobs:
             fi
           done
           exit "$fail"
+      - name: Save pinned OP fork tree
+        # Save split from restore: PRs never write; cache-hit != 'true' skips the save when
+        # the pin is unchanged. Only a base-branch pin bump writes a fresh entry.
+        if: github.event_name != 'pull_request' && steps.opcache.outputs.cache-hit != 'true' && success()
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/op-fork
+          key: op-fork-${{ steps.pin.outputs.commit }}

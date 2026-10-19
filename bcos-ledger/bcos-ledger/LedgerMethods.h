@@ -53,7 +53,7 @@
 #include <optional>
 #include <type_traits>
 
-#define LEDGER2_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER2")
+#define LEDGER2_LOG(LEVEL) BCOS_MODULE_LOG(LEDGER, LEVEL) << LOG_BADGE("LEDGER2")
 namespace bcos::ledger
 {
 

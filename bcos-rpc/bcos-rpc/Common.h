@@ -20,6 +20,7 @@
 #pragma once
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/Common.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
@@ -27,7 +28,7 @@
 #include <iostream>
 #include <bcos-utilities/LogStream.h>
 
-#define RPC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("RPC")
+#define RPC_LOG(LEVEL) BCOS_MODULE_LOG(RPC, LEVEL) << LOG_BADGE("RPC")
 
 namespace bcos::rpc
 {

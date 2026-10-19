@@ -23,7 +23,7 @@
 #include <tbb/parallel_for.h>
 #include <bcos-utilities/LogStream.h>
 
-#define BLKSYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BLOCK SYNC")
+#define BLKSYNC_LOG(LEVEL) BCOS_MODULE_LOG(SYNC, LEVEL) << LOG_BADGE("BLOCK SYNC")
 namespace bcos::sync
 {
 static constexpr const size_t MAX_DOWNLOAD_BLOCK_QUEUE_SIZE = 256;

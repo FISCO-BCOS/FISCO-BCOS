@@ -112,7 +112,7 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     {
         std::cout << "invalid parameters" << std::endl;
         std::cout << main_options << std::endl;
-        exit(0);
+        exit(1);
     }
     /// help information
     if (vm.count("help") || vm.count("h"))
@@ -146,13 +146,13 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     }
     if (!boost::filesystem::exists(configPath))
     {
-        std::cout << "config \'" << configPath << "\' not found!";
-        exit(0);
+        std::cout << "config \'" << configPath << "\' not found!" << std::endl;
+        exit(1);
     }
     if (!boost::filesystem::exists(genesisFilePath))
     {
-        std::cout << "genesis config \'" << genesisFilePath << "\' not found!";
-        exit(0);
+        std::cout << "genesis config \'" << genesisFilePath << "\' not found!" << std::endl;
+        exit(1);
     }
     float txSpeed = 10;
     if (_autoSendTx)

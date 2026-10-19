@@ -130,18 +130,24 @@ void requireDecimalField(
 /// "1677557088abc") — a typo'd config must fail fast like every neighbouring parse, not yield
 /// a wrong fork schedule. Shared by the L1 [fork_timestamps] ladder and the OP
 /// [op_fork_timestamps] schedule so the two can never disagree on what a timestamp is.
+/// The not-scheduled sentinel (UINT64_MAX) policy differs per key, even within one
+/// section: timestamp keys of the L1 ladder accept it as "never activates" because
+/// eth-sync-check --genesis2ini emits UINT64_MAX for forks the geth-format genesis
+/// leaves unscheduled (see the kNever design note in tools/eth-sync-check/main.cpp),
+/// while the OP schedule's keys and the L1 merge_block (a block number, where the
+/// sentinel would silently mean "pre-merge forever") refuse it (fail-closed,
+/// @c refuseSentinel=true).
 uint64_t parseForkTimestamp(
-    std::string const& section, std::string const& key, std::string const& value)
+    std::string const& section, std::string const& key, std::string const& value,
+    bool refuseSentinel)
 {
     // One acceptance window with the other loaders and the canonical-channel codec
-    // (ledger::parseConfigUint64): decimal or 0x-hex, the whole string consumed, and the
-    // not-scheduled sentinel refused. NOTE: the sentinel refusal is shared with the L1
-    // [fork_timestamps] ladder (this helper is its parser too) — a deliberate fail-closed
-    // widening over the old permissive from_chars, which accepted the all-9s value.
+    // (ledger::parseConfigUint64): decimal or 0x-hex, the whole string consumed, with the
+    // not-scheduled sentinel refused only where the caller asks for it (the OP lane).
     auto const parsed = ledger::parseConfigUint64(value,
         ledger::ConfigUint64Options{.allowHex = true,
             .maxValue = std::numeric_limits<uint64_t>::max(),
-            .refuseSentinel = true,
+            .refuseSentinel = refuseSentinel,
             .sentinel = ledger::c_opForkTimeUnset});
     if (parsed.error == ledger::ConfigUint64Error::sentinel)
     {
@@ -161,7 +167,7 @@ uint64_t parseForkTimestamp(
 
 /// Required key: absent is a config error.
 uint64_t readForkTimestamp(boost::property_tree::ptree const& section,
-    std::string const& sectionName, std::string const& key)
+    std::string const& sectionName, std::string const& key, bool refuseSentinel)
 {
     auto value = section.get_optional<std::string>(key);
     if (!value)
@@ -169,16 +175,16 @@ uint64_t readForkTimestamp(boost::property_tree::ptree const& section,
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("[" + sectionName + "]." + key + " is required"));
     }
-    return parseForkTimestamp(sectionName, key, *value);
+    return parseForkTimestamp(sectionName, key, *value, refuseSentinel);
 }
 
 /// Optional key: absent yields UINT64_MAX, the "not scheduled" sentinel both schedules use.
 uint64_t readOptionalForkTimestamp(boost::property_tree::ptree const& section,
-    std::string const& sectionName, std::string const& key)
+    std::string const& sectionName, std::string const& key, bool refuseSentinel)
 {
     if (auto value = section.get_optional<std::string>(key))
     {
-        return parseForkTimestamp(sectionName, key, *value);
+        return parseForkTimestamp(sectionName, key, *value, refuseSentinel);
     }
     return std::numeric_limits<uint64_t>::max();
 }
@@ -806,6 +812,22 @@ void NodeConfig::validateELModeInvariants() const
                 std::to_string(m_ethereumReorgWindow) +
                 "): an EL rollback target's trie nodes would already be pruned"));
     }
+    // The challenger data plane (debug_dbGet, gated by enable_debug_api on either listener)
+    // reads MPT preimages straight out of the node store with no retention guarantee: a block
+    // still inside a dispute game's challenge window can have its trie nodes pruned, and
+    // kona-host then receives an indistinguishable -32000 "not found" (debug_dbGet is keyed by
+    // content hash, not by block, so it cannot produce eth_getProof's "State pruned" diagnostic).
+    // The dispute window is a chain/contract parameter, not a node config, so the enforceable
+    // invariant is the archive one: a node serving preimages must not bound MPT disk growth.
+    if ((m_enableDebugApi || m_enableOpEngineDebugApi) && m_mptPruneWindow != -1)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "enable_debug_api requires storage.mpt_prune_window = -1 "
+                                  "(archive): the challenger data plane reads MPT preimages with "
+                                  "no retention guarantee, and a pruned block still inside a "
+                                  "dispute game's challenge window would answer -32000 \"not "
+                                  "found\" indistinguishable from an unknown hash"));
+    }
     // Same two-way binding for opstack-el: the per-node mode must be backed by the
     // chain-level declaration (which validateL2Invariants binds to the OP lane, the
     // fork schedule and the L2 genesis shape), and an opstack-el-declaring genesis
@@ -1161,6 +1183,15 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; listener only; the op-engine (8551) listener has its own [op_engine_rpc]
         ; enable_miner_api. Keep this port private if you set it — never expose it publicly.
         ; enable_miner_api=false
+        ; The geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload) is off
+        ; unless enabled here: it serves the fault-proof preimage oracle (kona-host), not general
+        ; clients. This key scopes the namespace to THIS web3 listener only; the op-engine (8551)
+        ; listener has its own [op_engine_rpc] enable_debug_api.
+        ; Enabling it also REQUIRES storage.mpt_prune_window=-1 (archive): the namespace reads
+        ; MPT preimages with no retention guarantee, so a pruned block still inside a dispute
+        ; game's challenge window would answer an indistinguishable -32000. The node refuses to
+        ; boot otherwise, and archive mode means MPT disk growth is unbounded — size for it.
+        ; enable_debug_api=false
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
@@ -1206,6 +1237,9 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     // Default off: on an OP node the DA caps exist, so without this gate the method would be
     // reachable from every caller of this listener (see the [web3_rpc] doc block).
     m_enableMinerApi = _pt.get<bool>("web3_rpc.enable_miner_api", false);
+    // Default off: the debug namespace serves the fault-proof preimage oracle, not general
+    // clients — expose it only on a listener that opts in (see the [web3_rpc] doc block).
+    m_enableDebugApi = _pt.get<bool>("web3_rpc.enable_debug_api", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
@@ -1248,11 +1282,17 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; batcher/conductor port. [web3_rpc] enable_miner_api scopes it to the web3 listener
         ; only; neither key reaches the other port.
         ; enable_miner_api=false
+        ; scopes the geth debug namespace to THIS listener only (default off); [web3_rpc]
+        ; enable_debug_api scopes it to the web3 listener. Neither key reaches the other port.
+        ; Enabling it on either port requires storage.mpt_prune_window=-1 (archive), for the
+        ; same reason as [web3_rpc] enable_debug_api above.
+        ; enable_debug_api=false
     */
     const auto config = parseEngineRpcSection(_pt, "op_engine_rpc", "conf/op-engine/jwt.hex");
     // test-only escape hatch, see Initializer's executor-version guard
     const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
     const bool enableMinerApi = _pt.get<bool>("op_engine_rpc.enable_miner_api", false);
+    const bool enableDebugApi = _pt.get<bool>("op_engine_rpc.enable_debug_api", false);
 
     m_enableOpEngineRpc = config.enable;
     // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
@@ -1282,6 +1322,7 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     m_opEngineClockSkewSecs = config.clockSkewSecs;
     m_opEngineAllowV1Executor = allowV1Executor;
     m_enableOpEngineMinerApi = enableMinerApi;
+    m_enableOpEngineDebugApi = enableDebugApi;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
                          << LOG_KV("enableOpEngineRpc", m_enableOpEngineRpc)
@@ -1637,7 +1678,11 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // rejected by peers. parseForkTimestamp (file-local, shared with the OP schedule) is
     // what enforces that.
     auto readTs = [&](std::string const& key) {
-        return readForkTimestamp(*section, "fork_timestamps", key);
+        // The L1 ladder's TIMESTAMP keys accept the not-scheduled sentinel: eth-sync-check
+        // --genesis2ini emits UINT64_MAX for forks the geth genesis leaves unscheduled,
+        // and the non-decreasing ladder check below treats it as the terminal
+        // "never activates" value. (merge_block is NOT read through this lambda — see below.)
+        return readForkTimestamp(*section, "fork_timestamps", key, /*refuseSentinel=*/false);
     };
     // Post-Prague forks (osaka, bpo1, bpo2, ...) are optional: absent means "not yet
     // active". They MUST be configured once activated on the chain — geth's EIP-2124
@@ -1646,7 +1691,8 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // part of the genesis pin (only the required london..prague ladder is pinned), so
     // configuring one later does not trip the restart comparison.
     auto readOptionalTs = [&](std::string const& key, uint64_t& out) {
-        out = readOptionalForkTimestamp(*section, "fork_timestamps", key);
+        out = readOptionalForkTimestamp(
+            *section, "fork_timestamps", key, /*refuseSentinel=*/false);
     };
 
     ledger::EthereumForkSchedule schedule;
@@ -1674,10 +1720,15 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // permissive) PoW validation branch and announce an EIP-2124 fork-id the
     // remote rejects, with no config error to explain either. Not a timestamp, but
     // it belongs to the same chain-level fork declaration and is parsed with the
-    // same strict decimal/0x-hex rules. Like the post-Prague tail it is
-    // deliberately NOT part of the genesis pin: divergence is caught by the
-    // fork-id handshake, which chains the merge block into the checksum.
-    m_ethereumMergeBlock = readTs("merge_block");
+    // same strict decimal/0x-hex rules. Unlike the timestamp keys it REFUSES the
+    // not-scheduled sentinel: a block number of UINT64_MAX would silently read as
+    // "pre-merge forever" (every block validated under PoW rules and rewarded as
+    // such), and the ladder check below does not cover merge_block. Like the
+    // post-Prague tail it is deliberately NOT part of the genesis pin: divergence
+    // is caught by the fork-id handshake, which chains the merge block into the
+    // checksum.
+    m_ethereumMergeBlock =
+        readForkTimestamp(*section, "fork_timestamps", "merge_block", /*refuseSentinel=*/true);
     // Activation times must be non-decreasing down the fork ladder — geth rejects an
     // out-of-order schedule at startup (ChainConfig.CheckConfigForkOrder), and the
     // EIP-2124 fork-id checksum chains activations IN ORDER, so a decreasing step
@@ -1786,8 +1837,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     ledger::OpForkSchedule schedule;
     for (auto const& [key, member] : keys)
     {
-        schedule.*member =
-            readOptionalForkTimestamp(*section, "op_fork_timestamps", std::string(key));
+        schedule.*member = readOptionalForkTimestamp(
+            *section, "op_fork_timestamps", std::string(key), /*refuseSentinel=*/true);
     }
     // Same rule as the L1 ladder: activation times must be non-decreasing down the fork
     // order, because a later fork is defined as a superset of the earlier one (Karst is
@@ -3559,6 +3610,16 @@ bool NodeConfig::enableOpEngineMinerApi() const
     return m_enableOpEngineMinerApi;
 }
 
+bool NodeConfig::enableDebugApi() const
+{
+    return m_enableDebugApi;
+}
+
+bool NodeConfig::enableOpEngineDebugApi() const
+{
+    return m_enableOpEngineDebugApi;
+}
+
 bool NodeConfig::opEngineAllowV1Executor() const
 {
     return m_opEngineAllowV1Executor;
@@ -4038,12 +4099,30 @@ std::string bcos::tool::generateGenesisData(
             // byte-compared pin (geth's CheckCompatible permits appending a future
             // fork; divergence on a not-yet-activated fork is caught by the EIP-2124
             // fork-id handshake, not by a startup abort).
-            ss << "[forkTimestamps]" << '\n'
-               << "london_time:" << schedule.m_londonTime << '\n'
-               << "paris_time:" << schedule.m_parisTime << '\n'
-               << "shanghai_time:" << schedule.m_shanghaiTime << '\n'
-               << "cancun_time:" << schedule.m_cancunTime << '\n'
-               << "prague_time:" << schedule.m_pragueTime << '\n';
+            //
+            // For the same reason a not-scheduled entry (UINT64_MAX, what
+            // eth-sync-check emits for a fork the chain never schedules) is SKIPPED
+            // rather than pinned literally: an operator who later schedules Cancun on
+            // a Shanghai-era chain must not trip the restart comparison. Divergence
+            // is still caught — a node holding the sentinel emits no key while a
+            // node holding a real activation time emits one, so the pins differ.
+            // Fully-scheduled chains emit all five keys exactly as before.
+            std::array<std::pair<std::string_view, uint64_t>, 5> const pinned{{
+                {"london_time", schedule.m_londonTime},
+                {"paris_time", schedule.m_parisTime},
+                {"shanghai_time", schedule.m_shanghaiTime},
+                {"cancun_time", schedule.m_cancunTime},
+                {"prague_time", schedule.m_pragueTime},
+            }};
+            ss << "[forkTimestamps]" << '\n';
+            for (auto const& [key, value] : pinned)
+            {
+                if (value == std::numeric_limits<uint64_t>::max())
+                {
+                    continue;  // not-scheduled sentinel: not pinned
+                }
+                ss << key << ":" << value << '\n';
+            }
         }
         // OP lane: only the entries that are 0 ("active from genesis") reach the pin. Those
         // are decided at genesis and must never differ between nodes. A fork scheduled for a

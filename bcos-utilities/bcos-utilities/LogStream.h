@@ -45,14 +45,19 @@
 #undef FATAL
 #endif
 
+#include <array>
+#include <atomic>
 #include <compare>
 #include <concepts>
+#include <cstdint>
 #include <cstring>
 #include <new>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 // BCOS log format
 #ifndef LOG_BADGE
@@ -94,6 +99,46 @@ constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
 }
 
 void setFileLogLevel(LogLevel const& _level);
+
+/// Per-module (channel) log level. A module is the subsystem slot a log macro is wired to; the
+/// badge text it prints is separate and may differ (PBFT_LOG prints [CONSENSUS][PBFT], GATEWAY
+/// covers [Gateway], [P2PService] and [AMOP], EXECUTOR covers [DAG] and [PRECOMPILED]).
+/// A table entry of -1 means "inherit the global c_fileLogLevel".
+enum class LogModule : uint8_t
+{
+    PBFT,
+    TXPOOL,
+    SYNC,
+    SCHEDULER,
+    EXECUTOR,
+    LEDGER,
+    RPC,
+    GATEWAY,
+    FRONT,
+    COUNT
+};
+constexpr int c_inheritGlobalLogLevel = -1;
+extern std::array<std::atomic<int>, static_cast<size_t>(LogModule::COUNT)> c_moduleLogLevel;
+
+inline bool moduleLogEnabled(LogModule _module, LogLevel _level)
+{
+    auto configured =
+        c_moduleLogLevel[static_cast<size_t>(_module)].load(std::memory_order_relaxed);
+    auto threshold =
+        configured == c_inheritGlobalLogLevel ? static_cast<int>(c_fileLogLevel) : configured;
+    return static_cast<int>(_level) >= threshold;
+}
+
+std::string_view logModuleName(LogModule _module);
+/// case-insensitive; nullopt when the name is not a channel
+std::optional<LogModule> parseLogModule(std::string_view _name);
+void setModuleLogLevel(LogModule _module, LogLevel _level);
+void resetModuleLogLevel(LogModule _module);
+/// returns false when _name is not a channel
+bool setModuleLogLevel(std::string_view _name, LogLevel _level);
+bool resetModuleLogLevel(std::string_view _name);
+/// only the modules whose level is explicitly set (not inheriting)
+std::vector<std::pair<std::string, LogLevel>> moduleLogLevels();
 
 // Buffers one log record and commits it to the registered whole-line sinks on
 // destruction. Constructed only when the level check in BCOS_LOG passes, so
@@ -209,6 +254,10 @@ private:
 
 #define BCOS_LOG(level)                                \
     if (bcos::LogLevel::level >= bcos::c_fileLogLevel) \
+    bcos::LogStream(bcos::LogLevel::level)
+
+#define BCOS_MODULE_LOG(MODULE, level)                                          \
+    if (bcos::moduleLogEnabled(bcos::LogModule::MODULE, bcos::LogLevel::level)) \
     bcos::LogStream(bcos::LogLevel::level)
 // for block number log
 #define BLOCK_NUMBER(NUMBER) "[blk-" << (NUMBER) << "]"

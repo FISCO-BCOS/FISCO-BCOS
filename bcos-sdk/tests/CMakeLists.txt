@@ -33,6 +33,10 @@ set_source_files_properties("unittests/EventSubParamsTest.cpp" PROPERTIES SKIP_U
 set_source_files_properties("unittests/ConfigTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/BlockNumberInfoTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/abi/ContractABITypeCodecLiquidTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# ContractEventTopicTest pulls in bcos::cppsdk::abi; batched with the EventSub tests
+# (using namespace bcos::cppsdk) it makes boost type_index's abi::__cxa_demangle ambiguous
+# with GCC 16's ::abi alias.
+set_source_files_properties("unittests/abi/ContractEventTopicTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/multigroup/JsonGroupInfoCodecTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME ${TEST_BINARY_NAME} COMMAND ${TEST_BINARY_NAME})

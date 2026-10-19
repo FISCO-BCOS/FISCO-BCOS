@@ -28,6 +28,7 @@
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -35,8 +36,9 @@
 #include <utility>
 #include <bcos-utilities/LogStream.h>
 #include <atomic>
+#include <utility>
 
-#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
+#include "bcos-framework/ledger/Ledger.h"  // LEDGER_LOG
 
 namespace bcos::ledger
 {

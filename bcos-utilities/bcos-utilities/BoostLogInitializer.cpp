@@ -22,6 +22,7 @@
 #include "BoostLogCollector.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/bcos-framework/protocol/GlobalConfig.h"
+#include "bcos-utilities/BlockStat.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/RateCollector.h"
 #include <boost/algorithm/string.hpp>
@@ -188,6 +189,15 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     else
     {
         bcos::RateCollector::disable();
+    }
+
+    if (_pt.get<bool>("log.enable_block_stat", false))
+    {
+        bcos::BlockStat::enable();
+    }
+    else
+    {
+        bcos::BlockStat::disable();
     }
 
     if (!logFormat.empty())

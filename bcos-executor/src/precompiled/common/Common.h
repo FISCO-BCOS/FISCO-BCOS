@@ -26,7 +26,7 @@
 
 namespace bcos::precompiled
 {
-#define PRECOMPILED_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR][PRECOMPILED]"
+#define PRECOMPILED_LOG(LEVEL) BCOS_MODULE_LOG(EXECUTOR, LEVEL) << "[EXECUTOR][PRECOMPILED]"
 
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using TableInfoTupleV320 = std::tuple<uint8_t, std::string, std::vector<std::string>>;
