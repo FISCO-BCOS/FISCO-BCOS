@@ -2069,6 +2069,23 @@ BOOST_AUTO_TEST_CASE(evmcRevisionMixedBareAndTransitionRefused)
         static_cast<int>(*transitions.evmcRevisionForBlock(100)), static_cast<int>(EVMC_PRAGUE));
 }
 
+// Two bare names are the other shape the encoder can never produce, and the same
+// mixed-cell reasoning applies: honouring the last one silently governs every block
+// under it where the writer meant a schedule. Before this guard "cancun,prague"
+// parsed as Prague. Re-acceptance must turn this red (review R9).
+BOOST_AUTO_TEST_CASE(evmcRevisionMultipleBareNamesRefused)
+{
+    for (std::string_view bad : {"cancun,prague", "prague,cancun,cancun"})
+    {
+        LedgerConfig parsed;
+        BOOST_CHECK_EXCEPTION(ledger::applyEVMCRevisionConfig(parsed, bad),
+            ledger::InvalidEVMCRevisionConfig, [](auto const& e) {
+                return boost::diagnostic_information(e).find("multiple bare names") !=
+                       std::string::npos;
+            });
+    }
+}
+
 // The evmc row codec's accepted domain round-trips: every shape an honest loader can
 // produce re-encodes to a string whose parse reproduces the same revision schedule.
 // Base selection order: forks.find(0) > explicitRev > forks.begin().

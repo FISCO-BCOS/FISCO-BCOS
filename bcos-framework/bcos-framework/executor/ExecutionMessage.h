@@ -206,9 +206,12 @@ public:
     virtual void setStaticCall(bool staticCall) = 0;
 
     // for evm
-    // Vestigial (ABI 19 removed evmc_message::create2_salt and both scheduler
-    // consumers were dropped): no production code sets or reads this. Retained on the
-    // protocol interface only; delete with the next wire-format revision.
+    // A legacy producer (the pre-EIP-1014 DMC/serial create path) hands the CREATE2
+    // salt down this field; both scheduler consumers (DmcExecutor,
+    // SerialBlockExecutive) derive the address through bcos::newCreate2EVMAddress so
+    // the stored account is the EIP-1014 one. ABI 19 removed
+    // evmc_message::create2_salt, so the salt no longer crosses the VM boundary;
+    // it stays on this protocol interface for the scheduler-side derivation.
     virtual std::optional<u256> createSalt() const = 0;
     virtual void setCreateSalt(u256 createSalt) = 0;
 

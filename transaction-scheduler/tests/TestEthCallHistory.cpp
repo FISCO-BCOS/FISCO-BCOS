@@ -679,6 +679,12 @@ BOOST_AUTO_TEST_CASE(executableCacheIsContentAddressed)
     auto historicalResult = task::syncWait(hostcontext::getExecutable(historicalRollbackable,
         cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
     BOOST_CHECK(!historicalResult);
+    // ... and the historical lookup must not consume or clear the shared entry: the
+    // cache is content-addressed, so latest-state fills stay valid for every root that
+    // holds the same code. A reintroduced historical bypass that removes entries (or
+    // serves latest state) fails one of these two checks.
+    BOOST_CHECK(task::syncWait(storage2::readOne(hostcontext::getCacheExecutables(),
+        hostcontext::ExecutableCacheKey{otherCodeHash, EVMC_CANCUN})));
 
     // Clean up the global cache so no other test sees these entries, then verify the
     // removal by reading back every key this case could have filled.

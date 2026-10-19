@@ -743,6 +743,18 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
             // before any block, so the operator sees the named entry.
             if (auto rev = evmcRevisionFromName(entry); rev)
             {
+                // Two bare names are as unproducible by the encoder as a bare name
+                // beside transitions (the encoder always spells "block:forkName"), and
+                // silently last-winning would execute every block under one revision
+                // where the writer meant a schedule. Refuse it like every other
+                // ambiguous cell.
+                if (single)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidEVMCRevisionConfig() << errinfo_comment(
+                            "ambiguous evmc_revision config value (multiple bare names): " +
+                            std::string(value)));
+                }
                 single = *rev;
             }
             else
