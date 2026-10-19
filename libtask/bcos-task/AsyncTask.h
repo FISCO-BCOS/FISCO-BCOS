@@ -15,6 +15,7 @@
  */
 
 #pragma once
+#include "Task.h"
 #include <atomic>
 #include <coroutine>
 #include <cstdint>
@@ -48,7 +49,22 @@ public:
                 *static_cast<promise_type*>(this));
             return AsyncTask{handle};
         }
-        static void unhandled_exception() { std::rethrow_exception(std::current_exception()); }
+        // Rethrow so the exception reaches whoever resumed the detached chain (task::wait's
+        // caller, or a settle path such as OneShot::cancel()). The escape strands this frame:
+        // unhandled_exception() runs while the coroutine is still executing — where destroy()
+        // would be undefined — and its throwing only leaves the coroutine "considered
+        // suspended at the final suspend point" ([dcl.fct.def.coroutine]), so final_suspend's
+        // self-destroy above never runs. (Rethrowing from final_suspend instead is not an
+        // option: the final-suspend co_await shall not be potentially-throwing.) Register the
+        // frame so the resumer that catches the escape reclaims it; destroying it also
+        // destroys the frames its parameter copies own (parameter copies die with the frame,
+        // not with the unwinding body), which is how the inner task's frame is reclaimed too.
+        void unhandled_exception()
+        {
+            detail::registerEscapedFrame(
+                std::coroutine_handle<promise_type>::from_promise(*this));
+            std::rethrow_exception(std::current_exception());
+        }
         constexpr static void return_void() noexcept {}
     };
 

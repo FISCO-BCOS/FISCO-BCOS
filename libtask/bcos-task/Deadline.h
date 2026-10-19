@@ -177,11 +177,12 @@ public:
     {
         auto state = m_state;
         // A fresh generation per arm is the entire late-expiry guard. arm() bumps it BEFORE
-        // touching the timer, so the bump lands ahead of any handler that basic_waitable_timer
-        // hands back synchronously while the expiry changes. The handler compares against the
-        // generation it was armed with, so anything queued by an earlier arm — a natural expiry,
-        // one that lost the race against a successful operation, or asio's own submit-on-re-arm —
-        // is rejected.
+        // touching the timer because a handler that asio has already moved into the io_context's
+        // ready queue can no longer be recalled by cancel() or expires_after() — it will still run,
+        // possibly with a SUCCESS error (TestDeadline stages exactly this state). The bump must
+        // therefore already be visible when the expiry changes, so anything queued by an earlier
+        // arm — a natural expiry or one that lost the race against a successful operation —
+        // compares its stale generation against the current one and is rejected.
         const auto armedGeneration = state->generation.fetch_add(1, std::memory_order_acq_rel) + 1;
         state->armed.store(true, std::memory_order_release);
         state->expired.store(false, std::memory_order_release);

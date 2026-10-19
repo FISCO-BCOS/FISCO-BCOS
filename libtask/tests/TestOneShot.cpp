@@ -29,19 +29,21 @@
 #include <thread>
 #include <tuple>
 
-// The regression test below deliberately leaks coroutine frames; suppress LSan for it when the
-// binary is built with AddressSanitizer (GCC defines __SANITIZE_ADDRESS__, clang does not).
-#ifndef __has_feature
-#define __has_feature(x) 0
-#endif
-#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
-#include <sanitizer/lsan_interface.h>
-#define BCOS_TASK_TEST_HAS_LSAN 1
-#endif
-
 using namespace bcos::task;
 
 BOOST_AUTO_TEST_SUITE(OneShotTest)
+
+namespace
+{
+// Parks on the slot until it is settled. The slot arrives as a by-value coroutine parameter, so
+// the parked frame owns its copy outright (a capturing lambda temporary would dangle).
+Task<void> parkOn(OneShot<int>::Ptr once)
+{
+    auto [value] = co_await *once;
+    (void)value;
+    co_return;
+}
+}  // namespace
 
 // Fast path: a completion that arrives BEFORE the coroutine parks must not be lost, and must not
 // suspend at all (the ordering "complete() then co_await" is the pattern the docs promise).
@@ -169,18 +171,12 @@ BOOST_AUTO_TEST_CASE(CancelResumesParkedAwaiterWithTheError)
 // executeTask frame, Awaitable::await_resume() and AsyncTask's unhandled_exception() — and
 // escapes resume() back into cancel()'s caller. When publish() was noexcept, that escape hit
 // std::terminate; the caller must be able to catch it, exactly as with
-// GetResultAwaitable::complete() (and as Session::postCallback's try/catch assumes).
+// GetResultAwaitable::complete() (and as Session::postCallback's try/catch assumes). The escape
+// strands the chain's frames at their final suspend points; publish() reclaims them through the
+// escaped-frame registry before propagating (see Task.h), so this path is leak-free.
 BOOST_AUTO_TEST_CASE(CancelEscapesToCallerWhenWaitLaunchedConsumerDoesNotCatch)
 {
     auto once = std::make_shared<OneShot<int>>();
-
-    // LSan: on this path the exception escapes resume() before either frame reaches the
-    // final_suspend that would destroy it, so the consumer frame and the executeTask frame leak —
-    // the inherent price of letting the exception out instead of terminating. Their allocations
-    // happen inside wait() below, so suppress leak tracking for that region only.
-#if BCOS_TASK_TEST_HAS_LSAN
-    __lsan_disable();
-#endif
 
     wait([once]() -> Task<void> {
         auto [value] = co_await *once;  // parks; the cancellation rethrow is NOT caught here
@@ -199,12 +195,43 @@ BOOST_AUTO_TEST_CASE(CancelEscapesToCallerWhenWaitLaunchedConsumerDoesNotCatch)
         BOOST_CHECK_EQUAL(error.what(), std::string("torn down"));
     }
 
-#if BCOS_TASK_TEST_HAS_LSAN
-    __lsan_enable();
-#endif
-
     BOOST_CHECK(caught);
     BOOST_CHECK(once->settled());
+}
+
+// Abandoning a parked wait: destroying the waiting frame deregisters its awaitable, so a later
+// cancel() only records the outcome instead of resuming a dead frame — the heap-owned slot's
+// teardown order "drop the consumer, then flush the sink".
+BOOST_AUTO_TEST_CASE(CancelAfterParkedWaiterDestroyedOnlyRecords)
+{
+    auto once = std::make_shared<OneShot<int>>();
+    {
+        auto consumer = parkOn(once);  // parks; the frame is destroyed while parked below
+        consumer.start();
+    }  // ~Task() destroys the parked frame; the parked awaitable deregisters itself
+
+    BOOST_CHECK(!once->settled());
+    BOOST_CHECK(once->cancel(std::make_exception_ptr(std::runtime_error("torn down"))));
+    BOOST_CHECK(once->settled());
+}
+
+// Same deregistration on the value path: complete() records the value and resumes no one, and a
+// later co_await still observes the recorded value on the fast path.
+BOOST_AUTO_TEST_CASE(CompleteAfterParkedWaiterDestroyedOnlyRecords)
+{
+    auto once = std::make_shared<OneShot<int>>();
+    {
+        auto consumer = parkOn(once);
+        consumer.start();
+    }
+
+    BOOST_CHECK(once->complete(42));
+    BOOST_CHECK(once->settled());
+    auto value = syncWait([once]() -> Task<int> {
+        auto [delivered] = co_await *once;
+        co_return delivered;
+    }());
+    BOOST_CHECK_EQUAL(value, 42);
 }
 
 // cancel() also settles a wait that has not parked yet: the later co_await takes the fast path and

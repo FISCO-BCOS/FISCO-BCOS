@@ -25,10 +25,60 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace bcos::task
 {
 DERIVE_BCOS_EXCEPTION(NoReturnValue);
+
+namespace detail
+{
+// Registry for detached coroutine frames stranded at their final suspend point by an escaping
+// unhandled_exception() (see AsyncTask). Such a frame cannot be reclaimed by its own
+// coroutine: unhandled_exception() runs while the coroutine is still executing (where
+// destroy() would be undefined), and its throwing only leaves the coroutine "considered
+// suspended at the final suspend point" ([dcl.fct.def.coroutine]), so final_suspend's
+// self-destroy never runs. The frame is registered here before the rethrow; the resumer that
+// catches the escape (task::wait, GetResultAwaitable::publish) reclaims it, with thread exit
+// as the safety net. Destroying the registered frame also destroys the frames its parameter
+// copies own — parameter copies die with the frame, not with the unwinding body — so one
+// registration reclaims the whole escaped chain (e.g. executeTask's `task` parameter owns the
+// inner task's frame).
+inline void reclaimEscapedFrames() noexcept;
+
+struct EscapedFrameRegistry
+{
+    std::vector<std::coroutine_handle<>> frames;
+    ~EscapedFrameRegistry() { reclaimEscapedFrames(); }
+};
+
+inline EscapedFrameRegistry& escapedFrameRegistry()
+{
+    thread_local EscapedFrameRegistry registry;
+    return registry;
+}
+
+inline void registerEscapedFrame(std::coroutine_handle<> handle)
+{
+    escapedFrameRegistry().frames.push_back(handle);
+}
+
+// Destroy every registered frame. Each is suspended at its final suspend point, so this is a
+// plain destroy(): it runs destructors but never resumes user code. The loop picks up frames
+// registered by those destructors' side effects.
+inline void reclaimEscapedFrames() noexcept
+{
+    auto& frames = escapedFrameRegistry().frames;
+    while (!frames.empty())
+    {
+        auto pending = std::exchange(frames, {});
+        for (auto handle : pending)
+        {
+            handle.destroy();
+        }
+    }
+}
+}  // namespace detail
 
 template <class Promise>
 struct FinalAwaitable
@@ -134,15 +184,17 @@ struct GetResultAwaitable
     {
         enum class State : uint8_t
         {
-            INIT,
-            SUSPENDED,
-            DONE,
+            INIT,       // no waiter parked, the settle not yet published
+            SUSPENDED,  // a waiter is parked; handle is valid
+            WOKEN,      // a settler claimed the parked waiter's resume
+            DONE,       // published with no parked waiter (settle-before-park, or the parked
+                        // waiter deregistered); a later co_await takes the fast path
         };
 
         std::tuple<Resp...> data;
-        // Suspend handshake only. DONE means the result arrived BEFORE the coroutine parked (so
-        // await_ready() takes the fast path); a result delivered after it parked resumes the
-        // coroutine and leaves this at SUSPENDED. Exactly-once is owned by `completed`, not here.
+        // Suspend handshake only: DONE means the settle was published with nobody parked (so
+        // await_ready() takes the fast path); a settle delivered to a parked waiter claims the
+        // resume with WOKEN. Exactly-once is owned by `completed`, not here.
         std::atomic<State> state = State::INIT;
         std::coroutine_handle<> handle;
         // Exactly-once claim: the completer that flips this false->true owns the completion.
@@ -153,6 +205,27 @@ struct GetResultAwaitable
     };
 
     explicit GetResultAwaitable(Result& result) : m_result(result) {}
+    // A copy would deregister the same wait twice.
+    GetResultAwaitable(const GetResultAwaitable&) = delete;
+    GetResultAwaitable& operator=(const GetResultAwaitable&) = delete;
+
+    // The awaitable lives in the waiting coroutine's frame and is destroyed with it. A frame
+    // destroyed while still parked ABANDONS the wait: deregister, so a later settle only
+    // records its outcome instead of resuming a dead frame. Losing the race against a settler
+    // that already claimed the resume (state == WOKEN) leaves the settle owning the frame
+    // until resume() returns — destroying the frame concurrently with an in-flight settle is
+    // outside the contract.
+    ~GetResultAwaitable() noexcept
+    {
+        if (!m_parked || m_resumed)
+        {
+            // never suspended, or the wait already ran to completion
+            return;
+        }
+        auto expected = Result::State::SUSPENDED;
+        (void)m_result.state.compare_exchange_strong(expected, Result::State::INIT,
+            std::memory_order_acq_rel, std::memory_order_acquire);
+    }
 
     bool await_ready() noexcept
     {
@@ -163,6 +236,9 @@ struct GetResultAwaitable
     }
     bool await_suspend(std::coroutine_handle<> handle) noexcept
     {
+        // Mark parked BEFORE publishing the handle: once state reads SUSPENDED, a settler may
+        // resume (and finish, destroying this awaitable) before await_suspend() returns.
+        m_parked = true;
         m_result.handle = handle;
         typename Result::State expected = Result::State::INIT;
         if (m_result.state.compare_exchange_strong(expected, Result::State::SUSPENDED,
@@ -176,6 +252,9 @@ struct GetResultAwaitable
     }
     std::tuple<Resp...> await_resume()
     {
+        // Set before any throw below: once the wait is over, this awaitable's destruction must
+        // never deregister, no matter how the delivered wait ends.
+        m_resumed = true;
         // A settled-without-value wait (OneShot::cancel) reports its reason here, so teardown is
         // never mistaken for a real result. A wait that was never settled at all is a bug in the
         // producer; report it the same way instead of returning default-constructed values.
@@ -198,19 +277,53 @@ struct GetResultAwaitable
         {
             return;
         }
-        // Write before publishing DONE, so a reader that observes DONE also observes data.
-        typename Result::State expected = Result::State::INIT;
+        // Write before publishing, so a reader that observes the settle also observes data.
         result.data = std::make_tuple(std::move(resp)...);
+        publish(result);
+    }
+
+    // Publish the settled state: resume the parked awaiter, or record DONE when nobody is
+    // parked (never parked, or the wait was abandoned) so the settle is not lost and a later
+    // co_await takes the await_ready() fast path. resume() runs the awaiter INLINE, so an
+    // awaiter that does not catch lets the exception propagate to the caller — deliberate, and
+    // therefore NOT noexcept. An escaped detached (task::wait) chain leaves its top frame
+    // stranded at its final suspend point; reclaim it before propagating.
+    static void publish(Result& result)
+    {
+        auto expected = Result::State::INIT;
         if (result.state.compare_exchange_strong(expected, Result::State::DONE,
                 std::memory_order_acq_rel, std::memory_order_acquire))
         {
             return;
         }
-        result.handle.resume();
+        // A waiter is parked (only this settler can observe WOKEN here, and DONE is its own
+        // store above, so expected == SUSPENDED). Claim the resume; a waiter deregistering
+        // concurrently flips SUSPENDED back to INIT, and only the claim's winner may touch the
+        // handle.
+        if (result.state.compare_exchange_strong(expected, Result::State::WOKEN,
+                std::memory_order_acq_rel, std::memory_order_acquire))
+        {
+            try
+            {
+                result.handle.resume();
+            }
+            catch (...)
+            {
+                detail::reclaimEscapedFrames();
+                throw;
+            }
+            return;
+        }
+        // The parked waiter deregistered mid-publish: record the settle, resume no one.
+        result.state.store(Result::State::DONE, std::memory_order_release);
     }
 
 private:
     Result& m_result;
+    // Fast-path filters for the destructor; the state machine above stays the arbiter, so
+    // stale reads here cannot cause a double resume or a lost settle.
+    std::atomic<bool> m_parked{false};
+    std::atomic<bool> m_resumed{false};
 };
 
 template <class TaskType>
