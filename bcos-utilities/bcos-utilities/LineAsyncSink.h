@@ -24,7 +24,9 @@
  *  producer first requests a bounded drain of the backlog (so earlier lines
  *  keep their base-behaviour ordering ahead of the abort), then writes the
  *  FATAL line synchronously — it can neither be dropped nor delayed past the
- *  backend's abort().
+ *  backend's abort(). If the backend itself is wedged the line goes to
+ *  stderr and the process aborts directly, so a stuck log volume cannot
+ *  turn the fail-stop into a hang.
  *
  *  The hand-off is one mutex + two std::deque<uint32_t> (free/ready slot
  *  indices), the same architecture spdlog's async thread pool uses. A
@@ -40,8 +42,11 @@
  *  string when it returns to the pool, so one huge line cannot pin memory.
  *
  *  The shared feeding thread flushes the backend whenever the queue drains
- *  and, under a continuous flood, at least every FlushInterval — so log lines
- *  reach the file promptly without paying a per-line flush on the producer.
+ *  and, under a continuous flood, at a bounded interval: the flood path
+ *  consults the clock once per FlushCheckEvery fed lines, so the real
+ *  staleness bound is FlushInterval plus up to FlushCheckEvery - 1 lines of
+ *  backend latency. Log lines still reach the file promptly without paying
+ *  a per-line flush on the producer.
  *
  * @file: LineAsyncSink.h
  */
@@ -57,6 +62,8 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -220,14 +227,14 @@ public:
     class LockedBackend
     {
     public:
-        LockedBackend(boost::shared_ptr<BackendT> const& _backend, std::mutex& _mutex)
+        LockedBackend(boost::shared_ptr<BackendT> const& _backend, std::timed_mutex& _mutex)
           : m_lock(_mutex), m_backend(_backend)
         {}
         BackendT* operator->() const { return m_backend.get(); }
         BackendT& operator*() const { return *m_backend; }
 
     private:
-        std::unique_lock<std::mutex> m_lock;
+        std::unique_lock<std::timed_mutex> m_lock;
         boost::shared_ptr<BackendT> m_backend;
     };
 
@@ -260,8 +267,9 @@ public:
         // First drain the backlog the way flush() does: the base's single
         // FIFO guaranteed every line logged before a FATAL reached the
         // backend before the abort, and that ordering is what makes the
-        // lines preceding a FATAL explain it. The wait is bounded so a
-        // wedged backend cannot turn the fail-stop into a hang.
+        // lines preceding a FATAL explain it. Both the drain wait and the
+        // backend acquisition below are bounded, so a wedged backend cannot
+        // turn the fail-stop into a hang.
         if (_level == LogLevel::FATAL)
         {
             {
@@ -286,8 +294,23 @@ public:
             line.append(_message);
             try
             {
-                std::lock_guard<std::mutex> lock(m_backendMutex);
-                m_backend->consumeLine(_level, line);
+                std::unique_lock<std::timed_mutex> lock(m_backendMutex, std::defer_lock);
+                if (lock.try_lock_for(FatalDrainTimeout))
+                {
+                    m_backend->consumeLine(_level, line);
+                }
+                else
+                {
+                    // The backend is wedged: the feeding worker holds
+                    // m_backendMutex inside consumeLine and may never release
+                    // it, so the abort in the backend would never run. Keep
+                    // the fail-stop total — emit the line to stderr and abort
+                    // directly instead of going through the backend.
+                    std::fwrite(line.data(), 1, line.size(), stderr);
+                    std::fputc('\n', stderr);
+                    std::fflush(stderr);
+                    std::abort();
+                }
             }
             catch (...)
             {}
@@ -372,10 +395,17 @@ private:
     };
 
     // A slot that once held a line this large does not keep the heap buffer
-    // when it returns to the pool.
+    // when it returns to the pool. The worst-case retained heap per sink is
+    // CapacityV x MaxRetainedLineCapacity (~128 MB with the default
+    // CapacityV of 32768); typical FISCO-BCOS line lengths keep it around
+    // 16 MB. The pool size is a template parameter, not operator-configurable
+    // (tracked in #5701).
     static constexpr std::size_t MaxRetainedLineCapacity = 4096;
     // Staleness bound under a continuous flood, where the queue never drains
-    // and the drain-time flush never runs: flush at least this often.
+    // and the drain-time flush never runs: flush at least this often. The
+    // flood path only consults the clock once per FlushCheckEvery fed lines,
+    // so the effective bound is FlushInterval plus up to FlushCheckEvery - 1
+    // lines of backend latency.
     static constexpr auto FlushInterval = std::chrono::milliseconds(100);
     // One clock read per this many fed lines on the flood path.
     static constexpr std::uint64_t FlushCheckEvery = 64;
@@ -384,14 +414,16 @@ private:
     static constexpr auto FatalDrainTimeout = std::chrono::seconds(1);
 
     // FIB-184: a backend exception must never kill the shared feeding thread.
-    // Backend IO without m_queueMutex: producers keep their single short
-    // critical section (LineSinkWriter's contract). m_backendMutex serializes
-    // against the other backend users (locked_backend(), the FATAL write).
+    // Hot-path backend IO (feedOne, the drained branch, the flood-path
+    // maybeFlush) runs without m_queueMutex held: producers keep their
+    // single short critical section (LineSinkWriter's contract).
+    // m_backendMutex serializes against the other backend users
+    // (locked_backend(), the FATAL write).
     void flushBackend()
     {
         try
         {
-            std::lock_guard<std::mutex> backendLock(m_backendMutex);
+            std::lock_guard<std::timed_mutex> backendLock(m_backendMutex);
             m_backend->flush();
         }
         catch (...)
@@ -410,16 +442,16 @@ private:
             line += "[log] dropped ";
             line += std::to_string(_dropped);
             line += " log line(s): slot pool exhausted";
-            std::lock_guard<std::mutex> backendLock(m_backendMutex);
+            std::lock_guard<std::timed_mutex> backendLock(m_backendMutex);
             m_backend->consumeLine(LogLevel::WARNING, line);
         }
         catch (...)
         {}
     }
 
-    // Locked variants for the cold paths (flush(), stop(), the FATAL drain):
-    // m_queueMutex is already held there and producer latency is not a
-    // concern. m_queueMutex guards m_lastFlush.
+    // Locked variant for the cold paths (flush(), stop()): m_queueMutex is
+    // already held there and producer latency is not a concern. m_queueMutex
+    // guards m_lastFlush.
     void flushBackendLocked()
     {
         m_lastFlush = std::chrono::steady_clock::now();
@@ -436,14 +468,21 @@ private:
         }
     }
 
-    // m_queueMutex must be held.
-    void maybeFlushLocked()
+    // Flood-path flush: only the bookkeeping runs under m_queueMutex, the
+    // backend flush itself runs after releasing it, so a slow file flush
+    // does not stall producers in writeLine(). Runs on the feeding worker
+    // only, so m_lastFlush needs no wider synchronization.
+    void maybeFlush()
     {
-        if (std::chrono::steady_clock::now() - m_lastFlush < FlushInterval)
         {
-            return;
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            if (std::chrono::steady_clock::now() - m_lastFlush < FlushInterval)
+            {
+                return;
+            }
+            m_lastFlush = std::chrono::steady_clock::now();
         }
-        flushBackendLocked();
+        flushBackend();
     }
 
     // Drains the backlog inline on the caller thread. _lock holds
@@ -465,7 +504,7 @@ private:
         Slot& s = m_slots[_slot];
         try
         {
-            std::lock_guard<std::mutex> lock(m_backendMutex);
+            std::lock_guard<std::timed_mutex> lock(m_backendMutex);
             m_backend->consumeLine(s.level, s.line);
         }
         catch (...)
@@ -520,19 +559,18 @@ private:
                 feedOne(slot);
                 // Under a continuous flood the queue never drains; keep the
                 // flush staleness bounded. One clock read per FlushCheckEvery
-                // lines.
+                // lines; the backend flush itself runs off m_queueMutex.
                 if (++linesSinceFlushCheck >= FlushCheckEvery)
                 {
                     linesSinceFlushCheck = 0;
-                    std::lock_guard<std::mutex> lock(m_queueMutex);
-                    maybeFlushLocked();
+                    maybeFlush();
                 }
                 continue;
             }
             // Drained branch, queue mutex released: surface dropped lines,
             // then flush unconditionally so the tail of a burst reaches the
             // file right away. Under a flood this branch never runs; that
-            // case stays rate-limited by maybeFlushLocked() above.
+            // case stays rate-limited by maybeFlush() above.
             if (dropped != 0)
             {
                 reportDropped(dropped);
@@ -554,7 +592,9 @@ private:
     }
 
     boost::shared_ptr<BackendT> m_backend;
-    std::mutex m_backendMutex;
+    // timed_mutex so the FATAL path can bound its acquisition: a wedged
+    // backend must not turn the fail-stop into a hang.
+    std::timed_mutex m_backendMutex;
     std::array<Slot, CapacityV> m_slots;
     std::deque<std::uint32_t> m_queue;
     std::deque<std::uint32_t> m_freeSlots;

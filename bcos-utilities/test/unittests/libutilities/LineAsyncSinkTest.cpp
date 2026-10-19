@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -319,6 +320,67 @@ BOOST_AUTO_TEST_CASE(fatalDrainsQueuedBacklogBeforeWriting)
     auto lines = backend->snapshot();
     BOOST_REQUIRE_EQUAL(lines.size(), 4u);
     BOOST_CHECK(lines.back().find("fatalLine") != std::string::npos);
+    sink.stop();
+}
+
+// Multi-producer stress for the hand-off protocol: slot-pool accounting, drop
+// counting and the wake/notify pairing under genuine contention, with a small
+// Capacity so the pool genuinely overflows. The pinned invariant is
+// conservation — every line is consumed exactly once (unique and untruncated)
+// or counted as dropped. This is the case to run under ThreadSanitizer.
+BOOST_AUTO_TEST_CASE(multiProducerConservationUnderOverflow)
+{
+    constexpr std::size_t Capacity = 64;
+    constexpr unsigned Producers = 8;
+    constexpr unsigned LinesPerProducer = 20000;
+    auto backend = boost::make_shared<FakeBackend>();
+    bcos::log::LineAsyncSink<FakeBackend, Capacity> sink(backend);
+
+    std::vector<std::thread> producers;
+    producers.reserve(Producers);
+    for (unsigned p = 0; p < Producers; ++p)
+    {
+        producers.emplace_back(
+            [p, &sink]
+            {
+                for (unsigned i = 0; i < LinesPerProducer; ++i)
+                {
+                    sink.writeLine(LogLevel::INFO, "p|",
+                        std::to_string(p) + "-" + std::to_string(i));
+                }
+            });
+    }
+    for (auto& producer : producers)
+    {
+        producer.join();
+    }
+    sink.flush();
+
+    auto lines = backend->snapshot();
+    std::unordered_set<std::string> seen;
+    seen.reserve(static_cast<std::size_t>(Producers) * LinesPerProducer);
+    std::uint64_t droppedByMarker = 0;
+    for (auto const& line : lines)
+    {
+        // dropped-lines marker: "...[log] dropped N log line(s): ..."
+        if (line.find("[log] dropped ") != std::string::npos)
+        {
+            auto const begin = line.find("dropped ") + 8;
+            auto const end = line.find(" log line(s)", begin);
+            droppedByMarker += std::stoull(line.substr(begin, end - begin));
+            continue;
+        }
+        // a duplicated line breaks the slot-pool accounting
+        BOOST_REQUIRE(seen.insert(line).second);
+        // a truncated or corrupted line fails the "p|<p>-<i>" layout
+        auto const sep = line.find('-', 2);
+        BOOST_REQUIRE_NE(sep, std::string::npos);
+        BOOST_REQUIRE_LT(sep + 1, line.size());
+        BOOST_CHECK_LT(std::stoul(line.substr(2, sep - 2)), Producers);
+        BOOST_CHECK_LT(std::stoul(line.substr(sep + 1)), LinesPerProducer);
+    }
+    auto const total = static_cast<std::uint64_t>(Producers) * LinesPerProducer;
+    BOOST_CHECK_EQUAL(seen.size() + droppedByMarker + sink.droppedLines(), total);
     sink.stop();
 }
 
