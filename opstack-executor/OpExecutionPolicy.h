@@ -330,7 +330,7 @@ public:
 
         if (entry->max_input_size > 0 &&
             static_cast<size_t>(msg.input_size) > entry->max_input_size)
-            return evmc::Result{EVMC_FAILURE, 0};
+            return evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
 
         // Length-limit-only (0x08 / BLS): the base table handles pricing and execution.
         if (entry->gas_cost_override < 0)
@@ -339,7 +339,7 @@ public:
         // Gas-override (0x100): the base table's is_precompile(PRAGUE) is false, so the
         // override dispatches it itself (ported executeGasOverridePrecompile).
         if (msg.gas < entry->gas_cost_override)
-            return evmc::Result{EVMC_OUT_OF_GAS, 0};
+            return evmc::Result{EVMC_OUT_OF_GAS, 0, 0, {.left = msg.state_gas}};
         const int64_t gas_left = msg.gas - entry->gas_cost_override;
 
         // The gas-override branch currently implements only P256Verify; any future additional
@@ -365,7 +365,7 @@ public:
             const evmc_result result{.status_code = EVMC_SUCCESS,
                 .gas_left = gas_left,
                 .gas_refund = 0,
-                .state_gas = {},
+                .state_gas = {.left = msg.state_gas},
                 .output_data = output_data,
                 .output_size = exec.output_size,
                 .release = [](const evmc_result* res) noexcept { delete[] res->output_data; }};
@@ -374,7 +374,7 @@ public:
         delete[] output_data;
         // op-geth charges only the 3450 on an input error — the remaining gas survives
         // (unlike evmone's generic path, which zeroes it).
-        return evmc::Result{exec.status_code, gas_left};
+        return evmc::Result{exec.status_code, gas_left, 0, {.left = msg.state_gas}};
     }
 
     /// Addresses in the override table are always warm: op-geth statedb.Prepare warms

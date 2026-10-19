@@ -555,7 +555,7 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     if (!new_acc_exists)
         new_acc = &m_state.insert(msg.recipient);
     else if (eth_host_detail::is_create_collision(*new_acc))
-        return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+        return evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
     m_state.journal_create(msg.recipient, new_acc_exists);
 
     assert(new_acc != nullptr);
@@ -588,7 +588,7 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     const bytes_view code{result.output_data, result.output_size};
 
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > evmone::MAX_CODE_SIZE)
-        return evmc::Result{EVMC_FAILURE};
+        return evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
 
     // Code deployment cost.
     const auto cost = std::ssize(code) * 200;
@@ -598,15 +598,16 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
         return (m_rev == EVMC_FRONTIER) ?
                    // evmc ABI 19: Result lost the created-address ctor; the caller reads
                    // msg.recipient (set by prepare_message / evmone for nested creates).
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund} :
-                   evmc::Result{EVMC_FAILURE};
+                   evmc::Result{
+                       EVMC_SUCCESS, result.gas_left, result.gas_refund, {.left = msg.state_gas}} :
+                   evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
     }
 
     if (!code.empty())
     {
         // EIP-3541: Reject new contract code starting with the 0xEF byte.
         if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
-            return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+            return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE, 0, 0, {.left = msg.state_gas}};
 
         new_acc->code_hash = evm::keccak256(code);
         new_acc->code = code;
@@ -661,7 +662,7 @@ evmc::Result EthereumHost<Storage, Policy>::execute_message(const evmc_message& 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
     if (code.empty())
-        return evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+        return evmc::Result{EVMC_SUCCESS, msg.gas, 0, {.left = msg.state_gas}};
 
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
@@ -671,7 +672,7 @@ evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) n
 {
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
-        return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+        return evmc::Result{EVMC_FAILURE, orig_msg.gas, 0, {.left = orig_msg.state_gas}};
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();
