@@ -35,7 +35,7 @@
 #include <atomic>
 #include <utility>
 
-#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
+#include "bcos-framework/ledger/Ledger.h"  // LEDGER_LOG
 
 namespace bcos::ledger
 {

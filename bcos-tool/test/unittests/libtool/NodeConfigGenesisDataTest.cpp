@@ -266,6 +266,61 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     BOOST_CHECK(data3.find("[ethereum]\nmode:el\n[web3]\nchain_id:1\n") != std::string::npos);
 }
 
+// A fork the chain never schedules (UINT64_MAX, what eth-sync-check --genesis2ini emits for
+// an absent *Time field) must NOT be frozen into the byte-compared genesis pin: an operator
+// who later schedules Cancun on a Shanghai-era chain regenerates config.genesis, and a pinned
+// sentinel would then abort the restart on a genesis mismatch. Sentinel entries are omitted
+// from the pin — the same rule the post-Prague tail follows. Divergence is still caught: a
+// node holding the sentinel emits no key while a node holding a real activation time emits
+// one, so the pins differ.
+BOOST_AUTO_TEST_CASE(forkTimestampsPinSkipsNotScheduledSentinel)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n";
+
+    // Shanghai-era chain: cancun/prague unscheduled -> omitted from the pin.
+    NodeConfig shanghaiEra(keyFactory);
+    BOOST_REQUIRE_NO_THROW(shanghaiEra.loadGenesisConfigFromString(
+        base + "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+               "cancun_time=18446744073709551615\nprague_time=18446744073709551615\n"
+               "merge_block=0\n" +
+        ethLaneGenesisSections()));
+    auto sentinelData = bcos::tool::generateGenesisData(
+        shanghaiEra.genesisConfig(), *shanghaiEra.ledgerConfig());
+    BOOST_CHECK(sentinelData.find("[forkTimestamps]") != std::string::npos);
+    BOOST_CHECK(sentinelData.find("london_time:0") != std::string::npos);
+    BOOST_CHECK(sentinelData.find("paris_time:0") != std::string::npos);
+    BOOST_CHECK(sentinelData.find("shanghai_time:1681338455") != std::string::npos);
+    BOOST_CHECK(sentinelData.find("cancun_time:") == std::string::npos);
+    BOOST_CHECK(sentinelData.find("prague_time:") == std::string::npos);
+
+    // Fully-scheduled chain: all five keys pinned, in ladder order, byte-identical to the
+    // pre-change emission.
+    NodeConfig full(keyFactory);
+    BOOST_REQUIRE_NO_THROW(full.loadGenesisConfigFromString(
+        base + "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+               "cancun_time=1710338135\nprague_time=1746612311\n"
+               "merge_block=0\n" +
+        ethLaneGenesisSections()));
+    auto fullData = bcos::tool::generateGenesisData(full.genesisConfig(), *full.ledgerConfig());
+    BOOST_CHECK(fullData.find("[forkTimestamps]\nlondon_time:0\nparis_time:0\n"
+                              "shanghai_time:1681338455\ncancun_time:1710338135\n"
+                              "prague_time:1746612311\n") != std::string::npos);
+}
+
 // [fork_timestamps] is the L1 fork schedule and belongs to executor.version=2 only, where the
 // node requires it (validateELModeInvariants). [ethereum] mode in the genesis is not read.
 BOOST_AUTO_TEST_CASE(forkTimestampsBelongToTheL1ElLane)
@@ -691,6 +746,57 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
     }
 }
 
+// The L1 ladder accepts the UINT64_MAX not-scheduled sentinel for forks the chain never
+// schedules: eth-sync-check --genesis2ini emits exactly this shape for geth-format geneses
+// whose config stops at an earlier fork (e.g. shanghaiTime only), and the ladder's
+// non-decreasing check treats UINT64_MAX as the terminal "never activates" value. Only the
+// OP [op_fork_timestamps] lane refuses the literal sentinel (fail-closed; covered by
+// NodeConfigOpForkTimestampsTest.sentinelAsDeclaredTimestampRejected).
+BOOST_AUTO_TEST_CASE(forkTimestampsAcceptNotScheduledSentinel)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n";
+
+    // Unscheduled tail: cancun/prague declared as the sentinel — eth-sync-check's emission
+    // for a Shanghai-at-genesis chain. Loads, and the schedule carries the sentinel.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
+            base + "cancun_time=18446744073709551615\nprague_time=18446744073709551615\n"
+                   "merge_block=0\n" +
+            ethLaneGenesisSections()));
+        auto const& schedule = cfg.genesisConfig().m_ethereumForkSchedule;
+        BOOST_REQUIRE(schedule.has_value());
+        BOOST_CHECK_EQUAL(schedule->m_shanghaiTime, 1681338455u);
+        BOOST_CHECK_EQUAL(schedule->m_cancunTime, std::numeric_limits<uint64_t>::max());
+        BOOST_CHECK_EQUAL(schedule->m_pragueTime, std::numeric_limits<uint64_t>::max());
+    }
+    // The 0x-hex spelling is the same value.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
+            base + "cancun_time=0xffffffffffffffff\nprague_time=0xffffffffffffffff\n"
+                   "merge_block=0\n" +
+            ethLaneGenesisSections()));
+        BOOST_CHECK_EQUAL(cfg.genesisConfig().m_ethereumForkSchedule->m_cancunTime,
+            std::numeric_limits<uint64_t>::max());
+    }
+}
+
 // Activation times must be non-decreasing down the fork ladder (geth rejects an
 // out-of-order schedule via ChainConfig.CheckConfigForkOrder); UINT64_MAX
 // ("not yet active") is terminal, so a scheduled time after it is a decrease.
@@ -807,6 +913,17 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "merge_block=-1\n"),
             InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "merge_block invalid timestamp"); });
+    }
+    // The not-scheduled sentinel is a TIMESTAMP concept; on a block number it would
+    // silently read as "pre-merge forever" (every block validated under PoW rules and
+    // rewarded as such), so merge_block refuses it even though the timestamp keys of the
+    // same section accept it.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "merge_block=18446744073709551615\n"),
+            InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "not-scheduled sentinel"); });
     }
     // Reload without the section resets to the unset value (0), not a stale one.
     {
