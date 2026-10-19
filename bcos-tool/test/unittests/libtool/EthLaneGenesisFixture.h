@@ -56,6 +56,27 @@ inline std::string ethLaneGenesisSections()
            "hash=0x8634eabcf9e6df6b91b63cecab2d7af50a0a4fb8e0cc0aaca07cd8d0da32c069\n";
 }
 
+// The common config.genesis head shared by the EL-lane fixtures: fixed
+// [version]/[chain]/[web3]/[consensus]/[tx] sections and the [executor] head up to
+// (not including) the version/revision keys each test varies. chainId defaults to 1;
+// Sepolia-shaped fixtures pass "11155111".
+inline std::string ethLaneGenesisBase(std::string const& chainId = "1")
+{
+    return "[version]\ncompatibility_version=3.18.0\n"
+           "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+           "[web3]\nchain_id=" +
+           chainId +
+           "\n"
+           "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+           "node.0="
+           "1234567890123456789012345678901234567890123456789012345678901234"
+           "1234567890123456789012345678901234567890123456789012345678901234"
+           ":1:1\n"
+           "[tx]\ngas_limit=3000000000\n"
+           "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+           "auth_admin_account=0x0000000000000000000000000000000000000001\n";
+}
+
 // The [ethGenesisHeader] block generateGenesisData emits for the sections above (u256 /
 // integral fields print decimal; hashes print 0x-prefixed hex). Used by the byte-exact
 // genesis-pin test.

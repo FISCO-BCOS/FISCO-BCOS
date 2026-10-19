@@ -108,20 +108,7 @@ BOOST_AUTO_TEST_CASE(evmcRevisionConfig)
 BOOST_AUTO_TEST_CASE(executorV2RequiresEvmcRevision)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n";
+    const std::string base = ethLaneGenesisBase();
 
     // version=2 with no EVMC revision -> rejected (loadExecutorConfig's v2 guard fires
     // before validateL2Invariants' lane binding, so no lane sections are needed here).
@@ -217,20 +204,7 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresCompat318)
 BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string base = ethLaneGenesisBase() +
         "version=2\n";
 
     // Out-of-order entries: accepted, normalized (map is key-ordered). The v2 lane binding
@@ -275,20 +249,7 @@ BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
 BOOST_AUTO_TEST_CASE(evmcExperimentalRejected)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string base = ethLaneGenesisBase() +
         "version=2\n";
 
     // Single revision = experimental -> rejected.
@@ -350,20 +311,7 @@ BOOST_AUTO_TEST_CASE(legacyDashJoinedFormat)
 BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string base = ethLaneGenesisBase() +
         "version=2\n";
     const std::string schedule =
         "[ethereum]\nmode=el\n"
@@ -460,6 +408,51 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     BOOST_CHECK(data3.find("[web3]") == std::string::npos);  // chain id emitted only with EL
 }
 
+// A fork the chain never schedules (UINT64_MAX, what eth-sync-check --genesis2ini emits for
+// an absent *Time field) must NOT be frozen into the byte-compared genesis pin: an operator
+// who later schedules Cancun on a Shanghai-era chain regenerates config.genesis, and a pinned
+// sentinel would then abort the restart on a genesis mismatch. Sentinel entries are omitted
+// from the pin — the same rule the post-Prague tail follows. Divergence is still caught: a
+// node holding the sentinel emits no key while a node holding a real activation time emits
+// one, so the pins differ.
+BOOST_AUTO_TEST_CASE(forkTimestampsPinSkipsNotScheduledSentinel)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string base = ethLaneGenesisBase() +
+        "version=2\n"
+        "[ethereum]\nmode=el\n";
+
+    // Shanghai-era chain: cancun/prague unscheduled -> omitted from the pin.
+    NodeConfig shanghaiEra(keyFactory);
+    BOOST_REQUIRE_NO_THROW(shanghaiEra.loadGenesisConfigFromString(
+        base + "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+               "cancun_time=18446744073709551615\nprague_time=18446744073709551615\n"
+               "merge_block=0\n" +
+        ethLaneGenesisSections()));
+    auto sentinelData = bcos::tool::generateGenesisData(
+        shanghaiEra.genesisConfig(), *shanghaiEra.ledgerConfig());
+    BOOST_CHECK(sentinelData.find("[forkTimestamps]") != std::string::npos);
+    BOOST_CHECK(sentinelData.find("london_time:0") != std::string::npos);
+    BOOST_CHECK(sentinelData.find("paris_time:0") != std::string::npos);
+    BOOST_CHECK(sentinelData.find("shanghai_time:1681338455") != std::string::npos);
+    BOOST_CHECK(sentinelData.find("cancun_time:") == std::string::npos);
+    BOOST_CHECK(sentinelData.find("prague_time:") == std::string::npos);
+
+    // Fully-scheduled chain: all five keys pinned, in ladder order, byte-identical to the
+    // pre-change emission.
+    NodeConfig full(keyFactory);
+    BOOST_REQUIRE_NO_THROW(full.loadGenesisConfigFromString(
+        base + "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+               "cancun_time=1710338135\nprague_time=1746612311\n"
+               "merge_block=0\n" +
+        ethLaneGenesisSections()));
+    auto fullData =
+        bcos::tool::generateGenesisData(full.genesisConfig(), *full.ledgerConfig());
+    BOOST_CHECK(fullData.find("[forkTimestamps]\nlondon_time:0\nparis_time:0\n"
+                              "shanghai_time:1681338455\ncancun_time:1710338135\n"
+                              "prague_time:1746612311\n") != std::string::npos);
+}
+
 // The EL-mode declaration ([ethereum] mode=el) and its fork schedule are bound together in
 // config.genesis: a [fork_timestamps] section on a genesis that does not declare EL mode
 // must be rejected (an ordinary executor-v2 chain must not be able to waive the evmc_revision
@@ -468,20 +461,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
 BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string base = ethLaneGenesisBase() +
         "version=2\n"
         // evm_revision lets loadExecutorConfig's v2 guard pass cleanly, so the "no EL
         // declaration" cases below reach validateL2Invariants — the branch under test — as
@@ -600,17 +580,7 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
     {
         NodeConfig cfg(keyFactory);
         const std::string plainGenesis =
-            "[version]\ncompatibility_version=3.18.0\n"
-            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-            "[web3]\nchain_id=1\n"
-            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-            "node.0=" +
-            node +
-            ":1:1\n"
-            "[tx]\ngas_limit=3000000000\n"
-            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=2\nevm_revision=cancun\n" +
+            ethLaneGenesisBase() + "version=2\nevm_revision=cancun\n" +
             ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
@@ -632,17 +602,7 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
     {
         NodeConfig cfg(keyFactory);
         const std::string plainGenesis =
-            "[version]\ncompatibility_version=3.18.0\n"
-            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-            "[web3]\nchain_id=1\n"
-            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-            "node.0=" +
-            node +
-            ":1:1\n"
-            "[tx]\ngas_limit=3000000000\n"
-            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=2\nevm_revision=cancun\n" +
+            ethLaneGenesisBase() + "version=2\nevm_revision=cancun\n" +
             ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
@@ -709,20 +669,7 @@ BOOST_AUTO_TEST_CASE(ethereumMaxBatchSizeBounds)
 BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string genesis =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=11155111\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string genesis = ethLaneGenesisBase("11155111") +
         "version=2\n"
         "[ethereum]\nmode=el\n"
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
@@ -795,20 +742,7 @@ BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
 BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string genesis =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=11155111\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string genesis = ethLaneGenesisBase("11155111") +
         "version=2\n"
         "[ethereum]\nmode=el\n"
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
@@ -865,20 +799,7 @@ BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
 BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string base = ethLaneGenesisBase() +
         "version=2\n"
         "evm_revision=cancun\n";
 
@@ -906,20 +827,7 @@ BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
 BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string base = ethLaneGenesisBase() +
         "version=2\n"
         "[ethereum]\nmode=el\n"
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
@@ -964,26 +872,55 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
     }
 }
 
+// The L1 ladder accepts the UINT64_MAX not-scheduled sentinel for forks the chain never
+// schedules: eth-sync-check --genesis2ini emits exactly this shape for geth-format geneses
+// whose config stops at an earlier fork (e.g. shanghaiTime only), and the ladder's
+// non-decreasing check treats UINT64_MAX as the terminal "never activates" value. Only the
+// OP [op_fork_timestamps] lane refuses the literal sentinel (fail-closed; covered by
+// NodeConfigOpForkTimestampsTest.sentinelAsDeclaredTimestampRejected).
+BOOST_AUTO_TEST_CASE(forkTimestampsAcceptNotScheduledSentinel)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string base = ethLaneGenesisBase() +
+        "version=2\n"
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n";
+
+    // Unscheduled tail: cancun/prague declared as the sentinel — eth-sync-check's emission
+    // for a Shanghai-at-genesis chain. Loads, and the schedule carries the sentinel.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(
+                base + "cancun_time=18446744073709551615\nprague_time=18446744073709551615\n"
+                       "merge_block=0\n" +
+                ethLaneGenesisSections()));
+        auto const& schedule = cfg.genesisConfig().m_ethereumForkSchedule;
+        BOOST_REQUIRE(schedule.has_value());
+        BOOST_CHECK_EQUAL(schedule->m_shanghaiTime, 1681338455u);
+        BOOST_CHECK_EQUAL(schedule->m_cancunTime, std::numeric_limits<uint64_t>::max());
+        BOOST_CHECK_EQUAL(schedule->m_pragueTime, std::numeric_limits<uint64_t>::max());
+    }
+    // The 0x-hex spelling is the same value.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(
+                base + "cancun_time=0xffffffffffffffff\nprague_time=0xffffffffffffffff\n"
+                       "merge_block=0\n" +
+                ethLaneGenesisSections()));
+        BOOST_CHECK_EQUAL(cfg.genesisConfig().m_ethereumForkSchedule->m_cancunTime,
+            std::numeric_limits<uint64_t>::max());
+    }
+}
+
 // Activation times must be non-decreasing down the fork ladder (geth rejects an
 // out-of-order schedule via ChainConfig.CheckConfigForkOrder); UINT64_MAX
 // ("not yet active") is terminal, so a scheduled time after it is a decrease.
 BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string head =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string head = ethLaneGenesisBase() +
         "version=2\n"
         "[ethereum]\nmode=el\n"
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\n";
@@ -1039,20 +976,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
 BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    const std::string node =
-        "1234567890123456789012345678901234567890123456789012345678901234"
-        "1234567890123456789012345678901234567890123456789012345678901234";
-    const std::string base =
-        "[version]\ncompatibility_version=3.18.0\n"
-        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-        "[web3]\nchain_id=1\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=" +
-        node +
-        ":1:1\n"
-        "[tx]\ngas_limit=3000000000\n"
-        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+    const std::string base = ethLaneGenesisBase() +
         "version=2\n"
         "evm_revision=cancun\n"
         "[ethereum]\nmode=el\n"
@@ -1091,6 +1015,17 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
             cfg.loadGenesisConfigFromString(base + "merge_block=-1\n"), InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "merge_block invalid timestamp"); });
     }
+    // The not-scheduled sentinel is a TIMESTAMP concept; on a block number it would
+    // silently read as "pre-merge forever" (every block validated under PoW rules and
+    // rewarded as such), so merge_block refuses it even though the timestamp keys of the
+    // same section accept it.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "merge_block=18446744073709551615\n"),
+            InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "not-scheduled sentinel"); });
+    }
     // Reload without the section resets to the unset value (0), not a stale one.
     {
         NodeConfig cfg(keyFactory);
@@ -1098,17 +1033,7 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
             cfg.loadGenesisConfigFromString(base + "merge_block=42\n" + ethLaneGenesisSections()));
         BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 42u);
         const std::string plain =
-            "[version]\ncompatibility_version=3.18.0\n"
-            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-            "[web3]\nchain_id=1\n"
-            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-            "node.0=" +
-            node +
-            ":1:1\n"
-            "[tx]\ngas_limit=3000000000\n"
-            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
-            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=2\nevm_revision=cancun\n" +
+            ethLaneGenesisBase() + "version=2\nevm_revision=cancun\n" +
             ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plain));
         BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 0u);

@@ -21,12 +21,12 @@
 #include "libnetwork/Common.h"
 #include <bcos-utilities/BoostLog.h>
 
-#define GATEWAY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Gateway]"
-#define GATEWAY_CONFIG_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Config]"
-#define GATEWAY_FACTORY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Factory]"
-#define NODE_MANAGER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][GatewayNodeManager]"
-#define ROUTER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Router]"
-#define RATELIMIT_MGR_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][RateLimiterManager]"
+#define GATEWAY_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[Gateway][Gateway]"
+#define GATEWAY_CONFIG_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[Gateway][Config]"
+#define GATEWAY_FACTORY_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[Gateway][Factory]"
+#define NODE_MANAGER_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[Gateway][GatewayNodeManager]"
+#define ROUTER_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[Gateway][Router]"
+#define RATELIMIT_MGR_LOG(LEVEL) BCOS_MODULE_LOG(GATEWAY, LEVEL) << "[Gateway][RateLimiterManager]"
 
 namespace bcos
 {
