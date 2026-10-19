@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2026 FISCO BCOS.
+ *  Copyright (C) 2024 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -231,9 +231,10 @@ EESTBlockchainFixture parseBlockchainFixture(
 std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const& filePath);
 
 /// Map an EEST fork name to an EVMC revision.
-/// Returns EVMC_OSAKA (latest handled) as a default for unknown forks.
-/// std::nullopt = the fork has no executable revision in this binary (Constantinople) and its
-/// fixtures must be skipped.
+/// std::nullopt = the fork has no executable revision in this binary (Constantinople /
+/// ConstantinopleFix), or its name cannot be resolved, and its fixtures must be skipped —
+/// there is no default revision: executing an unresolvable fork under a guessed schedule
+/// is the divergence this gate exists to prevent.
 std::optional<evmc_revision> forkNameToRevision(std::string const& forkName);
 
 }  // namespace bcos::test

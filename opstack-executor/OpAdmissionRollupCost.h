@@ -38,8 +38,9 @@ namespace bcos::executor_v1::opstack
 {
 
 /// The admission path could not resolve a committed header for the txpool's head
-/// (state view built from a block that is not committed). Named so callers classify
-/// on type (review F22).
+/// (state view built from a block that is not committed). Named for diagnostics; the
+/// std::runtime_error base keeps the admission path's existing catches working (no
+/// caller catches this type today).
 struct OpAdmissionHeaderUnavailable : std::runtime_error
 {
     using std::runtime_error::runtime_error;

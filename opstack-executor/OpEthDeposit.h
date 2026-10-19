@@ -89,15 +89,16 @@ struct OpEthDepositGasLimitReached : std::runtime_error
 };
 
 /// Regolith+ rejects system deposits outright (op-geth ErrSystemTxNotSupported,
-/// block-level error). Named so callers can classify without what() matching
-/// (review F22: the throw used to be a bare std::runtime_error).
+/// block-level error). Named for diagnostics; the std::runtime_error base keeps the
+/// deposit path's existing catches working (no caller catches this type today).
 struct OpEthDepositSystemTxUnsupported : std::runtime_error
 {
     using std::runtime_error::runtime_error;
 };
 
 /// A receipt gasUsed below zero is an internal invariant violation, never a contract
-/// outcome (review F22: was a bare std::runtime_error).
+/// outcome. Named for diagnostics; the std::runtime_error base keeps existing catches
+/// working (no caller catches this type today).
 struct OpEthDepositNegativeGasUsed : std::runtime_error
 {
     using std::runtime_error::runtime_error;

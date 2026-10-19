@@ -348,7 +348,7 @@ public:
         if (entry->addr != OP_P256_VERIFY_ADDRESS)
         {
             assert(false && "unhandled gas-override precompile address");
-            return evmc::Result{EVMC_INTERNAL_ERROR, gas_left};
+            return evmc::Result{EVMC_INTERNAL_ERROR, gas_left, 0, {.left = msg.state_gas}};
         }
 
         constexpr size_t c_maxOutput = 32;

@@ -52,15 +52,15 @@ namespace eth = bcos::executor_v1::eth;
 namespace
 {
 
-constexpr evmc::address kCoinbase = 0x4200000000000000000000000000000000000011_address;
-constexpr evmc::address kTransferTarget = 0xb0b0000000000000000000000000000000000001_address;
-constexpr evmc::address kRevertContract = 0x00000000000000000000000000000000e000e001_address;
-constexpr evmc::address kDepositor2 = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0002_address;
-constexpr evmc::address kDepositor3 = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0003_address;
-constexpr evmc::address kDepositor4 = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0004_address;
+constexpr evmc::address c_Coinbase = 0x4200000000000000000000000000000000000011_address;
+constexpr evmc::address c_TransferTarget = 0xb0b0000000000000000000000000000000000001_address;
+constexpr evmc::address c_RevertContract = 0x00000000000000000000000000000000e000e001_address;
+constexpr evmc::address c_Depositor2 = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0002_address;
+constexpr evmc::address c_Depositor3 = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0003_address;
+constexpr evmc::address c_Depositor4 = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0004_address;
 
-const bcos::u256 kHeaderBaseFee{1'000'000'000};  // 1 gwei
-constexpr uint64_t kBlockGasLimit = 10'000'000;
+const bcos::u256 c_HeaderBaseFee{1'000'000'000};  // 1 gwei
+constexpr uint64_t c_BlockGasLimit = 10'000'000;
 
 // ── synthetic header / envelope builders ────────────────────────────────────────────────────
 
@@ -75,11 +75,11 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeForkHeader(
     h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = number - 1,
         .blockHash =
             bcos::h256{"0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"}});
-    h->setCoinbase(bcos::Address{bcos::bytesConstRef{kCoinbase.bytes, sizeof(kCoinbase.bytes)}});
+    h->setCoinbase(bcos::Address{bcos::bytesConstRef{c_Coinbase.bytes, sizeof(c_Coinbase.bytes)}});
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});
     h->setReceiptsRoot(bcos::h256{});
-    h->setGasLimit(bcos::u256(kBlockGasLimit));
+    h->setGasLimit(bcos::u256(c_BlockGasLimit));
     h->setGasUsed(bcos::u256(0));
     h->setExtraData(bcos::bytes{});
     h->setPrevRandao(bcos::h256{});
@@ -355,21 +355,21 @@ BOOST_AUTO_TEST_SUITE(OpEthForkMatrixSuite)
 BOOST_AUTO_TEST_CASE(BedrockDepositSemantics)
 {
     DualRunFixture f;
-    auto const header = makeForkHeader(1, kHeaderBaseFee);
+    auto const header = makeForkHeader(1, c_HeaderBaseFee);
 
     std::vector<bcos::bytes> const rawTxBytes = {
         // 0: unmetered system deposit, gasLimit far above the block gas limit (10M).
         depositEnvelope(
             opeth::OP_DEPOSITOR, opeth::OP_L1_BLOCK, 150'000'000, /*system=*/true, 0x01),
         // 1: metered success (call into an empty-code account).
-        depositEnvelope(kDepositor2, kTransferTarget, 100'000, false, 0x02),
+        depositEnvelope(c_Depositor2, c_TransferTarget, 100'000, false, 0x02),
         // 2: metered EVM revert (contract code PUSH1 0, PUSH1 0, REVERT — Paris-valid).
-        depositEnvelope(kDepositor3, kRevertContract, 100'000, false, 0x03),
+        depositEnvelope(c_Depositor3, c_RevertContract, 100'000, false, 0x03),
         // 3: metered entry failure (gasLimit below the 21000 intrinsic).
-        depositEnvelope(kDepositor4, kTransferTarget, 1'000, false, 0x04),
+        depositEnvelope(c_Depositor4, c_TransferTarget, 1'000, false, 0x04),
     };
     std::vector<AccountSeed> const seeds = {
-        {.addr = kRevertContract, .code = {0x60, 0x00, 0x60, 0x00, 0xfd}},
+        {.addr = c_RevertContract, .code = {0x60, 0x00, 0x60, 0x00, 0xfd}},
     };
 
     auto out = runSyntheticBlock(f, *header, opeth::OP_BEDROCK_SPEC, rawTxBytes, seeds);
@@ -404,15 +404,15 @@ BOOST_AUTO_TEST_CASE(BedrockDepositSemantics)
 BOOST_AUTO_TEST_CASE(RegolithDepositNonce)
 {
     DualRunFixture f;
-    auto const header = makeForkHeader(1, kHeaderBaseFee);
+    auto const header = makeForkHeader(1, c_HeaderBaseFee);
 
     std::vector<bcos::bytes> const rawTxBytes = {
         depositEnvelope(opeth::OP_DEPOSITOR, opeth::OP_L1_BLOCK, 100'000, false, 0x11),
-        depositEnvelope(kDepositor2, kTransferTarget, 100'000, false, 0x12),
+        depositEnvelope(c_Depositor2, c_TransferTarget, 100'000, false, 0x12),
     };
     std::vector<AccountSeed> const seeds = {
         {.addr = opeth::OP_DEPOSITOR, .nonce = 7},
-        {.addr = kDepositor2, .nonce = 3},
+        {.addr = c_Depositor2, .nonce = 3},
     };
 
     auto out = runSyntheticBlock(f, *header, opeth::OP_REGOLITH_SPEC, rawTxBytes, seeds);
@@ -466,10 +466,10 @@ BOOST_AUTO_TEST_CASE(EcotoneFirstBlockFallback)
     auto const sender = keyPair->address(makeCryptoSuite()->hashImpl());
 
     DualRunFixture f;
-    auto const header = makeForkHeader(1, kHeaderBaseFee);
+    auto const header = makeForkHeader(1, c_HeaderBaseFee);
     auto const transferEnv = signEip1559(*keyPair, /*nonce=*/0, /*gasLimit=*/100'000,
         bcos::u256(2'000'000'000), bcos::u256(1'000'000),
-        bcos::Address{kTransferTarget.bytes, sizeof(kTransferTarget.bytes)}, bcos::u256(1));
+        bcos::Address{c_TransferTarget.bytes, sizeof(c_TransferTarget.bytes)}, bcos::u256(1));
     std::vector<bcos::bytes> const rawTxBytes = {
         depositEnvelope(opeth::OP_DEPOSITOR, opeth::OP_L1_BLOCK, 100'000, false, 0x21),
         transferEnv,
@@ -559,12 +559,12 @@ BOOST_AUTO_TEST_CASE(IsthmusOperatorFeeVaults)
     auto const sender = keyPair->address(hashImpl);
 
     DualRunFixture f;
-    auto const header = makeForkHeader(1, kHeaderBaseFee);
+    auto const header = makeForkHeader(1, c_HeaderBaseFee);
     constexpr uint64_t kTxGasLimit = 100'000;  // > 21000 → the pre-charge refund is observable
     const bcos::u256 kMaxFee{2'000'000'000};
     const bcos::u256 kPriority{1'000'000};
     auto const transferEnv = signEip1559(*keyPair, 0, kTxGasLimit, kMaxFee, kPriority,
-        bcos::Address{kTransferTarget.bytes, sizeof(kTransferTarget.bytes)}, bcos::u256(1));
+        bcos::Address{c_TransferTarget.bytes, sizeof(c_TransferTarget.bytes)}, bcos::u256(1));
     std::vector<bcos::bytes> const rawTxBytes = {
         depositEnvelope(opeth::OP_DEPOSITOR, opeth::OP_L1_BLOCK, 100'000, false, 0x31),
         transferEnv,
@@ -603,8 +603,8 @@ BOOST_AUTO_TEST_CASE(IsthmusOperatorFeeVaults)
     checkTwinsAgree(out, opeth::OP_ISTHMUS_SPEC, rawTxBytes);
 
     // Expected economics (Isthmus operator formula: gas*scalar/1e6 + constant):
-    constexpr uint64_t kGasUsed = 21'000;                    // plain value transfer
-    auto const effectivePrice = kHeaderBaseFee + kPriority;  // 1001000000, under the 2 gwei cap
+    constexpr uint64_t kGasUsed = 21'000;                     // plain value transfer
+    auto const effectivePrice = c_HeaderBaseFee + kPriority;  // 1001000000, under the 2 gwei cap
     opeth::OpFeeParams const params{.l1_base_fee = l1BaseFee,
         .base_fee_scalar = kBaseScalar,
         .blob_base_fee_scalar = kBlobScalar,
@@ -619,8 +619,8 @@ BOOST_AUTO_TEST_CASE(IsthmusOperatorFeeVaults)
 
     auto& view = out.viewB;
     BOOST_CHECK_EQUAL(
-        viewBalance(view, opeth::OP_BASE_FEE_VAULT), bcos::u256(kGasUsed) * kHeaderBaseFee);
-    BOOST_CHECK_EQUAL(viewBalance(view, kCoinbase), bcos::u256(kGasUsed) * kPriority);
+        viewBalance(view, opeth::OP_BASE_FEE_VAULT), bcos::u256(kGasUsed) * c_HeaderBaseFee);
+    BOOST_CHECK_EQUAL(viewBalance(view, c_Coinbase), bcos::u256(kGasUsed) * kPriority);
     BOOST_CHECK_EQUAL(viewBalance(view, opeth::OP_L1_FEE_VAULT), opeth::intxToBcosU256(l1Cost));
     BOOST_CHECK_EQUAL(
         viewBalance(view, opeth::OP_OPERATOR_FEE_VAULT), opeth::intxToBcosU256(opAtUsed));

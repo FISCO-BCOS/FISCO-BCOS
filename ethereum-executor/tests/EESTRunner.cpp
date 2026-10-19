@@ -579,8 +579,10 @@ std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
     auto lower = forkName;
     boost::algorithm::to_lower(lower);
 
-    // Explicit tables decide run / skip (review F6); no name is admitted or refused by
-    // substring shape. Plain names first, including the historical aliases:
+    // The plain-name table below is an explicit run/skip contract. Transition names are
+    // parsed by their To/AtTime shape further down (lowercased substring search), so
+    // the "no substring shape" rule applies to plain-name admission, not to the
+    // transition parser.
     struct ForkName
     {
         std::string_view name;
