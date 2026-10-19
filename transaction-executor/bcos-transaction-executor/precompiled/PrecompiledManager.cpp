@@ -38,15 +38,14 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
         1, Precompiled{executor::PrecompiledContract(
                            3000, 0, executor::PrecompiledRegistrar::executor("ecrecover")),
                0});
+    m_address2Precompiled.emplace_back(2,
+        Precompiled{executor::PrecompiledContract(60, 12,
+                        adaptEvmPrecompiled(eth_evm::sha256_execute, eth_evm::sha256_analyze, 0)),
+            0});
     m_address2Precompiled.emplace_back(
-        2, Precompiled{executor::PrecompiledContract(
-                           60, 12, adaptEvmPrecompiled(
-                                       eth_evm::sha256_execute, eth_evm::sha256_analyze, 0)),
-               0});
-    m_address2Precompiled.emplace_back(
-        3, Precompiled{executor::PrecompiledContract(
-                           600, 120, adaptEvmPrecompiled(eth_evm::ripemd160_execute,
-                                         eth_evm::ripemd160_analyze, 0)),
+        3, Precompiled{
+               executor::PrecompiledContract(600, 120,
+                   adaptEvmPrecompiled(eth_evm::ripemd160_execute, eth_evm::ripemd160_analyze, 0)),
                0});
     m_address2Precompiled.emplace_back(
         4, Precompiled{executor::PrecompiledContract(15, 3, identityExecutor), 0});
@@ -55,26 +54,24 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
                         executor::PrecompiledRegistrar::executor("modexp")),
             0});
     m_address2Precompiled.emplace_back(
-        6, Precompiled{executor::PrecompiledContract(
-                           150, 0, adaptEvmPrecompiled(
-                                       eth_evm::ecadd_execute, eth_evm::ecadd_analyze, 64)),
+        6, Precompiled{executor::PrecompiledContract(150, 0,
+                           adaptEvmPrecompiled(eth_evm::ecadd_execute, eth_evm::ecadd_analyze, 64)),
                0});
     m_address2Precompiled.emplace_back(
-        7, Precompiled{executor::PrecompiledContract(
-                           6000, 0, adaptEvmPrecompiled(
-                                        eth_evm::ecmul_execute, eth_evm::ecmul_analyze, 64)),
+        7, Precompiled{executor::PrecompiledContract(6000, 0,
+                           adaptEvmPrecompiled(eth_evm::ecmul_execute, eth_evm::ecmul_analyze, 64)),
                0});
     m_address2Precompiled.emplace_back(
-        8, Precompiled{executor::PrecompiledContract(
-                           executor::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
-                           adaptEvmPrecompiled(
-                               eth_evm::ecpairing_execute, eth_evm::ecpairing_analyze, 32)),
+        8, Precompiled{
+               executor::PrecompiledContract(
+                   executor::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
+                   adaptEvmPrecompiled(eth_evm::ecpairing_execute, eth_evm::ecpairing_analyze, 32)),
                0});
     m_address2Precompiled.emplace_back(
         9, Precompiled{executor::PrecompiledContract(
                            executor::PrecompiledRegistrar::pricer("blake2_compression"),
-                           adaptEvmPrecompiled(eth_evm::blake2bf_execute,
-                               eth_evm::blake2bf_analyze, 0, blake2InputOk)),
+                           adaptEvmPrecompiled(eth_evm::blake2bf_execute, eth_evm::blake2bf_analyze,
+                               0, blake2InputOk)),
                0});
 
     // EIP-2537 BLS12-381 precompiles (Prague, 0x0b–0x11)
@@ -103,8 +100,7 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
     {
         m_address2Precompiled.emplace_back(entry.address,
             Precompiled{
-                executor::PrecompiledContract(
-                    executor::PrecompiledRegistrar::pricer(entry.name),
+                executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer(entry.name),
                     adaptEvmPrecompiled(entry.execute, entry.analyze, 0, entry.precheck)),
                 ledger::Features::Flag::feature_evm_prague});
     }
