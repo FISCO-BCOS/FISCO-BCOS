@@ -386,9 +386,15 @@ struct EVMHostInterface
     {
         if (message->gas < 0)
         {
+            // A wrapped negative gas budget is refused before entering the VM. Answer
+            // deterministically (the v1 callback's arm) instead of throwing out of a
+            // host callback — a raw throw cannot cross evmc::VM::execute's noexcept
+            // boundary.
             EXECUTIVE_LOG(INFO) << LOG_DESC("EVM Gas overflow")
                                 << LOG_KV("message gas:", message->gas);
-            BOOST_THROW_EXCEPTION(protocol::GasOverflow());
+            evmc_result rejected{};
+            rejected.status_code = EVMC_OUT_OF_GAS;
+            return rejected;
         }
 
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);

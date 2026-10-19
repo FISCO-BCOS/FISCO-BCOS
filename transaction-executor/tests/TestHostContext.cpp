@@ -1664,18 +1664,19 @@ BOOST_AUTO_TEST_CASE(create2OpcodeDeploysAtTheHookAddress)
     {
         const char* name;
         bcos::crypto::Hash::Ptr hasher;
-        // Frozen literals (review F17): the expectation must not be computed by the
-        // same helper the hook delegates to — that oracle is self-referential and a
-        // wrong shared formula would pass. Frozen from the first run at 0b9a4d835
-        // (block 0, contextID 0, seq 41 + 1); the sm3 cell is the one that
-        // discriminates against an upstream-keccak revert.
+        // Frozen literals (review F17/R9): the expectation must not be computed by
+        // the same helper the hook delegates to — that oracle is self-referential and
+        // a wrong shared formula would pass. These are CREATE2 addresses for
+        // (creator, salt=0x42, innerInit), computed independently as
+        // hash(0xff || creator || salt || hash(initcode))[12:]; the sm3 cell is the
+        // one that discriminates against an upstream-keccak revert.
         std::string_view expected;
     };
     const std::array<HasherCase, 2> cases{
         HasherCase{"keccak", std::make_shared<bcos::crypto::Keccak256>(),
-            "51ecad688184962f355d19ee5ba27905f06ecd3b"},
+            "3180c619d688ee521b35e938e3dff0a57be39fa9"},
         HasherCase{"sm3", std::make_shared<bcos::crypto::SM3>(),
-            "954a006a3445efe79e69d0f2e5d4c5d6f7dbb23a"},
+            "dd5c3953fefccc05e25d7435ead48b9cc16b6471"},
     };
 
     int64_t hasherIndex = 0;
@@ -1744,6 +1745,13 @@ BOOST_AUTO_TEST_CASE(create2OpcodeDeploysAtTheHookAddress)
         // contract holds the 32-byte runtime the inner init returned.
         auto const expected = callHost.create2AddressForOpcode(
             creatorAddr, salt, bytesConstRef{innerInit.data(), innerInit.size()});
+        // The frozen literal is the ORACLE: recomputing through the same hook would be
+        // self-referential, so a wrong-but-consistent formula would pass (the SM3 cell
+        // is the one that discriminates against an upstream-keccak revert).
+        evmc_address frozenExpected{};
+        boost::algorithm::unhex(std::string(hasherCase.expected), frozenExpected.bytes);
+        BOOST_CHECK(std::equal(std::begin(frozenExpected.bytes), std::end(frozenExpected.bytes),
+            std::begin(expected.bytes)));
         auto size = syncWait(callHost.codeSizeAt(expected));
         BOOST_CHECK_EQUAL(size, 32u);
         ++hasherIndex;

@@ -137,11 +137,6 @@ inline h256 executableCodeKey(bytesConstRef code)
     crypto::Keccak256 hasher;
     return hasher.hash(code);
 }
-inline h256 executableCodeKey(std::string_view code)
-{
-    return executableCodeKey(
-        bytesConstRef(reinterpret_cast<byte const*>(code.data()), code.size()));
-}
 
 using CacheExecutables =
     storage2::memory_storage::MemoryStorage<ExecutableCacheKey, std::shared_ptr<Executable>,
@@ -173,9 +168,10 @@ task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_
             co_return std::move(*executable);
         }
     }
-    // The already-read hash doubles as code()'s key: one row read on this path, not two.
-    auto codeEntry = co_await account.code(
-        storedHash != h256{} ? std::optional<crypto::HashType>{storedHash} : std::nullopt);
+    // The already-read hash doubles as code()'s key on both arms: hash-present skips
+    // the CODE_HASH re-read, and a hash-less account passes the KNOWN-EMPTY hash so
+    // code() also skips the re-read (and turns straight to the legacy CODE field).
+    auto codeEntry = co_await account.code(std::optional<crypto::HashType>{storedHash});
     if (!codeEntry)
     {
         co_return {};
