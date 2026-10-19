@@ -615,8 +615,7 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
         auto web3WsService = buildWsService(std::move(web3Config));
 
         auto web3JsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService,
-            groupManager, false, m_nodeConfig->enableMinerApi(),
-            m_nodeConfig->enableDebugApi());
+            groupManager, false, m_nodeConfig->enableMinerApi(), m_nodeConfig->enableDebugApi());
 
         auto weakPtrWeb3JsonRpc = std::weak_ptr<Web3JsonRpcImpl>(web3JsonRpc);
 

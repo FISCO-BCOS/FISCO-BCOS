@@ -500,7 +500,8 @@ BOOST_AUTO_TEST_CASE(EcotoneFirstBlockFallback)
     putU32BE(slot3, 16, 1'000);  // base_fee_scalar
     putU32BE(slot3, 20, 2'000);  // blob_base_fee_scalar
     auto outSet = runWith({
-        {slotKey(1), wordFromU256(l1BaseFee)}, {slotKey(3), slot3},
+        {slotKey(1), wordFromU256(l1BaseFee)},
+        {slotKey(3), slot3},
         {slotKey(5), wordFromU256(intx::uint256{2'100})},
         {slotKey(6), wordFromU256(intx::uint256{1'000'000})},
         {slotKey(7), wordFromU256(intx::uint256{2'000'000'000})},  // blob_base_fee

@@ -323,43 +323,43 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // total transaction count. Everything is captured by value: asyncGetTotalTransactionCount
     // reaches this callback through task::wait, which does not wait, so the callback can run
     // after this function has returned and its locals are gone.
-    asyncGetTotalTransactionCount([storage, block, setRowCallback, totalCount = totalCount.load(),
-                                      failedCount = failedCount.load(), writeReceiptsTime,
-                                      writeTxsTime](Error::Ptr error, int64_t total, int64_t failed,
-                                      bcos::protocol::BlockNumber) {
-        if (error)
-        {
-            setRowCallback(std::make_unique<Error>(*error), 2);
-            return;
-        }
-        auto totalTxsCount = total + totalCount;
-        Entry totalEntry;
-        totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
-        storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
-            std::move(totalEntry), [setRowCallback](auto&& error) {
-                setRowCallback(std::forward<decltype(error)>(error));
-            });
-        auto failedTxs = failed + failedCount;
-        if (failedCount != 0)
-        {
-            Entry failedEntry;
-            failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
-            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
-                std::move(failedEntry), [setRowCallback](auto&& error) {
+    asyncGetTotalTransactionCount(
+        [storage, block, setRowCallback, totalCount = totalCount.load(),
+            failedCount = failedCount.load(), writeReceiptsTime, writeTxsTime](
+            Error::Ptr error, int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
+            if (error)
+            {
+                setRowCallback(std::make_unique<Error>(*error), 2);
+                return;
+            }
+            auto totalTxsCount = total + totalCount;
+            Entry totalEntry;
+            totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
+            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
+                std::move(totalEntry), [setRowCallback](auto&& error) {
                     setRowCallback(std::forward<decltype(error)>(error));
                 });
-        }
-        else
-        {
-            setRowCallback({}, true);
-        }
-        LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
-                         << LOG_KV("number", block->blockHeader()->number())
-                         << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
-                         << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount)
-                         << LOG_KV("writeReceiptsMs", writeReceiptsTime)
-                         << LOG_KV("writeTxsMs", writeTxsTime);
-    });
+            auto failedTxs = failed + failedCount;
+            if (failedCount != 0)
+            {
+                Entry failedEntry;
+                failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
+                storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
+                    std::move(failedEntry), [setRowCallback](auto&& error) {
+                        setRowCallback(std::forward<decltype(error)>(error));
+                    });
+            }
+            else
+            {
+                setRowCallback({}, true);
+            }
+            LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
+                             << LOG_KV("number", block->blockHeader()->number())
+                             << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
+                             << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount)
+                             << LOG_KV("writeReceiptsMs", writeReceiptsTime)
+                             << LOG_KV("writeTxsMs", writeTxsTime);
+        });
 }
 
 task::Task<std::optional<ledger::StorageState>> Ledger::getStorageState(

@@ -142,9 +142,7 @@ public:
         // heartbeat timer removed: no longer needed
     }
 
-    void stop()
-    {
-    }
+    void stop() {}
 
 public:
     const std::string& serviceName() const { return m_serviceName; }

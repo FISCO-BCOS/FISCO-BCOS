@@ -39,8 +39,8 @@ bcostars::Error RpcServiceServer::asyncNotifyGroupInfo(
 }
 
 bcostars::Error RpcServiceServer::asyncNotifyAMOPMessage(tars::Int32 _type,
-    const std::string& _topic, const std::vector<tars::Char>& _requestData, std::vector<tars::Char>&,
-    tars::TarsCurrentPtr current)
+    const std::string& _topic, const std::vector<tars::Char>& _requestData,
+    std::vector<tars::Char>&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     auto rpc = m_rpcInitializer->rpc();
@@ -53,8 +53,7 @@ bcostars::Error RpcServiceServer::asyncNotifyAMOPMessage(tars::Int32 _type,
         try
         {
             auto [error, responseData] = co_await _rpc->notifyAMOPMessage(_type, _topic,
-                bcos::bytesConstRef(
-                    (const bcos::byte*)_requestData->data(), _requestData->size()));
+                bcos::bytesConstRef((const bcos::byte*)_requestData->data(), _requestData->size()));
             std::vector<tars::Char> response;
             if (responseData)
             {
@@ -64,11 +63,11 @@ bcostars::Error RpcServiceServer::asyncNotifyAMOPMessage(tars::Int32 _type,
         }
         catch (std::exception const& e)
         {
-            RPCSERVICE_LOG(WARNING) << LOG_DESC("asyncNotifyAMOPMessage exception")
-                                    << LOG_KV("topic", _topic)
-                                    << LOG_KV("what", boost::diagnostic_information(e));
-            async_response_asyncNotifyAMOPMessage(_current,
-                toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))), {});
+            RPCSERVICE_LOG(WARNING)
+                << LOG_DESC("asyncNotifyAMOPMessage exception") << LOG_KV("topic", _topic)
+                << LOG_KV("what", boost::diagnostic_information(e));
+            async_response_asyncNotifyAMOPMessage(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))), {});
         }
     }(rpc, _type, _topic, requestData, current));
     return bcostars::Error();

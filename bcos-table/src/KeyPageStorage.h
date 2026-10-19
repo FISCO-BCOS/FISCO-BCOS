@@ -22,6 +22,7 @@
 
 #include "StateStorageInterface.h"
 #include <bcos-framework/storage/Serialize.h>
+#include <bcos-utilities/BoostLog.h>
 #include <fmt/format.h>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -48,7 +49,6 @@
 #include <string_view>
 #include <thread>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
 
 #define KeyPage_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-KeyPage]"
 namespace std
@@ -247,7 +247,8 @@ public:
             }
             boost::iostreams::stream<boost::iostreams::array_source> inputStream(
                 value.data(), value.size());
-            boost::archive::binary_iarchive archive(inputStream, bcos::storage::serialize::ARCHIVE_FLAG);
+            boost::archive::binary_iarchive archive(
+                inputStream, bcos::storage::serialize::ARCHIVE_FLAG);
             archive >> *this;
         }
         TableMeta(const TableMeta& meta)
@@ -556,7 +557,8 @@ public:
             }
             boost::iostreams::stream<boost::iostreams::array_source> inputStream(
                 value.data(), value.size());
-            boost::archive::binary_iarchive archive(inputStream, bcos::storage::serialize::ARCHIVE_FLAG);
+            boost::archive::binary_iarchive archive(
+                inputStream, bcos::storage::serialize::ARCHIVE_FLAG);
             archive >> *this;
             if (pageKey != entries.rbegin()->first)
             {

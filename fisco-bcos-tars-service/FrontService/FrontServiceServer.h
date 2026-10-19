@@ -32,13 +32,15 @@ public:
     void asyncSendBroadcastMessage(tars::Int32 _nodeType, tars::Int32 moduleID,
         const std::vector<tars::Char>& data, tars::TarsCurrentPtr current) override;
 
-    bcostars::Error asyncSendMessageByNodeID(tars::Int32 moduleID, const std::vector<tars::Char>& nodeID,
-        const std::vector<tars::Char>& data, tars::UInt32 timeout, tars::Bool requireRespCallback,
-        std::vector<tars::Char>& responseNodeID, std::vector<tars::Char>& responseData, std::string& seq,
-        tars::TarsCurrentPtr current) override;
+    bcostars::Error asyncSendMessageByNodeID(tars::Int32 moduleID,
+        const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data,
+        tars::UInt32 timeout, tars::Bool requireRespCallback,
+        std::vector<tars::Char>& responseNodeID, std::vector<tars::Char>& responseData,
+        std::string& seq, tars::TarsCurrentPtr current) override;
 
-    void asyncSendMessageByNodeIDs(tars::Int32 moduleID, const std::vector<std::vector<tars::Char>>& nodeIDs,
-        const std::vector<tars::Char>& data, tars::TarsCurrentPtr current) override;
+    void asyncSendMessageByNodeIDs(tars::Int32 moduleID,
+        const std::vector<std::vector<tars::Char>>& nodeIDs, const std::vector<tars::Char>& data,
+        tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncSendResponse(const std::string& id, tars::Int32 moduleID,
         const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data,
@@ -47,8 +49,9 @@ public:
         const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data,
         tars::TarsCurrentPtr current) override;
 
-    bcostars::Error onReceiveMessage(const std::string& groupID, const std::vector<tars::Char>& nodeID,
-        const std::vector<tars::Char>& data, tars::TarsCurrentPtr current) override;
+    bcostars::Error onReceiveMessage(const std::string& groupID,
+        const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data,
+        tars::TarsCurrentPtr current) override;
 
     bcostars::Error onReceiveGroupNodeInfo(const std::string& groupID,
         const bcostars::GroupNodeInfo& groupNodeInfo, tars::TarsCurrentPtr current) override;

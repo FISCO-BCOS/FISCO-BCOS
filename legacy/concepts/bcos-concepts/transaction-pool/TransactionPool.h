@@ -1,8 +1,8 @@
 #pragma once
 
-#include <bcos-concepts/Basic.h>
 #include "../protocol/Receipt.h"
 #include "../protocol/Transaction.h"
+#include <bcos-concepts/Basic.h>
 
 namespace bcos::concepts::transacton_pool
 {
@@ -29,6 +29,6 @@ private:
 
 template <class Impl>
 concept TransactionPool = std::derived_from<Impl, TransactionPoolBase<Impl>> ||
-    std::derived_from<typename Impl::element_type,
-        TransactionPoolBase<typename Impl::element_type>>;
+                          std::derived_from<typename Impl::element_type,
+                              TransactionPoolBase<typename Impl::element_type>>;
 }  // namespace bcos::concepts::transacton_pool

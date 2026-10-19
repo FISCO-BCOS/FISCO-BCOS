@@ -230,8 +230,8 @@ public:
         // This fixture drives the Ethereum lane (executor_version = 2), where finishExecute
         // commits the txsRoot over EIP-2718 wire bytes (calculateEthereumTransactionRoot) —
         // it throws on a FISCO-shaped payload, so the filler transaction is Web3-shaped.
-        block->appendTransaction(bcos::test::sharedmock::makeWeb3FillerTx(
-            static_cast<uint64_t>(number), *hashImpl));
+        block->appendTransaction(
+            bcos::test::sharedmock::makeWeb3FillerTx(static_cast<uint64_t>(number), *hashImpl));
 
         Error::Ptr execError;
         protocol::BlockHeader::Ptr executedHeader;

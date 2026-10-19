@@ -28,8 +28,7 @@ using namespace bcos::rpc;
 void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber latest,
     protocol::BlockNumber safeDepth, protocol::BlockNumber finalizedDepth,
     std::optional<protocol::BlockNumber> forkchoiceSafe,
-    std::optional<protocol::BlockNumber> forkchoiceFinalized,
-    bool failClosedOnMissingForkchoice)
+    std::optional<protocol::BlockNumber> forkchoiceFinalized, bool failClosedOnMissingForkchoice)
 {
     // check params
     if (!jParams.isMember("fromBlock") || jParams["fromBlock"].isNull())
@@ -57,14 +56,14 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
     }
 
     // prase fromBlock
-    std::tie(m_fromBlock, m_fromIsLatest) = getBlockNumberByTag(latest,
-        jParams["fromBlock"].asString(), safeDepth, finalizedDepth, forkchoiceSafe,
-        forkchoiceFinalized, failClosedOnMissingForkchoice);
+    std::tie(m_fromBlock, m_fromIsLatest) =
+        getBlockNumberByTag(latest, jParams["fromBlock"].asString(), safeDepth, finalizedDepth,
+            forkchoiceSafe, forkchoiceFinalized, failClosedOnMissingForkchoice);
 
     // prase toBlock
-    std::tie(m_toBlock, m_toIsLatest) = getBlockNumberByTag(latest,
-        jParams["toBlock"].asString(), safeDepth, finalizedDepth, forkchoiceSafe,
-        forkchoiceFinalized, failClosedOnMissingForkchoice);
+    std::tie(m_toBlock, m_toIsLatest) =
+        getBlockNumberByTag(latest, jParams["toBlock"].asString(), safeDepth, finalizedDepth,
+            forkchoiceSafe, forkchoiceFinalized, failClosedOnMissingForkchoice);
 
     // prase address
     auto& jAddresses = jParams["address"];

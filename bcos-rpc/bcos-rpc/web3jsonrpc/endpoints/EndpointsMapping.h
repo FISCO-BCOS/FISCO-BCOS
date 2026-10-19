@@ -40,8 +40,8 @@ public:
     /// debug_executePayload) on THIS listener only, behind the same per-listener convention
     /// ([engine_rpc] vs [web3_rpc] enable_debug_api). Off by default — it serves the
     /// fault-proof preimage oracle (kona-host), not general clients.
-    EndpointsMapping(bool enableOPEngine = false, bool enableMinerApi = false,
-        bool enableDebugApi = false)
+    EndpointsMapping(
+        bool enableOPEngine = false, bool enableMinerApi = false, bool enableDebugApi = false)
     {
         addHandlers(enableOPEngine, enableMinerApi, enableDebugApi);
     };
@@ -52,8 +52,8 @@ public:
     [[nodiscard]] std::optional<Handler> findHandler(const std::string& _method) const;
 
 private:
-    void addHandlers(bool enableOPEngine = false, bool enableMinerApi = false,
-        bool enableDebugApi = false);
+    void addHandlers(
+        bool enableOPEngine = false, bool enableMinerApi = false, bool enableDebugApi = false);
     void addEngineHandlers();
     void addEthHandlers();
     void addMinerHandlers();

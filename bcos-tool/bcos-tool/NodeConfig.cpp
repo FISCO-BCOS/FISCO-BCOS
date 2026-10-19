@@ -192,18 +192,17 @@ std::string ethLaneChainId(boost::property_tree::ptree const& genesis)
 /// while the OP schedule's keys and the L1 merge_block (a block number, where the
 /// sentinel would silently mean "pre-merge forever") refuse it (fail-closed,
 /// @c refuseSentinel=true).
-uint64_t parseForkTimestamp(
-    std::string const& section, std::string const& key, std::string const& value,
-    bool refuseSentinel)
+uint64_t parseForkTimestamp(std::string const& section, std::string const& key,
+    std::string const& value, bool refuseSentinel)
 {
     // One acceptance window with the other loaders and the canonical-channel codec
     // (ledger::parseConfigUint64): decimal or 0x-hex, the whole string consumed, with the
     // not-scheduled sentinel refused only where the caller asks for it (the OP lane).
-    auto const parsed = ledger::parseConfigUint64(value,
-        ledger::ConfigUint64Options{.allowHex = true,
-            .maxValue = std::numeric_limits<uint64_t>::max(),
-            .refuseSentinel = refuseSentinel,
-            .sentinel = ledger::c_opForkTimeUnset});
+    auto const parsed =
+        ledger::parseConfigUint64(value, ledger::ConfigUint64Options{.allowHex = true,
+                                             .maxValue = std::numeric_limits<uint64_t>::max(),
+                                             .refuseSentinel = refuseSentinel,
+                                             .sentinel = ledger::c_opForkTimeUnset});
     if (parsed.error == ledger::ConfigUint64Error::sentinel)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -1668,8 +1667,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // part of the genesis pin (only the required london..prague ladder is pinned), so
     // configuring one later does not trip the restart comparison.
     auto readOptionalTs = [&](std::string const& key, uint64_t& out) {
-        out = readOptionalForkTimestamp(
-            *section, "fork_timestamps", key, /*refuseSentinel=*/false);
+        out = readOptionalForkTimestamp(*section, "fork_timestamps", key, /*refuseSentinel=*/false);
     };
 
     ledger::EthereumForkSchedule schedule;

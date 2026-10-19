@@ -294,12 +294,13 @@ BOOST_AUTO_TEST_CASE(forkTimestampsPinSkipsNotScheduledSentinel)
     // Shanghai-era chain: cancun/prague unscheduled -> omitted from the pin.
     NodeConfig shanghaiEra(keyFactory);
     BOOST_REQUIRE_NO_THROW(shanghaiEra.loadGenesisConfigFromString(
-        base + "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-               "cancun_time=18446744073709551615\nprague_time=18446744073709551615\n"
-               "merge_block=0\n" +
+        base +
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=18446744073709551615\nprague_time=18446744073709551615\n"
+        "merge_block=0\n" +
         ethLaneGenesisSections()));
-    auto sentinelData = bcos::tool::generateGenesisData(
-        shanghaiEra.genesisConfig(), *shanghaiEra.ledgerConfig());
+    auto sentinelData =
+        bcos::tool::generateGenesisData(shanghaiEra.genesisConfig(), *shanghaiEra.ledgerConfig());
     BOOST_CHECK(sentinelData.find("[forkTimestamps]") != std::string::npos);
     BOOST_CHECK(sentinelData.find("london_time:0") != std::string::npos);
     BOOST_CHECK(sentinelData.find("paris_time:0") != std::string::npos);
@@ -311,9 +312,10 @@ BOOST_AUTO_TEST_CASE(forkTimestampsPinSkipsNotScheduledSentinel)
     // pre-change emission.
     NodeConfig full(keyFactory);
     BOOST_REQUIRE_NO_THROW(full.loadGenesisConfigFromString(
-        base + "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-               "cancun_time=1710338135\nprague_time=1746612311\n"
-               "merge_block=0\n" +
+        base +
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n" +
         ethLaneGenesisSections()));
     auto fullData = bcos::tool::generateGenesisData(full.genesisConfig(), *full.ledgerConfig());
     BOOST_CHECK(fullData.find("[forkTimestamps]\nlondon_time:0\nparis_time:0\n"
@@ -621,8 +623,7 @@ BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
             "[web3_rpc]\nenable_debug_api=true\n"
             "[storage]\nmpt_prune_window=300\n");
         BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "enable_debug_api requires storage.mpt_prune_window = -1");
+            return errinfoContains(e, "enable_debug_api requires storage.mpt_prune_window = -1");
         });
     }
     // The Engine API (8551) listener's own key is gated identically — "either listener" is the
@@ -633,8 +634,7 @@ BOOST_AUTO_TEST_CASE(enableDebugApiRequiresArchivePruneWindow)
             "[engine_rpc]\nenable_debug_api=true\n"
             "[storage]\nmpt_prune_window=300\n");
         BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "enable_debug_api requires storage.mpt_prune_window = -1");
+            return errinfoContains(e, "enable_debug_api requires storage.mpt_prune_window = -1");
         });
     }
     // Archive (the -1 default) with the namespace on: accepted.
@@ -776,8 +776,9 @@ BOOST_AUTO_TEST_CASE(forkTimestampsAcceptNotScheduledSentinel)
     {
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
-            base + "cancun_time=18446744073709551615\nprague_time=18446744073709551615\n"
-                   "merge_block=0\n" +
+            base +
+            "cancun_time=18446744073709551615\nprague_time=18446744073709551615\n"
+            "merge_block=0\n" +
             ethLaneGenesisSections()));
         auto const& schedule = cfg.genesisConfig().m_ethereumForkSchedule;
         BOOST_REQUIRE(schedule.has_value());
@@ -789,8 +790,9 @@ BOOST_AUTO_TEST_CASE(forkTimestampsAcceptNotScheduledSentinel)
     {
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
-            base + "cancun_time=0xffffffffffffffff\nprague_time=0xffffffffffffffff\n"
-                   "merge_block=0\n" +
+            base +
+            "cancun_time=0xffffffffffffffff\nprague_time=0xffffffffffffffff\n"
+            "merge_block=0\n" +
             ethLaneGenesisSections()));
         BOOST_CHECK_EQUAL(cfg.genesisConfig().m_ethereumForkSchedule->m_cancunTime,
             std::numeric_limits<uint64_t>::max());

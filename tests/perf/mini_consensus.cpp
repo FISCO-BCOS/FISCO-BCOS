@@ -134,9 +134,9 @@ void initAndStart(std::string const& _configFilePath, std::string const& _genesi
 
     // init the txpool
     auto ioServicePool = std::make_shared<IOServicePool>(1, "miniConsensus");
-    auto txpoolInitializer = std::make_shared<TxPoolInitializer>(nodeConfig,
-        nodeInitializer->protocolInitializer(), frontServiceInitializer->front(), ledger,
-        *ioServicePool->getIOService());
+    auto txpoolInitializer =
+        std::make_shared<TxPoolInitializer>(nodeConfig, nodeInitializer->protocolInitializer(),
+            frontServiceInitializer->front(), ledger, *ioServicePool->getIOService());
 
     auto nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
     auto consensusStoragePath = nodeConfig->storagePath() + "/consensus_log";

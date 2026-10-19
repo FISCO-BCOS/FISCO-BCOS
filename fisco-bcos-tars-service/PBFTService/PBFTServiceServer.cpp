@@ -42,7 +42,8 @@ bcostars::Error PBFTServiceServer::asyncCheckBlock(
     return bcostars::Error();
 }
 
-bcostars::Error PBFTServiceServer::asyncGetPBFTView(tars::Int64& _view, tars::TarsCurrentPtr _current)
+bcostars::Error PBFTServiceServer::asyncGetPBFTView(
+    tars::Int64& _view, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
     m_pbftInitializer->pbft()->asyncGetPBFTView(

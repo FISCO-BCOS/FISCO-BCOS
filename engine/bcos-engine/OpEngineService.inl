@@ -25,8 +25,8 @@
 // engine links rlp-protocol PUBLIC so installed consumers inherit the include dirs;
 // instantiators still need to link opstack-executor.
 #include "OpEngineService.h"
-#include <opstack-executor/OpRollupCost.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <opstack-executor/OpRollupCost.h>
 
 #include <iterator>
 #include <range/v3/algorithm/any_of.hpp>

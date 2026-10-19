@@ -151,8 +151,7 @@ void SingleNodeConsensus::loop()
         {
             SINGLE_CONSENSUS_LOG(ERROR)
                 << LOG_DESC("produceBlock iteration threw (unknown)")
-                << LOG_KV("diagnostic",
-                    boost::current_exception_diagnostic_information());
+                << LOG_KV("diagnostic", boost::current_exception_diagnostic_information());
         }
         // Drain the mempool as fast as possible when transactions are available (a tx is
         // sealed immediately after submission instead of waiting for the next interval
@@ -203,8 +202,7 @@ void SingleNodeConsensus::resolveInitialHead()
     auto [headHeaderError, headBlock] = headerPromise->wait(m_running);
     if (!headHeaderError && headBlock && headBlock->blockHeader())
     {
-        m_lastTimestamp =
-            static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
+        m_lastTimestamp = static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
     }
 
     m_headInitialized = true;

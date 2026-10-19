@@ -41,21 +41,26 @@ execute_cmd() {
   fi
 }
 
+# the version CI checks with (tools/.ci/clang-format-version): other versions break lines
+# differently and the CI check would reject their output. The hook runs from .git/hooks, so the
+# file is read from the work tree.
+clang_format_version=$(cat "$(git rev-parse --show-toplevel)/tools/.ci/clang-format-version")
+
 function check_codeFormat() {
   # if clang-format command not exist, print log and return directly
   if ! command -v ${check_script} &>/dev/null; then
     LOG_INFO "clang-format command not found, please install it, skip by default."
     exit 0
   fi
-  # if clang-format first version less than 15 skip check
-  if [ $(clang-format --version | awk '{print $3}' | awk -F '.' '{print $1}') -lt 15 ]; then
-    LOG_INFO "clang-format version less than 15, skip check."
+  local version=$(${check_script} --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
+  if [ "${version}" != "${clang_format_version}" ]; then
+    LOG_INFO "clang-format ${version} is not ${clang_format_version} (CI's version), skip check: pip install clang-format==${clang_format_version}"
     exit 0
   fi
   # Redirect output to stderr.
   exec 1>&2
   sum=0
-  for file in $(git diff-index --name-status HEAD -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
+  for file in $(git diff-index --name-only --diff-filter=d HEAD -- | grep -E '\.([ch](pp)?|inl)$' | grep -vE '^ports/'); do
     clang-format -style=file -i $file --dry-run --Werror
     sum=$(expr ${sum} + $?)
     execute_cmd "$check_script -style=file -i $file"

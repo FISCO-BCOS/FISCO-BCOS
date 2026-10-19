@@ -8,12 +8,11 @@ namespace bcos::crypto::digestsign
 {
 
 template <class DigestSignType>
-concept DigestSign = requires(DigestSignType digestSign)
-{
+concept DigestSign = requires(DigestSignType digestSign) {
     typename DigestSignType::Key;
     typename DigestSignType::Sign;
 
-    digestSign.sign(typename DigestSignType::Key const& key, trivial::Object auto const& hash);
+    digestSign.sign(typename DigestSignType::Key const & key, trivial::Object auto const & hash);
 };
 
 }  // namespace bcos::crypto::digestsign

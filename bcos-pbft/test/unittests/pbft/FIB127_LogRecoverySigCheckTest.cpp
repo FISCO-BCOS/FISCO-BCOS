@@ -45,8 +45,8 @@ class TestPBFTLogSync : public PBFTLogSync
 {
 public:
     using Ptr = std::shared_ptr<TestPBFTLogSync>;
-    TestPBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _cache,
-        bcos::IOServicePool::Ptr _pool)
+    TestPBFTLogSync(
+        PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _cache, bcos::IOServicePool::Ptr _pool)
       : PBFTLogSync(_config, _cache, std::move(_pool))
     {}
     void testOnRecvCommittedProposalsResponse(bcos::Error::Ptr _error,
