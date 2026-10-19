@@ -19,10 +19,10 @@
  * @date 2025-09-25
  */
 
+#include "bcos-gateway/Gateway.h"
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-gateway/Gateway.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
@@ -481,16 +481,15 @@ BOOST_AUTO_TEST_CASE(testErrorHandlingScenarios)
     bcos::bytes testData = {0x1, 0x2, 0x3};
 
     // First call should succeed
-    auto [firstError, firstCode, firstResponse] = bcos::task::syncWait(
-        amopRef.sendMessageByTopic("testTopic", bcos::bytesConstRef(testData.data(),
-            testData.size())));
+    auto [firstError, firstCode, firstResponse] = bcos::task::syncWait(amopRef.sendMessageByTopic(
+        "testTopic", bcos::bytesConstRef(testData.data(), testData.size())));
     BOOST_CHECK(firstError == nullptr && firstCode == 0);
     BOOST_CHECK(firstResponse.empty());
 
     // Second call should fail
-    auto [secondError, secondCode, secondResponse] = bcos::task::syncWait(
-        amopRef.sendMessageByTopic("testTopic", bcos::bytesConstRef(testData.data(),
-            testData.size())));
+    auto [secondError, secondCode, secondResponse] =
+        bcos::task::syncWait(amopRef.sendMessageByTopic(
+            "testTopic", bcos::bytesConstRef(testData.data(), testData.size())));
     BOOST_CHECK(secondError != nullptr && secondCode == -2);
     BOOST_CHECK(secondResponse.empty());
 

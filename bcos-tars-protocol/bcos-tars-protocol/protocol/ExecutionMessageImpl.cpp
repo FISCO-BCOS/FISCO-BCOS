@@ -378,8 +378,7 @@ std::string_view bcostars::protocol::ExecutionMessageImpl::delegateCallSender() 
     return m_inner()->delegateCallSender;
 }
 
-void bcostars::protocol::ExecutionMessageImpl::setDelegateCallSender(
-    std::string delegateCallSender)
+void bcostars::protocol::ExecutionMessageImpl::setDelegateCallSender(std::string delegateCallSender)
 {
     m_inner()->delegateCallSender = std::move(delegateCallSender);
 }

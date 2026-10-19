@@ -108,8 +108,7 @@ std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
 std::optional<std::string> matchReconstructedEthBlockHash(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const std::optional<bcos::h256>& parentBeaconBlockRoot,
-    bcos::protocol::EthBlockVersion forkVersion,
-    std::optional<bcos::h256> requestsHash = {});
+    bcos::protocol::EthBlockVersion forkVersion, std::optional<bcos::h256> requestsHash = {});
 /// Stamp Eth constants and fork-gated fields, then compute the RLP hash.
 /// @p withdrawalsRoot, when set, overrides withdrawalsRootFor (cache-miss
 /// reconstruction prefers the submitted header field). @p requestsHash, when set,
@@ -234,8 +233,7 @@ public:
     /// fee, excess blob gas, header fork era) from the committed parent header at the
     /// new block's timestamp (SECONDS, the Ethereum wire unit).
     virtual task::Task<ExternalL1Context> deriveL1Context(
-        bcos::protocol::EthBlockHeaderData const& parentHeader,
-        int64_t timestampSeconds) = 0;
+        bcos::protocol::EthBlockHeaderData const& parentHeader, int64_t timestampSeconds) = 0;
     /// Phase 4 (EL block building): execute the assembled block into the caller's view
     /// — block-start system calls, transactions, withdrawals, block-end system calls,
     /// the deterministic roots and the MPT delta — without verifying or committing

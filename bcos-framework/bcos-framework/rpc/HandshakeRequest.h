@@ -21,10 +21,10 @@
 #pragma once
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-utilities/BoostLog.h>
 #include <fmt/format.h>
 #include <json/json.h>
 #include <memory>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::rpc
 {

@@ -151,12 +151,8 @@ constexpr static auto c_systemTxsAddress =
 template <class Arg, class Range>
 bool contains(Range const& args, Arg const& arg)
     requires requires(Range const& r) {
-        {
-            r.begin()
-        } -> std::input_iterator;
-        {
-            r.end()
-        } -> std::input_iterator;
+        { r.begin() } -> std::input_iterator;
+        { r.end() } -> std::input_iterator;
     } && std::same_as<std::decay_t<decltype(*args.begin())>, std::decay_t<Arg>>
 {
     return std::binary_search(args.begin(), args.end(), arg);

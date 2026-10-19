@@ -80,9 +80,8 @@ public:
     using CheckpointName = bcos::h256;
 
 
-    explicit CheckpointRocksDBStorage(
-        std::string_view rootDir, KeyResolver keyResolver = {}, ValueResolver valueResolver = {},
-        RocksDBCheckpointOption option = {})
+    explicit CheckpointRocksDBStorage(std::string_view rootDir, KeyResolver keyResolver = {},
+        ValueResolver valueResolver = {}, RocksDBCheckpointOption option = {})
       : m_path(std::filesystem::path(rootDir).lexically_normal().string()),
         m_option(std::move(option)),
         m_cache(::rocksdb::NewLRUCache(m_option.blockCacheSize)),

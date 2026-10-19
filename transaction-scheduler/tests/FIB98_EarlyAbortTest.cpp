@@ -17,10 +17,10 @@
  * @brief Verify that createContexts aborts early when m_hasRAW is set (FIB-98)
  */
 
+#include "TrivialCheckpointStorage.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
-#include "TrivialCheckpointStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -29,9 +29,9 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
+#include <boost/atomic.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
-#include <boost/atomic.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -82,8 +82,7 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
-    using CheckpointBackend =
-        TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
+    using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 
     FIB98Fixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
@@ -132,8 +131,7 @@ BOOST_AUTO_TEST_CASE(createContextsAbortsWhenHasRAWIsSet)
 
         using ContextIterator = ::ranges::iterator_t<decltype(contexts)>;
         using ContextRange = ::ranges::subrange<ContextIterator>;
-        using BackendStorageType =
-            std::remove_reference_t<decltype(view.backendStorageRef())>;
+        using BackendStorageType = std::remove_reference_t<decltype(view.backendStorageRef())>;
         using ChunkType =
             ChunkStatus<MutableStorage, BackendStorageType, CountingExecutor, ContextRange>;
 

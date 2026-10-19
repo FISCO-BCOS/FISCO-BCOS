@@ -22,6 +22,7 @@
 #pragma once
 
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -34,7 +35,6 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>

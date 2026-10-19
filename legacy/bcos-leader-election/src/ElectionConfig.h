@@ -39,9 +39,7 @@ public:
         bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _purpose,
         boost::asio::io_context& _ioContext, std::string const& _caPath = "",
         std::string const& _certPath = "", std::string const& _keyPath = "")
-      : m_memberFactory(_memberFactory),
-        m_purpose(_purpose),
-        m_ioContext(&_ioContext)
+      : m_memberFactory(_memberFactory), m_purpose(_purpose), m_ioContext(&_ioContext)
     {
         if (!_caPath.empty() && !_certPath.empty() && !_keyPath.empty())
         {

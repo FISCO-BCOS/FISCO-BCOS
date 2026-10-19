@@ -21,13 +21,13 @@ struct StateValueResolver
     }
     static storage::Entry decode(std::string_view view)
     {
-        return storage::Entry::decode(bytesConstRef(
-            reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
+        return storage::Entry::decode(
+            bytesConstRef(reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
     }
     static storage::Entry decode(std::string buffer)
     {
-        return storage::Entry::decode(bytesConstRef(
-            reinterpret_cast<const bcos::byte*>(buffer.data()), buffer.size()));
+        return storage::Entry::decode(
+            bytesConstRef(reinterpret_cast<const bcos::byte*>(buffer.data()), buffer.size()));
     }
 };
 

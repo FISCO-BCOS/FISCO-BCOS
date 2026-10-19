@@ -47,8 +47,8 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     m_syncArchivedBlockBody(_syncArchivedBlockBody)
 {}
 
-BlockSync::Ptr BlockSyncFactory::createBlockSync(boost::asio::io_context& _ioContext,
-    bcos::IOServicePool::Ptr _ioServicePool)
+BlockSync::Ptr BlockSyncFactory::createBlockSync(
+    boost::asio::io_context& _ioContext, bcos::IOServicePool::Ptr _ioServicePool)
 {
     auto msgFactory = std::make_shared<BlockSyncMsgFactoryImpl>();
     auto syncConfig = std::make_shared<BlockSyncConfig>(m_nodeId, m_ledger, m_txpool,

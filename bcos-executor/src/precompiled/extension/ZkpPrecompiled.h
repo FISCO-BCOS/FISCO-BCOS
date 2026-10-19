@@ -45,7 +45,7 @@ class ZkpPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<ZkpPrecompiled>;
     ZkpPrecompiled(bcos::crypto::Hash::Ptr _hashImpl);
-    ~ZkpPrecompiled() override{};
+    ~ZkpPrecompiled() override {};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,

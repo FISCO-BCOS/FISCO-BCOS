@@ -141,21 +141,22 @@ public:
             return;
         }
 
-        m_ioServicePool->post([executor = m_executor, schedulerTermId,
-                           blockHeader = std::move(blockHeader), callback = std::move(callback)]() {
-            // create a holder
-            auto _holdExecutorCallback = [executorHolder = executor, callback =
-                                                                         std::move(callback)](
-                                             bcos::Error::UniquePtr error) {
-                EXECUTOR_LOG(TRACE)
-                    << "Release executor holder" << LOG_KV("ptr count", executorHolder.use_count());
-                callback(std::move(error));
-            };
+        m_ioServicePool->post(
+            [executor = m_executor, schedulerTermId, blockHeader = std::move(blockHeader),
+                callback = std::move(callback)]() {
+                // create a holder
+                auto _holdExecutorCallback = [executorHolder = executor, callback =
+                                                                             std::move(callback)](
+                                                 bcos::Error::UniquePtr error) {
+                    EXECUTOR_LOG(TRACE) << "Release executor holder"
+                                        << LOG_KV("ptr count", executorHolder.use_count());
+                    callback(std::move(error));
+                };
 
-            // execute the function
-            executor->nextBlockHeader(
-                schedulerTermId, blockHeader, std::move(_holdExecutorCallback));
-        });
+                // execute the function
+                executor->nextBlockHeader(
+                    schedulerTermId, blockHeader, std::move(_holdExecutorCallback));
+            });
     }
 
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -376,7 +377,7 @@ public:
             inputsVec->emplace_back(std::move(inputs[i]));
         }
         m_ioServicePool->post([executor = m_executor, contractAddress = std::move(contractAddress),
-                           inputsVec, callback = std::move(callback)] {
+                                  inputsVec, callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback =
                 [executorHolder = executor, callback = std::move(callback)](
@@ -515,7 +516,7 @@ public:
         }
 
         m_ioServicePool->post([executor = m_executor, params = bcos::protocol::TwoPCParams(params),
-                           callback = std::move(callback)] {
+                                  callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -550,7 +551,7 @@ public:
         }
 
         m_ioServicePool->post([executor = m_executor, params = bcos::protocol::TwoPCParams(params),
-                           callback = std::move(callback)] {
+                                  callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -585,7 +586,7 @@ public:
         }
 
         m_ioServicePool->post([executor = m_executor, params = bcos::protocol::TwoPCParams(params),
-                           callback = std::move(callback)] {
+                                  callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -643,7 +644,7 @@ public:
         auto currentExecutor = getAndNewExecutorIfNotExists();
 
         m_ioServicePool->post([executor = currentExecutor, contract = std::string(contract),
-                           callback = std::move(callback)] {
+                                  callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](
@@ -672,7 +673,7 @@ public:
         auto currentExecutor = getAndNewExecutorIfNotExists();
 
         m_ioServicePool->post([executor = currentExecutor, contract = std::string(contract),
-                           callback = std::move(callback)] {
+                                  callback = std::move(callback)] {
             // create a holder
             auto _holdExecutorCallback = [executorHolder = executor, callback =
                                                                          std::move(callback)](

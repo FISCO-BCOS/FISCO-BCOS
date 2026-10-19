@@ -58,8 +58,7 @@ void RateReporter::stop()
 void RateReporter::report()
 {
     auto& stat = m_rateReporterStat;
-    BCOS_LOG(INFO) << LOG_BADGE("RateReporter")
-                   << LOG_BADGE(m_moduleName)
+    BCOS_LOG(INFO) << LOG_BADGE("RateReporter") << LOG_BADGE(m_moduleName)
                    << LOG_KV("lastCount", stat.lastCount)
                    << LOG_KV("lastTotalDataSize", stat.lastTotalDataSize)
                    << LOG_KV("lastFailedCount", stat.lastFailedCount)

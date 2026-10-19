@@ -1,8 +1,7 @@
-#include <legacy/bcos-ledger/LedgerImpl.h>
-#include <bcos-concepts/ByteBuffer.h>
-#include <bcos-concepts/Serialize.h>
 #include "../../concepts/bcos-concepts/ledger/Ledger.h"
 #include "../../concepts/bcos-concepts/storage/Storage.h"
+#include <bcos-concepts/ByteBuffer.h>
+#include <bcos-concepts/Serialize.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
@@ -16,6 +15,7 @@
 #include <bcos-tars-protocol/tars/TransactionMetaData.h>
 #include <bcos-tars-protocol/tars/TransactionReceipt.h>
 #include <bcos-task/Wait.h>
+#include <legacy/bcos-ledger/LedgerImpl.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
@@ -68,7 +68,7 @@ struct MockMemoryStorage : bcos::concepts::storage::StorageBase<MockMemoryStorag
 {
     MockMemoryStorage(
         std::map<std::tuple<std::string, std::string>, bcos::storage::Entry, std::less<>>& data1)
-      : bcos::concepts::storage::StorageBase<MockMemoryStorage>(), data(data1){};
+      : bcos::concepts::storage::StorageBase<MockMemoryStorage>(), data(data1) {};
 
     std::optional<bcos::storage::Entry> impl_getRow(std::string_view table, std::string_view key)
     {
@@ -189,8 +189,7 @@ BOOST_AUTO_TEST_CASE(getBlock)
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, storage, nullptr, nullptr, 1000};
 
     bcostars::Block block;
-    bcos::task::syncWait(
-        ledger
+    bcos::task::syncWait(ledger
             .getBlock<bcos::concepts::ledger::HEADER, bcos::concepts::ledger::TRANSACTIONS_METADATA,
                 bcos::concepts::ledger::TRANSACTIONS, bcos::concepts::ledger::RECEIPTS>(
                 10086, block));

@@ -132,8 +132,7 @@ public:
 protected:
     std::map<std::string, uint32_t, std::less<>> name2Selector;
     [[no_unique_address]] std::unordered_map<uint32_t,
-        std::pair<protocol::BlockVersion, PrecompiledParams>>
-        selector2Func;
+        std::pair<protocol::BlockVersion, PrecompiledParams>> selector2Func;
     crypto::Hash::Ptr m_hashImpl;
 
     void registerFunc(uint32_t _selector, PrecompiledParams _func,
