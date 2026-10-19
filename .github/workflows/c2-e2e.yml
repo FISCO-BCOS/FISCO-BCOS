@@ -64,7 +64,11 @@ jobs:
           # enable_debug_api=true — the preimage oracle kona-host reads debug_dbGet /
           # debug_getRawHeader off it) and drop the removed feature_l2_ethereum_compat bit
           # from the genesis feature_flags so the node's verifyL2FeatureFlagsSlot passes.
-          ref: 5a2ad071ab2162972073ed9dfcf814e55a77fc8f
+          # 1438516 (harness fix branch, on top of 5a2ad07): the evmone-0.24 / EVMC ABI 19
+          # line puts bits 64..67 into the V3_18 default feature set, so the C2 bitmap must be
+          # 0x0f2800007fffffffff or the node refuses to build genesis; also prints the node's
+          # nohup.out tail on a startup failure. release-3.18.0 keeps pinning 5a2ad07.
+          ref: 143851611e5a4868db63abaf8ebbd70bb87d1921
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule
