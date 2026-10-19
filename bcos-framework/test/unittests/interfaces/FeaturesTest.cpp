@@ -224,6 +224,9 @@ BOOST_AUTO_TEST_CASE(feature)
         // bugfix_precompiled_node_fault_rethrow: node faults rethrow to the FIB arm instead of
         // a PrecompiledError REVERT; off = the pre-existing receipt.
         "bugfix_precompiled_node_fault_rethrow",
+        // bugfix_evm2929_created_address_warm: v1 lane; ON keeps evmone 0.24's
+        // created-address warmth, OFF reproduces the 0.21 cold-then-first-touch metering.
+        "bugfix_evm2929_created_address_warm",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());

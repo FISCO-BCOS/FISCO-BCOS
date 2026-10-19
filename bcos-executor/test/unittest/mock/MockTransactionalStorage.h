@@ -37,7 +37,6 @@ public:
         // real storage-fault shape the host callbacks see.
         if (m_faultTable == table && m_faultKey == _key)
         {
-            std::cerr << "F2TEST: fault FIRED table=" << table << " key=" << _key << std::endl;
             _callback(BCOS_ERROR_UNIQUE_PTR(-1, "injected storage fault (F2 test)"), std::nullopt);
             return;
         }

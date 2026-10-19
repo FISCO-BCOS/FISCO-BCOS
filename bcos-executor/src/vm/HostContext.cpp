@@ -898,7 +898,8 @@ evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uin
         const auto addrStr = bcos::newLegacyEVMAddressString(
             bytesConstRef{sender.bytes, sizeof(sender.bytes)}, u256(nonce));
         boost::algorithm::unhex(addrStr, out.bytes);
-        if (m_eip2929Access)
+        if (m_eip2929Access && !exec.blockContext().features().get(
+                                   ledger::Features::Flag::bugfix_evm2929_created_address_warm))
         {
             m_eip2929Access->markAddressCreatedByHook(out);
         }
@@ -915,7 +916,8 @@ evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uin
     const auto addrStr = bcos::newEVMAddress(exec.blockContext().hashHandler(),
         exec.blockContext().number(), exec.contextID(), exec.createDerivationSeq() + 1);
     boost::algorithm::unhex(addrStr, out.bytes);
-    if (m_eip2929Access)
+    if (m_eip2929Access && !exec.blockContext().features().get(
+                               ledger::Features::Flag::bugfix_evm2929_created_address_warm))
     {
         m_eip2929Access->markAddressCreatedByHook(out);
     }
@@ -946,7 +948,8 @@ evmc_address HostContext::create2AddressForOpcode(
     const auto addrStr = bcos::newCreate2EVMAddress(
         exec.blockContext().hashHandler(), evmAddress2String(sender), initCode, fromEvmC(salt));
     boost::algorithm::unhex(addrStr, out.bytes);
-    if (m_eip2929Access)
+    if (m_eip2929Access && !exec.blockContext().features().get(
+                               ledger::Features::Flag::bugfix_evm2929_created_address_warm))
     {
         m_eip2929Access->markAddressCreatedByHook(out);
     }

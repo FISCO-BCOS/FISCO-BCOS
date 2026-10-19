@@ -42,8 +42,9 @@ namespace executor
 {
 class BlockContext;
 // The executor receives the block's feature flags so consensus-relevant parses can be
-// gated (e.g. bugfix_precompiled_node_fault_rethrow); executors that need no flag ignore
-// it.
+// gated. No registered v1 executor reads the parameter today — the only consumer is
+// the v2 dispatch (transaction-executor/.../PrecompiledImpl.h) — and the parameter is
+// threaded here so a v1 executor can gate a parse without an interface change.
 using PrecompiledExecutor =
     std::function<std::pair<bool, bytes>(bytesConstRef, const ledger::Features& features)>;
 using PrecompiledPricer = std::function<bigint(bytesConstRef)>;
