@@ -296,6 +296,9 @@ public:
 
         /// callback to create context
         result2->setSeq(1000);
+        // R6 F2: the scheduler stamps every parent-resume with the tx-context's
+        // last-consumed seq; the test-as-scheduler mirrors it (1001 consumed).
+        result2->setSchedulerSeq(1001);
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(

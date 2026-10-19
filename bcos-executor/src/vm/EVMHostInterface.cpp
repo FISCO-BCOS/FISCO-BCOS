@@ -384,7 +384,9 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg)
 {
     // R6 F3: same short-circuit as translateHostFault — a recorded fault means
     // the frame is about to fail; do not dispatch another external request hop.
-    if (reinterpret_cast<HostContext*>(_context)->hasHostFault())
+    // _context may be null (negativeGasCallFailsClosedInsteadOfTerminating checks
+    // the fail-closed arm with a bare interface pointer).
+    if (_context && reinterpret_cast<HostContext*>(_context)->hasHostFault())
     {
         evmc_result stopped{};
         stopped.status_code = EVMC_INTERNAL_ERROR;
