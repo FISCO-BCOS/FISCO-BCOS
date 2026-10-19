@@ -6,6 +6,7 @@
 #include "bcos-scheduler/src/DmcExecutor.h"
 #include "bcos-scheduler/src/DmcStepRecorder.h"
 #include "bcos-scheduler/src/GraphKeyLocks.h"
+#include "bcos-scheduler/src/ShardingDmcExecutor.h"
 #include "mock/MockDmcExecutor.h"
 #include <bcos-crypto/bcos-crypto/ChecksumAddress.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -92,8 +93,8 @@ BOOST_AUTO_TEST_CASE(handleCreateMessageFollowsTheCreateSaltFormula)
         using bcos::scheduler::DmcExecutor::DmcExecutor;
         using bcos::scheduler::DmcExecutor::handleCreateMessage;
     };
-    auto executor = std::make_shared<TestableDmcExecutor>(
-        "DmcExecutorSalt", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder, false);
+    auto executor = std::make_shared<TestableDmcExecutor>("DmcExecutorSalt", "0xaabbccdd", block,
+        executor1, keyLocks, hashImpl, dmcRecorder, false, ledger::Features{});
 
     constexpr auto type = static_cast<int>(bcos::protocol::ExecutionMessage::Type::MESSAGE);
     auto salted = createMessage(0, 0, type, "", false);
@@ -125,8 +126,8 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
     blockHeader->calculateHash(*hashImpl);
     block->setBlockHeader(blockHeader);
     // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
-    auto dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder, false);
+    auto dmcExecutor = std::make_shared<DmcExecutor>("DmcExecutor1", "0xaabbccdd", block, executor1,
+        keyLocks, hashImpl, dmcRecorder, false, ledger::Features{});
 
     dmcExecutor->setSchedulerOutHandler(
         [this, &dmcFlagStruct](bcos::scheduler::ExecutiveState::Ptr executiveState) {
@@ -138,8 +139,8 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
             blockHeader->setNumber(2);
             blockHeader->calculateHash(*hashImpl);
             block->setBlockHeader(blockHeader);
-            auto dmcExecutor2 = std::make_shared<DmcExecutor>(
-                "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder, false);
+            auto dmcExecutor2 = std::make_shared<DmcExecutor>("DmcExecutor2", to, block, executor1,
+                keyLocks, hashImpl, dmcRecorder, false, ledger::Features{});
             dmcExecutor2->scheduleIn(executiveState);
         });
 
@@ -287,8 +288,8 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     blockHeader->calculateHash(*hashImpl);
     block->setBlockHeader(blockHeader);
     // block = fakeBlock(cryptoSuite, blockFactory, 1, 1, 1);
-    auto dmcExecutor = std::make_shared<DmcExecutor>(
-        "DmcExecutor1", "0xaabbccdd", block, executor1, keyLocks, hashImpl, dmcRecorder, false);
+    auto dmcExecutor = std::make_shared<DmcExecutor>("DmcExecutor1", "0xaabbccdd", block, executor1,
+        keyLocks, hashImpl, dmcRecorder, false, ledger::Features{});
 
     dmcExecutor->setSchedulerOutHandler(
         [this, &dmcFlagStruct](bcos::scheduler::ExecutiveState::Ptr executiveState) {
@@ -300,8 +301,8 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
             blockHeader->setNumber(2);
             blockHeader->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
             block->setBlockHeader(blockHeader);
-            auto dmcExecutor2 = std::make_shared<DmcExecutor>(
-                "DmcExecutor2", to, block, executor1, keyLocks, hashImpl, dmcRecorder, false);
+            auto dmcExecutor2 = std::make_shared<DmcExecutor>("DmcExecutor2", to, block, executor1,
+                keyLocks, hashImpl, dmcRecorder, false, ledger::Features{});
             dmcExecutor2->scheduleIn(executiveState);
         });
 
@@ -460,6 +461,77 @@ BOOST_AUTO_TEST_CASE(emptyToCreateAddressFollowsFeatureGateTest)
 
     // Flag off (the historical default): the formula address — different from the serial
     // rule, and non-empty (the derivation still ran).
+    auto const legacyTo = run(ledger::Features{});
+    BOOST_CHECK(!legacyTo.empty());
+    BOOST_CHECK_NE(legacyTo, serialTo);
+
+    // feature_evm_address on but the gate flag off: still the formula address.
+    ledger::Features flagOnly;
+    flagOnly.set(ledger::Features::Flag::feature_evm_address);
+    auto const flagOnlyTo = run(flagOnly);
+    BOOST_CHECK_EQUAL(flagOnlyTo, legacyTo);
+}
+
+// The sharding lane must derive from the features it was HANDED, not from a silent
+// default (R4 blocking finding): ShardingDmcExecutor forwards its ctor's features into
+// DmcExecutor::m_features, so a top-level deploy on a feature_sharding chain follows the
+// same version-gated rule as every other DMC lane. The probe exposes the protected
+// in-place stamping (the same call ShardingDmcExecutor::submit makes) so the applied
+// formula is observable without driving the full shard pipeline.
+BOOST_AUTO_TEST_CASE(shardingLaneCreateAddressFollowsForwardedFeaturesTest)
+{
+    struct ProbeShardingExecutor : ShardingDmcExecutor
+    {
+        using ShardingDmcExecutor::ShardingDmcExecutor;
+
+        std::string stampedCreateTo(protocol::ExecutionMessage::UniquePtr message)
+        {
+            handleCreateMessage(message, 0);
+            return std::string(message->to());
+        }
+    };
+
+    auto const from = std::string("0x00000000000000000000000000000000000000aa");
+    auto const nonce = std::string("7");
+
+    auto run = [&](ledger::Features features) -> std::string {
+        auto block = blockFactory->createBlock();
+        auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(3);
+        header->calculateHash(*cryptoSuite->hashImpl());
+        block->setBlockHeader(header);
+
+        ProbeShardingExecutor executor("ShardingDmcExecutor-create", "0xaabbccdd", block, executor1,
+            keyLocks, std::make_shared<Keccak256>(), dmcRecorder,
+            /*schedulerTermId=*/0, /*isCall=*/false, features);
+
+        auto message = std::make_unique<executor::NativeExecutionMessage>();
+        message->setType(protocol::ExecutionMessage::MESSAGE);
+        message->setContextID(9);
+        message->setSeq(4);
+        message->setDepth(0);
+        message->setFrom(from);
+        message->setOrigin(from);
+        message->setNonce(nonce);
+        message->setTo("");
+        message->setGasAvailable(1000000);
+        return executor.stampedCreateTo(std::move(message));
+    };
+
+    ledger::Features gated;
+    gated.set(ledger::Features::Flag::bugfix_dmc_create_address_rule);
+    gated.set(ledger::Features::Flag::feature_evm_address);
+    auto const gatedTo = run(gated);
+
+    // Forwarded features make the sharding lane match the serial derivation exactly;
+    // dropping the forward (features stuck at the all-zero default) lands here and
+    // fails this equality with the historical formula address.
+    auto const serialTo = bcos::newLegacyEVMAddressString(
+        bytesConstRef{boost::algorithm::unhex(from.substr(2))}, nonce);
+    BOOST_CHECK_EQUAL(gatedTo, serialTo);
+
+    // Nothing scheduled: the historical formula — different from the serial rule and
+    // non-empty (the derivation still ran).
     auto const legacyTo = run(ledger::Features{});
     BOOST_CHECK(!legacyTo.empty());
     BOOST_CHECK_NE(legacyTo, serialTo);

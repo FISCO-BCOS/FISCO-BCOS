@@ -8,9 +8,10 @@ ShardingDmcExecutor::ShardingDmcExecutor(std::string name, std::string contractA
     bcos::protocol::Block::Ptr block,
     bcos::executor::ParallelTransactionExecutorInterface::Ptr executor, GraphKeyLocks::Ptr keyLocks,
     bcos::crypto::Hash::Ptr hashImpl, DmcStepRecorder::Ptr dmcRecorder, int64_t schedulerTermId,
-    bool isCall)
+    bool isCall, ledger::Features features)
   : DmcExecutor(std::move(name), std::move(contractAddress), std::move(block), std::move(executor),
-        std::move(keyLocks), std::move(hashImpl), std::move(dmcRecorder), isCall),
+        std::move(keyLocks), std::move(hashImpl), std::move(dmcRecorder), isCall,
+        std::move(features)),
     m_schedulerTermId(schedulerTermId)
 {}
 

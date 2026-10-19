@@ -54,7 +54,7 @@ public:
     DmcExecutor(std::string name, std::string contractAddress, bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
-        DmcStepRecorder::Ptr dmcRecorder, bool isCall, ledger::Features features = {});
+        DmcStepRecorder::Ptr dmcRecorder, bool isCall, ledger::Features features);
 
     virtual ~DmcExecutor();
 
