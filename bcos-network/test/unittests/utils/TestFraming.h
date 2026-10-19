@@ -25,7 +25,7 @@
  *
  * A declared length below the prefix size desynchronizes the stream and maps to
  * FrameMeta::Status::ProtocolError; a length beyond the received bytes asks for more data
- * (declaredLength drives the read-loop grow path); frames at or above
+ * (frameSize drives the read-loop grow path); frames at or above
  * FRAME_TAKE_BUFFER_THRESHOLD take the buffer-swap path (FrameMeta::takeBuffer), exactly like
  * a production large-frame decoder. The frame CONTENT is opaque to the library, so the tests
  * below reuse the payload shapes of the gateway regressions they were migrated from (random
@@ -55,7 +55,7 @@ public:
         FrameMeta meta;
         if (buffer.size() < FRAME_HEADER_SIZE)
         {
-            return meta;  // NeedMoreData, declaredLength stays 0 (smaller than any frame)
+            return meta;  // NeedMoreData, frameSize stays 0 (smaller than any frame)
         }
 
         auto length = readLength(buffer.data());
@@ -67,12 +67,13 @@ public:
         }
         if (length > buffer.size())
         {
-            meta.declaredLength = length;
+            meta.frameSize = length;
             return meta;  // NeedMoreData
         }
 
         meta.status = FrameMeta::Status::Frame;
-        meta.consumed = length;
+        meta.wireConsumed = length;
+        meta.frameSize = length;
         if (length >= FRAME_TAKE_BUFFER_THRESHOLD)
         {
             // Large frame: leave `frame` empty and let the read loop move the whole receive

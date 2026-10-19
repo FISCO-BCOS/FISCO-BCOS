@@ -34,11 +34,12 @@ namespace bcos::devp2p::rlpx
 // handshake completes — before session start, so the read loop never decodes
 // with an unset cipher.
 //
-// FrameMeta contract deviation forced by encryption: `consumed` counts WIRE
-// bytes (ciphertext) so the read loop can advance its buffer, while `frame`
-// holds the DECRYPTED payload, which is shorter. Consumers must therefore
-// read the payload from meta.frame directly — FrameMeta::frameData() assumes
-// frame.size() == consumed and does not apply here.
+// Encryption layer: `wireConsumed` counts WIRE bytes (32B header + padded body + 16B MAC) so the
+// read loop advances its buffer by exactly what left the socket, while `frameSize` is the
+// DECRYPTED payload, which is shorter. FrameMeta carries the two counts separately, so
+// meta.frameData() is correct here — it returns [frame.data(), frameSize) and is what consumers
+// (and rlpx::Session) must use. (The old single `consumed` field made frameData() read
+// `consumed - frame.size()` bytes past the end of the payload.)
 class RlpxFrameDecoder
 {
 public:
@@ -69,7 +70,7 @@ public:
                 if (_buffer.size() < FramingCipher::headerSize())
                 {
                     meta.status = bcos::network::FrameMeta::Status::NeedMoreData;
-                    meta.declaredLength = FramingCipher::headerSize();
+                    meta.frameSize = FramingCipher::headerSize();
                     return meta;
                 }
                 m_framePayloadSize = static_cast<uint32_t>(m_cipher->decryptHeader(
@@ -87,7 +88,7 @@ public:
             if (_buffer.size() < total)
             {
                 meta.status = bcos::network::FrameMeta::Status::NeedMoreData;
-                meta.declaredLength = static_cast<uint32_t>(total);
+                meta.frameSize = static_cast<uint32_t>(total);
                 return meta;
             }
             meta.frame = m_cipher->decryptFrame(
@@ -96,7 +97,9 @@ public:
                 m_framePayloadSize);
             m_headerParsed = false;
             meta.status = bcos::network::FrameMeta::Status::Frame;
-            meta.consumed = static_cast<uint32_t>(total);
+            // Two counts, deliberately: advance by the wire frame, hand the consumer the plaintext.
+            meta.wireConsumed = static_cast<uint32_t>(total);
+            meta.frameSize = static_cast<uint32_t>(meta.frame.size());
             return meta;
         }
         catch (...)

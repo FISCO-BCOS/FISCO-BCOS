@@ -193,7 +193,12 @@ public:
         if (!haveNetwork())
         {
             m_run = true;
-            if (m_asioInterface->acceptor() != nullptr)
+            // Explicit listen switch, NOT `acceptor() != nullptr`: that test used to be vacuously
+            // true (the acceptor was always constructed, and its endpoint constructor binds a real
+            // listening socket), so a pure client silently ran an accept loop on an OS-assigned
+            // port nobody drained. ASIOInterface now only creates an acceptor when it is told to
+            // listen, and acceptLoop must not run otherwise.
+            if (m_listen)
             {
                 startAccept();
             }
@@ -220,8 +225,7 @@ public:
         // it. Posted to the acceptor's io_context (asio objects are not thread-safe, and stop()
         // runs off the pool thread); the ASIOInterface copy keeps the acceptor alive until the
         // cancel runs.
-        if (auto asioInterface = m_asioInterface;
-            asioInterface && asioInterface->acceptor() != nullptr)
+        if (auto asioInterface = m_asioInterface; asioInterface && asioInterface->listening())
         {
             try
             {
@@ -361,6 +365,13 @@ public:
     {
         return m_sessionFactory;
     }
+
+    // Whether start() runs an inbound accept loop. Set BEFORE start(); a pure client (devp2p's
+    // RlpxClient) turns it off, and ASIOInterface::listening() must agree — i.e. the same decision
+    // is passed to the ASIOInterface constructor. Defaults to true so every existing server/gateway
+    // call site keeps its behaviour.
+    bool listen() const { return m_listen; }
+    void setListen(bool _listen) { m_listen = _listen; }
 
     void setEnableSslVerify(bool _enableSSLVerify)
     {
@@ -961,18 +972,19 @@ private:
             // Unsafe").
             if (iterationFailed)
             {
-                // Guard the retry itself: newAcceptorTimer / async_wait run OUTSIDE the
-                // iteration's try above, so a throw here (timer allocation, initiation failure
-                // rethrown by await_resume) would escape acceptLoop entirely and permanently stop
-                // inbound acceptance while m_run stays true. Log and let the while loop retry.
+                // Guard the retry itself: the sleep runs OUTSIDE the iteration's try above, so a
+                // throw here (timer creation or coroutine-frame allocation) would escape acceptLoop
+                // entirely and permanently stop inbound acceptance while m_run stays true. Log and
+                // let the while loop retry.
                 try
                 {
-                    auto retryTimer = m_asioInterface->newAcceptorTimer(ACCEPT_RETRY_INTERVAL_MS);
-                    co_await task::makeFireAwaitable<boost::system::error_code>(
-                        [&retryTimer](auto handler) {
-                            retryTimer.async_wait(std::move(handler));
-                        },
-                        boost::asio::error::operation_aborted);
+                    // The timer MUST stay on the acceptor's own executor — hence the explicit
+                    // io_context argument: co_await resumes the loop on the timer's thread, and only
+                    // the acceptor's single io_context thread serializes the next while (m_run)
+                    // re-check and async_accept re-arm against the cancelAcceptor() that
+                    // Host::stop() posts to that same context (see the long note above).
+                    co_await task::awaitableSleep(
+                        m_asioInterface->acceptorIoContext(), ACCEPT_RETRY_INTERVAL_MS);
                 }
                 catch (...)
                 {
@@ -1015,15 +1027,10 @@ private:
             // destroyed. On timeout close the socket; that completes async_handshake with an
             // error, so the coroutine resumes, the guard is destroyed and the slot released. The
             // timer and the handshake completion run on the socket's single io_context thread, so
-            // they are serialised (no race on close/cancel). Same pattern as the outbound
-            // connectTimer.
-            auto handshakeTimer = std::make_shared<boost::asio::steady_timer>(
-                socket->ioService(), std::chrono::milliseconds(m_handshakeTimeout));
-            handshakeTimer->async_wait([socket](const boost::system::error_code& timerError) {
-                if (timerError == boost::asio::error::operation_aborted)
-                {
-                    return;
-                }
+            // they are serialised (no race on close/cancel). Same pattern as clientConnect.
+            auto handshakeDeadline = std::make_shared<task::Deadline>(
+                socket->ioService(), static_cast<uint32_t>(m_handshakeTimeout));
+            handshakeDeadline->arm([socket](boost::system::error_code) {
                 if (socket->isConnected())
                 {
                     HOST_LOG(WARNING) << LOG_BADGE("startAccept")
@@ -1038,7 +1045,7 @@ private:
             m_asioInterface->setVerifyCallback(socket, newVerifyCallback(peerIdentity));
             auto [handshakeError] =
                 co_await m_asioInterface->awaitableHandshake(socket, ba::ssl::stream_base::server);
-            handshakeTimer->cancel();
+            handshakeDeadline->disarm();
             handshakeServer(handshakeError, peerIdentity, socket);
         }
         catch (...)
@@ -1055,35 +1062,24 @@ private:
     clientConnect(std::shared_ptr<SocketT> socket, NodeIPEndpoint _nodeIPEndpoint)
     {
         auto self = this->shared_from_this();
+        /// if async connect timeout, close the socket directly
+        // Covers resolve + TCP connect + TLS handshake up to the disarm() below (the
+        // application-layer handshake that follows a successful connect() is deliberately NOT
+        // bounded here). task::Deadline owns the timer and the late-expiry guard.
+        // Held OUTSIDE the try: the catch(...) below settles the operation and must disarm it too.
+        auto connectDeadline = std::make_shared<task::Deadline>(
+            socket->ioService(), static_cast<uint32_t>(m_connectTimeThre));
         try
         {
-            /// if async connect timeout, close the socket directly
-            auto connectTimer = std::make_shared<boost::asio::steady_timer>(
-                socket->ioService(), std::chrono::milliseconds(m_connectTimeThre));
-            connectTimer->async_wait(
-                [this, socket, _nodeIPEndpoint](const boost::system::error_code& error) {
-                    /// return when cancel has been called
-                    if (error == boost::asio::error::operation_aborted)
-                    {
-                        HOST_LOG(DEBUG)
-                            << LOG_DESC("AsyncConnect handshake handler revoke this operation");
-                        return;
-                    }
-                    /// connection timer error
-                    if (error && error != boost::asio::error::operation_aborted)
-                    {
-                        HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
-                                        << LOG_KV("errorValue", error.value())
-                                        << LOG_KV("message", error.message());
-                    }
-                    if (socket->isConnected())
-                    {
-                        HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
-                                          << LOG_KV("endpoint", _nodeIPEndpoint);
-                        erasePendingConns(_nodeIPEndpoint);
-                        socket->close();
-                    }
-                });
+            connectDeadline->arm([this, socket, _nodeIPEndpoint](boost::system::error_code) {
+                if (socket->isConnected())
+                {
+                    HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
+                                      << LOG_KV("endpoint", _nodeIPEndpoint);
+                    erasePendingConns(_nodeIPEndpoint);
+                    socket->close();
+                }
+            });
             /// callback async connect
             auto [ec] = co_await m_asioInterface->awaitableResolveConnect(socket);
             if (ec)
@@ -1091,14 +1087,13 @@ private:
                 HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
                                 << LOG_KV("endpoint", _nodeIPEndpoint)
                                 << LOG_KV("message", ec.message());
-                // Settle on the SOCKET's io_context: on RESOLVE failure this coroutine resumed on
-                // the resolver's context (resolveConnect invokes the handler inline from the
-                // resolver completion), while connectTimer's async_wait handler runs on the
-                // socket's — close()/cancel() from here would race it ("Shared objects: Unsafe").
-                boost::asio::post(socket->ioService(), [socket, connectTimer]() {
-                    socket->close();
-                    connectTimer->cancel();
-                });
+                // disarm() is thread-safe (the guard flag is atomic and a queued expiry observes it
+                // as false), so the resolver-thread resume this branch can run on no longer needs
+                // the hand-rolled `post(socket->ioService(), [...]{ connectTimer->cancel(); })`
+                // dance to avoid racing the timer. Settle the socket itself on its own io_context,
+                // where the deadline handler and every other socket operation run.
+                connectDeadline->disarm();
+                boost::asio::post(socket->ioService(), [socket]() { socket->close(); });
                 co_return std::make_tuple(makeNetworkException(ConnectError, "Connect failed"),
                     IdentityToken(), std::shared_ptr<SessionType>());
             }
@@ -1110,7 +1105,7 @@ private:
             /// call handshakeClient after handshake succeed
             auto [handshakeError] =
                 co_await m_asioInterface->awaitableHandshake(socket, ba::ssl::stream_base::client);
-            connectTimer->cancel();
+            connectDeadline->disarm();
             // Pass COPIES of socket/_nodeIPEndpoint, not moves: if handshakeClient itself throws,
             // the catch(...) below settles the operation through socket->close() and
             // erasePendingConns(_nodeIPEndpoint) — both would be moved-from here had they been
@@ -1132,9 +1127,14 @@ private:
             // paths do: erase the entry, close the socket and return the error. The socket
             // teardown is POSTED to the socket's io_context — this catch is reachable on the
             // resolver's thread (see the resolve-failure branch above) as well as on a producer's
-            // stack inside an await_suspend, and close() from here would race the connect timer's
+            // stack inside an await_suspend, and close() from here would race the deadline
             // handler ("Shared objects: Unsafe").
             erasePendingConns(_nodeIPEndpoint);
+            // Disarm before settling: the queued-expiry window is still open while this frame
+            // unwinds, and an expiry that got through would erase the pending-connection entry
+            // again and close an already-closed socket. disarm() is thread-safe, so this is
+            // correct on the resolver thread too (see the resolve-failure branch above).
+            connectDeadline->disarm();
             boost::asio::post(socket->ioService(), [socket]() { socket->close(); });
             co_return std::make_tuple(makeNetworkException(ConnectError, "Connect failed"),
                 IdentityToken(), std::shared_ptr<SessionType>());
@@ -1161,6 +1161,8 @@ protected:
     uint16_t m_listenPort = 0;
     // enable ssl verify or not
     bool m_enableSSLVerify = true;
+    // Run an accept loop in start(). See setListen.
+    bool m_listen = true;
 
     // Network run flag. Written by start()/stop() from the caller's thread, read as the accept
     // loop's condition on the acceptor's io_context thread (Host::acceptLoop) and by

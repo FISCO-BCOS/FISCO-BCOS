@@ -35,7 +35,6 @@ Service::Service(P2PInfo const& _p2pInfo,
     std::shared_ptr<RouterTableFactory> _routerTableFactory, boost::asio::io_context* _ioContext)
   : m_selfInfo(_p2pInfo), m_nodeID(m_selfInfo.rawP2pID)
 {
-    m_msgHandlers.fill(nullptr);
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
 
     SERVICE_LOG(INFO) << LOG_BADGE("Service::Service") << LOG_DESC("local protocol")
@@ -45,17 +44,18 @@ Service::Service(P2PInfo const& _p2pInfo,
                       << LOG_KV("maxVersion", m_localProtocol->maxVersion());
 
     m_codec = g_BCOSConfig.codec();
-    // Process handshake packet logic, handshake protocol and determine
-    // the version, when handshake finished the version field of Message
-    // should be set
-    registerHandlerByMsgType(GatewayMessageType::Handshake,
-        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
-            onReceiveProtocol(std::move(exception), std::move(session), message);
+    // Handshake (protocol negotiation) and Heartbeat, as per-type coroutine pumps. Both are
+    // fire-and-forget replies: they do no async work, so their pumps just call through and report
+    // "keep going".
+    subscribeHandler(GatewayMessageType::Handshake,
+        [this](InboundMessage&& inbound) -> task::Task<bool> {
+            onReceiveProtocol(inbound.session, inbound.message);
+            co_return true;
         });
-
-    registerHandlerByMsgType(GatewayMessageType::Heartbeat,
-        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
-            onReceiveHeartbeat(std::move(exception), std::move(session), message);
+    subscribeHandler(GatewayMessageType::Heartbeat,
+        [this](InboundMessage&& inbound) -> task::Task<bool> {
+            onReceiveHeartbeat(inbound.session, inbound.message);
+            co_return true;
         });
 
     if (_routerTableFactory)
@@ -132,8 +132,11 @@ void Service::stop()
         // are posted to the shared pool while it is still up (see failPendingResponsesOf).
         failAllPendingResponses(
             bcos::network::makeNetworkException(bcos::network::P2PExceptionType::NetworkTimeout, "ServiceStopped"));
-        // Close every inbound channel: parked subscribe() consumers wake with a NetworkException
-        // instead of hanging past the network teardown.
+        // Close every inbound channel: parked subscribe() consumers AND the per-type handler pumps
+        // wake with a NetworkException instead of hanging past the network teardown, which is also
+        // what makes the pumps' frames reclaimable (they are detached, so the close is their only
+        // exit). Every handler's captured owner `this` (Gateway, AMOPImpl, GatewayNodeManager) is
+        // therefore released at stop() without any unregister step.
         {
             std::lock_guard lock(x_channels);
             for (auto& channel : m_channels)
@@ -221,7 +224,8 @@ void Service::heartBeat()
 
     std::shared_lock sessionLock(x_sessions);
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
-                      << LOG_KV("connected count", m_sessions.size());
+                      << LOG_KV("connected count", m_sessions.size())
+                      << LOG_KV("readTimeouts", m_readTimeouts.load(std::memory_order_relaxed));
     for (auto const& it : m_sessions)
     {
         auto session = it.second;
@@ -409,12 +413,38 @@ task::Task<void> Service::receiveLoop(P2PSession::Ptr _p2pSession)
         {
             auto meta = co_await session->recvMessage();
 
+            // Read-timeout frames (Session::setReadTimeoutMs > 0; empty frame, consumed == 0) are
+            // NOT messages and must be handled here. Without this branch the empty frame falls
+            // through to the decode below, where decodeOwned would report MESSAGE_INCOMPLETE and —
+            // under the old `>= 0` test — be mistaken for a successfully decoded (bogus, all-zero)
+            // Message and dispatched to the message handlers. Peer silence is not a protocol error:
+            // the read timeout is a keepalive, so count it and keep the pump running.
+            if (meta.status == bcos::network::FrameMeta::Status::Timeout) [[unlikely]]
+            {
+                m_readTimeouts.fetch_add(1, std::memory_order_relaxed);
+                SERVICE_LOG(DEBUG) << LOG_DESC("recvMessage read timeout, peer silent")
+                                  << LOG_KV("p2pid", _p2pSession->printP2pID());
+                continue;
+            }
+            if (meta.status != bcos::network::FrameMeta::Status::Frame) [[unlikely]]
+            {
+                // The session's decoder contract (see FrameDecoder/FrameMeta): the read loop only
+                // ever pushes Frame or Timeout. Reaching here means the session/decoder pair broke
+                // that contract, so fail loudly instead of dispatching garbage.
+                SERVICE_LOG(ERROR) << LOG_DESC("unexpected frame status from recvMessage")
+                                   << LOG_KV("status", static_cast<int>(meta.status))
+                                   << LOG_KV("p2pid", _p2pSession->printP2pID());
+                BOOST_THROW_EXCEPTION(bcos::network::makeNetworkException(
+                    bcos::network::P2PExceptionType::ProtocolError,
+                    "ProtocolError(unexpected frame status)"));
+            }
+
             // Response correlation is P2P policy, so it lives here rather than in libnetwork: a
             // response frame addressed to THIS node (or carrying no dstP2PNodeID, the V0 form)
             // settles the pending request in the node-level table; a frame addressed to another
             // node falls through to the router like any other — a routed response must never
-            // consume a LOCAL pending callback on a seq collision. A malformed frame (nullopt)
-            // falls through too: Message::decode below rejects it as a ProtocolError.
+            // consume a LOCAL pending callback on a seq collision. A frame that is not a response
+            // (nullopt) falls through too.
             auto respInfo = Message::peekResponseFrameInfo(meta.frameData());
             if (respInfo && respInfo->isResp &&
                 (respInfo->dstP2PNodeID.empty() || respInfo->dstP2PNodeID == m_nodeID ||
@@ -431,7 +461,11 @@ task::Task<void> Service::receiveLoop(P2PSession::Ptr _p2pSession)
             // a second full-frame copy.
             try
             {
-                if (message.decodeOwned(std::move(meta.frame), meta.frameOffset) >= 0) [[likely]]
+                // `> 0`, not `>= 0`: decodeImpl returns the decoded length on success and
+                // MESSAGE_INCOMPLETE == 0 is a FAILURE (see network::MessageDecodeStatus) — it is
+                // what decodeOwned returns for an empty/too-short frame. Testing `>= 0` conflates
+                // "decoded" with "incomplete" and dispatches an all-zero Message.
+                if (message.decodeOwned(std::move(meta.frame), meta.frameOffset) > 0) [[likely]]
                 {
                     onMessage(bcos::network::NetworkException{}, session, std::move(message), _p2pSession);
                     continue;
@@ -509,7 +543,7 @@ void Service::onDisconnect(bcos::network::NetworkException e, P2PSession::Ptr p2
     // heartBeat();
 }
 
-void Service::sendRespMessageBySession(bytesConstRef _payload, uint32_t _requestSeq,
+task::Task<void> Service::sendRespMessageBySession(bcos::bytes _payload, uint32_t _requestSeq,
     std::string _requestSrcP2PNodeID, P2PSession::Ptr _p2pSession)
 {
     // router path (merged from the former ServiceV2): the response carries dst/src so it can be
@@ -517,81 +551,69 @@ void Service::sendRespMessageBySession(bytesConstRef _payload, uint32_t _request
     if (m_router &&
         _p2pSession->protocolInfo()->version() > bcos::protocol::ProtocolVersion::V0)
     {
-        auto self = shared_from_this();
         auto p2pid = _p2pSession->p2pID();
-        // value message in frame; response payload copied into the frame (borrowed from the receive
-        // callback which does not outlive the deferred send). All state is passed as coroutine
-        // parameters so it is copied into the frame and stays alive.
-        task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
-                       bcos::bytes _payload, uint32_t _seq, std::string _dstP2PNodeID,
-                       bcos::network::P2pID _p2pid) -> task::Task<void> {
-            try
-            {
-                Message respMessage;
-                respMessage.setDstP2PNodeID(_dstP2PNodeID);
-                respMessage.setSrcP2PNodeID(_self->m_nodeID);
-                respMessage.setSeq(_seq);
-                respMessage.setRespPacket();
-                respMessage.setPayload(std::move(_payload));
-                // Note: respond directly via the original session (zero-copy view)
-                co_await _p2pSession->fastSendP2PMessage(
-                    respMessage, ::ranges::views::single(respMessage.payload()), bcos::network::Options{});
-                if (c_fileLogLevel <= TRACE) [[unlikely]]
-                {
-                    SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
-                                        << LOG_KV("seq", _seq)
-                                        << LOG_KV("from", respMessage.printSrcP2PNodeID())
-                                        << LOG_KV("dst", respMessage.printDstP2PNodeID())
-                                        << LOG_KV("payload size", respMessage.payload().size());
-                }
-            }
-            catch (std::exception const& e)
-            {
-                // A synchronous pre-send rejection (rate limit / max size) on the response path is
-                // expected during bandwidth saturation — log the request seq and target so the
-                // response-loss investigation keeps the routing dimension.
-                SERVICE2_LOG(WARNING) << LOG_BADGE("sendRespMessageBySession")
-                                      << LOG_DESC("send response failed") << LOG_KV("seq", _seq)
-                                      << LOG_KV("dst", _dstP2PNodeID)
-                                      << LOG_KV("what", boost::diagnostic_information(e));
-            }
-        }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), _requestSeq,
-            std::move(_requestSrcP2PNodeID), p2pid));
-        return;
-    }
-    auto self = shared_from_this();
-    auto p2pid = _p2pSession->p2pID();
-    // value message in frame; the (borrowed) response payload is copied into the frame because the
-    // receive callback that passed it does not outlive the deferred send. The session/service are
-    // passed as coroutine parameters so they are copied into the frame.
-    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
-                   bcos::bytes _payload, uint32_t _seq, bcos::network::P2pID _p2pid) -> task::Task<void> {
         try
         {
             Message respMessage;
-            respMessage.setSeq(_seq);
+            respMessage.setDstP2PNodeID(std::move(_requestSrcP2PNodeID));
+            respMessage.setSrcP2PNodeID(m_nodeID);
+            respMessage.setSeq(_requestSeq);
             respMessage.setRespPacket();
             respMessage.setPayload(std::move(_payload));
+            // Registered directly on the original session (zero-copy view into respMessage, which
+            // this frame owns for the whole send).
             co_await _p2pSession->fastSendP2PMessage(
                 respMessage, ::ranges::views::single(respMessage.payload()), bcos::network::Options{});
             if (c_fileLogLevel <= TRACE) [[unlikely]]
             {
-                SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _seq)
-                                   << LOG_KV("p2pid", printShortP2pID(_p2pid))
-                                   << LOG_KV("payload size", respMessage.payload().size());
+                SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
+                                    << LOG_KV("seq", _requestSeq)
+                                    << LOG_KV("from", respMessage.printSrcP2PNodeID())
+                                    << LOG_KV("dst", respMessage.printDstP2PNodeID())
+                                    << LOG_KV("payload size", respMessage.payload().size());
             }
         }
         catch (std::exception const& e)
         {
-            // Same shape as the router path above (which delegates V0 peers here): a synchronous
-            // pre-send rejection on the response path must not propagate out of the receiving
-            // handler.
-            SERVICE_LOG(WARNING) << LOG_BADGE("sendRespMessageBySession")
-                                 << LOG_DESC("send response failed") << LOG_KV("seq", _seq)
-                                 << LOG_KV("p2pid", printShortP2pID(_p2pid))
-                                 << LOG_KV("what", boost::diagnostic_information(e));
+            // A synchronous pre-send rejection (rate limit / max size) on the response path is
+            // expected during bandwidth saturation — log the request seq and target so the
+            // response-loss investigation keeps the routing dimension.
+            SERVICE2_LOG(WARNING) << LOG_BADGE("sendRespMessageBySession")
+                                  << LOG_DESC("send response failed")
+                                  << LOG_KV("seq", _requestSeq)
+                                  << LOG_KV("p2pid", printShortP2pID(p2pid))
+                                  << LOG_KV("what", boost::diagnostic_information(e));
         }
-    }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), _requestSeq, p2pid));
+        co_return;
+    }
+
+    auto p2pid = _p2pSession->p2pID();
+    try
+    {
+        Message respMessage;
+        respMessage.setSeq(_requestSeq);
+        respMessage.setRespPacket();
+        respMessage.setPayload(std::move(_payload));
+        co_await _p2pSession->fastSendP2PMessage(
+            respMessage, ::ranges::views::single(respMessage.payload()), bcos::network::Options{});
+        if (c_fileLogLevel <= TRACE) [[unlikely]]
+        {
+            SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _requestSeq)
+                               << LOG_KV("p2pid", printShortP2pID(p2pid))
+                               << LOG_KV("payload size", respMessage.payload().size());
+        }
+    }
+    catch (std::exception const& e)
+    {
+        // Same shape as the router path above (which delegates V0 peers here): a synchronous
+        // pre-send rejection on the response path is logged, not propagated — the caller is a
+        // message handler, and a failed response must not fail the whole dispatch.
+        SERVICE_LOG(WARNING) << LOG_BADGE("sendRespMessageBySession")
+                             << LOG_DESC("send response failed") << LOG_KV("seq", _requestSeq)
+                             << LOG_KV("p2pid", printShortP2pID(p2pid))
+                             << LOG_KV("what", boost::diagnostic_information(e));
+    }
+    co_return;
 }
 
 std::optional<bcos::Error> Service::onBeforeMessage(
@@ -758,9 +780,9 @@ void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
         auto ext = message.ext();
         auto version = message.version();
         auto seq = message.seq();
-        // Pull-mode dispatch wins over the legacy callback: a subscribed type is pushed into its
-        // channel; a full channel drops THIS message only (logged) — a slow consumer must not
-        // take down the whole session.
+        // THE dispatch: push into the channel subscribed for this type; its pump runs the handler.
+        // A full channel drops THIS message only (logged) — a slow consumer must not take down the
+        // whole session.
         if (auto channel = inboundChannel(packetType))
         {
             if (!channel->push(InboundMessage{std::move(p2pSession), std::move(message)}))
@@ -768,12 +790,6 @@ void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session,
                 SERVICE_LOG(WARNING) << LOG_DESC("inbound channel full or closed, drop message")
                                      << LOG_KV("packetType", packetType) << LOG_KV("seq", seq);
             }
-            return;
-        }
-        auto handler = getMessageHandlerByMsgType(packetType);
-        if (handler)
-        {
-            handler(e, p2pSession, std::move(message));
             return;
         }
 
@@ -997,8 +1013,8 @@ void Service::sendProtocol(P2PSession::Ptr _session)
 }
 
 // receive the heartbeat msg
-void Service::Service::onReceiveHeartbeat(
-    bcos::network::NetworkException /*unused*/, std::shared_ptr<P2PSession> _session, const Message& /*unused*/)
+void Service::onReceiveHeartbeat(
+    std::shared_ptr<P2PSession> _session, const Message& /*unused*/)
 {
     std::string endpoint = "unknown";
     if (_session)
@@ -1011,16 +1027,8 @@ void Service::Service::onReceiveHeartbeat(
 }
 
 // receive the protocolInfo
-void Service::onReceiveProtocol(
-    bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
+void Service::onReceiveProtocol(std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (bcos::network::errorCodeOf(_error))
-    {
-        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol failed")
-                             << LOG_KV("code", bcos::network::errorCodeOf(_error)) << LOG_KV("msg", _error.what())
-                             << LOG_KV("peer", _session ? _session->printP2pID() : "unknown");
-        return;
-    }
     try
     {
         auto payload = _message.payload();
@@ -1147,6 +1155,94 @@ bcos::network::P2pID bcos::gateway::Service::id() const
 {
     return m_nodeID;
 }
+// Start a per-type pump that runs `_handler` on every inbound message of `_type`, in arrival
+// order.
+//
+// The pump's lifetime is the CHANNEL's, not m_run's: Service::stop() closes every channel, which is
+// what ends the pumps (see handlerPump). Keying the loop on m_run instead would be wrong twice
+// over — it would kill pumps registered before start() (every handler is registered in a
+// constructor, and the router's are registered before Service::start runs), and a channel with a
+// dead pump silently accumulates messages.
+void bcos::gateway::Service::subscribeHandler(
+    uint16_t _type, CoroutineHandler _handler, std::size_t _capacity)
+{
+    auto channel = subscribe(_type,
+        [this](std::function<void()> wake) {
+            if (m_host)
+            {
+                m_host->asioInterface()->post(std::move(wake));
+            }
+            else
+            {
+                // No network wired in yet (only reachable from a test that registered a handler
+                // before setHost): resume inline rather than dropping the wake-up.
+                wake();
+            }
+        },
+        _capacity);
+    task::wait(handlerPump(_type, std::move(channel), std::move(_handler)));
+}
+
+// The pump: one long-lived coroutine per type, holding the channel and the handler for its whole
+// life. It exits when the channel closes — Service::stop() closes them all — and that close
+// rethrows the teardown NetworkException, which is the normal exit. Nothing else ends it, so no
+// frame leaks while the service runs and no message is silently dropped.
+task::Task<void> bcos::gateway::Service::handlerPump(
+    uint16_t _type, std::shared_ptr<InboundChannel> _channel, CoroutineHandler _handler)
+{
+    while (true)
+    {
+        try
+        {
+            auto inbound = co_await _channel->recv();
+            if (!co_await _handler(std::move(inbound)))
+            {
+                co_return;  // the handler asked to stop this type's pump
+            }
+        }
+        catch (bcos::network::NetworkException const& e)
+        {
+            SERVICE_LOG(INFO) << LOG_DESC("handler pump exit, channel closed")
+                              << LOG_KV("packetType", _type)
+                              << LOG_KV("code", bcos::network::errorCodeOf(e));
+            co_return;
+        }
+        catch (std::exception const& e)
+        {
+            // One bad message must not kill the type's dispatch: log it and take the next one.
+            // (The detached-task shape this replaced rethrew onto whichever thread resumed it.)
+            SERVICE_LOG(WARNING) << LOG_DESC("handler pump message failed, continuing")
+                                 << LOG_KV("packetType", _type)
+                                 << LOG_KV("what", boost::diagnostic_information(e));
+        }
+    }
+}
+
+std::shared_ptr<bcos::gateway::InboundChannel> bcos::gateway::Service::subscribe(
+    uint16_t _type, InboundChannel::Poster _poster, std::size_t _capacity)
+{
+    return subscribeChannel(_type, std::move(_poster), _capacity);
+}
+
+std::shared_ptr<bcos::gateway::InboundChannel> bcos::gateway::Service::subscribeChannel(
+    uint16_t _type, InboundChannel::Poster _poster, std::size_t _capacity)
+{
+    std::lock_guard lock(x_channels);
+    auto& slot = m_channels.at(_type);
+    if (!slot)
+    {
+        slot = std::make_shared<InboundChannel>(std::move(_poster), _capacity);
+    }
+    return slot;
+}
+
+std::shared_ptr<bcos::gateway::InboundChannel> bcos::gateway::Service::inboundChannel(
+    uint16_t _type) const
+{
+    std::lock_guard lock(x_channels);
+    return m_channels.at(_type);
+}
+
 void bcos::gateway::Service::registerUnreachableHandler(std::function<void(std::string)> _handler)
 {
     if (!m_router)
@@ -1329,44 +1425,6 @@ std::shared_ptr<P2PSession> bcos::gateway::Service::getP2PSessionByNodeIdWithout
 }
 
 
-bool bcos::gateway::Service::registerHandlerByMsgType(
-    uint16_t _type, MessageHandler const& _msgHandler)
-{
-    if (m_msgHandlers.at(_type))
-    {
-        return false;
-    }
-
-    m_msgHandlers.at(_type) = _msgHandler;
-    return true;
-}
-
-std::shared_ptr<InboundChannel> bcos::gateway::Service::subscribe(
-    uint16_t _type, InboundChannel::Poster _poster, std::size_t _capacity)
-{
-    std::lock_guard lock(x_channels);
-    auto& slot = m_channels.at(_type);
-    if (!slot)
-    {
-        slot = std::make_shared<InboundChannel>(std::move(_poster), _capacity);
-    }
-    return slot;
-}
-
-std::shared_ptr<InboundChannel> bcos::gateway::Service::inboundChannel(uint16_t _type) const
-{
-    std::lock_guard lock(x_channels);
-    return m_channels.at(_type);
-}
-bcos::gateway::Service::MessageHandler bcos::gateway::Service::getMessageHandlerByMsgType(
-    uint16_t _type)
-{
-    return m_msgHandlers.at(_type);
-}
-void bcos::gateway::Service::eraseHandlerByMsgType(uint16_t _type)
-{
-    m_msgHandlers.at(_type) = nullptr;
-}
 void bcos::gateway::Service::setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
     Session&, const Message&, uint32_t)> _handler)
 {

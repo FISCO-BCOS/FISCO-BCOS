@@ -323,8 +323,8 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     // joinRouterTable -> markRouterSeqChanged path). On the pre-fix code each one broadcast once
     // per change (the gossip storm); the debounced code broadcasts once on the first change
     // (leading edge) and coalesces the rest.
-    auto handler = service->getMessageHandlerByMsgType(GatewayMessageType::RouterTableResponse);
-    BOOST_REQUIRE(handler);
+    // Drive the RouterTableResponse entry point the router module wires to its channel (public
+    // since the legacy handler table was removed).
     constexpr int kChurn = 8;
     for (int i = 0; i < kChurn; ++i)
     {
@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
         Message message;
         message.setPacketType(GatewayMessageType::RouterTableResponse);
         message.setPayload(std::move(tableData));
-        handler(bcos::network::NetworkException{}, std::make_shared<FakeSessionVB>(senderID),
+        service->onReceivePeersRouterTable(std::make_shared<FakeSessionVB>(senderID),
             std::move(message));
     }
 

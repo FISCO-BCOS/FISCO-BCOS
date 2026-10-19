@@ -83,11 +83,11 @@ void bcos::network::SessionRecvBuffer::moveToHeader()
         m_writePos = 0;
     }
 }
-std::size_t bcos::network::SessionRecvBuffer::takeStorage(bytes& out, std::size_t frameLen)
+std::size_t bcos::network::SessionRecvBuffer::takeStorage(bytes& out, std::size_t wireLen)
 {
-    auto frameStart = m_readPos;
-    auto frameEnd = frameStart + frameLen;
-    std::size_t tail = m_writePos - frameEnd;
+    const auto frameStart = m_readPos;          // also the frame's plaintext offset in `out`
+    const auto wireEnd = frameStart + wireLen;  // end of the WIRE frame (what leaves with `out`)
+    const std::size_t tail = m_writePos - wireEnd;
 
     out = std::move(m_recvBuffer);
     // The reseeded buffer needs to hold only the tail; the next large frame grows it again
@@ -97,10 +97,12 @@ std::size_t bcos::network::SessionRecvBuffer::takeStorage(bytes& out, std::size_
     m_recvBuffer.resize(m_recvBufferSize);
     if (tail > 0)
     {
-        std::memcpy(m_recvBuffer.data(), out.data() + frameEnd, tail);
+        std::memcpy(m_recvBuffer.data(), out.data() + wireEnd, tail);
     }
-    // drop the stolen tail bytes from the frame vector (size-only, no relocation)
-    out.resize(frameEnd);
+    // Drop the stolen tail bytes (size-only, no relocation). Truncating at the WIRE end also
+    // keeps the whole plaintext: for every current decoder the plaintext begins at the wire
+    // frame's first byte and is no longer than it (RlpxFrameDecoder's plaintext is shorter).
+    out.resize(wireEnd);
     m_readPos = 0;
     m_writePos = tail;
     return frameStart;

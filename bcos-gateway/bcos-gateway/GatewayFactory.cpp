@@ -796,14 +796,14 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             }
             else
             {
-                // register a null amop message handler
-                service->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
-                    [](const bcos::network::NetworkException& _e,
-                        const bcos::gateway::P2PSession::Ptr& session,
-                        const bcos::gateway::Message& message) {
+                // Read-only mode: subscribe AMOP and drop every message. This must still
+                // SUBSCRIBE (not merely skip registration) so the type is recognised — an
+                // unsubscribed type falls through to the "Unrecognized message type" error path.
+                service->subscribeHandler(GatewayMessageType::AMOPMessageType,
+                    [](bcos::gateway::InboundMessage&& /*inbound*/) -> task::Task<bool> {
                         // 只读模式下, 不处理其它节点的amop消息
                         // In read-only mode, AMOP messages from other nodes are not processed
-                        return;
+                        co_return true;
                     });
             }
         }
@@ -916,10 +916,15 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
                 auto result =
                     gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
-                return result ? std::make_optional(
-                                    bcos::Error::buildError("", bcos::network::InQPSOverflow, result.value())) :
+                // The whole buildError(...) call must be parenthesised, exactly as in the
+                // checkOutGoing branch above. Without the parentheses the comma inside the argument
+                // list binds as the comma OPERATOR, so the true branch collapses to
+                // make_optional(result.value()) — the overload check fails, and the rejection
+                // reason is lost. The trailing `return std::nullopt;` this replaces was
+                // unreachable.
+                return result ? std::make_optional(bcos::Error::buildError(
+                                    "", bcos::network::InQPSOverflow, result.value())) :
                                 std::nullopt;
-                return std::nullopt;
             });
         }
 

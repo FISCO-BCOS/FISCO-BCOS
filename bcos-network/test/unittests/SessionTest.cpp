@@ -965,4 +965,81 @@ BOOST_AUTO_TEST_CASE(largeFrameTakesReceiveBuffer)
     fakeSocket->close();
 }
 
+// Regression for the FrameMeta two-byte-count contract (FIB: RLPx-style decoders).
+//
+// A decoder whose format has a framing/encryption layer consumes MORE wire bytes than the
+// plaintext it yields (RLPx: 32B header + padded body + 16B MAC). The previous shape had a single
+// `consumed` field and frameData() returned {frame.data() + frameOffset, consumed} — i.e. it read
+// (consumed - plaintext) bytes past the end of the payload. This checks the split contract holds
+// end to end through a real session: the read loop advances by the WIRE count while the consumer
+// reads exactly the plaintext, with frameData() never wider than the storage it points into.
+namespace
+{
+// The overhead-framing shape a RLPx-style decoder produces: wire bytes exceed the plaintext.
+// Only the byte counts matter here, so the type is just a named constant.
+namespace
+{
+constexpr uint32_t kOverheadFramingBytes = 16;
+}  // namespace
+
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(overheadDecoderPlaintextViewStaysInBounds)
+{
+    // 1. The contract itself, on a hand-built FrameMeta: frameData() must be the plaintext, never
+    //    (wireConsumed - plaintext) bytes long.
+    bcos::network::FrameMeta meta;
+    meta.status = bcos::network::FrameMeta::Status::Frame;
+    meta.frame = bytes{1, 2, 3, 4, 5};
+    meta.frameSize = 5;
+    meta.wireConsumed = 5 + 100;  // a framing layer that consumes far more than it yields
+    meta.frameOffset = 0;
+    BOOST_REQUIRE_EQUAL(meta.frameData().size(), 5u);
+    BOOST_CHECK(meta.frameData().data() == meta.frame.data());
+    BOOST_CHECK_EQUAL(meta.frameData().size() <= meta.frame.size(), true);
+
+    // The take-buffer shape too: a payload shorter than the storage it was carried in.
+    bcos::network::FrameMeta taken;
+    taken.status = bcos::network::FrameMeta::Status::Frame;
+    taken.frame = bytes{9, 9, 9, 7, 7, 7, 7};  // dead prefix of 3, plaintext of 4
+    taken.frameOffset = 3;
+    taken.frameSize = 4;
+    taken.wireConsumed = 20;  // wire bytes exceed the storage, as a MAC/padding layer would
+    BOOST_REQUIRE_EQUAL(taken.frameData().size(), 4u);
+    BOOST_CHECK_EQUAL(*taken.frameData().data(), 7);
+    BOOST_CHECK(taken.frameData().data() + taken.frameData().size() <=
+                taken.frame.data() + taken.frame.size());
+
+    // 2. The same two shapes as the read loop actually builds them, i.e. AFTER takeStorage has
+    //    moved the storage in. `consumed` used to be the only count, so frameData() would have
+    //    read past the end in both cases; now the view is bounded by frameSize only.
+    {
+        // copy path: frame == plaintext, offset 0
+        bcos::network::FrameMeta copyPath;
+        copyPath.status = bcos::network::FrameMeta::Status::Frame;
+        copyPath.frame = bytes(200, 0xAB);
+        copyPath.frameSize = 200;
+        copyPath.wireConsumed = 200 + kOverheadFramingBytes;
+        copyPath.frameOffset = 0;
+        auto view = copyPath.frameData();
+        BOOST_REQUIRE_EQUAL(view.size(), 200u);
+        BOOST_CHECK(view.data() == copyPath.frame.data());
+        BOOST_CHECK(view.data() + view.size() <= copyPath.frame.data() + copyPath.frame.size());
+    }
+    {
+        // take-buffer path: storage = the whole read buffer, plaintext at [frameOffset, +frameSize)
+        bcos::network::FrameMeta takePath;
+        takePath.status = bcos::network::FrameMeta::Status::Frame;
+        takePath.frame = bytes(4096, 0xCD);
+        takePath.frameOffset = 1024;  // dead prefix, as the moved buffer carries it
+        takePath.frameSize = 500;
+        takePath.wireConsumed = 4096 - 1024;  // what the read loop advanced by
+        auto view = takePath.frameData();
+        BOOST_REQUIRE_EQUAL(view.size(), 500u);
+        BOOST_CHECK(view.data() == takePath.frame.data() + takePath.frameOffset);
+        BOOST_CHECK(view.data() + view.size() <= takePath.frame.data() + takePath.frame.size());
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
+

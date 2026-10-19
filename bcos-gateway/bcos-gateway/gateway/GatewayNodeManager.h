@@ -73,12 +73,9 @@ protected:
     // restarted or re-connected nodes
     virtual void broadcastStatusSeq();
 
-    virtual void onReceiveStatusSeq(
-        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
-    virtual void onRequestNodeStatus(
-        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
-    virtual void onReceiveNodeStatus(
-        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
+    virtual void onReceiveStatusSeq(P2PSession::Ptr _session, const Message& _msg);
+    virtual void onRequestNodeStatus(P2PSession::Ptr _session, const Message& _msg);
+    virtual void onReceiveNodeStatus(P2PSession::Ptr _session, const Message& _msg);
     virtual bytesPointer generateNodeStatus();
     virtual void syncLatestNodeIDList();
 

@@ -85,19 +85,23 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, bcos::network::
     m_p2pNodeID = _nodeID;
     m_p2pInterface = _p2pInterface;
     // SyncNodeSeq
-    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::SyncNodeSeq,
-        [this](bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg) {
-            onReceiveStatusSeq(_e, _session, _msg);
+    // SyncNodeSeq
+    m_p2pInterface->subscribeHandler(GatewayMessageType::SyncNodeSeq,
+        [this](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+            onReceiveStatusSeq(std::move(inbound.session), std::move(inbound.message));
+            co_return true;
         });
     // RequestNodeStatus
-    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::RequestNodeStatus,
-        [this](bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg) {
-            onRequestNodeStatus(_e, _session, _msg);
+    m_p2pInterface->subscribeHandler(GatewayMessageType::RequestNodeStatus,
+        [this](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+            onRequestNodeStatus(std::move(inbound.session), std::move(inbound.message));
+            co_return true;
         });
     // ResponseNodeStatus
-    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::ResponseNodeStatus,
-        [this](bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg) {
-            onReceiveNodeStatus(_e, _session, _msg);
+    m_p2pInterface->subscribeHandler(GatewayMessageType::ResponseNodeStatus,
+        [this](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+            onReceiveNodeStatus(std::move(inbound.session), std::move(inbound.message));
+            co_return true;
         });
     m_timer = std::make_shared<Timer>(_ioContext, SEQ_SYNC_PERIOD, "seqSync");
     // broadcast seq periodically; also flush a coalesced node-list sync if peers dropped since the
@@ -127,12 +131,8 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, bcos::network::
 
 void GatewayNodeManager::stop()
 {
-    if (m_p2pInterface)
-    {
-        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::SyncNodeSeq);
-        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::RequestNodeStatus);
-        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::ResponseNodeStatus);
-    }
+    // No unregister step: the three per-type channel pumps are owned by Service and end when
+    // Service::stop() closes their channels, which is also what releases the `this` they capture.
     if (m_timer)
     {
         m_timer->stop();
@@ -162,15 +162,8 @@ bool GatewayNodeManager::unregisterNode(const std::string& _groupID, std::string
     return ret;
 }
 
-void GatewayNodeManager::onReceiveStatusSeq(
-    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
+void GatewayNodeManager::onReceiveStatusSeq(P2PSession::Ptr _session, const Message& _msg)
 {
-    if (bcos::network::errorCodeOf(_e))
-    {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveStatusSeq error")
-                                  << LOG_KV("code", bcos::network::errorCodeOf(_e)) << LOG_KV("msg", _e.what());
-        return;
-    }
     // FIB-183: onReceiveStatusSeq reads a 4-byte sequence via *(uint32_t*)payload().data()
     // with no size check (same defect class fixed in Service::onReceiveRouterSeq); a 0-3 byte
     // payload reads past the decoded buffer. Drop short payloads and use memcpy for the read.
@@ -224,15 +217,8 @@ bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _
     return true;
 }
 
-void GatewayNodeManager::onReceiveNodeStatus(
-    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
+void GatewayNodeManager::onReceiveNodeStatus(P2PSession::Ptr _session, const Message& _msg)
 {
-    if (bcos::network::errorCodeOf(_e))
-    {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveNodeStatus error")
-                                  << LOG_KV("code", bcos::network::errorCodeOf(_e)) << LOG_KV("msg", _e.what());
-        return;
-    }
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
     gatewayNodeStatus->decode(bytesConstRef(_msg.payload().data(), _msg.payload().size()));
     auto const& from = (!_msg.srcP2PNodeID().empty()) ? _msg.srcP2PNodeID() : _session->p2pID();
@@ -272,15 +258,8 @@ bool GatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _gro
     return updated;
 }
 
-void GatewayNodeManager::onRequestNodeStatus(
-    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
+void GatewayNodeManager::onRequestNodeStatus(P2PSession::Ptr _session, const Message& _msg)
 {
-    if (bcos::network::errorCodeOf(_e))
-    {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus network error")
-                                  << LOG_KV("code", bcos::network::errorCodeOf(_e)) << LOG_KV("msg", _e.what());
-        return;
-    }
     auto const& from = (!_msg.srcP2PNodeID().empty()) ? _msg.srcP2PNodeID() : _session->p2pID();
     auto nodeStatusData = generateNodeStatus();
     if (!nodeStatusData)

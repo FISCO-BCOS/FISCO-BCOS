@@ -33,7 +33,14 @@ public:
     /// verify callback
     using VerifyCallback = std::function<bool(bool, boost::asio::ssl::verify_context&)>;
 
-    ASIOInterface(IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort);
+    // `listen == false` gives a PURE CLIENT: no listening socket is created at all (the acceptor
+    // is left disengaged), so acceptor() returns nullptr and Host::start() runs no accept loop.
+    // This is not cosmetic — the acceptor's endpoint constructor opens, binds and listens, so a
+    // client that passed listenPort 0 was exposing an OS-assigned listener on 0.0.0.0 that nobody
+    // drained (whoever found the port could queue inbound sessions for the connection's lifetime).
+    // The resolver and the acceptor's io_context still exist: the resolver is what a client needs.
+    ASIOInterface(IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort,
+        bool listen = true);
     ~ASIOInterface();
 
     ba::ssl::context* srvContext();
@@ -47,7 +54,22 @@ public:
     // executor, so awaiting it resumes the caller on the acceptor's single io_context thread.
     // The accept retry loop relies on that thread to serialize its m_run re-check and its
     // async_accept re-arm against the cancelAcceptor() that Host::stop() posts there.
+    // PRECONDITION: this interface is listening (acceptor() != nullptr).
     boost::asio::steady_timer newAcceptorTimer(uint32_t timeout);
+
+    // The io_context the acceptor (and the resolver) were built on, fixed at construction. The
+    // accept retry loop needs it to arm a timer on THAT context rather than on the round-robin
+    // pool context newTimer would hand out — co_awaiting a timer resumes the host loop on the
+    // timer's thread, and only the acceptor's own thread serializes the loop's m_run re-check and
+    // async_accept re-arm against the cancelAcceptor() that Host::stop() posts to the same context.
+    // (ASIOInterface stores it rather than re-querying the pool: getIOService() round-robins, so a
+    // second call would return a different context.)
+    boost::asio::io_context& acceptorIoContext() { return *m_acceptorIoService; }
+
+    // Whether a listening socket exists at all. This is the condition Host::start() must branch on:
+    // the old `acceptor() != nullptr` test was vacuously true because the acceptor was always
+    // constructed (see the constructor note).
+    bool listening() const { return m_acceptor.has_value(); }
 
     // SocketT defaults to the production Socket; Host passes its own SocketT template parameter
     // explicitly so the created socket matches the session/host instantiation. SocketT must be
@@ -61,6 +83,7 @@ public:
             _server ? srvContext() : clientContext(), std::move(nodeIPEndpoint));
     }
 
+    // nullptr for a pure client (listen == false).
     bi::tcp::acceptor* acceptor();
 
     // SocketT: the socket operations below are function templates so they work with any socket
@@ -127,7 +150,7 @@ public:
     {
         return task::makeFireAwaitable<boost::system::error_code>(
             [this, socket](auto handler) {
-                m_acceptor.async_accept(socket->ref(), std::move(handler));
+                m_acceptor->async_accept(socket->ref(), std::move(handler));
             },
             boost::asio::error::operation_aborted);
     }
@@ -166,16 +189,23 @@ public:
             boost::asio::error::operation_aborted);
     }
 
+    // LIFETIME CONTRACT: `buffers` is taken by const reference and is NOT copied or moved into
+    // the awaitable — it must outlive the co_await. That is exactly what an awaiting caller
+    // provides: the frame owning the buffer stays suspended until the completion resumes it
+    // (FireCompletion completes the awaiting frame, see FireAwaitable.h), so a scratch container
+    // held by that frame can be reused across loop iterations instead of being reallocated per
+    // batch. A caller that fires the awaitable and drops it (no co_await) has no such frame and
+    // must keep the buffer alive itself.
     template <typename SocketT>
-    auto awaitableWrite(const std::shared_ptr<SocketT>& socket, auto buffers)
+    auto awaitableWrite(const std::shared_ptr<SocketT>& socket, const auto& buffers)
     {
         return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
-            [socket, buffers = std::move(buffers)](auto handler) mutable {
+            [socket, &buffers](auto handler) mutable {
                 auto& ioService = socket->ioService();
                 if (socket->isConnected())
                 {
                     boost::asio::post(ioService,
-                        [socket, buffers = std::move(buffers), handler = std::move(handler)]() mutable {
+                        [socket, &buffers, handler = std::move(handler)]() mutable {
                             ba::async_write(socket->stream(), buffers, std::move(handler));
                         });
                 }
@@ -225,9 +255,13 @@ public:
     // holds. Must run on the acceptor's io_context thread — post it there, e.g. from Host::stop().
     void cancelAcceptor()
     {
+        if (!m_acceptor)
+        {
+            return;  // pure client: nothing to cancel
+        }
         boost::system::error_code ec;
         // NOLINTNEXTLINE(bugprone-unused-return-value) error is delivered via the ec out-param
-        m_acceptor.cancel(ec);
+        m_acceptor->cancel(ec);
     }
 
     template <class Task>
@@ -269,7 +303,11 @@ private:
     }
 
     IOServicePool::Ptr m_ioServicePool;
-    bi::tcp::acceptor m_acceptor;
+    // The context the acceptor and resolver are bound to, captured at construction (see
+    // acceptorIoContext): the pool round-robins, so it must not be re-queried later.
+    std::shared_ptr<ba::io_context> m_acceptorIoService;
+    // Engaged only when listening (see the constructor): a client must not hold a bound socket.
+    std::optional<bi::tcp::acceptor> m_acceptor;
     bi::tcp::resolver m_resolver;
 
     std::optional<ba::ssl::context> m_srvContext;

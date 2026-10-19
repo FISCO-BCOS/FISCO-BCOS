@@ -75,10 +75,10 @@ AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     m_timer = std::make_shared<Timer>(_ioContext, TOPIC_SYNC_PERIOD, "topicSync");
     m_timer->registerTimeoutHandler([this]() { broadcastTopicSeq(); });
 
-    m_network->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
-        [this](bcos::network::NetworkException const& _e, bcos::gateway::P2PSession::Ptr _session,
-            bcos::gateway::Message _message) {
-            onAMOPMessage(_e, std::move(_session), std::move(_message));
+    m_network->subscribeHandler(GatewayMessageType::AMOPMessageType,
+        [this](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+            onAMOPMessage(std::move(inbound.session), std::move(inbound.message));
+            co_return true;
         });
 }
 
@@ -544,37 +544,17 @@ bcos::task::Task<void> AMOPImpl::sendBroadcastMessageByTopic(
                     << LOG_KV("topic", _topic) << LOG_KV("data size", dataSize);
 }
 
-void AMOPImpl::onAMOPMessage(
-    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _message)
+void AMOPImpl::onAMOPMessage(P2PSession::Ptr _session, Message _message)
 {
-    auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
-    m_strand.post([self, _e, _session, _message = std::move(_message)]() mutable {
-        auto amop = self.lock();
-        if (!amop)
-        {
-            return;
-        }
-        try
-        {
-            amop->dispatcherAMOPMessage(_e, _session, std::move(_message));
-        }
-        catch (std::exception const& e)
-        {
-            AMOP_LOG(WARNING) << LOG_DESC("dispatcher AMOPMessage exception")
-                              << LOG_KV("message", boost::diagnostic_information(e));
-        }
-    });
+    // No strand hop and no extra Message move: Service dispatches this type through a single
+    // channel pump, so dispatcherAMOPMessage already runs serialized on the shared pool — which is
+    // exactly what m_strand.post used to arrange by hand (the old push callback could fire
+    // concurrently from several session threads).
+    dispatcherAMOPMessage(std::move(_session), std::move(_message));
 }
 
-void AMOPImpl::dispatcherAMOPMessage(
-    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _message)
+void AMOPImpl::dispatcherAMOPMessage(P2PSession::Ptr _session, Message _message)
 {
-    if (bcos::network::errorCodeOf(_e) != 0)
-    {
-        AMOP_LOG(WARNING) << LOG_DESC("onAMOPMessage error for NetworkException")
-                          << LOG_KV("message", _e.what()) << LOG_KV("code", bcos::network::errorCodeOf(_e));
-        return;
-    }
     if (_message.packetType() != GatewayMessageType::AMOPMessageType)
     {
         return;

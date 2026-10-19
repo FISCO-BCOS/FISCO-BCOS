@@ -16,6 +16,7 @@
 #include "bcos-gateway/libp2p/PendingResponse.h"
 #include <bcos-task/Channel.h>
 #include <bcos-task/Task.h>
+#include <bcos-task/OneShot.h>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <range/v3/view/any_view.hpp>
@@ -47,9 +48,6 @@ using InboundChannel = task::Channel<InboundMessage>;
 class Service : public std::enable_shared_from_this<Service>
 {
 public:
-    using MessageHandler =
-        std::function<void(bcos::network::NetworkException, std::shared_ptr<P2PSession>, Message)>;
-
     // _routerTableFactory != nullptr enables the optional router (RIP) module (merged from the
     // former ServiceV2 subclass); _ioContext then drives the router-seq sync timer.
     Service(P2PInfo const& _p2pInfo,
@@ -78,7 +76,19 @@ public:
 
     virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/);
 
-    virtual void sendRespMessageBySession(bytesConstRef _payload, uint32_t _requestSeq,
+    // Reply on the session a request arrived on, as a COROUTINE the caller co_awaits.
+    //
+    // This used to be `void` and detached a task::wait frame per response, because the old
+    // void-returning MessageHandler had nowhere to await it; the caller also had to hand over a
+    // `bytes` copy so the frame owned the payload. Now the caller's handler is a coroutine, so it
+    // awaits this directly: no detached frame, and the payload is MOVED into the response message
+    // instead of being copied once more on the way in.
+    //
+    // `_payload` is taken by value deliberately: it must stay valid across the send's suspension,
+    // and the rate-limited caller passes a temporary std::string. A caller that can guarantee its
+    // buffer outlives the await (an inbound frame held by the awaiting frame) may pass a converted
+    // copy or hoist the buffer; nothing here retains a view past the send.
+    virtual task::Task<void> sendRespMessageBySession(bcos::bytes _payload, uint32_t _requestSeq,
         std::string _requestSrcP2PNodeID, P2PSession::Ptr _p2pSession);
 
     virtual task::Task<std::optional<Message>> sendMessageByNodeID(bcos::network::P2pID nodeID, Message& header,
@@ -178,12 +188,6 @@ public:
     bool enableCompress() const { return m_enableCompress; }
     void setEnableCompress(bool _enableCompress) { m_enableCompress = _enableCompress; }
 
-    virtual bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler);
-
-    MessageHandler getMessageHandlerByMsgType(uint16_t _type);
-
-    virtual void eraseHandlerByMsgType(uint16_t _type);
-
     // Default per-type inbound queue depth for subscribe().
     constexpr static std::size_t DEFAULT_INBOUND_QUEUE_SIZE = 1024;
 
@@ -192,15 +196,51 @@ public:
     // `co_await channel->recv()` and chooses its own execution context through `poster` (where
     // the parked consumer resumes). A full channel drops the message for THIS type only (logged)
     // — a slow consumer must not take down the whole session. Channels are closed by stop(),
-    // which wakes the consumer's recv() with a NetworkException. Subscribing a type shadows the
-    // legacy registerHandlerByMsgType callback for that type (the pump prefers the channel).
+    // which wakes the consumer's recv() with a NetworkException.
     std::shared_ptr<InboundChannel> subscribe(uint16_t _type, InboundChannel::Poster _poster,
         std::size_t _capacity = DEFAULT_INBOUND_QUEUE_SIZE);
+    // The channel-registry half of subscribe(), split out as a virtual seam: subscribeHandler() is
+    // deliberately NON-virtual (it takes a CoroutineHandler and starts a detached pump, so a test
+    // cannot usefully intercept the whole call), while a test that only wants the channel — or that
+    // must observe registration without running a pump — can override this. Production behaviour is
+    // unchanged: subscribe() forwards here.
+    virtual std::shared_ptr<InboundChannel> subscribeChannel(uint16_t _type,
+        InboundChannel::Poster _poster, std::size_t _capacity = DEFAULT_INBOUND_QUEUE_SIZE);
     // The channel currently subscribed for _type, nullptr when none (lookup only, no creation).
     std::shared_ptr<InboundChannel> inboundChannel(uint16_t _type) const;
 
+    // A per-type inbound handler as a COROUTINE. This is the shape every inbound message type uses:
+    // the old `MessageHandler` returned void, so a handler that had to reply (the common case)
+    // could not co_await its own send — it had to detach a coroutine per message and copy the
+    // payload into it. Returning a Task lets the handler co_await its reply, which removes the
+    // detached frame and the copy, and makes the handler's lifetime the channel pump's.
+    using CoroutineHandler = std::function<task::Task<bool>(InboundMessage&&)>;
+
+    // Subscribe `_type` and run `_handler` on every inbound message of that type, in arrival
+    // order, on the shared pool (the poster). The pump is started once per type and torn down by
+    // stop(), which closes the channels.
+    //
+    // The handler returns false to STOP the pump (used by the router's terminal paths); true (or a
+    // normal return) continues. A handler that throws is logged and the pump continues: one bad
+    // message must not kill the type's dispatch (the detached-task shape this replaces lost the
+    // exception into whichever thread had resumed it).
+    void subscribeHandler(uint16_t _type, CoroutineHandler _handler,
+        std::size_t _capacity = DEFAULT_INBOUND_QUEUE_SIZE);
+
+    // The pump body behind subscribeHandler, public so tests can drive a single step.
+    task::Task<void> handlerPump(uint16_t _type, std::shared_ptr<InboundChannel> _channel,
+        CoroutineHandler _handler);
+
     void setOnMessageHandler(
         std::function<std::optional<bcos::Error>(Session::Ptr, const Message&)> _handler);
+
+    // The router (RIP) module's inbound entry points. The constructor (initRouter) wires them to
+    // the RouterTableSyncSeq / RouterTableResponse / RouterTableRequest channels, so production
+    // reaches them through the pump; public so tests can drive one message at a time (they used to
+    // fetch the same functions out of the legacy handler table).
+    void onReceivePeersRouterTable(std::shared_ptr<P2PSession> _session, const Message& _message);
+    void onReceiveRouterTableRequest(std::shared_ptr<P2PSession> _session, const Message& _message);
+    void onReceiveRouterSeq(std::shared_ptr<P2PSession> _session, const Message& _message);
 
     virtual void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable);
     virtual void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable);
@@ -215,10 +255,11 @@ protected:
 
     // handshake protocol
     void sendProtocol(P2PSession::Ptr _session);
-    void onReceiveProtocol(
-        bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message);
-    void onReceiveHeartbeat(
-        bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message);
+    // No error parameter: these are delivered through the type's channel, and the only place an
+    // error can arrive (the session's receive pump) goes to teardownSession, never here. The old
+    // NetworkException parameter was always success, so every error branch below it was dead.
+    void onReceiveProtocol(std::shared_ptr<P2PSession> _session, const Message& _message);
+    void onReceiveHeartbeat(std::shared_ptr<P2PSession> _session, const Message& _message);
 
     // handlers called when new-session
     void registerOnNewSession(std::function<void(P2PSession::Ptr)> _handler);
@@ -231,8 +272,7 @@ protected:
 private:
     // Pull-mode receive pumps. acceptPump drains Host::acceptSession() into onConnect;
     // receiveLoop drains one session's recvMessage() into response correlation, the inbound
-    // filters, router forwarding and the per-type subscribe() channels (falling back to the
-    // legacy m_msgHandlers callback for types without a channel). A receiveLoop exits when the
+    // filters, router forwarding and the per-type subscribe() channels. A receiveLoop exits when the
     // session's channel is closed (drop), and its exit path IS the disconnect handling.
     task::Task<void> acceptPump();
     task::Task<void> receiveLoop(P2PSession::Ptr _p2pSession);
@@ -263,19 +303,13 @@ private:
     task::Task<std::optional<Message>> directSendMessageByNodeID(
         bcos::network::P2pID nodeID, Message& message, Payloads payloads, bcos::network::Options options = bcos::network::Options());
 
-    void onReceivePeersRouterTable(
-        bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message);
-    void joinRouterTable(std::shared_ptr<P2PSession> _session,
+        void joinRouterTable(std::shared_ptr<P2PSession> _session,
         std::shared_ptr<RouterTableInterface> _routerTable);
-    void onReceiveRouterTableRequest(
-        bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message);
     void broadcastRouterSeq();
     // FIB-186 (vector B): advance is done by the caller; this broadcasts the seq on the leading
     // edge of a membership/route-change burst and coalesces the rest (see
     // RouterState::routerSeqDirty).
     void markRouterSeqChanged();
-    void onReceiveRouterSeq(
-        bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message);
     void onNewSession(P2PSession::Ptr _session);
     void onEraseSession(P2PSession::Ptr _session);
     bool tryToUpdateSeq(std::string const& _p2pNodeID, uint32_t _seq);
@@ -302,6 +336,10 @@ protected:
     // Service-scoped: a routed response can arrive on any session of this node.
     PendingResponseTable m_pendingResponses;
     std::atomic<uint32_t> m_seq{1};
+    // Count of read-timeout frames consumed by the receive pumps (Session::setReadTimeoutMs; 0
+    // disabled by default). Reported by heartBeat so a silently-stalled peer is visible without
+    // turning the per-frame path into a log flood.
+    std::atomic<uint64_t> m_readTimeouts{0};
     // cert black/white-list admission lists (owned by the P2P identity object); null in tests
     // that never wire one — updatePeerBlacklist/Whitelist then skip the list update
     std::shared_ptr<P2PPeerIdentity> m_peerIdentity;
@@ -315,11 +353,9 @@ protected:
     std::optional<boost::asio::steady_timer> m_timer;
     bool m_run = false;
 
-    std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};
-
-    // Per-type pull channels (subscribe()). A type with a channel is dispatched there by the
-    // receive pumps; a type without one falls back to m_msgHandlers. Guarded by x_channels —
-    // subscribe() creates lazily and may race a receive pump's lookup.
+    // Per-type pull channels (subscribe()/subscribeHandler()). THE inbound dispatch: the receive
+    // pumps push into the channel for the message's type, and one pump per type drains it. Guarded
+    // by x_channels — subscribe() creates lazily and may race a receive pump's lookup.
     std::array<std::shared_ptr<InboundChannel>, bcos::gateway::GatewayMessageType::All>
         m_channels{};
     mutable std::mutex x_channels;
@@ -487,16 +523,15 @@ task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
 
     // options.response: register the pending request BEFORE sending — the ack may arrive (on ANY
     // session of this node, for a routed response) immediately after the write hits the wire. The
-    // result slot lives in this coroutine frame; the registered callback's reference into it stays
-    // valid because every settlement path (ack / timeout / disconnect-flush / stop-flush /
-    // write-failure reclaim) claims the table entry — destroying the callback — before or while
-    // completing it, and this frame outlives the wait below.
+    // OneShot lives in this coroutine frame; the registered callback's reference into it stays valid
+    // because every settlement path (ack / timeout / disconnect-flush / stop-flush / write-failure
+    // reclaim) claims the table entry — destroying the callback — before or while settling the
+    // slot, and this frame outlives the wait below.
     auto seq = message.seq();
-    typename task::GetResultAwaitable<bcos::network::NetworkException, std::optional<bcos::network::FrameMeta>>::Result result;
+    task::OneShot<bcos::network::NetworkException, std::optional<bcos::network::FrameMeta>> once;
     auto pending = std::make_shared<PendingResponse>();
-    pending->callback = [&result](bcos::network::NetworkException exception, std::optional<bcos::network::FrameMeta> responseFrame) {
-        task::GetResultAwaitable<bcos::network::NetworkException, std::optional<bcos::network::FrameMeta>>::complete(
-            result, std::move(exception), std::move(responseFrame));
+    pending->callback = [&once](bcos::network::NetworkException exception, std::optional<bcos::network::FrameMeta> responseFrame) {
+        once.complete(std::move(exception), std::move(responseFrame));
     };
     pending->owner = m_session;
     if (options.timeout > 0)
@@ -561,8 +596,7 @@ task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
             {
                 claimed->timeoutHandler->cancel();
             }
-            task::GetResultAwaitable<bcos::network::NetworkException, std::optional<bcos::network::FrameMeta>>::complete(
-                result, e, std::nullopt);
+            once.complete(e, std::nullopt);
         }
     }
     catch (...)
@@ -577,8 +611,7 @@ task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
     }
 
     // wait for ack / timeout / disconnect-flush (returns inline when already completed above)
-    auto [exception, responseFrame] =
-        co_await task::GetResultAwaitable<bcos::network::NetworkException, std::optional<bcos::network::FrameMeta>>(result);
+    auto [exception, responseFrame] = co_await once;
     if (bcos::network::errorCodeOf(exception) != 0)
     {
         BOOST_THROW_EXCEPTION(exception);

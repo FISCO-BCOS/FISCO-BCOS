@@ -47,7 +47,7 @@ public:
         if (buffer.size() < Message::MESSAGE_HEADER_LENGTH)
         {
             meta.status = bcos::network::FrameMeta::Status::NeedMoreData;
-            meta.declaredLength = Message::MESSAGE_HEADER_LENGTH;
+            meta.frameSize = Message::MESSAGE_HEADER_LENGTH;
             return meta;
         }
 
@@ -63,7 +63,7 @@ public:
         if (buffer.size() < length)
         {
             meta.status = bcos::network::FrameMeta::Status::NeedMoreData;
-            meta.declaredLength = length;
+            meta.frameSize = length;
             return meta;
         }
 
@@ -77,7 +77,9 @@ public:
         }
 
         meta.status = bcos::network::FrameMeta::Status::Frame;
-        meta.consumed = length;
+        // This format has no separate wire/plaintext layer: every consumed byte is frame content.
+        meta.wireConsumed = length;
+        meta.frameSize = length;
         if (length >= bcos::network::FRAME_TAKE_BUFFER_THRESHOLD)
         {
             // Large frame: leave `frame` empty and let the read loop swap the whole receive

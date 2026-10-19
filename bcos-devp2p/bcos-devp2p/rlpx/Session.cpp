@@ -26,8 +26,10 @@
 
 namespace bcos::devp2p::rlpx
 {
-Session::Session(NetHostPtr _host, NetSessionPtr _netSession, FramingCipher _egressCipher)
+Session::Session(NetHostPtr _host, NetSessionPtr _netSession, FramingCipher _egressCipher,
+    bool _ownsHost)
   : m_host(std::move(_host)),
+    m_ownsHost(_ownsHost),
     m_netSession(std::move(_netSession)),
     m_egressCipher(std::move(_egressCipher))
 {}
@@ -57,8 +59,12 @@ void Session::close()
     }
     if (m_host)
     {
-        // Host contract: stop() before the last strong reference is released.
-        m_host->stop();
+        if (m_ownsHost)
+        {
+            // Host contract: stop() before the last strong reference is released. Only the owner
+            // does this — see the class comment on host ownership.
+            m_host->stop();
+        }
         m_host.reset();
     }
 }
@@ -108,9 +114,9 @@ bcos::codec::rlp::RlpResult<Message> Session::recvMessage()
         throw std::runtime_error("Session::recvMessage: unexpected frame status " +
                                  std::to_string(static_cast<int>(meta.status)));
     }
-    // meta.frame holds the decrypted payload; meta.consumed counts wire bytes
-    // (see RlpxFrameDecoder), so frameData() does not apply here.
-    return m_codec.decode(bytesConstRef(meta.frame.data(), meta.frame.size()));
+    // frameData() is the single access contract: the decoder reports the decrypted plaintext
+    // length in frameSize separately from the wire byte count, so this is bounds-correct.
+    return m_codec.decode(meta.frameData());
 }
 
 }  // namespace bcos::devp2p::rlpx

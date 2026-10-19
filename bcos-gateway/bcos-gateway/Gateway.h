@@ -98,6 +98,12 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID, Message _msg,
         ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
+    // Awaitable form of the dispatch above, for callers that are themselves coroutines and must
+    // keep `_msg` (and therefore its payload view) alive across the dispatch. The void overload
+    // stays for the existing non-coroutine/test callers.
+    virtual task::Task<bcos::Error::Ptr> dispatchToFrontService(const std::string& _groupID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID, Message _msg);
+
     Service::Ptr p2pInterface() const;
     GatewayNodeManager::Ptr gatewayNodeManager();
     /**
@@ -133,8 +139,9 @@ public:
 protected:
     // for UT
     Gateway() = default;
-    virtual void onReceiveP2PMessage(
-        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
+    // Coroutine: it awaits the response send on every path that replies (rate-limit reject and the
+    // front-service completion), so no detached frame is needed per message.
+    virtual task::Task<void> onReceiveP2PMessage(P2PSession::Ptr _session, Message _msg);
 
     /**
      * @brief: receive group broadcast message
@@ -143,8 +150,7 @@ protected:
      * @param _payload: message content
      * @return void
      */
-    virtual void onReceiveBroadcastMessage(
-        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
+    virtual void onReceiveBroadcastMessage(P2PSession::Ptr _session, Message _msg);
 
     bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 

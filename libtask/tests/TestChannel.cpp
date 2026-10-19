@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(parkedRecvIsWokenByPushFromAnotherThread)
 
     // task::wait runs the consumer synchronously up to its first suspension: it is parked in
     // recv() before this thread continues.
-    wait([](Channel<int>& ch, std::promise<int>& out) -> Task<void> {
+    bcos::task::wait([](Channel<int>& ch, std::promise<int>& out) -> Task<void> {
         out.set_value(co_await ch.recv());
     }(channel, received));
 
@@ -62,7 +62,7 @@ BOOST_AUTO_TEST_CASE(closeWakesParkedRecvWithException)
     Channel<int> channel(inlinePoster(), 16);
     std::promise<std::string> failure;
 
-    wait([](Channel<int>& ch, std::promise<std::string>& out) -> Task<void> {
+    bcos::task::wait([](Channel<int>& ch, std::promise<std::string>& out) -> Task<void> {
         try
         {
             co_await ch.recv();
@@ -159,7 +159,7 @@ BOOST_AUTO_TEST_CASE(parkedProducerWokenByConsumerDrain)
     std::promise<bool> writable;
     // wait() runs the producer synchronously up to its first suspension: the channel is full,
     // so it is parked in waitWritable() before this thread continues.
-    wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
+    bcos::task::wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
         out.set_value(co_await ch.waitWritable());
         BOOST_CHECK(ch.push(3));
     }(channel, writable));
@@ -182,7 +182,7 @@ BOOST_AUTO_TEST_CASE(parkedProducerWokenOnlyWhenItsBytesFit)
     BOOST_CHECK(channel.push("12345"));  // 10/10 bytes queued
 
     std::promise<bool> writable;
-    wait([](Channel<std::string>& ch, std::promise<bool>& out) -> Task<void> {
+    bcos::task::wait([](Channel<std::string>& ch, std::promise<bool>& out) -> Task<void> {
         out.set_value(co_await ch.waitWritable(6));
     }(channel, writable));
     auto future = writable.get_future();
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(closeWakesParkedProducerWithFalse)
     channel.push(1);
 
     std::promise<bool> writable;
-    wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
+    bcos::task::wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
         out.set_value(co_await ch.waitWritable());
     }(channel, writable));
 

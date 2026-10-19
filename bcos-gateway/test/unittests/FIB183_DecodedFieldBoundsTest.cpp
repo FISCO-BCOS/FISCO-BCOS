@@ -42,10 +42,12 @@ public:
     void start() override {}
     void stop() override {}
 
-    void callOnReceiveP2PMessage(
-        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
+    void callOnReceiveP2PMessage(P2PSession::Ptr _session, Message _msg)
     {
-        onReceiveP2PMessage(_e, _session, std::move(_msg));
+        // The handler is a coroutine now; the test drives it to completion. Each case here is
+        // expected to drop the message before any await, so this returns without suspending.
+        auto task = onReceiveP2PMessage(std::move(_session), std::move(_msg));
+        task.start();
     }
 };
 
@@ -71,7 +73,7 @@ BOOST_AUTO_TEST_CASE(EmptyDstNodeIDsIsDropped)
     auto gateway = std::make_shared<FakeGatewayFIB183>();
     // Must not crash / must not dereference the null GatewayNodeManager.
     BOOST_CHECK_NO_THROW(
-        gateway->callOnReceiveP2PMessage(bcos::network::NetworkException{}, nullptr, std::move(msg)));
+        gateway->callOnReceiveP2PMessage(nullptr, std::move(msg)));
 }
 
 // Sanity check: confirm that a message decoded straight off the wire can legitimately
@@ -106,10 +108,8 @@ BOOST_AUTO_TEST_CASE(ShortRouterSeqPayloadIsDropped)
     boost::asio::io_context ioContext;
     auto service = std::make_shared<Service>(selfInfo, routerTableFactory, &ioContext);
 
-    // Black-box drive: the RouterTableSyncSeq message handler the router module registered,
-    // fetched through the public handler table (equivalent to calling onReceiveRouterSeq).
-    auto handler = service->getMessageHandlerByMsgType(GatewayMessageType::RouterTableSyncSeq);
-    BOOST_REQUIRE(handler);
+    // Drive the RouterTableSyncSeq entry point the router module wires to its channel. It used to
+    // be fetched out of the handler table; it is a public entry point now that the table is gone.
 
     for (size_t len = 0; len < sizeof(uint32_t); ++len)
     {
@@ -121,7 +121,7 @@ BOOST_AUTO_TEST_CASE(ShortRouterSeqPayloadIsDropped)
         }
         BOOST_CHECK_EQUAL(msg.payload().size(), len);
         // Session is nullptr on purpose: the guard returns before it is used.
-        BOOST_CHECK_NO_THROW(handler(bcos::network::NetworkException{}, nullptr, std::move(msg)));
+        BOOST_CHECK_NO_THROW(service->onReceiveRouterSeq(nullptr, std::move(msg)));
     }
 
     service->stop();

@@ -15,8 +15,8 @@
  *
  * @file ServiceSubscribeTest.cpp
  * @brief Tests for Service::subscribe — the pull-mode inbound interface. The receive pump's
- *        dispatch prefers a subscribed channel over the legacy registerHandlerByMsgType
- *        callback, a full channel drops only that message, and unsubscribe falls back.
+ *        dispatch goes through the channel subscribed for the message type, a full channel drops
+ *        only that message, and subscribeHandler() runs a coroutine handler per message.
  */
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
@@ -26,6 +26,8 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <thread>
 #include <memory>
 #include <string>
 
@@ -98,39 +100,62 @@ BOOST_AUTO_TEST_CASE(subscribedChannelReceivesDispatchedMessage)
         "hello");
 }
 
-BOOST_AUTO_TEST_CASE(legacyHandlerUsedWhenNoChannel)
+// The handler-pump path: subscribeHandler() runs a coroutine handler per inbound message, in
+// arrival order. (The old push-callback API — registerHandlerByMsgType — is gone; every type is
+// dispatched through its channel.)
+BOOST_AUTO_TEST_CASE(handlerPumpReceivesDispatchedMessagesInOrder)
 {
     auto service = makeService();
     auto peer = std::make_shared<FakeSubscribeSession>("peerB");
 
-    std::string received;
-    BOOST_REQUIRE(service->registerHandlerByMsgType(TYPE_B,
-        [&received](bcos::network::NetworkException, std::shared_ptr<P2PSession>, Message message) {
-            received.assign(message.payload().begin(), message.payload().end());
-        }));
+    std::vector<std::string> received;
+    service->subscribeHandler(TYPE_B,
+        [&received](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+            received.emplace_back(inbound.message.payload().begin(), inbound.message.payload().end());
+            co_return true;
+        },
+        /*capacity=*/8);
 
-    deliver(*service, peer, TYPE_B, "legacy");
-    BOOST_CHECK_EQUAL(received, "legacy");
+    deliver(*service, peer, TYPE_B, "one");
+    deliver(*service, peer, TYPE_B, "two");
+
+    // subscribeHandler's pump runs on the SHARED POOL (unlike the inline-poster channel tests
+    // above), so the drain happens on another thread and this test has to wait for it.
+    for (int i = 0; i < 500 && received.size() < 2; ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    BOOST_REQUIRE_EQUAL(received.size(), 2u);
+    BOOST_CHECK_EQUAL(received[0], "one");
+    BOOST_CHECK_EQUAL(received[1], "two");
 }
 
-BOOST_AUTO_TEST_CASE(channelShadowsLegacyHandlerForSameType)
+// A handler that returns false stops its own pump; later messages pile into the channel instead of
+// running the handler.
+BOOST_AUTO_TEST_CASE(handlerCanStopItsPump)
 {
     auto service = makeService();
     auto peer = std::make_shared<FakeSubscribeSession>("peerC");
 
-    bool legacyCalled = false;
-    BOOST_REQUIRE(service->registerHandlerByMsgType(
-        TYPE_A, [&legacyCalled](bcos::network::NetworkException, std::shared_ptr<P2PSession>, Message) {
-            legacyCalled = true;
-        }));
-    auto channel = service->subscribe(TYPE_A, inlinePoster());
+    int calls = 0;
+    service->subscribeHandler(TYPE_B,
+        [&calls](bcos::gateway::InboundMessage&&) -> task::Task<bool> {
+            ++calls;
+            co_return false;  // stop after the first message
+        },
+        /*capacity=*/8);
 
-    deliver(*service, peer, TYPE_A, "shadowed");
+    deliver(*service, peer, TYPE_B, "first");
+    deliver(*service, peer, TYPE_B, "second");
 
-    BOOST_CHECK(!legacyCalled);
-    auto inbound = task::syncWait(channel->recv());
-    BOOST_CHECK_EQUAL(std::string(inbound.message.payload().begin(), inbound.message.payload().end()),
-        "shadowed");
+    // The pump stops itself after the first message; wait for that to have happened, then give the
+    // second message time to NOT be handled.
+    for (int i = 0; i < 500 && calls < 1; ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    BOOST_CHECK_EQUAL(calls, 1);
 }
 
 BOOST_AUTO_TEST_CASE(fullChannelDropsOnlyThatMessageAndServiceSurvives)

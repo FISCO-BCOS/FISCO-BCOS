@@ -70,20 +70,20 @@ BOOST_AUTO_TEST_CASE(needMoreDataOnShortBuffer)
 
     auto empty = decoder.tryDecode(bytesConstRef{});
     BOOST_CHECK(empty.status == bcos::network::FrameMeta::Status::NeedMoreData);
-    BOOST_CHECK_EQUAL(empty.declaredLength, Message::MESSAGE_HEADER_LENGTH);
+    BOOST_CHECK_EQUAL(empty.frameSize, Message::MESSAGE_HEADER_LENGTH);
 
     // fewer bytes than the fixed header: the decoder asks for the header length
     bytes partial(10, 0xff);
     auto meta = decoder.tryDecode(ref(partial));
     BOOST_CHECK(meta.status == bcos::network::FrameMeta::Status::NeedMoreData);
-    BOOST_CHECK_EQUAL(meta.declaredLength, Message::MESSAGE_HEADER_LENGTH);
+    BOOST_CHECK_EQUAL(meta.frameSize, Message::MESSAGE_HEADER_LENGTH);
 
     // header complete but the frame body missing: asks for the declared frame length
     auto frame = buildFrame(0, 0x11223344, 0, bytes(100, 'x'));
     bytes headOnly(frame.begin(), frame.begin() + Message::MESSAGE_HEADER_LENGTH);
     meta = decoder.tryDecode(ref(headOnly));
     BOOST_CHECK(meta.status == bcos::network::FrameMeta::Status::NeedMoreData);
-    BOOST_CHECK_EQUAL(meta.declaredLength, frame.size());
+    BOOST_CHECK_EQUAL(meta.frameSize, frame.size());
 }
 
 BOOST_AUTO_TEST_CASE(decodesCompleteV0Frame)
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(decodesCompleteV0Frame)
 
     auto meta = decoder.tryDecode(ref(frame));
     BOOST_REQUIRE(meta.status == bcos::network::FrameMeta::Status::Frame);
-    BOOST_CHECK_EQUAL(meta.consumed, frame.size());
+    BOOST_CHECK_EQUAL(meta.wireConsumed, frame.size());
     BOOST_CHECK(!meta.takeBuffer);
     BOOST_CHECK_EQUAL(meta.frame.size(), frame.size());
     auto frameData = meta.frameData();
@@ -119,12 +119,12 @@ BOOST_AUTO_TEST_CASE(decodesStickyFramesBackToBack)
 
     auto metaA = decoder.tryDecode(ref(stream));
     BOOST_REQUIRE(metaA.status == bcos::network::FrameMeta::Status::Frame);
-    BOOST_CHECK_EQUAL(metaA.consumed, frameA.size());
+    BOOST_CHECK_EQUAL(metaA.wireConsumed, frameA.size());
 
-    bytesConstRef rest(stream.data() + metaA.consumed, stream.size() - metaA.consumed);
+    bytesConstRef rest(stream.data() + metaA.wireConsumed, stream.size() - metaA.wireConsumed);
     auto metaB = decoder.tryDecode(rest);
     BOOST_REQUIRE(metaB.status == bcos::network::FrameMeta::Status::Frame);
-    BOOST_CHECK_EQUAL(metaB.consumed, frameB.size());
+    BOOST_CHECK_EQUAL(metaB.wireConsumed, frameB.size());
 }
 
 BOOST_AUTO_TEST_CASE(protocolErrorOnBadLength)
@@ -161,7 +161,7 @@ BOOST_AUTO_TEST_CASE(decodesV2ExtendedHeader)
 
     auto meta = decoder.tryDecode(ref(frame));
     BOOST_REQUIRE(meta.status == bcos::network::FrameMeta::Status::Frame);
-    BOOST_CHECK_EQUAL(meta.consumed, frame.size());
+    BOOST_CHECK_EQUAL(meta.wireConsumed, frame.size());
 
     // the response-decision fields (resp flag, seq, dst) are peeked at the libp2p boundary,
     // not lifted by the decoder
@@ -228,7 +228,7 @@ BOOST_AUTO_TEST_CASE(largeFrameRequestsTakeBuffer)
     BOOST_REQUIRE(meta.status == bcos::network::FrameMeta::Status::Frame);
     BOOST_CHECK(meta.takeBuffer);
     BOOST_CHECK(meta.frame.empty());
-    BOOST_CHECK_EQUAL(meta.consumed, frame.size());
+    BOOST_CHECK_EQUAL(meta.wireConsumed, frame.size());
 
     // just below the threshold: the copy path, frameData() exposes exactly the frame
     auto smallFrame = buildFrame(

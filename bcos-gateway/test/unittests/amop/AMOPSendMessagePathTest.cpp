@@ -82,8 +82,12 @@ struct AMOPSendFixture
 {
     AMOPSendFixture()
     {
-        // AMOPImpl registers an AMOP message handler in its constructor
-        When(Method(networkMock, registerHandlerByMsgType)).AlwaysReturn(true);
+        // AMOPImpl subscribes its AMOP handler in the constructor. The seam is the CHANNEL it
+        // registers on (subscribeHandler itself is non-virtual — it also starts the pump), so the
+        // mock just hands back a channel.
+        When(Method(networkMock, subscribeChannel)).AlwaysDo([](uint16_t, InboundChannel::Poster, std::size_t) {
+            return std::make_shared<InboundChannel>([](std::function<void()> wake) { wake(); }, 64);
+        });
         // TopicManager::queryNodeIDsByTopic only returns reachable nodes
         When(Method(networkMock, isReachable)).AlwaysReturn(true);
         When(Method(networkMock, newSeq)).AlwaysReturn(0);

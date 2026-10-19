@@ -47,6 +47,10 @@ namespace bcos::task
 // queued remain drainable — recv() throws only once the queue is empty, so teardown loses
 // nothing that was accepted.
 //
+// Cancellation: `cancel(error)` is the same operation named for the case a caller actually has —
+// an external teardown waking a parked pump so it does not have to wait out a socket timeout. It is
+// thread-safe and idempotent, and queued values stay drainable ahead of the error.
+//
 // Lifetime contract: close() the channel before destroying it and keep it alive until every
 // parked recv()/waitWritable() has been woken (the wakes touch only the waiting coroutines'
 // frames, so once close() has run the channel may be freed while the resumes are still in
@@ -145,6 +149,23 @@ public:
     {
         std::lock_guard lock(m_mutex);
         return m_closed;
+    }
+
+    // CANCEL a parked consumer / producer from any thread, waking it with `error` (or the generic
+    // "channel closed" exception). This is `close()` under the name that says what a caller
+    // actually wants: an EXTERNAL cancellation — a shutdown path, a session teardown, or a peer
+    // thread that must not let a parked pump wait out a socket timeout. It exists as its own name
+    // because the tree has repeatedly hand-rolled that wake-up (PostingWorker, teardown executors,
+    // an "abort" timer racing a read) and the resulting code read as if a reader/writer was closing
+    // its own channel.
+    //
+    // Semantics are exactly close()'s, which are already thread-safe (m_mutex) and idempotent (the
+    // FIRST error sticks): parked recv() rethrows `error`, parked waitWritable() returns false, and
+    // values already queued stay drainable ahead of the error — cancellation never loses work that
+    // was already accepted. Calling cancel() twice, or after a close(), is a no-op.
+    void cancel(std::exception_ptr error)
+    {
+        close(std::move(error));
     }
 
     std::size_t size() const

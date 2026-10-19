@@ -25,6 +25,7 @@
 #include "Messages.h"
 #include <bcos-codec/rlp/Result.h>
 #include <bcos-network/Common.h>
+#include <bcos-task/Deadline.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -73,58 +74,20 @@ NetHostPtr makeHost(std::shared_ptr<bcos::network::ASIOInterface> _asio)
     return std::make_shared<NetHost>(std::move(_asio), std::move(factory));
 }
 
-// Total-deadline guard for one handshake-phase I/O operation: a timer armed on
-// the socket's own io_context whose expiry flags the operation and cancels the
-// pending async read/write (mirrors the read loop's setReadTimeoutMs pattern,
-// which cannot be used before session start). Flags are atomic: the timer
-// handler runs on the socket's io thread while disarm() runs on the thread
-// that blocked in syncWait.
-struct Deadline
-{
-    std::shared_ptr<std::atomic_bool> armed = std::make_shared<std::atomic_bool>(true);
-    std::shared_ptr<std::atomic_bool> expired = std::make_shared<std::atomic_bool>(false);
-    std::shared_ptr<boost::asio::steady_timer> timer;
-
-    Deadline(std::shared_ptr<bcos::network::PlainSocket> const& _socket, uint32_t _timeoutMs)
-      : timer(std::make_shared<boost::asio::steady_timer>(
-            _socket->ioService(), std::chrono::milliseconds(_timeoutMs)))
-    {
-        timer->async_wait([armed = armed, expired = expired, socket = _socket](
-                              const boost::system::error_code& _ec) {
-            if (!_ec && armed->load())
-            {
-                expired->store(true);
-                boost::system::error_code cancelEc;
-                // NOLINTNEXTLINE(bugprone-unused-return-value) delivered via the ec out-param
-                socket->ref().cancel(cancelEc);
-            }
-        });
-    }
-
-    // Disarm BEFORE cancel: an expiry already queued behind the I/O completion
-    // observes armed == false and no-ops, so it can never cancel the NEXT
-    // operation. The cancel itself is posted to the socket's io thread — asio
-    // objects are not cross-thread safe and the caller runs off that context.
-    void disarm(std::shared_ptr<bcos::network::PlainSocket> const& _socket)
-    {
-        armed->store(false);
-        boost::asio::post(_socket->ioService(), [timer = timer]() {
-            try
-            {
-                timer->cancel();
-            }
-            catch (...)
-            {}
-        });
-    }
-};
-
 // Handshake-phase read-full with a total deadline (the session read loop is
-// not running yet, so setReadTimeoutMs does not apply).
+// not running yet, so setReadTimeoutMs does not apply). The deadline is
+// bcos::task::Deadline: the timer is armed on the socket's io_context and its
+// handler cancels the pending read; expired() is read while the operation's
+// result is still in hand and disarm() then closes the late-expiry window.
 bcos::bytes readExactWithTimeout(bcos::network::ASIOInterface& _asio,
     std::shared_ptr<bcos::network::PlainSocket> const& _socket, size_t _size, uint32_t _timeoutMs)
 {
-    Deadline deadline(_socket, _timeoutMs);
+    bcos::task::Deadline deadline(_socket->ioService(), _timeoutMs);
+    deadline.arm([socket = _socket](boost::system::error_code) {
+        boost::system::error_code cancelEc;
+        // NOLINTNEXTLINE(bugprone-unused-return-value) delivered via the ec out-param
+        socket->ref().cancel(cancelEc);
+    });
     bcos::bytes buffer(_size, 0);
     boost::system::error_code ec;
     try
@@ -135,11 +98,12 @@ bcos::bytes readExactWithTimeout(bcos::network::ASIOInterface& _asio,
     }
     catch (...)
     {
-        deadline.disarm(_socket);
+        deadline.disarm();  // disarm throws nothing; ~Deadline would cancel anyway
         throw;
     }
-    deadline.disarm(_socket);
-    if (deadline.expired->load() && ec == boost::asio::error::operation_aborted)
+    const bool timedOut = deadline.expired();
+    deadline.disarm();
+    if (timedOut && ec == boost::asio::error::operation_aborted)
     {
         throw std::runtime_error("rlpx handshake: read timed out");
     }
@@ -155,7 +119,12 @@ void sendAllWithTimeout(bcos::network::ASIOInterface& _asio,
     std::shared_ptr<bcos::network::PlainSocket> const& _socket, bytesConstRef _data,
     uint32_t _timeoutMs)
 {
-    Deadline deadline(_socket, _timeoutMs);
+    bcos::task::Deadline deadline(_socket->ioService(), _timeoutMs);
+    deadline.arm([socket = _socket](boost::system::error_code) {
+        boost::system::error_code cancelEc;
+        // NOLINTNEXTLINE(bugprone-unused-return-value) delivered via the ec out-param
+        socket->ref().cancel(cancelEc);
+    });
     boost::system::error_code ec;
     try
     {
@@ -165,11 +134,12 @@ void sendAllWithTimeout(bcos::network::ASIOInterface& _asio,
     }
     catch (...)
     {
-        deadline.disarm(_socket);
+        deadline.disarm();
         throw;
     }
-    deadline.disarm(_socket);
-    if (deadline.expired->load() && ec == boost::asio::error::operation_aborted)
+    const bool timedOut = deadline.expired();
+    deadline.disarm();
+    if (timedOut && ec == boost::asio::error::operation_aborted)
     {
         throw std::runtime_error("rlpx handshake: write timed out");
     }
@@ -344,7 +314,7 @@ EstablishedSession exchangeHandshake(
 // then arm it for data traffic and wrap it in the synchronous facade.
 Session establishSession(NetHostPtr const& _host, NetSessionPtr const& _netSession,
     std::shared_ptr<bcos::network::ASIOInterface> const& _asio, EccKeyPair const& _keyPair,
-    bool _isInitiator, bytesConstRef _recipientPublicKey)
+    bool _isInitiator, bytesConstRef _recipientPublicKey, bool _ownsHost)
 {
     auto socket = _netSession->socket();
     IoChannel io;
@@ -365,7 +335,7 @@ Session establishSession(NetHostPtr const& _host, NetSessionPtr const& _netSessi
     _netSession->setReadTimeoutMs(kIoTimeoutMs);  // 15s read timeout, session stays alive
     _netSession->setIdleTimeInterval(0);          // no idle-drop (matches the old behaviour)
     _netSession->start();
-    return Session(_host, _netSession, FramingCipher(keyMaterial));
+    return Session(_host, _netSession, FramingCipher(keyMaterial), _ownsHost);
 }
 }  // namespace
 
@@ -394,7 +364,8 @@ EstablishedSession RlpxClient::connect()
     try
     {
         auto session = establishSession(host, netSession, asio, m_keyPair, /* isInitiator = */ true,
-            bytesConstRef(m_config.peerPublicKey.data(), m_config.peerPublicKey.size()));
+            bytesConstRef(m_config.peerPublicKey.data(), m_config.peerPublicKey.size()),
+            /* ownsHost = */ true);
         return exchangeHandshake(std::move(session), m_keyPair, m_config);
     }
     catch (...)
@@ -443,8 +414,10 @@ EstablishedSession RlpxServer::accept()
 
     try
     {
-        auto session = establishSession(
-            m_host, netSession, m_asio, m_keyPair, /* isInitiator = */ false, {});
+        // ownsHost = false: RlpxServer keeps m_host for its whole lifetime and must keep serving
+        // further clients after this session dies.
+        auto session = establishSession(m_host, netSession, m_asio, m_keyPair,
+            /* isInitiator = */ false, {}, /* ownsHost = */ false);
         if (m_config.clientId.empty())
         {
             m_config.clientId = "FISCO-BCOS-devp2p-server/v0.1.0";

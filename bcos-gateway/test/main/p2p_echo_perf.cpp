@@ -94,38 +94,26 @@ int main(int argc, const char** argv)
 
         if (asServer)  // server working
         {
-            // register message handler for p2p echo message type
-            service->registerHandlerByMsgType(
-                packageType, [reporter](bcos::network::NetworkException _exception,
-                                 std::shared_ptr<P2PSession> _session, Message _message) {
-                    if (bcos::network::errorCodeOf(_exception) != 0)
-                    {
-                        return;
-                    }
-
-                    // std::cerr << "\t[Server] recv request from client: "
-                    //           << std::string(_message.payload().begin(),
-                    //           _message.payload().end())
-                    //           << std::endl;
+            // Register the echo handler for the p2p echo message type. It is a COROUTINE handler
+            // now, so the reply is co_awaited in the handler itself — no detached task and no
+            // payload copy (the old void handler had to task::wait a frame per request).
+            service->subscribeHandler(
+                packageType,
+                [reporter](bcos::gateway::InboundMessage&& inbound) -> task::Task<bool> {
+                    auto& message = inbound.message;
                     // update rate stat
-                    reporter->update(_message.length(), true);
-                    _message.setRespPacket();
-                    // echo message through the coroutine fast path: the message is moved into the
-                    // coroutine frame as a parameter so it stays alive for the (possibly
-                    // deferred) send; its payload rides as a view (zero-copy).
-                    task::wait([](std::shared_ptr<P2PSession> _session,
-                                   Message _message) -> task::Task<void> {
-                        try
-                        {
-                            co_await _session->fastSendP2PMessage(
-                                _message, ::ranges::views::single(_message.payload()), bcos::network::Options());
-                        }
-                        catch (std::exception const& e)
-                        {
-                            std::cerr << "\t[Server] echo send exception: " << e.what()
-                                      << std::endl;
-                        }
-                    }(_session, std::move(_message)));
+                    reporter->update(message.length(), true);
+                    message.setRespPacket();
+                    try
+                    {
+                        co_await inbound.session->fastSendP2PMessage(message,
+                            ::ranges::views::single(message.payload()), bcos::network::Options());
+                    }
+                    catch (std::exception const& e)
+                    {
+                        std::cerr << "\t[Server] echo send exception: " << e.what() << std::endl;
+                    }
+                    co_return true;
                 });
 
             while (true)

@@ -47,18 +47,20 @@ void Service::initRouter(
     m_router->routerTable->setNodeID(m_nodeID);
     m_router->routerTable->setUnreachableDistance(m_router->unreachableDistance);
     // process router packet related logic
-    registerHandlerByMsgType(GatewayMessageType::RouterTableSyncSeq,
-        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
-            onReceiveRouterSeq(std::move(exception), std::move(session), message);
+    subscribeHandler(GatewayMessageType::RouterTableSyncSeq,
+        [this](InboundMessage&& inbound) -> task::Task<bool> {
+            onReceiveRouterSeq(std::move(inbound.session), inbound.message);
+            co_return true;
         });
-    registerHandlerByMsgType(GatewayMessageType::RouterTableResponse,
-        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
-            onReceivePeersRouterTable(std::move(exception), std::move(session), message);
+    subscribeHandler(GatewayMessageType::RouterTableResponse,
+        [this](InboundMessage&& inbound) -> task::Task<bool> {
+            onReceivePeersRouterTable(std::move(inbound.session), inbound.message);
+            co_return true;
         });
-
-    registerHandlerByMsgType(GatewayMessageType::RouterTableRequest,
-        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
-            onReceiveRouterTableRequest(std::move(exception), std::move(session), message);
+    subscribeHandler(GatewayMessageType::RouterTableRequest,
+        [this](InboundMessage&& inbound) -> task::Task<bool> {
+            onReceiveRouterTableRequest(std::move(inbound.session), inbound.message);
+            co_return true;
         });
     registerOnNewSession([this](P2PSession::Ptr _session) { onNewSession(std::move(_session)); });
     registerOnDeleteSession(
@@ -86,15 +88,8 @@ void Service::initRouter(
 }
 
 // receive routerTable from peers
-void Service::onReceivePeersRouterTable(
-    bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
+void Service::onReceivePeersRouterTable(std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (bcos::network::errorCodeOf(_error) != 0)
-    {
-        SERVICE2_LOG(WARNING) << LOG_BADGE("onReceivePeersRouterTable")
-                              << LOG_KV("code", bcos::network::errorCodeOf(_error)) << LOG_KV("msg", _error.what());
-        return;
-    }
     auto routerTable = m_router->routerTableFactory->createRouterTable(_message.payload());
 
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceivePeersRouterTable")
@@ -151,15 +146,8 @@ void Service::joinRouterTable(
 }
 
 // receive routerTable request from peer
-void Service::onReceiveRouterTableRequest(
-    bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
+void Service::onReceiveRouterTableRequest(std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (bcos::network::errorCodeOf(_error) != 0)
-    {
-        SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterTableRequest")
-                              << LOG_KV("code", bcos::network::errorCodeOf(_error)) << LOG_KV("msg", _error.what());
-        return;
-    }
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceiveRouterTableRequest")
                        << LOG_KV("peer", _session->printP2pID())
                        << LOG_KV("entrySize", m_router->routerTable->routerEntries().size());
@@ -232,16 +220,8 @@ void Service::markRouterSeqChanged()
     }
 }
 
-void Service::onReceiveRouterSeq(
-    bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
+void Service::onReceiveRouterSeq(std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (bcos::network::errorCodeOf(_error) != 0)
-    {
-        SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterSeq")
-                              << LOG_KV("code", bcos::network::errorCodeOf(_error))
-                              << LOG_KV("message", _error.what());
-        return;
-    }
     // FIB-183: the router-sequence payload must contain at least a 4-byte sequence number.
     // A short or empty payload (the smallest attacker-supplied frames are 14-78 bytes total)
     // would read past the end of the decoded payload buffer. Drop it before dereferencing.

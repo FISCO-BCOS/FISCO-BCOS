@@ -11,7 +11,9 @@
 #include "bcos-network/FrameMeta.h"
 #include "bcos-network/Socket.h"
 #include "bcos-task/Channel.h"
+#include "bcos-task/Deadline.h"
 #include "bcos-task/Task.h"
+#include "bcos-task/OneShot.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Timer.h"
@@ -75,11 +77,15 @@ public:
     bool resizeBuffer(size_t _bufferSize);
     void moveToHeader();
     /// Take-buffer handover for large frames (FrameMeta::takeBuffer): moves the whole storage
-    /// into `out` with the frame at [old readPos, old readPos + frameLen), reseeds this buffer
-    /// with just the tail bytes after the frame, and returns the frame's start offset (the old
-    /// readPos). The caller (the read loop) must NOT call onRead for this frame afterwards —
-    /// the consumed bytes left with `out`.
-    std::size_t takeStorage(bytes& out, std::size_t frameLen);
+    /// into `out` with the frame at [old readPos, old readPos + frameData size), reseeds this
+    /// buffer with just the tail bytes after the WIRE bytes, and returns the moved storage's
+    /// frame offset (the old readPos) — i.e. the value for FrameMeta::frameOffset, whose plaintext
+    /// view the read loop has already validated against this storage. The caller (the read loop)
+    /// must NOT call onRead for this frame afterwards — the consumed wire bytes left with `out`.
+    /// `wireLen` is a separate argument from the plaintext length because a decoder may report a
+    /// plaintext shorter than the wire frame it was carried in (RlpxFrameDecoder: framing + MAC
+    /// overhead): the buffer advances by the WIRE length, the consumer reads the plaintext.
+    std::size_t takeStorage(bytes& out, std::size_t wireLen);
     bcos::bytesConstRef asReadBuffer() const;
     bcos::bytesRef asWriteBuffer();
 
@@ -186,7 +192,7 @@ public:
                 }
             },
             MAX_RECV_QUEUE_FRAMES, MAX_RECV_QUEUE_BYTES,
-            [](const FrameMeta& meta) { return meta.frame.size(); }),
+            [](const FrameMeta& meta) { return meta.frameSize; }),
         m_idleCheckTimer(
             std::make_shared<Timer>(m_socket->ioService(), m_idleTimeInterval, "idleChecker"))
     {
@@ -418,7 +424,6 @@ public:
         m_idleTimeInterval = _idleTimeIntervalMs;
         m_idleCheckTimer->setTimeout(static_cast<int64_t>(_idleTimeIntervalMs));
     }
-    uint64_t idleTimeInterval() const { return m_idleTimeInterval; }
 
     // Read timeout (FrameMeta::Status::Timeout delivery). 0 = disabled (default): the read loop
     // blocks in awaitableReadSome indefinitely. When > 0, a read with no bytes arriving within
@@ -427,7 +432,6 @@ public:
     // a stalled read means. Set before start()/startWithPolicy(); the read loop reads the value
     // each iteration, so later changes take effect on the next read.
     void setReadTimeoutMs(uint32_t _readTimeoutMs) { m_readTimeoutMs = _readTimeoutMs; }
-    uint32_t readTimeoutMs() const { return m_readTimeoutMs; }
     /**
      * @brief The packets that can be sent are obtained based on the configured policy
      *
@@ -674,34 +678,24 @@ private:
                     (writeBuffer.size() > m_maxReadDataSize ? m_maxReadDataSize :
                                                               writeBuffer.size());
 
-                // Read timeout (setReadTimeoutMs, 0 = disabled): arm a timer on the socket's own
-                // io_service so its handler is serialized with the read completion AND with this
-                // coroutine's resumption on that single thread — the flags need no
-                // synchronization. On expiry the handler flags this iteration and cancels the
-                // pending read, which wakes the co_await below with operation_aborted. readArmed
-                // guards against a timer whose expiry is already QUEUED but not yet run (cancel()
-                // cannot recall it): the coroutine disarms it after the read completes, so a late
-                // success handler can never cancel the NEXT iteration's read. Both are
-                // frame-local: the timer and the read completion keep the session alive via this
-                // frame.
-                std::shared_ptr<bool> readExpired;
-                std::shared_ptr<bool> readArmed;
-                std::shared_ptr<boost::asio::steady_timer> readTimer;
+                // Read timeout (setReadTimeoutMs, 0 = disabled): task::Deadline owns the timer plus
+                // the late-expiry guard that used to be two hand-rolled shared_ptr<bool> flags
+                // here — arm() re-arms it per iteration, and disarm() must happen while this
+                // iteration's result is still in hand so an already-queued expiry cannot cancel the
+                // NEXT iteration's read. Deadline's flags live behind shared_ptr (a queued expiry
+                // handler outlives this frame position) and are atomic so a caller may disarm from
+                // another thread; on this path everything runs on the socket's io thread.
+                // The handler runs on the socket's io thread and cancels the pending read, which
+                // wakes the co_await below with operation_aborted.
+                std::shared_ptr<task::Deadline> readDeadline;
                 if (m_readTimeoutMs > 0)
                 {
-                    readExpired = std::make_shared<bool>(false);
-                    readArmed = std::make_shared<bool>(true);
-                    readTimer = std::make_shared<boost::asio::steady_timer>(
-                        m_socket->ioService(), std::chrono::milliseconds(m_readTimeoutMs));
-                    readTimer->async_wait([readExpired, readArmed, socket = m_socket](
-                                              const boost::system::error_code& timerEc) {
-                        if (!timerEc && *readArmed)
-                        {
-                            *readExpired = true;
-                            boost::system::error_code cancelEc;
-                            // NOLINTNEXTLINE(bugprone-unused-return-value)
-                            socket->ref().cancel(cancelEc);
-                        }
+                    readDeadline = std::make_shared<task::Deadline>(
+                        m_socket->ioService(), m_readTimeoutMs);
+                    readDeadline->arm([socket = m_socket](boost::system::error_code) {
+                        boost::system::error_code cancelEc;
+                        // NOLINTNEXTLINE(bugprone-unused-return-value)
+                        socket->ref().cancel(cancelEc);
                     });
                 }
 
@@ -710,13 +704,11 @@ private:
                         ->template awaitableReadSome<ReadPolicy>(
                             m_socket, boost::asio::buffer(writeBuffer.data(), readSize));
 
-                if (readTimer)
+                if (readDeadline)
                 {
-                    // Disarm BEFORE cancel: an expiry already queued behind this read's
-                    // completion observes readArmed == false and no-ops (see above).
-                    *readArmed = false;
-                    readTimer->cancel();
-                    if (*readExpired && ec == boost::asio::error::operation_aborted)
+                    const bool readExpired = readDeadline->expired();
+                    readDeadline->disarm();
+                    if (readExpired && ec == boost::asio::error::operation_aborted)
                     {
                         // Read timed out: deliver a Timeout frame (empty frame, consumed = 0;
                         // consumers check meta.status == FrameMeta::Status::Timeout) WITHOUT
@@ -776,18 +768,46 @@ private:
                         {
                             if (meta.takeBuffer) [[unlikely]]
                             {
-                                // Large frame (the decoder left meta.frame empty): move the whole
-                                // receive buffer into the frame instead of copying it out. The
-                                // tail bytes after the frame reseed a fresh buffer; the frame's
-                                // bytes left with the moved storage, so there is no onRead for
-                                // them.
+                                // Large frame: move the whole receive buffer into the frame
+                                // instead of copying it out. The tail bytes after the frame reseed
+                                // a fresh buffer; the frame's bytes left with the moved storage, so
+                                // there is no onRead for them.
+                                // `meta.frame` is EMPTY by contract on this path (the decoder must
+                                // not copy), so the wire bytes are validated against the read
+                                // BUFFER, before the move.
+                                const auto available = recvBuffer.dataSize();
+                                if (meta.wireConsumed > available) [[unlikely]]
+                                {
+                                    SESSION_LOG(ERROR)
+                                        << LOG_BADGE("readLoop")
+                                        << LOG_DESC("take-buffer frame exceeds the read buffer")
+                                        << LOG_KV("wireConsumed", meta.wireConsumed)
+                                        << LOG_KV("available", available);
+                                    drop(TCPError);
+                                    co_return;
+                                }
                                 meta.frameOffset = static_cast<uint32_t>(
-                                    recvBuffer.takeStorage(meta.frame, meta.consumed));
+                                    recvBuffer.takeStorage(meta.frame, meta.wireConsumed));
                                 meta.takeBuffer = false;
+                                // Now the storage is in hand: the plaintext the consumer will read
+                                // must lie inside it. The two counts are not interchangeable (RLPx
+                                // consumes more wire bytes than it yields plaintext), so this
+                                // cannot be folded into the check above.
+                                if (meta.frameOffset + meta.frameSize > meta.frame.size()) [[unlikely]]
+                                {
+                                    SESSION_LOG(ERROR)
+                                        << LOG_BADGE("readLoop")
+                                        << LOG_DESC("take-buffer plaintext does not fit its storage")
+                                        << LOG_KV("frameSize", meta.frameSize)
+                                        << LOG_KV("frameOffset", meta.frameOffset)
+                                        << LOG_KV("storageSize", meta.frame.size());
+                                    drop(TCPError);
+                                    co_return;
+                                }
                             }
                             else
                             {
-                                recvBuffer.onRead(meta.consumed);
+                                recvBuffer.onRead(meta.wireConsumed);
                             }
                             // Pull-mode delivery with backpressure: when the recv queue has no
                             // room for this frame the consumer is slower than the peer, so park
@@ -797,18 +817,18 @@ private:
                             // A frame larger than the entire byte budget could never be queued —
                             // drop instead of parking forever (unreachable in production:
                             // allowMaxMsgSize < the budget).
-                            if (meta.frame.size() > MAX_RECV_QUEUE_BYTES)
+                            if (meta.frameSize > MAX_RECV_QUEUE_BYTES)
                             {
                                 SESSION_LOG(ERROR)
                                     << LOG_BADGE("readLoop")
                                     << LOG_DESC("frame larger than the recv queue budget, drop")
-                                    << LOG_KV("frameSize", meta.frame.size())
+                                    << LOG_KV("frameSize", meta.frameSize)
                                     << LOG_KV("budget", MAX_RECV_QUEUE_BYTES)
                                     << LOG_KV("endpoint", nodeIPEndpoint());
                                 drop(UserReason);
                                 co_return;
                             }
-                            if (!co_await m_recvChannel.waitWritable(meta.frame.size()))
+                            if (!co_await m_recvChannel.waitWritable(meta.frameSize))
                             {
                                 // Channel closed: drop()/protocol-error teardown owns the session.
                                 co_return;
@@ -826,7 +846,7 @@ private:
                         }
                         else if (meta.status == FrameMeta::Status::NeedMoreData)
                         {
-                            auto length = meta.declaredLength;
+                            auto length = meta.frameSize;
                             if (length > allowMaxMsgSize())
                             {
                                 SESSION_LOG(ERROR)
@@ -995,10 +1015,13 @@ private:
                     payload.toConstBuffer(outputIt);
                 }
                 // `size` is unused: the loop re-derives the batch layout from `payloads` on each
-                // iteration, and a short/failed write is handled through `error` alone
+                // iteration, and a short/failed write is handled through `error` alone.
+                // `buffers` is passed by const reference (see awaitableWrite's lifetime contract)
+                // and is NOT moved out, so the frame-owned scratch keeps its capacity across
+                // iterations — reallocating it per batch was the whole point of hoisting it out of
+                // the loop. It is cleared at the top of the next batch instead.
                 [[maybe_unused]] auto [error, size] =
-                    co_await m_server.get().asioInterface()->awaitableWrite(
-                        m_socket, std::move(buffers));
+                    co_await m_server.get().asioInterface()->awaitableWrite(m_socket, buffers);
 
                 buffers.clear();
                 for (auto& payload : payloads)
@@ -1185,21 +1208,6 @@ private:
     }
 
 public:
-    /// Check error code after reading and drop peer if error code.
-    bool checkRead(boost::system::error_code _ec)
-    {
-        if (_ec && _ec.category() != boost::asio::error::get_misc_category() &&
-            _ec.value() != boost::asio::error::eof)
-        {
-            SESSION_LOG(WARNING) << LOG_DESC("checkRead error") << LOG_KV("message", _ec.message());
-            drop(TCPError);
-
-            return false;
-        }
-
-        return true;
-    }
-
     /// Launch the write loop (writeLoop) if no write is currently in flight. Safe to call from
     /// any thread: the first caller wins the m_writingInFlight CAS and becomes the single writer;
     /// concurrent callers return immediately and rely on the in-flight writer (or writeLoop's
@@ -1371,13 +1379,12 @@ task::Task<boost::system::error_code> send(
     }
 
     // Build one Payload carrying the given payload views, then wait until the write loop flushed
-    // (or aborted) it. The payload's completion callback settles a GetResultAwaitable below --
-    // exactly the "write completion" half the old with-response ResumeGate tracked by hand.
-    task::GetResultAwaitable<boost::system::error_code>::Result result;
+    // (or aborted) it. The payload's completion callback settles a OneShot below -- the single-slot
+    // "write completion" wait, shared with the other callback-to-coroutine handoffs in the tree
+    // instead of a per-site GetResultAwaitable/handle/claim protocol.
+    task::OneShot<boost::system::error_code> once;
     Payload payload;
-    payload.m_callback = [&result](boost::system::error_code ec) {
-        task::GetResultAwaitable<boost::system::error_code>::complete(result, ec);
-    };
+    payload.m_callback = [&once](boost::system::error_code ec) { once.complete(ec); };
     auto& vec = payload.m_data;
     if constexpr (::ranges::sized_range<Payloads>)
     {
@@ -1414,7 +1421,8 @@ task::Task<boost::system::error_code> send(
         session.write();
     }
 
-    co_return std::get<0>(co_await task::GetResultAwaitable<boost::system::error_code>(result));
+    auto [error] = co_await once;
+    co_return error;
 }
 }  // namespace detail
 

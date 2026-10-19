@@ -70,13 +70,13 @@ public:
     virtual task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data);
 
-    virtual void onAMOPMessage(bcos::network::NetworkException const& _e,
+    virtual void onAMOPMessage(
         bcos::gateway::P2PSession::Ptr _session, bcos::gateway::Message _message);
 
     virtual TopicManager::Ptr topicManager();
 
 protected:
-    virtual void dispatcherAMOPMessage(bcos::network::NetworkException const& _e,
+    virtual void dispatcherAMOPMessage(
         bcos::gateway::P2PSession::Ptr _session, bcos::gateway::Message _message);
     /**
      * @brief: periodically send topicSeq to all other nodes
