@@ -230,8 +230,8 @@ public:
         // This fixture drives the Ethereum lane (executor_version = 2), where finishExecute
         // commits the txsRoot over EIP-2718 wire bytes (calculateEthereumTransactionRoot) —
         // it throws on a FISCO-shaped payload, so the filler transaction is Web3-shaped.
-        block->appendTransaction(bcos::test::sharedmock::makeWeb3FillerTx(
-            static_cast<uint64_t>(number), *hashImpl));
+        block->appendTransaction(
+            bcos::test::sharedmock::makeWeb3FillerTx(static_cast<uint64_t>(number), *hashImpl));
 
         Error::Ptr execError;
         protocol::BlockHeader::Ptr executedHeader;
@@ -498,6 +498,44 @@ BOOST_AUTO_TEST_CASE(callAtBlockServesEachHeight)
     BOOST_REQUIRE_MESSAGE(
         !latestError, (latestError ? latestError->errorMessage() : std::string{}));
     BOOST_CHECK(outputOf(latestReceipt) == toBytes(hcEvmcValue(0x02)));
+}
+
+// executor_version=2 dry runs take their EVM revision from the Initializer-provided schedule
+// (stampCallRevision): it receives the called block's header timestamp in seconds and its
+// difficulty, and the executor runs with the revision it returns — on the historical path
+// (block 2) and the latest path (block 3) alike.
+BOOST_AUTO_TEST_CASE(callStampsRevisionFromSchedule)
+{
+    auto headers = runCanonicalChain();
+    headers[1]->setTimestamp(1700000000123);  // block 2, milliseconds
+    headers[1]->setDifficulty(0);
+    headers[2]->setTimestamp(1800000000999);  // block 3 (latest)
+    headers[2]->setDifficulty(7);
+    writeHeaderToBackend(headers[1]);
+    writeHeaderToBackend(headers[2]);
+
+    std::vector<std::pair<int64_t, u256>> scheduleCalls;
+    baselineScheduler.setEvmcRevisionSchedule(
+        [&scheduleCalls](int64_t timestampSeconds, u256 const& difficulty) {
+            scheduleCalls.emplace_back(timestampSeconds, difficulty);
+            return timestampSeconds >= 1800000000 ? EVMC_PRAGUE : EVMC_CANCUN;
+        });
+
+    auto [error2, receipt2] = callAt(2);
+    BOOST_REQUIRE_MESSAGE(!error2, (error2 ? error2->errorMessage() : std::string{}));
+    BOOST_REQUIRE_EQUAL(scheduleCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(scheduleCalls[0].first, 1700000000);
+    BOOST_CHECK_EQUAL(scheduleCalls[0].second, u256(0));
+    BOOST_REQUIRE(probeExecutor.m_lastExecutedRevision);
+    BOOST_CHECK_EQUAL(*probeExecutor.m_lastExecutedRevision, EVMC_CANCUN);
+
+    auto [error3, receipt3] = callAt(3);
+    BOOST_REQUIRE_MESSAGE(!error3, (error3 ? error3->errorMessage() : std::string{}));
+    BOOST_REQUIRE_EQUAL(scheduleCalls.size(), 2U);
+    BOOST_CHECK_EQUAL(scheduleCalls[1].first, 1800000000);
+    BOOST_CHECK_EQUAL(scheduleCalls[1].second, u256(7));
+    BOOST_REQUIRE(probeExecutor.m_lastExecutedRevision);
+    BOOST_CHECK_EQUAL(*probeExecutor.m_lastExecutedRevision, EVMC_PRAGUE);
 }
 
 // The PR #5324 review blocker, pinned green on the real stack: an SSTORE inside a

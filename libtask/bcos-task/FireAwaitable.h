@@ -188,10 +188,7 @@ struct FireAwaitable
         }
     }
 
-    std::tuple<Error, Results...> await_resume()
-    {
-        return std::move(m_result);
-    }
+    std::tuple<Error, Results...> await_resume() { return std::move(m_result); }
 };
 
 // Factory: Initiate is deduced from the initiate callable; Error and Results are specified

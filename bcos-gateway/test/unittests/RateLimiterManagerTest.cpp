@@ -21,13 +21,13 @@
 
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/GatewayFactory.h"
+#include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <chrono>
-#include <boost/test/unit_test.hpp>
 #include <boost/test/tools/old/interface.hpp>
+#include <boost/test/unit_test.hpp>
+#include <chrono>
 #include <memory>
 #include <thread>
 
@@ -297,8 +297,7 @@ void checkGroupRateLimiterConfig(const std::shared_ptr<GatewayConfig>& config,
 
     // 分支：重新构建rateLimiterManager，检查TimeWindowRateLimiter
     {
-        auto rateLimiterManager2 =
-            gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+        auto rateLimiterManager2 = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
         auto rateLimiter0 = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
             rateLimiterManager2->getGroupRateLimiter("group0"));
         BOOST_CHECK_EQUAL(rateLimiter0->maxPermitsSize(), timeWindowSec * config->doubleMBToBit(2));
@@ -351,8 +350,7 @@ void checkConnRateLimiterConfig(const std::shared_ptr<GatewayConfig>& config,
 
     // 分支：重新构建rateLimiterManager，检查TimeWindowRateLimiter
     {
-        auto rateLimiterManager2 =
-            gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+        auto rateLimiterManager2 = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
         auto rateLimiter0 = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
             rateLimiterManager2->getConnRateLimiter("192.108.0.1"));
         BOOST_CHECK_EQUAL(rateLimiter0->maxPermitsSize(), timeWindowSec * config->doubleMBToBit(1));
@@ -419,8 +417,7 @@ void checkInRateLimiterConfig(const std::shared_ptr<GatewayConfig>& config,
 
     // 分支：重新构建rateLimiterManager，检查inRateLimiter
     {
-        auto rateLimiterManager2 =
-            gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+        auto rateLimiterManager2 = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
         BOOST_CHECK(rateLimiterConfig.allowExceedMaxPermitSize);
         BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
         BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());

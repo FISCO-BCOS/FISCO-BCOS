@@ -6,8 +6,8 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <optional>
 
-using bcos::codec::rlp::DecodingError;
 using bcos::codec::rlp::decodeHeader;
+using bcos::codec::rlp::DecodingError;
 using bcos::codec::rlp::throwRlpDecodeError;
 
 namespace
@@ -105,8 +105,8 @@ bool bcos::rpc::isBlobTxNetworkWrapper(bcos::bytesConstRef envelope) noexcept
     {
         return false;
     }
-    auto const first = peekHeader(bcos::bytesConstRef(
-        rest.data() + outer->headerSize, rest.size() - outer->headerSize));
+    auto const first = peekHeader(
+        bcos::bytesConstRef(rest.data() + outer->headerSize, rest.size() - outer->headerSize));
     return first && first->isList;
 }
 
@@ -196,7 +196,8 @@ bcos::bytes bcos::rpc::encodeBlobTxNetworkWrapper(
     bcos::bytes out;
     out.reserve(1 + 9 + payload.size());
     out.push_back(static_cast<bcos::byte>(TransactionType::EIP4844));
-    codec::rlp::encodeHeader(out, codec::rlp::Header{.isList = true, .payloadLength = payload.size()});
+    codec::rlp::encodeHeader(
+        out, codec::rlp::Header{.isList = true, .payloadLength = payload.size()});
     out.insert(out.end(), payload.begin(), payload.end());
     return out;
 }

@@ -2,7 +2,7 @@
 
 This directory contains the [hive](https://github.com/ethereum/hive) client
 definition for running the FISCO-BCOS Ethereum L1 EL-mode node
-(`[ethereum] mode=el`, executor v2) against the official Ethereum cross-client
+(config.genesis `[executor] version=2`) against the official Ethereum cross-client
 test suites.
 
 ## Layout
@@ -88,10 +88,10 @@ The entrypoint:
    `eth-sync-check --genesis2ini` (alloc MPT state root and the
    `[eth_genesis_header]` hash are computed by the tool and verified by the
    node on load);
-2. maps `HIVE_BOOTNODE` onto the devp2p bootnodes file (a placeholder enode
-   keeps the autonomous sync loop idle when no peer is injected);
-3. enables the Engine API listener (8551, JWT) when the simulator mounted
-   `/jwtsecret`;
+2. maps `HIVE_BOOTNODE` onto the devp2p bootnodes file (an empty list when no
+   peer is injected: devp2p then has no peers);
+3. writes the Engine API listener's JWT secret (8551, always served): the
+   simulator's `/jwtsecret` when mounted, else a random one;
 4. imports `/chain.rlp` then `/blocks/` via
    `fisco-bcos --import-blocks <path>` — invalid blocks are skipped, so the
    best block after startup is the last valid imported block. The import
@@ -125,18 +125,19 @@ The entrypoint:
   `terminalTotalDifficulty > 0` loudly, and likewise refuses a genesis with no
   `baseFeePerGas` whose `config.londonBlock` is present and non-zero (a
   mid-chain London activation the timestamp ladder cannot express). A genesis
-  with NO `londonBlock` at all, however, is geth's "London never activates":
-  `--genesis2ini` emits it faithfully as a pre-London-shaped header plus a
-  never-activating fork ladder (every `*_time` = UINT64_MAX), so the smoke
-  genesis fixtures are served byte-exactly — only executing pre-London blocks
-  is unsupported (the EVM revision floor is London).
+  with NO `londonBlock` at all (geth's "London never activates") is refused
+  too, and so is one that leaves any of `shanghaiTime`/`cancunTime`/
+  `pragueTime` unscheduled: `[fork_timestamps]` requires london..prague and the
+  node refuses the UINT64_MAX not-scheduled sentinel there, so such a chain has
+  no representation. That includes hive's Paris/Shanghai/Cancun network
+  configs, whose genesis leaves the later forks unscheduled: their suites fail
+  at conversion. Unscheduled optional forks (osaka/bpo1/bpo2) are left out.
 - ~~**Empty alloc**~~ (fixed): `NodeConfig::validateL2Invariants` now exempts the
-  L1 EL lane (`[ethereum] mode=el`) from the non-empty-alloc invariant — an
+  L1 EL lane (`[executor] version=2`) from the non-empty-alloc invariant — an
   empty-alloc genesis publishes the canonical empty-trie root as its stateRoot
   (`Ledger::buildGenesisBlock`, matching geth byte-exactly) — and
   `--genesis2ini` converts an `alloc: {}` genesis instead of rejecting it. The
-  L2/OP lanes still require allocs (the SystemConfig predeploy's feature_flags
-  slot travels in them).
+  L2/OP lanes still require allocs (they carry their predeploys).
 - `engine_forkchoiceUpdatedV4` (Osaka) is not implemented yet.
 - ~~**EthBlockVersion stamping**~~ (fixed): `makeExecutionBlockHeader`
   (EthereumBlockVerifier.h) previously never called `setEthBlockVersion`, so

@@ -1,0 +1,153 @@
+/**
+ *  Copyright (C) 2022 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @brief the configuration of campaign leader
+ * @file CampaignConfig.h
+ * @author: yujiechen
+ * @date 2022-04-26
+ */
+#pragma once
+#include "ElectionConfig.h"
+#include "bcos-utilities/BoostLog.h"
+
+namespace bcos
+{
+namespace election
+{
+class CampaignConfig : public ElectionConfig
+{
+public:
+    using Ptr = std::shared_ptr<CampaignConfig>;
+    CampaignConfig(bcos::protocol::MemberInterface::Ptr _self, std::string const& _etcdEndPoint,
+        bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _leaderKey,
+        std::string const& _purpose, boost::asio::io_context& _ioContext, unsigned _leaseTTL = 3,
+        const std::string& _caPath = "", const std::string& _certPath = "",
+        const std::string& _keyPath = "")
+      : ElectionConfig(
+            _etcdEndPoint, _memberFactory, _purpose, _ioContext, _caPath, _certPath, _keyPath)
+    {
+        m_leaderKey = _leaderKey;
+        // FIB-176: leaseTTL is unsigned and feeds directly into the election
+        // timers. A value of 0 yields a 0ms campaign timer and underflows
+        // `leaseTTL() - 1` (the keepAlive interval) to a huge value; a value of
+        // 1 yields a 0s keepAlive interval. Clamp to a safe minimum before any
+        // timer is derived from it.
+        if (_leaseTTL < c_minLeaseTTL)
+        {
+            ELECTION_LOG(WARNING) << LOG_DESC(
+                                         "CampaignConfig: leaseTTL too small, clamp to minimum")
+                                  << LOG_KV("requested", _leaseTTL)
+                                  << LOG_KV("clamped", c_minLeaseTTL);
+        }
+        m_leaseTTL = clampLeaseTTL(_leaseTTL);
+        m_self = _self;
+        m_self->encode(m_leaderValue);
+        ELECTION_LOG(INFO) << LOG_DESC("CampaignConfig") << LOG_KV("selfID", m_self->memberID())
+                           << LOG_KV("key", m_leaderKey) << LOG_KV("leaderValue", m_leaderValue);
+    }
+
+    ~CampaignConfig() override {}
+
+    // FIB-176: minimum lease TTL (seconds). Below this the derived campaign
+    // timer (leaseTTL*1000 ms) and keepAlive interval (leaseTTL-1 s) degenerate
+    // or underflow.
+    static constexpr unsigned c_minLeaseTTL = 2;
+    static unsigned clampLeaseTTL(unsigned _ttl) noexcept
+    {
+        return _ttl < c_minLeaseTTL ? c_minLeaseTTL : _ttl;
+    }
+
+    std::string const& leaderKey() const { return m_leaderKey; }
+    virtual bcos::protocol::MemberInterface::Ptr fetchLeader();
+    virtual bcos::protocol::MemberInterface::Ptr getLeader();
+
+    virtual void setLeaderToSelf(int64_t _leaseID, int64_t _seq)
+    {
+        bcos::WriteGuard l(x_leader);
+        bcos::ReadGuard lock(x_self);
+        m_leader = m_memberFactory->createMember();
+        m_leader->setMemberID(m_self->memberID());
+        m_leader->setMemberConfig(m_self->memberConfig());
+        m_leader->setSeq(_seq);
+        // update the lease
+        m_leader->setLeaseID(_leaseID);
+    }
+
+    std::string const& leaderValue() const
+    {
+        ReadGuard l(x_self);
+        return m_leaderValue;
+    }
+    unsigned leaseTTL() const { return m_leaseTTL; }
+    bcos::protocol::MemberInterface::Ptr self()
+    {
+        ReadGuard l(x_self);
+        return m_self;
+    }
+
+    void registerTriggerCampaignHandler(std::function<bool()> _triggerCampaign)
+    {
+        m_triggerCampaign = _triggerCampaign;
+    }
+
+    void updateSelf(bcos::protocol::MemberInterface::Ptr _self)
+    {
+        WriteGuard l(x_self);
+        m_self = _self;
+        m_self->encode(m_leaderValue);
+    }
+
+    // FIB-173: exposed so the election layer can drop the stale self-leader
+    // pointer when the keepAlive heartbeat dies (the etcd lease is gone, so
+    // node-self is no longer the leader).
+    void resetLeader(bcos::protocol::MemberInterface::Ptr _leader);
+
+protected:
+    virtual void fetchLeaderInfoFromEtcd();
+    virtual void onLeaderKeyChanged(etcd::Response _response);
+    bool checkAndUpdateLeaderKey(etcd::Response _response);
+    void onElectionClusterRecover() override;
+    void reCreateWatcher() override
+    {
+        auto weak = std::weak_ptr<ElectionConfig>(shared_from_this());
+        m_watcher = std::make_shared<etcd::Watcher>(
+            *m_etcdClient, m_leaderKey, [weak](etcd::Response response) {
+                auto self = std::dynamic_pointer_cast<CampaignConfig>(weak.lock());
+                if (!self)
+                {
+                    return;
+                }
+                self->onLeaderKeyChanged(std::move(response));
+            });
+    }
+
+protected:
+    // the leader key that multiple workers compete for, eg: "/consensus"
+    std::string m_leaderKey;
+    // default lease ttl is 3 seconds
+    unsigned m_leaseTTL = 5;
+
+    // the campaign leader info, eg: the grpc/tars endpoint address
+    bcos::protocol::MemberInterface::Ptr m_self;
+    std::string m_leaderValue;
+    mutable SharedMutex x_self;
+
+    bcos::protocol::MemberInterface::Ptr m_leader;
+    mutable bcos::SharedMutex x_leader;
+
+    std::function<bool()> m_triggerCampaign;
+};
+}  // namespace election
+}  // namespace bcos

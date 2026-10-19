@@ -18,8 +18,8 @@
  * @author: yujiechen
  * @date 2021-06-10
  */
-#include "ChainLaneConfig.h"
 #include "NodeConfig.h"
+#include "ChainLaneConfig.h"
 #include "VersionConverter.h"
 #include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
@@ -51,6 +51,7 @@
 #include <cstdint>
 #include <limits>
 #include <set>
+#include <span>
 #include <string_view>
 #include <thread>
 #include <utility>
@@ -66,6 +67,24 @@ using namespace bcos::protocol;
 
 namespace
 {
+bool isEthereumLaneGenesis(boost::property_tree::ptree const& genesis)
+{
+    // A malformed executor.version reads as 0 here; loadExecutorConfig rejects it later.
+    return genesis.get_optional<int>("executor.version").value_or(0) >=
+           ledger::ETHEREUM_EXECUTOR_VERSION;
+}
+
+// v2/v3 ignore genesis [version] and run on ETHEREUM_LANE_COMPATIBILITY_VERSION.
+uint32_t genesisCompatibilityVersion(boost::property_tree::ptree const& genesis)
+{
+    if (isEthereumLaneGenesis(genesis))
+    {
+        return ledger::ETHEREUM_LANE_COMPATIBILITY_VERSION;
+    }
+    return toVersionNumber(
+        genesis.get<std::string>("version.compatibility_version", bcos::protocol::RC4_VERSION_STR));
+}
+
 // Trust-boundary helpers for [alloc.N] parsing. Functions are camelCase; no
 // members so no m_ prefix.
 bool isHex(std::string_view sv)
@@ -112,16 +131,53 @@ void requireHexField(std::string const& section, std::string const& field, std::
     }
 }
 
-void requireDecimalField(
-    std::string const& section, std::string const& field, std::string const& value)
+/// @p why, when non-empty, is inserted into the error before the offending value.
+void requireDecimalField(std::string const& section, std::string const& field,
+    std::string const& value, std::string_view why = {})
 {
     if (value.empty() || !std::all_of(value.begin(), value.end(),
                              [](unsigned char c) { return std::isdigit(c) != 0; }))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "[" + section + "]." + field + " must be decimal digits: " + value));
+                "[" + section + "]." + field + " must be decimal digits" +
+                (why.empty() ? std::string() : " " + std::string(why)) + ": " + value));
     }
+}
+
+/// The v2/v3 chain id (EIP-155 / EIP-2124, the web3_chain_id row, the genesis pin): the
+/// genesis [chain] chain_id, a non-zero decimal uint64. These lanes do not read [web3].
+std::string ethLaneChainId(boost::property_tree::ptree const& genesis)
+{
+    auto const chainId = genesis.get_optional<std::string>("chain.chain_id");
+    if (!chainId)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "executor.version >= 2 requires [chain] chain_id in "
+                                  "config.genesis (the Ethereum chain id, e.g. 11155111 for "
+                                  "Sepolia); [web3] chain_id is not read on this lane"));
+    }
+    requireDecimalField("chain", "chain_id", *chainId,
+        "on executor.version >= 2 (the Ethereum chain id, e.g. 11155111; a v0/v1 chain name "
+        "such as chain0 does not apply)");
+    auto const parsed = ledger::parseConfigUint64(*chainId, ledger::ConfigUint64Options{});
+    if (!parsed.value)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("[chain].chain_id must fit uint64: " + *chainId));
+    }
+    if (*parsed.value == 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[chain].chain_id must be non-zero on executor.version >= 2"));
+    }
+    // One spelling per id: "007" and "7" would pin and seed web3_chain_id differently.
+    if (chainId->front() == '0')
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[chain].chain_id must not have leading zeros: " + *chainId));
+    }
+    return *chainId;
 }
 /// Parse one fork-activation timestamp: decimal or 0x-prefixed hex. std::from_chars rejects
 /// sign characters ('-' would silently wrap to "never activates" under std::stoull) and the
@@ -136,18 +192,17 @@ void requireDecimalField(
 /// while the OP schedule's keys and the L1 merge_block (a block number, where the
 /// sentinel would silently mean "pre-merge forever") refuse it (fail-closed,
 /// @c refuseSentinel=true).
-uint64_t parseForkTimestamp(
-    std::string const& section, std::string const& key, std::string const& value,
-    bool refuseSentinel)
+uint64_t parseForkTimestamp(std::string const& section, std::string const& key,
+    std::string const& value, bool refuseSentinel)
 {
     // One acceptance window with the other loaders and the canonical-channel codec
     // (ledger::parseConfigUint64): decimal or 0x-hex, the whole string consumed, with the
     // not-scheduled sentinel refused only where the caller asks for it (the OP lane).
-    auto const parsed = ledger::parseConfigUint64(value,
-        ledger::ConfigUint64Options{.allowHex = true,
-            .maxValue = std::numeric_limits<uint64_t>::max(),
-            .refuseSentinel = refuseSentinel,
-            .sentinel = ledger::c_opForkTimeUnset});
+    auto const parsed =
+        ledger::parseConfigUint64(value, ledger::ConfigUint64Options{.allowHex = true,
+                                             .maxValue = std::numeric_limits<uint64_t>::max(),
+                                             .refuseSentinel = refuseSentinel,
+                                             .sentinel = ledger::c_opForkTimeUnset});
     if (parsed.error == ledger::ConfigUint64Error::sentinel)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -162,6 +217,137 @@ uint64_t parseForkTimestamp(
                                   "[" + section + "]." + key + " invalid timestamp: " + value));
     }
     return *parsed.value;
+}
+
+// Keys a stored config may still carry that no code reads any more. Each one present gets one
+// WARN at load (recordDeadKeys) and the node starts. config.ini keys a lane does not use but
+// another lane does are NOT here: one config.ini template serves every lane, so they are
+// silently ignored on the lane that has no use for them. config.genesis is per chain, so its
+// other-lane keys are listed (c_deadEthLaneGenesisKeys, c_deadV01LaneGenesisKeys).
+struct DeadKey
+{
+    std::string_view section;
+    // empty: the whole section; a trailing '*': every key of the section with that prefix
+    std::string_view key;
+    // what to write instead; empty when nothing replaces the key
+    std::string_view replacement;
+};
+
+constexpr auto c_ethereumModeReplacement =
+    "none: genesis executor.version decides; opstack-el -> config.ini [debug] follow_devp2p=true "
+    "(executor.version >= 3)";
+
+constexpr std::array c_deadConfigKeys{
+    DeadKey{"web3_rpc", "http_body_size_limit", "[web3_rpc] request_body_size_limit"},
+    DeadKey{"executor", "baseline_scheduler", ""},
+    DeadKey{"storage", "pd_ssl_*", ""},
+    DeadKey{"redis", "", ""},
+    DeadKey{"flow_control", "enable_distributed_ratelimit", ""},
+    DeadKey{"flow_control", "enable_distributed_ratelimit_cache", ""},
+    DeadKey{"flow_control", "distributed_ratelimit_cache_percent", ""},
+    DeadKey{"security", "hsm_public_key_file_path", ""},
+    DeadKey{"experimental", "check_parallel_conflict", ""},
+    // 3.18 keys this release removes
+    DeadKey{"consensus", "enable_single_node_consensus", "[debug] enable"},
+    DeadKey{"consensus", "block_interval", "[debug] block_interval"},
+    DeadKey{"consensus", "produce_empty_blocks", "[debug] produce_empty_blocks"},
+    DeadKey{"consensus", "fee_recipient", "[debug] fee_recipient"},
+    DeadKey{"consensus", "prev_randao", "[debug] prev_randao"},
+    DeadKey{"consensus", "fixed_timestamp", "[debug] fixed_timestamp"},
+    DeadKey{"op_engine_rpc", "",
+        "[engine_rpc]: move its keys there (enable_debug_api, enable_miner_api, listen_ip/port, "
+        "jwt_secret_file, ...); enable and unsafe_allow_v1_executor are gone"},
+    DeadKey{"engine_rpc", "enable",
+        "none: the Engine API listener runs whenever the block driver is Engine "
+        "(v2/v3 without a [debug] driver)"},
+    DeadKey{"ethereum", "mode", c_ethereumModeReplacement},
+    // [web3_rpc] enable_miner_api stays live: op-batcher's --l2-eth-rpc (no JWT) is the web3
+    // listener, and it sends miner_setMaxDASize there.
+};
+
+// config.ini sections that config.genesis carries from compatibility_version 3.1 on.
+constexpr std::array c_deadConfigChainSections{
+    DeadKey{"chain", "", "config.genesis [chain]"},
+    DeadKey{"web3", "", "config.genesis [web3] (v0/v1) / [chain] chain_id (v2/v3)"},
+};
+
+constexpr std::array c_deadGenesisKeys{
+    DeadKey{"consensus", "consensus_timeout", "config.ini [consensus] checkpoint_timeout"},
+};
+
+constexpr auto c_ethLaneForkReplacement = "[fork_timestamps] (v2) / [op_fork_timestamps] (v3)";
+
+// config.genesis keys v2/v3 do not read: the 3.18 development-line keys and the v0/v1 sections.
+constexpr std::array c_deadEthLaneGenesisKeys{
+    DeadKey{"ethereum", "mode", c_ethereumModeReplacement},
+    DeadKey{"executor", "evm_revision", c_ethLaneForkReplacement},
+    DeadKey{"executor", "evm_revision_forks", c_ethLaneForkReplacement},
+    DeadKey{"op_fork_schedule", "", "[op_fork_timestamps]"},
+    DeadKey{"web3", "", "[chain] chain_id"},
+    DeadKey{"version", "", "none: v2/v3 run on a fixed compatibility version"},
+    DeadKey{"features", "", c_ethLaneForkReplacement},
+};
+
+// config.genesis keys the 3.18 development line parsed (and pinned) on every lane; v0/v1 no
+// longer read them.
+constexpr std::array c_deadV01LaneGenesisKeys{
+    DeadKey{"executor", "evm_revision", "none: v0/v1 follow [version] and [features]"},
+    DeadKey{"executor", "evm_revision_forks", "none: v0/v1 follow [version] and [features]"},
+};
+
+// [debug] block parameters that only the DebugSelfProduce driver reads. blockDriver() refuses
+// [debug] enable on executor.version 0 and on the OP lane, so the replacement names the lanes.
+constexpr auto c_debugEnableReplacement = "[debug] enable=true (executor.version 1 or 2 only)";
+constexpr std::array c_debugSelfProduceKeys{
+    DeadKey{"debug", "block_interval", c_debugEnableReplacement},
+    DeadKey{"debug", "produce_empty_blocks", c_debugEnableReplacement},
+    DeadKey{"debug", "fee_recipient", c_debugEnableReplacement},
+    DeadKey{"debug", "prev_randao", c_debugEnableReplacement},
+    DeadKey{"debug", "fixed_timestamp", c_debugEnableReplacement},
+};
+
+// WARN once for each key of `table` present in `pt`; returns them as "<file> [section] key".
+std::vector<std::string> recordDeadKeys(
+    boost::property_tree::ptree const& pt, std::span<DeadKey const> table, std::string_view file)
+{
+    std::vector<std::string> found;
+    for (auto const& dead : table)
+    {
+        auto section = pt.get_child_optional(std::string(dead.section));
+        if (!section)
+        {
+            continue;
+        }
+        auto const sectionName = std::string(file) + " [" + std::string(dead.section) + "]";
+        std::vector<std::string> names;
+        if (dead.key.empty())
+        {
+            names.push_back(sectionName);
+        }
+        else if (dead.key.ends_with('*'))
+        {
+            auto const prefix = dead.key.substr(0, dead.key.size() - 1);
+            for (auto const& entry : *section)
+            {
+                if (entry.first.starts_with(prefix))
+                {
+                    names.push_back(sectionName + " " + entry.first);
+                }
+            }
+        }
+        else if (section->find(std::string(dead.key)) != section->not_found())
+        {
+            names.push_back(sectionName + " " + std::string(dead.key));
+        }
+        for (auto& name : names)
+        {
+            NodeConfig_LOG(WARNING)
+                << LOG_DESC("this key has no effect") << LOG_KV("key", name)
+                << LOG_KV("replacement", dead.replacement.empty() ? "none" : dead.replacement);
+            found.push_back(std::move(name));
+        }
+    }
+    return found;
 }
 
 /// Required key: absent is a config error.
@@ -187,34 +373,6 @@ uint64_t readOptionalForkTimestamp(boost::property_tree::ptree const& section,
     }
     return std::numeric_limits<uint64_t>::max();
 }
-
-// Shared field set of the authenticated Engine API listener sections
-// ([op_engine_rpc] and [engine_rpc]).
-struct EngineRpcSectionConfig
-{
-    bool enable = false;
-    std::string listenIP = "127.0.0.1";
-    int listenPort = 8551;
-    int requestBodySizeLimit = 10485760;
-    int batchRequestSizeLimit = 8;
-    std::string jwtSecretFile;
-    int32_t clockSkewSecs = 60;
-};
-
-EngineRpcSectionConfig parseEngineRpcSection(boost::property_tree::ptree const& _pt,
-    std::string const& _section, std::string _defaultJwtSecretFile)
-{
-    EngineRpcSectionConfig config;
-    config.enable = _pt.get<bool>(_section + ".enable", false);
-    config.listenIP = _pt.get<std::string>(_section + ".listen_ip", "127.0.0.1");
-    config.listenPort = _pt.get<int>(_section + ".listen_port", 8551);
-    config.requestBodySizeLimit = _pt.get<int>(_section + ".request_body_size_limit", 10485760);
-    config.batchRequestSizeLimit = _pt.get<int>(_section + ".batch_request_size_limit", 8);
-    config.jwtSecretFile =
-        _pt.get<std::string>(_section + ".jwt_secret_file", std::move(_defaultJwtSecretFile));
-    config.clockSkewSecs = _pt.get<int32_t>(_section + ".clock_skew_secs", 60);
-    return config;
-}
 }  // namespace
 
 NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
@@ -223,8 +381,8 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 
 NodeConfig::NodeConfig() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
 
-void NodeConfig::loadConfig(std::string const& _configPath, bool enforceChainConfig,
-    bool enforceGroupId)
+void NodeConfig::loadConfig(
+    std::string const& _configPath, bool enforceChainConfig, bool enforceGroupId)
 {
     boost::property_tree::ptree iniConfig;
     boost::property_tree::read_ini(_configPath, iniConfig);
@@ -254,9 +412,17 @@ void NodeConfig::loadGenesisConfigFromString(std::string const& _content)
     loadGenesisConfig(genesisConfig);
 }
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceChainConfig,
-    bool _enforceGroupId)
+void NodeConfig::loadConfig(
+    boost::property_tree::ptree const& _pt, bool _enforceChainConfig, bool _enforceGroupId)
 {
+    m_deadConfigKeys = recordDeadKeys(_pt, c_deadConfigKeys, "config.ini");
+    // From compat 3.1 the chain identity lives in config.genesis (loadGenesisConfig runs first)
+    if (!_enforceChainConfig && m_genesisConfig.m_compatibilityVersion >=
+                                    (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        auto chainSections = recordDeadKeys(_pt, c_deadConfigChainSections, "config.ini");
+        m_deadConfigKeys.insert(m_deadConfigKeys.end(), chainSections.begin(), chainSections.end());
+    }
     // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig || (m_genesisConfig.m_compatibilityVersion <
                                        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
@@ -268,11 +434,9 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
     loadWeb3RpcConfig(_pt);
-    loadOpEngineRpcConfig(_pt);
     loadEngineRpcConfig(_pt);
-    loadGatewayConfig(_pt);
+    loadDebugConfig(_pt);
     loadSealerConfig(_pt);
-    loadSingleNodeConsensusConfig(_pt);
     loadTxPoolConfig(_pt);
     // loadSecurityConfig before loadStorageSecurityConfig for deciding whether to use HSM
     loadSecurityConfig(_pt);
@@ -288,25 +452,37 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
 {
+    m_deadGenesisKeys = recordDeadKeys(_genesisConfig, c_deadGenesisKeys, "config.genesis");
+    auto laneKeys = isEthereumLaneGenesis(_genesisConfig) ?
+                        recordDeadKeys(_genesisConfig, c_deadEthLaneGenesisKeys, "config.genesis") :
+                        recordDeadKeys(_genesisConfig, c_deadV01LaneGenesisKeys, "config.genesis");
+    m_deadGenesisKeys.insert(m_deadGenesisKeys.end(), laneKeys.begin(), laneKeys.end());
     // if version >= 3.1.0, genesisBlock include chainConfig
-    auto compatibilityVersion = _genesisConfig.get<std::string>(
-        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
-    m_genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
+    m_genesisConfig.m_compatibilityVersion = genesisCompatibilityVersion(_genesisConfig);
     if (m_genesisConfig.m_compatibilityVersion >=
         (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         loadChainConfig(_genesisConfig, true);
     }
-    loadWeb3ChainConfig(_genesisConfig);
-    loadGenesisFeatures(_genesisConfig);
+    if (isEthereumLaneGenesis(_genesisConfig))
+    {
+        // One chain id per v2/v3 chain: [chain] chain_id feeds every [web3] chain_id consumer.
+        m_genesisConfig.m_web3ChainID = ethLaneChainId(_genesisConfig);
+    }
+    else
+    {
+        loadWeb3ChainConfig(_genesisConfig);
+    }
+    // v2/v3 fork on the Ethereum / OP schedule only; their [features] is ignored.
+    m_genesisConfig.m_features.clear();
+    if (!isEthereumLaneGenesis(_genesisConfig))
+    {
+        loadGenesisFeatures(_genesisConfig);
+    }
 
     loadLedgerConfig(_genesisConfig);
-    // EL-mode declaration + fork schedule must be parsed BEFORE loadExecutorConfig: its v2
-    // EVMC-revision / auth_admin_account guards exempt chains that declare EL mode
-    // ([ethereum] mode=el, with its mandatory [fork_timestamps] section).
     loadForkTimestamps(_genesisConfig);
     loadOpForkTimestamps(_genesisConfig);
-    loadOpForkSchedule(_genesisConfig);
     loadOpEip1559(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
@@ -430,8 +606,9 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("[" + std::string(sectionName) + "]." + key +
-                                                   " is required (all 22 eth genesis header "
-                                                   "fields must come from the genesis artifact)"));
+                                                   " is required (every header field that is "
+                                                   "not fork-gated, and hash, must come from "
+                                                   "the genesis artifact)"));
         }
         return *value;
     };
@@ -496,7 +673,7 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
     // Fork-gated fields are OPTIONAL: a pre-Cancun chain (e.g. Sepolia's
     // London-era genesis) omits the keys, which makes the corresponding RLP
     // field absent — that is exactly what lets Ledger re-encode the header
-    // byte-for-byte. An L2 artifact always emits all 21 keys, so the
+    // byte-for-byte. An L2 artifact always emits all six, so its full
     // 21-field encoding is unchanged. Only an ABSENT key means "field omitted":
     // a present-but-empty key is a config typo and must fail loudly in
     // requireHexField, not silently decode to the omitted-field encoding.
@@ -548,23 +725,33 @@ void NodeConfig::validateL2Invariants()
     // ETHEREUM_EXECUTOR_VERSION; there is no separate chain_mode or feature flag.
     // allocs and the lane must agree.
     bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
-    // An empty alloc set is legal only on the L1 EL lane ([ethereum] mode=el): its genesis
+    auto const lane = laneForExecutorVersion(genesis.m_executorVersion);
+    // An empty alloc set is legal only on the L1 EL lane (executor.version=2): its genesis
     // stateRoot is the canonical empty-trie root (Ledger::buildGenesisBlock publishes
     // mpt::emptyRootHash() and block 1's MPT build starts from it), which is a valid
-    // Ethereum genesis (hive smoke/genesis, several EEST fixtures). The L2/OP lanes still
-    // require allocs — the SystemConfig predeploy's feature_flags slot travels in them.
-    if (ethLane && genesis.m_allocs.empty() && !genesis.m_ethereumELMode)
+    // Ethereum genesis (hive smoke/genesis, several EEST fixtures). The OP lane still
+    // requires allocs — its predeploys live in them.
+    if (lane == ChainLane::Op && genesis.m_allocs.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.version >= 2 (the Ethereum lane) requires a "
-                                  "non-empty [alloc.*] section in config.genesis (only "
-                                  "[ethereum] mode=el may run an empty-alloc genesis)"));
+                                  "executor.version >= 3 (the OP lane) requires a non-empty "
+                                  "[alloc.*] section in config.genesis (only executor.version=2 "
+                                  "may run an empty-alloc genesis)"));
     }
     if (!ethLane && !genesis.m_allocs.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[alloc.*] section requires executor.version >= 2 (the "
                                   "Ethereum lane) in config.genesis"));
+    }
+    // RPBFT lives on the feature_rpbft / epoch rows, which an Ethereum-lane genesis does not
+    // write: an rpbft v2/v3 chain would build an RPBFT engine over a ledger that reports
+    // PBFT and never rotates its candidate sealers.
+    if (ethLane && genesis.m_consensusType == ledger::RPBFT_CONSENSUS_TYPE)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "consensus.consensus_type=rpbft requires executor.version < 2; "
+                                  "the Ethereum lane (executor.version >= 2) runs pbft"));
     }
     // The Ethereum B0 header and the Ethereum lane are bound both ways: a consortium chain
     // with an [eth_genesis_header] section is a mis-assembled config, and an Ethereum-lane
@@ -582,99 +769,33 @@ void NodeConfig::validateL2Invariants()
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "executor.version >= 2 (the Ethereum lane) requires an [eth_genesis_header] "
-                "section in config.genesis (all 22 fields from the merged genesis artifact); "
+                "section in config.genesis (the 21 header fields plus hash, from the merged "
+                "genesis artifact); "
                 "an Ethereum-lane chain without it would build a non-Ethereum genesis block"));
     }
-    // EL mode ([ethereum] mode=el) and its [fork_timestamps] schedule are bound both ways:
-    // the schedule only makes sense on a chain that declares EL mode — otherwise an ordinary
-    // executor-v2 chain could waive the evmc_revision / auth_admin_account guards by pasting
-    // in a section nothing reads — and an EL chain without a schedule cannot derive its EVM
-    // revision. Both live in config.genesis, so the pairing is part of the genesis pin.
-    if (!genesis.m_ethereumELMode && genesis.m_ethereumForkSchedule.has_value())
+    // [fork_timestamps] is the L1 fork schedule (L1 PoS header rules, the L1 EVM revision
+    // ladder): only the L1 EL lane reads it. The OP lane forks on [op_fork_timestamps].
+    if (lane != ChainLane::Eth && genesis.m_ethereumForkSchedule.has_value())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[fork_timestamps] section requires [ethereum] mode=el in "
-                                  "config.genesis (Ethereum L1 EL mode)"));
+                                  "[fork_timestamps] section requires executor.version=2 (the "
+                                  "L1 EL lane) in config.genesis"));
     }
-    if (genesis.m_ethereumELMode && !genesis.m_ethereumForkSchedule.has_value())
+    // EL-sync's EIP-155 signature validation and geth's EIP-2124 fork-id handshake
+    // (parts 7-9) key on the CHAIN id. On the Ethereum lanes that id is [chain] chain_id,
+    // already held to a non-zero decimal uint64 by ethLaneChainId. 0 = unset (FISCO lanes),
+    // never a mainnet fallback.
+    if (ethLane)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[ethereum] mode=el requires a [fork_timestamps] section in "
-                                  "config.genesis (the EL-mode fork schedule)"));
-    }
-    // The lane binding, symmetric to the opstack-el >= 3 check below: mode=el is
-    // the L1 EL lane (L1 fork schedule, L1 PoS header rules), so it requires the
-    // L1 executor version. On the OP lane (executor.version >= 3) the self-sync
-    // declaration is mode=opstack-el — accepting mode=el there would also waive
-    // the non-empty-alloc invariant above for a chain whose SystemConfig
-    // predeploy's feature_flags slot travels in the allocs.
-    if (genesis.m_ethereumELMode &&
-        (genesis.m_executorVersion < ledger::ETHEREUM_EXECUTOR_VERSION ||
-            genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION))
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[ethereum] mode=el requires executor.version=2 (the L1 EL "
-                                  "lane) in config.genesis; the OP lane (executor.version >= 3) "
-                                  "takes mode=opstack-el"));
-    }
-    // EL-sync mode's EIP-155 signature validation and geth's EIP-2124 fork-id handshake
-    // (parts 7-9) key on the CHAIN id: a silent fallback to mainnet (1) would accept
-    // transactions signed for another chain or announce a stale fork-id checksum. Require
-    // an explicit [web3] chain_id (the chain-level id, part of the genesis pin) on every
-    // EL-sync-declaring genesis (both el and opstack-el) — "0" is loadWeb3ChainConfig's
-    // absent default, and a value that overflows uint64 is a config error, not a
-    // fallback. Keyed on the genesis declaration (not the per-node config.ini mode) so
-    // the check is independent of load order.
-    if (genesis.m_ethereumELMode || genesis.m_opStackELMode)
-    {
-        auto const& web3ChainId = genesis.m_web3ChainID;
-        if (web3ChainId.empty())
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=el/opstack-el requires [web3] chain_id in "
-                                      "config.genesis (the Ethereum chain id, e.g. 11155111 "
-                                      "for Sepolia, 11155420 for op-sepolia)"));
-        }
-        try
-        {
-            m_ethereumChainId = boost::lexical_cast<uint64_t>(web3ChainId);
-        }
-        catch (boost::bad_lexical_cast const&)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=el/opstack-el requires [web3] chain_id "
-                                      "to fit uint64: " +
-                                      web3ChainId));
-        }
-        // Check the PARSED value, not the string: any zero spelling ("0", "00", ...)
-        // yields the reserved "unset" value, which is not a chain id.
-        if (m_ethereumChainId == 0)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=el/opstack-el requires a non-zero [web3] "
-                                      "chain_id in config.genesis (e.g. 11155111 for Sepolia, "
-                                      "11155420 for op-sepolia)"));
-        }
+        m_ethereumChainId =
+            ledger::parseConfigUint64(genesis.m_web3ChainID, ledger::ConfigUint64Options{})
+                .value.value_or(0);
     }
     // The OP lane and its fork schedule are bound both ways (enforced in the
     // laneKeyRules walk below): a [op_fork_timestamps] section on a non-OP chain would
     // be a section nothing reads (and, worse, one an operator would reasonably expect
     // to change execution); an OP chain without one has no way to say when Jovian or
     // Karst activate, and would silently run Isthmus forever.
-    // On the OP lane the EVM revision is a FUNCTION of the fork schedule: OpScheduler feeds
-    // the executor the fork spec resolved from (schedule, blockTime), so a configured
-    // executor.evm_revision is
-    // never read for execution and can only disagree with what the chain actually runs (a
-    // prague pin on a Karst block, say). Reject the pair instead of carrying a value that
-    // lies.
-    if (genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION &&
-        (genesis.m_evmcRevision.has_value() || !genesis.m_evmcRevisionForks.empty()))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "the OP lane derives the EVM revision from [op_fork_timestamps]; remove "
-                "executor.evm_revision / evm_revision_forks"));
-    }
     // The OP-only config sections are bound to the OP lane from the declarative rule
     // table (ChainLaneConfig.h laneKeyRules — the SAME table the lane matrix test
     // asserts against; presence is resolved through each rule's presenceMember hook, so
@@ -685,12 +806,7 @@ void NodeConfig::validateL2Invariants()
     // A section's presence reads the parsed GenesisConfig member NAMED by the rule
     // (LaneKeyRule.presenceMember) — one hook per rule, so a new row is enforced by
     // construction and a rule without a hook fails closed rather than reading "absent".
-    auto const lane = laneForExecutorVersion(genesis.m_executorVersion);
     auto const sectionPresent = [&](LaneKeyRule const& rule) {
-        if (rule.presenceMember == "m_opstackForkSchedule")
-        {
-            return genesis.m_opstackForkSchedule.has_value();
-        }
         if (rule.presenceMember == "m_opForkSchedule")
         {
             return genesis.m_opForkSchedule.has_value();
@@ -728,88 +844,67 @@ void NodeConfig::validateL2Invariants()
                 InvalidConfig() << errinfo_comment(std::string(rule.rejectMessage)));
         }
     }
-    // A dual declaration must agree on WHEN Jovian and Karst activate: those are the
-    // only rungs any consumer keys on across BOTH channels — the canonical
-    // [op_fork_schedule] text is stored as the SYS_CONFIG row whose snapshot readers
-    // (opForkScheduleFromCanonical) extract exactly the jovian/karst seconds, while the
-    // executor, the devp2p validator and the genesis pin run the [op_fork_timestamps]
-    // shorthand. A divergence on those two rungs would make one node price and admit
-    // against a different activation than it executes; lower rungs of the canonical row
-    // are carried verbatim but read by nobody today. The comparison lives in
-    // OpForkScheduleMetadata.h so the genesis writer resolves the same conflict by the
-    // same rule instead of silently preferring one channel.
-    if (auto const problem = ledger::opForkScheduleDualDeclarationProblem(
-            genesis.m_opstackForkSchedule, genesis.m_opForkSchedule))
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(*problem));
-    }
-    // The opstack-el declaration ([ethereum] mode=opstack-el) is bound to the OP lane and
-    // the Ethereum-lane genesis shape: the sync client downloads OP blocks over devp2p and
-    // commits them through OpBlockVerifier, which requires the OP executor (fork resolution
-    // from [op_fork_timestamps]) and the Ethereum genesis anchor ([eth_genesis_header] plus
-    // [alloc.*], both bound to executor.version >= 2 above — the >= 3 requirement below
-    // implies them). The chain-id requirement is the shared EL-sync block above.
-    if (genesis.m_opStackELMode)
-    {
-        if (genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=opstack-el requires executor.version >= 3 "
-                                      "(the OP lane) in config.genesis"));
-        }
-        if (!genesis.m_opForkSchedule.has_value())
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=opstack-el requires an "
-                                      "[op_fork_timestamps] section in config.genesis (the OP "
-                                      "fork schedule drives both header validation and the "
-                                      "EIP-2124 fork-id ladder)"));
-        }
-    }
 }
 
-// Cross-file EL-mode invariant: config.ini's ethereum.mode=el must be backed by the
-// chain-level declaration in config.genesis (which itself binds [fork_timestamps] and
-// [web3] chain_id — validateL2Invariants). This hook reads BOTH files' members, so it
-// must run after both are loaded: the node initializers call it explicitly. It is NOT
-// done inside loadEthereumConfig because tools (archive-tool, storage-tool) load
-// config.ini before config.genesis and must not trip on the not-yet-loaded genesis.
+// Cross-file invariants: config.ini settings whose legality depends on the lane
+// (config.genesis executor.version) or on genesis sections. This hook reads BOTH files'
+// members, so it must run after both are loaded: the node initializers call it explicitly.
+// It is NOT done inside the config.ini loaders because tools (archive-tool, storage-tool)
+// load config.ini before config.genesis and must not trip on the not-yet-loaded genesis.
+// It starts with blockDriver(), so a driver combination the lane refuses fails at startup.
 void NodeConfig::validateELModeInvariants() const
 {
-    if (m_enableEthereumEL && !m_genesisConfig.m_ethereumELMode)
+    auto const driver = blockDriver();
+    auto const lane = laneForExecutorVersion(m_genesisConfig.m_executorVersion);
+    // Both v2 drivers (Engine and DebugSelfProduce) build and verify every block through
+    // EthereumBlockVerifier (Initializer injects it into the EngineService), which derives the
+    // EVM revision and the header rules from the block timestamp against [fork_timestamps];
+    // without the schedule it has nothing to derive them from.
+    if (lane == ChainLane::Eth && !m_genesisConfig.m_ethereumForkSchedule.has_value())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode=el requires config.genesis to declare "
-                                  "[ethereum] mode=el: the EL-mode declaration is part of "
-                                  "the genesis pin"));
+                                  "executor.version=2 (the L1 EL lane) requires a "
+                                  "[fork_timestamps] section in config.genesis (the L1 fork "
+                                  "schedule): its Engine and [debug] enable block drivers derive "
+                                  "the EVM revision from it"));
     }
-    // The symmetric direction: the genesis EL declaration waives the on-chain
-    // executor.evm_revision (loadExecutorConfig) on the premise that the EL
-    // verifier derives the revision from the block timestamp — which only EL
-    // mode does. A node booting an EL-declaring genesis with ethereum.mode=none
-    // would run executor v2 through the FISCO pipeline with an implicit
-    // binary-side revision and diverge from its EL peers on the first block.
-    if (m_genesisConfig.m_ethereumELMode && !m_enableEthereumEL)
+    // Refused ahead of the MPT pruner's boot-time init (Initializer::init): that init walks
+    // the window's state roots and, with storage.mpt_prune_sweep_garbage on, deletes
+    // unreachable "/mpt/" rows, so the refusal must not come after it. The OP Engine API
+    // commit path has no MPT pruning observer; the devp2p follow path does
+    // (OpBlockVerifier::verifyAndCommit, wired through OpStackSyncInitializer).
+    if (lane == ChainLane::Op && m_mptPruneWindow > 0 && driver != BlockDriver::DebugFollowDevp2p)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "storage.mpt_prune_window > 0 on executor.version >= 3 (the OP lane) requires "
+                "[debug] follow_devp2p=true: the Engine API OP commit path has no MPT pruning "
+                "observer"));
+    }
+    // EEST fixture replay (loadOthersConfig): refused off the L1 EL lane rather than ignored.
+    // A FISCO-lane chain produces blocks through consensus and admits transactions from
+    // peers, and a node that stopped checking balances would fill its pool with
+    // transactions the leader cannot execute. The fixtures are Ethereum state tests, so the
+    // switch belongs to executor.version=2 only.
+    if (m_eestReplayMode && lane != ChainLane::Eth)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "config.genesis declares [ethereum] mode=el but config.ini "
-                                  "has ethereum.mode=none: an EL chain has no on-chain "
-                                  "evmc_revision, so every node must run in EL mode"));
+                                  "executor.eest_replay_mode requires executor.version=2 (the L1 "
+                                  "EL lane) in config.genesis"));
     }
     // Phase 3 shallow reorg (EthereumChainRollback.h) vs MPT pruning: a rollback target's
     // state root must stay fully resolvable on disk. A node row deleted at block b was
     // obsoleted at b - mpt_prune_window, so with prune_window >= reorg_window every node a
     // rollback target (>= head - reorg_window) references is still present. Pruning
     // disabled (-1) is always safe. Only EL mode rolls back, so only EL mode is gated.
-    if (m_enableEthereumEL && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
+    if (ethereumELModeEnabled() && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
         m_mptPruneWindow < m_ethereumReorgWindow)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "storage.mpt_prune_window (" + std::to_string(m_mptPruneWindow) +
-                ") must be -1 (disabled) or >= ethereum.reorg_window (" +
-                std::to_string(m_ethereumReorgWindow) +
-                "): an EL rollback target's trie nodes would already be pruned"));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "storage.mpt_prune_window (" + std::to_string(m_mptPruneWindow) +
+                                  ") must be -1 (disabled) or >= ethereum.reorg_window (" +
+                                  std::to_string(m_ethereumReorgWindow) +
+                                  "): an EL rollback target's trie nodes would already be pruned"));
     }
     // The challenger data plane (debug_dbGet, gated by enable_debug_api on either listener)
     // reads MPT preimages straight out of the node store with no retention guarantee: a block
@@ -818,7 +913,7 @@ void NodeConfig::validateELModeInvariants() const
     // content hash, not by block, so it cannot produce eth_getProof's "State pruned" diagnostic).
     // The dispute window is a chain/contract parameter, not a node config, so the enforceable
     // invariant is the archive one: a node serving preimages must not bound MPT disk growth.
-    if ((m_enableDebugApi || m_enableOpEngineDebugApi) && m_mptPruneWindow != -1)
+    if ((m_enableDebugApi || engineApiDebugApi()) && m_mptPruneWindow != -1)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "enable_debug_api requires storage.mpt_prune_window = -1 "
@@ -826,26 +921,6 @@ void NodeConfig::validateELModeInvariants() const
                                   "no retention guarantee, and a pruned block still inside a "
                                   "dispute game's challenge window would answer -32000 \"not "
                                   "found\" indistinguishable from an unknown hash"));
-    }
-    // Same two-way binding for opstack-el: the per-node mode must be backed by the
-    // chain-level declaration (which validateL2Invariants binds to the OP lane, the
-    // fork schedule and the L2 genesis shape), and an opstack-el-declaring genesis
-    // must not boot with its sync client disabled.
-    if (m_enableOpStackEL && !m_genesisConfig.m_opStackELMode)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode=opstack-el requires config.genesis to declare "
-                                  "[ethereum] mode=opstack-el: the EL-mode declaration is part "
-                                  "of the genesis pin"));
-    }
-    if (m_genesisConfig.m_opStackELMode && !m_enableOpStackEL)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "config.genesis declares [ethereum] mode=opstack-el but "
-                                  "config.ini has ethereum.mode=" +
-                                  std::string(m_enableEthereumEL ? "el" : "none") +
-                                  ": an opstack-el chain must run its devp2p sync client on "
-                                  "every node"));
     }
 }
 
@@ -923,7 +998,7 @@ void NodeConfig::loadWithoutTarsFrameworkConfig(boost::property_tree::ptree cons
 }
 
 void NodeConfig::loadNodeServiceConfig(
-    std::string const& _nodeID, boost::property_tree::ptree const& _pt)
+    std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require)
 {
     auto nodeName = _pt.get<std::string>("service.node_name", "");
     if (nodeName.size() == 0)
@@ -956,9 +1031,17 @@ void NodeConfig::loadNodeServiceConfig(
     }
 
     m_nodeName = nodeName;
+    m_schedulerServiceName = getServiceName(_pt, "service.scheduler", SCHEDULER_SERVANT_NAME,
+        getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), _require);
+    m_executorServiceName = getServiceName(_pt, "service.executor", EXECUTOR_SERVANT_NAME,
+        getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), _require);
+    m_txpoolServiceName = getServiceName(_pt, "service.txpool", TXPOOL_SERVANT_NAME,
+        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), _require);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
-                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework);
+                         << LOG_KV("withoutTarsFramework", m_withoutTarsFramework)
+                         << LOG_KV("schedulerServiceName", m_schedulerServiceName)
+                         << LOG_KV("executorServiceName", m_executorServiceName);
 }
 
 void NodeConfig::loadTarsProxyConfig(const std::string& _tarsProxyConf)
@@ -978,6 +1061,9 @@ void NodeConfig::loadTarsProxyConfig(const std::string& _tarsProxyConf)
         loadServiceTarsProxyConfig("front", pt);
         loadServiceTarsProxyConfig("rpc", pt);
         loadServiceTarsProxyConfig("gateway", pt);
+        loadServiceTarsProxyConfig("executor", pt);
+        loadServiceTarsProxyConfig("txpool", pt);
+        loadServiceTarsProxyConfig("scheduler", pt);
         loadServiceTarsProxyConfig("pbft", pt);
         loadServiceTarsProxyConfig("ledger", pt);
 
@@ -1168,13 +1254,13 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; The OP miner namespace (miner_setMaxDASize, the batcher DA-throttle handshake) is off
         ; unless enabled here: it writes the node-wide DA caps, and any client of the listener
         ; carrying it can starve the sequencer. This key scopes the namespace to THIS web3
-        ; listener only; the op-engine (8551) listener has its own [op_engine_rpc]
+        ; listener only; the Engine API (8551) listener has its own [engine_rpc]
         ; enable_miner_api. Keep this port private if you set it — never expose it publicly.
         ; enable_miner_api=false
         ; The geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload) is off
         ; unless enabled here: it serves the fault-proof preimage oracle (kona-host), not general
-        ; clients. This key scopes the namespace to THIS web3 listener only; the op-engine (8551)
-        ; listener has its own [op_engine_rpc] enable_debug_api.
+        ; clients. This key scopes the namespace to THIS web3 listener only; the Engine API (8551)
+        ; listener has its own [engine_rpc] enable_debug_api.
         ; Enabling it also REQUIRES storage.mpt_prune_window=-1 (archive): the namespace reads
         ; MPT preimages with no retention guarantee, so a pruned block still inside a dispute
         ; game's challenge window would answer an indistinguishable -32000. The node refuses to
@@ -1255,136 +1341,108 @@ uint32_t NodeConfig::web3FinalizedBlockDepth() const
     return m_web3FinalizedBlockDepth;
 }
 
-void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
-{
-    /*
-    [op_engine_rpc]
-        enable=false
-        listen_ip=127.0.0.1
-        listen_port=8551
-        request_body_size_limit=10485760
-        batch_request_size_limit=8
-        jwt_secret_file=conf/op-engine/jwt.hex
-        clock_skew_secs=60
-        ; scopes the OP miner namespace (miner_setMaxDASize) to THIS listener only — the
-        ; batcher/conductor port. [web3_rpc] enable_miner_api scopes it to the web3 listener
-        ; only; neither key reaches the other port.
-        ; enable_miner_api=false
-        ; scopes the geth debug namespace to THIS listener only (default off); [web3_rpc]
-        ; enable_debug_api scopes it to the web3 listener. Neither key reaches the other port.
-        ; Enabling it on either port requires storage.mpt_prune_window=-1 (archive), for the
-        ; same reason as [web3_rpc] enable_debug_api above.
-        ; enable_debug_api=false
-    */
-    const auto config = parseEngineRpcSection(_pt, "op_engine_rpc", "conf/op-engine/jwt.hex");
-    // test-only escape hatch, see Initializer's executor-version guard
-    const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
-    const bool enableMinerApi = _pt.get<bool>("op_engine_rpc.enable_miner_api", false);
-    const bool enableDebugApi = _pt.get<bool>("op_engine_rpc.enable_debug_api", false);
-
-    m_enableOpEngineRpc = config.enable;
-    // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
-    // two loaders runs second fires the guard, so it holds regardless of loadConfig's loader
-    // order and also when a loader is invoked on its own.
-    if (m_enableOpEngineRpc && m_enableSingleNodeConsensus)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
-                "exclusive: both drive the same EngineService; enable at most one"));
-    }
-    // Symmetric with loadEngineRpcConfig: the EL-mode [engine_rpc] listener and the OP-lane
-    // [op_engine_rpc] listener serve the same EngineService slot.
-    if (m_enableOpEngineRpc && m_enableEngineRpc)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "op_engine_rpc.enable and engine_rpc.enable are mutually exclusive: both "
-                "configure the same Engine API listener; enable at most one"));
-    }
-    m_opEngineRpcListenIP = config.listenIP;
-    m_opEngineRpcListenPort = config.listenPort;
-    m_opEngineHttpBodySizeLimit = config.requestBodySizeLimit;
-    m_opEngineBatchRequestSizeLimit = config.batchRequestSizeLimit;
-    m_opEngineJwtSecretFile = config.jwtSecretFile;
-    m_opEngineClockSkewSecs = config.clockSkewSecs;
-    m_opEngineAllowV1Executor = allowV1Executor;
-    m_enableOpEngineMinerApi = enableMinerApi;
-    m_enableOpEngineDebugApi = enableDebugApi;
-
-    NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
-                         << LOG_KV("enableOpEngineRpc", m_enableOpEngineRpc)
-                         << LOG_KV("listenIP", config.listenIP)
-                         << LOG_KV("listenPort", config.listenPort)
-                         << LOG_KV("requestBodySizeLimit", config.requestBodySizeLimit)
-                         << LOG_KV("batchRequestSizeLimit", config.batchRequestSizeLimit)
-                         << LOG_KV("jwtSecretFile", config.jwtSecretFile)
-                         << LOG_KV("clockSkewSecs", config.clockSkewSecs)
-                         << LOG_KV("unsafeAllowV1Executor", allowV1Executor)
-                         << LOG_KV("enableMinerApi", enableMinerApi);
-}
-
 void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
 {
     /*
     [engine_rpc]
-        enable=false
+        ; the authenticated Engine API listener. No enable key: it runs whenever the block
+        ; driver is Engine (executor.version >= 2), and executor.version < 2 never reads it
         listen_ip=127.0.0.1
         listen_port=8551
         request_body_size_limit=10485760
         batch_request_size_limit=8
         jwt_secret_file=conf/engine/jwt.hex
         clock_skew_secs=60
+        ; OP lane only: registers the OP miner namespace (miner_setMaxDASize, the batcher
+        ; DA-throttle handshake) on THIS listener. [web3_rpc] enable_miner_api scopes it to the
+        ; web3 listener only; neither key reaches the other port.
+        ; enable_miner_api=false
+        ; scopes the geth debug namespace to THIS listener (default off); [web3_rpc]
+        ; enable_debug_api scopes it to the web3 listener. Requires
+        ; storage.mpt_prune_window=-1 (archive), for the same reason as [web3_rpc]
+        ; enable_debug_api above.
+        ; enable_debug_api=false
     */
-    const auto config = parseEngineRpcSection(_pt, "engine_rpc", "conf/engine/jwt.hex");
-
-    m_enableEngineRpc = config.enable;
-    if (m_enableEngineRpc && m_enableOpEngineRpc)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "engine_rpc.enable and op_engine_rpc.enable are mutually exclusive: both "
-                "configure the same Engine API listener; enable at most one"));
-    }
-    if (m_enableEngineRpc && m_enableSingleNodeConsensus)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "engine_rpc.enable and consensus.enable_single_node_consensus are mutually "
-                "exclusive: both expose the same EngineService; enable at most one"));
-    }
-    m_engineRpcListenIP = config.listenIP;
-    m_engineRpcListenPort = config.listenPort;
-    m_engineHttpBodySizeLimit = config.requestBodySizeLimit;
-    m_engineBatchRequestSizeLimit = config.batchRequestSizeLimit;
-    m_engineJwtSecretFile = config.jwtSecretFile;
-    m_engineClockSkewSecs = config.clockSkewSecs;
+    m_engineRpc.listenIP = _pt.get<std::string>("engine_rpc.listen_ip", "127.0.0.1");
+    m_engineRpc.listenPort = _pt.get<int>("engine_rpc.listen_port", 8551);
+    m_engineRpc.requestBodySizeLimit = _pt.get<int>("engine_rpc.request_body_size_limit", 10485760);
+    m_engineRpc.batchRequestSizeLimit = _pt.get<int>("engine_rpc.batch_request_size_limit", 8);
+    m_engineRpc.jwtSecretFile =
+        _pt.get<std::string>("engine_rpc.jwt_secret_file", "conf/engine/jwt.hex");
+    m_engineRpc.clockSkewSecs = _pt.get<int32_t>("engine_rpc.clock_skew_secs", 60);
+    m_engineRpc.enableMinerApi = _pt.get<bool>("engine_rpc.enable_miner_api", false);
+    m_engineRpc.enableDebugApi = _pt.get<bool>("engine_rpc.enable_debug_api", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadEngineRpcConfig")
-                         << LOG_KV("enableEngineRpc", m_enableEngineRpc)
-                         << LOG_KV("listenIP", config.listenIP)
-                         << LOG_KV("listenPort", config.listenPort)
-                         << LOG_KV("requestBodySizeLimit", config.requestBodySizeLimit)
-                         << LOG_KV("batchRequestSizeLimit", config.batchRequestSizeLimit)
-                         << LOG_KV("jwtSecretFile", config.jwtSecretFile)
-                         << LOG_KV("clockSkewSecs", config.clockSkewSecs);
+                         << LOG_KV("listenIP", m_engineRpc.listenIP)
+                         << LOG_KV("listenPort", m_engineRpc.listenPort)
+                         << LOG_KV("requestBodySizeLimit", m_engineRpc.requestBodySizeLimit)
+                         << LOG_KV("batchRequestSizeLimit", m_engineRpc.batchRequestSizeLimit)
+                         << LOG_KV("jwtSecretFile", m_engineRpc.jwtSecretFile)
+                         << LOG_KV("clockSkewSecs", m_engineRpc.clockSkewSecs)
+                         << LOG_KV("enableMinerApi", m_engineRpc.enableMinerApi)
+                         << LOG_KV("enableDebugApi", m_engineRpc.enableDebugApi);
+}
+
+void NodeConfig::loadDebugConfig(boost::property_tree::ptree const& _pt)
+{
+    // Hidden development/test section: written into no template or runbook example. The
+    // lane checks live in blockDriver(), which needs config.genesis too.
+    //   [debug]
+    //       ; executor.version 1 or 2 only: produce blocks in-process (the DebugSelfProduce
+    //       ; driver) instead of PBFT (v1) or a consensus client over the Engine API (v2)
+    //       enable=false
+    //       ; OP lane only: follow an OP chain's op-geth peers over devp2p (bootnodes and
+    //       ; sync knobs in [ethereum]) instead of being driven by op-node
+    //       follow_devp2p=false
+    //       ; DebugSelfProduce block parameters
+    //       block_interval=1000
+    //       produce_empty_blocks=true
+    //       fee_recipient=0x0000000000000000000000000000000000000000
+    //       ; 32-byte hex; empty = the hash of a fixed seed
+    //       prev_randao=
+    //       ; seconds; 0 = wall clock
+    //       fixed_timestamp=0
+    m_debugEnable = _pt.get<bool>("debug.enable", false);
+    m_debugFollowDevp2p = _pt.get<bool>("debug.follow_devp2p", false);
+    m_debugBlockInterval = _pt.get<uint64_t>("debug.block_interval", 1000);
+    m_debugProduceEmptyBlocks = _pt.get<bool>("debug.produce_empty_blocks", true);
+    m_debugFeeRecipient =
+        _pt.get<std::string>("debug.fee_recipient", "0x0000000000000000000000000000000000000000");
+    m_debugPrevRandao = _pt.get<std::string>("debug.prev_randao", "");
+    m_debugFixedTimestamp = _pt.get<std::uint64_t>("debug.fixed_timestamp", 0);
+    if (!m_debugEnable)
+    {
+        auto unused = recordDeadKeys(_pt, c_debugSelfProduceKeys, "config.ini");
+        m_deadConfigKeys.insert(m_deadConfigKeys.end(), unused.begin(), unused.end());
+    }
+    if (m_debugEnable)
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+                                       "[debug] enable=true: the node produces its own blocks, "
+                                       "debug mode, not for production")
+                                << LOG_KV("blockInterval", m_debugBlockInterval)
+                                << LOG_KV("produceEmptyBlocks", m_debugProduceEmptyBlocks)
+                                << LOG_KV("feeRecipient", m_debugFeeRecipient);
+    }
+    if (m_debugFollowDevp2p)
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "[debug] follow_devp2p=true: debug mode, not for production");
+    }
 }
 
 void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
 {
     /*
     [ethereum]
-        ; EL-mode self-sync. mode=el runs the node as an Ethereum L1
-        ; execution-layer client (download via RLPx -> verify -> commit), with no
-        ; FISCO gateway / PBFT / txpool pipeline. mode=opstack-el is the same
-        ; shape for an OP-Stack chain (executor_version >= 3): blocks download
-        ; from op-geth EL serving peers and commit through OpBlockVerifier.
-        ; Any other value (or absent section) leaves the node in the normal
-        ; FISCO mode.
-        mode=none
-        ; geth-style enode:// list; path relative to the working directory.
-        ; For mode=opstack-el these must be op-geth EL serving peers of the OP
-        ; chain (e.g. op-sepolia bootnodes).
+        ; devp2p network keys. An executor.version=2 node runs devp2p sync next to the
+        ; Engine API (ethereumELModeEnabled()); the OP lane's devp2p self-follow is
+        ; [debug] follow_devp2p. There is no mode key: the lane decides.
+        ; geth-style enode:// list; path relative to the working directory. On
+        ; executor.version=2 an absent file or an empty list means no peers.
+        ; Under [debug] follow_devp2p these must be op-geth EL serving peers of the
+        ; OP chain (e.g. op-sepolia bootnodes).
         bootnodes_file=./bootnodes.json
         ; secp256k1 node identity: a file holding the 32-byte private key as hex
         ; (optional 0x prefix). Empty = auto-generate a persistent key on first
@@ -1402,11 +1460,11 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; cross-check. Optional; defaults to the Ethereum mainnet deposit
         ; contract (Sepolia: 0x7f02c3e3c98b133055b8b348b2ac625669182295).
         deposit_contract_address=
-        ; mode=opstack-el only: the OP chain's block cadence in seconds
+        ; [debug] follow_devp2p only: the OP chain's block cadence in seconds
         ; (rollup.json block_time; 2 on every superchain chain). Feeds the
         ; header validator's block-interval check. Range [1, 60].
         op_block_time_seconds=2
-        ; mode=opstack-el only: how far behind the peer's UNSAFE head the
+        ; [debug] follow_devp2p only: how far behind the peer's UNSAFE head the
         ; download stops (the peer head announced over eth/68 is the unsafe
         ; head; this lag does NOT track the OP safe/finalized head, which L1
         ; batch derivation defines and which can lag the unsafe head by a
@@ -1414,56 +1472,12 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; finality boundary. Range [0, 10000]; 0 = download up to the tip.
         op_sync_lag_blocks=64
     */
-    const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
-    if (mode != "none" && mode != "el" && mode != "opstack-el")
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode invalid: \"" + mode +
-                                  "\" (supported: none, el, opstack-el)"));
-    }
-    const bool enableEL = (mode == "el");
-    const bool enableOpStackEL = (mode == "opstack-el");
-    // Both EL modes are self-contained sync clients: mutually exclusive with the
-    // op-stack Engine API driver and the single-node consensus driver (both drive block
-    // production through the EngineService; EL modes drive it through devp2p download).
-    if ((enableEL || enableOpStackEL) && m_enableOpEngineRpc)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.mode=" + mode +
-                " and op_engine_rpc.enable are mutually exclusive: "
-                "EL mode self-syncs from bootnodes; op_engine_rpc is driven by an "
-                "external op-node"));
-    }
-    if ((enableEL || enableOpStackEL) && m_enableSingleNodeConsensus)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.mode=" + mode +
-                " and consensus.enable_single_node_consensus are mutually "
-                "exclusive: EL mode self-syncs from bootnodes; single-node consensus "
-                "produces its own blocks"));
-    }
-    // [engine_rpc] is the EL-mode Engine API listener; without EL mode nothing drives or
-    // serves the EngineService it exposes.
-    if (!enableEL && m_enableEngineRpc)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "engine_rpc.enable requires ethereum.mode=el: the engine RPC listener serves "
-                "the EL-mode EngineService"));
-    }
-    m_enableEthereumEL = enableEL;
-    m_enableOpStackEL = enableOpStackEL;
     // NOTE: this loader deliberately stays PURE parsing of the config.ini
     // [ethereum] section — it must NOT read m_genesisConfig members: tools
     // (archive-tool, storage-tool) call loadConfig BEFORE loadGenesisConfig, so
     // a genesis-reading guard here would fail them on EL-mode nodes. The
-    // cross-file requirements live in two order-independent places instead:
-    // genesis-side pairing (EL declaration <-> [fork_timestamps] <-> [web3]
-    // chain_id) in validateL2Invariants, and the config.ini->config.genesis
-    // direction in validateELModeInvariants, which the node initializers call
-    // after BOTH files are loaded.
+    // cross-file requirements live in validateELModeInvariants, which the node
+    // initializers call after BOTH files are loaded.
     m_ethereumBootnodesFile = _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
     m_ethereumTxGossip = _pt.get<bool>("ethereum.tx_gossip", true);
     m_ethereumNodeKeyFile = _pt.get<std::string>("ethereum.node_key_file", "");
@@ -1481,21 +1495,20 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_ethereumMaxBatchSize = maxBatch;
 
-    // mode=opstack-el: the OP chain's block cadence (rollup.json block_time). Bounded
+    // [debug] follow_devp2p: the OP chain's block cadence (rollup.json block_time). Bounded
     // like every neighbouring knob: the header validator only WARNs on a deviation
     // (op-geth enforces no fixed cadence at EL level), but a nonsensical value is a
     // config error, not a tuning choice.
     uint64_t blockTime = _pt.get<uint64_t>("ethereum.op_block_time_seconds", 2);
     if (blockTime == 0 || blockTime > 60)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.op_block_time_seconds must be in [1, 60], got " +
-                std::to_string(blockTime)));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.op_block_time_seconds must be in [1, 60], got " +
+                                  std::to_string(blockTime)));
     }
     m_opBlockTimeSeconds = blockTime;
 
-    // mode=opstack-el: the download lag behind the peer's UNSAFE head. The head a
+    // [debug] follow_devp2p: the download lag behind the peer's UNSAFE head. The head a
     // peer announces over eth/68 is its unsafe head; the OP safe/finalized heads are
     // defined by L1 batch derivation and can trail the unsafe head by a whole
     // sequencing window (~12h ≈ 21600 L2 blocks on superchain chains), so this knob
@@ -1505,10 +1518,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     uint64_t syncLag = _pt.get<uint64_t>("ethereum.op_sync_lag_blocks", 64);
     if (syncLag > 10000)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
-                std::to_string(syncLag)));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
+                                  std::to_string(syncLag)));
     }
     m_opSyncLagBlocks = syncLag;
 
@@ -1572,10 +1584,10 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     m_ethereumReorgWindow = _pt.get<int64_t>("ethereum.reorg_window", 256);
     if (m_ethereumReorgWindow < 0 || m_ethereumReorgWindow > 100'000)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.reorg_window must be 0 (disabled) or in "
-                                  "[1, 100000], got " +
-                                  std::to_string(m_ethereumReorgWindow)));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("ethereum.reorg_window must be 0 (disabled) or in "
+                                               "[1, 100000], got " +
+                                               std::to_string(m_ethereumReorgWindow)));
     }
 
     // Engine mempool sizing (EL mode only): capacity in transactions and per-transaction
@@ -1601,14 +1613,13 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_ethereumMempoolTxLifetimeMinutes = mempoolLifetime;
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig") << LOG_KV("mode", mode)
+    NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig")
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
                          << LOG_KV("reorgWindow", m_ethereumReorgWindow)
                          << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
-                         << LOG_KV("mempoolTxLifetimeMinutes",
-                                m_ethereumMempoolTxLifetimeMinutes)
+                         << LOG_KV("mempoolTxLifetimeMinutes", m_ethereumMempoolTxLifetimeMinutes)
                          << LOG_KV("depositContractAddress",
                                 "0x" + m_ethereumDepositContractAddress.hex())
                          << LOG_KV("opBlockTimeSeconds", m_opBlockTimeSeconds)
@@ -1620,41 +1631,18 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                                     "none");
 }
 
-// EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis). L1 PoS chains
-// fork on timestamps rather than block heights (unlike op-stack L2's
-// executor.evm_revision_forks). A zero timestamp means "active from genesis".
-// Also parses the chain-level EL-mode declaration ([ethereum] mode=el in config.genesis):
-// that is the PINNED statement the executor-v2 guard exemptions key on, so a node in EL
-// mode and its fork schedule are bound together in the genesis config, not coupled to the
-// per-node [ethereum] section of config.ini.
+// The L1 EL lane's fork schedule ([fork_timestamps] in config.genesis), the only source of a v2
+// chain's EVM revision: L1 PoS chains fork on timestamps rather than block heights. A zero
+// timestamp means "active from genesis".
 void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig)
 {
     // Reload is a supported shape (loadAllocs opens with m_allocs.clear()): a second genesis
-    // load without the EL declaration / schedule must not keep the previous values. A stale
-    // m_ethereumELMode would waive both the executor.evm_revision and the auth_admin_account
-    // guards; a stale schedule would leak into the genesis pin of a chain that has none.
-    m_genesisConfig.m_ethereumELMode = false;
-    m_genesisConfig.m_opStackELMode = false;
+    // load without the schedule must not keep the previous values. A stale schedule would
+    // satisfy the v2 [fork_timestamps] requirement and leak into the genesis pin of a chain
+    // that has none.
     m_genesisConfig.m_ethereumForkSchedule.reset();
-    m_ethereumChainId = 0;  // reassigned by validateL2Invariants when EL is declared
+    m_ethereumChainId = 0;     // reassigned by validateL2Invariants on executor.version >= 2
     m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
-
-    if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
-    {
-        auto mode = ethSection->get<std::string>("mode", "none");
-        if (mode != "none" && mode != "el" && mode != "opstack-el")
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment("config.genesis [ethereum].mode invalid: \"" +
-                                                   mode + "\" (supported: none, el, opstack-el)"));
-        }
-        m_genesisConfig.m_ethereumELMode = (mode == "el");
-        // opstack-el: the chain-level declaration of the OP devp2p self-sync lane
-        // (OpStackSyncInitializer). Bound to the OP fork schedule / L2 genesis shape /
-        // [web3] chain_id in validateL2Invariants, and to config.ini's
-        // [ethereum].mode=opstack-el in validateELModeInvariants.
-        m_genesisConfig.m_opStackELMode = (mode == "opstack-el");
-    }
 
     auto section = _genesisConfig.get_child_optional("fork_timestamps");
     if (!section)
@@ -1679,8 +1667,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // part of the genesis pin (only the required london..prague ladder is pinned), so
     // configuring one later does not trip the restart comparison.
     auto readOptionalTs = [&](std::string const& key, uint64_t& out) {
-        out = readOptionalForkTimestamp(
-            *section, "fork_timestamps", key, /*refuseSentinel=*/false);
+        out = readOptionalForkTimestamp(*section, "fork_timestamps", key, /*refuseSentinel=*/false);
     };
 
     ledger::EthereumForkSchedule schedule;
@@ -1791,19 +1778,18 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         return;
     }
     // The ladder's entries, in fork order (Bedrock has no entry — it is genesis).
-    std::array<std::pair<std::string_view, uint64_t ledger::OpForkSchedule::*>, 10> const
-        keys{{
-            {"regolith_time", &ledger::OpForkSchedule::m_regolithTime},
-            {"canyon_time", &ledger::OpForkSchedule::m_canyonTime},
-            {"delta_time", &ledger::OpForkSchedule::m_deltaTime},
-            {"ecotone_time", &ledger::OpForkSchedule::m_ecotoneTime},
-            {"fjord_time", &ledger::OpForkSchedule::m_fjordTime},
-            {"granite_time", &ledger::OpForkSchedule::m_graniteTime},
-            {"holocene_time", &ledger::OpForkSchedule::m_holoceneTime},
-            {"isthmus_time", &ledger::OpForkSchedule::m_isthmusTime},
-            {"jovian_time", &ledger::OpForkSchedule::m_jovianTime},
-            {"karst_time", &ledger::OpForkSchedule::m_karstTime},
-        }};
+    std::array<std::pair<std::string_view, uint64_t ledger::OpForkSchedule::*>, 10> const keys{{
+        {"regolith_time", &ledger::OpForkSchedule::m_regolithTime},
+        {"canyon_time", &ledger::OpForkSchedule::m_canyonTime},
+        {"delta_time", &ledger::OpForkSchedule::m_deltaTime},
+        {"ecotone_time", &ledger::OpForkSchedule::m_ecotoneTime},
+        {"fjord_time", &ledger::OpForkSchedule::m_fjordTime},
+        {"granite_time", &ledger::OpForkSchedule::m_graniteTime},
+        {"holocene_time", &ledger::OpForkSchedule::m_holoceneTime},
+        {"isthmus_time", &ledger::OpForkSchedule::m_isthmusTime},
+        {"jovian_time", &ledger::OpForkSchedule::m_jovianTime},
+        {"karst_time", &ledger::OpForkSchedule::m_karstTime},
+    }};
     // Every key is optional, so a misspelled one (jovain_time=0) would otherwise be read as
     // "not scheduled" and the chain would run the wrong fork rules without a word — the
     // failure validateL2Invariants' presence check exists to prevent. Reject anything but
@@ -1811,8 +1797,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     // guarantees at least one recognised entry.
     for (auto const& [key, _] : *section)
     {
-        bool known = std::any_of(keys.begin(), keys.end(),
-            [&](auto const& entry) { return entry.first == key; });
+        bool known = std::any_of(
+            keys.begin(), keys.end(), [&](auto const& entry) { return entry.first == key; });
         if (!known)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -1849,9 +1835,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(
-                    "[op_fork_timestamps]." + std::string(key) + " (" +
-                    std::to_string(time) + ") is earlier than " + std::string(prevKey) + " (" +
-                    std::to_string(prevTime) +
+                    "[op_fork_timestamps]." + std::string(key) + " (" + std::to_string(time) +
+                    ") is earlier than " + std::string(prevKey) + " (" + std::to_string(prevTime) +
                     "): fork activation times must be non-decreasing"));
         }
         prevKey = key;
@@ -1903,51 +1888,6 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
                          << LOG_KV("karst", schedule.m_karstTime);
 }
 
-void NodeConfig::loadOpForkSchedule(boost::property_tree::ptree const& _genesisConfig)
-{
-    // Reload must not keep a previous schedule: an absent section means "legacy via
-    // feature_op_jovian", and a stale optional would pin the wrong canonical.
-    m_genesisConfig.m_opstackForkSchedule.reset();
-    auto section = _genesisConfig.get_child_optional("op_fork_schedule");
-    if (!section)
-    {
-        return;
-    }
-    // Same unknown-key policy as the sibling [op_fork_timestamps] / [op_eip1559] loaders:
-    // this section carries exactly one key, and a stray one (schedule syntax pasted from
-    // another section, a misspelling) would otherwise be silently ignored — the canonical
-    // text is genesis-frozen into the SYS_CONFIG row, so the chain would boot a schedule
-    // that never saw the intended change, with no diagnostic at all.
-    for (auto const& entry : *section)
-    {
-        if (entry.first != "canonical")
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[op_fork_schedule] has an unrecognised key \"" +
-                                      entry.first + "\" (supported: canonical)"));
-        }
-    }
-    auto canonical = section->get_optional<std::string>("canonical");
-    if (!canonical)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("[op_fork_schedule].canonical is required"));
-    }
-    try
-    {
-        m_genesisConfig.m_opstackForkSchedule =
-            ledger::canonicalOpForkSchedule(ledger::parseOpForkSchedule(*canonical));
-    }
-    catch (ledger::InvalidOpForkSchedule const& e)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                std::string("[op_fork_schedule].canonical invalid: ") + e.what()));
-    }
-    NodeConfig_LOG(INFO) << LOG_DESC("loadOpForkSchedule")
-                         << LOG_KV("canonical", *m_genesisConfig.m_opstackForkSchedule);
-}
-
 void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig)
 {
     // Reload must not keep a previous triple (same shape as loadOpForkTimestamps): a stale
@@ -1983,9 +1923,9 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
         // row bound is NOT checked here — the assembled triple goes through the shared
         // opEip1559ParamsRowProblem below, the same rule set the SYS_CONFIG reader and the
         // genesis writer enforce.
-        auto const parsed = ledger::parseConfigUint64(text,
-            ledger::ConfigUint64Options{.allowHex = true,
-                .maxValue = std::numeric_limits<uint64_t>::max()});
+        auto const parsed =
+            ledger::parseConfigUint64(text, ledger::ConfigUint64Options{.allowHex = true,
+                                                .maxValue = std::numeric_limits<uint64_t>::max()});
         if (!parsed.value.has_value())
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -2024,12 +1964,12 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
     // encodes each field as u32 — one rule set instead of a loader-local copy.
     if (auto const problem = ledger::opEip1559ParamsRowProblem(params))
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[op_eip1559] triple carries a " + *problem +
-                                  ": elasticity=" + std::to_string(params.elasticity) +
-                                  " denominator=" + std::to_string(params.denominator) +
-                                  " denominator_canyon=" +
-                                  std::to_string(params.denominatorCanyon)));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[op_eip1559] triple carries a " + *problem +
+                ": elasticity=" + std::to_string(params.elasticity) +
+                " denominator=" + std::to_string(params.denominator) +
+                " denominator_canyon=" + std::to_string(params.denominatorCanyon)));
     }
     m_genesisConfig.m_opEip1559 = params;
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEip1559") << LOG_KV("elasticity", params.elasticity)
@@ -2040,33 +1980,6 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
 std::optional<ledger::OpEip1559Params> const& NodeConfig::opEip1559() const
 {
     return m_genesisConfig.m_opEip1559;
-}
-
-void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
-{
-    /*
-    [p2p]
-    listen_ip=0.0.0.0
-    listen_port=30300
-    sm_ssl=false
-    nodes_path=./
-    nodes_file=nodes.json
-    */
-    std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
-    int listenPort = _pt.get<int>("p2p.listen_port", 30300);
-    std::string nodesDir = _pt.get<std::string>("p2p.nodes_path", "./");
-    std::string nodesFile = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
-    bool smSsl = _pt.get<bool>("p2p.sm_ssl", false);
-
-    m_p2pListenIP = listenIP;
-    m_p2pListenPort = listenPort;
-    m_p2pNodeDir = nodesDir;
-    m_p2pSmSsl = smSsl;
-    m_p2pNodeFileName = nodesFile;
-
-    NodeConfig_LOG(INFO) << LOG_DESC("loadGatewayConfig") << LOG_KV("listenIP", listenIP)
-                         << LOG_KV("listenPort", listenPort) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("smSsl", smSsl) << LOG_KV("nodesFile", nodesFile);
 }
 
 void NodeConfig::loadCertConfig(boost::property_tree::ptree const& _pt)
@@ -2398,49 +2311,6 @@ void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
 }
 
-void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const& _pt)
-{
-    /*
-    [consensus]
-        enable_single_node_consensus=false
-        block_interval=1000
-        produce_empty_blocks=true
-        fee_recipient=0x0
-    */
-    m_enableSingleNodeConsensus = _pt.get<bool>("consensus.enable_single_node_consensus", false);
-    // Mutual exclusion with [op_engine_rpc].enable: the built-in single-node driver and an
-    // external op-node would both drive the same EngineService forkchoice/payload state.
-    // Refuse the combination at startup instead of leaving two block producers reachable by
-    // configuration. The check is symmetric (loadOpEngineRpcConfig carries the same guard),
-    // so it does not depend on the order the two loaders run in loadConfig.
-    if (m_enableSingleNodeConsensus && m_enableOpEngineRpc)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
-                "exclusive: both drive the same EngineService; enable at most one"));
-    }
-    // Symmetric with loadEngineRpcConfig (the EL-mode Engine API listener).
-    if (m_enableSingleNodeConsensus && m_enableEngineRpc)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "consensus.enable_single_node_consensus and engine_rpc.enable are mutually "
-                "exclusive: both expose the same EngineService; enable at most one"));
-    }
-    m_singleNodeConsensusBlockInterval = _pt.get<uint64_t>("consensus.block_interval", 1000);
-    m_singleNodeConsensusProduceEmptyBlocks = _pt.get<bool>("consensus.produce_empty_blocks", true);
-    m_singleNodeConsensusFeeRecipient = _pt.get<std::string>(
-        "consensus.fee_recipient", "0x0000000000000000000000000000000000000000");
-    m_singleNodeConsensusPrevRandao = _pt.get<std::string>("consensus.prev_randao", "");
-    m_singleNodeConsensusFixedTimestamp = _pt.get<std::uint64_t>("consensus.fixed_timestamp", 0);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadSingleNodeConsensusConfig")
-                         << LOG_KV("enableSingleNodeConsensus", m_enableSingleNodeConsensus)
-                         << LOG_KV("blockInterval", m_singleNodeConsensusBlockInterval)
-                         << LOG_KV("produceEmptyBlocks", m_singleNodeConsensusProduceEmptyBlocks)
-                         << LOG_KV("feeRecipient", m_singleNodeConsensusFeeRecipient);
-}
-
 void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _pt)
 {
     m_storageSecurityEnable = _pt.get<bool>("storage_security.enable", false);
@@ -2651,20 +2521,10 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     // admission to the context that drops the balance and nonce-window checks -- and NOTHING
     // else: the check set for that context is defined in the routing table, not here.
     //
-    // Refused outside engine-driven block production rather than ignored. A chain that produces
-    // blocks through consensus admits transactions from peers, and a node that stopped checking
-    // balances would fill its pool with transactions the leader cannot execute. Making it a
-    // startup failure means the mistake is found once, at the node that made it, instead of
-    // being discovered later as unexplained pool behaviour.
+    // Refused off executor.version=2 rather than ignored (validateELModeInvariants: the lane
+    // lives in config.genesis), so the mistake is found once, at the node that made it,
+    // instead of being discovered later as unexplained pool behaviour.
     m_eestReplayMode = _pt.get<bool>("executor.eest_replay_mode", false);
-    if (m_eestReplayMode && !engineDrivenBlockProduction())
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.eest_replay_mode requires engine-driven block "
-                                  "production ([consensus] enable_single_node_consensus or "
-                                  "[op_engine_rpc] enable); it cannot be used on a chain that "
-                                  "produces blocks through consensus"));
-    }
     if (m_eestReplayMode)
     {
         NodeConfig_LOG(WARNING) << LOG_DESC(
@@ -2672,7 +2532,6 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     }
 
     m_checkTransactionSignature = _pt.get<bool>("experimental.check_transaction_signature", true);
-    m_checkParallelConflict = _pt.get<bool>("experimental.check_parallel_conflict", true);
     m_singlePointConsensus = _pt.get<bool>("experimental.single_point_consensus", false);
     if (auto forceSender = _pt.get<std::string>("experimental.force_sender", {});
         !forceSender.empty())
@@ -2686,7 +2545,6 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("tbbThreadCount", m_tbbThreadCount)
                          << LOG_KV("checkTransactionSignature", m_checkTransactionSignature)
                          << LOG_KV("eestReplayMode", m_eestReplayMode)
-                         << LOG_KV("checkParallelConflict", m_checkParallelConflict)
                          << LOG_KV("singlePointConsensus", m_singlePointConsensus)
                          << LOG_KV("enableAuth", toHex(m_forceSender));
 }
@@ -2796,10 +2654,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
         m_genesisConfig.m_excessBlobGas = boost::lexical_cast<uint64_t>(excessBlobGasStr);
     }
     // the compatibility version
-    auto compatibilityVersion = _genesisConfig.get<std::string>(
-        "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
-    m_genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
+    m_genesisConfig.m_compatibilityVersion = genesisCompatibilityVersion(_genesisConfig);
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
     if (consensusNodeList.empty())
@@ -2914,168 +2770,6 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                                   "executor.is_auth_check/"
                                   "executor.is_serial_execute is null, please set it!"));
     }
-    // EVMC revision config — consumed by ethereum-executor (executor_version=2):
-    //   executor.evm_revision       = explicit single revision for all blocks, e.g. "cancun"
-    //   executor.evm_revision_forks = comma-separated "block:revision" fork transitions,
-    //                                 e.g. "0:cancun,100000:osaka"
-    // If neither is set, the ethereum-executor defaults to the latest revision from genesis.
-    // Reset first (same reason as loadForkTimestamps): on a reload, a previous genesis's
-    // revision must not survive into validateL2Invariants' OP-lane check.
-    m_genesisConfig.m_evmcRevision.reset();
-    m_genesisConfig.m_evmcRevisionForks.clear();
-    try
-    {
-        auto evmcRevisionStr = _genesisConfig.get<std::string>("executor.evm_revision", "");
-        if (!evmcRevisionStr.empty())
-        {
-            if (auto rev = ledger::evmcRevisionFromName(evmcRevisionStr); rev)
-            {
-                if (*rev == EVMC_EXPERIMENTAL)
-                {
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "executor.evm_revision=experimental is not a released fork: evmone's "
-                            "semantics for it change between versions, which would tie consensus "
-                            "to the binary"));
-                }
-                m_genesisConfig.m_evmcRevision = *rev;
-            }
-            else
-            {
-                BOOST_THROW_EXCEPTION(
-                    InvalidConfig() << errinfo_comment(
-                        "executor.evm_revision is invalid: " + evmcRevisionStr +
-                        ", supported revisions: frontier/homestead/tangerinewhistle/"
-                        "spuriousdragon/byzantium/constantinople/petersburg/istanbul/berlin/"
-                        "london/paris/shanghai/cancun/prague/osaka"));
-            }
-        }
-
-        auto evmcForksStr = _genesisConfig.get<std::string>("executor.evm_revision_forks", "");
-        if (!evmcForksStr.empty())
-        {
-            auto trim = [](std::string_view s) -> std::string_view {
-                auto b = s.find_first_not_of(" \t\r\n");
-                if (b == std::string_view::npos)
-                {
-                    return {};
-                }
-                auto e = s.find_last_not_of(" \t\r\n");
-                return s.substr(b, e - b + 1);
-            };
-            std::stringstream ss(evmcForksStr);
-            std::string token;
-            while (std::getline(ss, token, ','))
-            {
-                auto entry = trim(token);
-                if (entry.empty())
-                {
-                    continue;
-                }
-                auto colon = entry.find(':');
-                if (colon == std::string_view::npos)
-                {
-                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                              "executor.evm_revision_forks invalid entry (expected "
-                                              "\"block:revision\"): " +
-                                              std::string(entry)));
-                }
-                auto blockStr = trim(entry.substr(0, colon));
-                auto name = trim(entry.substr(colon + 1));
-                auto block = boost::lexical_cast<protocol::BlockNumber>(blockStr);
-                if (block < 0)
-                {
-                    // A negative fork height would otherwise become the block-0 baseline
-                    // (encodeEVMCRevisionConfig picks forks.begin()->second when no 0: entry
-                    // exists) — an operator typing -5 instead of 5 would silently get a
-                    // different fork schedule. Reject it here.
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "executor.evm_revision_forks block height must be >= 0, got " +
-                            std::to_string(block) + " in entry: " + std::string(entry)));
-                }
-                auto rev = ledger::evmcRevisionFromName(name);
-                if (!rev)
-                {
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "executor.evm_revision_forks invalid revision \"" + std::string(name) +
-                            "\" in entry: " + std::string(entry)));
-                }
-                if (*rev == EVMC_EXPERIMENTAL)
-                {
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "executor.evm_revision_forks revision \"experimental\" is not a "
-                            "released fork (evmone semantics change between versions); entry: " +
-                            std::string(entry)));
-                }
-                m_genesisConfig.m_evmcRevisionForks[block] = *rev;
-            }
-        }
-    }
-    catch (InvalidConfig const& e)
-    {
-        throw;  // already carries a precise message
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "Invalid executor.evm_revision config: " + std::string(e.what())));
-    }
-    // A v2 chain (executor_version >= 2 selects the ethereum-executor) MUST pin its EVMC
-    // revision explicitly. Unlike v0/v1 the revision is consumed on every block, and a
-    // binary-side default would be recorded nowhere on-chain — tying "upgrade the binary" to a
-    // hard fork (replay/resync would diverge and a mixed-version network could split, without
-    // either side erroring). Requiring it here makes the effective revision part of the
-    // genesis config and therefore of the on-chain state.
-    // EL mode (Ethereum L1 self-sync) is the exception: its fork schedule is timestamp-based
-    // ([fork_timestamps], loaded by loadForkTimestamps) and EthereumBlockVerifier derives the
-    // EVMC revision from the block timestamp via fillExecutionLedgerConfig — the revision is
-    // never read from on-chain state in this mode, so an executor.evm_revision is not
-    // required. The exemption is gated on the PINNED declaration ([ethereum] mode=el in
-    // config.genesis, loaded by loadForkTimestamps), not on the mere presence of a
-    // [fork_timestamps] section — validateL2Invariants binds the two together, so an
-    // ordinary v2 chain cannot waive this guard by pasting in a schedule nothing reads.
-    // The REQUIRED part of the schedule IS part of the genesis pin: loadForkTimestamps
-    // stores it on the GenesisConfig and generateGenesisData emits the london..prague
-    // ladder, so nodes holding different required schedules fail the genesis comparison.
-    // The post-Prague tail (osaka/bpo1/bpo2) is intentionally NOT pinned — those forks
-    // activate after genesis, so updating them must not trip the restart comparison
-    // (EIP-2124 fork-id handshake covers divergence).
-    // The OP lane (executor.version >= 3) is the second exemption: it derives the revision
-    // from the OP fork schedule ([op_fork_timestamps]) per block, exactly as EL mode derives
-    // it from [fork_timestamps]. validateL2Invariants goes further there and REJECTS an
-    // explicit revision on that lane, so the value can never be both required and ignored.
-    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
-        m_genesisConfig.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION &&
-        !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty() &&
-        !m_genesisConfig.m_ethereumELMode)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.version=2 (ethereum-executor) requires an explicit "
-                                  "executor.evm_revision (or executor.evm_revision_forks), or "
-                                  "[ethereum] mode=el with a [fork_timestamps] section (Ethereum "
-                                  "L1 EL mode) so the EVM revision is recorded on-chain; refusing "
-                                  "to run with an implicit binary-side default"));
-    }
-    // A v2 chain must ALSO be able to persist that revision: Ledger::buildGenesisBlock only
-    // writes evmc_revision for compatibility_version >= V3_18_0 (and executor_version for
-    // >= V3_15_0). Below 3.18.0 the operator would be forced to write a value that is then
-    // ignored (the chain runs the binary default); below 3.15.0 executor_version is not
-    // persisted either, so getLedgerConfig never injects a revision and every transaction
-    // throws EvmcRevisionNotConfigured. Reject both ranges up front.
-    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
-        m_genesisConfig.m_compatibilityVersion <
-            static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "executor.version=2 requires compatibility_version >= 3.18.0: below that "
-                "Ledger::buildGenesisBlock cannot persist evmc_revision, so the EVM revision "
-                "would not be recorded on-chain"));
-    }
     // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
     // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
     if (_genesisConfig.get<bool>("executor.is_wasm", false))
@@ -3089,15 +2783,14 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     {
         m_genesisConfig.m_authAdminAccount =
             _genesisConfig.get<std::string>("executor.auth_admin_account", "");
-        // Ethereum L1 EL mode ([ethereum] mode=el in config.genesis) is a pure Ethereum
-        // execution layer: it has no FISCO system-contract auth, so the auth_admin_account
-        // requirement (normally enforced from compatibility_version 3.3.0) does not apply.
-        // Gated on the pinned EL declaration (validateL2Invariants binds it to the fork
-        // schedule), so a stray [fork_timestamps] section cannot waive the requirement.
+        // The L1 EL lane (executor.version=2) is a pure Ethereum execution layer: it has no
+        // FISCO system-contract auth, so the auth_admin_account requirement (normally
+        // enforced from compatibility_version 3.3.0) does not apply.
         if (m_genesisConfig.m_authAdminAccount.empty() &&
             (m_genesisConfig.m_isAuthCheck ||
                 m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
-            !m_genesisConfig.m_ethereumELMode) [[unlikely]]
+            laneForExecutorVersion(m_genesisConfig.m_executorVersion) != ChainLane::Eth)
+            [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is empty, "
@@ -3108,7 +2801,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     {
         if ((m_genesisConfig.m_isAuthCheck ||
                 m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION) &&
-            !m_genesisConfig.m_ethereumELMode)
+            laneForExecutorVersion(m_genesisConfig.m_executorVersion) != ChainLane::Eth)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
@@ -3195,6 +2888,12 @@ void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree con
                 ledger::FeatureSet{.flag = flagEnum, .enable = static_cast<int>(enableNumber)});
         }
     }
+}
+
+std::string bcos::tool::NodeConfig::getDefaultServiceName(
+    std::string const& _nodeName, std::string const& _serviceName) const
+{
+    return m_genesisConfig.m_chainID + "." + _nodeName + _serviceName;
 }
 
 size_t NodeConfig::txpoolLimit() const
@@ -3457,6 +3156,21 @@ std::string const& NodeConfig::gatewayServiceName() const
     return m_gatewayServiceName;
 }
 
+std::string const& NodeConfig::schedulerServiceName() const
+{
+    return m_schedulerServiceName;
+}
+
+std::string const& NodeConfig::executorServiceName() const
+{
+    return m_executorServiceName;
+}
+
+std::string const& NodeConfig::txpoolServiceName() const
+{
+    return m_txpoolServiceName;
+}
+
 std::string const& NodeConfig::nodeName() const
 {
     return m_nodeName;
@@ -3562,9 +3276,62 @@ bool NodeConfig::web3SyncTransaction() const
     return m_web3SyncTransaction;
 }
 
-bool NodeConfig::enableOpEngineRpc() const
+BlockDriver NodeConfig::blockDriver() const
 {
-    return m_enableOpEngineRpc;
+    auto const version = m_genesisConfig.m_executorVersion;
+    auto const lane = laneForExecutorVersion(version);
+    if (m_debugEnable && m_debugFollowDevp2p)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[debug] enable and [debug] follow_devp2p are mutually "
+                                  "exclusive: each is a block driver; set at most one"));
+    }
+    if (m_debugFollowDevp2p && lane != ChainLane::Op)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[debug] follow_devp2p requires executor.version >= 3 (the OP "
+                                  "lane): it follows an OP chain's op-geth peers over devp2p"));
+    }
+    if (m_debugEnable && lane == ChainLane::Op)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[debug] enable: executor.version >= 3 (the OP lane) does not "
+                                  "support self-production; an OP chain is driven by op-node "
+                                  "over [engine_rpc]"));
+    }
+    if (m_debugEnable && version < 1)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[debug] enable requires executor.version 1 or 2: "
+                                  "executor.version=0 does not support self-production"));
+    }
+    if (lane == ChainLane::Op)
+    {
+        return m_debugFollowDevp2p ? BlockDriver::DebugFollowDevp2p : BlockDriver::Engine;
+    }
+    if (m_debugEnable)
+    {
+        return BlockDriver::DebugSelfProduce;
+    }
+    // The L1 EL lane is driven by a consensus client over the Engine API; the FISCO lanes by
+    // their own consensus.
+    return lane == ChainLane::Eth ? BlockDriver::Engine : BlockDriver::PBFT;
+}
+
+bool NodeConfig::servesEngineApi() const
+{
+    return blockDriver() == BlockDriver::Engine;
+}
+
+EngineRpcConfig const& NodeConfig::engineApiListener() const
+{
+    return m_engineRpc;
+}
+
+bool NodeConfig::engineApiMinerApi() const
+{
+    return laneForExecutorVersion(m_genesisConfig.m_executorVersion) == ChainLane::Op &&
+           m_engineRpc.enableMinerApi;
 }
 
 bool NodeConfig::enableMinerApi() const
@@ -3572,9 +3339,9 @@ bool NodeConfig::enableMinerApi() const
     return m_enableMinerApi;
 }
 
-bool NodeConfig::enableOpEngineMinerApi() const
+bool NodeConfig::engineApiDebugApi() const
 {
-    return m_enableOpEngineMinerApi;
+    return m_engineRpc.enableDebugApi;
 }
 
 bool NodeConfig::enableDebugApi() const
@@ -3582,139 +3349,29 @@ bool NodeConfig::enableDebugApi() const
     return m_enableDebugApi;
 }
 
-bool NodeConfig::enableOpEngineDebugApi() const
+uint64_t NodeConfig::debugBlockInterval() const
 {
-    return m_enableOpEngineDebugApi;
+    return m_debugBlockInterval;
 }
 
-bool NodeConfig::opEngineAllowV1Executor() const
+bool NodeConfig::debugProduceEmptyBlocks() const
 {
-    return m_opEngineAllowV1Executor;
+    return m_debugProduceEmptyBlocks;
 }
 
-bool NodeConfig::engineDrivenBlockProduction() const
+const std::string& NodeConfig::debugFeeRecipient() const
 {
-    return m_enableSingleNodeConsensus || m_enableOpEngineRpc;
+    return m_debugFeeRecipient;
 }
 
-bool NodeConfig::enableSingleNodeConsensus() const
+const std::string& NodeConfig::debugPrevRandao() const
 {
-    return m_enableSingleNodeConsensus;
+    return m_debugPrevRandao;
 }
 
-uint64_t NodeConfig::singleNodeConsensusBlockInterval() const
+std::uint64_t NodeConfig::debugFixedTimestamp() const
 {
-    return m_singleNodeConsensusBlockInterval;
-}
-
-bool NodeConfig::singleNodeConsensusProduceEmptyBlocks() const
-{
-    return m_singleNodeConsensusProduceEmptyBlocks;
-}
-
-const std::string& NodeConfig::singleNodeConsensusFeeRecipient() const
-{
-    return m_singleNodeConsensusFeeRecipient;
-}
-
-const std::string& NodeConfig::singleNodeConsensusPrevRandao() const
-{
-    return m_singleNodeConsensusPrevRandao;
-}
-
-std::uint64_t NodeConfig::singleNodeConsensusFixedTimestamp() const
-{
-    return m_singleNodeConsensusFixedTimestamp;
-}
-
-const std::string& NodeConfig::opEngineRpcListenIP() const
-{
-    return m_opEngineRpcListenIP;
-}
-
-uint16_t NodeConfig::opEngineRpcListenPort() const
-{
-    return m_opEngineRpcListenPort;
-}
-
-uint32_t NodeConfig::opEngineHttpBodySizeLimit() const
-{
-    return m_opEngineHttpBodySizeLimit;
-}
-
-uint32_t NodeConfig::opEngineBatchRequestSizeLimit() const
-{
-    return m_opEngineBatchRequestSizeLimit;
-}
-
-const std::string& NodeConfig::opEngineJwtSecretFile() const
-{
-    return m_opEngineJwtSecretFile;
-}
-
-int32_t NodeConfig::opEngineClockSkewSecs() const
-{
-    return m_opEngineClockSkewSecs;
-}
-
-bool NodeConfig::enableEngineRpc() const
-{
-    return m_enableEngineRpc;
-}
-
-const std::string& NodeConfig::engineRpcListenIP() const
-{
-    return m_engineRpcListenIP;
-}
-
-uint16_t NodeConfig::engineRpcListenPort() const
-{
-    return m_engineRpcListenPort;
-}
-
-uint32_t NodeConfig::engineHttpBodySizeLimit() const
-{
-    return m_engineHttpBodySizeLimit;
-}
-
-uint32_t NodeConfig::engineBatchRequestSizeLimit() const
-{
-    return m_engineBatchRequestSizeLimit;
-}
-
-const std::string& NodeConfig::engineJwtSecretFile() const
-{
-    return m_engineJwtSecretFile;
-}
-
-int32_t NodeConfig::engineClockSkewSecs() const
-{
-    return m_engineClockSkewSecs;
-}
-
-const std::string& NodeConfig::p2pListenIP() const
-{
-    return m_p2pListenIP;
-}
-
-uint16_t NodeConfig::p2pListenPort() const
-{
-    return m_p2pListenPort;
-}
-
-bool NodeConfig::p2pSmSsl() const
-{
-    return m_p2pSmSsl;
-}
-
-const std::string& NodeConfig::p2pNodeDir() const
-{
-    return m_p2pNodeDir;
-}
-
-const std::string& NodeConfig::p2pNodeFileName() const
-{
-    return m_p2pNodeFileName;
+    return m_debugFixedTimestamp;
 }
 
 const std::string& NodeConfig::certPath()
@@ -3934,21 +3591,6 @@ size_t NodeConfig::tbbThreadCount() const
     return m_tbbThreadCount;
 }
 
-void NodeConfig::loadAlloc(boost::property_tree::ptree const& ptree)
-{
-    if (auto node = ptree.get_child_optional("alloc"))
-    {
-        for (const auto& it : *node)
-        {
-            auto flag = it.first;
-            auto enableNumber = it.second.get_value<bool>();
-            m_genesisConfig.m_features.emplace_back(
-                ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
-                    .enable = static_cast<int>(enableNumber)});
-        }
-    }
-}
-
 std::string bcos::tool::generateGenesisData(
     ledger::GenesisConfig const& genesisConfig, ledger::LedgerConfig const& ledgerConfig)
 {
@@ -3974,9 +3616,9 @@ std::string bcos::tool::generateGenesisData(
            // v2 execution (base fee / blob base fee), so they must be part of the genesis pin
            // the guard at Ledger::buildGenesisBlock compares on restart — otherwise two nodes
            // configured identically except for these keys pass the genesis-mismatch check and
-           // diverge on the first block. Emit them only when non-default (mirroring the
-           // evmRevision pattern) so a default-configured chain's genesis string is byte-
-           // identical to before this change and existing chains are unaffected.
+           // diverge on the first block. Emit them only when non-default so a
+           // default-configured chain's genesis string is byte-identical to before this
+           // change and existing chains are unaffected.
            << (genesisConfig.m_txGasPrice != "0x0" ?
                       "gasprice:" + genesisConfig.m_txGasPrice + "\n" :
                       "")
@@ -3986,11 +3628,10 @@ std::string bcos::tool::generateGenesisData(
            << (genesisConfig.m_opEip1559.has_value() ?
                       [&genesisConfig] {
                           // The chain's EIP-1559 parameters price every pre-Holocene block, so
-                          // they are part of the genesis pin for the same reason evmRevision
-                          // is. Emitted only when DECLARED so a chain without [op_eip1559]
-                          // keeps the byte-identical pin it had before this key existed; the
-                          // value is the EFFECTIVE triple (effectiveOpEip1559), so "explicitly
-                          // 250" and "omitted canyon" pin the same string.
+                          // they are part of the genesis pin. Emitted only when DECLARED so a chain
+                          // without [op_eip1559] keeps the byte-identical pin it had before this
+                          // key existed; the value is the EFFECTIVE triple (effectiveOpEip1559), so
+                          // "explicitly 250" and "omitted canyon" pin the same string.
                           auto const params =
                               bcos::engine::effectiveOpEip1559(genesisConfig.m_opEip1559);
                           return "eip1559:" + std::to_string(params.elasticity) + ',' +
@@ -4003,13 +3644,6 @@ std::string bcos::tool::generateGenesisData(
            << "isAuthCheck:" << genesisConfig.m_isAuthCheck << '\n'
            << "authAdminAccount:" << genesisConfig.m_authAdminAccount << '\n'
            << "isSerialExecute:" << genesisConfig.m_isSerialExecute << '\n';
-        if (genesisConfig.m_evmcRevision || !genesisConfig.m_evmcRevisionForks.empty())
-        {
-            ss << "evmRevision:"
-               << ledger::encodeEVMCRevisionConfig(
-                      genesisConfig.m_evmcRevision, genesisConfig.m_evmcRevisionForks)
-               << '\n';
-        }
         if (genesisConfig.m_compatibilityVersion >=
             (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
         {
@@ -4024,35 +3658,23 @@ std::string bcos::tool::generateGenesisData(
                 ss << feature.flag << ":" << feature.enable << '\n';
             }
         }
-        // The EL-mode fork schedule's REQUIRED ladder drives the EVM revision in EL
-        // mode, so it is part of the genesis pin for the same reason evmRevision is.
-        // Emitted only when present (mirroring the [ethGenesisHeader] pattern) so every
-        // legacy chain's genesis string stays byte-identical. The chain-level EL-mode
-        // declaration ([ethereum] mode=el) precedes it, so a node whose genesis
-        // declares EL mode but is missing the schedule fails the genesis comparison
-        // instead of silently running a different EVM schedule. Emitted AFTER the
-        // [executor]-owned keys (epochSealerNum/epochBlockNum, [features]) so those
-        // no-section-header keys keep following [executor] on every chain instead of
-        // being split off under [forkTimestamps] on an EL chain.
-        if (genesisConfig.m_ethereumELMode)
+        // The L1 fork schedule's REQUIRED ladder drives the EVM revision on the L1 EL lane, so
+        // it is part of the genesis pin. Emitted only when
+        // present (mirroring the [ethGenesisHeader] pattern) so every legacy chain's genesis
+        // string stays byte-identical. Emitted AFTER the [executor]-owned keys
+        // (epochSealerNum/epochBlockNum, [features]) so those no-section-header keys keep
+        // following [executor] on every chain instead of being split off under
+        // [forkTimestamps] on an EL chain.
+        if (bcos::tool::laneForExecutorVersion(genesisConfig.m_executorVersion) ==
+            bcos::tool::ChainLane::Eth)
         {
-            // The EIP-155 / EIP-2124 chain id is validated as part of the EL
-            // declaration (validateL2Invariants), so it belongs to the pin too:
-            // emitted next to the declaration (gated the same way, so legacy
-            // chains stay byte-identical) — an operator editing [web3] chain_id
-            // after init now fails the genesis comparison on restart.
+            // The EIP-155 / EIP-2124 chain id ([chain] chain_id, validateL2Invariants)
+            // belongs to the pin: an operator editing it after init fails the genesis
+            // comparison on restart. Gated on the L1 EL lane, so legacy chains stay
+            // byte-identical. "[ethereum] mode:el" and the "[web3]" label are the pin's
+            // historical spelling of this block (the mode key itself is gone).
             ss << "[ethereum]" << '\n'
                << "mode:el" << '\n'
-               << "[web3]" << '\n'
-               << "chain_id:" << genesisConfig.m_web3ChainID << '\n';
-        }
-        // opstack-el: same pin shape as the EL declaration above — the mode and the
-        // EIP-155/EIP-2124 chain id are chain-level decisions every node must agree
-        // on. (The [opForkTimestamps] block below keeps its own emit rules.)
-        if (genesisConfig.m_opStackELMode)
-        {
-            ss << "[ethereum]" << '\n'
-               << "mode:opstack-el" << '\n'
                << "[web3]" << '\n'
                << "chain_id:" << genesisConfig.m_web3ChainID << '\n';
         }
@@ -4124,8 +3746,8 @@ std::string bcos::tool::generateGenesisData(
                 {"jovian_time", opSchedule.m_jovianTime},
                 {"karst_time", opSchedule.m_karstTime},
             }};
-            bool const anyGenesisActive = std::any_of(pinned.begin(), pinned.end(),
-                [](auto const& entry) { return entry.second == 0; });
+            bool const anyGenesisActive = std::any_of(
+                pinned.begin(), pinned.end(), [](auto const& entry) { return entry.second == 0; });
             if (anyGenesisActive)
             {
                 ss << "[opForkTimestamps]" << '\n';
@@ -4228,30 +3850,20 @@ bool bcos::tool::NodeConfig::checkTransactionSignature() const
 {
     return m_checkTransactionSignature;
 }
-bool bcos::tool::NodeConfig::checkParallelConflict() const
+std::vector<std::string> bcos::tool::NodeConfig::deadKeys() const
 {
-    return m_checkParallelConflict;
+    auto keys = m_deadGenesisKeys;
+    keys.insert(keys.end(), m_deadConfigKeys.begin(), m_deadConfigKeys.end());
+    return keys;
 }
 int bcos::tool::NodeConfig::executorVersion() const
 {
     return m_genesisConfig.m_executorVersion;
 }
-std::optional<evmc_revision> bcos::tool::NodeConfig::evmcRevision() const
-{
-    return m_genesisConfig.m_evmcRevision;
-}
-std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::evmcRevisionForks()
-    const
-{
-    return m_genesisConfig.m_evmcRevisionForks;
-}
 bool bcos::tool::NodeConfig::ethereumELModeEnabled() const
 {
-    return m_enableEthereumEL;
-}
-bool bcos::tool::NodeConfig::opStackELModeEnabled() const
-{
-    return m_enableOpStackEL;
+    return laneForExecutorVersion(m_genesisConfig.m_executorVersion) == ChainLane::Eth &&
+           blockDriver() == BlockDriver::Engine;
 }
 uint64_t bcos::tool::NodeConfig::opBlockTimeSeconds() const
 {
@@ -4279,9 +3891,9 @@ uint32_t bcos::tool::NodeConfig::ethereumMaxBatchSize() const
 }
 uint64_t bcos::tool::NodeConfig::ethereumChainId() const
 {
-    // Validated and pinned from config.genesis's [web3] chain_id when the genesis
-    // declares EL mode (validateL2Invariants throws on an absent/invalid id).
-    // 0 = unset (non-EL chains) — never a silent mainnet fallback.
+    // Copied from config.genesis's [chain] chain_id on executor.version >= 2
+    // (ethLaneChainId throws on an absent/invalid id). 0 = unset (FISCO lanes) — never a
+    // silent mainnet fallback.
     return m_ethereumChainId;
 }
 // Schedule absent -> UINT64_MAX ("not active") for every fork getter: 0 is the

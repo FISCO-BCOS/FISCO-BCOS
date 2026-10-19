@@ -42,8 +42,8 @@ public:
     bcostars::Error asyncFillBlock(const std::vector<std::vector<tars::Char>>& txHashs,
         std::vector<bcostars::Transaction>& filled, tars::TarsCurrentPtr current) override;
 
-    bcostars::Error asyncMarkTxs(const std::vector<std::vector<tars::Char>>& txHashs, tars::Bool sealedFlag,
-        tars::Int64 _batchId, const std::vector<tars::Char>& _batchHash,
+    bcostars::Error asyncMarkTxs(const std::vector<std::vector<tars::Char>>& txHashs,
+        tars::Bool sealedFlag, tars::Int64 _batchId, const std::vector<tars::Char>& _batchHash,
         tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncNotifyBlockResult(tars::Int64 blockNumber,
@@ -54,21 +54,22 @@ public:
         const std::vector<tars::Char>& nodeID, const std::vector<tars::Char>& data,
         tars::TarsCurrentPtr current) override;
 
-    bcostars::Error asyncSealTxs(tars::Int64 txsLimit, const std::vector<std::vector<tars::Char>>& avoidTxs,
-        bcostars::Block& txsList, bcostars::Block& sysTxsList,
-        tars::TarsCurrentPtr current) override;
+    bcostars::Error asyncSealTxs(tars::Int64 txsLimit,
+        const std::vector<std::vector<tars::Char>>& avoidTxs, bcostars::Block& txsList,
+        bcostars::Block& sysTxsList, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncVerifyBlock(const std::vector<tars::Char>& generatedNodeID,
         const bcostars::Block& block, tars::Bool& result, tars::TarsCurrentPtr current) override;
 
-    bcostars::Error notifyConnectedNodes(
-        const std::vector<std::vector<tars::Char>>& connectedNodes, tars::TarsCurrentPtr current) override;
+    bcostars::Error notifyConnectedNodes(const std::vector<std::vector<tars::Char>>& connectedNodes,
+        tars::TarsCurrentPtr current) override;
 
     bcostars::Error notifyConsensusNodeList(
         const std::vector<bcostars::ConsensusNode>& consensusNodeList,
         tars::TarsCurrentPtr current) override;
 
-    bcostars::Error notifyObserverNodeList(const std::vector<bcostars::ConsensusNode>& observerNodeList,
+    bcostars::Error notifyObserverNodeList(
+        const std::vector<bcostars::ConsensusNode>& observerNodeList,
         tars::TarsCurrentPtr current) override;
     bcostars::Error asyncGetPendingTransactionSize(
         tars::Int64& _pendingTxsSize, tars::TarsCurrentPtr _current) override;

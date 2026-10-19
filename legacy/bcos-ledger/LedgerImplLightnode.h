@@ -2,16 +2,16 @@
 
 #include "../concepts/bcos-concepts/ledger/Ledger.h"
 #include "../concepts/bcos-concepts/ledger/LedgerLightnode.h"
+#include "../concepts/bcos-concepts/storage/Storage.h"
+#include "LedgerImpl.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Hash.h>
-#include "../concepts/bcos-concepts/storage/Storage.h"
-#include "LedgerImpl.h"
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <range/v3/range/access.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
-#include <bcos-utilities/BoostLog.h>
+#include <range/v3/range/access.hpp>
 
 namespace bcos::ledger
 {
@@ -21,9 +21,9 @@ static constexpr const int LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT = 50;
 // Lightnode-specific extensions to LedgerImpl.
 // These methods have been moved to legacy because they are only used by the lightnode module.
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
-class LedgerImplLightnode : public LedgerImpl<Hasher, Storage>,
-                              public bcos::concepts::ledger::LedgerLightnodeBase<
-                                  LedgerImplLightnode<Hasher, Storage>>
+class LedgerImplLightnode
+  : public LedgerImpl<Hasher, Storage>,
+    public bcos::concepts::ledger::LedgerLightnodeBase<LedgerImplLightnode<Hasher, Storage>>
 {
 public:
     using Base = LedgerImpl<Hasher, Storage>;
@@ -38,8 +38,7 @@ public:
         LedgerImplLightnode<Hasher, Storage>>::getBlockNumberByHash;
     using bcos::concepts::ledger::LedgerLightnodeBase<
         LedgerImplLightnode<Hasher, Storage>>::getBlockHashByNumber;
-    using bcos::concepts::ledger::LedgerLightnodeBase<
-        LedgerImplLightnode<Hasher, Storage>>::getABI;
+    using bcos::concepts::ledger::LedgerLightnodeBase<LedgerImplLightnode<Hasher, Storage>>::getABI;
     using bcos::concepts::ledger::LedgerLightnodeBase<
         LedgerImplLightnode<Hasher, Storage>>::getTransactions;
     using bcos::concepts::ledger::LedgerLightnodeBase<
@@ -70,8 +69,7 @@ public:
     }
 
     template <bcos::concepts::ledger::DataFlag... Flags>
-    task::Task<void> impl_getBlockByNodeList(
-        bcos::concepts::block::BlockNumber auto blockNumber,
+    task::Task<void> impl_getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
         bcos::concepts::block::Block auto& block, bcos::crypto::NodeIDs const& nodeList)
     {
         try

@@ -28,11 +28,11 @@
 #include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <memory>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::executor
 {

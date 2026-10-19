@@ -20,8 +20,8 @@
 #pragma once
 
 #include "bcos-utilities/Common.h"
-#include <atomic>
 #include <boost/asio/io_context.hpp>
+#include <atomic>
 #include <memory>
 #include <string>
 #include <utility>

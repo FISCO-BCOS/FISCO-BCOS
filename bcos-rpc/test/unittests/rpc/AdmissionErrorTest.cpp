@@ -124,7 +124,7 @@ BOOST_AUTO_TEST_CASE(detailIsAppendedInParentheses)
 }
 
 // Which codes the table is allowed to answer at all. An in-process pool only ever throws a
-// TransactionStatus, but the same interface carries a Pro/tars client's own faults through the
+// TransactionStatus, but the same interface carries a MAX/TARS client's own faults through the
 // same int field, and the table's fallback would name one of those "Unknown" -- a refusal's code
 // for a node fault. A code this node has no name for is not a verdict.
 BOOST_AUTO_TEST_CASE(onlyANamedStatusIsAVerdict)

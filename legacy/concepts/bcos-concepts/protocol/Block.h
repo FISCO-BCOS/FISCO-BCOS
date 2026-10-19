@@ -1,9 +1,9 @@
 #pragma once
 #include "Receipt.h"
 #include "Transaction.h"
+#include <concepts>
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/range/traits.hpp>
-#include <concepts>
 
 namespace bcos::concepts::block
 {

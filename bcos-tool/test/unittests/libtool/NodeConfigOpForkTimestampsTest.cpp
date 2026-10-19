@@ -11,12 +11,12 @@
 // [op_fork_timestamps]: the OP lane's fork schedule in config.genesis. Activation is by L2
 // block timestamp in SECONDS, the same keying op-node applies to rollup.json's *_time
 // fields (regolith .. karst; bedrock is genesis and has no key). The section and
-// executor.version=3 are bound both ways, the lane refuses an executor.evm_revision (it
-// derives the revision from this schedule per block), and only the entries equal to 0
+// executor.version=3 are bound both ways, the lane derives the EVM revision from this
+// schedule per block (an executor.evm_revision is not read), and only the entries equal to 0
 // reach the genesis pin.
 
-#include "ExceptionCheck.h"
 #include "EthLaneGenesisFixture.h"
+#include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
@@ -47,7 +47,6 @@ std::string opGenesis(std::string const& executorTail, std::string const& opSect
         "1234567890123456789012345678901234567890123456789012345678901234";
     return "[version]\ncompatibility_version=3.18.0\n"
            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
-           "[web3]\nchain_id=1\n"
            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
            "node.0=" +
            node +
@@ -58,7 +57,7 @@ std::string opGenesis(std::string const& executorTail, std::string const& opSect
            executorTail + opSection + ethLaneGenesisSections();
 }
 
-/// The OP lane's accepted [executor] tail: version 3, no evm_revision.
+/// The OP lane's accepted [executor] tail: version 3.
 std::string opExecutor()
 {
     return "version=3\n";
@@ -104,10 +103,9 @@ BOOST_AUTO_TEST_CASE(decreasingScheduleRejected)
 
     // Non-adjacent pair, full ladder: ecotone cannot precede canyon.
     NodeConfig ladder(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(ladder.loadGenesisConfigFromString(
-                              opGenesis(opExecutor(),
-                                  "[op_fork_timestamps]\nisthmus_time=5000\ncanyon_time=2000\n"
-                                  "ecotone_time=1000\n")),
+    BOOST_CHECK_EXCEPTION(ladder.loadGenesisConfigFromString(opGenesis(opExecutor(),
+                              "[op_fork_timestamps]\nisthmus_time=5000\ncanyon_time=2000\n"
+                              "ecotone_time=1000\n")),
         InvalidConfig, [](auto const& e) {
             return errinfoContains(e, "fork activation times must be non-decreasing");
         });
@@ -123,8 +121,8 @@ BOOST_AUTO_TEST_CASE(unscheduledIntermediateForksAllowed)
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, kNever);
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, 1000U);
 
-    auto jump = loadOk(opGenesis(
-        opExecutor(), "[op_fork_timestamps]\nisthmus_time=500\ncanyon_time=100\n"));
+    auto jump = loadOk(
+        opGenesis(opExecutor(), "[op_fork_timestamps]\nisthmus_time=500\ncanyon_time=100\n"));
     BOOST_REQUIRE(jump.opForkSchedule().has_value());
     BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_regolithTime, kNever);
     BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_canyonTime, 100U);
@@ -187,9 +185,8 @@ BOOST_AUTO_TEST_CASE(malformedTimestampRejected)
 BOOST_AUTO_TEST_CASE(sectionWithoutOpLaneRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(
-        cfg.loadGenesisConfigFromString(
-            opGenesis("version=2\nevm_revision=prague\n", "[op_fork_timestamps]\njovian_time=0\n")),
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(
+                              opGenesis("version=2\n", "[op_fork_timestamps]\njovian_time=0\n")),
         InvalidConfig, [](auto const& e) {
             return errinfoContains(
                 e, "[op_fork_timestamps] requires executor.version >= 3 (OP lane)");
@@ -207,21 +204,20 @@ BOOST_AUTO_TEST_CASE(opLaneWithoutSectionRejected)
         });
 }
 
-// On the OP lane the revision is a function of the schedule, so a configured one can only
-// disagree with what the chain runs.
-BOOST_AUTO_TEST_CASE(opLaneRejectsExplicitEvmRevision)
+// On the OP lane the revision is a function of the schedule; executor.evm_revision /
+// evm_revision_forks are not read: the genesis loads and pins as if they were absent.
+BOOST_AUTO_TEST_CASE(opLaneIgnoresEvmRevision)
 {
+    auto plain =
+        loadOk(opGenesis(opExecutor(), "[op_fork_timestamps]\njovian_time=0\nkarst_time=0\n"));
+    auto const plainPin =
+        bcos::tool::generateGenesisData(plain.genesisConfig(), *plain.ledgerConfig());
     for (const auto* tail :
         {"version=3\nevm_revision=osaka\n", "version=3\nevm_revision_forks=0:prague,100:osaka\n"})
     {
-        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
-                                  tail, "[op_fork_timestamps]\njovian_time=0\nkarst_time=0\n")),
-            InvalidConfig, [](auto const& e) {
-                return errinfoContains(e,
-                    "the OP lane derives the EVM revision from [op_fork_timestamps]; remove "
-                    "executor.evm_revision / evm_revision_forks");
-            });
+        auto cfg = loadOk(opGenesis(tail, "[op_fork_timestamps]\njovian_time=0\nkarst_time=0\n"));
+        BOOST_CHECK_EQUAL(
+            bcos::tool::generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig()), plainPin);
     }
 }
 
@@ -237,8 +233,7 @@ BOOST_AUTO_TEST_CASE(emptySectionReadsAsAbsent)
         [](auto const& e) { return errinfoContains(e, "carrying at least one entry"); });
 }
 
-// The accepted shape. It must ALSO clear the v2 guard that demands an explicit revision —
-// that guard's second exemption is exactly this lane.
+// The accepted shape.
 BOOST_AUTO_TEST_CASE(opLaneWithScheduleAndNoRevisionLoads)
 {
     auto cfg =
@@ -246,8 +241,6 @@ BOOST_AUTO_TEST_CASE(opLaneWithScheduleAndNoRevisionLoads)
     BOOST_REQUIRE(cfg.opForkSchedule().has_value());
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, 0U);
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, 500U);
-    BOOST_CHECK(!cfg.genesisConfig().m_evmcRevision.has_value());
-    BOOST_CHECK(cfg.genesisConfig().m_evmcRevisionForks.empty());
 }
 
 // Only the entries that are 0 are pinned. A fork scheduled for the future must stay editable
@@ -313,28 +306,21 @@ BOOST_AUTO_TEST_CASE(reloadWithoutSectionDropsTheSchedule)
         loadOk(opGenesis(opExecutor(), "[op_fork_timestamps]\njovian_time=0\nkarst_time=0\n"));
     BOOST_REQUIRE(cfg.opForkSchedule().has_value());
 
-    BOOST_REQUIRE_NO_THROW(
-        cfg.loadGenesisConfigFromString(opGenesis("version=2\nevm_revision=prague\n", "")));
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis("version=2\n", "")));
     BOOST_CHECK(!cfg.opForkSchedule().has_value());
     auto data = bcos::tool::generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
     BOOST_CHECK(data.find("opForkTimestamps") == std::string::npos);
-
-    // And the other way round: the v2 genesis's evm_revision must not survive into the OP
-    // lane's "no configured revision" check on the next load.
-    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
-        opGenesis(opExecutor(), "[op_fork_timestamps]\njovian_time=0\nkarst_time=0\n")));
-    BOOST_CHECK(cfg.opForkSchedule().has_value());
-    BOOST_CHECK(!cfg.genesisConfig().m_evmcRevision.has_value());
 }
 
 // Node admission compares genesis strings byte for byte, so a v2 chain's pin shape must not
-// drift. A v2 chain now necessarily carries the Ethereum-lane sections ([alloc.*] +
+// drift. A v2 chain necessarily carries the Ethereum-lane sections ([alloc.*] +
 // [eth_genesis_header], bound to executor.version >= 2 by validateL2Invariants); allocs stay
-// out of the pin, but the header is pinned, so the expected string below includes the
-// [ethGenesisHeader] block and still contains no [opForkTimestamps] emission.
-BOOST_AUTO_TEST_CASE(legacyV2GenesisStringUnchanged)
+// out of the pin, but the header is pinned, and so is the L1 EL lane's chain-id block
+// ("[ethereum] mode:el" / "[web3] chain_id", emitted on every executor.version=2 genesis).
+// The expected string contains no [opForkTimestamps] emission.
+BOOST_AUTO_TEST_CASE(v2GenesisStringShape)
 {
-    auto cfg = loadOk(opGenesis("version=2\nevm_revision=prague\n", ""));
+    auto cfg = loadOk(opGenesis("version=2\n", ""));
     auto data = bcos::tool::generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
     BOOST_CHECK(data.find("opForkTimestamps") == std::string::npos);
     // The exact expected string: any drift in the pin's shape shows up here, not in a
@@ -349,7 +335,8 @@ BOOST_AUTO_TEST_CASE(legacyV2GenesisStringUnchanged)
         "[tx]\ngaslimit:3000000000\n"
         "[executor]\niswasm: 0\nisAuthCheck:0\n"
         "authAdminAccount:0x0000000000000000000000000000000000000001\nisSerialExecute:0\n"
-        "evmRevision:0:prague\nepochSealerNum:4\nepochBlockNum:1000\n" +
+        "epochSealerNum:4\nepochBlockNum:1000\n"
+        "[ethereum]\nmode:el\n[web3]\nchain_id:1\n" +
         ethLaneGenesisPinSection() + "node.0:" + node + ",1\n";
     BOOST_CHECK_EQUAL(data, expected);
 }
@@ -362,8 +349,7 @@ BOOST_AUTO_TEST_CASE(sentinelAsDeclaredTimestampRejected)
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
                               "[op_fork_timestamps]\njovian_time=18446744073709551615\n")),
-        InvalidConfig,
-        [](auto const& e) { return errinfoContains(e, "not-scheduled sentinel"); });
+        InvalidConfig, [](auto const& e) { return errinfoContains(e, "not-scheduled sentinel"); });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

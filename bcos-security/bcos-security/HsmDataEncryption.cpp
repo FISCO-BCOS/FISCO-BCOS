@@ -67,9 +67,9 @@ std::string HsmDataEncryption::decrypt(uint8_t* data, size_t size)
     // inside the crypto layer as a ~16-exabyte allocation request.
     if (size < SM4_IV_DATA_SIZE)
     {
-        BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(
-                                  "HsmDataEncryption: ciphertext too short, size: " +
-                                  std::to_string(size)));
+        BOOST_THROW_EXCEPTION(
+            DecryptFailed() << errinfo_comment(
+                "HsmDataEncryption: ciphertext too short, size: " + std::to_string(size)));
     }
     size_t cipherDataSize = size - SM4_IV_DATA_SIZE;
     bytes decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(

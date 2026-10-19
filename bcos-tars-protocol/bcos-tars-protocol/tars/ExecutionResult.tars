@@ -1,0 +1,9 @@
+#include "TransactionReceipt.tars"
+
+module bcostars {
+    struct ExecutionResult {
+        1 optional int status;
+        2 optional TransactionReceipt receipt;
+        3 optional vector<byte> to;
+    };
+};

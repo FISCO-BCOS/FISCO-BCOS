@@ -4,10 +4,12 @@ How to stand up a single FISCO-BCOS node in OP-Stack L2 mode, what changes
 versus the default `pbft` mode, the error strings you hit if the genesis is
 wrong, and the upgrade paths.
 
-L2 mode is signalled by the genesis executor version — `version = 3` (or higher)
-in the `[executor]` section of `config.genesis`, together with
-`[ethereum] mode = opstack-el`. There is no `chain_mode` key and no feature
-flag; the executor version and the `[alloc.*]` sections must agree
+An L2 node is an `executor.version = 3` node driven by op-node: `version = 3` in
+the `[executor]` section of `config.genesis` puts the chain on the OP lane, and
+on that lane the block driver is the Engine API (`NodeConfig::blockDriver()`),
+which `config.ini` `[engine_rpc]` serves to op-node. There is no mode key, no
+`chain_mode` key and no feature flag; the executor version, the `[alloc.*]`
+sections, `[eth_genesis_header]` and `[op_fork_timestamps]` must agree
 (`NodeConfig::validateL2Invariants` in `bcos-tool/bcos-tool/NodeConfig.cpp`).
 
 This is node-bring-up only. The op-node / sequencer wiring and the L1 bridge
@@ -19,10 +21,10 @@ You set `executor.version = 3` in `config.genesis` but leave the
 `[alloc.*]` sections out. The node refuses to start:
 
 ```
-executor.version >= 2 (the Ethereum lane) requires a non-empty [alloc.*] section in config.genesis (only [ethereum] mode=el may run an empty-alloc genesis)
+executor.version >= 3 (the OP lane) requires a non-empty [alloc.*] section in config.genesis (only executor.version=2 may run an empty-alloc genesis)
 ```
 
-(`NodeConfig::validateL2Invariants`. Only the L1 EL lane — `[ethereum] mode=el` —
+(`NodeConfig::validateL2Invariants`. Only the L1 EL lane — `executor.version = 2` —
 is exempt: its empty-alloc genesis publishes the canonical empty-trie root.) L2 mode has no contracts unless genesis allocs
 materialize them — predeploy constructors never run on-chain, so all runtime
 bytecode and storage must be written directly into genesis state. The quick
@@ -85,38 +87,77 @@ regenerate from the FROZEN op-deployer artifact and fill in
 match the base an already-started chain was actually built from, and genesis
 is immutable: there is no fixing it post-launch.
 
-### 3. Assemble `config.genesis`
+### 3. Assemble `config.genesis` and `config.ini`
 
-Declare the OP lane via the executor version and EL mode, then append the
-generated `allocs.ini`:
+Start from the node directory `tools/BcosAirBuilder/build_chain.sh` generates
+(an `executor.version = 1` chain), then move its `config.genesis` to the OP
+lane and append the generated `allocs.ini`.
+`tools/.ci/ci_opnode_startup_check.sh` does exactly this for a one-alloc devnet.
 
 ```ini
-[executor]
-    version = 3
-
-[ethereum]
-    mode = opstack-el
-
 [chain]
     sm_crypto = false
     group_id  = group0
-    chain_id  = chain0
+    ; the L2 chain id, decimal (rollup.json l2_chain_id). eth_chainId and EIP-155
+    ; read it; a [web3] section is not read on executor.version >= 2
+    chain_id  = 901
+
+[executor]
+    version = 3
+
+; L2 block timestamps in seconds, from rollup.json (isthmus_time, jovian_time,
+; karst_time, ...). An absent key is a fork that never activates.
+[op_fork_timestamps]
+    isthmus_time = 0
+    jovian_time  = 0
+    karst_time   = 0
 
 ; --- appended from allocs.ini ---
 [alloc.0]
-    address = 43000000000000000000000000000000000000c0
+    address = 0x43000000000000000000000000000000000000c0
     balance = 0
     nonce   = 0
     code    = 0x60806040...
 [alloc.0.storage]
     0x0000...0000 = 0x...
 ; ... 12 more predeploys ...
+
+; the L2 genesis block header, from the genesis artifact (tools/op-genesis-to-allocs.py
+; emits it): 15 required header fields, the six fork-gated ones an L2 artifact
+; always carries, and hash
+[eth_genesis_header]
+    parent_hash = 0x0000000000000000000000000000000000000000000000000000000000000000
+    state_root  = 0x...
+    ; ... the remaining header fields ...
+    hash        = 0x...
 ```
 
-`executor.version >= 3` is the OP lane (an OP-Stack L2); `= 2` is the plain
+`executor.version = 3` is the OP lane (an OP-Stack L2); `= 2` is the plain
 Ethereum lane (L1 EL). The lane is fixed at genesis — there is no runtime
 switch. With `executor.version < 2`, any `[alloc.*]` section is rejected
-(`NodeConfig::validateL2Invariants`).
+(`NodeConfig::validateL2Invariants`). The `[version]` and `[features]` sections
+of the generated file are not read on `executor.version >= 2`.
+
+In `config.ini`, add the Engine API listener op-node drives the node through.
+It has no `enable` key: `executor.version >= 2` always serves it.
+
+```ini
+[engine_rpc]
+    listen_ip = 127.0.0.1
+    listen_port = 8551
+    ; 32-byte hex secret; op-node --l2.jwt-secret points at the same file
+    jwt_secret_file = conf/engine/jwt.hex
+
+[web3_rpc]
+    enable = true
+    ; op-batcher calls miner_setMaxDASize on its --l2-eth-rpc, the web3 port
+    enable_miner_api = true
+```
+
+`[web3_rpc] enable_miner_api` registers the miner namespace on the web3
+listener only. `[engine_rpc] enable_miner_api` does the same on the Engine API
+listener, for a caller that holds the JWT; neither key reaches the other port
+(`RpcFactory.h`).
 
 ### 4. Start the node
 
@@ -126,10 +167,9 @@ switch. With `executor.version < 2`, any `[alloc.*]` section is rejected
 
 On first init with allocs, `Ledger::buildGenesisBlock` computes an
 op-geth-compatible Ethereum state root over the allocs
-(`computeGenesisStateRoot`, `bcos-ledger/bcos-ledger/Ledger.cpp:1903`) and
-stores it as the genesis block's `stateRoot` (`Ledger.cpp:2064`). The chain
-config fields are serialized into the genesis block's `extraData`. Both are
-re-derived and checked on every later startup (see [Immutability](#immutability)).
+(`computeGenesisStateTrie`) and stores the `[eth_genesis_header]` block as
+block 0 after checking that its `state_root` and `hash` match. Both are
+re-checked on every later startup (see [Immutability](#immutability)).
 
 ### 5. Verify
 
@@ -137,11 +177,11 @@ re-derived and checked on every later startup (see [Immutability](#immutability)
 # every merged predeploy carries code (spot-check; genesis-bootstrap.sh sweeps them all)
 cast code 0x43000000000000000000000000000000000000C0 --rpc-url http://127.0.0.1:8545
 
-# SystemConfig returns the seeded chain_id (value, enableNumber)
+# SystemConfig returns the chain_id the allocs seeded (value, enableNumber)
 cast call 0x43000000000000000000000000000000000000C0 \
     "getValueByKey(string)" "chain_id" --rpc-url http://127.0.0.1:8545
 
-# eth_chainId agrees with SystemConfig chain_id (PR-4/PR-6 path consistency)
+# eth_chainId (config.genesis [chain] chain_id) agrees with the SystemConfig chain_id
 cast chain-id --rpc-url http://127.0.0.1:8545
 ```
 
@@ -150,84 +190,72 @@ running devnet.
 
 ## L2 mode vs pbft mode
 
-| Aspect | `pbft` (default) | L2 (`executor.version >= 3`, `mode=opstack-el`) |
-|--------|------------------|-----------------------------------|
+| Aspect | `pbft` (default) | L2 (`executor.version = 3`) |
+|--------|------------------|-----------------------------|
+| Block driver | PBFT | op-node over `[engine_rpc]` (`NodeConfig::blockDriver()`) |
 | `[alloc.*]` genesis allocs | rejected | required (non-empty) |
 | Predeploys at block 0 | none | 13 (2 self-written + 11 pinned OP fork) |
-| FISCO-private precompiles (`0x1000`..) | live | `disabledInL2()` removes 13 of them (PR-5) |
+| FISCO-private precompiles (`0x1000`..) | live | 18 of them hidden from `executor.version >= 2` on (`kL2DisabledSet`, `bcos-executor/src/precompiled/L2DisabledSet.h`) |
 | KZG point-evaluation `0x0a` | not registered | registered (A6.14) |
-| Genesis block `stateRoot` | empty | op-geth MPT root over allocs (`Ledger.cpp:2064`) |
-| Per-block config source | static node config | `L2ConfigLoader` reads `SystemConfig._config` slots directly, no EVM staticcall (PR-4) |
-| `eth_chainId` source | node config | `LedgerConfig.chainId` from SystemConfig `chain_id` (A6.9) |
-| WASM executor | allowed | rejected (`is_wasm=true` unsupported) |
+| Genesis block `stateRoot` | empty | op-geth MPT root over allocs (`Ledger::buildGenesisBlock`) |
+| Fork schedule | `[features]` / `compatibility_version` | `[op_fork_timestamps]` |
+| `eth_chainId` source | `[web3] chain_id` | `[chain] chain_id` |
 
 ## Common errors
 
-Genesis-config errors are thrown as `bcos::tool::InvalidConfig`; the per-block
-config-load errors are `std::runtime_error`. Line numbers are as of
-release-3.18.0 and will drift; the verbatim error string is the stable anchor.
-Exact strings:
+Genesis-config errors are thrown as `bcos::tool::InvalidConfig`. The verbatim
+error string is the stable anchor. Exact strings:
 
 | Error string (verbatim) | Cause | Source |
 |-------------------------|-------|--------|
-| `executor.version >= 2 (the Ethereum lane) requires a non-empty [alloc.*] section in config.genesis (only [ethereum] mode=el may run an empty-alloc genesis)` | Ethereum lane on (`executor.version >= 2`), no allocs, and not the L1 EL lane | `NodeConfig::validateL2Invariants` |
+| `executor.version >= 3 (the OP lane) requires a non-empty [alloc.*] section in config.genesis (only executor.version=2 may run an empty-alloc genesis)` | OP lane, no allocs | `NodeConfig::validateL2Invariants` |
 | `[alloc.*] section requires executor.version >= 2 (the Ethereum lane) in config.genesis` | allocs present, `executor.version < 2` | `NodeConfig::validateL2Invariants` |
-| `executor.version >= 2 (the Ethereum lane) requires an [eth_genesis_header] section in config.genesis (all 22 fields from the merged genesis artifact); ...` | Ethereum lane on, no `[eth_genesis_header]` section | `NodeConfig::validateL2Invariants` |
+| `executor.version >= 2 (the Ethereum lane) requires an [eth_genesis_header] section in config.genesis (the 21 header fields plus hash, from the merged genesis artifact); ...` | Ethereum lane on, no `[eth_genesis_header]` section | `NodeConfig::validateL2Invariants` |
 | `[eth_genesis_header] section requires executor.version >= 2 (the Ethereum lane) in config.genesis` | `[eth_genesis_header]` present on a consortium (`executor.version < 2`) genesis | `NodeConfig::validateL2Invariants` |
-| `[ethereum] mode=el requires executor.version=2 (the L1 EL lane) in config.genesis; the OP lane (executor.version >= 3) takes mode=opstack-el` | `mode=el` declared on a non-L1 lane (the OP lane must use `mode=opstack-el`) | `NodeConfig::validateL2Invariants` |
-| `executor.is_wasm=true is not supported: WASM support was removed in FISCO-BCOS 3.18; use the EVM executor (set is_wasm=false)` | `is_wasm = true` (any lane; WASM removed in 3.18) | `NodeConfig::loadExecutorConfig` |
-| `[alloc.N].address duplicate: <addr>` | two alloc entries share an address | `NodeConfig.cpp:239` |
-| `[alloc.N].nonce must fit in uint64: <v>` | alloc `nonce` exceeds `uint64` (RLP-encoded as a uint64 in the state root) | `NodeConfig.cpp:260` |
-| `[alloc.N] malformed: <detail>` | malformed alloc hex (bad length / not 0x-prefixed / odd nibble count) | `NodeConfig.cpp:287` |
-| `genesis allocs changed since first init (op-geth state root mismatch); refuse to start. stored=<h> computed=<h>` | allocs edited after first init | `Ledger.cpp:1930` |
-| `L2 genesis allocs must carry the SystemConfig feature_flags Entry slot ...` | the alloc JSON has no `feature_flags` storage slot on the SystemConfig account | `Ledger.cpp` `verifyL2FeatureFlagsSlot` |
-| `SystemConfig feature_flags slot in the genesis allocs does not match this node's genesis feature set (Features::toFlagsNumber()): alloc=0x... expected=0x...` | the alloc's `feature_flags` value disagrees with the binary's feature set — see the bit-57 note below | `Ledger.cpp` `verifyL2FeatureFlagsSlot` |
-| `L2ConfigLoader: SystemConfig key '<k>' is not set (slot empty); ...` | a config key was never seeded into SystemConfig storage | `L2ConfigLoader.h:268` |
-| `L2ConfigLoader: chain_id == 0 breaks EIP-155 replay protection` | `chain_id` slot seeded as 0 | `L2ConfigLoader.h:301` |
-| `L2ConfigLoader: slot value must be <N> bytes, got <n>` | SystemConfig slot value has the wrong width (layout drift) | `L2ConfigLoader.h:145` |
-
-### Bit 57: `feature_l2_ethereum_compat` allocs from the 3.18 dev line
-
-The `feature_l2_ethereum_compat` flag (bit 57 of the packed `feature_flags`
-value) was introduced on the 3.18 development line and removed before any
-release shipped it; lanes are now expressed by `executor.version` alone. An
-alloc JSON generated while that flag existed carries bit 57 set and fails the
-slot check above on current binaries (`expected=0x...` never has bit 57).
-Regenerate the allocs with the current `build-allocs.py` — this moves the
-genesis `stateRoot` and therefore the genesis hash and `rollup.json`, so the
-old chain cannot be continued; treat it as a new genesis. Chains initialized
-before the flag existed are unaffected.
+| `executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section carrying at least one entry: ...` | OP lane, no `[op_fork_timestamps]` | `laneKeyRules` (`ChainLaneConfig.h`) |
+| `[op_fork_timestamps] requires executor.version >= 3 (OP lane)` | `[op_fork_timestamps]` on `executor.version < 3` | `laneKeyRules` (`ChainLaneConfig.h`) |
+| `executor.version >= 2 requires [chain] chain_id in config.genesis (the Ethereum chain id, e.g. 11155111 for Sepolia); [web3] chain_id is not read on this lane` | no `[chain] chain_id` | `ethLaneChainId` (`NodeConfig.cpp`) |
+| `[chain].chain_id must be decimal digits on executor.version >= 2 (...): chain0` | a v0/v1 chain name left in `[chain] chain_id` | `ethLaneChainId` (`NodeConfig.cpp`) |
+| `executor.is_wasm=true is not supported: WASM support was removed in FISCO-BCOS 3.18; use the EVM executor (set is_wasm=false)` | `is_wasm = true` (any lane) | `NodeConfig::loadExecutorConfig` |
+| `[alloc.N].address duplicate: <addr>` | two alloc entries share an address | `NodeConfig::loadAllocs` |
+| `[alloc.N].nonce must fit in uint64: <v>` | alloc `nonce` exceeds `uint64` (RLP-encoded as a uint64 in the state root) | `NodeConfig::loadAllocs` |
+| `[alloc.N] malformed: <detail>` | malformed alloc hex (bad length / not 0x-prefixed / odd nibble count) | `NodeConfig::loadAllocs` |
+| `genesis allocs changed since first init (op-geth state root mismatch); refuse to start. stored=<h> computed=<h>` | allocs edited after first init | `Ledger::buildGenesisBlock` |
 
 ## Immutability
 
-Two frozen-genesis guards run in `Ledger::buildGenesisBlock` on every startup
-after the first, both keyed off the already-persisted genesis block:
+Three frozen-genesis guards run in `Ledger::buildGenesisBlock` on every startup
+after the first, all keyed off the already-persisted genesis block:
 
-- **Chain config fields** (chainID, groupID, sm_crypto, is_wasm, gas limits,
-  the feature set) live in the genesis block's `extraData`, produced by
-  `generateGenesisData`. On restart the fields are regenerated and compared; a
-  mismatch aborts with *"The Genesis Data is inconsistent with the initial
-  Genesis Data"* (`Ledger.cpp:1980`).
+- **Genesis header.** `[eth_genesis_header].hash` must equal the stored block 0
+  hash, or the node aborts with *"[eth_genesis_header].hash does not match the
+  stored genesis block"*.
+- **Chain config fields** (chain id, group id, sm_crypto, consensus, gas limit,
+  executor, the OP forks active at genesis) are the genesis pin
+  `generateGenesisData` produces. On
+  an `[eth_genesis_header]` chain block 0's `extraData` carries the artifact
+  bytes, so the pin is stored in the `eth_genesis_data` SYS_CONFIG row instead.
+  On restart the pin is regenerated and compared; a mismatch aborts with
+  *"The Genesis Data is inconsistent with the initial Genesis Data"*.
 - **Allocs** are captured by the genesis block's `stateRoot` (the op-geth MPT
-  root). On restart, if the config fields still match but a freshly computed
-  state root differs, the node aborts with *"genesis allocs changed since first
-  init"* (`Ledger.cpp:1930`). `computeGenesisStateRoot` reads only
-  `genesis.m_allocs`, so this fires precisely when an alloc's address, balance,
-  nonce, code, or storage changed.
+  root). On restart, if the pin still matches but a freshly computed state
+  root differs, the node aborts with *"genesis allocs changed since first
+  init"*. `computeGenesisStateTrie` reads only `genesis.m_allocs`, so this fires
+  precisely when an alloc's address, balance, nonce, code, or storage changed.
 
-Neither guard is ever rewritten: the genesis block is the source of truth, and
+None of these is ever rewritten: the genesis block is the source of truth, and
 editing a frozen field means the node is now pointed at a different chain.
 
 ## Upgrade paths
 
 | Change | Path |
 |--------|------|
-| Enable/disable L2 mode (`executor.version >= 3` + `[ethereum] mode=opstack-el`) | the executor version and allocs are pinned by genesis; immutable after first init — start a **new chain** |
+| Enable/disable L2 mode (`executor.version = 3`) | the executor version and allocs are pinned by genesis; immutable after first init — start a **new chain** |
 | Move an existing consortium chain (`executor_version` 0/1) onto the Ethereum/OP lane by governance | **not possible**: at compatibility >= 3.18 `SystemConfigPrecompiled` refuses `executor_version` writes of 2 or above in both directions — lane membership is a genesis property (a mid-chain flip would mix two state-transition rules on one chain). Below compatibility 3.18 only 0/1 are writable. Start a **new chain** |
 | Add / change a predeploy (different allocs) | allocs are pinned by the genesis `stateRoot`; start a **new chain** |
 | Bump the pinned OP fork to a new tag | edit `op-fork-pin.toml` — see `runbook-op-fork-upgrade.md` |
 | Phase B governance handover (DAO switch) | runtime `transferOwnership` txs, not a genesis change: `Ownable.owner` of SystemConfig / L2ValidatorSet (config + validator authority) and/or `ProxyAdmin` ownership (upgrade authority) — two independent roles, hand over each deliberately |
 
 There is no in-place migration for any frozen genesis field by design: the
-`stateRoot` / `extraData` guards exist to stop a node from silently running on a
+guards above exist to stop a node from silently running on a
 genesis that differs from the one it was initialized with.

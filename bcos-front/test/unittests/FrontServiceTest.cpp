@@ -91,8 +91,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_onReceiveMessage_decodeFailed)
 
     // truncated / illegal frame
     bcos::bytes garbage{'x', 'y', 'z'};
-    auto error = task::syncWait(
-        frontService->onReceiveMessage(g_groupID, srcNodeID, bcos::ref(garbage)));
+    auto error =
+        task::syncWait(frontService->onReceiveMessage(g_groupID, srcNodeID, bcos::ref(garbage)));
     BOOST_REQUIRE(error);
     BOOST_CHECK_EQUAL(error->errorCode(), bcos::protocol::CommonError::MessageDecodeFailed);
 
@@ -189,8 +189,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
 
     // Use wait_for with timeout to avoid hanging indefinitely on CI
     auto status = f.wait_for(std::chrono::seconds(10));
-    BOOST_CHECK_MESSAGE(status == std::future_status::ready,
-        "Timed out waiting for group node info notification");
+    BOOST_CHECK_MESSAGE(
+        status == std::future_status::ready, "Timed out waiting for group node info notification");
     if (status == std::future_status::ready)
     {
         f.get();
@@ -209,17 +209,16 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendResponse_coroutine)
     // the id/nodeID/payload copies so the bytesConstRef view stays valid until the send completes
     auto resultPromise = std::make_shared<std::promise<SendResult>>();
     auto resultFuture = resultPromise->get_future();
-    frontService->registerModuleMessageDispatcher(moduleID,
-        [frontService, dstNodeID, moduleID, data](bcos::crypto::NodeIDPtr _nodeID,
-            const std::string& _id, bytesConstRef _data) {
+    frontService->registerModuleMessageDispatcher(
+        moduleID, [frontService, dstNodeID, moduleID, data](bcos::crypto::NodeIDPtr _nodeID,
+                      const std::string& _id, bytesConstRef _data) {
             (void)_nodeID;
             (void)_data;
             task::wait([](decltype(frontService) _frontService, std::string _responseID,
                            decltype(dstNodeID) _dstNodeID, int _moduleID,
                            std::string _payload) -> task::Task<void> {
                 auto error = co_await _frontService->sendResponse(_responseID, _moduleID,
-                    _dstNodeID,
-                    bytesConstRef((unsigned char*)_payload.data(), _payload.size()));
+                    _dstNodeID, bytesConstRef((unsigned char*)_payload.data(), _payload.size()));
                 (void)error;
             }(frontService, _id, dstNodeID, moduleID, data));
         });
@@ -229,8 +228,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendResponse_coroutine)
         [](decltype(self) _self, decltype(dstNodeID) _dstNodeID, int _moduleID, std::string _data,
             std::shared_ptr<std::promise<SendResult>> _resultPromise) -> task::Task<void> {
             auto result = co_await _self->sendMessageByNodeID(_moduleID, _dstNodeID,
-                ::ranges::views::single(bytesConstRef(
-                    reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
+                ::ranges::views::single(
+                    bytesConstRef(reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
                 5000);
             _resultPromise->set_value(std::move(result));
         }(self, dstNodeID, moduleID, data, resultPromise));
@@ -316,8 +315,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine)
     // timeout == 0: fire-and-forget send; the module-level dispatch (not a response) is what the
     // fake gateway loops back, so only the send completion matters here.
     auto result = task::syncWait(frontService->sendMessageByNodeID(moduleID, dstNodeID,
-        ::ranges::views::single(bytesConstRef(
-            reinterpret_cast<const bcos::byte*>(data.data()), data.size())),
+        ::ranges::views::single(
+            bytesConstRef(reinterpret_cast<const bcos::byte*>(data.data()), data.size())),
         0));
     (void)result;
     f.get();
@@ -352,13 +351,14 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine_withResponse
             // it back to onReceiveMessage, where message.isResponse() triggers handleCallback ->
             // SendResponseAwaitable::complete
             auto fs = frontService;
-            task::wait([](decltype(fs) _frontService, int _moduleID,
-                           bcos::crypto::NodeIDPtr _dstNodeID, std::string _id,
-                           bcos::bytes _payload) -> task::Task<void> {
-                (void)co_await _frontService->sendResponse(
-                    _id, _moduleID, std::move(_dstNodeID), bcos::ref(_payload));
-            }(fs, moduleID, dstNodeID, _id,
-                bcos::bytes(responsePayload.begin(), responsePayload.end())));
+            task::wait(
+                [](decltype(fs) _frontService, int _moduleID, bcos::crypto::NodeIDPtr _dstNodeID,
+                    std::string _id, bcos::bytes _payload) -> task::Task<void> {
+                    (void)co_await _frontService->sendResponse(
+                        _id, _moduleID, std::move(_dstNodeID), bcos::ref(_payload));
+                }(fs, moduleID, dstNodeID, _id,
+                                                               bcos::bytes(responsePayload.begin(),
+                                                                   responsePayload.end())));
         });
 
     auto self = frontService;
@@ -366,8 +366,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_sendMessageByNodeID_coroutine_withResponse
         [](decltype(self) _self, decltype(dstNodeID) _dstNodeID, int _moduleID, std::string _data,
             std::shared_ptr<std::promise<SendResult>> _resultPromise) -> task::Task<void> {
             auto result = co_await _self->sendMessageByNodeID(_moduleID, _dstNodeID,
-                ::ranges::views::single(bytesConstRef(
-                    reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
+                ::ranges::views::single(
+                    bytesConstRef(reinterpret_cast<const bcos::byte*>(_data.data()), _data.size())),
                 5000);
             _resultPromise->set_value(std::move(result));
         }(self, dstNodeID, moduleID, data, resultPromise));
@@ -431,14 +431,12 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
     {
         senders.emplace_back([frontService, moduleID, dstNodeID, data, &barrier]() {
             auto result = task::syncWait(frontService->sendMessageByNodeID(moduleID, dstNodeID,
-                ::ranges::views::single(
-                    bytesConstRef((unsigned char*)data.data(), data.size())),
+                ::ranges::views::single(bytesConstRef((unsigned char*)data.data(), data.size())),
                 2000));
             BOOST_CHECK(result.error);
             if (result.error)
             {
-                BOOST_CHECK_EQUAL(
-                    result.error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
+                BOOST_CHECK_EQUAL(result.error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
             }
             barrier.set_value();
         });

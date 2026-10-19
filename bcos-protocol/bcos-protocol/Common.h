@@ -20,12 +20,12 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
-#include <limits>
 #include <algorithm>
+#include <limits>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {

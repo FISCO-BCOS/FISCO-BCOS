@@ -21,9 +21,9 @@
  */
 #pragma once
 
+#include "../rlpx/Session.h"
 #include "BodySequence.h"
 #include "HeaderChain.h"
-#include "../rlpx/Session.h"
 #include <functional>
 
 namespace bcos::devp2p::sync
@@ -37,15 +37,13 @@ public:
 
     // `_startNumber`: first block to download (nextNumber of the anchor).
     // `_anchorHash`: hash of the last locally-known block (block startNumber - 1).
-    BlockExchange(uint64_t _startNumber, bcos::h256 _anchorHash,
-        uint64_t _batchSize = 192)
+    BlockExchange(uint64_t _startNumber, bcos::h256 _anchorHash, uint64_t _batchSize = 192)
       : m_headerChain(_startNumber, _anchorHash), m_batchSize(_batchSize)
     {}
 
     // Same, but with the known anchor header so downloaded headers are also
     // validated against Ethereum PoS field rules.
-    BlockExchange(uint64_t _startNumber,
-        bcos::protocol::EthBlockHeaderData _anchorHeader,
+    BlockExchange(uint64_t _startNumber, bcos::protocol::EthBlockHeaderData _anchorHeader,
         ChainConfig const& _config = {}, uint64_t _batchSize = 192)
       : m_headerChain(_startNumber, std::move(_anchorHeader), _config), m_batchSize(_batchSize)
     {}
@@ -70,9 +68,8 @@ public:
             size_t processed = 0;
             while (processed < headers.size())
             {
-                std::vector<HeaderWithHash> pending(headers.begin() +
-                        static_cast<std::ptrdiff_t>(processed),
-                    headers.end());
+                std::vector<HeaderWithHash> pending(
+                    headers.begin() + static_cast<std::ptrdiff_t>(processed), headers.end());
                 auto blocks = m_bodySequence.requestBodies(_session, pending);
                 if (blocks.empty())
                 {
@@ -89,8 +86,7 @@ public:
             m_headerChain.advance(processed, headers[processed - 1]);
             if (processed > remaining)
             {
-                throw std::runtime_error(
-                    "BlockExchange: peer returned more blocks than requested");
+                throw std::runtime_error("BlockExchange: peer returned more blocks than requested");
             }
             remaining -= processed;
         }

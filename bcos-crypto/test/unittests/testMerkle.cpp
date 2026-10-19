@@ -1,4 +1,3 @@
-#include <ostream>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -6,6 +5,7 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
+#include <ostream>
 #include <random>
 #include <stdexcept>
 

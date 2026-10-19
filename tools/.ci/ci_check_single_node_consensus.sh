@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Copyright (c) FISCO-BCOS, Apache-2.0
 #
-# Smoke test for the built-in single-node consensus mode:
+# Smoke test for the built-in single-node driver (hidden config.ini [debug] enable):
 #   1. build a single-node AIR chain via build_chain.sh
-#   2. patch config.genesis for executor_version=2 + evmc revision + L2 alloc funding
-#   3. patch config.ini: web3_rpc + [consensus] enable_single_node_consensus=true
+#   2. patch config.genesis for executor_version=2 + [fork_timestamps] + L2 alloc funding
+#   3. patch config.ini: web3_rpc + [debug] enable=true
 #   4. start the node (no pbft/sealer/txpool — the single-node driver produces blocks
-#      from the mempool via the scheduler commit path)
+#      from the mempool through the EngineService, with the EVM revision and the header
+#      rules per block timestamp from [fork_timestamps])
 #   5. drive eth_sendRawTransaction -> eth_getTransactionReceipt / eth_getBlockByNumber
 #
 # Usage: bash tools/.ci/ci_check_single_node_consensus.sh [REPO_ROOT]
@@ -45,7 +46,7 @@ trap stop_node EXIT
 log "building single-node chain via build_chain.sh"
 cd "${REPO_ROOT}/tools"
 rm -rf nodes config
-bash "${BUILDER}" -l "127.0.0.1:1" -v 3.18.0 -e "${BINARY}" "" >/dev/null 2>&1 \
+bash "${BUILDER}" -l "127.0.0.1:1" -e "${BINARY}" "" >/dev/null 2>&1 \
     || fail "build_chain.sh failed"
 [ -f "${WORK_DIR}/config.genesis" ] || fail "config.genesis not generated"
 
@@ -53,7 +54,23 @@ bash "${BUILDER}" -l "127.0.0.1:1" -v 3.18.0 -e "${BINARY}" "" >/dev/null 2>&1 \
 log "patching config.genesis for executor_version=2 + L2 alloc"
 cd "${WORK_DIR}"
 perl -p -i -e 's/version=1/version=2/' config.genesis
-perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' config.genesis
+# executor version 2 takes its chain id from [chain] chain_id (a decimal), not [web3]
+perl -p -i -e 's/chain_id=chain0/chain_id=20200/' config.genesis
+
+# The v2 fork schedule: every v2 block driver derives the EVM revision and the header rules
+# per block timestamp from it. Cancun from genesis; Prague stays in the future (a Prague
+# block runs the EIP-7002/7251 system calls, whose contracts this single-alloc genesis does
+# not carry).
+cat >> config.genesis <<'GENESIS_EOF'
+
+[fork_timestamps]
+london_time=0
+paris_time=0
+shanghai_time=0
+cancun_time=0
+prague_time=4102444800
+merge_block=0
+GENESIS_EOF
 
 # executor_version=2 (patched above) already puts the chain on the Ethereum lane, so
 # genesis [alloc] can pre-fund a sender.
@@ -99,27 +116,21 @@ requests_hash=0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 hash=0xf66beef79256c0b3f1fd2852040413c5dffa1ff44f0f78421ae17cf8f397a1a5
 GENESIS_EOF
 
-# ---- 3. patch config.ini: web3_rpc + single-node consensus ----
-log "patching config.ini for web3_rpc + single-node consensus"
+# ---- 3. patch config.ini: web3_rpc + the single-node driver ----
+log "patching config.ini for web3_rpc + [debug] enable"
 perl -p -i -e 'if (/\[web3_rpc\]/) { $f=1 } elsif ($f && s/enable\s*=\s*false/enable=true/) { $f=0 }' config.ini
 
-# Enable the built-in single-node consensus: timed block production from the mempool via
-# the scheduler commit path. produce_empty_blocks=true so the smoke test also sees the
-# timer driving empty blocks. The keys are inserted into the existing [consensus] section
-# (a second [consensus] section would be rejected by the ini parser).
-python3 - "config.ini" <<'PYEOF'
-import sys
-path = sys.argv[1]
-content = open(path).read()
-idx = content.find('\n[consensus]\n    enable_single_node_consensus')
-if idx != -1:
-    content = content[:idx]
-if 'enable_single_node_consensus' not in content:
-    content = content.replace('min_seal_time=500\n',
-        'min_seal_time=500\n    enable_single_node_consensus=true\n    block_interval=1000\n    produce_empty_blocks=true\n')
-open(path, 'w').write(content)
-print("patched [consensus]")
-PYEOF
+# Enable the built-in single-node driver ([debug] is a hidden section that no template
+# carries, so it is appended): timed block production from the mempool.
+# produce_empty_blocks=true so the smoke test also sees the timer driving empty blocks.
+grep -q '^\[debug\]' config.ini && fail "config.ini already has a [debug] section"
+cat >> config.ini <<'INI_EOF'
+
+[debug]
+    enable=true
+    block_interval=1000
+    produce_empty_blocks=true
+INI_EOF
 
 # ---- 4. start node and wait for RPC ----
 log "starting node"
@@ -165,7 +176,9 @@ def rpc(method, params):
 
 chain_id = int(rpc("eth_chainId", []), 16)
 nonce = int(rpc("eth_getTransactionCount", [sender, "latest"]), 16)
-tx = {"chainId": chain_id, "nonce": nonce, "gasPrice": 1, "gas": 21000,
+# The block's base fee follows the EIP-1559 rule from the genesis header's 1 gwei; a price
+# below it is never sealed, so pay 2 gwei.
+tx = {"chainId": chain_id, "nonce": nonce, "gasPrice": 2 * 10**9, "gas": 21000,
       "to": eth_utils.to_checksum_address(recipient), "value": 1, "data": b""}
 signed = Account.sign_transaction(tx, secret)
 tx_hash = rpc("eth_sendRawTransaction", [signed.raw_transaction.hex()])
@@ -201,5 +214,5 @@ now_sec = int(time.time())
 print(f"block timestamp={block_ts} wall-clock-now={now_sec}")
 assert abs(block_ts - now_sec) < 120, (
     f"block timestamp {block_ts} not within 120s of wall clock {now_sec}")
-print("PASS: single-node consensus produced a block containing the tx")
+print("PASS: the single-node driver produced a block containing the tx")
 PYEOF

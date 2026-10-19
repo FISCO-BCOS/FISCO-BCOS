@@ -45,7 +45,6 @@ default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
 auth_mode="false"
 monitor_mode="false"
-enable_op_engine_rpc="false"
 auth_admin_account=
 binary_path=""
 lightnode_binary_path=""
@@ -69,7 +68,7 @@ consensus_type="pbft"
 supported_consensus=(pbft rpbft)
 log_level="info"
 
-# for pro default setting
+# for pro or max default setting
 bcos_builder_package=BcosBuilder.tgz
 bcos_builder_version=v3.12.2
 use_exist_binary="false"
@@ -81,15 +80,12 @@ download_service_binary_path_flag="false"
 service_type="all"
 chain_version="air"
 service_output_dir="generated"
-# -p fields: p2p, rpc, tars start ports; a 4th value (the retired MAX TiKV port) is ignored
-# and a 5th sets the monitor port. Read them through the index names below.
-pro_port_start=(30300 20200 40400)
-readonly pro_port_p2p=0 pro_port_rpc=1 pro_port_tars=2 pro_port_monitor=4
+proOrmax_port_start=(30300 20200 40400 2379 3901)
 isPortSpecified="false"
 tars_listen_port_space=5
 executor_version=1
 
-#for pro expand
+#for pro or max expand
 expand_dir="expand"
 
 LOG_WARN() {
@@ -601,15 +597,16 @@ air
     -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -6 <ipv6 mode>                      [Optional] IPv6 mode use :: as default listen ip, default is false
     -T <Consensus Algorithm>            [Optional] Default PBFT. Options can be pbft / rpbft, pbft is recommended
-    -O <OP Engine RPC>                  [Optional] Default off. If set -O, emit [op_engine_rpc] section (enable=true) and generate a per-node JWT secret for external op-node driven mode
     -h Help
-pro
+    (air chains use executor version 1. For an Ethereum-lane genesis (executor version 2),
+     convert a geth genesis.json with: eth-sync-check --genesis2ini <genesis.json>)
+pro or max
     -C <Command>                        [Optional] the command, support 'deploy' now, default is deploy
     -g <group id>                       [Optional] set the group id, default: group0
     -I <chain id>                       [Optional] set the chain id, default: chain0
-    -V <chain version>                  [Optional] support 'air'、'pro', default is 'air'
+    -V <chain version>                  [Optional] support 'air'、'pro'、'max', default is 'air'
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -p <Start port>                     [Optional] Default 30300、20200、40400 means p2p_port start from 30300, rpc_port from 20200, tars_port from 40400
+    -p <Start port>                     [Optional] Default 30300、20200、40400、2379 means p2p_port start from 30300, rpc_port from 20200, tars_port from 40400, tikv_port default 2379
     -e <service binary path>            [Optional] rpc gateway node service binary path
     -y <service binary download type>   [Optional] rpc gateway node service binary download type, default type is cdn
     -v <service binary version>         [Optional] Default is the latest ${service_binary_version}
@@ -638,23 +635,30 @@ deploy pro service e.g
     bash $0 -p 30300,20200 -l [IP1]:2,[IP2]:2 -C deploy -V pro -o generate -t all -s
     bash $0 -p 30300,20200 -l [IP1]:2,[IP2]:2 -C deploy -V pro -o generate -e ./binary
     bash $0 -p 30300,20200,40400 -l [IP1]:2,[IP2]:2 -C deploy -V pro -o generate -y cdn -v ${service_binary_version} -r ./binaryPath
+deploy max service e.g
+    bash $0 -p 30300,20200,40400,2379 -l [IP1]:1,[IP2]:1,[IP3]:1,[IP4]:1 -C deploy -V max -o generate -t all
+    bash $0 -p 30300,20200,40400,2379 -l [IP1]:1,[IP2]:1,[IP3]:1,[IP4]:1 -C deploy -V max -o generate -t all -e ./binary -s
+    bash $0 -p 30300,20200,40400,2379 -l [IP1]:1,[IP2]:1,[IP3]:1,[IP4]:1 -C deploy -V max -o generate -y cdn -v ${service_binary_version} -r ./binaryPath
+    bash $0 -c config.toml -C deploy -V max -o generate -t all
 expand pro node e.g
     bash $0 -C expand_node -V pro -o expand_node -c ./config.toml
 expand pro rpc/gateway e.g
     bash $0 -C expand_service -V pro -o expand_service -c ./config.toml
 expand pro group e.g
     bash $0 -C expand_group -V pro -o expand_group -c ./config.toml
+expand max node e.g
+    bash $0 -C expand_node -V max -o expand_node -c ./config.toml
+expand max rpc/gateway e.g
+    bash $0 -C expand_service -V max -o expand_service -c ./config.toml
 
 EOF
     exit 0
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zDshHmEn:R:a:N:u:y:r:V:6T:O" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zDshHmEn:R:a:N:u:y:r:V:6T:" option; do
         case $option in
         6) use_ipv6="true" && default_listen_ip="::"
-        ;;
-        O) enable_op_engine_rpc="true"
         ;;
         l)
             ip_param=$OPTARG
@@ -690,7 +694,7 @@ parse_params() {
         p)
             isPortSpecified="true"
             port_start=(${OPTARG//,/ })
-            pro_port_start=(${OPTARG//,/ })
+            proOrmax_port_start=(${OPTARG//,/ })
             ;;
         s) sm_mode="true" ;;
         H) enable_hsm="true";;
@@ -767,24 +771,6 @@ parse_params() {
     done
 
     if [[ "$chain_version" == "air" ]];then
-        if [[ "${sm_mode}" == "true" && "${enable_op_engine_rpc}" == "true" ]]; then
-            LOG_FATAL "-O (op_engine_rpc) is not supported together with SM mode (-s) yet"
-        fi
-        if [[ "${enable_op_engine_rpc}" == "true" ]]; then
-            # op_engine_rpc requires the v2 pure-Ethereum executor (the node refuses to boot
-            # otherwise), and executor version=2 in turn requires compatibility_version >= 3.18.0
-            local compat_num="${compatibility_version//[vV]/}"
-            local compat_major compat_minor
-            compat_major=$(echo "${compat_num}" | cut -d. -f1)
-            compat_minor=$(echo "${compat_num}" | cut -d. -f2)
-            if ! [[ "${compat_major}" =~ ^[0-9]+$ && "${compat_minor}" =~ ^[0-9]+$ ]] ||
-                [ "${compat_major}" -lt 3 ] ||
-                { [ "${compat_major}" -eq 3 ] && [ "${compat_minor}" -lt 18 ]; }; then
-                LOG_FATAL "-O (op_engine_rpc) requires -v 3.18.0 or newer (got ${compatibility_version}): executor version=2 needs compatibility_version >= 3.18.0"
-            fi
-            executor_version=2
-            LOG_INFO "-O: config.genesis executor version=2 + evm_revision=cancun (op_engine_rpc requires the v2 pure-Ethereum executor with an explicit on-chain EVM revision)"
-        fi
         if [[ "$mtail_binary_path" != "" ]]; then
             file_must_exists "${mtail_binary_path}"
         fi
@@ -795,11 +781,8 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
         fi
     else
-        if [[ "${enable_op_engine_rpc}" == "true" ]]; then
-            LOG_FATAL "-O (op_engine_rpc) only supports air mode; pro deployments have no op-engine assembly"
-        fi
         if [[ "$isPortSpecified" = "true" ]]; then
-            if [ ${#pro_port_start[@]} -lt 2 ]; then LOG_WARN "service start port error. e.g: 30300,20200" && exit 1; fi
+            if [ ${#proOrmax_port_start[@]} -lt 2 ]; then LOG_WARN "service start port error. e.g: 30300,20200" && exit 1; fi
         fi
     fi
 }
@@ -1103,23 +1086,23 @@ gauge p2p_session_actived by host , node
 }
 
 gauge block_exec_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]ProposalExecuted,.*?execMs=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 }
 
 histogram block_exec_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[Core\]\[METRIC\]asyncExecuteBlock success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]ProposalExecuted,.*?execMs=(?P<timeCost>\d+)/ {
    block_exec_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
 gauge block_commit_duration_milliseconds_gauge by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]BlockCommitted,.*?commitMs=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds_gauge[chain][group][host][node] = \$timeCost
 }
 
 
 histogram block_commit_duration_milliseconds buckets 0, 50, 100, 150 by chain , group , host , node
-/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]commitStableCheckPoint success.*?timeCost=(?P<timeCost>\d+)/ {
+/\[CONSENSUS\]\[PBFT\]\[STORAGE\]\[METRIC\]BlockCommitted,.*?commitMs=(?P<timeCost>\d+)/ {
    block_commit_duration_milliseconds[chain][group][host][node] = \$timeCost
 }
 
@@ -1129,7 +1112,7 @@ gauge ledger_block_height by chain , group , host , node
 }
 
 gauge txpool_pending_tx_size by chain , group , host , node
-/\[TXPOOL\]\[METRIC\]batchFetchTxs success,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
+/\[TXPOOL\]\[METRIC\]TxsFetched,.*?pendingTxs=(?P<pendingTxs>\d+)/ {
   txpool_pending_tx_size[chain][group][host][node] = \$pendingTxs
 }
 EOF
@@ -1369,22 +1352,6 @@ generate_config_ini() {
         enable_ssl_content="enable_ssl=false"
     fi
 
-    # [op_engine_rpc] only appears when the chain is built for external op-node
-    # driven mode (-O); ordinary chains carry neither the section nor a JWT secret
-    local op_engine_rpc_section=""
-    if [[ "${enable_op_engine_rpc}" == "true" ]]; then
-        op_engine_rpc_section="[op_engine_rpc]
-    ; authenticated OP-Stack Engine API endpoint, driven by an external op-node
-    ; mutually exclusive with [consensus] enable_single_node_consensus
-    enable=true
-    listen_ip=127.0.0.1
-    listen_port=8551
-    ; JWT shared secret (op-node --l2.jwt-secret must point at the same file)
-    jwt_secret_file=conf/op-engine/jwt.hex
-
-"
-    fi
-
     cat <<EOF >"${output}"
 [p2p]
     listen_ip=${p2p_listen_ip}
@@ -1432,7 +1399,7 @@ generate_config_ini() {
     cors_allowed_headers=Content-Type, Authorization, X-Requested-With
     cors_max_age=86400
 
-${op_engine_rpc_section}[cert]
+[cert]
     ; directory the certificates located in
     ca_path=./conf
     ; the ca certificate file
@@ -1476,7 +1443,6 @@ generate_common_ini() {
 
 [executor]
     enable_dag=true
-    baseline_scheduler=false
     baseline_scheduler_parallel=false
 
 [storage]
@@ -1485,9 +1451,6 @@ generate_common_ini() {
     ; The granularity of the storage page, in bytes, must not be less than 4096 Bytes, the default is 10240 Bytes (10KB)
     ; if modify key_page_size value to 0, should clear the data directory
     key_page_size=${key_page_size}
-    pd_ssl_ca_path=
-    pd_ssl_cert_path=
-    pd_ssl_key_path=
     enable_archive=false
     archive_ip=127.0.0.1
     archive_port=
@@ -1517,33 +1480,12 @@ generate_common_ini() {
     sync_block_by_tree=false
     tree_width=3
 
-[redis]
-    ; redis server ip
-    ;server_ip=127.0.0.1
-    ; redis server port
-    ;server_port=6379
-    ; redis request timeout, unit ms
-    ;request_timeout=3000
-    ; redis connection pool size
-    ;connection_pool_size=16
-    ; redis password, default empty
-    ;password=
-    ; redis db, default 0th
-    ;db=0
-
 [flow_control]
     ; rate limiter stat reporter interval, unit: ms
     ; stat_reporter_interval=60000
 
     ; time window for rate limiter, default: 3s
     ; time_window_sec=3
-
-    ; enable distributed rate limiter, redis required, default: false
-    ; enable_distributed_ratelimit=false
-    ; enable local cache for distributed rate limiter, work with enable_distributed_ratelimit, default: true
-    ; enable_distributed_ratelimit_cache=true
-    ; distributed rate limiter local cache percent, work with enable_distributed_ratelimit_cache, default: 20
-    ; distributed_ratelimit_cache_percent=20
 
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
@@ -1653,7 +1595,7 @@ generate_sm_config_ini() {
     enable=false
     listen_ip=0.0.0.0
     listen_port=8545
-    http_body_size_limit=10240000
+    request_body_size_limit=10240000
     ; cors config for web3 rpc
     enable_cors=true
     cors_allow_credentials=true
@@ -1684,8 +1626,8 @@ EOF
 
 generate_jwt_secret() {
     local conf_dir="${1}"
-    local jwt_file="${conf_dir}/op-engine/jwt.hex"
-    mkdir -p "${conf_dir}/op-engine"
+    local jwt_file="${conf_dir}/engine/jwt.hex"
+    mkdir -p "${conf_dir}/engine"
     # Engine API JWT shared secret: 32 random bytes hex-encoded,
     # 64 hex chars + trailing newline (65 bytes total). Created 0600 (umask 077):
     # it authenticates the Engine API and must not be world-readable.
@@ -1814,14 +1756,6 @@ generate_genesis_config() {
     local output=${1}
     local node_list=${2}
 
-    # executor version=2 refuses to boot without an explicit on-chain EVM revision, so -O
-    # (which pins version=2) must also pin one; edit before the first boot to change it
-    local executor_evm_revision_line=""
-    if [[ "${enable_op_engine_rpc}" == "true" ]]; then
-        executor_evm_revision_line="
-    evm_revision=cancun"
-    fi
-
     cat <<EOF >"${output}"
 [chain]
     ; use SM crypto or not, should nerver be changed
@@ -1839,8 +1773,6 @@ generate_genesis_config() {
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     block_tx_count_limit=1000
-    ; in millisecond, block consensus timeout, at least 3000ms
-    consensus_timeout=3000
     ; the number of blocks generated by each leader
     leader_period=1
     ; rpbft
@@ -1862,7 +1794,7 @@ generate_genesis_config() {
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
     is_serial_execute=${serial_mode}
-    version=${executor_version}${executor_evm_revision_line}
+    version=${executor_version}
 EOF
 }
 
@@ -2030,8 +1962,8 @@ expand_node()
     generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
     LOG_INFO "generate_node_cert success..."
     # the expanded node inherits config.ini from the existing chain; generate a JWT
-    # secret only when that config carries an [op_engine_rpc] section
-    if grep -q '^\[op_engine_rpc\]' "${config_path}/config.ini"; then
+    # secret only when that config carries an [engine_rpc] section
+    if grep -q '^\[engine_rpc\]' "${config_path}/config.ini"; then
         generate_jwt_secret "${node_dir}/conf"
     fi
     # generate node account
@@ -2208,9 +2140,6 @@ deploy_nodes()
             node_dir="${output_dir}/${ip}/node${node_count}"
             mkdir -p "${node_dir}"
             generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
-            if [[ "${enable_op_engine_rpc}" == "true" ]]; then
-                generate_jwt_secret "${node_dir}/conf"
-            fi
             generate_node_scripts "${node_dir}" "${docker_mode}"
             if "${monitor_mode}" ;then
                 local port=$((mtail_listen_port + node_count))
@@ -2338,9 +2267,6 @@ generate_template_package()
     node_dir="${output_dir}/${node_name}"
     mkdir -p "${node_dir}"
     mkdir -p "${node_dir}/conf"
-    if [[ "${enable_op_engine_rpc}" == "true" ]]; then
-        generate_jwt_secret "${node_dir}/conf"
-    fi
 
     p2p_listen_ip="${default_listen_ip}"
     rpc_listen_ip="${default_listen_ip}"
@@ -2559,7 +2485,9 @@ download_service_bin(){
     fi
     cd "${BcosBuilder_path}/${chain_version}"
     if [[ ${chain_version} == "pro" ]] && [[ ${download_specific_binary_flag} == "true" || ${download_service_binary_path_flag} == "true" || ! -d "binary" || ! -f "binary/BcosGatewayService/BcosGatewayService" || \
-     ! -f "binary/BcosNodeService/BcosNodeService" || ! -f "binary/BcosRpcService/BcosRpcService" ]];then
+     ! -f "binary/BcosNodeService/BcosNodeService" || ! -f "binary/BcosRpcService/BcosRpcService" ]] || \
+    [[ ${chain_version} == "max" ]] && [[ ${download_specific_binary_flag} == "true" || ${download_service_binary_path_flag} == "true" || ! -d "binary" || ! -f "binary/BcosGatewayService/BcosGatewayService" || \
+     ! -f "binary/BcosExecutorService/BcosExecutorService" || ! -f "binary/BcosMaxNodeService/BcosMaxNodeService" || ! -f "binary/BcosRpcService/BcosRpcService" ]];then
 
         download_service_binary_path=$(convert_to_absolute_path "$download_service_binary_path")
         python3 build_chain.py download_binary -t ${download_service_binary_type} -v ${service_binary_version} -p ${download_service_binary_path}
@@ -2629,13 +2557,20 @@ gen_gateway_template() {
     local num=$3
     local config_path=$4
     local peers_str=$5
-    local p2p_listen_port=${pro_port_start[pro_port_p2p]}
-    local rpc_listen_port=${pro_port_start[pro_port_rpc]}
+    local p2p_listen_port=${proOrmax_port_start[0]}
+    local rpc_listen_port=${proOrmax_port_start[1]}
 
     cat <<EOF >>"${config_path}"
 [[agency]]
 name = "${agencyName}"
 EOF
+
+if [[ ${chain_version} == "max" ]];then
+        tars_listen_port_space=6
+        cat <<EOF >>"${config_path}"
+failover_cluster_url = "${ip}:${tikv_listen_port}"
+EOF
+fi
 
     cat <<EOF >>"${config_path}"
 # enable data disk encryption for rpc/gateway or not, default is false
@@ -2681,6 +2616,7 @@ gen_node_template(){
     local config_path=$3
     local ip=$4
 
+    if [[ ${chain_version} == "pro" ]];then
     cat <<EOF >>"${config_path}"
     [[agency.group]]
         group_id = "${default_group}"
@@ -2703,6 +2639,29 @@ gen_node_template(){
         monitor_log_path = ""
 
 EOF
+    fi
+    if [[ ${chain_version} == "max" ]];then
+        cat <<EOF >>"${config_path}"
+     [[agency.group]]
+        group_id = "${default_group}"
+        [[agency.group.node]]
+        node_name =  "${node_name}"
+        # the tikv storage pd-addresses
+        pd_addrs = "${ip}:${tikv_listen_port}"
+        key_page_size=0
+        deploy_ip = ["$ip"]
+        executor_deploy_ip=["$ip"]
+        monitor_listen_port =  "${monitor_listen_port}"
+        # the tikv storage pd-addresses
+        # monitor log path example:"/home/fisco/tars/framework/app_log/"
+        monitor_log_path = ""
+        # node tars server listen ip
+        tars_listen_ip="0.0.0.0"
+        # node tars server listen port
+        tars_listen_port=${tars_listen_port}
+
+EOF
+    fi
 }
 
 getPeers(){
@@ -2710,7 +2669,7 @@ getPeers(){
     ip_array=(${ip_param//,/ })
 
     peer=""
-    local gateway_port=${pro_port_start[pro_port_p2p]}
+    local gateway_port=${proOrmax_port_start[0]}
 
     for line in ${ip_array[*]}; do
         if [ -n "$(echo ${line} | grep "\.")" ];then
@@ -2741,16 +2700,22 @@ gen_gateway_config() {
     gen_chain_template "${config_path}"
     gen_group_template "${config_path}"
     local k=0
-    if [[ -z ${pro_port_start[pro_port_tars]} ]];then
+    if [[ -z ${proOrmax_port_start[2]} ]];then
        tars_listen_port=40400
     else
-        tars_listen_port=${pro_port_start[pro_port_tars]}
+        tars_listen_port=${proOrmax_port_start[2]}
     fi
 
-    if [[ -z ${pro_port_start[pro_port_monitor]} ]];then
+    if [[ -z ${proOrmax_port_start[3]} ]];then
+        tikv_listen_port=2379
+    else
+        tikv_listen_port=${proOrmax_port_start[3]}
+    fi
+
+    if [[ -z ${proOrmax_port_start[4]} ]];then
         monitor_listen_port=3901
     else
-        monitor_listen_port=${pro_port_start[pro_port_monitor]}
+        monitor_listen_port=${proOrmax_port_start[4]}
     fi
 
     for line in ${ip_array[*]}; do
@@ -2779,8 +2744,8 @@ install_python_package(){
         done < "${BcosBuilder_path}/requirements.txt"
     fi
 }
-# deploy pro chain service
-deploy_pro_nodes(){
+# deploy pro or max chain service
+deploy_pro_or_max_nodes(){
     dir_must_not_exists "${service_output_dir}"
     mkdir -p "$service_output_dir"
     dir_must_exists "${service_output_dir}"
@@ -2834,7 +2799,7 @@ removeExcessFiles(){
     done
 }
 
-expand_pro_nodes(){
+expand_pro_max(){
     dir_must_not_exists "${expand_dir}"
     mkdir -p "$expand_dir"
     dir_must_exists "${expand_dir}"
@@ -2924,14 +2889,12 @@ main() {
     else
         LOG_FATAL "Unsupported command ${command}, only support \'deploy\' and \'expand\' now!"
     fi
-    elif [[ "${chain_version}" == "pro" ]]; then
+    elif [[ "${chain_version}" == "pro" || "${chain_version}" == "max" ]]; then
         if [[ "${command}" == "deploy" ]]; then
-            deploy_pro_nodes
+            deploy_pro_or_max_nodes
         elif [[ "${command}" == "expand_node" || "${command}" == "expand_group" || "${command}" == "expand_service" ]]; then
-            expand_pro_nodes
+            expand_pro_max
         fi
-    else
-        LOG_FATAL "Unsupported chain version ${chain_version}, only support 'air' and 'pro'"
     fi
 }
 

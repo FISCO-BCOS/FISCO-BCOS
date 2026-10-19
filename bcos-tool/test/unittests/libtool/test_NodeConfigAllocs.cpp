@@ -57,9 +57,7 @@ constexpr auto kBase =
     "[tx]\ngas_limit=300000000\n"
     "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n";
 
-// Ethereum-lane base: executor.version=2 signals the lane. compatibility_version
-// must be >= 3.18.0 (below it Ledger::buildGenesisBlock cannot persist the EVM
-// revision) and a v2 chain must pin an explicit executor.evm_revision.
+// Ethereum-lane base: executor.version=2 signals the lane.
 constexpr auto kAllocsEthBase =
     "[chain]\nsm_crypto=0\nchain_id=1\ngroup_id=g\n"
     "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
@@ -67,7 +65,7 @@ constexpr auto kAllocsEthBase =
     "[version]\ncompatibility_version=3.18.0\n"
     "[tx]\ngas_limit=300000000\n"
     "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n"
-    "version=2\nevm_revision=cancun\n";
+    "version=2\n";
 
 constexpr auto kAlloc0 =
     "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
@@ -124,57 +122,55 @@ BOOST_AUTO_TEST_CASE(EthLaneWithAllocsParsed)
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs[0].code, "0x6080604052");
 }
 
-BOOST_AUTO_TEST_CASE(EthLaneRejectsEmptyAllocs)
+namespace
 {
-    // executor.version >= 2 WITHOUT the EL declaration ([ethereum] mode=el) still
-    // requires a non-empty [alloc.*] section — the L2/OP lanes carry the
-    // SystemConfig predeploy's feature_flags slot in the allocs.
+std::string opLaneBase()
+{
+    std::string base = kAllocsEthBase;
+    auto pos = base.find("version=2\n");
+    BOOST_REQUIRE(pos != std::string::npos);
+    base.replace(pos, 10, "version=3\n");
+    return base;
+}
+
+constexpr auto kForkTimestamps =
+    "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+    "cancun_time=1710338135\nprague_time=1746612311\n"
+    "merge_block=0\n";
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(OpLaneRejectsEmptyAllocs)
+{
+    // The OP lane (executor.version >= 3) requires a non-empty [alloc.*] section: it
+    // carries its predeploys in the allocs.
     auto cfg = makeNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(std::string(kAllocsEthBase))),
-        bcos::tool::InvalidConfig, [](auto const& e) {
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(opLaneBase())), bcos::tool::InvalidConfig,
+        [](auto const& e) {
             return bcos::test::errinfoContains(e, "requires a non-empty [alloc.*] section");
         });
 }
 
-BOOST_AUTO_TEST_CASE(ELModeAllowsEmptyAllocs)
+BOOST_AUTO_TEST_CASE(L1ElLaneAllowsEmptyAllocs)
 {
-    // The L1 EL lane ([ethereum] mode=el) exempts the non-empty-alloc invariant:
-    // an empty-alloc genesis publishes the canonical empty-trie root as its
-    // stateRoot (hive smoke/genesis, several EEST fixtures).
-    constexpr auto kELDeclarations =
-        "[web3]\nchain_id=1\n"
-        "[ethereum]\nmode=el\n"
-        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-        "cancun_time=1710338135\nprague_time=1746612311\n"
-        "merge_block=0\n";
+    // The L1 EL lane (executor.version=2) exempts the non-empty-alloc invariant: an
+    // empty-alloc genesis publishes the canonical empty-trie root as its stateRoot (hive
+    // smoke/genesis, several EEST fixtures).
     auto cfg = makeNodeConfig();
     cfg->loadGenesisConfig(
-        parseIni(std::string(kAllocsEthBase) + kELDeclarations + kAllocsEthHeader));
+        parseIni(std::string(kAllocsEthBase) + kForkTimestamps + kAllocsEthHeader));
     BOOST_CHECK(cfg->genesisConfig().m_allocs.empty());
-    BOOST_CHECK(cfg->genesisConfig().m_ethereumELMode);
 }
 
-BOOST_AUTO_TEST_CASE(ELModeOnOpLaneRejected)
+BOOST_AUTO_TEST_CASE(ForkTimestampsOnOpLaneRejected)
 {
-    // mode=el is bound to the L1 EL lane: executor.version=3 (the OP lane) must
-    // declare mode=opstack-el instead. Accepting mode=el here would waive the
-    // non-empty-alloc invariant for a chain whose SystemConfig predeploy's
-    // feature_flags slot travels in the allocs.
-    constexpr auto kELDeclarations =
-        "[web3]\nchain_id=1\n"
-        "[ethereum]\nmode=el\n"
-        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-        "cancun_time=1710338135\nprague_time=1746612311\n"
-        "merge_block=0\n";
-    std::string opLaneBase = std::string(kAllocsEthBase);
-    auto pos = opLaneBase.find("version=2\n");
-    BOOST_REQUIRE(pos != std::string::npos);
-    opLaneBase.replace(pos, 10, "version=3\n");
+    // [fork_timestamps] is the L1 fork schedule: the OP lane forks on [op_fork_timestamps]
+    // and refuses a section it would never read.
     auto cfg = makeNodeConfig();
-    BOOST_CHECK_EXCEPTION(
-        cfg->loadGenesisConfig(parseIni(opLaneBase + kELDeclarations + kAllocsEthHeader)),
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(
+                              opLaneBase() + kAlloc0 + kForkTimestamps + kAllocsEthHeader)),
         bcos::tool::InvalidConfig, [](auto const& e) {
-            return bcos::test::errinfoContains(e, "mode=el requires executor.version=2");
+            return bcos::test::errinfoContains(
+                e, "[fork_timestamps] section requires executor.version=2");
         });
 }
 

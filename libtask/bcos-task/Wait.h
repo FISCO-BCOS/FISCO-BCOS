@@ -78,8 +78,7 @@ constexpr inline struct SyncWait
             std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
         ReturnVariant result;
 
-        auto handle = [](Task&& task, decltype(result)& result,
-                          auto&&... args) -> task::SyncTask {
+        auto handle = [](Task&& task, decltype(result)& result, auto&&... args) -> task::SyncTask {
             try
             {
                 if constexpr (std::is_void_v<ReturnType>)

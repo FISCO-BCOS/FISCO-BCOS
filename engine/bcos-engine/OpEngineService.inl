@@ -25,8 +25,8 @@
 // engine links rlp-protocol PUBLIC so installed consumers inherit the include dirs;
 // instantiators still need to link opstack-executor.
 #include "OpEngineService.h"
-#include <opstack-executor/OpRollupCost.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <opstack-executor/OpRollupCost.h>
 
 #include <iterator>
 #include <range/v3/algorithm/any_of.hpp>
@@ -277,8 +277,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
 
     std::vector<bytes> forcedEnvelopes;
-    // Reached only when tests set allowSynthesizedL1Attributes. Production
-    // op_engine_rpc never invents this envelope (op-geth does not either).
+    // Reached only when tests set allowSynthesizedL1Attributes. In production the
+    // OP lane's [engine_rpc] never invents this envelope (op-geth does not either).
     if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
     {
         // CHILD time picks the calldata layout (op-node's L1InfoDeposit(..., l2Timestamp)),

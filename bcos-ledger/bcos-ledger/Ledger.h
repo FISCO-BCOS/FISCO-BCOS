@@ -19,7 +19,6 @@
  */
 #pragma once
 #include "bcos-framework/ledger/GenesisConfig.h"
-#include "bcos-framework/ledger/IL2ConfigLoader.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
@@ -28,15 +27,15 @@
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/compute/detail/lru_cache.hpp>
-#include <utility>
-#include <bcos-utilities/BoostLog.h>
 #include <atomic>
+#include <utility>
 
-#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
+#include "bcos-framework/ledger/Ledger.h"  // LEDGER_LOG
 
 namespace bcos::ledger
 {
@@ -55,12 +54,9 @@ public:
     using CacheType =
         boost::compute::detail::lru_cache<int64_t, std::shared_ptr<std::vector<h256>>>;
 
-    static constexpr int c_defaultMerkleTreeCacheSize = 100;
-
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage, size_t _blockLimit,
-        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr,
-        int merkleTreeCacheSize = c_defaultMerkleTreeCacheSize,
+        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr, int merkleTreeCacheSize = 100,
         bcos::IOServicePool::Ptr _ioServicePool = nullptr)
       : m_blockFactory(std::move(_blockFactory)),
         m_stateStorage(std::move(_storage)),
@@ -156,12 +152,6 @@ public:
 
     storage::StorageInterface::Ptr getStateStorage() override;
 
-    // L2 mode: inject the per-block SystemConfig loader. AIR/MAX wire this only
-    // when running in L2 chain mode; a null loader makes loadL2Config a no-op so
-    // PBFT/non-L2 paths short-circuit without an EVM staticcall.
-    void setL2ConfigLoader(ledger::IL2ConfigLoader::Ptr loader) { m_l2Loader = std::move(loader); }
-    task::Task<void> loadL2Config(protocol::BlockNumber blockNumber, ledger::LedgerConfig& cfg);
-
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Table>& table, const std::string_view& tableName);
@@ -226,7 +216,5 @@ private:
     CacheType m_txProofMerkleCache;
     CacheType m_receiptProofMerkleCache;
     size_t m_keyPageSize = 0;
-    // null unless running in L2 chain mode; see setL2ConfigLoader/loadL2Config.
-    ledger::IL2ConfigLoader::Ptr m_l2Loader;
 };
 }  // namespace bcos::ledger

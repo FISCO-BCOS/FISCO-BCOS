@@ -332,7 +332,7 @@ public:
         {
             return static_cast<std::size_t>(protocol::blobScheduleForTimestamp(
                 m_config.blobForks, m_config.headTimestampSeconds())
-                                                .maxBlobs);
+                    .maxBlobs);
         }
         return m_config.maxBlobsPerTransaction;
     }
@@ -468,9 +468,9 @@ public:
             // (in-memory noncer) and reth's best_transactions() select block transactions
             // without touching state.
             for (auto nonceIt = senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
-                 nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
-                 nonceIt->nonce() == currentNonce;
-                 ++nonceIt)
+                nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
+                nonceIt->nonce() == currentNonce;
+                ++nonceIt)
             {
                 ++currentNonce;
                 ++count;

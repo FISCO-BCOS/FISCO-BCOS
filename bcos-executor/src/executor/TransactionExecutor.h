@@ -43,10 +43,10 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <list>
 #include <memory>
 #include <shared_mutex>
 #include <thread>
-#include <list>
 
 
 namespace bcos
@@ -116,7 +116,7 @@ public:
     void preExecuteTransactions(int64_t schedulerTermId,
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(bcos::Error::UniquePtr)> callback) override{
+        std::function<void(bcos::Error::UniquePtr)> callback) override {
         // do nothing
     };
 

@@ -20,9 +20,9 @@
 
 #pragma once
 
+#include "bcos-devp2p/sync/HeaderValidator.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/BlockFactory.h"
-#include "bcos-devp2p/sync/HeaderValidator.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"  // complete type for shared_ptr upcast in the decoder
 #include "bcos-task/Task.h"
@@ -47,15 +47,14 @@ namespace bcos::initializer
 /// m_commitMutex.
 template <class GlobalStateStorage>
 class ExternalPayloadVerifierImpl final
-    : public engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>
+  : public engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>
 {
 public:
     using Verifier = scheduler_v1::EthereumBlockVerifier<scheduler_v1::SchedulerSerialImpl,
         executor_v1::eth::EthereumExecutor>;
 
     ExternalPayloadVerifierImpl(std::shared_ptr<Verifier> verifier,
-        bcos::ledger::LedgerInterface::Ptr ledger,
-        bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::ledger::LedgerInterface::Ptr ledger, bcos::protocol::BlockFactory::Ptr blockFactory,
         scheduler_v1::EvmcForkTimestamps forkSchedule, uint64_t chainId, uint64_t mergeBlock)
       : m_verifier(std::move(verifier)),
         m_ledger(std::move(ledger)),
@@ -86,8 +85,7 @@ public:
                 co_return ExternalPayloadResult{
                     .outcome = ExternalPayloadOutcome::Invalid, .error = std::move(result.error)};
             }
-            co_return ExternalPayloadResult{
-                .outcome = ExternalPayloadOutcome::Valid, .error = {}};
+            co_return ExternalPayloadResult{.outcome = ExternalPayloadOutcome::Valid, .error = {}};
         }
         catch (scheduler_v1::StaleOrOutOfOrderBlock const&)
         {
@@ -125,14 +123,13 @@ public:
     }
 
     task::Task<engine::engine_common::ExternalL1Context> deriveL1Context(
-        bcos::protocol::EthBlockHeaderData const& parentHeader,
-        int64_t timestampSeconds) override
+        bcos::protocol::EthBlockHeaderData const& parentHeader, int64_t timestampSeconds) override
     {
         using engine::engine_common::ExternalL1Context;
         // The builder only ever produces PoS blocks (difficulty 0), which is also the
         // per-block "TTD passed" signal evmcRevisionForTimestamp keys on.
-        auto const revision = scheduler_v1::evmcRevisionForTimestamp(
-            m_forkSchedule, timestampSeconds, u256(0));
+        auto const revision =
+            scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0));
         ExternalL1Context context;
         // Throws UnsupportedFork for a revision this binary cannot map to a header era
         // — the same loud failure the number-keyed derivation had.
@@ -147,6 +144,13 @@ public:
                 static_cast<uint64_t>(timestampSeconds))),
             /*_osakaActive=*/revision >= EVMC_OSAKA);
         co_return context;
+    }
+
+    std::optional<bcos::protocol::EthBlockVersion> forkVersionAt(
+        int64_t timestampSeconds) const override
+    {
+        return engine::detail::tryEthBlockVersionFor(
+            scheduler_v1::evmcRevisionForTimestamp(m_forkSchedule, timestampSeconds, u256(0)));
     }
 
     task::Task<engine::engine_common::ExternalBuildResult> buildL1Block(

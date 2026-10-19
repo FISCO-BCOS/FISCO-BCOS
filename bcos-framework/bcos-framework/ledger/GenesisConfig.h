@@ -173,12 +173,6 @@ public:
     bool m_isSerialExecute = true;
     int m_executorVersion = 0;
 
-    // EVMC revision config (consumed by ethereum-executor, executor_version=2).
-    // m_evmcRevision: explicit single revision applied to all blocks (when set).
-    // m_evmcRevisionForks: block height -> revision fork transitions.
-    std::optional<evmc_revision> m_evmcRevision;
-    std::map<protocol::BlockNumber, evmc_revision> m_evmcRevisionForks;
-
     // rpbft config
     int64_t m_epochSealerNum = 4;
     int64_t m_epochBlockNum = 1000;
@@ -212,28 +206,6 @@ public:
     /// 250" and "omitted canyon" pin the same string, while omitting the WHOLE section pins
     /// nothing at all, which is what keeps a pre-existing chain's pin text unchanged.
     std::optional<OpEip1559Params> m_opEip1559;
-
-    // True iff config.genesis declares "[ethereum] mode=el" — the chain is an
-    // Ethereum L1 EL-sync chain. Chain-level (part of the genesis pin), NOT the
-    // per-node [ethereum] section of config.ini: the executor-v2 evmc_revision /
-    // auth_admin_account guard exemptions are gated on this declaration, so a
-    // [fork_timestamps] section pasted into an ordinary v2 genesis cannot waive
-    // them. validateL2Invariants binds it to m_ethereumForkSchedule both ways.
-    bool m_ethereumELMode = false;
-
-    // True iff config.genesis declares "[ethereum] mode=opstack-el" — the chain is
-    // an OP-Stack chain synced over devp2p (OpStackSyncInitializer), executor
-    // version >= OPSTACK_EXECUTOR_VERSION. Same chain-level pin semantics as
-    // m_ethereumELMode; validateL2Invariants binds it to m_opForkSchedule, the L2
-    // genesis shape ([eth_genesis_header] + [alloc.*]) and a non-zero [web3]
-    // chain_id. Mutually exclusive with m_ethereumELMode by construction (one
-    // mode string).
-    bool m_opStackELMode = false;
-
-    // Canonical OP fork schedule. Parsed from genesis [op_fork_schedule]
-    // canonical and persisted into s_op_chain_metadata at genesis when set; not
-    // part of LedgerConfig / generateGenesisData.
-    std::optional<std::string> m_opstackForkSchedule;
 
 };  // namespace genesisConfig
 }  // namespace bcos::ledger

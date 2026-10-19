@@ -16,11 +16,9 @@
  * @file EthEndpointSystemConfigTest.cpp
  * @brief EthEndpoint::chainId() must source from LedgerConfig (A6.9 / PR-6).
  *
- * In L2 mode the SystemConfigPrecompiled (0x1000) is disabled and L2ConfigLoader
- * (PR-4) fills LedgerConfig::chainId per block from SystemConfig.sol's
- * getChainConfig(). EthEndpoint must therefore read chainId from LedgerConfig
- * (getLedgerConfig -> fetchAllSystemConfigs) rather than parsing it itself, so
- * what dApps observe via eth_chainId is L2 governance.
+ * EthEndpoint must read chainId from LedgerConfig (getLedgerConfig ->
+ * fetchAllSystemConfigs) rather than parsing SYS_CONFIG itself, so eth_chainId
+ * and execution see the same value.
  */
 
 #include "../common/RPCFixture.h"

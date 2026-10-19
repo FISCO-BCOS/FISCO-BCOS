@@ -85,16 +85,14 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         "genesis config file path, eg. genesis.ini")("prune,p", "prune the node data")("snapshot,s",
         boost::program_options::value<bool>(),
         "generate snapshot with or without txs and receipts, if true generate snapshot with txs "
-        "and receipts")(
-        "output,o", boost::program_options::value<std::string>(), "snapshot output directory")(
-        "import,i", boost::program_options::value<std::string>(), "import snapshot from directory")(
-        "import-blocks", boost::program_options::value<std::string>(),
+        "and receipts")("output,o", boost::program_options::value<std::string>(),
+        "snapshot output directory")("import,i", boost::program_options::value<std::string>(),
+        "import snapshot from directory")("import-blocks",
+        boost::program_options::value<std::string>(),
         "offline import of RLP-encoded Ethereum blocks (a chain.rlp-style file or a "
-        "directory of one-block *.rlp files), then exit — Ethereum L1 EL mode only")(
-        "el,e", "run in EL self-sync mode (mirror of [ethereum].mode=el or mode=opstack-el; "
-                "conflicts with the config file are rejected)")(
-        "bootnodes,b", boost::program_options::value<std::string>(),
-        "path to the EL-mode bootnodes file (mirror of [ethereum].bootnodes_file; a value that "
+        "directory of one-block *.rlp files), then exit — executor.version=2 only")("bootnodes,b",
+        boost::program_options::value<std::string>(),
+        "path to the devp2p bootnodes file (mirror of [ethereum].bootnodes_file; a value that "
         "differs from the config file is rejected)");
 
     if (_autoSendTx)
@@ -210,15 +208,9 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         importBlocksPath = vm["import-blocks"].as<std::string>();
     }
 
-    // Ethereum L1 EL-mode command-line mirrors ([ethereum] in config.ini is the source of
-    // truth; these flags only echo it). The conflict check is done by the caller
-    // (AirNodeInitializer) against the loaded NodeConfig: --el must agree with
-    // ethereum.mode, and --bootnodes must agree with ethereum.bootnodes_file.
-    std::optional<bool> ethereumEL;
-    if (vm.count("el") || vm.count("e"))
-    {
-        ethereumEL = true;
-    }
+    // devp2p command-line mirror ([ethereum] in config.ini is the source of truth; the flag
+    // only echoes it). The conflict check is done by the caller (AirNodeInitializer) against
+    // the loaded NodeConfig: --bootnodes must agree with ethereum.bootnodes_file.
     std::optional<std::string> ethereumBootnodesFile;
     if (vm.count("bootnodes") || vm.count("b"))
     {
@@ -226,5 +218,5 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     }
 
     return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed,
-        ethereumEL, ethereumBootnodesFile, op, std::move(importBlocksPath)};
+        ethereumBootnodesFile, op, std::move(importBlocksPath)};
 }

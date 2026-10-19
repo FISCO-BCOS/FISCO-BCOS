@@ -1255,11 +1255,9 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
     }());
 }
 
-// The Karst method triple (FCU V3 -> getPayloadV5 -> newPayloadV4) on the SAME assembly a
-// production [op_engine_rpc] node runs: executor_version = 2, the real EthereumExecutor and
-// SchedulerSerialImpl. libinitializer's guard requires executor_version >= 2 for
-// op_engine_rpc, so this — not the v1 escape hatch the integration script drives — is the
-// configuration external CLs talk to.
+// The Karst method triple (FCU V3 -> getPayloadV5 -> newPayloadV4) on an executor_version = 2
+// assembly: the real EthereumExecutor and SchedulerSerialImpl, without the external payload
+// verifier a production v2 node wires (EthEngineService's null-verifier path).
 //
 // What it pins is a known placeholder, deliberately: buildPayload stamps withdrawalsRoot
 // with the canonical EMPTY-TRIE ROOT (EngineServiceImpl.h, TODO(C4 header fields)) instead

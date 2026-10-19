@@ -14,6 +14,7 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/MPTDeltaLayer.h"
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_group.h>
@@ -31,7 +32,6 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {
@@ -162,6 +162,16 @@ private:
     /// the stop()-time store safe against an in-flight execute. A stale read only flips the
     /// tally off one block early or late — the delta's consumers never read it either way.
     std::atomic<bool> m_trackRefCounts{false};
+
+    /// executor_version=2 only (setEvmcRevisionSchedule): the dry-run calls stamp the revision
+    /// of the block they execute on from it. Empty on every other lane.
+    ledger::EvmcRevisionSchedule m_evmcRevisionSchedule;
+
+    /// Stamp the EVM revision of @p blockHeader onto @p ledgerConfig when an
+    /// m_evmcRevisionSchedule is set (header timestamp in milliseconds, as the v2 lane stores
+    /// it); otherwise leave the config as getLedgerConfig built it.
+    void stampCallRevision(
+        ledger::LedgerConfig& ledgerConfig, protocol::BlockHeader const& blockHeader) const;
 
     /**
      * Build the block's Ethereum MPT state root over the execute view — the view whose top
@@ -313,6 +323,12 @@ public:
     /// flow starts. A null pointer keeps the current observer — the commit path relies on the
     /// member never being empty.
     void setMPTCommitObserver(std::shared_ptr<ledger::mpt::CommitObserver> observer);
+
+
+    /// executor_version=2 (the L1 EL lane): call() and callAtBlock() (eth_call /
+    /// eth_estimateGas) execute with the EVM revision this schedule assigns to the block they
+    /// run on, since the lane records no evmc_revision row. Call at wiring time.
+    void setEvmcRevisionSchedule(ledger::EvmcRevisionSchedule schedule);
 
 
     /// Restore the no-op observer. stop() calls this under a BLOCKING m_commitMutex lock, so it
