@@ -92,11 +92,13 @@ BOOST_AUTO_TEST_CASE(ShortAddress)
 {
     // A Solidity contract-creation message carries an empty to (BlockExecutive sets create and
     // never calls setTo), so every deploy executed through DMC reaches the short-address path of
-    // getAddressChecksum. Pin the recorder output against a golden value: the zero-padding of
-    // missing address bytes is what produces it, so reverting the padding loop changes the value
-    // and turns this red (a same-process self-comparison would not, and ASan stays silent because
-    // an empty std::string's data() points into live small-string storage).
-    auto makeMessage = [] {
+    // getAddressChecksum. Both cases pin the recorder output against a golden value. The empty
+    // address pins determinism: its padding loop is a no-op, so what it catches is a regression
+    // to the unconditional four-byte read (a same-process self-comparison would not, and ASan
+    // stays silent because an empty std::string's data() points into live small-string storage).
+    // The non-empty short address is the case that actually pins the zero-padding: reverting the
+    // padding loop changes its value and turns this red.
+    auto makeMessage = [](std::string to = "") {
         auto message = std::make_unique<bcos::executor::NativeExecutionMessage>();
         message->setStaticCall(false);
         message->setType(protocol::ExecutionMessage::Type(0));
@@ -104,7 +106,7 @@ BOOST_AUTO_TEST_CASE(ShortAddress)
         message->setSeq(1);
         message->setOrigin("aabbccdd");
         message->setFrom("eeffaabb");
-        message->setTo("");
+        message->setTo(to);
         return message;
     };
 
@@ -112,6 +114,10 @@ BOOST_AUTO_TEST_CASE(ShortAddress)
     recorder->recordSend(m_address, 0, makeMessage());
     recorder->nextDmcRound();
     BOOST_CHECK_EQUAL(recorder->dumpAndClearChecksum(), "59758e84:59758e83:0:1");
+
+    recorder->recordSend(m_address, 0, makeMessage("ab"));
+    recorder->nextDmcRound();
+    BOOST_CHECK_EQUAL(recorder->dumpAndClearChecksum(), "31bf8e84:31bf8e83:0:1");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

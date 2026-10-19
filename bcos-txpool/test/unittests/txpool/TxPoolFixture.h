@@ -51,8 +51,6 @@
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
-using namespace bcos::ledger;
-using namespace bcos::consensus;
 using namespace bcos::front;
 using namespace bcos::sync;
 using namespace bcos::tool;
@@ -61,6 +59,14 @@ namespace bcos
 {
 namespace test
 {
+// These two live INSIDE bcos::test on purpose: at global scope they leak into every
+// consumer TU (and every unity-build batch-mate), making ConsensusNodeList ambiguous
+// for unrelated files that pull both bcos::ledger and bcos::consensus (FIB-167). From
+// here they still reach all consumers - test code lives in bcos::test, and
+// [namespace.udir] nominates the names into the enclosing bcos - while batch-mates
+// outside bcos::test no longer see them.
+using namespace bcos::ledger;
+using namespace bcos::consensus;
 class FakeTransactionSync1 : public TransactionSync
 {
 public:

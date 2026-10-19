@@ -230,7 +230,8 @@ jobs:
           # include (a TU compiles because a batch neighbour included the header), and
           # -DUNITY_BUILD=OFF is the only configuration that surfaces that class - and the
           # diagnostic switch when a unity miscompile is suspected. TESTS=OFF means only the
-          # production sources get the non-unity pass here.
+          # production sources get the non-unity pass here; the Coverage job repeats it with
+          # TESTS=ON so the test tree gets one non-unity reference build per run.
           if [[ "${{ matrix.os }}" == "ubuntu-26.04-static" ]]; then
             EXTRA_FLAGS="${EXTRA_FLAGS} -DTESTS=OFF -DUNITY_BUILD=OFF"
           fi
@@ -675,7 +676,7 @@ jobs:
           # (RelWithDebInfo -O2 -g + --coverage instrumentation), so the time it
           # spends building is time it is exposed to a runner preemption - a
           # shutdown signal here has already killed it at 89% once.
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DUNITY_BUILD=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       # vcpkg installs during Configure, so save right after it (same reasoning as the
       # build matrix): a later flake must not discard a freshly built dependency tree.
       - name: Save vcpkg cache
