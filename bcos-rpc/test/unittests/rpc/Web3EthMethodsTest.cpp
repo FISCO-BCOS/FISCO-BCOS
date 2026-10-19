@@ -361,7 +361,6 @@ BOOST_AUTO_TEST_CASE(feeMethodsWithoutLedgerFailClosed)
         BOOST_CHECK_EQUAL(error.code(), static_cast<int32_t>(JsonRpcError::InternalError));
         BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_maxPriorityFeePerGas");
     }
-
 }
 
 BOOST_AUTO_TEST_CASE(estimateGasMissingParentBlockFailsClosed)

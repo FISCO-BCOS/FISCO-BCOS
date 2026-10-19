@@ -156,17 +156,14 @@ void stampForkFields(OpPair& p)
 // boilerplate from the presence/gating tests.
 u256 expectedBaseFee(OpPair const& p)
 {
-    bool parentHolocene =
-        bcos::ledger::resolveOpFork(p.config.forkSchedule, static_cast<uint64_t>(p.parent.timestamp)) >=
-        OpFork::Holocene;
-    bool parentJovian =
-        bcos::ledger::resolveOpFork(p.config.forkSchedule, static_cast<uint64_t>(p.parent.timestamp)) >=
-        OpFork::Jovian;
-    uint64_t denominator =
-        bcos::ledger::resolveOpFork(p.config.forkSchedule, static_cast<uint64_t>(p.child.timestamp)) >=
-                OpFork::Canyon ?
-            p.config.eip1559DenominatorCanyon :
-            p.config.eip1559DenominatorBedrock;
+    bool parentHolocene = bcos::ledger::resolveOpFork(p.config.forkSchedule,
+                              static_cast<uint64_t>(p.parent.timestamp)) >= OpFork::Holocene;
+    bool parentJovian = bcos::ledger::resolveOpFork(p.config.forkSchedule,
+                            static_cast<uint64_t>(p.parent.timestamp)) >= OpFork::Jovian;
+    uint64_t denominator = bcos::ledger::resolveOpFork(p.config.forkSchedule,
+                               static_cast<uint64_t>(p.child.timestamp)) >= OpFork::Canyon ?
+                               p.config.eip1559DenominatorCanyon :
+                               p.config.eip1559DenominatorBedrock;
     std::span<const bcos::byte> extra{p.parent.extraData.data(), p.parent.extraData.size()};
     return bcos::engine::calcOpBaseFeeFromFields(p.parent.gasLimit, p.parent.gasUsed,
         *p.parent.baseFee, p.parent.blobGasUsed, extra, parentHolocene, parentJovian, denominator,
@@ -259,7 +256,7 @@ BOOST_AUTO_TEST_CASE(declaredElasticityAndCanyonDenominatorDrivePricing)
     presetElasticity.config.eip1559Elasticity = 4;
     BOOST_CHECK(
         !validateOpHeader(presetElasticity.child, presetElasticity.parent, presetElasticity.config)
-             .valid);
+            .valid);
 
     // Declared Canyon denominator 300 (preset 250), keyed on the CHILD's activation:
     // deltaFee = 1e9 * 5M / 5M / 300 = +3'333'333 (floor).
@@ -346,7 +343,7 @@ BOOST_AUTO_TEST_CASE(jovianMinBaseFeeFloorAndDaMetering)
     p.config.forkSchedule.m_canyonTime = kParentTs;  // Jovian implies the whole ladder below it
     p.config.forkSchedule.m_ecotoneTime = kParentTs;
     p.config.forkSchedule.m_holoceneTime = kParentTs;
-    p.config.forkSchedule.m_jovianTime = kParentTs;                       // parent already Jovian
+    p.config.forkSchedule.m_jovianTime = kParentTs;        // parent already Jovian
     p.parent.extraData = jovianExtra(100, 4, 2000000000);  // 2 gwei floor
     p.parent.blobGasUsed = u256(20000000);                 // DA footprint > gasUsed
     p.parent.gasUsed = 1000000;

@@ -254,12 +254,12 @@ BOOST_AUTO_TEST_CASE(typeGateIsEvaluatedFirstAndSignatureBeforeAccountState)
     BOOST_CHECK(indexOf(Check::ChainId) < indexOf(Check::Balance));
 
     // The items evmone's validate_transaction also has, in the order it reports them
-    // (ported as ethereum-executor/EthereumTransition.h): the type-specific block -- revision gate, 7702
-    // "to" present, 4844 "to" present (its "hashes non-empty" runs earlier, in normalize), 7702
-    // authorization list non-empty -- comes BEFORE the shared fee rules, so
-    // a 7702 envelope with an empty authorization list and a tip above its fee cap reports the
-    // list, not the tip. Asserted as a sequence so that inserting a check in the wrong place
-    // fails here rather than in an EEST fixture's expected exception.
+    // (ported as ethereum-executor/EthereumTransition.h): the type-specific block -- revision gate,
+    // 7702 "to" present, 4844 "to" present (its "hashes non-empty" runs earlier, in normalize),
+    // 7702 authorization list non-empty -- comes BEFORE the shared fee rules, so a 7702 envelope
+    // with an empty authorization list and a tip above its fee cap reports the list, not the tip.
+    // Asserted as a sequence so that inserting a check in the wrong place fails here rather than in
+    // an EEST fixture's expected exception.
     constexpr std::array evmoneSequence{Check::TypeByRevision, Check::SetCodeHasTo,
         Check::BlobHasTo, Check::AuthListNonEmpty, Check::TipNotAboveCap, Check::MaxGasLimit,
         Check::FeeCapVsBaseFee, Check::SenderIsEOA, Check::NonceNotMax, Check::Web3NonceWindow,

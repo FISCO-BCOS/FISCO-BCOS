@@ -22,8 +22,8 @@
 #include "bcos-sync/BlockSyncConfig.h"
 #include "bcos-sync/interfaces/BlocksMsgInterface.h"
 #include <bcos-framework/protocol/Block.h>
-#include <queue>
 #include <list>
+#include <queue>
 namespace bcos::sync
 {
 // increase order

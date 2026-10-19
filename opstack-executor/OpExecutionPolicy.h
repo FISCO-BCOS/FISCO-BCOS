@@ -19,6 +19,10 @@
 
 #pragma once
 
+#include <bcos-framework/protocol/Transaction.h>
+#include <bcos-framework/protocol/TransactionReceiptFactory.h>
+#include <bcos-framework/protocol/TxGasModel.h>
+#include <bcos-utilities/Bloom.h>
 #include <ethereum-executor/EthExecutionPolicy.h>
 #include <ethereum-executor/EthLogs.h>
 #include <ethereum-executor/EthereumHost.h>
@@ -27,10 +31,6 @@
 #include <opstack-executor/OpFeeParams.h>
 #include <opstack-executor/OpForkSpec.h>
 #include <opstack-executor/OpRollupCost.h>
-#include <bcos-framework/protocol/Transaction.h>
-#include <bcos-framework/protocol/TransactionReceiptFactory.h>
-#include <bcos-framework/protocol/TxGasModel.h>
-#include <bcos-utilities/Bloom.h>
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -87,9 +87,9 @@ public:
     /// gates for the admitted kinds). OP rejects blob txs outright and every kind
     /// above set_code — the 0x7E deposit never reaches this hook (the block executor
     /// dispatches it to runDeposit first).
-    std::optional<std::error_code> validateTxType(protocol::Transaction const& tx,
-        uint8_t txKind, evmc_revision rev, eth::EthBlockInfo const& /*block*/,
-        int64_t /*blobGasLeft*/, eth::EthCallParams const& callParams) const
+    std::optional<std::error_code> validateTxType(protocol::Transaction const& tx, uint8_t txKind,
+        evmc_revision rev, eth::EthBlockInfo const& /*block*/, int64_t /*blobGasLeft*/,
+        eth::EthCallParams const& callParams) const
     {
         // Whitelist, not a blacklist (ported opValidate comment): every value above
         // set_code — which includes the 0x7E deposit type — and the blob type are
@@ -113,8 +113,9 @@ public:
     /// OP addition to the sender's theoretical maximum cost (ported opValidate's
     /// 512-bit cap inputs): l1Cost (four-branch fork selection) + operatorCost(gasLimit).
     /// Writes the validate-time snapshot the transition half reads.
-    bcos::u512 additionalMaxCost(protocol::Transaction const& tx, eth::EthBlockInfo const& /*block*/,
-        evmc_revision /*rev*/, eth::EthCallParams const& callParams) const
+    bcos::u512 additionalMaxCost(protocol::Transaction const& tx,
+        eth::EthBlockInfo const& /*block*/, evmc_revision /*rev*/,
+        eth::EthCallParams const& callParams) const
     {
         const auto gasLimit = eth::effectiveGasLimit(tx, callParams);
 
@@ -123,9 +124,9 @@ public:
         const auto l1Cost = l1.fee;
         const auto flzLen = l1.flz_len;
         const auto legacyL1GasUsed = l1.legacy_l1_gas_used;
-        const auto opCost = m_spec.has_operator_fee ?
-                                computeOperatorCost(m_fee, static_cast<uint64_t>(gasLimit), m_spec) :
-                                intx::uint256{0};
+        const auto opCost = m_spec.has_operator_fee ? computeOperatorCost(m_fee,
+                                                          static_cast<uint64_t>(gasLimit), m_spec) :
+                                                      intx::uint256{0};
 
         auto& snapshot = *m_snapshot;
         snapshot.l1_cost = l1Cost;
@@ -228,8 +229,7 @@ public:
         // gas_used <= gas_limit, so cap >= used holds and the refund never underflows.
         auto& snapshot = *m_snapshot;
         const auto opAtUsed = snapshot.has_operator_fee ?
-                                  computeOperatorCost(snapshot.fee,
-                                      static_cast<uint64_t>(gas_used),
+                                  computeOperatorCost(snapshot.fee, static_cast<uint64_t>(gas_used),
                                       snapshot.jovian_operator_formula) :
                                   intx::uint256{0};
         const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
@@ -268,7 +268,8 @@ public:
         if (entry == nullptr)
             return eth::evm::call_precompile(rev, msg);
 
-        if (entry->max_input_size > 0 && static_cast<size_t>(msg.input_size) > entry->max_input_size)
+        if (entry->max_input_size > 0 &&
+            static_cast<size_t>(msg.input_size) > entry->max_input_size)
             return evmc::Result{EVMC_FAILURE, 0};
 
         // Length-limit-only (0x08 / BLS): the base table handles pricing and execution.
@@ -294,12 +295,13 @@ public:
         // Heap buffer with a release callback, matching eth::evm::call_precompile's
         // ownership convention (the caller's evmc::Result releases it).
         const auto output_data = new (std::nothrow) uint8_t[kMaxOutput];
-        const auto exec = eth::evm::p256verify_execute(
-            msg.input_data, msg.input_size, output_data, kMaxOutput);
+        const auto exec =
+            eth::evm::p256verify_execute(msg.input_data, msg.input_size, output_data, kMaxOutput);
 
         if (exec.status_code == EVMC_SUCCESS && exec.output_size > 0)
         {
-            const evmc_result result{EVMC_SUCCESS, gas_left, 0, output_data, exec.output_size,
+            const evmc_result result{
+                EVMC_SUCCESS, gas_left, 0, output_data, exec.output_size,
                 [](const evmc_result* res) noexcept { delete[] res->output_data; },
                 evmc::address{},  // create_address
                 {}                // padding
@@ -336,22 +338,21 @@ public:
 
         std::vector<protocol::LogEntry> logs = eth::takeBcosLogs(host);
         // Guard output_data nullptr (void-return calls): `nullptr + 0` is UB.
-        const bcos::bytes outputBytes{result.output_size != 0 ?
-                                          bcos::bytes{result.output_data,
-                                              result.output_data + result.output_size} :
-                                          bcos::bytes{}};
+        const bcos::bytes outputBytes{
+            result.output_size != 0 ?
+                bcos::bytes{result.output_data, result.output_data + result.output_size} :
+                bcos::bytes{}};
         auto out = rf.createReceipt(bcos::u256{static_cast<uint64_t>(gasUsed)},
-            m_isCreate ? toFiscoContractAddress(m_sender, m_nonce) : std::string{},
-            std::move(logs), toFiscoOpStatus(result.status_code),
+            m_isCreate ? toFiscoContractAddress(m_sender, m_nonce) : std::string{}, std::move(logs),
+            toFiscoOpStatus(result.status_code),
             bcos::bytesConstRef{outputBytes.data(), outputBytes.size()}, blockNumber);
         const auto bloom = bcos::getLogsBloom(out->logEntries());
         out->setLogsBloom(bcos::bytesConstRef{bloom.data(), bloom.size()});
 
         // Both the meta and the effective price describe what the transaction was actually
         // priced and charged under — the validate-time snapshot, never a fresh fork spec.
-        auto meta =
-            deriveOpReceiptMeta(*m_snapshot, m_snapshot->operator_fee_at_used,
-                /*fill_operator_scalars=*/true);
+        auto meta = deriveOpReceiptMeta(*m_snapshot, m_snapshot->operator_fee_at_used,
+            /*fill_operator_scalars=*/true);
         out->setOpStackMeta(toOpStackMeta(meta));
 
         uint256 priorityGasPrice;

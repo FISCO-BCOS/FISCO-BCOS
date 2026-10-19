@@ -19,10 +19,11 @@
  * @date: 2021-09-26
  */
 #include "TiKVStorage.h"
-#include "bcos-storage/Common.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Table.h"
+#include "bcos-storage/Common.h"
 #include "tikv_client.h"
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
@@ -32,7 +33,6 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
-#include <bcos-utilities/BoostLog.h>
 
 constexpr uint32_t MAX_RETRY_LIMIT = 32;
 
@@ -528,9 +528,11 @@ void TiKVStorage::asyncRollback(
 }
 
 bcos::Error::Ptr TiKVStorage::setRows(std::string_view tableName,
-    ::ranges::any_view<std::string_view, ::ranges::category::random_access | ::ranges::category::sized>
+    ::ranges::any_view<std::string_view,
+        ::ranges::category::random_access | ::ranges::category::sized>
         keys,
-    ::ranges::any_view<std::string_view, ::ranges::category::random_access | ::ranges::category::sized>
+    ::ranges::any_view<std::string_view,
+        ::ranges::category::random_access | ::ranges::category::sized>
         values) noexcept
 {
     bcos::Error::Ptr err = nullptr;

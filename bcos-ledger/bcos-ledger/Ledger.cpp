@@ -24,11 +24,11 @@
 #include "Ledger.h"
 #include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
-#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -323,43 +323,43 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // total transaction count. Everything is captured by value: asyncGetTotalTransactionCount
     // reaches this callback through task::wait, which does not wait, so the callback can run
     // after this function has returned and its locals are gone.
-    asyncGetTotalTransactionCount([storage, block, setRowCallback, totalCount = totalCount.load(),
-                                      failedCount = failedCount.load(), writeReceiptsTime,
-                                      writeTxsTime](Error::Ptr error, int64_t total, int64_t failed,
-                                      bcos::protocol::BlockNumber) {
-        if (error)
-        {
-            setRowCallback(std::make_unique<Error>(*error), 2);
-            return;
-        }
-        auto totalTxsCount = total + totalCount;
-        Entry totalEntry;
-        totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
-        storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
-            std::move(totalEntry), [setRowCallback](auto&& error) {
-                setRowCallback(std::forward<decltype(error)>(error));
-            });
-        auto failedTxs = failed + failedCount;
-        if (failedCount != 0)
-        {
-            Entry failedEntry;
-            failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
-            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
-                std::move(failedEntry), [setRowCallback](auto&& error) {
+    asyncGetTotalTransactionCount(
+        [storage, block, setRowCallback, totalCount = totalCount.load(),
+            failedCount = failedCount.load(), writeReceiptsTime, writeTxsTime](
+            Error::Ptr error, int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
+            if (error)
+            {
+                setRowCallback(std::make_unique<Error>(*error), 2);
+                return;
+            }
+            auto totalTxsCount = total + totalCount;
+            Entry totalEntry;
+            totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
+            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
+                std::move(totalEntry), [setRowCallback](auto&& error) {
                     setRowCallback(std::forward<decltype(error)>(error));
                 });
-        }
-        else
-        {
-            setRowCallback({}, true);
-        }
-        LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
-                         << LOG_KV("number", block->blockHeader()->number())
-                         << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
-                         << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount)
-                         << LOG_KV("writeReceiptsMs", writeReceiptsTime)
-                         << LOG_KV("writeTxsMs", writeTxsTime);
-    });
+            auto failedTxs = failed + failedCount;
+            if (failedCount != 0)
+            {
+                Entry failedEntry;
+                failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
+                storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
+                    std::move(failedEntry), [setRowCallback](auto&& error) {
+                        setRowCallback(std::forward<decltype(error)>(error));
+                    });
+            }
+            else
+            {
+                setRowCallback({}, true);
+            }
+            LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
+                             << LOG_KV("number", block->blockHeader()->number())
+                             << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
+                             << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount)
+                             << LOG_KV("writeReceiptsMs", writeReceiptsTime)
+                             << LOG_KV("writeTxsMs", writeTxsTime);
+        });
 }
 
 task::Task<std::optional<ledger::StorageState>> Ledger::getStorageState(
@@ -1509,23 +1509,22 @@ static void verifyL2FeatureFlagsSlot(
     auto flagsNumber = features.toFlagsNumber();
     for (size_t i = 0; i < expectedValue.size(); ++i)
     {
-        expectedValue[expectedValue.size() - 1 - i] =
-            (flagsNumber & 0xFF).convert_to<uint8_t>();
+        expectedValue[expectedValue.size() - 1 - i] = (flagsNumber & 0xFF).convert_to<uint8_t>();
         flagsNumber >>= 8;
     }
 
-        // Two duties, without guessing which account plays the SystemConfig role:
-        //  * any account carrying the slot has its VALUE compared (the slot-key lookup below), so
-        //    the check covers every layout the allocs actually use, not just the template's;
-        //  * an account at the TEMPLATE address (0x43...C0) must carry the slot — the layout the
-        //    generator writes for (build-allocs.py's requirement is keyed on that address).
-        // The presence mandate is deliberately NOT extended to other layouts yet: their allocs
-        // do not carry the slot today (the harness's chain-config leaves `system_config` empty for
-        // the committed C2 layout, so build-allocs.py writes no slot there), and mandating it
-        // refuses such a node at genesis — measured: the C2 e2e goes red. Extend the mandate in
-        // the same change that makes the generator write the slot for that layout.
-        // This runs before ANY genesis write, so a refusal leaves the datadir untouched and a
-        // config fix is a plain retry.
+    // Two duties, without guessing which account plays the SystemConfig role:
+    //  * any account carrying the slot has its VALUE compared (the slot-key lookup below), so
+    //    the check covers every layout the allocs actually use, not just the template's;
+    //  * an account at the TEMPLATE address (0x43...C0) must carry the slot — the layout the
+    //    generator writes for (build-allocs.py's requirement is keyed on that address).
+    // The presence mandate is deliberately NOT extended to other layouts yet: their allocs
+    // do not carry the slot today (the harness's chain-config leaves `system_config` empty for
+    // the committed C2 layout, so build-allocs.py writes no slot there), and mandating it
+    // refuses such a node at genesis — measured: the C2 e2e goes red. Extend the mandate in
+    // the same change that makes the generator write the slot for that layout.
+    // This runs before ANY genesis write, so a refusal leaves the datadir untouched and a
+    // config fix is a plain retry.
     for (auto const& importAccount : allocs)
     {
         const ledger::Alloc::State* featureFlagsSlot = nullptr;
@@ -1567,8 +1566,8 @@ static void verifyL2FeatureFlagsSlot(
                 bcos::tool::InvalidConfig() << errinfo_comment(
                     "SystemConfig feature_flags slot in the genesis allocs does not match "
                     "this node's genesis feature set (Features::toFlagsNumber()): alloc=0x" +
-                    toHex(actualValue) + " expected=0x" + toHex(expectedValue) +
-                    " (account 0x" + std::string(importAccount.address) +
+                    toHex(actualValue) + " expected=0x" + toHex(expectedValue) + " (account 0x" +
+                    std::string(importAccount.address) +
                     "); the alloc artifact and the node's [features] config disagree"));
         }
     }

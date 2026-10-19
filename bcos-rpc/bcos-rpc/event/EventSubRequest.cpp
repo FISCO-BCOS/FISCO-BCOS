@@ -248,7 +248,7 @@ bool EventSubRequest::fromJson(const std::string& _request)
                     if (jIndex.isArray())
                     {  // array topics
                         for (Json::Value::ArrayIndex innerIndex = 0; innerIndex < jIndex.size();
-                             ++innerIndex)
+                            ++innerIndex)
                         {
                             std::string topic = jIndex[innerIndex].asString();
                             if ((topic.compare(0, 2, "0x") == 0) ||

@@ -7,11 +7,10 @@ using namespace bcos::scheduler;
 ShardingDmcExecutor::ShardingDmcExecutor(std::string name, std::string contractAddress,
     bcos::protocol::Block::Ptr block,
     bcos::executor::ParallelTransactionExecutorInterface::Ptr executor, GraphKeyLocks::Ptr keyLocks,
-    bcos::crypto::Hash::Ptr hashImpl, DmcStepRecorder::Ptr dmcRecorder,
-    int64_t schedulerTermId, bool isCall)
-  : DmcExecutor(std::move(name), std::move(contractAddress), std::move(block),
-        std::move(executor), std::move(keyLocks), std::move(hashImpl), std::move(dmcRecorder),
-        isCall),
+    bcos::crypto::Hash::Ptr hashImpl, DmcStepRecorder::Ptr dmcRecorder, int64_t schedulerTermId,
+    bool isCall)
+  : DmcExecutor(std::move(name), std::move(contractAddress), std::move(block), std::move(executor),
+        std::move(keyLocks), std::move(hashImpl), std::move(dmcRecorder), isCall),
     m_schedulerTermId(schedulerTermId)
 {}
 
@@ -208,8 +207,8 @@ void ShardingDmcExecutor::preExecute()
 
     std::shared_ptr<std::promise<bcos::Error::UniquePtr>> preExePromise =
         std::make_shared<std::promise<bcos::Error::UniquePtr>>();
-    m_executor->preExecuteTransactions(m_schedulerTermId, m_block->blockHeader(),
-        m_contractAddress, *message, [preExePromise](bcos::Error::UniquePtr error) {
+    m_executor->preExecuteTransactions(m_schedulerTermId, m_block->blockHeader(), m_contractAddress,
+        *message, [preExePromise](bcos::Error::UniquePtr error) {
             preExePromise->set_value(std::move(error));
         });
 

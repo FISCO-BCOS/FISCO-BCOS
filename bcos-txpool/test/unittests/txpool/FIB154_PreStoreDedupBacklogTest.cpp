@@ -42,11 +42,11 @@ class InspectableTxPool : public bcos::txpool::TxPool
 {
 public:
     using Ptr = std::shared_ptr<InspectableTxPool>;
-    using bcos::txpool::TxPool::TxPool;
-    using bcos::txpool::TxPool::PreStoreAdmission;
-    using bcos::txpool::TxPool::tryAcquirePreStoreSlot;
-    using bcos::txpool::TxPool::releasePreStoreSlot;
     using bcos::txpool::TxPool::m_preStoreInFlight;
+    using bcos::txpool::TxPool::PreStoreAdmission;
+    using bcos::txpool::TxPool::releasePreStoreSlot;
+    using bcos::txpool::TxPool::tryAcquirePreStoreSlot;
+    using bcos::txpool::TxPool::TxPool;
     using bcos::txpool::TxPool::x_preStoreInFlight;
 };
 
@@ -56,8 +56,8 @@ inline std::size_t inflightSize(InspectableTxPool& p)
     return p.m_preStoreInFlight.size();
 }
 
-inline InspectableTxPool::Ptr makeInspectable(bcos::txpool::TxPool::Ptr const& base,
-    bcos::IOServicePool::Ptr ioServicePool)
+inline InspectableTxPool::Ptr makeInspectable(
+    bcos::txpool::TxPool::Ptr const& base, bcos::IOServicePool::Ptr ioServicePool)
 {
     // Reuse the fixture's already-constructed components. The new instance is
     // never start()ed, so its destructor's stop() takes the m_running==false
@@ -76,12 +76,11 @@ BOOST_AUTO_TEST_CASE(duplicate_block_hash_skipped)
     auto pool = makeInspectable(m_txpool, ioServicePool);
     auto h = makeBlockHashFib154(1);
 
-    BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) ==
-                InspectableTxPool::PreStoreAdmission::Accepted);
+    BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) == InspectableTxPool::PreStoreAdmission::Accepted);
     BOOST_CHECK_EQUAL(inflightSize(*pool), 1u);
 
-    BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) ==
-                InspectableTxPool::PreStoreAdmission::DuplicateSkipped);
+    BOOST_CHECK(
+        pool->tryAcquirePreStoreSlot(h) == InspectableTxPool::PreStoreAdmission::DuplicateSkipped);
     BOOST_CHECK_EQUAL(inflightSize(*pool), 1u);
 
     pool->releasePreStoreSlot(h);
@@ -98,9 +97,8 @@ BOOST_AUTO_TEST_CASE(backlog_cap_drops_excess)
 
     for (std::size_t i = 0; i < cap; ++i)
     {
-        BOOST_CHECK(pool->tryAcquirePreStoreSlot(
-                        makeBlockHashFib154(static_cast<int64_t>(i + 100))) ==
-                    InspectableTxPool::PreStoreAdmission::Accepted);
+        BOOST_CHECK(pool->tryAcquirePreStoreSlot(makeBlockHashFib154(static_cast<int64_t>(
+                        i + 100))) == InspectableTxPool::PreStoreAdmission::Accepted);
     }
     BOOST_CHECK_EQUAL(inflightSize(*pool), cap);
 
@@ -141,8 +139,7 @@ BOOST_AUTO_TEST_CASE(backpressure_disabled_bypasses_gate)
     // Flipping back on restores admission control.
     pool->setPreStoreBackpressureEnabled(true);
     auto h = makeBlockHashFib154(123);
-    BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) ==
-                InspectableTxPool::PreStoreAdmission::Accepted);
+    BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) == InspectableTxPool::PreStoreAdmission::Accepted);
     BOOST_CHECK_EQUAL(inflightSize(*pool), 1u);
     pool->releasePreStoreSlot(h);
 }
@@ -153,8 +150,7 @@ BOOST_AUTO_TEST_CASE(cleanup_on_success)
     auto pool = makeInspectable(m_txpool, ioServicePool);
     auto h = makeBlockHashFib154(7);
 
-    BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) ==
-                InspectableTxPool::PreStoreAdmission::Accepted);
+    BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) == InspectableTxPool::PreStoreAdmission::Accepted);
     pool->releasePreStoreSlot(h);
     BOOST_CHECK_EQUAL(inflightSize(*pool), 0u);
 }
@@ -166,8 +162,7 @@ BOOST_AUTO_TEST_CASE(cleanup_on_exception)
     auto pool = makeInspectable(m_txpool, ioServicePool);
     auto h = makeBlockHashFib154(8);
 
-    BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) ==
-                InspectableTxPool::PreStoreAdmission::Accepted);
+    BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) == InspectableTxPool::PreStoreAdmission::Accepted);
     try
     {
         throw std::runtime_error("simulated storeVerifiedBlock failure");

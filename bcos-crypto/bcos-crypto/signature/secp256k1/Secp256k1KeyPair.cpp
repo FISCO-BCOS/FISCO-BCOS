@@ -20,8 +20,8 @@
  */
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
-#include <wedpr-crypto/WedprUtilities.h>
 #include <wedpr-crypto/WedprCrypto.h>
+#include <wedpr-crypto/WedprUtilities.h>
 
 bcos::crypto::Secp256k1KeyPair::Secp256k1KeyPair()
   : KeyPair(SECP256K1_PUBLIC_LEN, SECP256K1_PRIVATE_LEN, KeyPairType::Secp256K1)

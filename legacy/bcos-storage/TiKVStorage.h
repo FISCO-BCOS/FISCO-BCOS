@@ -59,9 +59,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept override;
 
     void asyncGetRows(std::string_view table,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access |
-                ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
         override;

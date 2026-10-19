@@ -74,7 +74,8 @@ inline std::vector<sync::Block> makeTestChain(size_t _count)
         // is the anchor, outside the chain) so it carries the initial 1 gwei;
         // every later block must match the recomputation from its parent for
         // the downloaded chain to pass PoS header validation.
-        header.baseFee = i == 0 ? bcos::u256(1000000000) : sync::computeNextBaseFee(chain.back().header);
+        header.baseFee =
+            i == 0 ? bcos::u256(1000000000) : sync::computeNextBaseFee(chain.back().header);
 
         // A transaction on even blocks (opaque EIP-2718 bytes — must be a COMPLETE
         // RLP element; legacy txs are lists, typed txs are 0xNN||payload).
@@ -87,7 +88,8 @@ inline std::vector<sync::Block> makeTestChain(size_t _count)
         if (i == _count - 1)
         {
             header.withdrawalsHash = bcos::crypto::HashType(
-                std::string_view("0x4444444444444444444444444444444444444444444444444444444444444444"),
+                std::string_view(
+                    "0x4444444444444444444444444444444444444444444444444444444444444444"),
                 bcos::crypto::HashType::FromHex);
             bcos::protocol::EthWithdrawalData withdrawal;
             withdrawal.index = i;
@@ -102,8 +104,8 @@ inline std::vector<sync::Block> makeTestChain(size_t _count)
         bcos::bytes headerRlp;
         bcos::codec::rlp::encode(headerRlp, header);
         block.headerRlp = headerRlp;
-        block.hash = bcos::crypto::keccak256Hash(
-            bcos::bytesConstRef(headerRlp.data(), headerRlp.size()));
+        block.hash =
+            bcos::crypto::keccak256Hash(bcos::bytesConstRef(headerRlp.data(), headerRlp.size()));
 
         chain.push_back(std::move(block));
         parentHash = chain.back().hash;
@@ -180,8 +182,7 @@ inline std::vector<sync::Block> makeOpTestChain(size_t _count, sync::OpChainConf
         header.nonce = bcos::h64{};
         header.gasLimit = 30000000;
         header.gasUsed = 4000000;
-        header.timestamp =
-            kOpChainGenesisTs + static_cast<int64_t>(i * _config.blockTimeSeconds);
+        header.timestamp = kOpChainGenesisTs + static_cast<int64_t>(i * _config.blockTimeSeconds);
         header.prevRandao = bcos::h256{};
 
         // Fork-gated fields, keyed on THIS header's timestamp exactly like the
@@ -232,18 +233,17 @@ inline std::vector<sync::Block> makeOpTestChain(size_t _count, sync::OpChainConf
                                              _config.eip1559DenominatorBedrock;
             std::span<const bcos::byte> parentExtra{
                 parent.extraData.data(), parent.extraData.size()};
-            header.baseFee = bcos::engine::calcOpBaseFeeFromFields(parent.gasLimit,
-                parent.gasUsed, *parent.baseFee, parent.blobGasUsed, parentExtra,
+            header.baseFee = bcos::engine::calcOpBaseFeeFromFields(parent.gasLimit, parent.gasUsed,
+                *parent.baseFee, parent.blobGasUsed, parentExtra,
                 parentFork >= bcos::ledger::OpFork::Holocene,
-                parentFork >= bcos::ledger::OpFork::Jovian, denominator,
-                _config.eip1559Elasticity);
+                parentFork >= bcos::ledger::OpFork::Jovian, denominator, _config.eip1559Elasticity);
         }
 
         bcos::bytes headerRlp;
         bcos::codec::rlp::encode(headerRlp, header);
         block.headerRlp = headerRlp;
-        block.hash = bcos::crypto::keccak256Hash(
-            bcos::bytesConstRef(headerRlp.data(), headerRlp.size()));
+        block.hash =
+            bcos::crypto::keccak256Hash(bcos::bytesConstRef(headerRlp.data(), headerRlp.size()));
 
         chain.push_back(std::move(block));
         parentHash = chain.back().hash;
@@ -273,8 +273,8 @@ inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> cons
 
     for (;;)
     {
-        auto msg = unwrapOrThrow(
-            _session.recvMessage(), "SyncPeerServer: failed to decode a frame: ");
+        auto msg =
+            unwrapOrThrow(_session.recvMessage(), "SyncPeerServer: failed to decode a frame: ");
         if (msg.id == rlpx::baseMsg::Ping)
         {
             _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, rlpx::encodePong()});
@@ -282,8 +282,8 @@ inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> cons
         }
         if (msg.id == eth::frameId(eth::msg::GetBlockHeaders))
         {
-            auto request = unwrapOrThrow(
-                eth::decodeGetBlockHeaders(ref(msg.data)), "SyncPeerServer: malformed GetBlockHeaders: ");
+            auto request = unwrapOrThrow(eth::decodeGetBlockHeaders(ref(msg.data)),
+                "SyncPeerServer: malformed GetBlockHeaders: ");
             eth::BlockHeadersMessage response;
             response.requestId = request.requestId;
             if (request.originHash.has_value())
@@ -310,15 +310,15 @@ inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> cons
                     response.headers.push_back(_chain[static_cast<size_t>(idx)].headerRlp);
                 }
             }
-            _session.sendMessage(rlpx::Message{
-                static_cast<uint8_t>(eth::frameId(eth::msg::BlockHeaders)),
-                eth::encodeBlockHeaders(response)});
+            _session.sendMessage(
+                rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::BlockHeaders)),
+                    eth::encodeBlockHeaders(response)});
             continue;
         }
         if (msg.id == eth::frameId(eth::msg::GetBlockBodies))
         {
-            auto request = unwrapOrThrow(
-                eth::decodeGetBlockBodies(ref(msg.data)), "SyncPeerServer: malformed GetBlockBodies: ");
+            auto request = unwrapOrThrow(eth::decodeGetBlockBodies(ref(msg.data)),
+                "SyncPeerServer: malformed GetBlockBodies: ");
             eth::BlockBodiesMessage response;
             response.requestId = request.requestId;
             for (auto const& hash : request.hashes)
@@ -334,9 +334,9 @@ inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> cons
                 }
                 response.bodies.push_back(std::move(body));
             }
-            _session.sendMessage(rlpx::Message{
-                static_cast<uint8_t>(eth::frameId(eth::msg::BlockBodies)),
-                eth::encodeBlockBodies(response)});
+            _session.sendMessage(
+                rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::BlockBodies)),
+                    eth::encodeBlockBodies(response)});
             continue;
         }
         // Unknown message or disconnect: stop serving.

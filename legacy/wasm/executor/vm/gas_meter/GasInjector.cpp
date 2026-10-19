@@ -27,8 +27,8 @@
 #include "src/cast.h"
 #include "src/ir.h"
 #include "src/stream.h"
-#include <iostream>
 #include <bcos-utilities/BoostLog.h>
+#include <iostream>
 
 using namespace std;
 using namespace wabt;

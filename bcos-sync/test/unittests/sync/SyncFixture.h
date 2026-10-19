@@ -28,8 +28,8 @@
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/IOServicePool.h>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -90,13 +90,12 @@ public:
             _nodeTimeMaintenance)
     {}
 
-    BlockSync::Ptr createBlockSync(boost::asio::io_context& _ioContext,
-        bcos::IOServicePool::Ptr _ioServicePool) override
+    BlockSync::Ptr createBlockSync(
+        boost::asio::io_context& _ioContext, bcos::IOServicePool::Ptr _ioServicePool) override
     {
         auto pool = _ioServicePool;  // keep a copy before move
         auto sync = BlockSyncFactory::createBlockSync(_ioContext, std::move(_ioServicePool));
-        return std::make_shared<FakeBlockSync>(
-            sync->config(), _ioContext, std::move(pool));
+        return std::make_shared<FakeBlockSync>(sync->config(), _ioContext, std::move(pool));
     }
 };
 

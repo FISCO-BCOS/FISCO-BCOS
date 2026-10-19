@@ -28,11 +28,11 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/Common.h"
+#include <boost/algorithm/string.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/serialization/string.hpp>
 #include <boost/serialization/vector.hpp>
-#include <boost/algorithm/string.hpp>
 
 namespace bcos::precompiled
 {

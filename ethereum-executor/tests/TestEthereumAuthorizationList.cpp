@@ -14,13 +14,13 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "ethereum-executor/EthereumState.h"
 #include "ethereum-executor/EthereumTransition.h"
 #include "ethereum-executor/tests/TestMemoryStorage.h"
-#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 
-#include <evmc/evmc.hpp>
 #include <algorithm>
+#include <evmc/evmc.hpp>
 
 using namespace bcos;
 using namespace bcos::executor_v1;
@@ -53,7 +53,7 @@ bcostars::protocol::TransactionImpl makeAuthTx()
 {
     bcostars::protocol::TransactionImpl tx;
     auto& inner = tx.mutableInner();
-    inner.type = static_cast<tars::Char>(1);  // TransactionType::Web3Transaction
+    inner.type = static_cast<tars::Char>(1);             // TransactionType::Web3Transaction
     inner.web3TypedTxKind = static_cast<tars::Char>(4);  // EIP-7702 set-code
 
     bcostars::AuthorizationEntry entry;
@@ -105,8 +105,8 @@ BOOST_AUTO_TEST_CASE(AuthorizationForAnotherChainIsSkipped)
             "cross-chain authorization must NOT write a delegation designator");
         for (auto const& [addr, account] : state.modified())
         {
-            BOOST_CHECK_MESSAGE(account.code.empty() ||
-                                    !isDelegationDesignator(account.code, kDelegate),
+            BOOST_CHECK_MESSAGE(
+                account.code.empty() || !isDelegationDesignator(account.code, kDelegate),
                 "no account may receive a delegation designator on a foreign chain");
         }
     }

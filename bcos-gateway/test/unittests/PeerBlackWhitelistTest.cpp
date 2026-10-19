@@ -29,8 +29,8 @@ BOOST_AUTO_TEST_SUITE(PeerBlackWhitelistTest)
 
 BOOST_AUTO_TEST_CASE(whitelistMembershipAndSize)
 {
-    PeerBlackWhitelist wl(
-        PeerBlackWhitelist::Type::Whitelist, std::set<std::string>{kNodeA, kNodeB}, /*enable=*/true);
+    PeerBlackWhitelist wl(PeerBlackWhitelist::Type::Whitelist,
+        std::set<std::string>{kNodeA, kNodeB}, /*enable=*/true);
     BOOST_CHECK(wl.enable());
     BOOST_CHECK_EQUAL(wl.size(), 2U);
     BOOST_CHECK(wl.has(kNodeA));

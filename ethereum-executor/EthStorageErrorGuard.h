@@ -212,8 +212,8 @@ public:
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::WriteSome, Storage&,
             decltype(keyValues), decltype(args)...>>>
     {
-        using Return = task::AwaitableReturnType<std::invoke_result_t<storage2::WriteSome,
-            Storage&, decltype(keyValues), decltype(args)...>>;
+        using Return = task::AwaitableReturnType<std::invoke_result_t<storage2::WriteSome, Storage&,
+            decltype(keyValues), decltype(args)...>>;
         try
         {
             if constexpr (std::is_void_v<Return>)
@@ -284,9 +284,8 @@ public:
     /// range() forwards the underlying iterator; a fault surfacing lazily from
     /// iterator.next() (not from the range() call itself) does NOT pass
     /// through this wrapper (known limitation, see file header comment).
-    auto range(auto&&... args)
-        -> task::Task<storage2::ReturnType<
-            std::invoke_result_t<storage2::Range, Storage&, decltype(args)...>>>
+    auto range(auto&&... args) -> task::Task<
+        storage2::ReturnType<std::invoke_result_t<storage2::Range, Storage&, decltype(args)...>>>
     {
         try
         {
@@ -303,8 +302,8 @@ public:
     /// Raw passthrough reads (Rollbackable's journaling preimage capture
     /// requires them on the wrapped storage).
     auto readOneRaw(auto key, auto... tags)
-        -> task::Task<task::AwaitableReturnType<decltype(
-            std::declval<Storage&>().readOneRaw(std::move(key), tags...))>>
+        -> task::Task<task::AwaitableReturnType<decltype(std::declval<Storage&>().readOneRaw(
+            std::move(key), tags...))>>
         requires executor_v1::HasReadOneRaw<Storage>
     {
         try

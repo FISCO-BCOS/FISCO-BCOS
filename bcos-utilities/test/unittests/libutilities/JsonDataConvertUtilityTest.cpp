@@ -44,14 +44,13 @@ BOOST_AUTO_TEST_CASE(testRight160)
     h256 h = jonStringToFixedBytes<32>(str);
     BOOST_CHECK("0x5548007e067150c07dab4facb7160e075548007e" == toJonString(right160(h)));
     // test u256
-    h256 h256Data(
-        fromHex("12b5155eda010a5b7ae26a4a268e466a4b8d31547ad875fce9ab298c639a1b2f"));
+    h256 h256Data(fromHex("12b5155eda010a5b7ae26a4a268e466a4b8d31547ad875fce9ab298c639a1b2f"));
     // trans h256Data to u256
     u256 value(h256Data);
     // trans value to h256 again
     h256 convertedH256Data = value;
-    std::cout << "### value: " << value << ", h256Data:" << toHex(h256Data)
-              << "convertedH256Data" << toHex(convertedH256Data) << std::endl;
+    std::cout << "### value: " << value << ", h256Data:" << toHex(h256Data) << "convertedH256Data"
+              << toHex(convertedH256Data) << std::endl;
     BOOST_CHECK(convertedH256Data == h256Data);
 }
 

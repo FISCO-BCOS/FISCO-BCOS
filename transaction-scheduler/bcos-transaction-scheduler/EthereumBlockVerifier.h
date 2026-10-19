@@ -586,8 +586,7 @@ public:
 
         // Execution header carrying the block context for the EVM.
         auto blockHeader = makeExecutionBlockHeader(
-            ethHeader, m_blockFactory.get(), ledgerConfig.compatibilityVersion(),
-            forkSchedule);
+            ethHeader, m_blockFactory.get(), ledgerConfig.compatibilityVersion(), forkSchedule);
         execution.header = blockHeader;
 
         // The block's EVM revision, resolved once for every fork-gated step below

@@ -83,9 +83,9 @@ public:
     {
         if (!m_slot->poisoned())
             return;
-        throw bcos::evm::engine::OpStorageError(std::string(context) +
-                                                "op-eth block: storage read failed: " +
-                                                m_slot->firstErrorMessage());
+        throw bcos::evm::engine::OpStorageError(
+            std::string(context) +
+            "op-eth block: storage read failed: " + m_slot->firstErrorMessage());
     }
 
 private:

@@ -16,6 +16,7 @@
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
@@ -24,7 +25,6 @@
 #include <exception>
 #include <string>
 #include <thread>
-#include <boost/atomic.hpp>
 
 std::atomic_long g_blockNumber = 0;
 constexpr static long blockLimit = 900;

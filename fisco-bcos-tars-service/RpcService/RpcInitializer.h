@@ -67,4 +67,5 @@ private:
     bcos::group::GroupInfoFactory::Ptr m_groupInfoFactory;
     bcos::group::ChainNodeInfoFactory::Ptr m_chainNodeInfoFactory;
     std::atomic_bool m_running = {false};
-};}  // namespace bcostars
+};
+}  // namespace bcostars

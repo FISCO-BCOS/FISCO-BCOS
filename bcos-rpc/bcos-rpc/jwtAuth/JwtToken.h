@@ -38,10 +38,13 @@ struct JwtHeader
 
 struct JwtClaims
 {
-    // The specification of JWT is from https://github.com/ethereum/execution-apis/blob/main/src/engine/authentication.md
-    // Required: iat (issued-at) claim. The execution layer client SHOULD only accept iat timestamps which are within +-60 seconds from the current time.
-    // Optional: id claim. The consensus layer client MAY use this to communicate a unique identifier for the individual consensus layer client.
-    // Optional: clv claim. The consensus layer client MAY use this to communicate the consensus layer client type/version.
+    // The specification of JWT is from
+    // https://github.com/ethereum/execution-apis/blob/main/src/engine/authentication.md Required:
+    // iat (issued-at) claim. The execution layer client SHOULD only accept iat timestamps which are
+    // within +-60 seconds from the current time. Optional: id claim. The consensus layer client MAY
+    // use this to communicate a unique identifier for the individual consensus layer client.
+    // Optional: clv claim. The consensus layer client MAY use this to communicate the consensus
+    // layer client type/version.
     int64_t iat{0};
     std::optional<std::string> id;
     std::optional<std::string> clv;
@@ -58,8 +61,7 @@ public:
         m_claims(std::move(_claims)),
         m_signature(std::move(_signature))
     {}
-    static JwtToken decode(
-        const ::jwt::decoded_jwt<::jwt::traits::kazuho_picojson>& decoded)
+    static JwtToken decode(const ::jwt::decoded_jwt<::jwt::traits::kazuho_picojson>& decoded)
     {
         JwtHeader header;
         if (decoded.has_algorithm())
@@ -75,7 +77,7 @@ public:
         if (decoded.has_issued_at())
         {
             claims.iat = std::chrono::duration_cast<std::chrono::seconds>(
-                             decoded.get_issued_at().time_since_epoch())
+                decoded.get_issued_at().time_since_epoch())
                              .count();
         }
         if (decoded.has_payload_claim("id"))
@@ -100,4 +102,3 @@ private:
     std::string m_signature;
 };
 }  // namespace bcos::rpc
-

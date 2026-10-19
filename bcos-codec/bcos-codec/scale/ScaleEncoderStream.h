@@ -23,8 +23,8 @@
 #include <boost/variant.hpp>
 #include <deque>
 #include <gsl/span>
-#include <type_traits>
 #include <list>
+#include <type_traits>
 
 namespace bcos
 {

@@ -39,7 +39,7 @@ public:
         data[storage::SYS_TABLE] = std::map<std::string, Entry::Ptr>();
         m_threadPool = std::make_shared<bcos::IOServicePool>(, "mockStorage");
     }
-    virtual ~MockStorage() { m_threadPool/* IOServicePool lifecycle managed externally */; }
+    virtual ~MockStorage() { m_threadPool /* IOServicePool lifecycle managed externally */; }
 
     std::vector<std::string> getPrimaryKeys(const std::shared_ptr<TableInfo>& _tableInfo,
         const Condition::Ptr& _condition) const override
