@@ -23,9 +23,9 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-task/Wait.h"
+#include <fmt/format.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <fmt/format.h>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/view/concat.hpp>
 #include <tuple>
