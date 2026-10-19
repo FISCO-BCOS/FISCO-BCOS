@@ -126,9 +126,11 @@ class NodeServiceConfig:
         self.service_obj_list = service_obj_list
         self.deploy_ip_list = deploy_ip_list
         self.base_service_name = base_service_name
-        # Note: contains [config.ini, config.genesis, node.pem]
+        # Note: in max-node mode, only contains [config.genesis, node.pem]
+        #       in pro-node mode, contains [config.ini, config.genesis, node.pem]
         #       in HSM mode, node.pem contains only public key information
         self.config_file_list = config_file_list
+        # Note: in max-node mode, the ini config files prefixed with deploy ip
         self.ini_config_file = "config.ini"
         self.need_add_ini_config = need_add_ini_config
 
@@ -194,16 +196,21 @@ class NodeConfig:
         """
         parse and load the node_service config
         """
-        # the node service config
+        # the max_node service config
         self.node_service_name = self.get_service_name(
             self.node_service_base_name)
 
         node_deploy_ip = utilities.get_item_value(
             self.config, "deploy_ip", None, True, self.desc)
         deploy_ip_list = []
-        self.node_config_file_list = [
-            "config.ini", "config.genesis", "node.pem"]
-        deploy_ip_list.append(node_deploy_ip)
+        self.node_config_file_list = None
+        if node_type != "max":
+            self.node_config_file_list = [
+                "config.ini", "config.genesis", "node.pem"]
+            deploy_ip_list.append(node_deploy_ip)
+        else:
+            self.node_config_file_list = ["config.genesis", "node.pem"]
+            deploy_ip_list = node_deploy_ip
 
         self.node_service = NodeServiceConfig(self.agency_config.chain_id, self.node_service_base_name,
                                               self.node_service_name,
@@ -224,6 +231,18 @@ class ProNodeConfig(NodeConfig):
         NodeConfig.__init__(self, config, chain_id, group_id, agency_config,
                             utilities.ServiceInfo.single_node_service, utilities.ServiceInfo.single_node_obj_name_list,
                             sm_crypto, "pro")
+
+
+class MaxNodeConfig(NodeConfig):
+    def __init__(self, config, chain_id, group_id, agency_config, sm_crypto):
+        """
+        the max-node config
+        """
+        utilities.log_error(
+            "The MAX node topology (BcosNodeService + BcosExecutorService, backed by the "
+            "removed TiKV storage and etcd leader-election failover) is retired. "
+            "Please deploy a 'pro' or 'air' chain instead.")
+        sys.exit(-1)
 
 
 class GroupConfig:
@@ -361,8 +380,13 @@ class ChainConfig:
                 group_config, "node", None, False, "[[agency.group.node]]")
             group_node_list = []
             for node in node_config:
-                node_service = ProNodeConfig(
-                    node, self.chain_id, group_id, agency_config, group_config_obj.sm_crypto)
+                node_service = None
+                if self.node_type == "max":
+                    node_service = MaxNodeConfig(
+                        node, self.chain_id, group_id, agency_config, group_config_obj.sm_crypto)
+                else:
+                    node_service = ProNodeConfig(
+                        node, self.chain_id, group_id, agency_config, group_config_obj.sm_crypto)
                 if self.__check_duplicate_node_name(node_service.node_service_name):
                     utilities.log_error("The duplicate node name: " + node_service.node_name +
                                         " appears in group: " + group_id + " of the agency: " + agency_config.name)

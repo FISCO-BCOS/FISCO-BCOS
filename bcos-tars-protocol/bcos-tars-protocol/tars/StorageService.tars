@@ -1,0 +1,52 @@
+#include "CommonProtocol.tars"
+
+module bcostars
+{
+
+struct TableInfo {
+    1 optional string name;
+    2 optional string _key;
+    3 optional vector<string> fields;
+    4 optional vector<string> indices;
+    5 optional bool enableConsensus;
+    6 optional bool enableCache;
+    7 optional bool newTable;
+};
+
+struct Condition {
+    1 optional vector<short> conditions;
+    2 optional long offset;
+    3 optional long size;
+};
+
+struct Entry {
+    1 optional long num;
+    2 optional int status;
+    3 optional map<string, string> fields;
+    4 optional bool isNull;
+};
+
+struct TableFactory {
+    1 optional long num;
+    2 optional vector<TableInfo> tableInfos;
+    3 optional vector<map<string, Entry>> datas;
+};
+
+interface StorageService
+{
+    Error getPrimaryKeys(TableInfo tableInfo, Condition condition, out vector<string> keys);
+    Error getRow(TableInfo tableInfo, string keys, out Entry row);
+    Error getRows(TableInfo tableInfo, vector<string> keys, out map<string, Entry> rows);
+    Error commitBlock(long blockNumber, vector<TableInfo> infos, vector<map<string, Entry>> datas, out long count);
+
+    Error addStateCache(long blockNumber, TableFactory tableFactory);
+    Error dropStateCache(long blockNumber);
+    Error getStateCache(long blockNumber, out TableFactory tableFactory);
+
+    Error put(string columnFamily, string _key, string value);
+    Error get(string columnFamily, string _key, out string value);
+    Error remove(string columnFamily, string _key);
+    Error getBatch(string columnFamily, vector<string> keys, out vector<string> values);
+};
+
+}; 

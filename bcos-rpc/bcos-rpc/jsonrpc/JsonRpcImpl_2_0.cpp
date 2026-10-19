@@ -560,17 +560,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         }
         catch (bcos::Error& e)
         {
-            auto info = boost::diagnostic_information(e);
-            if (e.errorCode() == (int64_t)bcos::protocol::TransactionStatus::TxPoolIsFull)
-            {
-                RPC_IMPL_LOG(DEBUG) << "sendTransaction error" << LOG_KV("errCode", e.errorCode())
-                                    << LOG_KV("msg", info);
-            }
-            else
-            {
-                RPC_IMPL_LOG(WARNING) << "sendTransaction error" << LOG_KV("errCode", e.errorCode())
-                                      << LOG_KV("msg", info);
-            }
+            // The refusal reaches the client in the RPC error; the txpool prints the per-tx
+            // TxRejected line (DEBUG) with the reason.
             respFunc(std::make_shared<bcos::Error>(std::move(e)), jResp);
         }
         catch (std::exception& e)

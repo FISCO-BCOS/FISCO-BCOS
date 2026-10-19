@@ -168,7 +168,7 @@ check_consensus()
     for node in ${node_list}
     do
         LOG_INFO "check_consensus for ${node}"
-        result=$(cat ${node}/log/*log |grep -i reachN)
+        result=$(cat ${node}/log/*log |grep -iE 'NewViewReached|reachNewView')
         if [[ -z "${result}" ]];
         then
             LOG_ERROR "checkView failed ******* cons info for ${node} *******"

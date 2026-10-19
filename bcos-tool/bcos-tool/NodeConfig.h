@@ -65,7 +65,7 @@ public:
     virtual void loadWithoutTarsFrameworkConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadNodeServiceConfig(
-        std::string const& _nodeID, boost::property_tree::ptree const& _pt);
+        std::string const& _nodeID, boost::property_tree::ptree const& _pt, bool _require = false);
 
     virtual void loadTarsProxyConfig(const std::string& _tarsProxyConf);
 
@@ -174,7 +174,14 @@ public:
     std::string const& rpcServiceName() const;
     std::string const& gatewayServiceName() const;
 
+    std::string const& schedulerServiceName() const;
+    std::string const& executorServiceName() const;
+    std::string const& txpoolServiceName() const;
+
     std::string const& nodeName() const;
+
+    std::string getDefaultServiceName(
+        std::string const& _nodeName, std::string const& _serviceName) const;
 
     // the rpc configurations
     const std::string& rpcListenIP() const;
@@ -596,7 +603,7 @@ private:
     BaselineSchedulerConfig m_baselineSchedulerConfig;
     TarsRPCConfig m_tarsRPCConfig;
 
-    // a Pro deployment run without the tars admin site
+    // Pro and Max versions run do not apply to tars admin site
     bool m_withoutTarsFramework = {false};
 
     // service name to tars endpoints
@@ -605,6 +612,10 @@ private:
     std::string m_rpcServiceName;
     std::string m_gatewayServiceName;
 
+    // the serviceName of other modules
+    std::string m_schedulerServiceName;
+    std::string m_executorServiceName;
+    std::string m_txpoolServiceName;
     std::string m_nodeName;
 
     // config for rpc
