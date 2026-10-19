@@ -28,6 +28,7 @@
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>

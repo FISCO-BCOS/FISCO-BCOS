@@ -264,7 +264,7 @@ public:
         blockHeader->setVersion(blockVersion);
         blockHeader->calculateHash(*hashImpl);
         // Ethereum-lane blocks must carry an EIP-2718 transaction: finishExecute commits the
-        // txsRoot over the wire bcos::bytes (calculateEthereumTransactionRoot), which throws on a
+        // txsRoot over the wire bytes (calculateEthereumTransactionRoot), which throws on a
         // FISCO-shaped payload. The legacy lane keeps the plain filler transaction.
         if (g_mwExecutorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
@@ -626,7 +626,7 @@ BOOST_AUTO_TEST_CASE(commitAtomicityAndObserverTiming)
     BOOST_CHECK_GT(record.newNodeCount, 0);
     BOOST_CHECK(record.allNodesInBackendAtCallback);  // fired AFTER the nodes landed
 
-    // Post-hoc: every delta node readable from the backend under its digest, bcos::bytes equal.
+    // Post-hoc: every delta node readable from the backend under its digest, bytes equal.
     for (auto const& [hash, rlp] : record.delta.newNodes)
     {
         auto stored = backendNode(backendStorage, hash);
@@ -818,7 +818,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockPublishesNoExecuteTimeHeader)
 
 // Guard: a stray row under the reserved "/mpt/" table in the block's TOP delta layer must be
 // skipped by the build's account scan — parseAccountTable only accepts the account-table
-// shapes ("/apps/<40-hex>", "/s/<20 raw bcos::bytes>") — never classified as an account, and must
+// shapes ("/apps/<40-hex>", "/s/<20 raw bytes>") — never classified as an account, and must
 // not perturb the state root.
 BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
 {

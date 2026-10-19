@@ -70,12 +70,12 @@ macro(configure_project)
     # scheduler, ...):
     #   8 -> 96.4s wall / 2.8GB max TU; 16 -> 95.1s / 2.8GB; 32 -> 116s / 3.4GB;
     #   0 (one TU per target) -> 113s / 3.4GB.
-    # 16 buys ~1.3% wall time on that subset, but the memory ceiling is set by the
-    # test targets (test-bcos-rpc / test-transaction-scheduler peak ~3.7GB), which
-    # the subset does not measure - larger batches there are what force CI's
-    # --parallel 3. 8 matches 16 on wall time at lower peak memory and half the
-    # incremental-rebuild granularity, so it is the default; bump it locally with
-    # -DUNITY_BUILD_BATCH_SIZE=N if a full-build measurement says otherwise.
+    # 16 buys ~1.3% wall time on that subset, but the library subset is not where the memory
+    # ceiling lives: the test targets peak higher (test-bcos-rpc / test-transaction-scheduler
+    # reached ~3.7GB at batch 16; the batch-8 peak is unmeasured - follow-up issue). 8 matches
+    # 16 on wall time at lower peak memory and half the incremental-rebuild granularity, so it
+    # is the default; bump it locally with -DUNITY_BUILD_BATCH_SIZE=N if a full-build
+    # measurement says otherwise.
     default_option(UNITY_BUILD ON)
     if(NOT DEFINED UNITY_BUILD_BATCH_SIZE)
         set(UNITY_BUILD_BATCH_SIZE "8")

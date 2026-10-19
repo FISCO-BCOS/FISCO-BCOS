@@ -226,8 +226,13 @@ jobs:
           # leaves the static binaries (fisco-bcos + lightnode) and the air integration test
           # in place; release events still build the shipped static binaries WITH the full
           # suites via the ubuntu-26.04 leg (see the release branch of the condition above).
+          # This leg also gates the non-unity configuration: unity build can hide a missing
+          # include (a TU compiles because a batch neighbour included the header), and
+          # -DUNITY_BUILD=OFF is the only configuration that surfaces that class - and the
+          # diagnostic switch when a unity miscompile is suspected. TESTS=OFF means only the
+          # production sources get the non-unity pass here.
           if [[ "${{ matrix.os }}" == "ubuntu-26.04-static" ]]; then
-            EXTRA_FLAGS="${EXTRA_FLAGS} -DTESTS=OFF"
+            EXTRA_FLAGS="${EXTRA_FLAGS} -DTESTS=OFF -DUNITY_BUILD=OFF"
           fi
           # The hive gate job (hive_smoke) reuses this leg's artifact and also
           # needs eth-sync-check (genesis2ini); tools are off by default.
@@ -325,13 +330,15 @@ jobs:
         run: |
           cd build
           # Bound the job count: with the repo-wide unity build one translation unit folds up to
-          # 8 sources together, and the heaviest ones peak at ~3.7 GB of compiler RSS measured
-          # with the CI flags (test-bcos-rpc / test-transaction-scheduler). Leaving --parallel
-          # unset lets the generator use every core, so several of those can run at once on a
-          # 4 vCPU runner - ~14.7 GB against its 16 GB budget - and this step has been dying a
-          # runner "lost communication"/SIGTERM instead of a compile error. --parallel 3 caps the
-          # worst case near 11 GB and matches the coverage job, which is the heaviest build in
-          # this workflow and the stable one precisely because it already bounds parallelism.
+          # 8 sources together. The heaviest TUs peaked at ~3.7 GB of compiler RSS when measured
+          # with the CI flags at batch 16 (test-bcos-rpc / test-transaction-scheduler); the peak
+          # at batch 8 has not been re-measured (follow-up issue), so the cap stays conservative.
+          # Leaving --parallel unset lets the generator use every core, so several of those can
+          # run at once on a 4 vCPU runner and this step has been dying a runner
+          # "lost communication"/SIGTERM instead of a compile error. --parallel 3 keeps the worst
+          # case within the 16 GB budget and matches the coverage job, which is the heaviest
+          # build in this workflow and the stable one precisely because it already bounds
+          # parallelism.
           cmake --build . --parallel 3
       - name: ccache stats
         # always(): the hit rate and cache size are the evidence for the cache sizing, and a

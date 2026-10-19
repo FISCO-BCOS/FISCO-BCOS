@@ -92,8 +92,10 @@ BOOST_AUTO_TEST_CASE(ShortAddress)
 {
     // A Solidity contract-creation message carries an empty to (BlockExecutive sets create and
     // never calls setTo), so every deploy executed through DMC reaches the short-address path of
-    // getAddressChecksum. The checksum must stay deterministic for it rather than reading out of
-    // bounds - reverting the padding loop turns this red under ASan.
+    // getAddressChecksum. Pin the recorder output against a golden value: the zero-padding of
+    // missing address bytes is what produces it, so reverting the padding loop changes the value
+    // and turns this red (a same-process self-comparison would not, and ASan stays silent because
+    // an empty std::string's data() points into live small-string storage).
     auto makeMessage = [] {
         auto message = std::make_unique<bcos::executor::NativeExecutionMessage>();
         message->setStaticCall(false);
@@ -106,15 +108,10 @@ BOOST_AUTO_TEST_CASE(ShortAddress)
         return message;
     };
 
-    std::vector<std::string> sums;
-    for (size_t i = 0; i < 2; i++)
-    {
-        DmcStepRecorder::Ptr recorder = std::make_shared<DmcStepRecorder>();
-        recorder->recordSend(m_address, 0, makeMessage());
-        recorder->nextDmcRound();
-        sums.push_back(recorder->dumpAndClearChecksum());
-    }
-    BOOST_CHECK(sums[0] == sums[1]);
+    DmcStepRecorder::Ptr recorder = std::make_shared<DmcStepRecorder>();
+    recorder->recordSend(m_address, 0, makeMessage());
+    recorder->nextDmcRound();
+    BOOST_CHECK_EQUAL(recorder->dumpAndClearChecksum(), "59758e84:59758e83:0:1");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

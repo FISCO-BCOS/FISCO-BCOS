@@ -23,15 +23,17 @@
 #include "../../txpool/TxPoolInterface.h"
 #include <bcos-utilities/IOServicePool.h>
 
-using namespace bcos;
+namespace bcos::test
+{
+// Using-directives live INSIDE bcos::test on purpose: at global scope they leak into
+// every consumer TU (and every unity-build batch-mate), making names shared by
+// bcos::txpool / bcos::protocol / bcos::crypto ambiguous for unrelated files.
+// Consumers needing these names must qualify or declare them.
 using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 using namespace bcos::consensus;
 
-
-namespace bcos::test
-{
 class FakeTxPool : public TxPoolInterface
 {
 public:

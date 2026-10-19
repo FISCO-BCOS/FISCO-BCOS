@@ -31,15 +31,18 @@
 #include <string>
 #include <utility>
 
-using namespace bcos;
-using namespace bcos::ledger;
-using namespace bcos::protocol;
-using namespace bcos::crypto;
-using namespace bcos::consensus;
 namespace bcos
 {
 namespace test
 {
+// Using-directives live INSIDE bcos::test on purpose: at global scope they leak into
+// every consumer TU (and every unity-build batch-mate), making names like
+// ConsensusNodeList ambiguous for unrelated files that pull both bcos::ledger and
+// bcos::consensus. Consumers needing these names must qualify or declare them.
+using namespace bcos::ledger;
+using namespace bcos::protocol;
+using namespace bcos::crypto;
+using namespace bcos::consensus;
 
 class FakeLedger : public LedgerInterface, public std::enable_shared_from_this<FakeLedger>
 {
