@@ -41,7 +41,7 @@ struct NodeDir
     std::string logFormat;  // empty == default format
     size_t txpoolLimit = 15000;
     bool authCheck = false;
-    std::optional<int64_t> consensusTimeoutMs;  // config.genesis [consensus] consensus_timeout
+    std::optional<int64_t> consensusTimeoutMs;  // max(3000, [consensus] min_seal_time + 1)
     // config.ini [ethereum] mode (NodeConfig::loadEthereumConfig): none / el / opstack-el
     std::string ethereumMode = "none";
     // config.ini [web3_rpc] (NodeConfig::loadWeb3RpcConfig defaults)

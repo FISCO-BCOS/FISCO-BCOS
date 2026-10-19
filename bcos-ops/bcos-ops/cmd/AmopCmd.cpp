@@ -309,6 +309,6 @@ void registerAmopCommand()
             "sub <topic> [--count N (0 = until Ctrl-C)] [--wait seconds (default 60)] | "
             "pub <topic> <message> [--wait seconds (default 10)]   [--node-dir <dir> | --rpc "
             "<host:port>] [--json]",
-            {}, runAmop});
+            {}, runAmop, {"count", "wait"}, true});
 }
 }  // namespace bcos::ops

@@ -18,6 +18,7 @@
 #include "Checks.h"
 #include "Mode.h"
 #include <algorithm>
+#include <limits>
 
 namespace bcos::ops
 {
@@ -46,8 +47,12 @@ std::vector<Check> evaluate(
     }
     else
     {
-        auto ageMs = _nowMs - *_status.latestTimestamp;
-        auto limitMs = static_cast<int64_t>(_thresholds.stallFactor * *_status.consensusTimeoutMs);
+        // the timestamp and the timeout come from the RPC peer: clamp both before the int64
+        // arithmetic so an extreme value cannot overflow it
+        auto ageMs = _nowMs - std::clamp<int64_t>(*_status.latestTimestamp, 0, _nowMs);
+        auto limit = _thresholds.stallFactor * static_cast<double>(*_status.consensusTimeoutMs);
+        auto limitMs = limit >= 9.2e18 ? std::numeric_limits<int64_t>::max() :
+                                         static_cast<int64_t>(std::max(limit, 0.0));
         if (!readsPbft(_status.mode))
         {
             // no PBFT timer drives the blocks: an L1 EL seals every ~12 s and an OP sequencer

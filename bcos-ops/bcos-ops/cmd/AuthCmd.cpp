@@ -187,6 +187,6 @@ void registerAuthCommand()
             "<contract> <sel> <acct> | set-contract-status <contract> <true|false|0|1|2>   "
             "[--account <key-file>] [--yes] [--direct] [--interval <blocks>] [--node-dir <dir> | "
             "--rpc <host:port>] [--json]",
-            {"yes", "direct"}, runAuth});
+            {"yes", "direct"}, runAuth, {"account", "interval"}, true});
 }
 }  // namespace bcos::ops

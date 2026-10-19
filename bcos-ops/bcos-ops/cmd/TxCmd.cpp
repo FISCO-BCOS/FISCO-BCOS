@@ -570,6 +570,7 @@ void registerTxCommand()
             "[--account <pem|hex-key>] "
             "[--mode none|el|opstack-el] [--web3 host:port] [--node-dir "
             "<dir> | --rpc <host:port>] [--json]",
-            {"proof"}, runTx});
+            {"proof"}, runTx, {"account", "abi", "value", "link", "nonce", "block-limit", "wait"},
+            true});
 }
 }  // namespace bcos::ops

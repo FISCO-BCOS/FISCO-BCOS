@@ -209,6 +209,6 @@ void registerSysconfigCommand()
             "get <key> | set <key> <value> | features | enable-features <flag...>   [--account "
             "<key-file>] [--yes] [--direct] [--interval <blocks>] [--node-dir <dir> | --rpc "
             "<host:port>] [--json]",
-            {"yes", "direct"}, runSysconfig});
+            {"yes", "direct"}, runSysconfig, {"account", "interval"}, true});
 }
 }  // namespace bcos::ops

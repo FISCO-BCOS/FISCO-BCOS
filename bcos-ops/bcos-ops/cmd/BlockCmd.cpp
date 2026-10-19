@@ -183,6 +183,6 @@ void registerBlockCommand()
                 "getBlockByNumber, getBlockByHash)",
             "get <height|0xhash> [--txs] [--proof]   [--node-dir <dir> | --rpc <host:port>] "
             "[--json]",
-            {"txs", "proof"}, runBlock});
+            {"txs", "proof"}, runBlock, {}, true});
 }
 }  // namespace bcos::ops

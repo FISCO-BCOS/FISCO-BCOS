@@ -124,10 +124,11 @@ void renderStatus(
                 show(_status.connectedGroupNodes) + "  quorum " + show(_status.minRequiredQuorum) +
                 (_status.inTimeout && *_status.inTimeout ? "  TIMEOUT" : ""));
     }
-    rows.emplace_back(
-        "sync", std::string(_status.isSyncing && *_status.isSyncing ? "syncing" : "idle") +
-                    "  highest " + show(_status.knownHighestNumber) + "  lag " + show(_status.lag) +
-                    "  peers " + show(_status.peerCount));
+    rows.emplace_back("sync", std::string(!_status.isSyncing ? "-" :
+                                          *_status.isSyncing ? "syncing" :
+                                                               "idle") +
+                                  "  highest " + show(_status.knownHighestNumber) + "  lag " +
+                                  show(_status.lag) + "  peers " + show(_status.peerCount));
     rows.emplace_back(
         "txpool", "pending " + show(_status.pendingTxSize) +
                       (_status.txpoolLimit ? "  limit " + show(_status.txpoolLimit) : ""));
@@ -218,6 +219,6 @@ void registerStatusCommand()
                       "consensus_stable and quorum_connected until --mode none is given. "
                       "`attach getConsensusStatus` is not gated; op_engine_rpc and single-node "
                       "non-PBFT setups are not recognised as EL",
-                      {}, runStatus});
+                      {}, runStatus, {"stall-factor", "max-lag"}});
 }
 }  // namespace bcos::ops
