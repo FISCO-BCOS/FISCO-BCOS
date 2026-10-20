@@ -1407,17 +1407,10 @@ BOOST_AUTO_TEST_CASE(dmcNestedCreateFollowsSchedulerSeqHandback)
     auto const aAddr = std::string(deployResult->newEVMContractAddress());
     BOOST_REQUIRE_GT(aAddr.size(), 0);
 
-    auto resume = [&](NativeExecutionMessage::UniquePtr msg, int64_t stamp) {
-        msg->setSchedulerSeq(stamp);
-        msg->setKeyLocks({});
-        std::promise<ExecutionMessage::UniquePtr> prom;
-        executor->dmcExecuteTransaction(std::move(msg),
-            [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& r) {
-                BOOST_CHECK(!error);
-                prom.set_value(std::move(r));
-            });
-        return prom.get_future().get();
-    };
+    // R6 CI: the hand-back pump this test drove through was folded into the direct
+    // assertions below; the lambda remained set-but-unused and tripped gcc's
+    // -Werror=unused-but-set-variable on the Linux legs (macos/clang does not warn).
+    (void)0;
 
     auto drive = [&](int64_t entrySeq, std::optional<int64_t> stamp) {
         auto params = std::make_unique<NativeExecutionMessage>();
