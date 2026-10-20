@@ -1338,6 +1338,160 @@ BOOST_AUTO_TEST_CASE(preBugfixRejectedCreate2PinsStatusGasOutput)
                        << " out=" << result4->data().size());
 }
 
+
+// [R6 F1] The DMC nested-CREATE derivation follows the schedulerSeq the scheduler
+// handed back on resume: the parent frame's externalCall adopts the stamp, so a nested
+// CREATE that runs after a resume derives from the stamped seq. The "two consecutive
+// CREATEs" contract makes the resume's stamp observable end-to-end: the first CREATE
+// derives from the entry seq (no hand-back yet), the second — after the resume — from
+// the stamped seq. Both are pinned to the scheduler-side formula (newEVMAddress), the
+// consensus invariant the fix exists to preserve; the seam-level adopt/throw contract
+// is pinned separately (createDerivationSeqAdoptsStampAndFailsLoudWithout).
+BOOST_AUTO_TEST_CASE(dmcNestedCreateFollowsSchedulerSeqHandback)
+{
+    // Legacy formula (feature_evm_address OFF): the hook derives
+    // newEVMAddress(hash, block, ctx, createDerivationSeq()+1) — the surface
+    // schedulerSeq drives. The contract: CREATE; CREATE; STOP. Each CREATE deploys a
+    // child whose init is a 1-byte STOP (a non-empty, valid init).
+    std::string const aHex =
+        "6022600c60003960226000f3"   // init: CODECOPY the 34-byte runtime, RETURN it
+        "600c6016600039"             // runtime: copy the 12-byte child init into memory
+        "600c60006000f0"             // CREATE(value=0, offset=0, size=12) -> code 0x00
+        "600c60006000f0"             // CREATE again (the resume-observable one)
+        "00"                         // STOP
+        "60006000526001601f6000f3";  // child init: MSTORE 0 -> mem[31], RETURN 1 byte
+
+    bytes input;
+    boost::algorithm::unhex(aHex, std::back_inserter(input));
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(201), 100201, "1", "1");
+    auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    blockHeader->setNumber(1);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
+    ledger->setBlockNumber(blockHeader->number() - 1);
+    blockHeader->calculateHash(*cryptoSuite->hashImpl());
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    auto deployParams = std::make_unique<NativeExecutionMessage>();
+    deployParams->setContextID(200);
+    deployParams->setSeq(1200);
+    deployParams->setDepth(0);
+    deployParams->setOrigin(std::string(sender));
+    deployParams->setFrom(std::string(sender));
+    deployParams->setTo("cc2233445566778899001122334455667788990011");
+    deployParams->setStaticCall(false);
+    deployParams->setGasAvailable(gas);
+    deployParams->setData(input);
+    deployParams->setType(NativeExecutionMessage::TXHASH);
+    deployParams->setTransactionHash(hash);
+    deployParams->setCreate(true);
+    std::promise<ExecutionMessage::UniquePtr> deployPromise;
+    executor->dmcExecuteTransaction(std::move(deployParams),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            deployPromise.set_value(std::move(result));
+        });
+    auto deployResult = deployPromise.get_future().get();
+    BOOST_REQUIRE(deployResult);
+    auto const aAddr = std::string(deployResult->newEVMContractAddress());
+    BOOST_REQUIRE_GT(aAddr.size(), 0);
+
+    auto resume = [&](NativeExecutionMessage::UniquePtr msg, int64_t stamp) {
+        msg->setSchedulerSeq(stamp);
+        msg->setKeyLocks({});
+        std::promise<ExecutionMessage::UniquePtr> prom;
+        executor->dmcExecuteTransaction(std::move(msg),
+            [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& r) {
+                BOOST_CHECK(!error);
+                prom.set_value(std::move(r));
+            });
+        return prom.get_future().get();
+    };
+
+    auto drive = [&](int64_t entrySeq, std::optional<int64_t> stamp) {
+        auto params = std::make_unique<NativeExecutionMessage>();
+        params->setContextID(201);
+        params->setSeq(entrySeq);
+        params->setDepth(0);
+        params->setOrigin(std::string(sender));
+        params->setFrom(std::string(sender));
+        params->setTo(aAddr);
+        params->setStaticCall(false);
+        params->setGasAvailable(gas);
+        params->setCreate(false);
+        params->setType(NativeExecutionMessage::MESSAGE);
+
+        std::vector<std::string> creates;
+        bool frameFaulted = false;
+        auto msg = [&]() -> NativeExecutionMessage::UniquePtr {
+            std::promise<ExecutionMessage::UniquePtr> prom;
+            executor->dmcExecuteTransaction(
+                std::move(params), [&](bcos::Error::UniquePtr&& error,
+                                       bcos::protocol::ExecutionMessage::UniquePtr&& r) {
+                    if (error)
+                        frameFaulted = true;
+                    else
+                        prom.set_value(std::move(r));
+                });
+            return prom.get_future().get();
+        }();
+        for (int hops = 0; hops < 8 && creates.size() < 2; ++hops)
+        {
+            if (msg->create() && msg->type() == ExecutionMessage::MESSAGE)
+                creates.push_back(std::string(msg->to()));
+            std::promise<ExecutionMessage::UniquePtr> prom;
+            auto stamp2 = stamp.value_or(-1);
+            msg->setSchedulerSeq(stamp2);
+            msg->setKeyLocks({});
+            executor->dmcExecuteTransaction(
+                std::move(msg), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& r) {
+                    if (error)
+                    {
+                        frameFaulted = true;
+                        prom.set_value(nullptr);
+                    }
+                    else
+                    {
+                        prom.set_value(std::move(r));
+                    }
+                });
+            msg = prom.get_future().get();
+            if (!msg)
+                break;
+        }
+        return std::pair{creates, frameFaulted};
+    };
+
+    // Stamped: the entry seq 1201 -> first CREATE derives f(1201+1); the resume stamp
+    // 1202 -> the second CREATE derives f(1202+1). Both through the scheduler-side
+    // formula — a derivation that ignored the hand-back fails the second assertion.
+    auto const stamped = drive(1201, 1202);
+    BOOST_REQUIRE_EQUAL(stamped.first.size(), 2u);
+    BOOST_CHECK_EQUAL(
+        stamped.first[0], bcos::newEVMAddress(*cryptoSuite->hashImpl(), 1, 201, 1202));
+    BOOST_CHECK_EQUAL(
+        stamped.first[1], bcos::newEVMAddress(*cryptoSuite->hashImpl(), 1, 201, 1203));
+    BOOST_CHECK_NE(stamped.first[0], stamped.first[1]);
+    BOOST_CHECK(!stamped.second);
+
+    // The negative control (an unstamped resume failing loudly on the second CREATE)
+    // is the seam-level test's job: the throw crosses evmone's noexcept VM frames and
+    // becomes std::terminate in-process, so it cannot be exercised here. See
+    // createDerivationSeqAdoptsStampAndFailsLoudWithout for the throw pin.
+}
+
 // The call() host callback's deterministic negative-gas arm (review F1 keeps it): a gas
 // that underflowed u256 -> int64 must answer EVMC_OUT_OF_GAS rather than enter the VM on
 // a wrapped budget. It fires before the context is touched, so the fnTable slot is
