@@ -21,12 +21,12 @@ P2PSession::P2PSession()
 {
     // init with the minVersion
     m_protocolInfo->setVersion(m_protocolInfo->minVersion());
-    P2PSESSION_LOG(INFO) << "[P2PSession::P2PSession] this=" << this;
+    P2PSESSION_LOG(DEBUG) << "[P2PSession::P2PSession] this=" << this;
 }
 
 P2PSession::~P2PSession()
 {
-    P2PSESSION_LOG(INFO) << "[P2PSession::~P2PSession] this=" << this;
+    P2PSESSION_LOG(DEBUG) << "[P2PSession::~P2PSession] this=" << this;
 }
 
 bool P2PSession::active()
@@ -89,7 +89,7 @@ bcos::protocol::ProtocolInfo::ConstPtr P2PSession::protocolInfo() const
 
 void P2PSession::start()
 {
-    P2PSESSION_LOG(INFO) << "[P2PSession::start] this=" << this;
+    P2PSESSION_LOG(DEBUG) << "[P2PSession::start] this=" << this;
     if (!m_run && m_session)
     {
         m_run = true;
