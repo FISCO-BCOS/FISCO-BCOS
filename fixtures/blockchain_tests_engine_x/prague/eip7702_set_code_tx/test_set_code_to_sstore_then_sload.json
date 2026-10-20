@@ -1,0 +1,194 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_sstore_then_sload[fork_Prague-blockchain_test_engine_x-]": {
+        "network": "Prague",
+        "lastblockhash": "0xe575fbe94384a49a0304e98c7aef0933717a6b020a0b5885190c78141ea49426",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf5d2d498c59f8a8c7c31d05f00d6c793d16afcc55a2c7ac8a818defb150c0c2e",
+                        "receiptsRoot": "0x4b0a644782113747ac9b6ea4a3d508c438d510040d83bce5030dee0bad2863cf",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1eb7a",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe575fbe94384a49a0304e98c7aef0933717a6b020a0b5885190c78141ea49426",
+                        "transactions": [
+                            "0x04f8c101808007830186a0940996f757d1a97a6b35ae890e0faed77c6be064698080c0f85cf85a809437ebf8fed2c7ecc80dbd28e70f0251e953feaae68001a09114b06ac56faea00cb697f16f95db79e5439610e6a76f7603723752d3167fe8a04e56f5ae40d72d414fae0bf7b5f5b173ec8c6fc7164d752c57007bce68c80bce01a0ee9f67d322e9b59951e0294693ebfbb1f33e9d99ba54660850f9e9d4d6f1ff37a04ece874fe02dd151e2bedc0d6bac18c9ae4fb314d2f109779d6e23cfbf8eef1a",
+                            "0x04f8c101018007830186a0940996f757d1a97a6b35ae890e0faed77c6be064698080c0f85cf85a809437ebf8fed2c7ecc80dbd28e70f0251e953feabe60101a08a79afcdaaaee5b0e059a5d308f624694b1d210970f5c1c61db800ed7710ac06a036a88b01252df2d1f68b1e03abe67f877df73c8ae4b75b068202e312ea73f6fb80a0d9c5b15307a5f34b5ec4acbe66ac0a1f000c237d28ca033d1c08891e3f472dd5a0525efc6a2f53bd305e1f3fa85a18dec46249434c01ed99df5aac9bc33f0af5ae"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x726632204b1b7a13d4c7296770d72d24a790721f8f87837320fe435357ca9f0b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple SSTORE then SLOAD in two separate set-code\n    transactions.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L269",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_sstore_then_sload[fork_Prague-blockchain_test_engine_x-auth_signer_in_access_list]": {
+        "network": "Prague",
+        "lastblockhash": "0xb1c75b794e00bf06cc68b4b635429c02d071402c81db1a43e07974e4ae0aed37",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2b47885281322987d4f240f156f5eaf66bde30e77d51b1b46cb94cc419637f74",
+                        "receiptsRoot": "0xda9e73ccb4385cf83267d49005a314f198c1eeea0c9b46bfaeabdd604742cf07",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1f476",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb1c75b794e00bf06cc68b4b635429c02d071402c81db1a43e07974e4ae0aed37",
+                        "transactions": [
+                            "0x04f8c101808007830186a094b191205b656c603e1840978356a077a7ebf9f9b88080c0f85cf85a809427103e897bc042ac590f38e94f9d8410df8771a08001a0832bb7e0f67059f05088d88b9c308fccab77c7d7bb4e599f958f644d174a67dba07c47ee1717bcbcdab6ec72ef7f052a80707965ff49e521756cdf70ee0a8e773380a0832afa391fe7abc955f8f5615b7e4a12716d08f4a49df764c4cb0f7d6c3e7d87a06c6ddb2cc4ac51f71f5b4c0861317748d3e0ee1ad86c1bf86fdedf7e3bed9a72",
+                            "0x04f8fa01018007830186a094b191205b656c603e1840978356a077a7ebf9f9b88080f838f794b191205b656c603e1840978356a077a7ebf9f9b8e1a00000000000000000000000000000000000000000000000000000000000000001f85cf85a809427103e897bc042ac590f38e94f9d8410df8772a00101a05d27b05f984c090bbb201590934b8f0be0d8dcbbde449bd9432bb5e8c493984aa0210af2ff7d12bba934fe54bd9a387cf8e40c6f790af3fc140769f468d98071cf80a0480d2b86d8f4351e194216238fa8bbae99f6b782488793d04fb362fc6df92b1aa04cd7e2c36abd9ea3d76c8401b213e1b320ef4a2a0a287bf66e806e38bb5ccc37"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x53534b9ecbe79853e691bb69f56f4523fe905c4e4566d0d606163a54cd06e929",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple SSTORE then SLOAD in two separate set-code\n    transactions.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L269",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_sstore_then_sload[fork_Prague-blockchain_test_engine_x-sender_in_access_list]": {
+        "network": "Prague",
+        "lastblockhash": "0x76a919f870d4dbadb33f133091c3af43673a00fa6aaf1362066730a1acde5e39",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x61995a3490e46d0f1e2746bbdb9134da7d43c42c3ab82b8e2e652238fb6f8174",
+                        "receiptsRoot": "0x8008edec8b9020af569ad46304799bad1d9963070abfb8c11bfedfb50e2281c8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1fc46",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x76a919f870d4dbadb33f133091c3af43673a00fa6aaf1362066730a1acde5e39",
+                        "transactions": [
+                            "0x04f8c101808007830186a09489bab01ce1a07be231a49d28f06b83092c4cb54d8080c0f85cf85a80949066246f9598f44caf62004c62a3692cfed720cf8080a00f314f94bd521ea0e95fa1a8a95e6d0af4e6ebff9b39012d64676d0eed8fcd89a01f8db62be6692cb2187890b1159ab2d79c0f7f4ea3a5cbc60fbe680c6356007b01a0685ee80f19a5e26472c4ecd7d170f7b3c99bb898bee93295f494d852808f0197a05b8f3efe3bcc69c0be12ff3825dce55b1381b52c99369002ee65311367d09ab4",
+                            "0x04f8fa01018007830186a09489bab01ce1a07be231a49d28f06b83092c4cb54d8080f838f794c1528f6c2bf82c28fcc608ca0680f27311135166e1a00000000000000000000000000000000000000000000000000000000000000001f85cf85a80949066246f9598f44caf62004c62a3692cfed721cf0180a0a0f74e48c7a11479dc7076b7a310376a887f52c06b6f21fc3f5b1acd8dec3544a049f68def6e4ce51aca0f4efbbab41395bc19f167a56ab541e393bddf8a15b02880a0cc7ef10cda4044cbab1b4d44a83726c2afe58772f29f0e0c48d8be722676c40ca041a2069c043da7261dd7dc0477a242f7b03a43dd1e5d2f0053d9d2c69739f871"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x0979ae602860c9153466ffd337c32ebe4b4a7194f5647a28c1b0d9ada59d0c15",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple SSTORE then SLOAD in two separate set-code\n    transactions.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L269",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

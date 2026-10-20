@@ -1,0 +1,53 @@
+{
+  "testIds": [
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_16]"
+  ],
+  "environment": {
+    "currentCoinbase": "0x0000000000000000000000000000000000000000",
+    "currentGasLimit": "0x07270e00",
+    "currentNumber": "0x00",
+    "currentTimestamp": "0x00",
+    "currentRandom": "0x00",
+    "currentDifficulty": "0x00",
+    "currentBaseFee": "0x07",
+    "parentUncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "blockHashes": {},
+    "ommers": []
+  },
+  "network": "Paris",
+  "pre": {
+    "0x0c5f22795cb34c79e3bb00689c3503db0899de70": {
+      "nonce": "0x01",
+      "balance": "0x00",
+      "code": "0x36600055",
+      "storage": {}
+    },
+    "0x6a6316f5e7cbe00c388a7ce2edfc66f41bde6dd0": {
+      "nonce": "0x00",
+      "balance": "0x3635c9adc5dea00000",
+      "code": "0x",
+      "storage": {}
+    }
+  },
+  "genesis": {
+    "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "uncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "coinbase": "0x0000000000000000000000000000000000000000",
+    "stateRoot": "0xcf9848cd4dfb9ae495639c954aef38601bccd93a444b23653d6d99beb57fe59c",
+    "transactionsTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "receiptTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "difficulty": "0x00",
+    "number": "0x00",
+    "gasLimit": "0x07270e00",
+    "gasUsed": "0x00",
+    "timestamp": "0x00",
+    "extraData": "0x00",
+    "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "nonce": "0x0000000000000000",
+    "baseFeePerGas": "0x07",
+    "hash": "0xe5b69c71a533bff647564eb4bf28f498ecf363a4c328f1c2046abd59c5a0d55a"
+  },
+  "preAccountCount": 2,
+  "testCount": 1
+}

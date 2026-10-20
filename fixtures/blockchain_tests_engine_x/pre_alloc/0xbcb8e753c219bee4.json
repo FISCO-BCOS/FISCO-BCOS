@@ -1,0 +1,63 @@
+{
+  "testIds": [
+    "tests/berlin/eip2929_gas_cost_increases/test_precompile_warming.py::test_precompile_warming[fork_ParisToShanghaiAtTime15k-address_0x0000000000000000000000000000000000000001-precompile_in_successor_True-precompile_in_predecessor_True-blockchain_test_engine_x]"
+  ],
+  "environment": {
+    "currentCoinbase": "0x0000000000000000000000000000000000000000",
+    "currentGasLimit": "0x07270e00",
+    "currentNumber": "0x00",
+    "currentTimestamp": "0x00",
+    "currentRandom": "0x00",
+    "currentDifficulty": "0x00",
+    "currentBaseFee": "0x07",
+    "parentUncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "blockHashes": {},
+    "ommers": []
+  },
+  "network": "ParisToShanghaiAtTime15k",
+  "pre": {
+    "0x80b6dbcd1e461968130e90c178a42314bce35d19": {
+      "nonce": "0x00",
+      "balance": "0x3635c9adc5dea00000",
+      "code": "0x",
+      "storage": {}
+    },
+    "0xdafc4566a8e87907888214c9183b9d72413de0cd": {
+      "nonce": "0x01",
+      "balance": "0x00",
+      "code": "0x5a600131505a900360005500",
+      "storage": {
+        "0x00": "0xdeadbeef"
+      }
+    },
+    "0xdafc4566a8e87907888214c9183b9d72413de1cd": {
+      "nonce": "0x01",
+      "balance": "0x00",
+      "code": "0x5a600131505a900360005500",
+      "storage": {
+        "0x00": "0xdeadbeef"
+      }
+    }
+  },
+  "genesis": {
+    "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "uncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "coinbase": "0x0000000000000000000000000000000000000000",
+    "stateRoot": "0x21cd9524536c3ea1b74c787b3150b71303b0ba72d4e3d1ca80c4453a091f72e0",
+    "transactionsTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "receiptTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "difficulty": "0x00",
+    "number": "0x00",
+    "gasLimit": "0x07270e00",
+    "gasUsed": "0x00",
+    "timestamp": "0x00",
+    "extraData": "0x00",
+    "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "nonce": "0x0000000000000000",
+    "baseFeePerGas": "0x07",
+    "hash": "0xed1b1cd9fe556cba0039a5069cceb789dd055e6cf088feb079719b99034c35f7"
+  },
+  "preAccountCount": 3,
+  "testCount": 1
+}

@@ -1,0 +1,425 @@
+{
+    "tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py::test_blobhash_opcode_contexts_tx_types[fork_Cancun-tx_type_0-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0xf2dbd85a6e08dba90ef17630e57f31ea7cc670666a9f508702b642d5ba0a0114",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xae5d5c53d80f2707",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x007172c66027dcb2ca5e77dc19991f39dad80091d6d23ae5f1631912dd1da366",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe3c77db867380ffd7433fea86ebfd240bc5f8f00d59905908bb5757e9f75f33d",
+                        "receiptsRoot": "0xa5ca6f0ba985abff77f091ae13b5077613972f2f4aff28b45229f5726a3e59e6",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa9",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x140000",
+                        "blockHash": "0xf2dbd85a6e08dba90ef17630e57f31ea7cc670666a9f508702b642d5ba0a0114",
+                        "transactions": [
+                            "0xf860800a8307a12094d87c17127410883a41191c7de9bc95c990b69517808026a0b8b3da8f7757dd3036e3e144a4867d9e292a609d4ccac73c1df84f6622ce9a4ea0071c45edad108070f8ca9d1671fb083350194269410dea25991950a83255629a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xcda5100473b041cb12c939483f4bbeb0efac4c1a290b98a18c8a30c30ede008d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the `BLOBHASH` opcode functions correctly when called in\n    different contexts.\n\n    - `BLOBHASH` opcode on the top level of the call stack.\n    - `BLOBHASH` opcode on the max value.\n    - `BLOBHASH` opcode on `CALL`, `DELEGATECALL`, `STATICCALL`, and\n        `CALLCODE`.\n    - `BLOBHASH` opcode on Initcode.\n    - `BLOBHASH` opcode on `CREATE` and `CREATE2`.\n    - `BLOBHASH` opcode on transaction types 0, 1 and 2.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py#L329",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py::test_blobhash_opcode_contexts_tx_types[fork_Cancun-tx_type_1-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x8ba0be308be0d169c2e9463ad751ffaa1648673609d939943ab62da26b7b6815",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xae5d5c53d80f2707",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x007172c66027dcb2ca5e77dc19991f39dad80091d6d23ae5f1631912dd1da366",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5e2483fe3e9b4a02bd750ce0126538a8f113b3abcd5455c494076b8fb86d775c",
+                        "receiptsRoot": "0x6d8976e35863b0bfa0b8e37f986526afed097e887c836a2d548774c289127691",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa9",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x140000",
+                        "blockHash": "0x8ba0be308be0d169c2e9463ad751ffaa1648673609d939943ab62da26b7b6815",
+                        "transactions": [
+                            "0x01f86201800a8307a12094e196a2e4919626e6b0295a20d55a96270bcfe3c88080c001a0aa9caf322beb69597dc13419cbb63a5de96e0072a711405d26602e3fac08f909a0491d2db23400927a61b585ba993324b1e72e9a68ab0db4db73fbd44aae4b54db"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x4ebe6a1e25736f5c757dfa2fd200a682141e4ae2843504a9c8e2fe0b436bb830",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the `BLOBHASH` opcode functions correctly when called in\n    different contexts.\n\n    - `BLOBHASH` opcode on the top level of the call stack.\n    - `BLOBHASH` opcode on the max value.\n    - `BLOBHASH` opcode on `CALL`, `DELEGATECALL`, `STATICCALL`, and\n        `CALLCODE`.\n    - `BLOBHASH` opcode on Initcode.\n    - `BLOBHASH` opcode on `CREATE` and `CREATE2`.\n    - `BLOBHASH` opcode on transaction types 0, 1 and 2.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py#L329",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py::test_blobhash_opcode_contexts_tx_types[fork_Cancun-tx_type_2-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x04e500585501ed2142f88540c1ea336482dbf6425d8429cc7bc75428afc6616f",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xae5d5c53d80f2707",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x007172c66027dcb2ca5e77dc19991f39dad80091d6d23ae5f1631912dd1da366",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2fc041ff05d87219ef8cd050bfc75f00a23c843b1bfa7ca7df3a047e179801b8",
+                        "receiptsRoot": "0xb3cc81ade5d60a6971abb79c6710f128b56f025852b280a9eee336cae8ae4dec",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa9",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x140000",
+                        "blockHash": "0x04e500585501ed2142f88540c1ea336482dbf6425d8429cc7bc75428afc6616f",
+                        "transactions": [
+                            "0x02f863018080078307a12094d02514373ea7e8f86e42cb768b69e77c38e353f78080c001a0da3b3eb4dd73620a43b06b050387f6c71fdba0f91353b86a78e621b43296d75fa01c99409665b9a1267b9a736d2f88328de03ec5efe5b876fc6de3c62f398cc411"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x8cab9d9377377c516d8c90e8e5f07f8afa3c03b7fc62701eca2085e8cd08fa8c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the `BLOBHASH` opcode functions correctly when called in\n    different contexts.\n\n    - `BLOBHASH` opcode on the top level of the call stack.\n    - `BLOBHASH` opcode on the max value.\n    - `BLOBHASH` opcode on `CALL`, `DELEGATECALL`, `STATICCALL`, and\n        `CALLCODE`.\n    - `BLOBHASH` opcode on Initcode.\n    - `BLOBHASH` opcode on `CREATE` and `CREATE2`.\n    - `BLOBHASH` opcode on transaction types 0, 1 and 2.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py#L329",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py::test_blobhash_opcode_contexts_tx_types[fork_Prague-tx_type_0-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0xec0bb610b923b811762a9930fcd64c8108e8329085390958ff956e72481c62cb",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2d9002de79062b15",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf620e4e1e8abfb2652b275e96a58913eb6fb0ccbf32fb6497e73206ae1f3babd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb0ff89adfd6d4ba1461f67c755225fabd5229e8ccf813234f64a81e2608ef474",
+                        "receiptsRoot": "0xa5ca6f0ba985abff77f091ae13b5077613972f2f4aff28b45229f5726a3e59e6",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa9",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x140000",
+                        "blockHash": "0xec0bb610b923b811762a9930fcd64c8108e8329085390958ff956e72481c62cb",
+                        "transactions": [
+                            "0xf860800a8307a12094d87c17127410883a41191c7de9bc95c990b69517808026a0b8b3da8f7757dd3036e3e144a4867d9e292a609d4ccac73c1df84f6622ce9a4ea0071c45edad108070f8ca9d1671fb083350194269410dea25991950a83255629a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6bbfb28ab9e518312f781985a06dba197e09179ec47ad64fcfd45e4e6eb3b9de",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the `BLOBHASH` opcode functions correctly when called in\n    different contexts.\n\n    - `BLOBHASH` opcode on the top level of the call stack.\n    - `BLOBHASH` opcode on the max value.\n    - `BLOBHASH` opcode on `CALL`, `DELEGATECALL`, `STATICCALL`, and\n        `CALLCODE`.\n    - `BLOBHASH` opcode on Initcode.\n    - `BLOBHASH` opcode on `CREATE` and `CREATE2`.\n    - `BLOBHASH` opcode on transaction types 0, 1 and 2.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py#L329",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py::test_blobhash_opcode_contexts_tx_types[fork_Prague-tx_type_1-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x948729a40429ef43c3b6cf8e97036d9079ea70d19fa7b3fee9306baf5486cd55",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2d9002de79062b15",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf620e4e1e8abfb2652b275e96a58913eb6fb0ccbf32fb6497e73206ae1f3babd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9c9d49e03aab9327df1ba3334d5582cfea976bfed59b420a22d17b09f6f8a76e",
+                        "receiptsRoot": "0x6d8976e35863b0bfa0b8e37f986526afed097e887c836a2d548774c289127691",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa9",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x140000",
+                        "blockHash": "0x948729a40429ef43c3b6cf8e97036d9079ea70d19fa7b3fee9306baf5486cd55",
+                        "transactions": [
+                            "0x01f86201800a8307a12094e196a2e4919626e6b0295a20d55a96270bcfe3c88080c001a0aa9caf322beb69597dc13419cbb63a5de96e0072a711405d26602e3fac08f909a0491d2db23400927a61b585ba993324b1e72e9a68ab0db4db73fbd44aae4b54db"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x29f6fdd086352b4daf393feec82cfbbb81038ab13475198dd3a8f20acdd7643c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the `BLOBHASH` opcode functions correctly when called in\n    different contexts.\n\n    - `BLOBHASH` opcode on the top level of the call stack.\n    - `BLOBHASH` opcode on the max value.\n    - `BLOBHASH` opcode on `CALL`, `DELEGATECALL`, `STATICCALL`, and\n        `CALLCODE`.\n    - `BLOBHASH` opcode on Initcode.\n    - `BLOBHASH` opcode on `CREATE` and `CREATE2`.\n    - `BLOBHASH` opcode on transaction types 0, 1 and 2.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py#L329",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py::test_blobhash_opcode_contexts_tx_types[fork_Prague-tx_type_2-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x1dfc6213eaeb477d68b94b93d263bbbe30bd5607dbbf81aacb564e8a78b26a5d",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2d9002de79062b15",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf620e4e1e8abfb2652b275e96a58913eb6fb0ccbf32fb6497e73206ae1f3babd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9024d24d07493cc8bd70cbe35efa153718e247e0928779e22b78d0909029b872",
+                        "receiptsRoot": "0xb3cc81ade5d60a6971abb79c6710f128b56f025852b280a9eee336cae8ae4dec",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa9",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x140000",
+                        "blockHash": "0x1dfc6213eaeb477d68b94b93d263bbbe30bd5607dbbf81aacb564e8a78b26a5d",
+                        "transactions": [
+                            "0x02f863018080078307a12094d02514373ea7e8f86e42cb768b69e77c38e353f78080c001a0da3b3eb4dd73620a43b06b050387f6c71fdba0f91353b86a78e621b43296d75fa01c99409665b9a1267b9a736d2f88328de03ec5efe5b876fc6de3c62f398cc411"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd3e30f40d2e53649cd8e36e0d5e471ef03cd598111749c68465ee79a437822bb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the `BLOBHASH` opcode functions correctly when called in\n    different contexts.\n\n    - `BLOBHASH` opcode on the top level of the call stack.\n    - `BLOBHASH` opcode on the max value.\n    - `BLOBHASH` opcode on `CALL`, `DELEGATECALL`, `STATICCALL`, and\n        `CALLCODE`.\n    - `BLOBHASH` opcode on Initcode.\n    - `BLOBHASH` opcode on `CREATE` and `CREATE2`.\n    - `BLOBHASH` opcode on transaction types 0, 1 and 2.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py#L329",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py::test_blobhash_opcode_contexts_tx_types[fork_Prague-tx_type_4-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x995b1485eb0a0a8ff00345b0ea2262608e3354ec7340315be1d01f45026bbee1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2d9002de79062b15",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf620e4e1e8abfb2652b275e96a58913eb6fb0ccbf32fb6497e73206ae1f3babd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9d9daaaa0fa0678705066389861156038c8ac760b0f3876156d62293aa1a3a54",
+                        "receiptsRoot": "0x487b20244bf209f842412f7e95cb688f76e95bb8624906e24bb3295c5915f0fe",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xbc51",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x140000",
+                        "blockHash": "0x995b1485eb0a0a8ff00345b0ea2262608e3354ec7340315be1d01f45026bbee1",
+                        "transactions": [
+                            "0x04f8c1018080078307a120948f1a5d152dcff12090b30ce4d2320d8be25c8d1d8080c0f85cf85a809400000000000000000000000000000000000000008001a0b5a531aff2c6eb12ba42872d3d2359de135b58f6af6f14534b44a4d07b486a5aa0506059a0e0cb5ac8efe57e394b005f35377b563e7d356680346da70a048c8c5880a06ba57fd38052b8fd0ebf3ab2b58739b6eb0064a91598ee1d72701b7709b3027da07233cc9f738f0e4a5ed7e657b7d3cf4f9ced74700764544c41bdf291ace473eb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xfc10ba5247ed56d7b1012c7a94cfd1ad89ff4e3582909415d7e86c8bd585d637",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the `BLOBHASH` opcode functions correctly when called in\n    different contexts.\n\n    - `BLOBHASH` opcode on the top level of the call stack.\n    - `BLOBHASH` opcode on the max value.\n    - `BLOBHASH` opcode on `CALL`, `DELEGATECALL`, `STATICCALL`, and\n        `CALLCODE`.\n    - `BLOBHASH` opcode on Initcode.\n    - `BLOBHASH` opcode on `CREATE` and `CREATE2`.\n    - `BLOBHASH` opcode on transaction types 0, 1 and 2.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blobhash_opcode_contexts.py#L329",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    }
+}

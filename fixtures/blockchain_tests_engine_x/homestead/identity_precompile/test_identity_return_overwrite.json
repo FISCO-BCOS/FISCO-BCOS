@@ -1,0 +1,814 @@
+{
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Cancun-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x387fb3cf7c506b127dfd35a91345ac9849c488fe462a23ea604ebb3ee06d16b2",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb56281c34061596f598054426bab069b3997cc77bcd9e7a1d777ab3c2604eac7",
+                        "receiptsRoot": "0xd38af1b981fc250c57a8c5eec1c015d3dd7300d1cc3f45002f2d981da3c8ffde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa947",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x387fb3cf7c506b127dfd35a91345ac9849c488fe462a23ea604ebb3ee06d16b2",
+                        "transactions": [
+                            "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6ef6a2b7af1de9d938f7cd26ae76f93f8f97db4baa9b6a3e087fe001d6c8a5c2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Cancun-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0xcb8e0258c5373dd35ab67b17513f004138c673f70221b0ad83ffb2e10896333a",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0cf9933d19a38b06527c2ded9cc21450f20f80c39e9ec5008dd3b6f6b5e35c29",
+                        "receiptsRoot": "0xd38af1b981fc250c57a8c5eec1c015d3dd7300d1cc3f45002f2d981da3c8ffde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa947",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xcb8e0258c5373dd35ab67b17513f004138c673f70221b0ad83ffb2e10896333a",
+                        "transactions": [
+                            "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6bba50a17b488d09f3815c16aed89d425e6ba3160d7ba29b9ffbc0269533d5bb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Cancun-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0xbac2907b7648d30de0af0549b101331740b242d34e359c0caab91a995fbb2417",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x25b6ab0a5ec22b83f071d92cc4f2b046004b5a5f229cea6d1c0a9bc81e001b72",
+                        "receiptsRoot": "0xc67e2cf23bf5004ea21d2fdfdecb0044f7bba6cf0506430d03ecdb72cafbd78e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa944",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xbac2907b7648d30de0af0549b101331740b242d34e359c0caab91a995fbb2417",
+                        "transactions": [
+                            "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2629679cc18210039cd2292fabbf9b1c08073a9328177ce1fae4437f6bf365c0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Cancun-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x8bef57bba5deaf1629a85680f10ea420bfdcb3340c6d2013c664ad027e6c0517",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2c81f9eea4d851adb36232668c5ce37d5aa3fcd9a43603b5054efc7e3d371417",
+                        "receiptsRoot": "0xc67e2cf23bf5004ea21d2fdfdecb0044f7bba6cf0506430d03ecdb72cafbd78e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa944",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8bef57bba5deaf1629a85680f10ea420bfdcb3340c6d2013c664ad027e6c0517",
+                        "transactions": [
+                            "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x29bcdbcedb4c24dc02809438787c186ad00e7d2388aac11fa2e33e71825eb98e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Paris-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0xc99ca6d797bb2cbbd2d23f938c5b3cd50300d3e0b3e01edb6e5d73740673b6f0",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8ad999d1dd51596dc556fe6279485e8a957b9da1d9fca4bf60d086091188e0e5",
+                        "receiptsRoot": "0xd38af1b981fc250c57a8c5eec1c015d3dd7300d1cc3f45002f2d981da3c8ffde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa947",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xc99ca6d797bb2cbbd2d23f938c5b3cd50300d3e0b3e01edb6e5d73740673b6f0",
+                        "transactions": [
+                            "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xf3d202dbf3eebe5c3cdba2b0b57cf67d2e5e61d3d806fe526076cd2a5c450518",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Paris-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0x9d736543b4d4f37243a686693b9c45f7972e59079839699a0ca718f5ffe078e8",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2fdda4dbae30f35e778f3dfbf28fdbd07cf3fde9ee1ae93b77808314a6feb64c",
+                        "receiptsRoot": "0xd38af1b981fc250c57a8c5eec1c015d3dd7300d1cc3f45002f2d981da3c8ffde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa947",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x9d736543b4d4f37243a686693b9c45f7972e59079839699a0ca718f5ffe078e8",
+                        "transactions": [
+                            "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xe3c3f25f1bf5d8c46505b8828bbb8bc2876ee32fc7598fcbfdbb212065c9ba0e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Paris-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0x9c51c2592ce8242ca2d88c32e3eb5470c41e89e71741b2591654db6b4abbd13e",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x41ec94070ee68c649fd34cf7ef5fc382c24f8a6d7ea8f55a67173672ea2e7384",
+                        "receiptsRoot": "0xc67e2cf23bf5004ea21d2fdfdecb0044f7bba6cf0506430d03ecdb72cafbd78e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa944",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x9c51c2592ce8242ca2d88c32e3eb5470c41e89e71741b2591654db6b4abbd13e",
+                        "transactions": [
+                            "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x86861cb796c8c7ecb08e0312a35d71620ee633f02bc957a1657652f2f6ea9044",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Paris-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0x6fc377fea469f9570b1df7e46254b56f79bce4a01b5920fffef5f3730f2745c5",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x326123cee254f1f0118de205dbb03a59ae9967e9581bc766d59648d20c58e1d1",
+                        "receiptsRoot": "0xc67e2cf23bf5004ea21d2fdfdecb0044f7bba6cf0506430d03ecdb72cafbd78e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa944",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x6fc377fea469f9570b1df7e46254b56f79bce4a01b5920fffef5f3730f2745c5",
+                        "transactions": [
+                            "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x38bf9cb2b6f8742a58bd30ca26b87e3a4d290ab9b3a2e5e1b3687debcde44b12",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x9ab79763c87dc9c9498bb227ee386cd12c868c35dd3ded5fdbdbfffa5914297a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xa77f09cf4bd8093ecf61f03a42eabf831c90cb7ad028e97088674c395cff2217",
+                        "receiptsRoot": "0xd38af1b981fc250c57a8c5eec1c015d3dd7300d1cc3f45002f2d981da3c8ffde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa947",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9ab79763c87dc9c9498bb227ee386cd12c868c35dd3ded5fdbdbfffa5914297a",
+                        "transactions": [
+                            "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x054ac88e563fdd3ffeae25ef9d145966274688869ee086cf4806092713942524",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Prague-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x4e7bbd9c423f364b0439102a40ec496fb99ae1df1cba27e4acd2a9a5f25cbcc2",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8b13f110c99652e7346a7b329ac18416e704b46fd36ef8ed997f1c9acbbae117",
+                        "receiptsRoot": "0xd38af1b981fc250c57a8c5eec1c015d3dd7300d1cc3f45002f2d981da3c8ffde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa947",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4e7bbd9c423f364b0439102a40ec496fb99ae1df1cba27e4acd2a9a5f25cbcc2",
+                        "transactions": [
+                            "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x5b4cc3159e8fbff6830581b5de9590bb79cc4bf2f67ef8d21ad9f96d2717f498",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Prague-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x27a08386904412d62813d35f5e733f1ad6ca702744ae5fceff4f2275b5d4dd49",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3def30febcda93f500096320e2165b909e89ce8ce90878b84525c87120982f43",
+                        "receiptsRoot": "0xc67e2cf23bf5004ea21d2fdfdecb0044f7bba6cf0506430d03ecdb72cafbd78e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa944",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x27a08386904412d62813d35f5e733f1ad6ca702744ae5fceff4f2275b5d4dd49",
+                        "transactions": [
+                            "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xbb7103e423b774531d3873426b96cfc72d8266aaadd24af1f1a65e3d36038b3a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Prague-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0xe657464efb2aca1c34985951be73e756a8b3c546a07985e5e00090901530fd8a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x262f4cfae2f53c6534ccb3fa9542ede509a369c11830043173ee4e2dfa8048c4",
+                        "receiptsRoot": "0xc67e2cf23bf5004ea21d2fdfdecb0044f7bba6cf0506430d03ecdb72cafbd78e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa944",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe657464efb2aca1c34985951be73e756a8b3c546a07985e5e00090901530fd8a",
+                        "transactions": [
+                            "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x58956e4438cea4e6475749c148556260324255f04bccb69010849ec62c4d55ec",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Shanghai-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xba281b224ab1e5b5ea7b085dc069931ba59cae8cf4bd6d843c313aae82a2e189",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe163caaca8286a83b7d8505fc8efe7de49089cdcde4661cf21ae422064b9d8d9",
+                        "receiptsRoot": "0xd38af1b981fc250c57a8c5eec1c015d3dd7300d1cc3f45002f2d981da3c8ffde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa947",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xba281b224ab1e5b5ea7b085dc069931ba59cae8cf4bd6d843c313aae82a2e189",
+                        "transactions": [
+                            "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xc465436e2b415fd460d75bb61ade5a2d26939ba68d48f46ef30ada34a6726c2a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Shanghai-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x5f4eb7b8421be5519ae09073476aa387352d155b65da578779a263f5898852f6",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2672a9c3fc6fceabd98171293979b472e5952cddf82c5787fb6034b3826c1f16",
+                        "receiptsRoot": "0xd38af1b981fc250c57a8c5eec1c015d3dd7300d1cc3f45002f2d981da3c8ffde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa947",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x5f4eb7b8421be5519ae09073476aa387352d155b65da578779a263f5898852f6",
+                        "transactions": [
+                            "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xdeeb8b8e90b6c0b8e48b5810942963198b12721b4558e24f18f2126bc82216ae",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Shanghai-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xea7312dd0eb18e6dd10db08a9530ef90a966c1cd0d90cb92c9ae659fb49a54a0",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x775d679596b505625b19f34c262c7f9c4919734e5c0b54589f2479d3fa6e7a10",
+                        "receiptsRoot": "0xc67e2cf23bf5004ea21d2fdfdecb0044f7bba6cf0506430d03ecdb72cafbd78e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa944",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xea7312dd0eb18e6dd10db08a9530ef90a966c1cd0d90cb92c9ae659fb49a54a0",
+                        "transactions": [
+                            "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x9416dd8da4e265d6fe1e0e21131ccd5c33f288137a5589acb74cd6b3fb817789",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Shanghai-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xd386e6c22e17719220bc1a5f53704e63560298a30df77811f9319741dfb314b4",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8b6089c75e2a327f0413d37c6b41128b2d6017003b8f78130fddfed1c8f46d43",
+                        "receiptsRoot": "0xc67e2cf23bf5004ea21d2fdfdecb0044f7bba6cf0506430d03ecdb72cafbd78e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa944",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xd386e6c22e17719220bc1a5f53704e63560298a30df77811f9319741dfb314b4",
+                        "transactions": [
+                            "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x2c0e96ccd8a4c71cde29ebe0ccbebcd5191f5518a7274277b923e2aa5e1b11d7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

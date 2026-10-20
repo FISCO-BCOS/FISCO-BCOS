@@ -1,0 +1,67 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_invalid_transaction_after_authorization[fork_Prague-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2ba746636a06011480f1dd3b26d82e2ded2a8f97fb82678dea0bbbb07c46a477",
+                        "receiptsRoot": "0x036c7d20420edbce24b5062148bce80563b48fd4532fb1c068b2c96a53117019",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8fc0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xac7f4657ad961fa26b43f5be6d25b95dc2c4f6737ecc0d5b3247db8e201e683a",
+                        "transactions": [
+                            "0x04f8c1018080078307a12094a1593f1d3bbb244d9b00d0a3c37c9cc53d4705a18080c0f85cf85a809400000000000000000000000000000000000000018001a0a41d848371e348445076c864e98f19317b301abe17f037100b450739f9a4057aa03276b421b84b623b208d00123221b0eba1e13d929eb7f8393060e7648c53187180a05d80a2feb0c946aa4a86cdb74396a22001f5b518710d9b784647946060d167e8a0639dc88ac42b1d2fceb37aadcf779696b8c7486c6ee6cbc0c6b9c51eb4a1bbab",
+                            "0xf85f800a82520894a1593f1d3bbb244d9b00d0a3c37c9cc53d4705a1018025a01e10315456d182ace0b450d587d469134087fa73a2fe803039442eba34400609a05f24b8ee48e73688e33c7760f58e05ee80388244442a813f1304f097dcb4d628"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.NONCE_MISMATCH_TOO_LOW"
+            }
+        ],
+        "_info": {
+            "hash": "0x25e578b1697ff653b786b9223b202c5b784c9c98d469aace3290b9bf01be8d62",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test an invalid block due to a transaction reusing the same nonce as an\n    authorization included in a prior transaction.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L3794",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

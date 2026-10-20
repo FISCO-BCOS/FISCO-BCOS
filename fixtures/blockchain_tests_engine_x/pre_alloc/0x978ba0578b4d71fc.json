@@ -1,0 +1,106 @@
+{
+  "testIds": [
+    "tests/static/state_tests/stMemoryStressTest/mload32bitBound_MsizeFiller.json::mload32bitBound_Msize[fork_Cancun-blockchain_test_engine_x_from_state_test--g0]",
+    "tests/static/state_tests/stMemoryStressTest/mload32bitBound_MsizeFiller.json::mload32bitBound_Msize[fork_Cancun-blockchain_test_engine_x_from_state_test--g1]",
+    "tests/static/state_tests/stMemoryStressTest/mload32bitBound_return2Filler.json::mload32bitBound_return2[fork_Cancun-blockchain_test_engine_x_from_state_test--g0]",
+    "tests/static/state_tests/stMemoryStressTest/mload32bitBound_return2Filler.json::mload32bitBound_return2[fork_Cancun-blockchain_test_engine_x_from_state_test--g1]"
+  ],
+  "environment": {
+    "currentCoinbase": "0x0000000000000000000000000000000000000000",
+    "currentGasLimit": "0x027101391c9c29c0",
+    "currentNumber": "0x00",
+    "currentTimestamp": "0x00",
+    "currentRandom": "0x00",
+    "currentDifficulty": "0x00",
+    "currentBaseFee": "0x0b",
+    "currentExcessBlobGas": "0x00",
+    "currentBlobGasUsed": "0x00",
+    "parentUncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "blockHashes": {},
+    "ommers": [],
+    "withdrawals": []
+  },
+  "network": "Cancun",
+  "pre": {
+    "0x000f3df6d732807ef1319fb7b8bb8522d0beac02": {
+      "nonce": "0x01",
+      "balance": "0x00",
+      "code": "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500",
+      "storage": {}
+    },
+    "0xa6f338ae085fc6583d389ed5586d2fe60ea5bf29": {
+      "nonce": "0x00",
+      "balance": "0x186a0c3b1e19a180",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x7c4588ea83186a1371ecb194f980d1e6fba79a03": {
+      "nonce": "0x00",
+      "balance": "0x0de0b6b3a7640000",
+      "code": "0x600163ffffffff525960005500",
+      "storage": {}
+    },
+    "0x8f1f2ef64b359720709d06ce44fe54db189971a4": {
+      "nonce": "0x00",
+      "balance": "0x186a0c3b1e19a180",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x1e3db1160bcc8a9ac4a56011a75732761cb0878d": {
+      "nonce": "0x00",
+      "balance": "0x0de0b6b3a7640000",
+      "code": "0x600163ffffffff525960005500",
+      "storage": {}
+    },
+    "0x739b97baf39e34664e0f83742a1893e261fb6bd9": {
+      "nonce": "0x00",
+      "balance": "0x186a0c3b1e19a180",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x107678bb0888d77de4b47e766b36b383e9a69328": {
+      "nonce": "0x00",
+      "balance": "0x0de0b6b3a7640000",
+      "code": "0x600160005263ffffffff6000f300",
+      "storage": {}
+    },
+    "0xffc665b7834a61d15398b5eb5eace6880885ec41": {
+      "nonce": "0x00",
+      "balance": "0x186a0c3b1e19a180",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x8278d3bebc79d9a114023f70a07d9c39ae20d847": {
+      "nonce": "0x00",
+      "balance": "0x0de0b6b3a7640000",
+      "code": "0x600160005263ffffffff6000f300",
+      "storage": {}
+    }
+  },
+  "genesis": {
+    "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "uncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "coinbase": "0x0000000000000000000000000000000000000000",
+    "stateRoot": "0xece214aa727a8e30d8c6113f2247a885208c4685d84758281a4a7fffa699e309",
+    "transactionsTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "receiptTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "difficulty": "0x00",
+    "number": "0x00",
+    "gasLimit": "0x027101391c9c29c0",
+    "gasUsed": "0x00",
+    "timestamp": "0x00",
+    "extraData": "0x00",
+    "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "nonce": "0x0000000000000000",
+    "baseFeePerGas": "0x0b",
+    "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "blobGasUsed": "0x00",
+    "excessBlobGas": "0x00",
+    "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "0x6b27d94688e78f4f0c9c3d025434d5ccd60815988557a0be76339823374a8ee1"
+  },
+  "preAccountCount": 9,
+  "testCount": 4
+}

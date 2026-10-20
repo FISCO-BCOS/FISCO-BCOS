@@ -1,0 +1,666 @@
+{
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Cancun-blockchain_test_engine_x_from_state_test-call]": {
+        "network": "Cancun",
+        "lastblockhash": "0x93ab636c6e4f3cffd92f675ecd8cc0154bb426d8a8a767e322f6ff92c9069d09",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8f7de0b034d50e7f6c73dacbec4110ee81431ab340175f968af97e7e05603779",
+                        "receiptsRoot": "0x64d2b19c0d71c3f3fb78dc292f9c5c3a52eac4fbc43dbcb62c622ba33a9e56c8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10985",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x93ab636c6e4f3cffd92f675ecd8cc0154bb426d8a8a767e322f6ff92c9069d09",
+                        "transactions": [
+                            "0xf860800a830186a094c4bd120e5125af077b39ef836e9e875d1426a4da808026a05cd06880590bce7ee4a2fbdba667b37a1052e6193d41ecefea617787762211f5a05f953260ef3aff97d083a73dcb4c1122db76db5f5c659851c6094efc1c2b4ce8"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x151151daec458a37d677905a532bd0db1ea410ba135a2beb613d412023e7693f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Cancun-blockchain_test_engine_x_from_state_test-callcode]": {
+        "network": "Cancun",
+        "lastblockhash": "0x380571239fcd99afcc7f23150e48025d7adae05fbcc160be34c0874e4632ddc8",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4893f9dfa212be189e4c5a18fac405725010b9ce40af3cd4e3a79f001ce2429d",
+                        "receiptsRoot": "0x64d2b19c0d71c3f3fb78dc292f9c5c3a52eac4fbc43dbcb62c622ba33a9e56c8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10985",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x380571239fcd99afcc7f23150e48025d7adae05fbcc160be34c0874e4632ddc8",
+                        "transactions": [
+                            "0xf860800a830186a094292f31d1bcc1e43b3c8769df2996ad4e9a153c16808026a0926b85bfc7499fc8e0fc6bb0a75e7a0e32f3d2bd03ddf3d31deea871922ce857a0173c270b54ff89eadbe5101d3d658eea1fe036b7016eb24cba929b32b0d07d99"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xff573e54a5585c16501e6c60e20b32ce7cde1cd0339b89ab6f7cc6cc29ba669b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Cancun-blockchain_test_engine_x_from_state_test-delegatecall]": {
+        "network": "Cancun",
+        "lastblockhash": "0xd34714f10910a41c40c27fb1d31ab5e3afc30fc05b2bdec7edb840a374f28edd",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc0b499a39fc8c00f682db2a817bd11869d43036b8ed12217fca024f22dc6e871",
+                        "receiptsRoot": "0x2ab89a18d916ebe51698487b52c7ccd995495a95d4bdabcf1cf93aeb8d252839",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10982",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xd34714f10910a41c40c27fb1d31ab5e3afc30fc05b2bdec7edb840a374f28edd",
+                        "transactions": [
+                            "0xf860800a830186a09476aacd4c7021caa726da432598e372931e0ba8ac808026a060c5302339e41a716ac599980e0e5eec3d23371c5f9762ecd2614e2adad6928aa0040d6330ea8af7e626f502e4047e8afc7290c9fcb6fc1914b214c8824b50c24d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2a6d3eba1aef63234649d391e37fae203c44b996b1bdcbf71483c6d8bcd2fa31",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Cancun-blockchain_test_engine_x_from_state_test-staticcall]": {
+        "network": "Cancun",
+        "lastblockhash": "0x398626466d6de74d635b3d783f3415a37aeddab3350ae05d3b8f734652451e13",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbbce55c4afad28e0561d919ead1d863dd2d19462e6bc52b83672c3dcaabefc07",
+                        "receiptsRoot": "0x2ab89a18d916ebe51698487b52c7ccd995495a95d4bdabcf1cf93aeb8d252839",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10982",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x398626466d6de74d635b3d783f3415a37aeddab3350ae05d3b8f734652451e13",
+                        "transactions": [
+                            "0xf860800a830186a094f3c7a6b689e8942c56a193b86a2db8885cc496a1808026a0899fa1aa631452128eefb6c034a47743af092d43ebb8bae52fd361e24eb83fb4a005303ae6b4190332f6bdb4f97006c968714f650b932e8b79115909bc9a022861"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x762a2f205ce5ecdb8833093df598d2770363345d2f8b44cf42a1a1c201968aad",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Prague-blockchain_test_engine_x_from_state_test-call]": {
+        "network": "Prague",
+        "lastblockhash": "0xa582cba8857ebff77385816290d6cf73ab053b8907f3f70dbaae05265354bdb3",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x629fc182a4855c7644d13890c2a024c68f83c9756f5bfacba6f2c816b427d00e",
+                        "receiptsRoot": "0x64d2b19c0d71c3f3fb78dc292f9c5c3a52eac4fbc43dbcb62c622ba33a9e56c8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10985",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xa582cba8857ebff77385816290d6cf73ab053b8907f3f70dbaae05265354bdb3",
+                        "transactions": [
+                            "0xf860800a830186a094c4bd120e5125af077b39ef836e9e875d1426a4da808026a05cd06880590bce7ee4a2fbdba667b37a1052e6193d41ecefea617787762211f5a05f953260ef3aff97d083a73dcb4c1122db76db5f5c659851c6094efc1c2b4ce8"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xcde7662cea8f0a8067422431338e95b317f98ddcc595e1fbfca051a522282072",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Prague-blockchain_test_engine_x_from_state_test-callcode]": {
+        "network": "Prague",
+        "lastblockhash": "0x0e5f7af17364d6dbe99963338358378ee2e68042dd518e3e075a66baf90a30d5",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3ce9b16f7ee311a527a0413e98001e52996cc356ebc51af7c86e2a075a965dd6",
+                        "receiptsRoot": "0x64d2b19c0d71c3f3fb78dc292f9c5c3a52eac4fbc43dbcb62c622ba33a9e56c8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10985",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0e5f7af17364d6dbe99963338358378ee2e68042dd518e3e075a66baf90a30d5",
+                        "transactions": [
+                            "0xf860800a830186a094292f31d1bcc1e43b3c8769df2996ad4e9a153c16808026a0926b85bfc7499fc8e0fc6bb0a75e7a0e32f3d2bd03ddf3d31deea871922ce857a0173c270b54ff89eadbe5101d3d658eea1fe036b7016eb24cba929b32b0d07d99"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x329cee25b3bbb2af85857e71759409cf064d578a3e565053ff0cb7e73e5f5b40",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Prague-blockchain_test_engine_x_from_state_test-delegatecall]": {
+        "network": "Prague",
+        "lastblockhash": "0xe2170658487ac01293ab1f972dc3048ff52d7299c42de4716ba602334023f412",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb4567ddd97b78df6720447c28f28beac0ee64792fa279f63c9d0bfeb6a2199bf",
+                        "receiptsRoot": "0x2ab89a18d916ebe51698487b52c7ccd995495a95d4bdabcf1cf93aeb8d252839",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10982",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe2170658487ac01293ab1f972dc3048ff52d7299c42de4716ba602334023f412",
+                        "transactions": [
+                            "0xf860800a830186a09476aacd4c7021caa726da432598e372931e0ba8ac808026a060c5302339e41a716ac599980e0e5eec3d23371c5f9762ecd2614e2adad6928aa0040d6330ea8af7e626f502e4047e8afc7290c9fcb6fc1914b214c8824b50c24d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x34a9036208e410da24af01fcd546086f2860bd5591eaa4057adc6567d00fca5a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Prague-blockchain_test_engine_x_from_state_test-staticcall]": {
+        "network": "Prague",
+        "lastblockhash": "0xbbaf89e4687a2f01e0be6029ff6a516bb645c3311d90015b92cb9d56c102415a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x977dca2d2d128aeb0e9463139c2078030f365d77c6970d4ca545f6915c8b95c1",
+                        "receiptsRoot": "0x2ab89a18d916ebe51698487b52c7ccd995495a95d4bdabcf1cf93aeb8d252839",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10982",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xbbaf89e4687a2f01e0be6029ff6a516bb645c3311d90015b92cb9d56c102415a",
+                        "transactions": [
+                            "0xf860800a830186a094f3c7a6b689e8942c56a193b86a2db8885cc496a1808026a0899fa1aa631452128eefb6c034a47743af092d43ebb8bae52fd361e24eb83fb4a005303ae6b4190332f6bdb4f97006c968714f650b932e8b79115909bc9a022861"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xfd7aa1336739c2852f71f85ebf2ce8c281d44d0bd30a4fdc74599cc89ff33246",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Shanghai-blockchain_test_engine_x_from_state_test-call]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x5302e5ddae77fdc7d82c0ec9b752dc9a79bc774353790e2db029dadcfeb8fe0b",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0097faadaeb8b487b572e43cef8d5a0db0d89b7cd05a9112a1383b85a2b4c5aa",
+                        "receiptsRoot": "0x64d2b19c0d71c3f3fb78dc292f9c5c3a52eac4fbc43dbcb62c622ba33a9e56c8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10985",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x5302e5ddae77fdc7d82c0ec9b752dc9a79bc774353790e2db029dadcfeb8fe0b",
+                        "transactions": [
+                            "0xf860800a830186a094c4bd120e5125af077b39ef836e9e875d1426a4da808026a05cd06880590bce7ee4a2fbdba667b37a1052e6193d41ecefea617787762211f5a05f953260ef3aff97d083a73dcb4c1122db76db5f5c659851c6094efc1c2b4ce8"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xdc5b5c94016fc02bf18f8b412cd935a0641f04027ba7d738e25622d592e43d83",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Shanghai-blockchain_test_engine_x_from_state_test-callcode]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x931dee3ac5c7e4861cdecbed618ab1a9c81a7ef01e780620be073e2b1695c9bb",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe39c54631d8cfc7bea445e7ad3c265a2d86beddfd1a9c73606cc631b622f5552",
+                        "receiptsRoot": "0x64d2b19c0d71c3f3fb78dc292f9c5c3a52eac4fbc43dbcb62c622ba33a9e56c8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10985",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x931dee3ac5c7e4861cdecbed618ab1a9c81a7ef01e780620be073e2b1695c9bb",
+                        "transactions": [
+                            "0xf860800a830186a094292f31d1bcc1e43b3c8769df2996ad4e9a153c16808026a0926b85bfc7499fc8e0fc6bb0a75e7a0e32f3d2bd03ddf3d31deea871922ce857a0173c270b54ff89eadbe5101d3d658eea1fe036b7016eb24cba929b32b0d07d99"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xe04dd77cd60b80bbc47388c1830564715cdc2557e65e940f50e93cd4ddae8630",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Shanghai-blockchain_test_engine_x_from_state_test-delegatecall]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x17fd5a168736433aea68894df59d9b3be0fb72d80a22327b5fc5d381e1841871",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x35fa1f68ed4cd755c1e68bdfb645719cd920dbcbe90db97ecd8553f39de7bcfc",
+                        "receiptsRoot": "0x2ab89a18d916ebe51698487b52c7ccd995495a95d4bdabcf1cf93aeb8d252839",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10982",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x17fd5a168736433aea68894df59d9b3be0fb72d80a22327b5fc5d381e1841871",
+                        "transactions": [
+                            "0xf860800a830186a09476aacd4c7021caa726da432598e372931e0ba8ac808026a060c5302339e41a716ac599980e0e5eec3d23371c5f9762ecd2614e2adad6928aa0040d6330ea8af7e626f502e4047e8afc7290c9fcb6fc1914b214c8824b50c24d"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xa80b659caf7e35507d5109746ab4a3ba4fc3ed99ade87ef35b8696476b2bc0e4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    },
+    "tests/shanghai/eip3855_push0/test_push0.py::TestPush0CallContext::test_push0_contract_during_call_contexts[fork_Shanghai-blockchain_test_engine_x_from_state_test-staticcall]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x0d4ed4dee5eaa29c4703b7a0cca485aff9c21fb850a85b950fc6e0daa5059f8a",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x686c18fa50af2d8843859739d934b0385af4e956f64f7353a8415c9ea9bba224",
+                        "receiptsRoot": "0x2ab89a18d916ebe51698487b52c7ccd995495a95d4bdabcf1cf93aeb8d252839",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10982",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x0d4ed4dee5eaa29c4703b7a0cca485aff9c21fb850a85b950fc6e0daa5059f8a",
+                        "transactions": [
+                            "0xf860800a830186a094f3c7a6b689e8942c56a193b86a2db8885cc496a1808026a0899fa1aa631452128eefb6c034a47743af092d43ebb8bae52fd361e24eb83fb4a005303ae6b4190332f6bdb4f97006c968714f650b932e8b79115909bc9a022861"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xc733f836bbc2423387bf646690a565b2db0636c12e625117eb24452d18c667fe",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\n\n    Test the PUSH0 operation in various contract call contexts.\n\n    Test PUSH0 in the following contract call contexts:\n\n    - CALL,\n    - CALLCODE,\n    - DELEGATECALL,\n    - STATICCALL.\n    \n\nTest PUSH0 during various call contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip3855_push0/test_push0.py#L137",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3855.md",
+            "reference-spec-version": "6f85bd73336de4aacfad7ac3bb3a7e1ba2d68f51"
+        }
+    }
+}

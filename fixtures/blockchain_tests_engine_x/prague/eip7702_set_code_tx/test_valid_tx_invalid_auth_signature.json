@@ -1,0 +1,1325 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-r=0]": {
+        "network": "Prague",
+        "lastblockhash": "0xe36359d76f4757a6c2eb33d53b6c543d943ebc6299caf53d71a09f82759eb51b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc98fa8ca785621b6a11061cdfd2b765bb2cdd31b66661a89225b05ffaabe1216",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe36359d76f4757a6c2eb33d53b6c543d943ebc6299caf53d71a09f82759eb51b",
+                        "transactions": [
+                            "0x04f87f01808007830186a094f2e2f5536371833fd4debc3adc7ff9a23cbaace48080c0dbda019400000000000000000000000000000000000000008001800180a0703325024f0014ea3b3df8759cc95c60824c529ffb6998ca2623d0cc93a7c38da0651cf0320f38fa0bf770f9502541e373f3f93ef799c7df88974918083a634257"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xdfe6a628157a884375b22c6c9f5a0add4ff5fd8b0b7bec2962486c5871729191",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-r=2**256-1]": {
+        "network": "Prague",
+        "lastblockhash": "0xfc546128c691057b0cb257c8e658ce9a29f811d460b976499deeb34bc1d48565",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x32994249c5eceb459e8dc090c894f6f744639353349c71fdf339ce6ae466437d",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xfc546128c691057b0cb257c8e658ce9a29f811d460b976499deeb34bc1d48565",
+                        "transactions": [
+                            "0x04f8a101808007830186a09479cb40c2274f1f277db8869438bfb1a8f03976408080c0f83cf83a019400000000000000000000000000000000000000008001a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0101a0094204e7c7c4714c399afbfa105e649e6bf51b2fab680cb6ab0be3b11567705aa06f186e710d828f8190bfaee7b5929bca1bf2a7c1aba2462fdaf5100e946f41ca"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9ac9104b2dbc1a98a7e0dc7c4ac94b365216bafc688e045cfb6752719b4ddde4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-r=SECP256K1N+1]": {
+        "network": "Prague",
+        "lastblockhash": "0x0150fb725c455456bef5407eda3fa49947eb4bbe64444d337cdb0b4be91cf862",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf3c87d563d767716d7bfca9c80e2bf909adffb9b725ac4448e624901fe5ca74b",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0150fb725c455456bef5407eda3fa49947eb4bbe64444d337cdb0b4be91cf862",
+                        "transactions": [
+                            "0x04f8a101808007830186a094a3e620500de74d44fb667313ec62a3c298eb3b5a8080c0f83cf83a019400000000000000000000000000000000000000008080a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd03641420101a0113ee3dd22c2386ed697ca95305b3f058609fd626bf2d3629fccfa9733605648a06f8f2f6902095fcb5e3ab8a8ca3992d0ae6ddbcb9b5587350214308c0ff1826b"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x17d8671400d325571b984d567b882894536085dffc479a10cf3d4f09211d86d5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-r=SECP256K1N-1]": {
+        "network": "Prague",
+        "lastblockhash": "0x7c4cd8ce494b891ac2388fe1512f0c2e9a21eb5248293b88ef51833702f3d113",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x59141c3616713e770dccdef1f341b7c2c2d84f8f4d1215f567dd65295a00f492",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7c4cd8ce494b891ac2388fe1512f0c2e9a21eb5248293b88ef51833702f3d113",
+                        "transactions": [
+                            "0x04f8a101808007830186a094a9497975817f7577d3b5cd00753c746e67352acb8080c0f83cf83a019400000000000000000000000000000000000000008080a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd03641400101a071e7a905291b5156d8721f8202412dd2778faa2958c7f00dbd266b6a35465a03a013d601a93c7c6286f3fefb66dbfc67520d28b9f1c4b0efd05701a4eb7a273473"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa35f7d1080624f3fbf5b255a397dffa2e949790d6e5b090f7efa63d3505ab5c8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-r=SECP256K1N]": {
+        "network": "Prague",
+        "lastblockhash": "0x8aff6345412d9e20f4947268d755a8e9b2d639cba2d1dbfa5efd02b7e0fa50f7",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe3dd024510e11c72e18f1f61160407ef4c7c9a957613bb69276ea894a88197f4",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8aff6345412d9e20f4947268d755a8e9b2d639cba2d1dbfa5efd02b7e0fa50f7",
+                        "transactions": [
+                            "0x04f8a101808007830186a0944733a5332d6de32cdb43b1a5a3d6da27e7b7f81a8080c0f83cf83a019400000000000000000000000000000000000000008080a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd03641410101a043e83b5d51036099449e97f2b8f14241c203b04bda642a55fcf73055b69b2061a041df29bf5f431256d3d37ec6821b5c5caec4b98e0b972fa531d5707af83edbf4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa5882b19513d7e06787520bf51536cf8a2aa5f4540c9c332a1a2148aced6c52a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-s=0]": {
+        "network": "Prague",
+        "lastblockhash": "0x21128fbc55bf63f5df35f3bd0f78acf05392b3e0200ae96d91518aaa9ea915c8",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbf3e1dd8f49ec81be6f07218c62b542f38448796360d5d87a60bba3dcf4894d7",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x21128fbc55bf63f5df35f3bd0f78acf05392b3e0200ae96d91518aaa9ea915c8",
+                        "transactions": [
+                            "0x04f87f01808007830186a094a3f70d4a616f7b82b44756bab9611c09b76f03a48080c0dbda019400000000000000000000000000000000000000008001018001a08eb3c511d00a2cf96ddbf4a3cf8860f65a660e86866bc7545bde0934b210f7daa049da3ec68257f7c3fe4aec13681ae864d7502a22366fc8f14950c9840b389974"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xec20ab938c9879a90c36b1c7a2cb1414438fb55c1c3f0d0a9ad923992b2f354f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-s=2**256-1]": {
+        "network": "Prague",
+        "lastblockhash": "0xc853547b29c2ee602ce1592349d5ba972defde362582220ab1eaf8792242295b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf2df5a9acbc6f3e28dfe12c9c90af75a33fa28ae13da36859bd0a79d982e23df",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc853547b29c2ee602ce1592349d5ba972defde362582220ab1eaf8792242295b",
+                        "transactions": [
+                            "0x04f8a101808007830186a0943e176f55d51e3a3e0bc9d42e302f98c5391dd7ee8080c0f83cf83a01940000000000000000000000000000000000000000808001a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80a001baf75cad3b9e34d951d3f742e256f9e788431ffcd7a3acf113f39aeca6b556a06cca7e3b8fec51d49dafef13273b8435d2b3069322af903cc13f636f77bfc775"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x5680869a95b7d56e8f732e957e91ceec65e753dd75a76151eea965ababb2b3a3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-s=SECP256K1N+1]": {
+        "network": "Prague",
+        "lastblockhash": "0xfd3b9d0a47295e164b500ad64b67e1108d6a927e2d60228d6112fe88172e74fd",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6d376c5af105bca36d45eb9d7c064df47033654c6ba01467c6ee7ce874c017c0",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xfd3b9d0a47295e164b500ad64b67e1108d6a927e2d60228d6112fe88172e74fd",
+                        "transactions": [
+                            "0x04f8a101808007830186a0949066a6ed13f9a5aeb6aeb4743b18865627277ba08080c0f83cf83a01940000000000000000000000000000000000000000808001a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036414280a02e00fd3a82ad4b1a009ae866c98527ee499d1c83f0e2504eccbfc91d66ba52a1a02b99d85069dc5b84db0e674e1de11aca4ce74883806959eaf175d688c8da5e98"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xfc09a5310e16b5a2c4f0afb6d3a19b05c34e85ccab223235befbb9585b17c8cf",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-s=SECP256K1N-1]": {
+        "network": "Prague",
+        "lastblockhash": "0xd3d2bead3c8ebe48937b4128e20279c6721d908b615eaefeb476714536afd032",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x99a0406628b97e61c86286827658de6948ec5e18866ec7986906a0a88d677e0e",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xd3d2bead3c8ebe48937b4128e20279c6721d908b615eaefeb476714536afd032",
+                        "transactions": [
+                            "0x04f8a101808007830186a094ecacc239da5d9e72053a125df79fac189eefa0ba8080c0f83cf83a01940000000000000000000000000000000000000000808001a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036414001a05200f68b4cfa01eeac3e5a938f92c22430e1559748f7ca13a9d46c60f5961e2ba003fcebbdea6f45fc86e58bee6e810a6b26d1342942260790d618e7c786521e2a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x063bbf6da9a562452ca37a567b5667abd262edb56c061f6160abc0750d6dab8b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-s=SECP256K1N]": {
+        "network": "Prague",
+        "lastblockhash": "0x66f33f194494f5763eff9be9276d8d2b5871772d2c706c876d1ea35d3313961d",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x72f42ebdc0343d20a31c1c12a1d50f3b95a80a67bba65163f43b222497d469b1",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x66f33f194494f5763eff9be9276d8d2b5871772d2c706c876d1ea35d3313961d",
+                        "transactions": [
+                            "0x04f8a101808007830186a0949ac5789abb220816112abb3f3c1501f039a49a9e8080c0f83cf83a01940000000000000000000000000000000000000000808001a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036414101a0db812cd1e2a4eb63b0c0fee8fc414d209d9631e17d79719e9c5692dbd67434faa013743135905fbeb835f294c9e6eb9fcb729a1ff6515b30dfe280f820bd28bf6a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xece8531b755668c500ed93311f73b764e5357e3ac10654fc4682dedba38eec58",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-s=SECP256K1N_OVER_2+1]": {
+        "network": "Prague",
+        "lastblockhash": "0x1d276b6fb4783f0af4e2964b1c349cd2d4a7ef7707c9d4828c6cae1526a4e6d5",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc6392f7e029c39531892fa326f978625445f80453d416d5091262bf620edf005",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x1d276b6fb4783f0af4e2964b1c349cd2d4a7ef7707c9d4828c6cae1526a4e6d5",
+                        "transactions": [
+                            "0x04f8a101808007830186a0940895e1ceeecef048bef2d6002adfd5bf1cf5d8f08080c0f83cf83a01940000000000000000000000000000000000000000808001a07fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a180a08113dc06a8257218096231003ebd09b7f77ea62d2a4b8d1453c19d779959fb50a0447a461aff35d71b1c7994775846e9553a63808a9a5df2ffaec625f6cd03045d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb3ad343f11252c6997e2ddc1875b845e93cb6fa2c9090d295d749f3563cf6fc4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-s=SECP256K1N_OVER_2-1]": {
+        "network": "Prague",
+        "lastblockhash": "0xdc870909affef005c707560adc053dcb1b3fdc5e69885bcca6231f699c784b86",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbc5bed375bf96e3b5dde7a7c1e0871fa0adb4423d5ce8d9ea640384739f3f0cd",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdc870909affef005c707560adc053dcb1b3fdc5e69885bcca6231f699c784b86",
+                        "transactions": [
+                            "0x04f8a101808007830186a094757c0012d8f1a76d168dce3e5ad5fdf430fa56888080c0f83cf83a01940000000000000000000000000000000000000000808001a07fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b209f01a057ad1b308d9138c8d53d06caa227471c3daa22fe883bef0a7577d79b4bb59247a04534f90b75be839d2a81f68989a2311f0744d304666eeeaddf3564921d576a7e"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa18c77f92ed31b6ebaf9708b3ac1a2af11936f2b8868f8496cc0680845524ad8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-s=SECP256K1N_OVER_2]": {
+        "network": "Prague",
+        "lastblockhash": "0x96584ce9237813a39f0df444d8661a56eb7fceda94678893efd70d83810b7ebf",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x98afb7d603c51ff1d4ce6444df797f3e56e31b8ab6490ec5d140acbf8b4784c5",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x96584ce9237813a39f0df444d8661a56eb7fceda94678893efd70d83810b7ebf",
+                        "transactions": [
+                            "0x04f8a101808007830186a094744a9a4dcbd601fdfe4efdb63179f231e6a69d648080c0f83cf83a01940000000000000000000000000000000000000000808001a07fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a080a0b539f2c1755984f421fc463193544a0749a0d3d38c8a62b03a1ceb0e67de8792a02344aac8ccc0d810c1af34fc6f1a69d39b1665ffc5784c9961350b09844f95eb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd618e9e1a937c584ae0502d67654e5c84ad2083aa04066ab5416a21b1c5c4390",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-v=2**8-1,r=s=2**256-1]": {
+        "network": "Prague",
+        "lastblockhash": "0x90e39a64661a8d6ece72d89ec50bf7055aa91905924bced6bfaa6729fd2da22c",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8bca92460c46a6dfbab92bca0ebcd399a3884ca9bb449ce96bb983cbef890441",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x90e39a64661a8d6ece72d89ec50bf7055aa91905924bced6bfaa6729fd2da22c",
+                        "transactions": [
+                            "0x04f8c201808007830186a0942f14cb4002fd6117ca885e140cccc9afa5cbff6a8080c0f85df85b019400000000000000000000000000000000000000008081ffa0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80a08f8f5b923e39a963e9ba3a80a3fe7aadffc4e56e91e78de8b703da2f31fb9554a057d9e660b67588c287d166f728a257d086cb4be94fc1b212527f4dafe8ad25a8"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x85f29e65af3b008e0ae053a5ce826f63dec611132314adf112b3b6a949850489",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-v=2**8-1]": {
+        "network": "Prague",
+        "lastblockhash": "0xfface37f4e11a0b2e6cdf7f598687ed7048a5df53c9132c9da050d3c82503e7b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x85f92d1ec31d41f6262ecd88532f4c266521eafd9458fe275e9af5b18d01f12e",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xfface37f4e11a0b2e6cdf7f598687ed7048a5df53c9132c9da050d3c82503e7b",
+                        "transactions": [
+                            "0x04f88001808007830186a094d8eefce792616098e6f977b7c33ebbd5f59ee3d08080c0dcdb019400000000000000000000000000000000000000008081ff010180a0b8faa1f46c2991dd6893c47ed6e5d533849d172b4f6c4dd5727c83723313114ea05e20abe0d15eb74233205a4da0305ec69af0ebb07d0c735c21a9f5963c2a0605"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd3d74b7c6b3cca16fc4432a0195a78fb6233fdd589a9a3ee118f959cbf607eb1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-v=27]": {
+        "network": "Prague",
+        "lastblockhash": "0x379e9258528077084e08faa1785d3a4ea7f7695bbbf689468f7b9c53abb857c9",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x12dd72c1783bd6f5093ff88940f2c2034339e70ccdf644cd32b88a3b735a2238",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x379e9258528077084e08faa1785d3a4ea7f7695bbbf689468f7b9c53abb857c9",
+                        "transactions": [
+                            "0x04f87f01808007830186a0942706e6901decf6aa87891a335aba84010e2951e78080c0dbda01940000000000000000000000000000000000000000801b010101a0fd45f4c47963c6296d8d4a14d8eaba8e06a45b3d25524d3d2bfa2071e8456b29a042d337cecc870b89843b024fceab1046c7defc2f1afb1e0393c3fe49c89d529d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x8f6dad8698b27b4b813de60505ed88c2f7bc907229b19ec81a52b949883653b0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-v=28]": {
+        "network": "Prague",
+        "lastblockhash": "0x8909db7cdc03e0050ba165cac4cdc80175caee4007e5cbf4a54a941a62b63ad3",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3dd632efa82afd99ddd9f87c42af13cefdc0dc6f3156d6b9198f4e92153224ea",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8909db7cdc03e0050ba165cac4cdc80175caee4007e5cbf4a54a941a62b63ad3",
+                        "transactions": [
+                            "0x04f87f01808007830186a094db7e028b7c68383a243e797ead5fb5fd264873128080c0dbda01940000000000000000000000000000000000000000801c010101a0ab2cb2acc5b61ff70d6ec70428313063132c758a0e39d8b49aa7d0f120fe17bda0318e76131cbf98079a8383a2cbeee1665109e26f62b5734900d0e713cdb3d844"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd7416581e178d39605e49f001b917e2bfb0e0365c9443a971a0bdf739d42fc8c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-v=2]": {
+        "network": "Prague",
+        "lastblockhash": "0xe73047b6b50e34989c4df3c4c5a197866b1fb6bd129e0b7e1de655e614063254",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x81cf8a94042de08b7dd2b24b87f860e6ce125bd81a879996c0bb336031a45faa",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe73047b6b50e34989c4df3c4c5a197866b1fb6bd129e0b7e1de655e614063254",
+                        "transactions": [
+                            "0x04f87f01808007830186a0940629e1b8fd0fb1591674fa9b1a96366e6c073e828080c0dbda019400000000000000000000000000000000000000008002010101a05cb3f54e84c57ef9b986f4381cce1ffcccd63ceef15a0142e20be95c0b497576a05c3e9af953d660575b4969f8fc9f6823746356a07c805a64a9ba95cfafded5d7"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x12bafef36c86db75d8c266b26a7297dbfbe04093ecad23a0c94fb9e144081eb0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-v=35]": {
+        "network": "Prague",
+        "lastblockhash": "0xb2786dd9b2fe17140eabbc689da35e90fba682c95ac489bdd897fe39cedafae3",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8524724114357bac103b0a0d2472a437a6b021e7e8024d3395efe0c3c8a83a37",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb2786dd9b2fe17140eabbc689da35e90fba682c95ac489bdd897fe39cedafae3",
+                        "transactions": [
+                            "0x04f87f01808007830186a094cdc329ca0a7b50f9475d34d9a6903f571e8b38818080c0dbda019400000000000000000000000000000000000000008023010101a013077d849048f194fed48c4144e59fe9bf0236be61bdb34fee19ff8c7b4ec579a0379d312757a3840ef77d21ae8058b1ef0cba14a1ccecec346a304b049afc97f8"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6ba55414017bef0a16cac0e66a10b86e3daaaebb262d0d3e72e3e75664851570",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-v=36]": {
+        "network": "Prague",
+        "lastblockhash": "0xb09b9e71f3cab234a418bf7d70049fdbdf56b63b6848e73ba463273c6b2af152",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7496c8d31563bf522713ab0ca21ce663f86a7b01f9b2caa8fced7b07d9b86352",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb09b9e71f3cab234a418bf7d70049fdbdf56b63b6848e73ba463273c6b2af152",
+                        "transactions": [
+                            "0x04f87f01808007830186a094357ca3185605b9697cd02801624f802a9fea041b8080c0dbda019400000000000000000000000000000000000000008024010180a03829f35fb66ba6aa48b385d3a0acee29d3606133da471c4b2dffe41f2cb5f8c7a058959db1ce02a0e8febcaec522dc810810e85c33ecefb12435d55a21e1b1c3d5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1a097e1f2a5b1ed92a8f242b361bc626edbe5d824bfa135a1bc5bf5b5f125f11",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_valid_tx_invalid_auth_signature[fork_Prague-blockchain_test_engine_x_from_state_test-v=r=s=0]": {
+        "network": "Prague",
+        "lastblockhash": "0xd841545e29513d0aa28b346b439023924e07c77cd2d0ad08114279e2ee65c273",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7c9a2bed9e5e92a2e736d4648de8ba3b558d1432c624c44e282509244940f10c",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xd841545e29513d0aa28b346b439023924e07c77cd2d0ad08114279e2ee65c273",
+                        "transactions": [
+                            "0x04f87f01808007830186a0940e0726f6b6e395117fcede9e97375e911cb07c6e8080c0dbda019400000000000000000000000000000000000000008080808080a0c2719654d517f4fb98a3c3f276418c414e24d6aedf20ecf550d4c533fd00d23da0142b04555977ca1ddf0ef9c7dd7fb5d0e8dac3dbaea30bdf8f8e70abdb38a376"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3d04dc942eb9265c8b6e3e69eb72f07fa12fa33c7668a931156d676c40bda090",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction to set the code of an account using synthetic\n    signatures, the transaction is valid but the authorization should not go\n    through.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2279",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

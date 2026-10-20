@@ -1,0 +1,273 @@
+{
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_use_value_in_contract[fork_Cancun-blockchain_test_engine_x]": {
+        "network": "Cancun",
+        "lastblockhash": "0x4e789b94d30af80a240718c378fab3fe0670a3d2e4ae8e1fcbfcd5119b3329f5",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5d2593fb768ca73e37ac168fe6c8eeb9979f5c97ff68b9a577da84fd74030c86",
+                        "receiptsRoot": "0x20634fdb40ab47cf9da3364f16cb7f2f7d140d7a6f2df113491072044e6cf75a",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7f0a",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x388f477158cd1b3fcb3363dcf718178bda63d7adee8a8941676d66ad69551165",
+                        "transactions": [
+                            "0xf860800a830186a0945bfc31088f18b618da2d9e522dbde963385ee688808025a07dbbd00cde365f817b6df2c69daecfbe569f71b161c0ed033b59f8f3189e280ea07929e85565a944935397a5ebfe8e60de30e1ee03c6446a66d387de0f076eaa03"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x5bfc31088f18b618da2d9e522dbde963385ee688",
+                                "amount": "0x1"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0x388f477158cd1b3fcb3363dcf718178bda63d7adee8a8941676d66ad69551165",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdd27783886a4da678d9dc14fa16016a83518597eac35f5fb0a7907492422a7d7",
+                        "receiptsRoot": "0xf84739c1f5cac8fe5d72ec0376816485daccdc24bee333f37ddc063021a90f5f",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xccc6",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4e789b94d30af80a240718c378fab3fe0670a3d2e4ae8e1fcbfcd5119b3329f5",
+                        "transactions": [
+                            "0xf860010a830186a0945bfc31088f18b618da2d9e522dbde963385ee688808026a08fb6a16be97ac64ec8a19f9a445b273b16fff829618455db9c3f52782e016744a00f30c3c9edc93226dbdb1e8598fe3e701bf453a86baab46919c03b13b4d4d94c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x4a36fa3c1b8489184a6f89dd5de16479d3dadf1f2f64e7c728edb52d70ec8915",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending value from contract that has not received a withdrawal.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L142",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_use_value_in_contract[fork_Prague-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xc139fae9038a58b054e97912a0e172d5327f8447dc9d35eabc827b939fddf5b9",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x66b01e3b12d7b1fc6a87b3699cecf641b1885a173ef8b6fce4cbb9a395dbff99",
+                        "receiptsRoot": "0x20634fdb40ab47cf9da3364f16cb7f2f7d140d7a6f2df113491072044e6cf75a",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7f0a",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x19bc810ce3976f8524cf39c114e0e768096e10e8f8b8244a986d75d84a20ce60",
+                        "transactions": [
+                            "0xf860800a830186a0945bfc31088f18b618da2d9e522dbde963385ee688808025a07dbbd00cde365f817b6df2c69daecfbe569f71b161c0ed033b59f8f3189e280ea07929e85565a944935397a5ebfe8e60de30e1ee03c6446a66d387de0f076eaa03"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x5bfc31088f18b618da2d9e522dbde963385ee688",
+                                "amount": "0x1"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0x19bc810ce3976f8524cf39c114e0e768096e10e8f8b8244a986d75d84a20ce60",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf70e167ca7fbe90fd4cc03055f0393120c6d3fb7ac97ed5537b4971b57e68690",
+                        "receiptsRoot": "0xf84739c1f5cac8fe5d72ec0376816485daccdc24bee333f37ddc063021a90f5f",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xccc6",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc139fae9038a58b054e97912a0e172d5327f8447dc9d35eabc827b939fddf5b9",
+                        "transactions": [
+                            "0xf860010a830186a0945bfc31088f18b618da2d9e522dbde963385ee688808026a08fb6a16be97ac64ec8a19f9a445b273b16fff829618455db9c3f52782e016744a00f30c3c9edc93226dbdb1e8598fe3e701bf453a86baab46919c03b13b4d4d94c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd4854fb8ed74d00e4489b41337a363b25e86311063f37bbcee6d5558949a3bf7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending value from contract that has not received a withdrawal.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L142",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_use_value_in_contract[fork_Shanghai-blockchain_test_engine_x]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x6751448757d5998e1e2a3c53e5e31e7371cff79e249599e3a22675a30e5afa6a",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6e42975d39c6d486e9fa4e0c97d62e8ffd5bd0e5f4d703ef1e72a906fa4c5a9d",
+                        "receiptsRoot": "0x20634fdb40ab47cf9da3364f16cb7f2f7d140d7a6f2df113491072044e6cf75a",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7f0a",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x4f3548d1cd56f7ca369209b9c9e5580b4bf1b1fd4f8bd364f6fdb0a182af584b",
+                        "transactions": [
+                            "0xf860800a830186a0945bfc31088f18b618da2d9e522dbde963385ee688808025a07dbbd00cde365f817b6df2c69daecfbe569f71b161c0ed033b59f8f3189e280ea07929e85565a944935397a5ebfe8e60de30e1ee03c6446a66d387de0f076eaa03"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x5bfc31088f18b618da2d9e522dbde963385ee688",
+                                "amount": "0x1"
+                            }
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0x4f3548d1cd56f7ca369209b9c9e5580b4bf1b1fd4f8bd364f6fdb0a182af584b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x967d08c976965a294a9e2e4801c61531d558c5977efdc236ba15d1ee116bb45a",
+                        "receiptsRoot": "0xf84739c1f5cac8fe5d72ec0376816485daccdc24bee333f37ddc063021a90f5f",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xccc6",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x6751448757d5998e1e2a3c53e5e31e7371cff79e249599e3a22675a30e5afa6a",
+                        "transactions": [
+                            "0xf860010a830186a0945bfc31088f18b618da2d9e522dbde963385ee688808026a08fb6a16be97ac64ec8a19f9a445b273b16fff829618455db9c3f52782e016744a00f30c3c9edc93226dbdb1e8598fe3e701bf453a86baab46919c03b13b4d4d94c"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x47477be3283592279117210b9e3ce65431a5351056c651b7abb8b2082f3fd7b8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending value from contract that has not received a withdrawal.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L142",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    }
+}

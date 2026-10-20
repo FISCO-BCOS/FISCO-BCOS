@@ -1,0 +1,40 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_encoded_as_bytes[fork_Prague-transaction_test-non_zero_address]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c301808007830186a09400000000000000000000000000000000000000008080c0f85eb85cf85a809400000000000000000000000000000000000000018001a095157c126bdec50d7901a895e5f70c4ad86f1921de552f4d89f2513149d3dad7a05d5b13d1fae5359a4bc12fd267e2e6c2162e04fe013d134984ccad3cdbbcaed101a0eb7cf0ec0a284da7ee62deeec2614134922fbf4ac9a7a7d17fe6014134c008dfa05728b91e621ace623c09dacc3f7f8ad3357057b0407a4c81fa9e1302b984b25b",
+        "_info": {
+            "hash": "0xe61e547067735695598e350dd56ab750ec16f4258802ad2827ceb81e939eaa18",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is encoded in the outer element as bytes instead of a\n    list of elements.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L563",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_encoded_as_bytes[fork_Prague-transaction_test-reset_delegation_address]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c301808007830186a09400000000000000000000000000000000000000008080c0f85eb85cf85a809400000000000000000000000000000000000000008001a0c30343d0f2b26b16059b83ed9c85fc1e91a5b243e2e8111b26c680a275fe1739a002c71add0866b8e54baa339675241ace2020c1b6a1a405fc882bf4419b5bb34a80a0ec400e778d8cbabcdbc5c9f47514c536b91f83de7e305027ce762e66acd8057ca0074ccf2862e2ef012548dacda7215ff3ccf6663d5e70ea6c8c5d40ae1cf24189",
+        "_info": {
+            "hash": "0x4d1e6f8248add3ae597c43a6aa1db2522c7bbc440cdd164b0665d74436be58b4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is encoded in the outer element as bytes instead of a\n    list of elements.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L563",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

@@ -1,0 +1,139 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py::test_static_to_pointer[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x1be4654e04bea512a505db3c72a4d35de39da52d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8c7fc16ff5a494c1a86147406092d5647e547973": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xfe6588e75887d0970bd611dc73bfea7eccd13f2d": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6005600055",
+                "storage": {}
+            },
+            "0xfe6588e75887d0970bd611dc73bfea7eccd1402d": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60206103e860206000738c7fc16ff5a494c1a86147406092d5647e547973620f4240fa6000556001600155",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x2dc6c0"
+            ],
+            "to": "0xfe6588e75887d0970bd611dc73bfea7eccd1402d",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                []
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x00",
+                    "address": "0xfe6588e75887d0970bd611dc73bfea7eccd13f2d",
+                    "nonce": "0x00",
+                    "v": "0x01",
+                    "r": "0x32a3c534eecfa888c008310888657da574fdfd77ea8b68af4153d097773c8591",
+                    "s": "0x259540f5c43f4890027cd39952769adf43f1e5164da140ff6275428a5ec03d",
+                    "signer": "0x8c7fc16ff5a494c1a86147406092d5647e547973",
+                    "yParity": "0x01"
+                }
+            ],
+            "sender": "0x1be4654e04bea512a505db3c72a4d35de39da52d",
+            "secretKey": "0xb8bf2916e09cbb6c6058dcecfe6588e75887d0970bd611dc73bfea7eccd13f2d"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xdcffd122780c90ecad39b452179acba51c86dc1b29075981229f779e7cb803fc",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f8c001808007832dc6c094fe6588e75887d0970bd611dc73bfea7eccd1402d8080c0f85bf8598094fe6588e75887d0970bd611dc73bfea7eccd13f2d8001a032a3c534eecfa888c008310888657da574fdfd77ea8b68af4153d097773c85919f259540f5c43f4890027cd39952769adf43f1e5164da140ff6275428a5ec03d80a0474f8a31e154b165339ce10bcd17add72f7f4314857fa566697599351a0c15c5a058c61325ac81d3b0a1002afaa75b3944120abea827f360156d94b0b64bf366c3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x1be4654e04bea512a505db3c72a4d35de39da52d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de2eb674",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8c7fc16ff5a494c1a86147406092d5647e547973": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0xef0100fe6588e75887d0970bd611dc73bfea7eccd13f2d",
+                            "storage": {}
+                        },
+                        "0xfe6588e75887d0970bd611dc73bfea7eccd13f2d": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6005600055",
+                            "storage": {}
+                        },
+                        "0xfe6588e75887d0970bd611dc73bfea7eccd1402d": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60206103e860206000738c7fc16ff5a494c1a86147406092d5647e547973620f4240fa6000556001600155",
+                            "storage": {
+                                "0x01": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa8e9b2837d156651b670c8219b2825396de0627878ab084eae5b05c46dae991a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tx -> staticcall -> pointer A -> static violation.\n\n    Verify that static context is active when make sub call to pointer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py#L937",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

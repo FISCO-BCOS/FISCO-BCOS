@@ -1,0 +1,738 @@
+{
+    "tests/istanbul/eip152_blake2/test_blake2_delegatecall.py::test_blake2_precompile_delegatecall[fork_Berlin-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060096001f460005500",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x015f90"
+            ],
+            "to": "0x0a70add232a7bae9c56bf2f935f32df38f723758",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xca57896a16886c9079cac97b396c1c694b741ca8",
+            "secretKey": "0xea51f11bb228af34ae1c42600a70add232a7bae9c56bf2f935f32df38f723758"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0xa2ba47e03bb8bf58648f7cd7b2e0c7ebb1ca9b1c0fdb9cb0086cececc92e17f8",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83015f90940a70add232a7bae9c56bf2f935f32df38f723758808025a0ff81af09a2dcbd8b7af916df9269408242a2a1092bd49f36001cfeefea3e3436a04c00cf6bd750a6436ba7ad6ad6481a3403c20e845d25c0322ded2e7d3bd3c244",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060096001f460005500",
+                            "storage": {}
+                        },
+                        "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9e01ce",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fe32",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xd54bbb2f7741cb3b25102c1b434d78d7cf0ddc5e2e14901e01e2bc42ed3ea0ae",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test delegatecall consumes specified gas for the Blake2B precompile when it\n    exists.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2_delegatecall.py#L23",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2_delegatecall.py::test_blake2_precompile_delegatecall[fork_Cancun-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060096001f460005500",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x015f90"
+            ],
+            "to": "0x0a70add232a7bae9c56bf2f935f32df38f723758",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xca57896a16886c9079cac97b396c1c694b741ca8",
+            "secretKey": "0xea51f11bb228af34ae1c42600a70add232a7bae9c56bf2f935f32df38f723758"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x7c62a3dc0c71e4bf4f50eee2a72d9b7f37c74346c2b104c4b9ca5f4ec81b38ac",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83015f90940a70add232a7bae9c56bf2f935f32df38f723758808025a0ff81af09a2dcbd8b7af916df9269408242a2a1092bd49f36001cfeefea3e3436a04c00cf6bd750a6436ba7ad6ad6481a3403c20e845d25c0322ded2e7d3bd3c244",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060096001f460005500",
+                            "storage": {}
+                        },
+                        "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9cbf1c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0xf9de",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x6e01440ce60ae945a75332e3d8ae2cbb78a89526be393465f5575dd4a2f034f6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test delegatecall consumes specified gas for the Blake2B precompile when it\n    exists.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2_delegatecall.py#L23",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2_delegatecall.py::test_blake2_precompile_delegatecall[fork_ConstantinopleFix-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060096001f460005500",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x015f90"
+            ],
+            "to": "0x0a70add232a7bae9c56bf2f935f32df38f723758",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xca57896a16886c9079cac97b396c1c694b741ca8",
+            "secretKey": "0xea51f11bb228af34ae1c42600a70add232a7bae9c56bf2f935f32df38f723758"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0xf1580f98ca1f3cc3eedc8698798d517244058186bd3fc37bab50c55854fcc941",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83015f90940a70add232a7bae9c56bf2f935f32df38f723758808025a0ff81af09a2dcbd8b7af916df9269408242a2a1092bd49f36001cfeefea3e3436a04c00cf6bd750a6436ba7ad6ad6481a3403c20e845d25c0322ded2e7d3bd3c244",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060096001f460005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9bec36",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0413ca",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x7053df25ec456e5e1cca0b0e396f0c264dec3827f00c53ff5bf043920efe6fc5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test delegatecall consumes specified gas for the Blake2B precompile when it\n    exists.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2_delegatecall.py#L23",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2_delegatecall.py::test_blake2_precompile_delegatecall[fork_Istanbul-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060096001f460005500",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x015f90"
+            ],
+            "to": "0x0a70add232a7bae9c56bf2f935f32df38f723758",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xca57896a16886c9079cac97b396c1c694b741ca8",
+            "secretKey": "0xea51f11bb228af34ae1c42600a70add232a7bae9c56bf2f935f32df38f723758"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0x810c678b435fe93e26de88d06db440eb2686bdbdb09a19e3418b4275b3009a5c",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83015f90940a70add232a7bae9c56bf2f935f32df38f723758808025a0ff81af09a2dcbd8b7af916df9269408242a2a1092bd49f36001cfeefea3e3436a04c00cf6bd750a6436ba7ad6ad6481a3403c20e845d25c0322ded2e7d3bd3c244",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060096001f460005500",
+                            "storage": {}
+                        },
+                        "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9df616",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0209ea",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xeb9e83d3d985217057f67d31c5a24e6e0cc56bbcce13abf1b238c3f4b8231869",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test delegatecall consumes specified gas for the Blake2B precompile when it\n    exists.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2_delegatecall.py#L23",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2_delegatecall.py::test_blake2_precompile_delegatecall[fork_London-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060096001f460005500",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x015f90"
+            ],
+            "to": "0x0a70add232a7bae9c56bf2f935f32df38f723758",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xca57896a16886c9079cac97b396c1c694b741ca8",
+            "secretKey": "0xea51f11bb228af34ae1c42600a70add232a7bae9c56bf2f935f32df38f723758"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0x7c62a3dc0c71e4bf4f50eee2a72d9b7f37c74346c2b104c4b9ca5f4ec81b38ac",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83015f90940a70add232a7bae9c56bf2f935f32df38f723758808025a0ff81af09a2dcbd8b7af916df9269408242a2a1092bd49f36001cfeefea3e3436a04c00cf6bd750a6436ba7ad6ad6481a3403c20e845d25c0322ded2e7d3bd3c244",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060096001f460005500",
+                            "storage": {}
+                        },
+                        "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9cbf1c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0xf9de",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xdbaa913fb7830a3bae2c13faf38da27c6b2bd6ed31db1eb8dd24e44a26e93ea6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test delegatecall consumes specified gas for the Blake2B precompile when it\n    exists.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2_delegatecall.py#L23",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2_delegatecall.py::test_blake2_precompile_delegatecall[fork_Paris-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060096001f460005500",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x015f90"
+            ],
+            "to": "0x0a70add232a7bae9c56bf2f935f32df38f723758",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xca57896a16886c9079cac97b396c1c694b741ca8",
+            "secretKey": "0xea51f11bb228af34ae1c42600a70add232a7bae9c56bf2f935f32df38f723758"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0x7c62a3dc0c71e4bf4f50eee2a72d9b7f37c74346c2b104c4b9ca5f4ec81b38ac",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83015f90940a70add232a7bae9c56bf2f935f32df38f723758808025a0ff81af09a2dcbd8b7af916df9269408242a2a1092bd49f36001cfeefea3e3436a04c00cf6bd750a6436ba7ad6ad6481a3403c20e845d25c0322ded2e7d3bd3c244",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060096001f460005500",
+                            "storage": {}
+                        },
+                        "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9cbf1c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0xf9de",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa326de096a6da1aa2eeba3885e6d8c45962f23d0ceec667df1adc89a2d0e6bc6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test delegatecall consumes specified gas for the Blake2B precompile when it\n    exists.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2_delegatecall.py#L23",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2_delegatecall.py::test_blake2_precompile_delegatecall[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060096001f460005500",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x015f90"
+            ],
+            "to": "0x0a70add232a7bae9c56bf2f935f32df38f723758",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xca57896a16886c9079cac97b396c1c694b741ca8",
+            "secretKey": "0xea51f11bb228af34ae1c42600a70add232a7bae9c56bf2f935f32df38f723758"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x7c62a3dc0c71e4bf4f50eee2a72d9b7f37c74346c2b104c4b9ca5f4ec81b38ac",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83015f90940a70add232a7bae9c56bf2f935f32df38f723758808025a0ff81af09a2dcbd8b7af916df9269408242a2a1092bd49f36001cfeefea3e3436a04c00cf6bd750a6436ba7ad6ad6481a3403c20e845d25c0322ded2e7d3bd3c244",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060096001f460005500",
+                            "storage": {}
+                        },
+                        "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9cbf1c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0xf9de",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x3c5f8d42a7ca0d5713a84b0f16d8d51d459e19daada8845aec30bfe7a78a5ade",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test delegatecall consumes specified gas for the Blake2B precompile when it\n    exists.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2_delegatecall.py#L23",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2_delegatecall.py::test_blake2_precompile_delegatecall[fork_Shanghai-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060096001f460005500",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x015f90"
+            ],
+            "to": "0x0a70add232a7bae9c56bf2f935f32df38f723758",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xca57896a16886c9079cac97b396c1c694b741ca8",
+            "secretKey": "0xea51f11bb228af34ae1c42600a70add232a7bae9c56bf2f935f32df38f723758"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x7c62a3dc0c71e4bf4f50eee2a72d9b7f37c74346c2b104c4b9ca5f4ec81b38ac",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83015f90940a70add232a7bae9c56bf2f935f32df38f723758808025a0ff81af09a2dcbd8b7af916df9269408242a2a1092bd49f36001cfeefea3e3436a04c00cf6bd750a6436ba7ad6ad6481a3403c20e845d25c0322ded2e7d3bd3c244",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a70add232a7bae9c56bf2f935f32df38f723758": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060096001f460005500",
+                            "storage": {}
+                        },
+                        "0xca57896a16886c9079cac97b396c1c694b741ca8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9cbf1c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0xf9de",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe028ff2d17f408f6db07c51b503e85d61eab608f6f75e7fa05f51d4caa1de2f3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test delegatecall consumes specified gas for the Blake2B precompile when it\n    exists.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2_delegatecall.py#L23",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    }
+}

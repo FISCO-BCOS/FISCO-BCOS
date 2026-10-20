@@ -1,0 +1,245 @@
+{
+    "tests/static/state_tests/stRefundTest/refund_CallAFiller.json::refund_CallA[fork_Cancun-state_test-]": {
+        "env": {
+            "currentCoinbase": "0x0afab55b15cc2f28ae8b78af7bd7e47c788107a7",
+            "currentGasLimit": "0x0f4240",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x49e52febe42e64fd2b21f6145ff062abdafcc462": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600060015500",
+                "storage": {
+                    "0x01": "0x01"
+                }
+            },
+            "0x49e52febe42e64fd2b21f6145ff062abdafcc562": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600060006000600060007349e52febe42e64fd2b21f6145ff062abdafcc46261157cf160005500",
+                "storage": {
+                    "0x01": "0x01"
+                }
+            },
+            "0x1f02fe432c0c984353eb595fffd491f6ca4354f2": {
+                "nonce": "0x00",
+                "balance": "0x01312d00",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x0afab55b15cc2f28ae8b78af7bd7e47c788107a7": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x030d40"
+            ],
+            "to": "0x49e52febe42e64fd2b21f6145ff062abdafcc562",
+            "value": [
+                "0x0a"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x1f02fe432c0c984353eb595fffd491f6ca4354f2",
+            "secretKey": "0x3e3d5895893f710d7588f0fb49e52febe42e64fd2b21f6145ff062abdafcc462"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x159fdeffd0eea1e3770861079248a22aa46ce71a342ed9181d71329039d777da",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83030d409449e52febe42e64fd2b21f6145ff062abdafcc5620a8026a07d2e7aa88345eac3d3bae7a5e77a36681e8029b890f24123e1e8606bc2700888a06daa3eb83bfa2a3db7da149de6be1c64bfd6f8839b8c6d92af4eaeecca39692b",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x49e52febe42e64fd2b21f6145ff062abdafcc462": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600060015500",
+                            "storage": {}
+                        },
+                        "0x49e52febe42e64fd2b21f6145ff062abdafcc562": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a764000a",
+                            "code": "0x600060006000600060007349e52febe42e64fd2b21f6145ff062abdafcc46261157cf160005500",
+                            "storage": {
+                                "0x01": "0x01",
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x1f02fe432c0c984353eb595fffd491f6ca4354f2": {
+                            "nonce": "0x01",
+                            "balance": "0x012a2ad2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x0afab55b15cc2f28ae8b78af7bd7e47c788107a7": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x5f1691d743462380ef4bd8cc1c77bea1a36725b9777f5ca096a972bc07dcd94e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/static/state_tests/stRefundTest/refund_CallAFiller.json::refund_CallA[fork_Prague-state_test-]": {
+        "env": {
+            "currentCoinbase": "0x0afab55b15cc2f28ae8b78af7bd7e47c788107a7",
+            "currentGasLimit": "0x0f4240",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x49e52febe42e64fd2b21f6145ff062abdafcc462": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600060015500",
+                "storage": {
+                    "0x01": "0x01"
+                }
+            },
+            "0x49e52febe42e64fd2b21f6145ff062abdafcc562": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600060006000600060007349e52febe42e64fd2b21f6145ff062abdafcc46261157cf160005500",
+                "storage": {
+                    "0x01": "0x01"
+                }
+            },
+            "0x1f02fe432c0c984353eb595fffd491f6ca4354f2": {
+                "nonce": "0x00",
+                "balance": "0x01312d00",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x0afab55b15cc2f28ae8b78af7bd7e47c788107a7": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x030d40"
+            ],
+            "to": "0x49e52febe42e64fd2b21f6145ff062abdafcc562",
+            "value": [
+                "0x0a"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x1f02fe432c0c984353eb595fffd491f6ca4354f2",
+            "secretKey": "0x3e3d5895893f710d7588f0fb49e52febe42e64fd2b21f6145ff062abdafcc462"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x159fdeffd0eea1e3770861079248a22aa46ce71a342ed9181d71329039d777da",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83030d409449e52febe42e64fd2b21f6145ff062abdafcc5620a8026a07d2e7aa88345eac3d3bae7a5e77a36681e8029b890f24123e1e8606bc2700888a06daa3eb83bfa2a3db7da149de6be1c64bfd6f8839b8c6d92af4eaeecca39692b",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x49e52febe42e64fd2b21f6145ff062abdafcc462": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600060015500",
+                            "storage": {}
+                        },
+                        "0x49e52febe42e64fd2b21f6145ff062abdafcc562": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a764000a",
+                            "code": "0x600060006000600060007349e52febe42e64fd2b21f6145ff062abdafcc46261157cf160005500",
+                            "storage": {
+                                "0x01": "0x01",
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x1f02fe432c0c984353eb595fffd491f6ca4354f2": {
+                            "nonce": "0x01",
+                            "balance": "0x012a2ad2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x0afab55b15cc2f28ae8b78af7bd7e47c788107a7": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1dc29d90cee5b6bd1bee286b784d2c43e59bd13248c22be1170df094a6efe6df",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    }
+}

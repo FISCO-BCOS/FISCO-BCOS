@@ -1,0 +1,814 @@
+{
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Cancun-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0xff34ee8ed049b123dee691371ff931dd4d2d6bafba95f4a74818f649324793d0",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xce8d3bb4afb84ede13672551fef7e895a8202de47b70d3309959e43f26b9549e",
+                        "receiptsRoot": "0x2cf2dab18ed9da610ec6e34fa5508c22dc5822c15c1398fdf90929aef58fd441",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xff34ee8ed049b123dee691371ff931dd4d2d6bafba95f4a74818f649324793d0",
+                        "transactions": [
+                            "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x04c5dae4cfdd819c5f01c6d6d0e4d5d65fd7f0b454ea4b27802c7a3f3fd9fcde",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Cancun-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0xdb957b34cfd9d3730f8b1f78d6b630a9ee6f24554b6e969808d84205402a83d9",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x798427a9dd4b8debea31982a8470c85e69fe32da0e277bcce843ce2667e07676",
+                        "receiptsRoot": "0x2cf2dab18ed9da610ec6e34fa5508c22dc5822c15c1398fdf90929aef58fd441",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdb957b34cfd9d3730f8b1f78d6b630a9ee6f24554b6e969808d84205402a83d9",
+                        "transactions": [
+                            "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf05269334bbe60dab839f01529ac05ecdfcbfbeaf427840081ac9f355bd6a920",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Cancun-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0xbdc321e4080b2465e8510ff12e73817ba64985bc77048def6271c0bdb0dc2a91",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfb75f0d2317df8044a9695395faddcc0f4a200dd51df94696b3e8039759507a9",
+                        "receiptsRoot": "0x6379330f9c7bd8c889482eb75c834108f1f4dcf0b7d293dc46e269a0ee256e19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xbdc321e4080b2465e8510ff12e73817ba64985bc77048def6271c0bdb0dc2a91",
+                        "transactions": [
+                            "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x219421c3433d7e078ce735909e55a2db751f35c17abc6b155372c0c29798d6fe",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Cancun-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x4091d070bb77eddd67b47e4daf0b6513f09c380f4e8f36abec181ce27f11d67f",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x00f7040786d35284acdebb5c78ca0ca874898c4c0d27f7285b4af47c8ea9d3c3",
+                        "receiptsRoot": "0x6379330f9c7bd8c889482eb75c834108f1f4dcf0b7d293dc46e269a0ee256e19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4091d070bb77eddd67b47e4daf0b6513f09c380f4e8f36abec181ce27f11d67f",
+                        "transactions": [
+                            "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb637253de847551768de601f110c9aa2de7387327462c1d3f04e37b2a49e7ac2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Paris-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0xcc8e6bd379b29f6fe50d0af3ad32876b1d4350b8a00d0c80b8e058d401a6292b",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5d40d8c7e624498d2fd44162a840d1aa51ccd6f92ff459b32d7a35c490bdeab2",
+                        "receiptsRoot": "0x2cf2dab18ed9da610ec6e34fa5508c22dc5822c15c1398fdf90929aef58fd441",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xcc8e6bd379b29f6fe50d0af3ad32876b1d4350b8a00d0c80b8e058d401a6292b",
+                        "transactions": [
+                            "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xad39a99699240b0d697fe1bc08030e55ac67adb62ad4eefce48c8ceb64618106",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Paris-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0xf26a6458c0956aee8f4fd2368cbfbfca6ee6910635b8074fef44f5b4705ebb8b",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x968cc42a558cd3c6af99d4352c098bbea5290a1f64b5ea6a56a4c227b577ec86",
+                        "receiptsRoot": "0x2cf2dab18ed9da610ec6e34fa5508c22dc5822c15c1398fdf90929aef58fd441",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xf26a6458c0956aee8f4fd2368cbfbfca6ee6910635b8074fef44f5b4705ebb8b",
+                        "transactions": [
+                            "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xa2429da4188db1052705c5d20a99b80cbf453659e44c99495e0ad3a751b6b474",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Paris-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0xb6d535fbc134cb80bc05fc642586947092c19f26bafc25d7cc5e2cf45c78052a",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2ad8f3c89cf3192d8f6c6c6d203efc9ee9b6e46473eeee300c15ae7696d62bcd",
+                        "receiptsRoot": "0x6379330f9c7bd8c889482eb75c834108f1f4dcf0b7d293dc46e269a0ee256e19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb6d535fbc134cb80bc05fc642586947092c19f26bafc25d7cc5e2cf45c78052a",
+                        "transactions": [
+                            "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xd396837a57d7d33ec198805bc2ebb3cdb61fc0279118c46a2ec54c1acf7821c2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Paris-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0x190731d8caf4e728ee44fe52b56e900e3ad6f85db8fa1aaa0c5d9f94bf4b1f4e",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x071d00a23e97b3c24a838a074c4beb54dbb20c584e66246ea333c8b9f6f76040",
+                        "receiptsRoot": "0x6379330f9c7bd8c889482eb75c834108f1f4dcf0b7d293dc46e269a0ee256e19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x190731d8caf4e728ee44fe52b56e900e3ad6f85db8fa1aaa0c5d9f94bf4b1f4e",
+                        "transactions": [
+                            "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xd3f3c046248d5cbc5057efc4acbe88242ff1e4790a8392f4d72c7e0e7b98715d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0xb54b9e16623a9492faf203428b826fa67d30697020bf0628ad222be18ad6fe61",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x42863773e2f6b065716f72628afa4d1d0930eff09ca8eca0ff85ec8b53aa36a4",
+                        "receiptsRoot": "0x2cf2dab18ed9da610ec6e34fa5508c22dc5822c15c1398fdf90929aef58fd441",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb54b9e16623a9492faf203428b826fa67d30697020bf0628ad222be18ad6fe61",
+                        "transactions": [
+                            "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x32d216a364039afc55399145b796ff22b36b1022250c4858368d3ed0dd1302ea",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Prague-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x96aa04dab1944c2f8aaccd64e48bf463e39f44f194f8829a86fc323c3eb0afe7",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x53ee4c2e339ce2f9c6ec12366f17d8134b72746bbce8bd25d60a9e678e582235",
+                        "receiptsRoot": "0x2cf2dab18ed9da610ec6e34fa5508c22dc5822c15c1398fdf90929aef58fd441",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x96aa04dab1944c2f8aaccd64e48bf463e39f44f194f8829a86fc323c3eb0afe7",
+                        "transactions": [
+                            "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x56945212c01f524057cf8e33bbf788147188ef5c2c072f6800050a476d145a46",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Prague-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0xa636845dacb7421ccad898035e7fefed9333f12794f7bd4a3f8971de77254448",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x757011516d95398d560311a863e2517d666a6d0fdfc70d558d2d38f6cc44c91c",
+                        "receiptsRoot": "0x6379330f9c7bd8c889482eb75c834108f1f4dcf0b7d293dc46e269a0ee256e19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xa636845dacb7421ccad898035e7fefed9333f12794f7bd4a3f8971de77254448",
+                        "transactions": [
+                            "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x5308ff2e4f3748528211d8402b6e0af16b9a8d27e1b87c7c7c9c486c00878dea",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Prague-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x60ce0e8b3e19b8e9d635d6ae799d558ce39a47f3a7a55fe41dcddcfcd50e30a1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x06909b00b0a97c6cee5b34c1655a33e80b640a606894f30580e8472548df08f5",
+                        "receiptsRoot": "0x6379330f9c7bd8c889482eb75c834108f1f4dcf0b7d293dc46e269a0ee256e19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x60ce0e8b3e19b8e9d635d6ae799d558ce39a47f3a7a55fe41dcddcfcd50e30a1",
+                        "transactions": [
+                            "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xae23b9731d77ead2854247bbebf1730dce4e1f5b11eade07c7e28dbc80783874",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Shanghai-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xcac421e82d5c757b64a9d5bce7c8439ec7c520ea640c4936a82a58cf0d3bb2e1",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd47e8db0948fa6b69cfe8910474ed37485f002b9a2031f866d252eb9ce59ddde",
+                        "receiptsRoot": "0x2cf2dab18ed9da610ec6e34fa5508c22dc5822c15c1398fdf90929aef58fd441",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xcac421e82d5c757b64a9d5bce7c8439ec7c520ea640c4936a82a58cf0d3bb2e1",
+                        "transactions": [
+                            "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x92a5743033d9fddc6bd3304f27f27b9af7242cc100731842f83e615acdc2bae6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Shanghai-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xb8527c32f6a39ff9ec44ed4f61f541350febaa2270ec0220416cc4684c7cd754",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x956d2b9bc3d87c89e697a87a4abcf5a3194eaab7f4113893be8a868df663d736",
+                        "receiptsRoot": "0x2cf2dab18ed9da610ec6e34fa5508c22dc5822c15c1398fdf90929aef58fd441",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb8527c32f6a39ff9ec44ed4f61f541350febaa2270ec0220416cc4684c7cd754",
+                        "transactions": [
+                            "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xf319c685531345130e89e0a86779dd0fe46adb13d70ddbfd98c722652fadee7d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Shanghai-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x6a9f86e66c7f7e65f74e878d6449b48b53e215ebbd9807fb11631c3da1da0cbc",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc12aff136a5dc7d03bb46137d60f74e7ba978a8f61282162752d6cdb570fb51a",
+                        "receiptsRoot": "0x6379330f9c7bd8c889482eb75c834108f1f4dcf0b7d293dc46e269a0ee256e19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x6a9f86e66c7f7e65f74e878d6449b48b53e215ebbd9807fb11631c3da1da0cbc",
+                        "transactions": [
+                            "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x018b1cc1befa8a6295b1aa4d44fc1376ca0e8dc4a92afd4db19b9e9ed7454330",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Shanghai-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xcaebf41582923c194bf55ca2c2635fe7b312285c4fc04d1afe4c49c634347ede",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2d94e15dd774af39147c6e1e766d0e6bcafb6a3a2fa33b30b0fd719568ab4a77",
+                        "receiptsRoot": "0x6379330f9c7bd8c889482eb75c834108f1f4dcf0b7d293dc46e269a0ee256e19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2b1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xcaebf41582923c194bf55ca2c2635fe7b312285c4fc04d1afe4c49c634347ede",
+                        "transactions": [
+                            "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x2b5b38e833d13afa08c668b9a996b6046d5962a085ae7f125b09b989c99366a6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

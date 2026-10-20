@@ -1,0 +1,374 @@
+{
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_value_opcode[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-tx_value_0-opcode_CALLVALUE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x155f9485f3454467b76135268cf21908b2376b416b667393f5c4a413208a375e",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdae60bb2b15ee6cadda90813f23ad72d006edf0da697c6ebd44022e0c3bdd202",
+                        "receiptsRoot": "0x177fa2fb1e9167ed2b44e478ba54b39da40523cc985950390a475b658986a486",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x155f9485f3454467b76135268cf21908b2376b416b667393f5c4a413208a375e",
+                        "transactions": [
+                            "0x03f886018080078307a120946fa8475a296e7ce0b82ab24734f2f1141179884c8080c001e1a0010000000000000000000000000000000000000000000000000000000000000001a0fb6fa835e15bbd4897870abc6ce2c44ddd856cfbd42131824f435f5679ecffe7a016c6a4f1c0d26a906a8ca9f2814a1eec9959f2a50366e1880c8959e42cd5e7b4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x59c81cff99c0ecf6b2e08553416ede5ce9444c5f5ac82e4c01169a7390edfcb1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the VALUE opcode with different blob type transaction value amounts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1242",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_value_opcode[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-tx_value_1-opcode_CALLVALUE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x80ab03827d0db50171c31cd6509219b3bb5fa183125582e541cfd46bbc014e44",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x22df25c7fc8da401bce7b2c43dd278d173e25d9ce73a53d4dd33324a14387046",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x80ab03827d0db50171c31cd6509219b3bb5fa183125582e541cfd46bbc014e44",
+                        "transactions": [
+                            "0x03f886018080078307a1209499e4e6be6dd2968e31dd105bcfa3c00327ac909c0180c001e1a0010000000000000000000000000000000000000000000000000000000000000080a0c3e84fff4b8a0997fd4691fbe403019b5ec067c3fe0b6065c155a8f4791556eea0395032f9b8a961d4171522076b06bc6ab3283c66f4a4b229bb3a5e932b232287"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa8ba9dee5b40417e18a929c6d68bd9854896facbb5a5b22e479735dcc7b38f7d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the VALUE opcode with different blob type transaction value amounts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1242",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_value_opcode[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-tx_value_1000000000000000000-opcode_CALLVALUE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x52f81b2244c18707aeeffd372db18f4c63ec2579c64521b1ab382cc61f3c2fc4",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0f9f965db1cc9d8909e85e72eb965667094be2eb1aa72b87b3e91cb5ccaf9adb",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x52f81b2244c18707aeeffd372db18f4c63ec2579c64521b1ab382cc61f3c2fc4",
+                        "transactions": [
+                            "0x03f88e018080078307a1209438ebf95100916acdb494f678d4856bd7200eda2f880de0b6b3a764000080c001e1a0010000000000000000000000000000000000000000000000000000000000000001a09227d7577deeb6293202fc4ebf0c232c3ef03d6bad924bf489164b89e380e86ea0425a61d7bef44924d7981a873aa8d422d56ba2aa117d6ca1e597376a873446ad"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6b80630ee74002b1452a0b9d9dbeba98f5a4bf16c8aa81627a338079d5bcde3b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the VALUE opcode with different blob type transaction value amounts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1242",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_value_opcode[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-tx_value_0-opcode_CALLVALUE]": {
+        "network": "Prague",
+        "lastblockhash": "0xcf9b6336ae2f840a11aa615116ad2acad75b8fda6bdd62a272cc322c3f5c231b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf79088ba70e48ba732f1067820ad3af9b06a1ffa5985ea25cdc45198af48a262",
+                        "receiptsRoot": "0x177fa2fb1e9167ed2b44e478ba54b39da40523cc985950390a475b658986a486",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0xcf9b6336ae2f840a11aa615116ad2acad75b8fda6bdd62a272cc322c3f5c231b",
+                        "transactions": [
+                            "0x03f886018080078307a120946fa8475a296e7ce0b82ab24734f2f1141179884c8080c001e1a0010000000000000000000000000000000000000000000000000000000000000001a0fb6fa835e15bbd4897870abc6ce2c44ddd856cfbd42131824f435f5679ecffe7a016c6a4f1c0d26a906a8ca9f2814a1eec9959f2a50366e1880c8959e42cd5e7b4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x93198e618e5554eb23e251956a1ce4f9266b2ea02148162f43e1cfd526a2d29e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the VALUE opcode with different blob type transaction value amounts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1242",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_value_opcode[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-tx_value_1-opcode_CALLVALUE]": {
+        "network": "Prague",
+        "lastblockhash": "0x596b71d4e17ac274519fdde54b096aaf4ad6f7febeeefc97bff7fb6b374cb1ff",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7b52f5d548fb0c5d5603aa2661386a15e7e9a5d6f5b0c573c689c05bd0586505",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x596b71d4e17ac274519fdde54b096aaf4ad6f7febeeefc97bff7fb6b374cb1ff",
+                        "transactions": [
+                            "0x03f886018080078307a1209499e4e6be6dd2968e31dd105bcfa3c00327ac909c0180c001e1a0010000000000000000000000000000000000000000000000000000000000000080a0c3e84fff4b8a0997fd4691fbe403019b5ec067c3fe0b6065c155a8f4791556eea0395032f9b8a961d4171522076b06bc6ab3283c66f4a4b229bb3a5e932b232287"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x414a7d52c99f9ed458d0fc52acdec23d62ffb57b0b1ce0e3cf38025b14bbe550",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the VALUE opcode with different blob type transaction value amounts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1242",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_value_opcode[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-tx_value_1000000000000000000-opcode_CALLVALUE]": {
+        "network": "Prague",
+        "lastblockhash": "0x36e677525b69346b6a4dfad3da5186a785eae0b47b317234c70d8a82fc10992b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x116560ff7b18bb330a10c7077738580d0b80d555d788597459c05a32a2826625",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x36e677525b69346b6a4dfad3da5186a785eae0b47b317234c70d8a82fc10992b",
+                        "transactions": [
+                            "0x03f88e018080078307a1209438ebf95100916acdb494f678d4856bd7200eda2f880de0b6b3a764000080c001e1a0010000000000000000000000000000000000000000000000000000000000000001a09227d7577deeb6293202fc4ebf0c232c3ef03d6bad924bf489164b89e380e86ea0425a61d7bef44924d7981a873aa8d422d56ba2aa117d6ca1e597376a873446ad"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xbe44f1d6f9464125f1c227e5ae38c88881e9f50397b5a70e882e312d88e7aad7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the VALUE opcode with different blob type transaction value amounts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1242",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    }
+}

@@ -1,0 +1,632 @@
+{
+    "tests/berlin/eip2929_gas_cost_increases/test_call.py::test_call_insufficient_balance[fork_Berlin-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                "nonce": "0x00",
+                "balance": "0x01",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                "storage": {}
+            },
+            "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x1257767465d91292f29c15df1e25e063daed8b59",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd",
+            "secretKey": "0xffc684abd3b0e49d1021eee51257767465d91292f29c15df1e25e063daed8b5a"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x8de37694a5f906afd054d5b6d054994df4afb8e614558dfb76e028f5aecca779",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0941257767465d91292f29c15df1e25e063daed8b59808026a0a7eaaef383a6b7fc7192d2adbdaf0331b4d82f352f89956ce8be97e9fe5d0590a01a5ae493968f37d3462cdca0d30f0e3bb4799025e48682bcb1eefe152c847d52",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                            "storage": {
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de97a536",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x085aca",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x2b89bde4fc79e8c6ec6d396f4783fef70444c5ab5891a17cb46d901ef5e7fcc8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test a regular CALL to see if it warms the destination with insufficient\n    balance.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/berlin/eip2929_gas_cost_increases/test_call.py#L19",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2929.md",
+            "reference-spec-version": "0e11417265a623adb680c527b15d0cb6701b870b"
+        }
+    },
+    "tests/berlin/eip2929_gas_cost_increases/test_call.py::test_call_insufficient_balance[fork_Cancun-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                "nonce": "0x00",
+                "balance": "0x01",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                "storage": {}
+            },
+            "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x1257767465d91292f29c15df1e25e063daed8b59",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd",
+            "secretKey": "0xffc684abd3b0e49d1021eee51257767465d91292f29c15df1e25e063daed8b5a"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x5fd30bb61fb5034fff14954f12e4d26b89be16689f72f0bc93856f03cd1baaa4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0941257767465d91292f29c15df1e25e063daed8b59808026a0a7eaaef383a6b7fc7192d2adbdaf0331b4d82f352f89956ce8be97e9fe5d0590a01a5ae493968f37d3462cdca0d30f0e3bb4799025e48682bcb1eefe152c847d52",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                            "storage": {
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de97a536",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0281a3",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe51b07c8b87e6fe7655e9febe1b7025ad5c4eeecf0e859181e078c334ab41c8b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test a regular CALL to see if it warms the destination with insufficient\n    balance.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/berlin/eip2929_gas_cost_increases/test_call.py#L19",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2929.md",
+            "reference-spec-version": "0e11417265a623adb680c527b15d0cb6701b870b"
+        }
+    },
+    "tests/berlin/eip2929_gas_cost_increases/test_call.py::test_call_insufficient_balance[fork_London-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                "nonce": "0x00",
+                "balance": "0x01",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                "storage": {}
+            },
+            "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x1257767465d91292f29c15df1e25e063daed8b59",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd",
+            "secretKey": "0xffc684abd3b0e49d1021eee51257767465d91292f29c15df1e25e063daed8b5a"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0x5fd30bb61fb5034fff14954f12e4d26b89be16689f72f0bc93856f03cd1baaa4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0941257767465d91292f29c15df1e25e063daed8b59808026a0a7eaaef383a6b7fc7192d2adbdaf0331b4d82f352f89956ce8be97e9fe5d0590a01a5ae493968f37d3462cdca0d30f0e3bb4799025e48682bcb1eefe152c847d52",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                            "storage": {
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de97a536",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0281a3",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x2cf27d756c968f356b743869c4c6cfbb5828c2936adb04eb9a09ee53623d09a6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test a regular CALL to see if it warms the destination with insufficient\n    balance.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/berlin/eip2929_gas_cost_increases/test_call.py#L19",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2929.md",
+            "reference-spec-version": "0e11417265a623adb680c527b15d0cb6701b870b"
+        }
+    },
+    "tests/berlin/eip2929_gas_cost_increases/test_call.py::test_call_insufficient_balance[fork_Paris-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                "nonce": "0x00",
+                "balance": "0x01",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                "storage": {}
+            },
+            "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x1257767465d91292f29c15df1e25e063daed8b59",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd",
+            "secretKey": "0xffc684abd3b0e49d1021eee51257767465d91292f29c15df1e25e063daed8b5a"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0x5fd30bb61fb5034fff14954f12e4d26b89be16689f72f0bc93856f03cd1baaa4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0941257767465d91292f29c15df1e25e063daed8b59808026a0a7eaaef383a6b7fc7192d2adbdaf0331b4d82f352f89956ce8be97e9fe5d0590a01a5ae493968f37d3462cdca0d30f0e3bb4799025e48682bcb1eefe152c847d52",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                            "storage": {
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de97a536",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0281a3",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x226e6fc0e154c32e7b1f1784084e53387cd1d87a379c025091358f973126ab17",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test a regular CALL to see if it warms the destination with insufficient\n    balance.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/berlin/eip2929_gas_cost_increases/test_call.py#L19",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2929.md",
+            "reference-spec-version": "0e11417265a623adb680c527b15d0cb6701b870b"
+        }
+    },
+    "tests/berlin/eip2929_gas_cost_increases/test_call.py::test_call_insufficient_balance[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                "nonce": "0x00",
+                "balance": "0x01",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                "storage": {}
+            },
+            "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x1257767465d91292f29c15df1e25e063daed8b59",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd",
+            "secretKey": "0xffc684abd3b0e49d1021eee51257767465d91292f29c15df1e25e063daed8b5a"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x5fd30bb61fb5034fff14954f12e4d26b89be16689f72f0bc93856f03cd1baaa4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0941257767465d91292f29c15df1e25e063daed8b59808026a0a7eaaef383a6b7fc7192d2adbdaf0331b4d82f352f89956ce8be97e9fe5d0590a01a5ae493968f37d3462cdca0d30f0e3bb4799025e48682bcb1eefe152c847d52",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                            "storage": {
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de97a536",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0281a3",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xd60fcc8f34c212d4527f57228a3c78aa33433e7e95ce67216d278d3473323b8a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test a regular CALL to see if it warms the destination with insufficient\n    balance.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/berlin/eip2929_gas_cost_increases/test_call.py#L19",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2929.md",
+            "reference-spec-version": "0e11417265a623adb680c527b15d0cb6701b870b"
+        }
+    },
+    "tests/berlin/eip2929_gas_cost_increases/test_call.py::test_call_insufficient_balance[fork_Shanghai-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                "nonce": "0x00",
+                "balance": "0x01",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                "storage": {}
+            },
+            "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x1257767465d91292f29c15df1e25e063daed8b59",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd",
+            "secretKey": "0xffc684abd3b0e49d1021eee51257767465d91292f29c15df1e25e063daed8b5a"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x5fd30bb61fb5034fff14954f12e4d26b89be16689f72f0bc93856f03cd1baaa4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0941257767465d91292f29c15df1e25e063daed8b59808026a0a7eaaef383a6b7fc7192d2adbdaf0331b4d82f352f89956ce8be97e9fe5d0590a01a5ae493968f37d3462cdca0d30f0e3bb4799025e48682bcb1eefe152c847d52",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x5f78cefb39f7ab074718cacd54ef0b4d0eb0a52e": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x1257767465d91292f29c15df1e25e063daed8b59": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006001735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e5af16000555a735f78cefb39f7ab074718cacd54ef0b4d0eb0a52e315a905090036005900360015500",
+                            "storage": {
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0xae32ae2ec09b1a1521de4dbc0a846fcd40d9e1fd": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de97a536",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0281a3",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x603af7b08a939a62169b75cb69f02d9be508a63fe2ffd5d53f5f822c32157b8e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test a regular CALL to see if it warms the destination with insufficient\n    balance.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/berlin/eip2929_gas_cost_increases/test_call.py#L19",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2929.md",
+            "reference-spec-version": "0e11417265a623adb680c527b15d0cb6701b870b"
+        }
+    }
+}

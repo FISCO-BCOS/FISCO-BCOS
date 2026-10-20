@@ -1,0 +1,205 @@
+{
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_Cancun-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x682a481c2dba9adf0143b5f59a691aeffc905f3261be20596a65cdfaadac4de6",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x61259c43a86c27f486efc716f496247d3ed8451871faa86bc76b847743b05d8f",
+                        "receiptsRoot": "0x7707e324b8362092d0b8ebe2e234cb13592cc1b7b31cf8884ba2ff24e46eb4f7",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x18507",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x682a481c2dba9adf0143b5f59a691aeffc905f3261be20596a65cdfaadac4de6",
+                        "transactions": [
+                            "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x117a342f49ba4279462b1c9fb1d0efdfc5c2af01abfcdcc2324ee56dc8419b16",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_Paris-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0x9b91b1d71eb15e5351f74c3058dde39b6a27d6ae4b82375e725676120ffa03af",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2116f048870c528fae7f9249956734ba179f53e60930dd38a4bcea758c47924a",
+                        "receiptsRoot": "0x7707e324b8362092d0b8ebe2e234cb13592cc1b7b31cf8884ba2ff24e46eb4f7",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x18507",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x9b91b1d71eb15e5351f74c3058dde39b6a27d6ae4b82375e725676120ffa03af",
+                        "transactions": [
+                            "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x0df02c0864ee32dedfa3ece221f138378b51eb07335b09e22339f0d66ee4d3b7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_Prague-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0xaa8d106e5f7265e1af0d9b3dfd23171ed78d02288e3e181d723d0bfdc2e276fc",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8cf13ff6384f2c17110694061db392a22d326995ee6f1b8b5e749fd815490439",
+                        "receiptsRoot": "0x7707e324b8362092d0b8ebe2e234cb13592cc1b7b31cf8884ba2ff24e46eb4f7",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x18507",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xaa8d106e5f7265e1af0d9b3dfd23171ed78d02288e3e181d723d0bfdc2e276fc",
+                        "transactions": [
+                            "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x604ad2f0e5ae590819e2357648bbee4ba75a8d2f8fa557614b8cfebdc35596f3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_Shanghai-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x050ab547fc8f4cb0aa3383d0d92c3fa837b096e9b78552307349b54882f1b3cf",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf7e143f38998b66360e1ce92bc976f2f767778fd26036db910c79f0b5dced697",
+                        "receiptsRoot": "0x7707e324b8362092d0b8ebe2e234cb13592cc1b7b31cf8884ba2ff24e46eb4f7",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x18507",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x050ab547fc8f4cb0aa3383d0d92c3fa837b096e9b78552307349b54882f1b3cf",
+                        "transactions": [
+                            "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xfc08595c4dc180b3ccc6cdb80b4f33ffcd747a32948fd6ef383f146ab1477a27",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

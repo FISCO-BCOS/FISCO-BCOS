@@ -1,0 +1,65 @@
+{
+    "tests/prague/eip2935_historical_block_hashes_from_state/test_eip_mainnet.py::test_eip_2935[fork_Prague-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0x655e107148474ab98d6b5c5bdda0a4ff475e428456ff0820f3337c2c2521b283",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x851d7af0194d1663efd855923d346a13748d0148466dec33c123b6b2660b6b5a",
+                        "receiptsRoot": "0xa2ac602cd5e93d73a3c67be1b6815d88051e7f96a0852f576911cdacfa4ea359",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xbb87",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x655e107148474ab98d6b5c5bdda0a4ff475e428456ff0820f3337c2c2521b283",
+                        "transactions": [
+                            "0xf85f800a82c3509478460922692cbbd7792f4df0d12975c4822c66be808026a0e77f4af46d0e2fbfde5b96fe3d8ad309f8dc7da02d723a9c6c6c8ee11121d834a01b55b2305c30cc0ac96534dcaab56e61731628705d565c0d5bef04ffb48b5032"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3198de126f95544cc7f439ccf97d551844c339e63ff3d6eeeb2972a3029887b1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test a simple block hash request from EIP-2935 system contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2935_historical_block_hashes_from_state/test_eip_mainnet.py#L24",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2935.md",
+            "reference-spec-version": "06aadd458ee04ede80498db55927b052eb5bef38"
+        }
+    }
+}

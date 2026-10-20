@@ -1,0 +1,281 @@
+{
+    "tests/static/state_tests/stStaticFlagEnabled/CallWithZeroValueToPrecompileFromContractInitializationFiller.yml::CallWithZeroValueToPrecompileFromContractInitialization[fork_Cancun-state_test-]": {
+        "env": {
+            "currentCoinbase": "0xcafe000000000000000000000000000000000001",
+            "currentGasLimit": "0x989680",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xb000000000000000000000000000000000000000": {
+                "nonce": "0x00",
+                "balance": "0x03e8",
+                "code": "0x7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600055366000600037655a175a175a173660006000f56001557ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60025500",
+                "storage": {
+                    "0x00": "0xdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeaf",
+                    "0x01": "0xdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeaf"
+                }
+            },
+            "0xa000000000000000000000000000000000000000": {
+                "nonce": "0x00",
+                "balance": "0x03e8",
+                "code": "0x7f18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c600052601c6020527f73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f6040527feeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549606052602061200060806000600060015af1620a00005260a060020a6120005106620a010052620a0100513214620a02005260006000526000602052600060405260006060526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060025af1620a030052600051620a04005261200051620a05005260006000526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060035af1620a060052600051620a07005261200051620a08005260006000526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060045af1620a09005261200051620a10005260006000526000612000526001600052602060205260206040527f03fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc6060527f2efffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc6080527f2f0000000000000000000000000000000000000000000000000000000000000060a052602061200060a16000600060055af1620a11005261200051620a12005260006000526000602052600060405260006060526000608052600060a0526000612000527f0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd26000527f16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba6020527f1de49a4b0233273bba8146af82042d004f2085ec982397db0d97da17204cc2866040527f0217327ffc463919bef80cc166d09c6172639d8589799928761bcd9f22c903d4606052604061200060806000600060065af1620a13005261200051620a14005261202051620a15005260006000526000602052600060405260006060526000612000526000612020527f0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd26000527f16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba6020526003604052604061200060606000600060075af1620a16005261200051620a17005261202051620a1800526000600052600060205260006040526000612000526000612020527f1c76476f4def4bb94541d57ebba1193381ffa7aa76ada664dd31c16024c43f596000527f3034dd2920f673e204fee2811c678745fc819b55d3e9d294e45c9b03a76aef416020527f209dd15ebff5d46c4bd888e51a93cf99a7329636c63514396b4a452003a35bf76040527f04bf11ca01483bfa8b34b43561848d28905960114c8ac04049af4b6315a416786060527f2bb8324af6cfc93537a2ad1a445cfd0ca2a71acd7ac41fadbf933c2a51be344d6080527f120a2a4cf30c1bf9845f20c6fe39e07ea2cce61f0c9bb048165fe5e4de87755060a0527f111e129f1cf1097710d41c4ac70fcdfa5ba2023c6ff1cbeac322de49d1b6df7c60c0527f2032c61a830e3c17286de9462bf242fca2883585b93870a73853face6a6bf41160e0527f198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2610100527f1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed610120527f090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b610140527f12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa6101605260206120006101806000600060085af1620a19005261200051620a20005260006120005262012020620a0000f300",
+                "storage": {}
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x3d0900"
+            ],
+            "to": "0xb000000000000000000000000000000000000000",
+            "value": [
+                "0x64"
+            ],
+            "data": [
+                "0x7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60005562012020620a00006000600073a0000000000000000000000000000000000000005afa507ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600155620a000051610a0055620a110051610a1155620a010051610a0155620a120051610a1255620a020051610a0255620a130051610a1355620a030051610a0355620a140051610a1455620a040051610a0455620a150051610a1555620a050051610a0555620a160051610a1655620a060051610a0655620a170051610a1755620a070051610a0755620a180051610a1855620a080051610a0855620a190051610a1955620a090051610a0955620a200051610a2055620a100051610a105500"
+            ],
+            "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "secretKey": "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x9f7b54b515dfb264a3f1528168e4e43ca1f7a3104cca9cf9aff1de2f43dff30c",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf9018c800a833d090094b00000000000000000000000000000000000000064b9012a7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60005562012020620a00006000600073a0000000000000000000000000000000000000005afa507ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600155620a000051610a0055620a110051610a1155620a010051610a0155620a120051610a1255620a020051610a0255620a130051610a1355620a030051610a0355620a140051610a1455620a040051610a0455620a150051610a1555620a050051610a0555620a160051610a1655620a060051610a0655620a170051610a1755620a070051610a0755620a180051610a1855620a080051610a0855620a190051610a1955620a090051610a0955620a200051610a2055620a100051610a10550026a05cd1dc749057341e21a2cbe577a26af53507ee49880408af04b7ef312fd395bfa0064c20f78616e0a38f436d8d4d1abdd799434aff644aceaa9a06beab4fb1b49f",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xb000000000000000000000000000000000000000": {
+                            "nonce": "0x01",
+                            "balance": "0x044c",
+                            "code": "0x7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600055366000600037655a175a175a173660006000f56001557ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60025500",
+                            "storage": {
+                                "0x00": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+                                "0x01": "0xfd7776b1a634b0dc19301b174ccf30d4d24070a8",
+                                "0x02": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed"
+                            }
+                        },
+                        "0xa000000000000000000000000000000000000000": {
+                            "nonce": "0x00",
+                            "balance": "0x03e8",
+                            "code": "0x7f18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c600052601c6020527f73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f6040527feeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549606052602061200060806000600060015af1620a00005260a060020a6120005106620a010052620a0100513214620a02005260006000526000602052600060405260006060526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060025af1620a030052600051620a04005261200051620a05005260006000526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060035af1620a060052600051620a07005261200051620a08005260006000526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060045af1620a09005261200051620a10005260006000526000612000526001600052602060205260206040527f03fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc6060527f2efffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc6080527f2f0000000000000000000000000000000000000000000000000000000000000060a052602061200060a16000600060055af1620a11005261200051620a12005260006000526000602052600060405260006060526000608052600060a0526000612000527f0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd26000527f16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba6020527f1de49a4b0233273bba8146af82042d004f2085ec982397db0d97da17204cc2866040527f0217327ffc463919bef80cc166d09c6172639d8589799928761bcd9f22c903d4606052604061200060806000600060065af1620a13005261200051620a14005261202051620a15005260006000526000602052600060405260006060526000612000526000612020527f0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd26000527f16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba6020526003604052604061200060606000600060075af1620a16005261200051620a17005261202051620a1800526000600052600060205260006040526000612000526000612020527f1c76476f4def4bb94541d57ebba1193381ffa7aa76ada664dd31c16024c43f596000527f3034dd2920f673e204fee2811c678745fc819b55d3e9d294e45c9b03a76aef416020527f209dd15ebff5d46c4bd888e51a93cf99a7329636c63514396b4a452003a35bf76040527f04bf11ca01483bfa8b34b43561848d28905960114c8ac04049af4b6315a416786060527f2bb8324af6cfc93537a2ad1a445cfd0ca2a71acd7ac41fadbf933c2a51be344d6080527f120a2a4cf30c1bf9845f20c6fe39e07ea2cce61f0c9bb048165fe5e4de87755060a0527f111e129f1cf1097710d41c4ac70fcdfa5ba2023c6ff1cbeac322de49d1b6df7c60c0527f2032c61a830e3c17286de9462bf242fca2883585b93870a73853face6a6bf41160e0527f198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2610100527f1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed610120527f090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b610140527f12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa6101605260206120006101806000600060085af1620a19005261200051620a20005260006120005262012020620a0000f300",
+                            "storage": {}
+                        },
+                        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a5aacf32",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xfd7776b1a634b0dc19301b174ccf30d4d24070a8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x",
+                            "storage": {
+                                "0x00": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+                                "0x01": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+                                "0x0a00": "0x01",
+                                "0x0a11": "0x01",
+                                "0x0a01": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+                                "0x0a12": "0x01",
+                                "0x0a02": "0x01",
+                                "0x0a13": "0x01",
+                                "0x0a03": "0x01",
+                                "0x0a14": "0x1f4d1d80177b1377743d1901f70d7389be7f7a35a35bfd234a8aaee615b88c49",
+                                "0x0a04": "0x0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000",
+                                "0x0a15": "0x018683193ae021a2f8920fed186cde5d9b1365116865281ccf884c1f28b1df8f",
+                                "0x0a05": "0x73f5062fb68ed2a1ec82ff8c73f9251bb9cf53a623bc93527e16bc5ae29dad74",
+                                "0x0a16": "0x01",
+                                "0x0a06": "0x01",
+                                "0x0a17": "0x1f4d1d80177b1377743d1901f70d7389be7f7a35a35bfd234a8aaee615b88c49",
+                                "0x0a07": "0x0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000",
+                                "0x0a18": "0x018683193ae021a2f8920fed186cde5d9b1365116865281ccf884c1f28b1df8f",
+                                "0x0a08": "0x14ef238cfa4075e9ede92f18b1566c1dd0b99aaa",
+                                "0x0a19": "0x01",
+                                "0x0a09": "0x01",
+                                "0x0a20": "0x01",
+                                "0x0a10": "0x0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc8c049d017f484a7903da4a39b94ce75424d91537b4815de2949090722a511b1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/static/state_tests/stStaticFlagEnabled/CallWithZeroValueToPrecompileFromContractInitializationFiller.yml::CallWithZeroValueToPrecompileFromContractInitialization[fork_Prague-state_test-]": {
+        "env": {
+            "currentCoinbase": "0xcafe000000000000000000000000000000000001",
+            "currentGasLimit": "0x989680",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xb000000000000000000000000000000000000000": {
+                "nonce": "0x00",
+                "balance": "0x03e8",
+                "code": "0x7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600055366000600037655a175a175a173660006000f56001557ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60025500",
+                "storage": {
+                    "0x00": "0xdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeaf",
+                    "0x01": "0xdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeafdeadbeaf"
+                }
+            },
+            "0xa000000000000000000000000000000000000000": {
+                "nonce": "0x00",
+                "balance": "0x03e8",
+                "code": "0x7f18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c600052601c6020527f73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f6040527feeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549606052602061200060806000600060015af1620a00005260a060020a6120005106620a010052620a0100513214620a02005260006000526000602052600060405260006060526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060025af1620a030052600051620a04005261200051620a05005260006000526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060035af1620a060052600051620a07005261200051620a08005260006000526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060045af1620a09005261200051620a10005260006000526000612000526001600052602060205260206040527f03fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc6060527f2efffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc6080527f2f0000000000000000000000000000000000000000000000000000000000000060a052602061200060a16000600060055af1620a11005261200051620a12005260006000526000602052600060405260006060526000608052600060a0526000612000527f0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd26000527f16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba6020527f1de49a4b0233273bba8146af82042d004f2085ec982397db0d97da17204cc2866040527f0217327ffc463919bef80cc166d09c6172639d8589799928761bcd9f22c903d4606052604061200060806000600060065af1620a13005261200051620a14005261202051620a15005260006000526000602052600060405260006060526000612000526000612020527f0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd26000527f16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba6020526003604052604061200060606000600060075af1620a16005261200051620a17005261202051620a1800526000600052600060205260006040526000612000526000612020527f1c76476f4def4bb94541d57ebba1193381ffa7aa76ada664dd31c16024c43f596000527f3034dd2920f673e204fee2811c678745fc819b55d3e9d294e45c9b03a76aef416020527f209dd15ebff5d46c4bd888e51a93cf99a7329636c63514396b4a452003a35bf76040527f04bf11ca01483bfa8b34b43561848d28905960114c8ac04049af4b6315a416786060527f2bb8324af6cfc93537a2ad1a445cfd0ca2a71acd7ac41fadbf933c2a51be344d6080527f120a2a4cf30c1bf9845f20c6fe39e07ea2cce61f0c9bb048165fe5e4de87755060a0527f111e129f1cf1097710d41c4ac70fcdfa5ba2023c6ff1cbeac322de49d1b6df7c60c0527f2032c61a830e3c17286de9462bf242fca2883585b93870a73853face6a6bf41160e0527f198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2610100527f1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed610120527f090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b610140527f12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa6101605260206120006101806000600060085af1620a19005261200051620a20005260006120005262012020620a0000f300",
+                "storage": {}
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x3d0900"
+            ],
+            "to": "0xb000000000000000000000000000000000000000",
+            "value": [
+                "0x64"
+            ],
+            "data": [
+                "0x7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60005562012020620a00006000600073a0000000000000000000000000000000000000005afa507ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600155620a000051610a0055620a110051610a1155620a010051610a0155620a120051610a1255620a020051610a0255620a130051610a1355620a030051610a0355620a140051610a1455620a040051610a0455620a150051610a1555620a050051610a0555620a160051610a1655620a060051610a0655620a170051610a1755620a070051610a0755620a180051610a1855620a080051610a0855620a190051610a1955620a090051610a0955620a200051610a2055620a100051610a105500"
+            ],
+            "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "secretKey": "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x9f7b54b515dfb264a3f1528168e4e43ca1f7a3104cca9cf9aff1de2f43dff30c",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf9018c800a833d090094b00000000000000000000000000000000000000064b9012a7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60005562012020620a00006000600073a0000000000000000000000000000000000000005afa507ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600155620a000051610a0055620a110051610a1155620a010051610a0155620a120051610a1255620a020051610a0255620a130051610a1355620a030051610a0355620a140051610a1455620a040051610a0455620a150051610a1555620a050051610a0555620a160051610a1655620a060051610a0655620a170051610a1755620a070051610a0755620a180051610a1855620a080051610a0855620a190051610a1955620a090051610a0955620a200051610a2055620a100051610a10550026a05cd1dc749057341e21a2cbe577a26af53507ee49880408af04b7ef312fd395bfa0064c20f78616e0a38f436d8d4d1abdd799434aff644aceaa9a06beab4fb1b49f",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xb000000000000000000000000000000000000000": {
+                            "nonce": "0x01",
+                            "balance": "0x044c",
+                            "code": "0x7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600055366000600037655a175a175a173660006000f56001557ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60025500",
+                            "storage": {
+                                "0x00": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+                                "0x01": "0xfd7776b1a634b0dc19301b174ccf30d4d24070a8",
+                                "0x02": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed"
+                            }
+                        },
+                        "0xa000000000000000000000000000000000000000": {
+                            "nonce": "0x00",
+                            "balance": "0x03e8",
+                            "code": "0x7f18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c600052601c6020527f73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f6040527feeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549606052602061200060806000600060015af1620a00005260a060020a6120005106620a010052620a0100513214620a02005260006000526000602052600060405260006060526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060025af1620a030052600051620a04005261200051620a05005260006000526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060035af1620a060052600051620a07005261200051620a08005260006000526000612000527c0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000600052602061200060206000600060045af1620a09005261200051620a10005260006000526000612000526001600052602060205260206040527f03fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc6060527f2efffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc6080527f2f0000000000000000000000000000000000000000000000000000000000000060a052602061200060a16000600060055af1620a11005261200051620a12005260006000526000602052600060405260006060526000608052600060a0526000612000527f0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd26000527f16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba6020527f1de49a4b0233273bba8146af82042d004f2085ec982397db0d97da17204cc2866040527f0217327ffc463919bef80cc166d09c6172639d8589799928761bcd9f22c903d4606052604061200060806000600060065af1620a13005261200051620a14005261202051620a15005260006000526000602052600060405260006060526000612000526000612020527f0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd26000527f16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba6020526003604052604061200060606000600060075af1620a16005261200051620a17005261202051620a1800526000600052600060205260006040526000612000526000612020527f1c76476f4def4bb94541d57ebba1193381ffa7aa76ada664dd31c16024c43f596000527f3034dd2920f673e204fee2811c678745fc819b55d3e9d294e45c9b03a76aef416020527f209dd15ebff5d46c4bd888e51a93cf99a7329636c63514396b4a452003a35bf76040527f04bf11ca01483bfa8b34b43561848d28905960114c8ac04049af4b6315a416786060527f2bb8324af6cfc93537a2ad1a445cfd0ca2a71acd7ac41fadbf933c2a51be344d6080527f120a2a4cf30c1bf9845f20c6fe39e07ea2cce61f0c9bb048165fe5e4de87755060a0527f111e129f1cf1097710d41c4ac70fcdfa5ba2023c6ff1cbeac322de49d1b6df7c60c0527f2032c61a830e3c17286de9462bf242fca2883585b93870a73853face6a6bf41160e0527f198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2610100527f1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed610120527f090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b610140527f12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa6101605260206120006101806000600060085af1620a19005261200051620a20005260006120005262012020620a0000f300",
+                            "storage": {}
+                        },
+                        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a5aacf32",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xfd7776b1a634b0dc19301b174ccf30d4d24070a8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x",
+                            "storage": {
+                                "0x00": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+                                "0x01": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+                                "0x0a00": "0x01",
+                                "0x0a11": "0x01",
+                                "0x0a01": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+                                "0x0a12": "0x01",
+                                "0x0a02": "0x01",
+                                "0x0a13": "0x01",
+                                "0x0a03": "0x01",
+                                "0x0a14": "0x1f4d1d80177b1377743d1901f70d7389be7f7a35a35bfd234a8aaee615b88c49",
+                                "0x0a04": "0x0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000",
+                                "0x0a15": "0x018683193ae021a2f8920fed186cde5d9b1365116865281ccf884c1f28b1df8f",
+                                "0x0a05": "0x73f5062fb68ed2a1ec82ff8c73f9251bb9cf53a623bc93527e16bc5ae29dad74",
+                                "0x0a16": "0x01",
+                                "0x0a06": "0x01",
+                                "0x0a17": "0x1f4d1d80177b1377743d1901f70d7389be7f7a35a35bfd234a8aaee615b88c49",
+                                "0x0a07": "0x0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000",
+                                "0x0a18": "0x018683193ae021a2f8920fed186cde5d9b1365116865281ccf884c1f28b1df8f",
+                                "0x0a08": "0x14ef238cfa4075e9ede92f18b1566c1dd0b99aaa",
+                                "0x0a19": "0x01",
+                                "0x0a09": "0x01",
+                                "0x0a20": "0x01",
+                                "0x0a10": "0x0ccccccccccccccccccccccccccccccccccccccccccccccccccc000000"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x4a830b41d1f964a9dad226cf87468b097cb5b78b6b8c8d5007ec983add420026",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    }
+}

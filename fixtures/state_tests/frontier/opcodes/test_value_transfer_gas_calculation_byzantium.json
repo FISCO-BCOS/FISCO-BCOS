@@ -1,0 +1,3130 @@
+{
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Berlin-state_test-gas_shortage_0-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x703fd4b361bcffa826815fc0aedce4e69321e7ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8f5b5ebec5901beb2175e851f04874c04062abe2": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173ff0c84f07dfd2104549f242088383febc624e9685af2",
+                "storage": {}
+            },
+            "0x8f5b5ebec5901beb2175e851f04874c04062ace2": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000738f5b5ebec5901beb2175e851f04874c04062abe2612d64f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8f5b5ebec5901beb2175e851f04874c04062ace2",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x703fd4b361bcffa826815fc0aedce4e69321e7ad",
+            "secretKey": "0x1eadb2ae7a7b773a372524f68f5b5ebec5901beb2175e851f04874c04062abe2"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x21d2e74f9dad93f479b3ef909116e328a9aff64700171e2358281da8b4059aba",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120948f5b5ebec5901beb2175e851f04874c04062ace2018025a0d1157f224b0513695f6e0723f0da6d251a81e05163c7d4f62c7dc4da3e15cf0fa0219c97782c7ce82f05c3edff68abe9b15bc5b0df0d5c360008e4f5a635d98fae",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x703fd4b361bcffa826815fc0aedce4e69321e7ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9799d7",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8f5b5ebec5901beb2175e851f04874c04062abe2": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173ff0c84f07dfd2104549f242088383febc624e9685af2",
+                            "storage": {}
+                        },
+                        "0x8f5b5ebec5901beb2175e851f04874c04062ace2": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000738f5b5ebec5901beb2175e851f04874c04062abe2612d64f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x086628",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa1b962bdb661b119383cb8c829e55c1622e545d47da162f74059211b611d3506",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Berlin-state_test-gas_shortage_0-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x38ce4d11f881cc45131c749a2e4f3e35428061a7": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xf58524d16b1bfc68d12fee2f67e5603137861de4": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173b65711799e35518d3e83190d74b724be6c391c8d5af1",
+                "storage": {}
+            },
+            "0xf58524d16b1bfc68d12fee2f67e5603137861ee4": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073f58524d16b1bfc68d12fee2f67e5603137861de4618f0cf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xf58524d16b1bfc68d12fee2f67e5603137861ee4",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x38ce4d11f881cc45131c749a2e4f3e35428061a7",
+            "secretKey": "0x8f5a8749ade0e5ca15cd24e6f58524d16b1bfc68d12fee2f67e5603137861de4"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0xc2ced0ce0b4208b26a65120e6afc7848d256a2ea8ce764d23961065b7c925306",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094f58524d16b1bfc68d12fee2f67e5603137861ee4018025a0903e8c2906efb437116dfdf671c939da08e3a4fd09e2e538ee4f5261f0a6b6a8a0013e9e8c72cbfb43334e212d3dfd24041acee2de46b645667ae2083a35c043c5",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x38ce4d11f881cc45131c749a2e4f3e35428061a7": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de93c947",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xf58524d16b1bfc68d12fee2f67e5603137861de4": {
+                            "nonce": "0x01",
+                            "balance": "0x02",
+                            "code": "0x6000600060006000600173b65711799e35518d3e83190d74b724be6c391c8d5af1",
+                            "storage": {}
+                        },
+                        "0xf58524d16b1bfc68d12fee2f67e5603137861ee4": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073f58524d16b1bfc68d12fee2f67e5603137861de4618f0cf1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xb65711799e35518d3e83190d74b724be6c391c8d": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0c36b8",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x65896982e75d296662ffae27d9cf4c436d107c14fc3489db3c23e7782b4ddd08",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Berlin-state_test-gas_shortage_0-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x98beac81edb5bf087d8dc578291c9eb5264a16ad": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073632fd565721767e87c2ee06964c7c663c5a749885af4",
+                "storage": {}
+            },
+            "0x98beac81edb5bf087d8dc578291c9eb5264a17ad": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600060007398beac81edb5bf087d8dc578291c9eb5264a16ad610a39f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x98beac81edb5bf087d8dc578291c9eb5264a17ad",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9",
+            "secretKey": "0x0dd956157274828a61a77e4898beac81edb5bf087d8dc578291c9eb5264a16ad"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x14061d5e7cb3a06d0a05d19736b12fa6b0d72c4d943afe079c6c353742119736",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a1209498beac81edb5bf087d8dc578291c9eb5264a17ad018026a024472c353b23cd1b3dc414415a43d2329d5504ec510301e5f28a1116a3b5a1e5a03648de0e42378bda4565cf641510967bf4b80a1d317a95b46e01cc5616b46935",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de989fad",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x98beac81edb5bf087d8dc578291c9eb5264a16ad": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073632fd565721767e87c2ee06964c7c663c5a749885af4",
+                            "storage": {}
+                        },
+                        "0x98beac81edb5bf087d8dc578291c9eb5264a17ad": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x600060006000600060007398beac81edb5bf087d8dc578291c9eb5264a16ad610a39f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x076052",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xbf28470be58d45a30eaa43fc859df0669889ca7ae0421081e9633eddde4ff014",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Berlin-state_test-gas_shortage_0-callee_opcode_STATICCALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xb649456b10eff8f39b0c66413fea8d6bd6ef6819": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073cf3cd01d4ec9541ec90c31d7331ed9e1faa8a8b95afa",
+                "storage": {}
+            },
+            "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073b649456b10eff8f39b0c66413fea8d6bd6ef6819610a39f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e",
+            "secretKey": "0x015c9360b8c9911cf83cb91fb649456b10eff8f39b0c66413fea8d6bd6ef6819"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0xa7e1238a3dc23e84e3d7fff5bbada600f1554ac594c56f947562e8db7162466a",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094b649456b10eff8f39b0c66413fea8d6bd6ef6919018025a0089a5aa8ec9ab019fb22230cc2311b821cf4413080e86883e79fcd3ce1934427a0036fc4e348779fc9da4f3c6cc55732b80cd4ab9b64c71a9bf40351cc6865ff76",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de989fad",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xb649456b10eff8f39b0c66413fea8d6bd6ef6819": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073cf3cd01d4ec9541ec90c31d7331ed9e1faa8a8b95afa",
+                            "storage": {}
+                        },
+                        "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073b649456b10eff8f39b0c66413fea8d6bd6ef6819610a39f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x076052",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x4b02665b353c4b37cc61531fa07b270fd73160103007676d02443e958a190ed3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Berlin-state_test-gas_shortage_1-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x848b1c12c58aabe8f3ef5bbec97ed33754cf7feb": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173f325f03fbde34a9d49cd0e0ed4be6bf161201dcb5af2",
+                "storage": {}
+            },
+            "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073848b1c12c58aabe8f3ef5bbec97ed33754cf7feb612d63f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0",
+            "secretKey": "0xf5d8891b46ab9005c32345af848b1c12c58aabe8f3ef5bbec97ed33754cf7feb"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x8d5819a1188cdb7858b7031beaf8eeea4549a88291c0210f753b01160f7e8c03",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094848b1c12c58aabe8f3ef5bbec97ed33754cf80eb018026a0304bef7205861cf431f69f4b9fc23064200c02ae649731afff992412210852cca043f514d0403b9499309034e6edcf0b103dd491b7179421cde3b106b77463156b",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9a4961",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x848b1c12c58aabe8f3ef5bbec97ed33754cf7feb": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173f325f03fbde34a9d49cd0e0ed4be6bf161201dcb5af2",
+                            "storage": {}
+                        },
+                        "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073848b1c12c58aabe8f3ef5bbec97ed33754cf7feb612d63f1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x05b69e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xacfc7d8efc5564ab07944c91c23ab8420985043d1bd18b74f32130ba1dcdd5c6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Berlin-state_test-gas_shortage_1-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x3fca517994f272b3785de810aed5f40f74a87d60": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173c17caf460dbe7dbcbea0d660f92a1fc3d28d20e25af1",
+                "storage": {}
+            },
+            "0x3fca517994f272b3785de810aed5f40f74a87e60": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000733fca517994f272b3785de810aed5f40f74a87d60618f0bf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x3fca517994f272b3785de810aed5f40f74a87e60",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452",
+            "secretKey": "0x68352066b81d2dd81aefb2723fca517994f272b3785de810aed5f40f74a87d60"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x08151aa70effe1e56641ffe3bef5138ef7835838d0356eacd7c28d0cd5cc4b97",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120943fca517994f272b3785de810aed5f40f74a87e60018025a0fbd69f012b116f081bcec3e2d85028ca04b62c715e6c518ba47e3d0b5b5a0438a041893b29ab6ae16a5a86af14adeaa911efafd6733d1d285f4ddee1d5bd250b30",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9678d1",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x3fca517994f272b3785de810aed5f40f74a87d60": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173c17caf460dbe7dbcbea0d660f92a1fc3d28d20e25af1",
+                            "storage": {}
+                        },
+                        "0x3fca517994f272b3785de810aed5f40f74a87e60": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000733fca517994f272b3785de810aed5f40f74a87d60618f0bf1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x09872e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xfd74c61117eaa769b1f6a91c2276eea20d9c32286c7f84beb32f41cc82499573",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Berlin-state_test-gas_shortage_1-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xead0677526ccdd465d64cd231bb39761e5fac0c9": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060007396bc300e9db3db0fc8e70067bcb052609c4f8f175af4",
+                "storage": {}
+            },
+            "0xead0677526ccdd465d64cd231bb39761e5fac1c9": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073ead0677526ccdd465d64cd231bb39761e5fac0c9610a38f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xead0677526ccdd465d64cd231bb39761e5fac1c9",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674",
+            "secretKey": "0x54e3840eb94336a96a694b84ead0677526ccdd465d64cd231bb39761e5fac0c9"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x44978a65d1eaae9b00932cdc166b4f6f603e1910c3913ce2dd2a88f764ee1677",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094ead0677526ccdd465d64cd231bb39761e5fac1c9018026a0c2c78100f0a6b0524195e2c0dcfd540914eef72e1b2a31bf1ace783e0888c57ca048a46a11ca4b55794e38d3dfc10c343adb16943f9f0ea776622bb53c53e0f558",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9ba90f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xead0677526ccdd465d64cd231bb39761e5fac0c9": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x60006000600060007396bc300e9db3db0fc8e70067bcb052609c4f8f175af4",
+                            "storage": {}
+                        },
+                        "0xead0677526ccdd465d64cd231bb39761e5fac1c9": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073ead0677526ccdd465d64cd231bb39761e5fac0c9610a38f1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0456f0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa42d296a90be702d7709dac7ec70dd5c3b7a6616caa9241baff7eb520e32920c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Berlin-state_test-gas_shortage_1-callee_opcode_STATICCALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x2c2cf2d9ba033adca59477edfa453d387747e891": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000736ccb94d357e33605f69a3c03e5e0f1eb34533a7c5afa",
+                "storage": {}
+            },
+            "0x2c2cf2d9ba033adca59477edfa453d387747e991": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000732c2cf2d9ba033adca59477edfa453d387747e891610a38f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x2c2cf2d9ba033adca59477edfa453d387747e991",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7",
+            "secretKey": "0xec41c9923a27f7ee238d410c2c2cf2d9ba033adca59477edfa453d387747e891"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x34cd2cdec28b30d68c35c0f89c812cb4b1f555bc0312b6b246baed5e3ed82bf6",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120942c2cf2d9ba033adca59477edfa453d387747e991018026a05876dc8be9a4ccbe7ce1f735fe6080b82b50b443fa19d22c43c66db5fb020050a07c49b405aef4b9afb5ecde210f2110a5afe1e1dc0ca124921b9b4e0b1f585b7e",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9ba90f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2c2cf2d9ba033adca59477edfa453d387747e891": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000736ccb94d357e33605f69a3c03e5e0f1eb34533a7c5afa",
+                            "storage": {}
+                        },
+                        "0x2c2cf2d9ba033adca59477edfa453d387747e991": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000732c2cf2d9ba033adca59477edfa453d387747e891610a38f1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0456f0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x20c33486cb5c755c0b992d834b32dba9eea3cbe01317fa5ca274038b4ef3f610",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Byzantium-state_test-gas_shortage_0-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x703fd4b361bcffa826815fc0aedce4e69321e7ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8f5b5ebec5901beb2175e851f04874c04062abe2": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173ff0c84f07dfd2104549f242088383febc624e9685af2",
+                "storage": {}
+            },
+            "0x8f5b5ebec5901beb2175e851f04874c04062ace2": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000738f5b5ebec5901beb2175e851f04874c04062abe26125f8f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8f5b5ebec5901beb2175e851f04874c04062ace2",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x703fd4b361bcffa826815fc0aedce4e69321e7ad",
+            "secretKey": "0x1eadb2ae7a7b773a372524f68f5b5ebec5901beb2175e851f04874c04062abe2"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0xb5bb9a1ee3a58446b3d23809d73abe235ab4f545814511f84dc2849aff88d4b6",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120948f5b5ebec5901beb2175e851f04874c04062ace2018025a0d1157f224b0513695f6e0723f0da6d251a81e05163c7d4f62c7dc4da3e15cf0fa0219c97782c7ce82f05c3edff68abe9b15bc5b0df0d5c360008e4f5a635d98fae",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x703fd4b361bcffa826815fc0aedce4e69321e7ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de98804f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8f5b5ebec5901beb2175e851f04874c04062abe2": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173ff0c84f07dfd2104549f242088383febc624e9685af2",
+                            "storage": {}
+                        },
+                        "0x8f5b5ebec5901beb2175e851f04874c04062ace2": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000738f5b5ebec5901beb2175e851f04874c04062abe26125f8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x077fb0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb49b4d84bc3e3cf5698a197a1e79c416c6af2d39ce52cc3202549267b5f3a43b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Byzantium-state_test-gas_shortage_0-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x38ce4d11f881cc45131c749a2e4f3e35428061a7": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xf58524d16b1bfc68d12fee2f67e5603137861de4": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173b65711799e35518d3e83190d74b724be6c391c8d5af1",
+                "storage": {}
+            },
+            "0xf58524d16b1bfc68d12fee2f67e5603137861ee4": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073f58524d16b1bfc68d12fee2f67e5603137861de46187a0f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xf58524d16b1bfc68d12fee2f67e5603137861ee4",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x38ce4d11f881cc45131c749a2e4f3e35428061a7",
+            "secretKey": "0x8f5a8749ade0e5ca15cd24e6f58524d16b1bfc68d12fee2f67e5603137861de4"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0xe547a7133a9c9063e42a01264a52e57e68326b4e90bb0070c856272d64122877",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094f58524d16b1bfc68d12fee2f67e5603137861ee4018025a0903e8c2906efb437116dfdf671c939da08e3a4fd09e2e538ee4f5261f0a6b6a8a0013e9e8c72cbfb43334e212d3dfd24041acee2de46b645667ae2083a35c043c5",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x38ce4d11f881cc45131c749a2e4f3e35428061a7": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de94afbf",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xf58524d16b1bfc68d12fee2f67e5603137861de4": {
+                            "nonce": "0x01",
+                            "balance": "0x02",
+                            "code": "0x6000600060006000600173b65711799e35518d3e83190d74b724be6c391c8d5af1",
+                            "storage": {}
+                        },
+                        "0xf58524d16b1bfc68d12fee2f67e5603137861ee4": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073f58524d16b1bfc68d12fee2f67e5603137861de46187a0f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xb65711799e35518d3e83190d74b724be6c391c8d": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0b5040",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1374fe8839e58d7abcc701adb46e80c4841e7db52d3c478a2cbc9516209e768c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Byzantium-state_test-gas_shortage_0-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x98beac81edb5bf087d8dc578291c9eb5264a16ad": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073632fd565721767e87c2ee06964c7c663c5a749885af4",
+                "storage": {}
+            },
+            "0x98beac81edb5bf087d8dc578291c9eb5264a17ad": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600060007398beac81edb5bf087d8dc578291c9eb5264a16ad6102cdf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x98beac81edb5bf087d8dc578291c9eb5264a17ad",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9",
+            "secretKey": "0x0dd956157274828a61a77e4898beac81edb5bf087d8dc578291c9eb5264a16ad"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0xad1779e7cb9cd64aac46fe6fa533a3c93a937337bc87e4ba053ba44909e11604",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a1209498beac81edb5bf087d8dc578291c9eb5264a17ad018026a024472c353b23cd1b3dc414415a43d2329d5504ec510301e5f28a1116a3b5a1e5a03648de0e42378bda4565cf641510967bf4b80a1d317a95b46e01cc5616b46935",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de998625",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x98beac81edb5bf087d8dc578291c9eb5264a16ad": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073632fd565721767e87c2ee06964c7c663c5a749885af4",
+                            "storage": {}
+                        },
+                        "0x98beac81edb5bf087d8dc578291c9eb5264a17ad": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x600060006000600060007398beac81edb5bf087d8dc578291c9eb5264a16ad6102cdf1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0679da",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xbf68e4b9a432c50d6c1fd4d0caa3d9b19f9a246f5be50f676409e4d1757312d0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Byzantium-state_test-gas_shortage_0-callee_opcode_STATICCALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xb649456b10eff8f39b0c66413fea8d6bd6ef6819": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073cf3cd01d4ec9541ec90c31d7331ed9e1faa8a8b95afa",
+                "storage": {}
+            },
+            "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073b649456b10eff8f39b0c66413fea8d6bd6ef68196102cdf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e",
+            "secretKey": "0x015c9360b8c9911cf83cb91fb649456b10eff8f39b0c66413fea8d6bd6ef6819"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0xb86fa5befd1ecbc4f822f2a8689fa50792ad3fb0978e6dd04cd4fd63fa464100",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094b649456b10eff8f39b0c66413fea8d6bd6ef6919018025a0089a5aa8ec9ab019fb22230cc2311b821cf4413080e86883e79fcd3ce1934427a0036fc4e348779fc9da4f3c6cc55732b80cd4ab9b64c71a9bf40351cc6865ff76",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de998625",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xb649456b10eff8f39b0c66413fea8d6bd6ef6819": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073cf3cd01d4ec9541ec90c31d7331ed9e1faa8a8b95afa",
+                            "storage": {}
+                        },
+                        "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073b649456b10eff8f39b0c66413fea8d6bd6ef68196102cdf1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0679da",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x6b0ff6aace903530898cb7001f05fd738c26c13d8df6278f78197c54f1ef0de4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Byzantium-state_test-gas_shortage_1-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x848b1c12c58aabe8f3ef5bbec97ed33754cf7feb": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173f325f03fbde34a9d49cd0e0ed4be6bf161201dcb5af2",
+                "storage": {}
+            },
+            "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073848b1c12c58aabe8f3ef5bbec97ed33754cf7feb6125f7f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0",
+            "secretKey": "0xf5d8891b46ab9005c32345af848b1c12c58aabe8f3ef5bbec97ed33754cf7feb"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0xfa26ae7a660228c9527ff856b2dcbb0cb975d08626fab1dddf096248896491e4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094848b1c12c58aabe8f3ef5bbec97ed33754cf80eb018026a0304bef7205861cf431f69f4b9fc23064200c02ae649731afff992412210852cca043f514d0403b9499309034e6edcf0b103dd491b7179421cde3b106b77463156b",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9a7071",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x848b1c12c58aabe8f3ef5bbec97ed33754cf7feb": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173f325f03fbde34a9d49cd0e0ed4be6bf161201dcb5af2",
+                            "storage": {}
+                        },
+                        "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073848b1c12c58aabe8f3ef5bbec97ed33754cf7feb6125f7f1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x058f8e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xcbee16e6e285a7bac0144bedc92482bf64594ddb97d279fa9462fbc1747e495f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Byzantium-state_test-gas_shortage_1-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x3fca517994f272b3785de810aed5f40f74a87d60": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173c17caf460dbe7dbcbea0d660f92a1fc3d28d20e25af1",
+                "storage": {}
+            },
+            "0x3fca517994f272b3785de810aed5f40f74a87e60": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000733fca517994f272b3785de810aed5f40f74a87d6061879ff1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x3fca517994f272b3785de810aed5f40f74a87e60",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452",
+            "secretKey": "0x68352066b81d2dd81aefb2723fca517994f272b3785de810aed5f40f74a87d60"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0xbb998e203f13d79ee343c398a12aacbe05299315ad857248e1fceaa9fedeab04",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120943fca517994f272b3785de810aed5f40f74a87e60018025a0fbd69f012b116f081bcec3e2d85028ca04b62c715e6c518ba47e3d0b5b5a0438a041893b29ab6ae16a5a86af14adeaa911efafd6733d1d285f4ddee1d5bd250b30",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de969fe1",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x3fca517994f272b3785de810aed5f40f74a87d60": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173c17caf460dbe7dbcbea0d660f92a1fc3d28d20e25af1",
+                            "storage": {}
+                        },
+                        "0x3fca517994f272b3785de810aed5f40f74a87e60": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000733fca517994f272b3785de810aed5f40f74a87d6061879ff1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x09601e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb13388297b1292413f38130e3ed16461f0fb4a78d9f4cd1a03f52f5006c2b870",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Byzantium-state_test-gas_shortage_1-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xead0677526ccdd465d64cd231bb39761e5fac0c9": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060007396bc300e9db3db0fc8e70067bcb052609c4f8f175af4",
+                "storage": {}
+            },
+            "0xead0677526ccdd465d64cd231bb39761e5fac1c9": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073ead0677526ccdd465d64cd231bb39761e5fac0c96102ccf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xead0677526ccdd465d64cd231bb39761e5fac1c9",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674",
+            "secretKey": "0x54e3840eb94336a96a694b84ead0677526ccdd465d64cd231bb39761e5fac0c9"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0xbf93f7387bfe5e8f379caf3e280efe499179c9c025b42ae2841c5aeae8413adb",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094ead0677526ccdd465d64cd231bb39761e5fac1c9018026a0c2c78100f0a6b0524195e2c0dcfd540914eef72e1b2a31bf1ace783e0888c57ca048a46a11ca4b55794e38d3dfc10c343adb16943f9f0ea776622bb53c53e0f558",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9bd01f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xead0677526ccdd465d64cd231bb39761e5fac0c9": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x60006000600060007396bc300e9db3db0fc8e70067bcb052609c4f8f175af4",
+                            "storage": {}
+                        },
+                        "0xead0677526ccdd465d64cd231bb39761e5fac1c9": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073ead0677526ccdd465d64cd231bb39761e5fac0c96102ccf1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x042fe0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x56cab2d1176d89d5ddf5e9ae49f21635e9eefb1167e8880f4491af337ee788ff",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Byzantium-state_test-gas_shortage_1-callee_opcode_STATICCALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x2c2cf2d9ba033adca59477edfa453d387747e891": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000736ccb94d357e33605f69a3c03e5e0f1eb34533a7c5afa",
+                "storage": {}
+            },
+            "0x2c2cf2d9ba033adca59477edfa453d387747e991": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000732c2cf2d9ba033adca59477edfa453d387747e8916102ccf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x2c2cf2d9ba033adca59477edfa453d387747e991",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7",
+            "secretKey": "0xec41c9923a27f7ee238d410c2c2cf2d9ba033adca59477edfa453d387747e891"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0x68287f732a7a9b21b5ee9778898c4b78627c7a92812a06f0285516f2b10bf128",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120942c2cf2d9ba033adca59477edfa453d387747e991018026a05876dc8be9a4ccbe7ce1f735fe6080b82b50b443fa19d22c43c66db5fb020050a07c49b405aef4b9afb5ecde210f2110a5afe1e1dc0ca124921b9b4e0b1f585b7e",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9bd01f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2c2cf2d9ba033adca59477edfa453d387747e891": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000736ccb94d357e33605f69a3c03e5e0f1eb34533a7c5afa",
+                            "storage": {}
+                        },
+                        "0x2c2cf2d9ba033adca59477edfa453d387747e991": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000732c2cf2d9ba033adca59477edfa453d387747e8916102ccf1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x042fe0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x9efee70315e9a979c833b3e2dff47570e508ca31addf1ea5422a68ecea108389",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_ConstantinopleFix-state_test-gas_shortage_0-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x703fd4b361bcffa826815fc0aedce4e69321e7ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8f5b5ebec5901beb2175e851f04874c04062abe2": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173ff0c84f07dfd2104549f242088383febc624e9685af2",
+                "storage": {}
+            },
+            "0x8f5b5ebec5901beb2175e851f04874c04062ace2": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000738f5b5ebec5901beb2175e851f04874c04062abe26125f8f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8f5b5ebec5901beb2175e851f04874c04062ace2",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x703fd4b361bcffa826815fc0aedce4e69321e7ad",
+            "secretKey": "0x1eadb2ae7a7b773a372524f68f5b5ebec5901beb2175e851f04874c04062abe2"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0xb5bb9a1ee3a58446b3d23809d73abe235ab4f545814511f84dc2849aff88d4b6",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120948f5b5ebec5901beb2175e851f04874c04062ace2018025a0d1157f224b0513695f6e0723f0da6d251a81e05163c7d4f62c7dc4da3e15cf0fa0219c97782c7ce82f05c3edff68abe9b15bc5b0df0d5c360008e4f5a635d98fae",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x703fd4b361bcffa826815fc0aedce4e69321e7ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de98804f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8f5b5ebec5901beb2175e851f04874c04062abe2": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173ff0c84f07dfd2104549f242088383febc624e9685af2",
+                            "storage": {}
+                        },
+                        "0x8f5b5ebec5901beb2175e851f04874c04062ace2": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000738f5b5ebec5901beb2175e851f04874c04062abe26125f8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x077fb0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x56e060c9ffd3474ad296c94233e8dc4aebd9d88a768b6a5d1589ab7963a7ae41",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_ConstantinopleFix-state_test-gas_shortage_0-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x38ce4d11f881cc45131c749a2e4f3e35428061a7": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xf58524d16b1bfc68d12fee2f67e5603137861de4": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173b65711799e35518d3e83190d74b724be6c391c8d5af1",
+                "storage": {}
+            },
+            "0xf58524d16b1bfc68d12fee2f67e5603137861ee4": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073f58524d16b1bfc68d12fee2f67e5603137861de46187a0f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xf58524d16b1bfc68d12fee2f67e5603137861ee4",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x38ce4d11f881cc45131c749a2e4f3e35428061a7",
+            "secretKey": "0x8f5a8749ade0e5ca15cd24e6f58524d16b1bfc68d12fee2f67e5603137861de4"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0xe547a7133a9c9063e42a01264a52e57e68326b4e90bb0070c856272d64122877",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094f58524d16b1bfc68d12fee2f67e5603137861ee4018025a0903e8c2906efb437116dfdf671c939da08e3a4fd09e2e538ee4f5261f0a6b6a8a0013e9e8c72cbfb43334e212d3dfd24041acee2de46b645667ae2083a35c043c5",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x38ce4d11f881cc45131c749a2e4f3e35428061a7": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de94afbf",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xf58524d16b1bfc68d12fee2f67e5603137861de4": {
+                            "nonce": "0x01",
+                            "balance": "0x02",
+                            "code": "0x6000600060006000600173b65711799e35518d3e83190d74b724be6c391c8d5af1",
+                            "storage": {}
+                        },
+                        "0xf58524d16b1bfc68d12fee2f67e5603137861ee4": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073f58524d16b1bfc68d12fee2f67e5603137861de46187a0f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xb65711799e35518d3e83190d74b724be6c391c8d": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0b5040",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x9f3d903fda82a50bcf6d811175383c3e3c250a3d39bac9221bb6223ede3beac9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_ConstantinopleFix-state_test-gas_shortage_0-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x98beac81edb5bf087d8dc578291c9eb5264a16ad": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073632fd565721767e87c2ee06964c7c663c5a749885af4",
+                "storage": {}
+            },
+            "0x98beac81edb5bf087d8dc578291c9eb5264a17ad": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600060007398beac81edb5bf087d8dc578291c9eb5264a16ad6102cdf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x98beac81edb5bf087d8dc578291c9eb5264a17ad",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9",
+            "secretKey": "0x0dd956157274828a61a77e4898beac81edb5bf087d8dc578291c9eb5264a16ad"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0xad1779e7cb9cd64aac46fe6fa533a3c93a937337bc87e4ba053ba44909e11604",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a1209498beac81edb5bf087d8dc578291c9eb5264a17ad018026a024472c353b23cd1b3dc414415a43d2329d5504ec510301e5f28a1116a3b5a1e5a03648de0e42378bda4565cf641510967bf4b80a1d317a95b46e01cc5616b46935",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de998625",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x98beac81edb5bf087d8dc578291c9eb5264a16ad": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073632fd565721767e87c2ee06964c7c663c5a749885af4",
+                            "storage": {}
+                        },
+                        "0x98beac81edb5bf087d8dc578291c9eb5264a17ad": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x600060006000600060007398beac81edb5bf087d8dc578291c9eb5264a16ad6102cdf1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0679da",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x3e49115229bbc282ccc6afec598f79ec0a1836ab58f651f9e4ca177ed6f7e01a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_ConstantinopleFix-state_test-gas_shortage_0-callee_opcode_STATICCALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xb649456b10eff8f39b0c66413fea8d6bd6ef6819": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073cf3cd01d4ec9541ec90c31d7331ed9e1faa8a8b95afa",
+                "storage": {}
+            },
+            "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073b649456b10eff8f39b0c66413fea8d6bd6ef68196102cdf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e",
+            "secretKey": "0x015c9360b8c9911cf83cb91fb649456b10eff8f39b0c66413fea8d6bd6ef6819"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0xb86fa5befd1ecbc4f822f2a8689fa50792ad3fb0978e6dd04cd4fd63fa464100",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094b649456b10eff8f39b0c66413fea8d6bd6ef6919018025a0089a5aa8ec9ab019fb22230cc2311b821cf4413080e86883e79fcd3ce1934427a0036fc4e348779fc9da4f3c6cc55732b80cd4ab9b64c71a9bf40351cc6865ff76",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de998625",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xb649456b10eff8f39b0c66413fea8d6bd6ef6819": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073cf3cd01d4ec9541ec90c31d7331ed9e1faa8a8b95afa",
+                            "storage": {}
+                        },
+                        "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073b649456b10eff8f39b0c66413fea8d6bd6ef68196102cdf1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0679da",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1dc2b0848d57b2f561cfc3600de9581ee625172ea01399389b34fd5b2148938d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_ConstantinopleFix-state_test-gas_shortage_1-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x848b1c12c58aabe8f3ef5bbec97ed33754cf7feb": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173f325f03fbde34a9d49cd0e0ed4be6bf161201dcb5af2",
+                "storage": {}
+            },
+            "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073848b1c12c58aabe8f3ef5bbec97ed33754cf7feb6125f7f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0",
+            "secretKey": "0xf5d8891b46ab9005c32345af848b1c12c58aabe8f3ef5bbec97ed33754cf7feb"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0xfa26ae7a660228c9527ff856b2dcbb0cb975d08626fab1dddf096248896491e4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094848b1c12c58aabe8f3ef5bbec97ed33754cf80eb018026a0304bef7205861cf431f69f4b9fc23064200c02ae649731afff992412210852cca043f514d0403b9499309034e6edcf0b103dd491b7179421cde3b106b77463156b",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9a7071",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x848b1c12c58aabe8f3ef5bbec97ed33754cf7feb": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173f325f03fbde34a9d49cd0e0ed4be6bf161201dcb5af2",
+                            "storage": {}
+                        },
+                        "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073848b1c12c58aabe8f3ef5bbec97ed33754cf7feb6125f7f1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x058f8e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1d0f10e3ef8bc9e0121024b993760d3b3b531366e9446d24495a912c240748c0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_ConstantinopleFix-state_test-gas_shortage_1-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x3fca517994f272b3785de810aed5f40f74a87d60": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173c17caf460dbe7dbcbea0d660f92a1fc3d28d20e25af1",
+                "storage": {}
+            },
+            "0x3fca517994f272b3785de810aed5f40f74a87e60": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000733fca517994f272b3785de810aed5f40f74a87d6061879ff1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x3fca517994f272b3785de810aed5f40f74a87e60",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452",
+            "secretKey": "0x68352066b81d2dd81aefb2723fca517994f272b3785de810aed5f40f74a87d60"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0xbb998e203f13d79ee343c398a12aacbe05299315ad857248e1fceaa9fedeab04",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120943fca517994f272b3785de810aed5f40f74a87e60018025a0fbd69f012b116f081bcec3e2d85028ca04b62c715e6c518ba47e3d0b5b5a0438a041893b29ab6ae16a5a86af14adeaa911efafd6733d1d285f4ddee1d5bd250b30",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de969fe1",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x3fca517994f272b3785de810aed5f40f74a87d60": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173c17caf460dbe7dbcbea0d660f92a1fc3d28d20e25af1",
+                            "storage": {}
+                        },
+                        "0x3fca517994f272b3785de810aed5f40f74a87e60": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000733fca517994f272b3785de810aed5f40f74a87d6061879ff1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x09601e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x3be092371c6ebd48ab56b0d7bc335a482fc60806b071280ffc55237d306bef26",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_ConstantinopleFix-state_test-gas_shortage_1-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xead0677526ccdd465d64cd231bb39761e5fac0c9": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060007396bc300e9db3db0fc8e70067bcb052609c4f8f175af4",
+                "storage": {}
+            },
+            "0xead0677526ccdd465d64cd231bb39761e5fac1c9": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073ead0677526ccdd465d64cd231bb39761e5fac0c96102ccf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xead0677526ccdd465d64cd231bb39761e5fac1c9",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674",
+            "secretKey": "0x54e3840eb94336a96a694b84ead0677526ccdd465d64cd231bb39761e5fac0c9"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0xbf93f7387bfe5e8f379caf3e280efe499179c9c025b42ae2841c5aeae8413adb",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094ead0677526ccdd465d64cd231bb39761e5fac1c9018026a0c2c78100f0a6b0524195e2c0dcfd540914eef72e1b2a31bf1ace783e0888c57ca048a46a11ca4b55794e38d3dfc10c343adb16943f9f0ea776622bb53c53e0f558",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9bd01f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xead0677526ccdd465d64cd231bb39761e5fac0c9": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x60006000600060007396bc300e9db3db0fc8e70067bcb052609c4f8f175af4",
+                            "storage": {}
+                        },
+                        "0xead0677526ccdd465d64cd231bb39761e5fac1c9": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073ead0677526ccdd465d64cd231bb39761e5fac0c96102ccf1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x042fe0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x6f6b26f5810461a2789bddb84eec7295b8caa7b36a86b4fb7192960d032671c3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_ConstantinopleFix-state_test-gas_shortage_1-callee_opcode_STATICCALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x2c2cf2d9ba033adca59477edfa453d387747e891": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000736ccb94d357e33605f69a3c03e5e0f1eb34533a7c5afa",
+                "storage": {}
+            },
+            "0x2c2cf2d9ba033adca59477edfa453d387747e991": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000732c2cf2d9ba033adca59477edfa453d387747e8916102ccf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x2c2cf2d9ba033adca59477edfa453d387747e991",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7",
+            "secretKey": "0xec41c9923a27f7ee238d410c2c2cf2d9ba033adca59477edfa453d387747e891"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0x68287f732a7a9b21b5ee9778898c4b78627c7a92812a06f0285516f2b10bf128",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120942c2cf2d9ba033adca59477edfa453d387747e991018026a05876dc8be9a4ccbe7ce1f735fe6080b82b50b443fa19d22c43c66db5fb020050a07c49b405aef4b9afb5ecde210f2110a5afe1e1dc0ca124921b9b4e0b1f585b7e",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9bd01f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2c2cf2d9ba033adca59477edfa453d387747e891": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000736ccb94d357e33605f69a3c03e5e0f1eb34533a7c5afa",
+                            "storage": {}
+                        },
+                        "0x2c2cf2d9ba033adca59477edfa453d387747e991": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000732c2cf2d9ba033adca59477edfa453d387747e8916102ccf1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x042fe0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x15b97d4e865f028d7e424c9e3dc27af2fc7067e7dde9c21efe201ed3ab4f02c6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Istanbul-state_test-gas_shortage_0-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x703fd4b361bcffa826815fc0aedce4e69321e7ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8f5b5ebec5901beb2175e851f04874c04062abe2": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173ff0c84f07dfd2104549f242088383febc624e9685af2",
+                "storage": {}
+            },
+            "0x8f5b5ebec5901beb2175e851f04874c04062ace2": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000738f5b5ebec5901beb2175e851f04874c04062abe26125f8f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8f5b5ebec5901beb2175e851f04874c04062ace2",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x703fd4b361bcffa826815fc0aedce4e69321e7ad",
+            "secretKey": "0x1eadb2ae7a7b773a372524f68f5b5ebec5901beb2175e851f04874c04062abe2"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0xb5bb9a1ee3a58446b3d23809d73abe235ab4f545814511f84dc2849aff88d4b6",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120948f5b5ebec5901beb2175e851f04874c04062ace2018025a0d1157f224b0513695f6e0723f0da6d251a81e05163c7d4f62c7dc4da3e15cf0fa0219c97782c7ce82f05c3edff68abe9b15bc5b0df0d5c360008e4f5a635d98fae",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x703fd4b361bcffa826815fc0aedce4e69321e7ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de98804f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8f5b5ebec5901beb2175e851f04874c04062abe2": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173ff0c84f07dfd2104549f242088383febc624e9685af2",
+                            "storage": {}
+                        },
+                        "0x8f5b5ebec5901beb2175e851f04874c04062ace2": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000738f5b5ebec5901beb2175e851f04874c04062abe26125f8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x077fb0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x31b645444873abc65728159fe4f271391a8e453930c4d2b2c41b68c2c9e021af",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Istanbul-state_test-gas_shortage_0-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x38ce4d11f881cc45131c749a2e4f3e35428061a7": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xf58524d16b1bfc68d12fee2f67e5603137861de4": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173b65711799e35518d3e83190d74b724be6c391c8d5af1",
+                "storage": {}
+            },
+            "0xf58524d16b1bfc68d12fee2f67e5603137861ee4": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073f58524d16b1bfc68d12fee2f67e5603137861de46187a0f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xf58524d16b1bfc68d12fee2f67e5603137861ee4",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x38ce4d11f881cc45131c749a2e4f3e35428061a7",
+            "secretKey": "0x8f5a8749ade0e5ca15cd24e6f58524d16b1bfc68d12fee2f67e5603137861de4"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0xe547a7133a9c9063e42a01264a52e57e68326b4e90bb0070c856272d64122877",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094f58524d16b1bfc68d12fee2f67e5603137861ee4018025a0903e8c2906efb437116dfdf671c939da08e3a4fd09e2e538ee4f5261f0a6b6a8a0013e9e8c72cbfb43334e212d3dfd24041acee2de46b645667ae2083a35c043c5",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x38ce4d11f881cc45131c749a2e4f3e35428061a7": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de94afbf",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xf58524d16b1bfc68d12fee2f67e5603137861de4": {
+                            "nonce": "0x01",
+                            "balance": "0x02",
+                            "code": "0x6000600060006000600173b65711799e35518d3e83190d74b724be6c391c8d5af1",
+                            "storage": {}
+                        },
+                        "0xf58524d16b1bfc68d12fee2f67e5603137861ee4": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073f58524d16b1bfc68d12fee2f67e5603137861de46187a0f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xb65711799e35518d3e83190d74b724be6c391c8d": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0b5040",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x23fe797652a42b46053a641ad5b69f5eb011c5ec45e663f2ab39a2158565224a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Istanbul-state_test-gas_shortage_0-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x98beac81edb5bf087d8dc578291c9eb5264a16ad": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073632fd565721767e87c2ee06964c7c663c5a749885af4",
+                "storage": {}
+            },
+            "0x98beac81edb5bf087d8dc578291c9eb5264a17ad": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600060007398beac81edb5bf087d8dc578291c9eb5264a16ad6102cdf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x98beac81edb5bf087d8dc578291c9eb5264a17ad",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9",
+            "secretKey": "0x0dd956157274828a61a77e4898beac81edb5bf087d8dc578291c9eb5264a16ad"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0xad1779e7cb9cd64aac46fe6fa533a3c93a937337bc87e4ba053ba44909e11604",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a1209498beac81edb5bf087d8dc578291c9eb5264a17ad018026a024472c353b23cd1b3dc414415a43d2329d5504ec510301e5f28a1116a3b5a1e5a03648de0e42378bda4565cf641510967bf4b80a1d317a95b46e01cc5616b46935",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xda1e7b1d6dad5c803018977ebd88e682cfa380e9": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de998625",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x98beac81edb5bf087d8dc578291c9eb5264a16ad": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073632fd565721767e87c2ee06964c7c663c5a749885af4",
+                            "storage": {}
+                        },
+                        "0x98beac81edb5bf087d8dc578291c9eb5264a17ad": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x600060006000600060007398beac81edb5bf087d8dc578291c9eb5264a16ad6102cdf1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0679da",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x4ce96c94fbf0c3ebe9fa4e627575786b39e560853ed7f5b80ef3ee8ce3394086",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Istanbul-state_test-gas_shortage_0-callee_opcode_STATICCALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xb649456b10eff8f39b0c66413fea8d6bd6ef6819": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073cf3cd01d4ec9541ec90c31d7331ed9e1faa8a8b95afa",
+                "storage": {}
+            },
+            "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073b649456b10eff8f39b0c66413fea8d6bd6ef68196102cdf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e",
+            "secretKey": "0x015c9360b8c9911cf83cb91fb649456b10eff8f39b0c66413fea8d6bd6ef6819"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0xb86fa5befd1ecbc4f822f2a8689fa50792ad3fb0978e6dd04cd4fd63fa464100",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094b649456b10eff8f39b0c66413fea8d6bd6ef6919018025a0089a5aa8ec9ab019fb22230cc2311b821cf4413080e86883e79fcd3ce1934427a0036fc4e348779fc9da4f3c6cc55732b80cd4ab9b64c71a9bf40351cc6865ff76",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x47a101d6b50feb4a8ac7f04e5a6b8fcb32ae847e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de998625",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xb649456b10eff8f39b0c66413fea8d6bd6ef6819": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073cf3cd01d4ec9541ec90c31d7331ed9e1faa8a8b95afa",
+                            "storage": {}
+                        },
+                        "0xb649456b10eff8f39b0c66413fea8d6bd6ef6919": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073b649456b10eff8f39b0c66413fea8d6bd6ef68196102cdf1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0679da",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xad7d2a7a7543bd32394852b3a8995a780cecebe9f0e7416ea98b5b198471c10c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Istanbul-state_test-gas_shortage_1-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x848b1c12c58aabe8f3ef5bbec97ed33754cf7feb": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173f325f03fbde34a9d49cd0e0ed4be6bf161201dcb5af2",
+                "storage": {}
+            },
+            "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073848b1c12c58aabe8f3ef5bbec97ed33754cf7feb6125f7f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0",
+            "secretKey": "0xf5d8891b46ab9005c32345af848b1c12c58aabe8f3ef5bbec97ed33754cf7feb"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0xd4d54c8ea88cf992709334e4d296da651ea9a33f98a065b1a01b739cacd5d731",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094848b1c12c58aabe8f3ef5bbec97ed33754cf80eb018026a0304bef7205861cf431f69f4b9fc23064200c02ae649731afff992412210852cca043f514d0403b9499309034e6edcf0b103dd491b7179421cde3b106b77463156b",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2a6c5be3927267bc6fd0ba3650266e49f61008e0": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9b1481",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x848b1c12c58aabe8f3ef5bbec97ed33754cf7feb": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173f325f03fbde34a9d49cd0e0ed4be6bf161201dcb5af2",
+                            "storage": {}
+                        },
+                        "0x848b1c12c58aabe8f3ef5bbec97ed33754cf80eb": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073848b1c12c58aabe8f3ef5bbec97ed33754cf7feb6125f7f1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x04eb7e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x5644d5686e6198287474005e368e53d68f25eaff8115ee9daa6cb75d0c29f214",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Istanbul-state_test-gas_shortage_1-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x3fca517994f272b3785de810aed5f40f74a87d60": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173c17caf460dbe7dbcbea0d660f92a1fc3d28d20e25af1",
+                "storage": {}
+            },
+            "0x3fca517994f272b3785de810aed5f40f74a87e60": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000733fca517994f272b3785de810aed5f40f74a87d6061879ff1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x3fca517994f272b3785de810aed5f40f74a87e60",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452",
+            "secretKey": "0x68352066b81d2dd81aefb2723fca517994f272b3785de810aed5f40f74a87d60"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0xfaac7cd1c282137ee4dcd02afd896a5f9be20af3050e9e3215493ef6d98c5799",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120943fca517994f272b3785de810aed5f40f74a87e60018025a0fbd69f012b116f081bcec3e2d85028ca04b62c715e6c518ba47e3d0b5b5a0438a041893b29ab6ae16a5a86af14adeaa911efafd6733d1d285f4ddee1d5bd250b30",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x9d2d2edcbc5e8464c8f21ad160e977956fb4c452": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9743f1",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x3fca517994f272b3785de810aed5f40f74a87d60": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173c17caf460dbe7dbcbea0d660f92a1fc3d28d20e25af1",
+                            "storage": {}
+                        },
+                        "0x3fca517994f272b3785de810aed5f40f74a87e60": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000733fca517994f272b3785de810aed5f40f74a87d6061879ff1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x08bc0e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xf24f8f4624f48a76e6c167e6c32b80b286a1fdc014d16dfce06dcae78a4835a5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Istanbul-state_test-gas_shortage_1-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xead0677526ccdd465d64cd231bb39761e5fac0c9": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060007396bc300e9db3db0fc8e70067bcb052609c4f8f175af4",
+                "storage": {}
+            },
+            "0xead0677526ccdd465d64cd231bb39761e5fac1c9": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073ead0677526ccdd465d64cd231bb39761e5fac0c96102ccf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xead0677526ccdd465d64cd231bb39761e5fac1c9",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674",
+            "secretKey": "0x54e3840eb94336a96a694b84ead0677526ccdd465d64cd231bb39761e5fac0c9"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0x2932e46b6b5409ecbc4bc5bbaa3e50e50a925d7e8e553b8d92a1caed8bca92bb",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094ead0677526ccdd465d64cd231bb39761e5fac1c9018026a0c2c78100f0a6b0524195e2c0dcfd540914eef72e1b2a31bf1ace783e0888c57ca048a46a11ca4b55794e38d3dfc10c343adb16943f9f0ea776622bb53c53e0f558",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x09a8b8e1d23dc69d1c286f47c273f637f3f9f674": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9c742f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xead0677526ccdd465d64cd231bb39761e5fac0c9": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x60006000600060007396bc300e9db3db0fc8e70067bcb052609c4f8f175af4",
+                            "storage": {}
+                        },
+                        "0xead0677526ccdd465d64cd231bb39761e5fac1c9": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073ead0677526ccdd465d64cd231bb39761e5fac0c96102ccf1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x038bd0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x8ac408b41690d465909c3d1b33ccdbde7425dfc1f1ac4cbb0a8432a8775b77d4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_byzantium[fork_Istanbul-state_test-gas_shortage_1-callee_opcode_STATICCALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x2c2cf2d9ba033adca59477edfa453d387747e891": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000736ccb94d357e33605f69a3c03e5e0f1eb34533a7c5afa",
+                "storage": {}
+            },
+            "0x2c2cf2d9ba033adca59477edfa453d387747e991": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000732c2cf2d9ba033adca59477edfa453d387747e8916102ccf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x2c2cf2d9ba033adca59477edfa453d387747e991",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7",
+            "secretKey": "0xec41c9923a27f7ee238d410c2c2cf2d9ba033adca59477edfa453d387747e891"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0x03ed03da66911b8f9e92d97bb9cbf43f0887ccb1e66ec661642d07c0b3fa18ec",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120942c2cf2d9ba033adca59477edfa453d387747e991018026a05876dc8be9a4ccbe7ce1f735fe6080b82b50b443fa19d22c43c66db5fb020050a07c49b405aef4b9afb5ecde210f2110a5afe1e1dc0ca124921b9b4e0b1f585b7e",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8550950b4c8012b32becdb9c9d546cbfe1b8bfe7": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9c742f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2c2cf2d9ba033adca59477edfa453d387747e891": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000736ccb94d357e33605f69a3c03e5e0f1eb34533a7c5afa",
+                            "storage": {}
+                        },
+                        "0x2c2cf2d9ba033adca59477edfa453d387747e991": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000732c2cf2d9ba033adca59477edfa453d387747e8916102ccf1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x038bd0",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x4b784f483050fe7e8995628ca906893dc75ae82165c13905d8c7be8b6b5a7d24",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL/STATICCALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L218",
+            "fixture-format": "state_test"
+        }
+    }
+}

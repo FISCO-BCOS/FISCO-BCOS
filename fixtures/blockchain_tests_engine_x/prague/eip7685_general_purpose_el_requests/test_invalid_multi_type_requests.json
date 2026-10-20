@@ -1,0 +1,1300 @@
+{
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-duplicate_consolidation_request-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1900ede2c9cf5ee172704b03662b1b4a03cca31c59477c2c4e0fe136625f5f99",
+                        "receiptsRoot": "0xbea1cf0974374ddc5e5ae05648835fdf625e580321b36561262d6e1ac3a2a570",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1ccde",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe98cf0896cd95811e5a82c58389cfe63f1d9d7793261ec4e0c47eb008b620508",
+                        "transactions": [
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000126a063d2424a67973cce198db5d9fd0d3a07f63ccf5d6133b2af0eb414ef64e17664a02b46f2957b8e240ef3fc1ac980e68230d3872b637beea087b5192fa32be18cab"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0xa9010bbd447883c7baf2ab166d63bc2a55b9881308d8fae32cb609ce37e8888c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-duplicate_deposit_request-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x41e33437fe87b1d0d699a409e5f5f7e2a82bc7e023156030b94df6f05fcd0c18",
+                        "receiptsRoot": "0x65b54085b6e42dbe17b8f4d4edb3bdeff30d972e8eff62a36a0b99721f159e68",
+                        "logsBloom": "0x00000000000000000000400000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000020000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x14312",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc0da6a7d2163118e5a85606850c6ae75e2aade91040adde69888c871d049b6de",
+                        "transactions": [
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000225a0e73c7228bdedcae155420d85787068a0ffc3d8be19bbe1c831c58aa695476d04a07d3b947c0da93f36e06567e788d2d0d81f775147b757d703648f30a2b564de04"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000",
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0xc4a56337152b168e936f1dfb15e5588ebfb0528b45f27ba1a5e85739673d1417",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-duplicate_withdrawal_request-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7169515f7fbaafa112977f049e4b9a294627474db9f529dde2b7bef260e64c6a",
+                        "receiptsRoot": "0x7519924c8f0c8132a01f506ccb567e186775c672596bc7aebc53235ca9af2c6f",
+                        "logsBloom": "0x00000000008000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c251",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4ad0b51c6609e66d47593bea84474ced1d719117a580cf43fa9b9270a0eb6006",
+                        "transactions": [
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000025a09be1043e42e32a641efd3bc1a4e6c0335c9cdbcf7ddafee4b1a89e660143a899a060c57b19d9af1071e5c75d98625fb16cad3a17cb4cdea29376bc427632289d83"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000",
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0xf36517b9e411c42e6e73bffbd85c451e4a6d0192b9f3b6aa242003f40bfbde29",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-extra_empty_request-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4d86d683ea440694377114def9ff829e82e4a0e4227132135c0a1d61570386f4",
+                        "receiptsRoot": "0x7aeee3fb290eb22ec2818004f8623866fa5df95ff175e0b067bd891fefccc21c",
+                        "logsBloom": "0x00000000008000000000400000000040000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000020000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400400000000000000000000000020000000000000000000001000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4d241",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x35f38f363c6d9163eab511120d441167ea9d6697cd1f4ccb221f57dbf3c9733a",
+                        "transactions": [
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000225a05d2139b2ae3766375e6ec11bf05be059e4d1d2b2b28714a0909edd11cd9c4e7fa040ff0cee060c05d109dacaef5e8680a200102e236076a04130efbac934dcb256",
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000026a0816819c52de6a79a86812ca9081da55144e73e07691c08c68a07296ab13e95d7a0378fa3da20e76d3387dc7ddaf2b40f82cfddcd989527c917a3ea2154b067c8f6",
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000126a0cbee5701f1a5fc90277fd35e7d62516465a12d2f5892a7bb50f5361c1c1d039ca014f7bc9e2744de55a1f75766020688aebddbfdbf076b47cb75ca3970a4504b93"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000",
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000",
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+                        "0x"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0x9186969353a2fcc1d0f552ba083e6f85e9e486d986fffdd47ecf0fc481b2ba1e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-extra_invalid_type_request_with_data_0x00-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7c20b6d368c4043dd92979a0c72b08a0330a7a37616d5f5bcb0e2fc5e76882da",
+                        "receiptsRoot": "0xecb5a297c008c7244401ccb9321fd28b23c2ed402bcff13e7622ff7121447224",
+                        "logsBloom": "0x00000000008000000000400000000040000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000020000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400400000000000000000000000020000000000000000000001000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4d241",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe901dc793269db8b7f2e4b74758bf5b79f88f96efd851ad45f04942e49c29b09",
+                        "transactions": [
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000225a002ad5698c04d4a9327cf27fbdc8c2b3aa439d7ad408f95b5bea394135b42d838a0067edc9ba520c31a347dcb6b1df640d0a5fee29842315da055bedf799d0510ba",
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000025a0b9b59d23fe0fbbac72272b91e16629d6d484f2afb9eeb02d8dda1ae9967748d3a054a5e7db8b27336d4575ce5b6e72edb8cf539d1e2badcb8695ef086f75030cd3",
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000125a06e10cc077d4c2d89106804e0f63307a9136da804891550cc7ce0d6182831a7a2a07f59cb70225a3281d002c5e5b0504eeb993a8c4cac2021fc79038369d7eeaf39"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000",
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000",
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+                        "0x0300"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS"
+            }
+        ],
+        "_info": {
+            "hash": "0xa6827c5085ac1b15edd1d6634bd79d270a14c38545f608efe3841ff6ed383ef0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-extra_invalid_type_request_with_data_0x01-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe823e9e1d7b6bd61bbbfb213f8f5ba34414893dd563d958d712ae3017da9cdb9",
+                        "receiptsRoot": "0xfcc5f425284aff33d3d44a36434736a9dc0dbdad408f701b52d80d26d118f118",
+                        "logsBloom": "0x00000000008000000000400000000040000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000020000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400400000000000000000000000020000000000000000000001000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4d241",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xbc9bd5cd456b3ec071870fc4ce723dfdd5898e59591b0e6fcdf49f36513d52af",
+                        "transactions": [
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000226a005f73c1dcb98f4ab0ffc30c2fb308ca9770dcb86817f420fd27684bf55de0c74a044dcdc37a6179d21eac9cc9e25612ad22163219a130d324f32c82bbbf60610e7",
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000026a0c2ddcf1756812bb0f3ac27c604dfbf06f9828b04563818bd298c9b9914256a2aa06b0c9ff7a404c2b9e9e549817e95b68acd14bfdc4323c4312eb18a1c5b90d759",
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000126a02bd6501efe73a15cb0d7e99825d2f45faaf7ffa6ab0769a1d3e932b5ff868477a0552d895b2f6f07161187051f36d1675abcc712d091c4b4ef11631ed63cc85a0f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000",
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000",
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+                        "0x0301"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS"
+            }
+        ],
+        "_info": {
+            "hash": "0x7eb3e79468f82a0bbb22fdff4d2a934ed0a9323d60cbf603d4fc8521eb3691db",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-extra_invalid_type_request_with_data_0xff-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9bf46a8ff9d8ed74bc48815bed2c1d4b2618c83237fb01d16f6656115d5e8a9d",
+                        "receiptsRoot": "0xc785faa6037f8d9187177390304c9df968e02d58addd62ebf059c0cf25fb84ef",
+                        "logsBloom": "0x00000000008000000000400000000040000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000020000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400400000000000000000000000020000000000000000000001000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4d241",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf55771bb3f5db4cec3a8f3af2266434a4394baa679a1b55a1301b113ff0a1d1c",
+                        "transactions": [
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000226a061b411f8dcaf4a73c78d772e88bd51e6b15c22b11352b0a4f4944c3c67e6db9ea031b20e4cc88a34dd1404c125e57b39d61c378246f270f3922dcafbfd138f8ffc",
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000026a01557582fef8ef1893c8dd84f4a87093f3055cbaea59c5f8377a946fe9a230dfda05ed1fda548a57106ba054062ccd1c2cddc4907aa37382d14cc53948bbbdeda0a",
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000125a0762c60325d11d4e4e7c7d08d1f3aba34d025a14894076c92443711abcd66d963a0114c3844df6383fbbf04dc1874c04809cf2b92e17008ae21828a82df348d22e6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000",
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000",
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+                        "0x03ff"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS"
+            }
+        ],
+        "_info": {
+            "hash": "0x2ce9141c4880fa1fd7c3cd73e69278876985f02695c42c5ef0f38249c8908ddd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-extra_invalid_type_request_with_no_data-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8cc9e9c1badaf2307d710e2d6bd873b43d6cfa0674bf17c36b81c90f9c249f1b",
+                        "receiptsRoot": "0x7d8bc3357aa6faa4f3f8f104a765b86fe60d46cef2245c530e6e781c61ad69b4",
+                        "logsBloom": "0x00000000008000000000400000000040000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000020000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400400000000000000000000000020000000000000000000001000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4d241",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x20e709e264403714c8d0e5f4ba4d6eb6e1c2f6aed07b3773b1a128fd8b889033",
+                        "transactions": [
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000225a07e8c14e13c935f68bba9085d4e525685641d4a8f6388f1a56dfcdbfa5eb30dcca00647da65e4dbdb71594e94cebf899c701ec42b694f4ac3db2d7c25b422ac7080",
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000026a028204131f109b904a2b7dfe99af3de631480ede09aff7056bd9e98ecf45299d6a0085fede76efafe916139d77a16e8618bc6a2699c56ba2d0738bc0bb3537ef0ea",
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000125a0ce243d3e270d9e6e3215bf676e53fed4408af68556fb0cf96f01841dd4b8513ea04814963b2ffca7b0a3bc99e6107f37eeb75ed1b0fe45645215d4a2d595bdbc99"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000",
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000",
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+                        "0x03"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0x8ad01fecd6c94c863ec1f7dcc3a73643b43eabbdf37f3b1a60b47d3ef97a6d2b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-incorrect_order_first_request_at_end-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3f3225ce5b4109de265370f3574cecf9e1a7fb264784a86081489dfc49953a96",
+                        "receiptsRoot": "0xc5562b9217a59772ab7b8c9dc53bee955776d3f7d71e9a26f051a5e3667266ad",
+                        "logsBloom": "0x00000000008000000000400000000040000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000020000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400400000000000000000000000020000000000000000000001000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4d241",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x1c36051d584b7840a839cf9ccd2fa302f927e7929db27439b6678d34b6adc914",
+                        "transactions": [
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000026a0f7c33578ebb904bfcf7595333d874eceed1a382e6fb7d775e5047d527f1ef8cba011e8f8eefcbd9750b4be6bb1dccb0e5d1a10555d092fb7990be3d6d4ebbcd414",
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000126a0ccd11e5cbf6a5635df6ae3fcef6601deb15b34f4348747c41c86845dac5f96a2a07c19b68a34f7bda2b3e29d039a7f1e1036c18b069019fc33fa5af81123e74c4d",
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000225a084e0797b83ca53c486a466bafc2fbb51c5d273adc505d31258fb8317814cafb1a048ced8aea680c8ac536b72e38de39bd05aef5c3066b8084a1180b78d134c64a1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000",
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0x447045dc6e370d0ba2e559fa382cd230721210cbbf3bb59bcf470166881536de",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-incorrect_order_last_request_at_beginning-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd53c615dbdf61f87e2e2d7af825a3bbb242d6116bb7c39a1130c0e31945f4aea",
+                        "receiptsRoot": "0xd7d77fdad41cee34f1ae94034129bf76922cb9637c2607a7a7ca4d1b301ab631",
+                        "logsBloom": "0x00000000008000000000400000000040000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000020000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400400000000000000000000000020000000000000000000001000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4d241",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdd7e68ff234d50b1f1ec96cf49af6d5fe4636f2371455ffc39ffbb82e5be253e",
+                        "transactions": [
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000126a02bdbeb51a5bdfe6709f45c364bcb7890a4a9c9a14b2c8d7955ff176a8dcf8c95a02683168f30189c8273bbdd5fb407ff4a88230ad6fc62bb4856dacab5d1c79940",
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000225a0d653634f89fe33aa616724ca1e5f7f129f5e4b9d87553b43455c5aa469a17dd8a073ddc3d56e1b719e39c49649447c99d3362e04cd00715d1c34934d4c46e3f93d",
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000025a0f5684f6ebcafd1100368836869131747eea4fc8361b0f884d086145f00c9d3ada00655bc2b3456348a7e95945762f5edd24ecde95b3024645fb0f6c1b509a28939"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000",
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0x8fe4f3b30698e99c075c0d53f21ad9744d3f7bd921ddb2a9a4293a30dce9895b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-incorrect_order_second_request_at_end-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5df12786b5c5b792c6de07c32d14923a15713bbe8c402e3b7e1588c36a0f3a1c",
+                        "receiptsRoot": "0xa2a1f34c66b310cc6c23f91a288d7332008a75aa16958cc0cb94d4189597d4c8",
+                        "logsBloom": "0x00000000008000000000400000000040000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000020000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400400000000000000000000000020000000000000000000001000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4d241",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3a0aebae7aa8f93e92470885c3136fddedc788ecf4789271de9f918f28486e6d",
+                        "transactions": [
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000226a02eff8a7d1ed98b9f2484d7747a3a70c3279270f4f045a53683857efef098fea3a06883865c2fb59922f9f9596c51f5277b7bcd2279d5d5764b036f742d476e403c",
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000125a0e812003743efb050605079fbce28a6f035003a2709be0d1295cfd7cff6cadafda01693d6b9da1c0d2acdefe64933fcab8f6fcc511cc57a7aac88c9658fc6ae834f",
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000025a09a982a07d4977227ddda055f0e1dea873855ecaa333d2d9de9a8557a4262f4c2a04449ff08058647baaa997d3395b6b340b16dadad2b9ed4b2afd0c3ff1cfe707e"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000",
+                        "0x02a94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+                        "0x01a94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0x08e7ee20cdf82e9f4e84f0dffbc0d88c76355a295d9d23e6866540d2a9437775",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-no_requests_and_invalid_hash_calculation_method-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1da614241d23ab36110499a4770726e87fec0b9c8cfad12a3c9750b8065bdbe3",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xebd8e379eeb015350dd4e2137e28fdd4088e77074ae484bcc67e7abbcdce4d0e",
+                        "transactions": [],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00",
+                        "0x01",
+                        "0x02"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0x5f300e8e929032f6e00d7989dba9dfcba8e4e3838634d2204b89c1c4a1f10f82",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-no_requests_and_invalid_hash_calculation_method_2-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1da614241d23ab36110499a4770726e87fec0b9c8cfad12a3c9750b8065bdbe3",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdc001df57b3755e7611d14970ee6f6e0db0e952fcec18d786886076791153f18",
+                        "transactions": [],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x",
+                        "0x",
+                        "0x"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS",
+                "errorCode": "-32602"
+            }
+        ],
+        "_info": {
+            "hash": "0x7e8f1c883c69f3120561b76a8189037b2776418da663706a4fa550708e22253b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-single_consolidation_empty_requests_list-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x359fa003df5dc29d399e0c2860d855d959dab2f340b00956cc795629f992e3fe",
+                        "receiptsRoot": "0x4ac9628ac0cda62f4165b8c419bbe55f77a720c92e6fe68b22261dcafe75724c",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1ccde",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x61305fc4c9634740fa8e53af17e7fb6439d19c3aff87d8f438342957b1201b83",
+                        "transactions": [
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000126a0c75b2e3b2d8a9b18354bd6ca562fe15d716f1e57a7938fc1767f36bd0bf69bd1a0118cf342532b5f7fa6f2f117a02a4e1cf353b6d819e9f166346ca7d5f3c52b5f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS"
+            }
+        ],
+        "_info": {
+            "hash": "0x0f24062e9a64f294298de679f455bbce6c09e2a6358e20fc3da42943df8c543e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-single_consolidation_missing_type_byte-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xee23e75f4d7c345dcd628b40292d114565858e9df47f8974e412b7e108404b36",
+                        "receiptsRoot": "0xf64378ecf9286e2ef01d37ad5497fec7da29b4289bb0944bc787fa4072f3cac3",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1ccde",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x61560210e55b66f6b54a50d87f4901e4877f7b8bbd952d55cc5ff334d075faa8",
+                        "transactions": [
+                            "0xf8c580843b9aca00830f4240940000bbddc7ce488642fb579f8b00f3a59000725101b86000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000126a0613a0e985fe73b1a202f66a92d947f0079a1f205c875a49add0d6a36e1bc6c93a008cbf7c873805256a4d61bfb81e51e3754c224ee8aba1839d5b40431c37c85f6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS"
+            }
+        ],
+        "_info": {
+            "hash": "0xbae04d34e26e867ed3e233e33f3f37e9fe649c631d32563f1366a273fd817f22",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-single_deposit_empty_requests_list-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc9ab31c94675e2c040606132b2127a084dbc0bacb5947d5c8796054d5531c535",
+                        "receiptsRoot": "0x65b54085b6e42dbe17b8f4d4edb3bdeff30d972e8eff62a36a0b99721f159e68",
+                        "logsBloom": "0x00000000000000000000400000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000020000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x14312",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3f88b588072debb55ff04bd2de1df8f42137c0356c026a3ae16c7ab1d16d58a9",
+                        "transactions": [
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000225a0b9410e2c79f76fa3492edb31817f70979ed0b726a479ccc91391e7c80ec07d20a07680839d488a8b7a230b36df23a1627c26f8883c26449fe8da70426180ab61bd"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS"
+            }
+        ],
+        "_info": {
+            "hash": "0xc4ad94d73ed6f8fdc4443d3447bc3b8a4ad98015fb890d041db972030e6ec4eb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-single_deposit_missing_type_byte-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xcdb9e715893c7056e6dc4cf92ff41009d7d8632e598c61fa0c982dd89c0dd0e6",
+                        "receiptsRoot": "0x65b54085b6e42dbe17b8f4d4edb3bdeff30d972e8eff62a36a0b99721f159e68",
+                        "logsBloom": "0x00000000000000000000400000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000020000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x14312",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb92d6d9fd016cc142024c6cbba06e8c8fb488a52b9ab943ab2d46e3a368c876e",
+                        "transactions": [
+                            "0xf901ff8007830f42409400000000219ab540356cbb839cbe05303d7705fa8901bc16d674ec800000b9019422895118000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000d00000000000000000000000000000000000000000000000000000000000000110ca932437f8f2fe4b811137b4366a5158b58c0542c9933ea72f9c96315fe8d809000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000226a00c2541d569fd764b82dd3f2e6940eb133fdb8196c9687ca0fbed2df4c5942c44a02b618fc4a54d5df2aaff08006531dae60bdc91717696e74c2a5545c35c473959"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100405973070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS"
+            }
+        ],
+        "_info": {
+            "hash": "0x94ee607b6b981f7dc168018b9592c5e5759f2107eda4b02419c3ac5bdbe8e422",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-single_withdrawal_empty_requests_list-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb578e7d3fdc220d24b61cae31441cd6c43936bf80f8569f14543ddb1452efc23",
+                        "receiptsRoot": "0x289cae6f1b92c5fb11300c041ae9e1acd8639473006458fc2483b1d6ceb022a8",
+                        "logsBloom": "0x00000000008000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c251",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x46cb3f05ef697bf8d93144e518818d5eecf671bd7dc6e933b5a86edace69ef7b",
+                        "transactions": [
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000026a057a6fd626cde0bfeae10b2b57e29bb2f97f49013ea57cedf8b33313e9e1a5ab1a02631dff3529936a0bd1d7ca9052f3b390d670f57993b379d3dd70630650333ff"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS"
+            }
+        ],
+        "_info": {
+            "hash": "0xc56ae6fc731a05ed9adfab8b43032a57d50be1ea87fbc5c02a1d3918c9a632aa",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    },
+    "tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py::test_invalid_multi_type_requests[fork_Prague-single_withdrawal_missing_type_byte-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe90c5d1e82ad2762",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf11f544ae58e52b81b19e7c45b75ed6f7f7bbf180cee36ec3cf10d4c1e5db77f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe399fa5186ab628a92cf288a2730c5bb5bd14ac83e5b032398f46f230a61f885",
+                        "receiptsRoot": "0xa91cc7344b1e4eda3de4ce66b074a67e8d204bfc6baebc1f585c3fc32d43c3f8",
+                        "logsBloom": "0x00000000008000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c251",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdf36ef3e0ebd574e4169307f32cb3ddb41fc967f01da8a3153253f12881277e1",
+                        "transactions": [
+                            "0xf89d80843b9aca00830f42409400000961ef480eb55e80d19ad83579a64c00700201b838000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000026a0ac4517c23d7cbd6ba124df5684c437c905cd253d1a787c69cfc516f640cc7abfa05f6f38bd8ba4014d042f30838f2c6835c1e3768fa24112c81a04822151eb405b"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INVALID_REQUESTS"
+            }
+        ],
+        "_info": {
+            "hash": "0xf185c2cca80af3a650dd6c902848600bad01ebf8e77c76d2a7ec6f04548b56c4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Negative testing for all request types in the same block.\n\n    In these tests, the requests hash in the header reflects what's received in\n    the parameters portion of the `engine_newPayloadVX` call, so the block hash\n    calculation might pass if a client copies the info received verbatim, but\n    block validation must fail after the block is executed (via RLP or Engine\n    API).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7685_general_purpose_el_requests/test_multi_type_requests.py#L670",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7685.md",
+            "reference-spec-version": "67ecb425d78f1d40c4f1cb957f3214afd0ece945"
+        }
+    }
+}

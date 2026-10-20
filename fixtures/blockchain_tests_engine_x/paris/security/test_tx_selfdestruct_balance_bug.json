@@ -1,0 +1,217 @@
+{
+    "tests/paris/security/test_selfdestruct_balance_bug.py::test_tx_selfdestruct_balance_bug[fork_Cancun-blockchain_test_engine_x]": {
+        "network": "Cancun",
+        "lastblockhash": "0x0eda4e16f3609d3152e293ebb6f0f02cc74d965dc6dc1d21506bcbc51bd1502c",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x465d2b03f6e07c26ddaa224d0bd9aed99d2f301a36beacd62ab27a1f07ecef38",
+                        "receiptsRoot": "0x77514df32c41583dc5c10955386dacba82a12a44d3b782758ba64a84952af4be",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2fcd4",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0eda4e16f3609d3152e293ebb6f0f02cc74d965dc6dc1d21506bcbc51bd1502c",
+                        "transactions": [
+                            "0xf89f800a830f424094d1ab3f3a304a2e804e6ec38e95e942e6a86f22d080b83e610033600081600b8239f36000600035146022580157600160003514600d58015760006000fd60155801565b47600055600b5801565b30ff60035801565b26a0de421519a6557a397e3df669aafa275ebbafc853b8d3f0909e0c7ad1f6ccf95ba0435ce0f4e606d12056d712e2ecdfa7647d594f803dd4ef62cd6ed7d4140a82a2",
+                            "0xf860010a830186a094d1ab3f3a304a2e804e6ec38e95e942e6a86f23d0808026a0f9fb9aa0490903b2919d655e969b32b747d63ed729864baf84b4cdd5d67ad489a05c1ded6dba9ff973418d60845bfa8a6830a2f9d756502e4b33cbeadbab2bfb35",
+                            "0xf860020a830186a094f8b274585718c90346bf0ea0a12f70b16a24a9d5058026a02fe79dc58eed3b48371476d47c7973a0d0721b059ea7583216ada07d8213cff5a02dbe0bcd1ebdd22056d0a49d5e11531bba137fd687074fa68ab8c04826a19e06",
+                            "0xf860030a830186a094d1ab3f3a304a2e804e6ec38e95e942e6a86f24d0808026a0dee17a881291ab29bdfbf646f24195e6b1704f7aaca70ac09b083e260890fd52a01d4a66fd89e1e81a5358e64104427f004b3ba98bb6c5a34e93e524541d90246c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf117376efa4badb012d247208d5f6fabb9a84f1646c1dfa4976c0880c2cae977",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that the vulnerability is not present by checking the balance of the\n    `0xaa` contract after executing specific transactions.\n\n    1. Start with contract `0xaa` which has initial balance of 3 wei.\n    `0xaa` contract code simply performs a self-destruct to itself.\n\n    2. Send a transaction (tx 1) to invoke caller contract `0xcc` (which has a\n    balance of 1 wei), which in turn invokes `0xaa` with a 1 wei call.\n\n    3. Store the balance of `0xaa` after the first transaction is processed.\n    `0xaa` self-destructed. Expected outcome: 0 wei.\n\n    4. Send another transaction (tx 2) to call 0xaa with 5 wei.\n\n    5. Store the balance of `0xaa` after the second transaction is processed.\n    No self-destruct. Expected outcome: 5 wei.\n\n    6. Verify that:\n        - Call within tx 1 is successful, i.e `0xaa` self-destructed.\n        - The balances of `0xaa` after each tx are correct.\n        - During tx 2, code in `0xaa` does not execute,\n            hence self-destruct mechanism does not trigger.\n\n    TODO: EOF - This test could be parametrized for EOFCREATE",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/paris/security/test_selfdestruct_balance_bug.py#L30",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/paris/security/test_selfdestruct_balance_bug.py::test_tx_selfdestruct_balance_bug[fork_Paris-blockchain_test_engine_x]": {
+        "network": "Paris",
+        "lastblockhash": "0x20ec599e9d5f4a1aada5c0bd02510f7f2b4d23ff5df268c8c84d4af1441e2e07",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x866f4cdf22dbb42e681666ef1e841f6060e7eb4839fdbb9f35840eee7071d170",
+                        "receiptsRoot": "0x815a19228f4b63272f76849107002a19e0ca4fea496dd46b9941df7eaf59d376",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2fcd0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x20ec599e9d5f4a1aada5c0bd02510f7f2b4d23ff5df268c8c84d4af1441e2e07",
+                        "transactions": [
+                            "0xf89f800a830f424094d1ab3f3a304a2e804e6ec38e95e942e6a86f22d080b83e610033600081600b8239f36000600035146022580157600160003514600d58015760006000fd60155801565b47600055600b5801565b30ff60035801565b26a0de421519a6557a397e3df669aafa275ebbafc853b8d3f0909e0c7ad1f6ccf95ba0435ce0f4e606d12056d712e2ecdfa7647d594f803dd4ef62cd6ed7d4140a82a2",
+                            "0xf860010a830186a094d1ab3f3a304a2e804e6ec38e95e942e6a86f23d0808026a0f9fb9aa0490903b2919d655e969b32b747d63ed729864baf84b4cdd5d67ad489a05c1ded6dba9ff973418d60845bfa8a6830a2f9d756502e4b33cbeadbab2bfb35",
+                            "0xf860020a830186a094f8b274585718c90346bf0ea0a12f70b16a24a9d5058026a02fe79dc58eed3b48371476d47c7973a0d0721b059ea7583216ada07d8213cff5a02dbe0bcd1ebdd22056d0a49d5e11531bba137fd687074fa68ab8c04826a19e06",
+                            "0xf860030a830186a094d1ab3f3a304a2e804e6ec38e95e942e6a86f24d0808026a0dee17a881291ab29bdfbf646f24195e6b1704f7aaca70ac09b083e260890fd52a01d4a66fd89e1e81a5358e64104427f004b3ba98bb6c5a34e93e524541d90246c"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x74e9c36435783a5e6ae46d5cf9b84b3dbcd07e8edb83ad44cb2581a301cd567a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that the vulnerability is not present by checking the balance of the\n    `0xaa` contract after executing specific transactions.\n\n    1. Start with contract `0xaa` which has initial balance of 3 wei.\n    `0xaa` contract code simply performs a self-destruct to itself.\n\n    2. Send a transaction (tx 1) to invoke caller contract `0xcc` (which has a\n    balance of 1 wei), which in turn invokes `0xaa` with a 1 wei call.\n\n    3. Store the balance of `0xaa` after the first transaction is processed.\n    `0xaa` self-destructed. Expected outcome: 0 wei.\n\n    4. Send another transaction (tx 2) to call 0xaa with 5 wei.\n\n    5. Store the balance of `0xaa` after the second transaction is processed.\n    No self-destruct. Expected outcome: 5 wei.\n\n    6. Verify that:\n        - Call within tx 1 is successful, i.e `0xaa` self-destructed.\n        - The balances of `0xaa` after each tx are correct.\n        - During tx 2, code in `0xaa` does not execute,\n            hence self-destruct mechanism does not trigger.\n\n    TODO: EOF - This test could be parametrized for EOFCREATE",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/paris/security/test_selfdestruct_balance_bug.py#L30",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/paris/security/test_selfdestruct_balance_bug.py::test_tx_selfdestruct_balance_bug[fork_Prague-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xe2d815adee9da98cc0618bd7b2d1351607f1a3af86f20072ede4e2ce0c4580e6",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x488ecfacb88b18c15a672bf4d08f16ba5b427425ca5d4f76d412d00450514ec2",
+                        "receiptsRoot": "0x77514df32c41583dc5c10955386dacba82a12a44d3b782758ba64a84952af4be",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2fcd4",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe2d815adee9da98cc0618bd7b2d1351607f1a3af86f20072ede4e2ce0c4580e6",
+                        "transactions": [
+                            "0xf89f800a830f424094d1ab3f3a304a2e804e6ec38e95e942e6a86f22d080b83e610033600081600b8239f36000600035146022580157600160003514600d58015760006000fd60155801565b47600055600b5801565b30ff60035801565b26a0de421519a6557a397e3df669aafa275ebbafc853b8d3f0909e0c7ad1f6ccf95ba0435ce0f4e606d12056d712e2ecdfa7647d594f803dd4ef62cd6ed7d4140a82a2",
+                            "0xf860010a830186a094d1ab3f3a304a2e804e6ec38e95e942e6a86f23d0808026a0f9fb9aa0490903b2919d655e969b32b747d63ed729864baf84b4cdd5d67ad489a05c1ded6dba9ff973418d60845bfa8a6830a2f9d756502e4b33cbeadbab2bfb35",
+                            "0xf860020a830186a094f8b274585718c90346bf0ea0a12f70b16a24a9d5058026a02fe79dc58eed3b48371476d47c7973a0d0721b059ea7583216ada07d8213cff5a02dbe0bcd1ebdd22056d0a49d5e11531bba137fd687074fa68ab8c04826a19e06",
+                            "0xf860030a830186a094d1ab3f3a304a2e804e6ec38e95e942e6a86f24d0808026a0dee17a881291ab29bdfbf646f24195e6b1704f7aaca70ac09b083e260890fd52a01d4a66fd89e1e81a5358e64104427f004b3ba98bb6c5a34e93e524541d90246c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xe76411c50070042a1c7ec4b229a17ff9176643635e0fcdb0f8281417cd3a1b7c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that the vulnerability is not present by checking the balance of the\n    `0xaa` contract after executing specific transactions.\n\n    1. Start with contract `0xaa` which has initial balance of 3 wei.\n    `0xaa` contract code simply performs a self-destruct to itself.\n\n    2. Send a transaction (tx 1) to invoke caller contract `0xcc` (which has a\n    balance of 1 wei), which in turn invokes `0xaa` with a 1 wei call.\n\n    3. Store the balance of `0xaa` after the first transaction is processed.\n    `0xaa` self-destructed. Expected outcome: 0 wei.\n\n    4. Send another transaction (tx 2) to call 0xaa with 5 wei.\n\n    5. Store the balance of `0xaa` after the second transaction is processed.\n    No self-destruct. Expected outcome: 5 wei.\n\n    6. Verify that:\n        - Call within tx 1 is successful, i.e `0xaa` self-destructed.\n        - The balances of `0xaa` after each tx are correct.\n        - During tx 2, code in `0xaa` does not execute,\n            hence self-destruct mechanism does not trigger.\n\n    TODO: EOF - This test could be parametrized for EOFCREATE",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/paris/security/test_selfdestruct_balance_bug.py#L30",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/paris/security/test_selfdestruct_balance_bug.py::test_tx_selfdestruct_balance_bug[fork_Shanghai-blockchain_test_engine_x]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x13794c7b62c061e8595246873607d18ed265fa516b19a482fdde3e7598b377c6",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf7d8478079c6723f421b5152dfec4d878bd2ba8e3314a0f56ce2427f75fc85d5",
+                        "receiptsRoot": "0x77514df32c41583dc5c10955386dacba82a12a44d3b782758ba64a84952af4be",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2fcd4",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x13794c7b62c061e8595246873607d18ed265fa516b19a482fdde3e7598b377c6",
+                        "transactions": [
+                            "0xf89f800a830f424094d1ab3f3a304a2e804e6ec38e95e942e6a86f22d080b83e610033600081600b8239f36000600035146022580157600160003514600d58015760006000fd60155801565b47600055600b5801565b30ff60035801565b26a0de421519a6557a397e3df669aafa275ebbafc853b8d3f0909e0c7ad1f6ccf95ba0435ce0f4e606d12056d712e2ecdfa7647d594f803dd4ef62cd6ed7d4140a82a2",
+                            "0xf860010a830186a094d1ab3f3a304a2e804e6ec38e95e942e6a86f23d0808026a0f9fb9aa0490903b2919d655e969b32b747d63ed729864baf84b4cdd5d67ad489a05c1ded6dba9ff973418d60845bfa8a6830a2f9d756502e4b33cbeadbab2bfb35",
+                            "0xf860020a830186a094f8b274585718c90346bf0ea0a12f70b16a24a9d5058026a02fe79dc58eed3b48371476d47c7973a0d0721b059ea7583216ada07d8213cff5a02dbe0bcd1ebdd22056d0a49d5e11531bba137fd687074fa68ab8c04826a19e06",
+                            "0xf860030a830186a094d1ab3f3a304a2e804e6ec38e95e942e6a86f24d0808026a0dee17a881291ab29bdfbf646f24195e6b1704f7aaca70ac09b083e260890fd52a01d4a66fd89e1e81a5358e64104427f004b3ba98bb6c5a34e93e524541d90246c"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x1f541ba4ef16924a826d1ac8b704f9653f09a309857fff9e8deb13470b8e5cb6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that the vulnerability is not present by checking the balance of the\n    `0xaa` contract after executing specific transactions.\n\n    1. Start with contract `0xaa` which has initial balance of 3 wei.\n    `0xaa` contract code simply performs a self-destruct to itself.\n\n    2. Send a transaction (tx 1) to invoke caller contract `0xcc` (which has a\n    balance of 1 wei), which in turn invokes `0xaa` with a 1 wei call.\n\n    3. Store the balance of `0xaa` after the first transaction is processed.\n    `0xaa` self-destructed. Expected outcome: 0 wei.\n\n    4. Send another transaction (tx 2) to call 0xaa with 5 wei.\n\n    5. Store the balance of `0xaa` after the second transaction is processed.\n    No self-destruct. Expected outcome: 5 wei.\n\n    6. Verify that:\n        - Call within tx 1 is successful, i.e `0xaa` self-destructed.\n        - The balances of `0xaa` after each tx are correct.\n        - During tx 2, code in `0xaa` does not execute,\n            hence self-destruct mechanism does not trigger.\n\n    TODO: EOF - This test could be parametrized for EOFCREATE",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/paris/security/test_selfdestruct_balance_bug.py#L30",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

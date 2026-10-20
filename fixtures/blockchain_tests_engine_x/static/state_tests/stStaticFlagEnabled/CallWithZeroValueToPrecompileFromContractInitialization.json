@@ -1,0 +1,118 @@
+{
+    "tests/static/state_tests/stStaticFlagEnabled/CallWithZeroValueToPrecompileFromContractInitializationFiller.yml::CallWithZeroValueToPrecompileFromContractInitialization[fork_Cancun-blockchain_test_engine_x_from_state_test-]": {
+        "network": "Cancun",
+        "lastblockhash": "0x5a2f45c4c5f037a178d28c7fb7cfda29ba2c4f5fdccbe7b47e96269a3710a70b",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x49d0505eef70567c",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x044fb3f6bf140ca3f426611966d9e8a743118adcabdb33e4b74a9ff73d28d7f6",
+                        "feeRecipient": "0xcafe000000000000000000000000000000000001",
+                        "stateRoot": "0x1c88ce5c7b63eb0f0296418d1aa28b45ed530375ddd96bb48547b35bd8475486",
+                        "receiptsRoot": "0xb18b3ac1571ce7c814abbfe179772b603239b7171f919ee314380a4931cb4428",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x989680",
+                        "gasUsed": "0x2c1e71",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x5a2f45c4c5f037a178d28c7fb7cfda29ba2c4f5fdccbe7b47e96269a3710a70b",
+                        "transactions": [
+                            "0xf9018c800a833d090094b00000000000000000000000000000000000000064b9012a7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60005562012020620a00006000600073a0000000000000000000000000000000000000005afa507ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600155620a000051610a0055620a110051610a1155620a010051610a0155620a120051610a1255620a020051610a0255620a130051610a1355620a030051610a0355620a140051610a1455620a040051610a0455620a150051610a1555620a050051610a0555620a160051610a1655620a060051610a0655620a170051610a1755620a070051610a0755620a180051610a1855620a080051610a0855620a190051610a1955620a090051610a0955620a200051610a2055620a100051610a10550026a05cd1dc749057341e21a2cbe577a26af53507ee49880408af04b7ef312fd395bfa0064c20f78616e0a38f436d8d4d1abdd799434aff644aceaa9a06beab4fb1b49f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3d8113c10831bec1027cff73bbc656c7553801243b62d3d86c91e21a51c67bda",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/static/state_tests/stStaticFlagEnabled/CallWithZeroValueToPrecompileFromContractInitializationFiller.yml::CallWithZeroValueToPrecompileFromContractInitialization[fork_Prague-blockchain_test_engine_x_from_state_test-]": {
+        "network": "Prague",
+        "lastblockhash": "0x2da2581df7e0f72435da6f7ac265f81fdc134f835a3721d8919f041f9871d2c1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x23052b138f2496c0",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xdd4657bfc61baf26b8d6766401be7a702c287d824f38df089629b42efeda614e",
+                        "feeRecipient": "0xcafe000000000000000000000000000000000001",
+                        "stateRoot": "0x7a6254b56141a003202c1a23d1afb9ebe61c63830f94fc907d069af348f6339b",
+                        "receiptsRoot": "0xb18b3ac1571ce7c814abbfe179772b603239b7171f919ee314380a4931cb4428",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x989680",
+                        "gasUsed": "0x2c1e71",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x2da2581df7e0f72435da6f7ac265f81fdc134f835a3721d8919f041f9871d2c1",
+                        "transactions": [
+                            "0xf9018c800a833d090094b00000000000000000000000000000000000000064b9012a7ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed60005562012020620a00006000600073a0000000000000000000000000000000000000005afa507ffeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed600155620a000051610a0055620a110051610a1155620a010051610a0155620a120051610a1255620a020051610a0255620a130051610a1355620a030051610a0355620a140051610a1455620a040051610a0455620a150051610a1555620a050051610a0555620a160051610a1655620a060051610a0655620a170051610a1755620a070051610a0755620a180051610a1855620a080051610a0855620a190051610a1955620a090051610a0955620a200051610a2055620a100051610a10550026a05cd1dc749057341e21a2cbe577a26af53507ee49880408af04b7ef312fd395bfa0064c20f78616e0a38f436d8d4d1abdd799434aff644aceaa9a06beab4fb1b49f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xc313afa6d81d35f44cc8086e5e7635a0529977b8eadab08d0c92797fea4f899e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

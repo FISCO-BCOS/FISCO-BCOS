@@ -1,0 +1,888 @@
+{
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Cancun-blockchain_test_engine_x-four_withdrawals_one_with_value_one_with_max]": {
+        "network": "Cancun",
+        "lastblockhash": "0x52303c44b95cc2a1fac860fd2055e46cd5457daeea2602340d02deece6e0f4da",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9299bbb0b7aa68a2441e3ec4fb50b3f95eea1fa8fc2b891351139cabb25654d9",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x52303c44b95cc2a1fac860fd2055e46cd5457daeea2602340d02deece6e0f4da",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x080e68aba3f06db4517ce8615ff9f1c6e4dd072c",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0xa07ea870afacd68bfd9d751d632b9249d73974f4",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x0",
+                                "address": "0x5d8004b26d6b9a398dbffbc6993156e3f76c0f91",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x2",
+                                "validatorIndex": "0x0",
+                                "address": "0x84203d50f6a2b006f09d70b71b938c3cb85cb237",
+                                "amount": "0xffffffffffffffff"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf2092bdec1f31c4af0548345e39b24d2e593afae341456006aa1d7f49fd57fd5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Cancun-blockchain_test_engine_x-four_withdrawals_one_with_value_one_with_max_reversed_order]": {
+        "network": "Cancun",
+        "lastblockhash": "0xadb9b8f9cd0ad7327e076d4cfab3f9b776ece69856ca4279004e4e35d0f43309",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd0fa42d38be60b0d56144c30bd6a540253e4514641d9ead63cb8ef02ca2f0669",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xadb9b8f9cd0ad7327e076d4cfab3f9b776ece69856ca4279004e4e35d0f43309",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x496d5b7226e5e79ad86e1a4c4773aee1e86ec9b5",
+                                "amount": "0xffffffffffffffff"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x0",
+                                "address": "0x328b568f00f092c3efaf981aaac8c98a9cf24f92",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x2",
+                                "validatorIndex": "0x0",
+                                "address": "0x6b26c1ee386906eed1da7f3f67a2983219e091dc",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x3",
+                                "validatorIndex": "0x0",
+                                "address": "0x1163678ebdab9545ebd83274faf6a0a7529a8fa7",
+                                "amount": "0x0"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x968f1bff2e036cbb6153fb8c1e1cd5c59866d94ec62b2187c3ba3d6ef0ac847a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Cancun-blockchain_test_engine_x-three_withdrawals_one_with_value]": {
+        "network": "Cancun",
+        "lastblockhash": "0x2db8b1ec8703bef57ae779e179a47fce33b6ddc41b61953f585b3a251da4b6a7",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb761360b3d248fdbf16b426a94845b125ef4a1fc775b731eb184fc2eb3f386ce",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x2db8b1ec8703bef57ae779e179a47fce33b6ddc41b61953f585b3a251da4b6a7",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x7cbb55c28adba19521d8c3f8d923cdba1450bcea",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x405877d6ef9c58fefcfdf7a8217bf624881b5a19",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x0",
+                                "address": "0x8997718d461cafa2055da2c6687ac907731a56aa",
+                                "amount": "0x1"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf9b8165b1b59b5b350b4bb69484924fc3b5b8f36c241e24cbfc3f059e1311e1c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Cancun-blockchain_test_engine_x-two_withdrawals_no_value]": {
+        "network": "Cancun",
+        "lastblockhash": "0x2fa600d601b90b7a6c6881d2c5d6f1e30bd8ec85449cd26ec2e61dd03f9aac1c",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xae24e42b3d0d66d8f520fb16b967e10a6cf1060d712d80b7b489727ccd7e87fa",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x2fa600d601b90b7a6c6881d2c5d6f1e30bd8ec85449cd26ec2e61dd03f9aac1c",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0xf4053af7c3b136946eb65fcd51ad894cc1e62af9",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x7579475d7a313ab6eb6efab3bd3778b055a8b1cf",
+                                "amount": "0x0"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x95d0fbdc991d6eea9aa9bb115456be949d4764958e88374153ca16f1428c5945",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Prague-blockchain_test_engine_x-four_withdrawals_one_with_value_one_with_max]": {
+        "network": "Prague",
+        "lastblockhash": "0x9aa09d744fff56bf562090e2e1c17725f2501dbfccfbeabb90ab8b4fef71dfc2",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc94892b0a1670f1be8e12c230028657d5b8ec71eced53bf9d2de4c8a72e9a2d5",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9aa09d744fff56bf562090e2e1c17725f2501dbfccfbeabb90ab8b4fef71dfc2",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x080e68aba3f06db4517ce8615ff9f1c6e4dd072c",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0xa07ea870afacd68bfd9d751d632b9249d73974f4",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x0",
+                                "address": "0x5d8004b26d6b9a398dbffbc6993156e3f76c0f91",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x2",
+                                "validatorIndex": "0x0",
+                                "address": "0x84203d50f6a2b006f09d70b71b938c3cb85cb237",
+                                "amount": "0xffffffffffffffff"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xcc2954cc198a863e1b5234676cc8b42306c225159333b91c68488c6782367cd3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Prague-blockchain_test_engine_x-four_withdrawals_one_with_value_one_with_max_reversed_order]": {
+        "network": "Prague",
+        "lastblockhash": "0x9a9d9a96e5af4553d436c4c60b971fb85c00f4552d657d2d741f895dad301ec6",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x546f6afc356e58c1b7750530784bb47432773a9d4dab02f9c5b348a2b5adac26",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9a9d9a96e5af4553d436c4c60b971fb85c00f4552d657d2d741f895dad301ec6",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x496d5b7226e5e79ad86e1a4c4773aee1e86ec9b5",
+                                "amount": "0xffffffffffffffff"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x0",
+                                "address": "0x328b568f00f092c3efaf981aaac8c98a9cf24f92",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x2",
+                                "validatorIndex": "0x0",
+                                "address": "0x6b26c1ee386906eed1da7f3f67a2983219e091dc",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x3",
+                                "validatorIndex": "0x0",
+                                "address": "0x1163678ebdab9545ebd83274faf6a0a7529a8fa7",
+                                "amount": "0x0"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x970aefb66c674dbbda9d993538d9dbc28c93710007fa48d22c3b5a56fb6629df",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Prague-blockchain_test_engine_x-three_withdrawals_one_with_value]": {
+        "network": "Prague",
+        "lastblockhash": "0xb509c16599c9a54d801b2b9ec3cd4873b21970c49a40be696c27a79f60aa9bdc",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbb73f6c9d12925e9633b29cb69c4079127af474a628ebcedf80eed59e569b9c1",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb509c16599c9a54d801b2b9ec3cd4873b21970c49a40be696c27a79f60aa9bdc",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x7cbb55c28adba19521d8c3f8d923cdba1450bcea",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x405877d6ef9c58fefcfdf7a8217bf624881b5a19",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x0",
+                                "address": "0x8997718d461cafa2055da2c6687ac907731a56aa",
+                                "amount": "0x1"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa47f8cf6f49ee5fee1a179efc4c510dd597b83e1893cc94735246d670eebe970",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Prague-blockchain_test_engine_x-two_withdrawals_no_value]": {
+        "network": "Prague",
+        "lastblockhash": "0x13d4bc4d3b9497c6293e600b8a45f71413355a70b360c231aedbb8b75b2f2e71",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4ee434ddfb18d2c53cdf0e25a832fa2223b75713015132bfed0ca1f1c2c61ec4",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x13d4bc4d3b9497c6293e600b8a45f71413355a70b360c231aedbb8b75b2f2e71",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0xf4053af7c3b136946eb65fcd51ad894cc1e62af9",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x7579475d7a313ab6eb6efab3bd3778b055a8b1cf",
+                                "amount": "0x0"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x90b895b50a6f772379a8ae62174471af80c6f39b46ded6dcb3b530b40b63a097",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Shanghai-blockchain_test_engine_x-four_withdrawals_one_with_value_one_with_max]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xd59bac953816aee0fb3bc2644ddf104560e1af8b17c0db3d9fd4acb048c9d172",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfa5f37bf34c3d8b05ca340e4b97a0a3075c5b1a6b6b9d014d7d016a28f033f11",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xd59bac953816aee0fb3bc2644ddf104560e1af8b17c0db3d9fd4acb048c9d172",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x080e68aba3f06db4517ce8615ff9f1c6e4dd072c",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0xa07ea870afacd68bfd9d751d632b9249d73974f4",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x0",
+                                "address": "0x5d8004b26d6b9a398dbffbc6993156e3f76c0f91",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x2",
+                                "validatorIndex": "0x0",
+                                "address": "0x84203d50f6a2b006f09d70b71b938c3cb85cb237",
+                                "amount": "0xffffffffffffffff"
+                            }
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x26d203be2527cfef20f875f44db5a8f159421d79bd83fae5072e37b725b863c8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Shanghai-blockchain_test_engine_x-four_withdrawals_one_with_value_one_with_max_reversed_order]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xd9329439409b2d9276fd14099973b3320b5b2e598208369bcec191de5c4bc59f",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5fb756aa11bfc0d81075eb74f218a6664906e38434ea0ffeb7977b962e79c15e",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xd9329439409b2d9276fd14099973b3320b5b2e598208369bcec191de5c4bc59f",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x496d5b7226e5e79ad86e1a4c4773aee1e86ec9b5",
+                                "amount": "0xffffffffffffffff"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x0",
+                                "address": "0x328b568f00f092c3efaf981aaac8c98a9cf24f92",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x2",
+                                "validatorIndex": "0x0",
+                                "address": "0x6b26c1ee386906eed1da7f3f67a2983219e091dc",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x3",
+                                "validatorIndex": "0x0",
+                                "address": "0x1163678ebdab9545ebd83274faf6a0a7529a8fa7",
+                                "amount": "0x0"
+                            }
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x68de2cde43b9fbfe1c57cd01041b4dc3f9742b1f485af2bbf7f98857efefaa43",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Shanghai-blockchain_test_engine_x-three_withdrawals_one_with_value]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x6f8604f234a0393700bfc0988083e437d975b042a76a2dbf79b58544d8007ab8",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x740478a27e9090517a8e899175bacc38a8ba156a27f4f1094d6bcde9ef0af29f",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x6f8604f234a0393700bfc0988083e437d975b042a76a2dbf79b58544d8007ab8",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x7cbb55c28adba19521d8c3f8d923cdba1450bcea",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x405877d6ef9c58fefcfdf7a8217bf624881b5a19",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x0",
+                                "address": "0x8997718d461cafa2055da2c6687ac907731a56aa",
+                                "amount": "0x1"
+                            }
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xf48ac23384080c64db2a649e35ce894a33cae3b6869db652991a3ebaa703f910",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_zero_amount[fork_Shanghai-blockchain_test_engine_x-two_withdrawals_no_value]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xd53ec6e8d97c80969147229c73224e43d6d1a98332411f8416fb66b03c9d4c41",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x19582a48a25fe0582f65b6d1ea735a1a7ce00eab7e1c0dbb76d7afaa8ce07d30",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xd53ec6e8d97c80969147229c73224e43d6d1a98332411f8416fb66b03c9d4c41",
+                        "transactions": [],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0xf4053af7c3b136946eb65fcd51ad894cc1e62af9",
+                                "amount": "0x0"
+                            },
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x7579475d7a313ab6eb6efab3bd3778b055a8b1cf",
+                                "amount": "0x0"
+                            }
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x78cc00b08f6127d8c5d5950f6906cf8ec511df3fed1cebbbae9009cced494c4d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawal scenarios with a zero amount in a single block.\n\n    All the withdrawals in the following scenarios are included in one block.\n\n    1. Two withdrawals of zero amount to two different addresses; one to an\n        untouched account, one to an account with a balance.\n\n    2. As 1., but with an additional withdrawal with positive value.\n\n    3. As 2., but with an additional withdrawal containing the maximum value\n       possible.\n\n    4. As 3., but with order of withdrawals in the block reversed.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L604",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    }
+}

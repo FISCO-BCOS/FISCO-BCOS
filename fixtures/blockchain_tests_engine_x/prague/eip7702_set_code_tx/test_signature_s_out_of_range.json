@@ -1,0 +1,65 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_signature_s_out_of_range[fork_Prague-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x114b41cf64aaa5e169053de6ec2d243b9dd34cc3b1b8be32daa3e5fa7b970b8e",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8d1aa2caae0c5e103b0d91dd1af40712d5818a7c8e1be80b7cd0355cb36a8e64",
+                        "receiptsRoot": "0x5719ea416677b09c9070ef0711e2a036fe045f80aaf3f89beddb18c69bda5d6d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10a0a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x114b41cf64aaa5e169053de6ec2d243b9dd34cc3b1b8be32daa3e5fa7b970b8e",
+                        "transactions": [
+                            "0x04f8c101808007830186a09458816a45d82af63a0ae8510fe82825a0b184b4138080c0f85cf85a019458816a45d82af63a0ae8510fe82825a0b184b3138080a003b790670e58033a3e7944f7dc070127053ddbc2a1dcf2e8c133793bf638b8b7a08ce6aa3d2c0890a8c0025a302b3c1f541023297cb0203e323c71a1ea6ee3df4001a06ec1adaa6c5b1c82e176deea4ba11686889dc6aba36f43a1a2f825d097602f84a055266ee20682be2388e3d43d6fc6a3fa1a5abb19ae43b366b46733ca27aea261"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x12ba4823367e4c9855d6d1c91bc6db616e15990da3d6c6915a34535979d583b2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction with an authorization tuple where the signature\n    s value is out of range by modifying its value to be `SECP256K1N - S` and\n    flipping the v value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2361",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

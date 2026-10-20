@@ -1,0 +1,792 @@
+{
+    "tests/static/state_tests/stEIP1559/outOfFundsFiller.yml::outOfFunds[fork_Cancun-state_test-declaredKeyWrite-g0-v0]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0xff112233445566",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x03e8",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xd71ff18b33179067ed3809ddf8d8ab3eadaefaab": {
+                "nonce": "0x01",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x18672be59254ad3372603cf83655073b25b96a6f": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600260005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x01",
+            "maxPriorityFeePerGas": "0x174876e800",
+            "maxFeePerGas": "0x174876e800",
+            "gasLimit": [
+                "0x01000000"
+            ],
+            "to": "0x18672be59254ad3372603cf83655073b25b96a6f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0xd71ff18b33179067ed3809ddf8d8ab3eadaefaab",
+            "secretKey": "0x0146c4d11311e85b750efa7f18672be59254ad3372603cf83655073b25b96a6f"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xf9e185917492d420eb8bfff399f399e758302e919f4b0c1d9aee584889df4a43",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f86e010185174876e80085174876e80084010000009418672be59254ad3372603cf83655073b25b96a6f8000c001a058af86bd1968cd07db5ad9b7eed12bb993d7455dea73b92b1329bf9145d34223a06884f0395c1aeb007b0076969e6b58e12c026f671b9e282b4b8959b3e7266f30",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd71ff18b33179067ed3809ddf8d8ab3eadaefaab": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x18672be59254ad3372603cf83655073b25b96a6f": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600260005500",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe493688455850c5dc625931daa9f8a3117bf90de5fbe6ffca14c376a0b464d5b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP1559/outOfFundsFiller.yml::outOfFunds[fork_Cancun-state_test-declaredKeyWrite-g0-v1]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0xff112233445566",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x03e8",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x41acdf7cc64006c9a100f48db6f5da456c0dc2aa": {
+                "nonce": "0x01",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xdc4432d3ba620a5878448a8463d9dc1f83514e3b": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600260005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x01",
+            "maxPriorityFeePerGas": "0x174876e800",
+            "maxFeePerGas": "0x174876e800",
+            "gasLimit": [
+                "0x01000000"
+            ],
+            "to": "0xdc4432d3ba620a5878448a8463d9dc1f83514e3b",
+            "value": [
+                "0x0de0b6b3a7640000"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0x41acdf7cc64006c9a100f48db6f5da456c0dc2aa",
+            "secretKey": "0xb7bf530035eb4c922d7c39dcdc4432d3ba620a5878448a8463d9dc1f83514e3b"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xe50cc365b53766f47d1632dbabadaf8d67ce7bf41333af619f7c4fb1f14ab5f9",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f876010185174876e80085174876e800840100000094dc4432d3ba620a5878448a8463d9dc1f83514e3b880de0b6b3a764000000c001a06efee268cfcbdeabdaefeb8ce4a019b91ad7c18b3d63d2f13c7db03d655ac537a057920dc0dd1031860fc00b8df2c6bc80621c3169619ef9e25b214e797bcf67a2",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x41acdf7cc64006c9a100f48db6f5da456c0dc2aa": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xdc4432d3ba620a5878448a8463d9dc1f83514e3b": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600260005500",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x8ce0fe84c06c9700de11a64355c0dc8111a43dcfd194d45d5c1abba062c0474a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP1559/outOfFundsFiller.yml::outOfFunds[fork_Cancun-state_test-declaredKeyWrite-g1-v0]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0xff112233445566",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x03e8",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xff9e69113a8c5c2f097bc8434afd60b921725c41": {
+                "nonce": "0x01",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xdf60821daea785f748c8ca31c66bc04c7dccc98a": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600260005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x01",
+            "maxPriorityFeePerGas": "0x174876e800",
+            "maxFeePerGas": "0x174876e800",
+            "gasLimit": [
+                "0x9c40"
+            ],
+            "to": "0xdf60821daea785f748c8ca31c66bc04c7dccc98a",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0xff9e69113a8c5c2f097bc8434afd60b921725c41",
+            "secretKey": "0x4f42c9a189f301b16abc35a7df60821daea785f748c8ca31c66bc04c7dccc98a"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x8d88d0d7a5ed746dd88f691949e8e3acd77cd6f12d83868f6f2c9720f92ddf0b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f86c010185174876e80085174876e800829c4094df60821daea785f748c8ca31c66bc04c7dccc98a8000c001a0808ff420726cd6eb4b6e9be55b866a04c23fe420e84dd53eecc5be6fce441e75a01cf56e0b6fb78690510dd4439bc8d5c1cba3299eacf5af25599d40926a1451dc",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xff9e69113a8c5c2f097bc8434afd60b921725c41": {
+                            "nonce": "0x02",
+                            "balance": "0x0dd280b9144a0000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xdf60821daea785f748c8ca31c66bc04c7dccc98a": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600260005500",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0e35fa90b7a600",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x5626fe7c81d264944920be85bb1e4838b7813c41bb374e97efb7c4c772851846",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP1559/outOfFundsFiller.yml::outOfFunds[fork_Cancun-state_test-declaredKeyWrite-g1-v1]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0xff112233445566",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x03e8",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x11afb806e7faa427da7d951a10e4456ad8d8f57f": {
+                "nonce": "0x01",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x57d96af6de7785280d83aae8ba33dbb2a75ab294": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600260005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x01",
+            "maxPriorityFeePerGas": "0x174876e800",
+            "maxFeePerGas": "0x174876e800",
+            "gasLimit": [
+                "0x9c40"
+            ],
+            "to": "0x57d96af6de7785280d83aae8ba33dbb2a75ab294",
+            "value": [
+                "0x0de0b6b3a7640000"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0x11afb806e7faa427da7d951a10e4456ad8d8f57f",
+            "secretKey": "0x5555083467243b2a1c1c766e57d96af6de7785280d83aae8ba33dbb2a75ab294"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xd0750622a7601981eeb0edbb6e87b78627aedfbf7b1deb98651b3364b3103ac9",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f874010185174876e80085174876e800829c409457d96af6de7785280d83aae8ba33dbb2a75ab294880de0b6b3a764000000c001a07dcf33912ade93b1a2a3f9d725620f22cc6ba70ba889bba0de1e16085a2e70e7a0574ff7479a42f242cf693388f4d462d9e842303502c00ef711a67b4c865b3976",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x11afb806e7faa427da7d951a10e4456ad8d8f57f": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x57d96af6de7785280d83aae8ba33dbb2a75ab294": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600260005500",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc36e44051d960cb8b59f99b61586a71ff70ea86224e8d7a6994ae72c36f8eb8b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP1559/outOfFundsFiller.yml::outOfFunds[fork_Prague-state_test-declaredKeyWrite-g0-v0]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0xff112233445566",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x03e8",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xd71ff18b33179067ed3809ddf8d8ab3eadaefaab": {
+                "nonce": "0x01",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x18672be59254ad3372603cf83655073b25b96a6f": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600260005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x01",
+            "maxPriorityFeePerGas": "0x174876e800",
+            "maxFeePerGas": "0x174876e800",
+            "gasLimit": [
+                "0x01000000"
+            ],
+            "to": "0x18672be59254ad3372603cf83655073b25b96a6f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0xd71ff18b33179067ed3809ddf8d8ab3eadaefaab",
+            "secretKey": "0x0146c4d11311e85b750efa7f18672be59254ad3372603cf83655073b25b96a6f"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xf9e185917492d420eb8bfff399f399e758302e919f4b0c1d9aee584889df4a43",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f86e010185174876e80085174876e80084010000009418672be59254ad3372603cf83655073b25b96a6f8000c001a058af86bd1968cd07db5ad9b7eed12bb993d7455dea73b92b1329bf9145d34223a06884f0395c1aeb007b0076969e6b58e12c026f671b9e282b4b8959b3e7266f30",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd71ff18b33179067ed3809ddf8d8ab3eadaefaab": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x18672be59254ad3372603cf83655073b25b96a6f": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600260005500",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1acf748a1aa539c52214a69ffa598545147b2316dbe10343e602a73f5b36e9e4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP1559/outOfFundsFiller.yml::outOfFunds[fork_Prague-state_test-declaredKeyWrite-g0-v1]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0xff112233445566",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x03e8",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x41acdf7cc64006c9a100f48db6f5da456c0dc2aa": {
+                "nonce": "0x01",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xdc4432d3ba620a5878448a8463d9dc1f83514e3b": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600260005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x01",
+            "maxPriorityFeePerGas": "0x174876e800",
+            "maxFeePerGas": "0x174876e800",
+            "gasLimit": [
+                "0x01000000"
+            ],
+            "to": "0xdc4432d3ba620a5878448a8463d9dc1f83514e3b",
+            "value": [
+                "0x0de0b6b3a7640000"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0x41acdf7cc64006c9a100f48db6f5da456c0dc2aa",
+            "secretKey": "0xb7bf530035eb4c922d7c39dcdc4432d3ba620a5878448a8463d9dc1f83514e3b"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xe50cc365b53766f47d1632dbabadaf8d67ce7bf41333af619f7c4fb1f14ab5f9",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f876010185174876e80085174876e800840100000094dc4432d3ba620a5878448a8463d9dc1f83514e3b880de0b6b3a764000000c001a06efee268cfcbdeabdaefeb8ce4a019b91ad7c18b3d63d2f13c7db03d655ac537a057920dc0dd1031860fc00b8df2c6bc80621c3169619ef9e25b214e797bcf67a2",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x41acdf7cc64006c9a100f48db6f5da456c0dc2aa": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xdc4432d3ba620a5878448a8463d9dc1f83514e3b": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600260005500",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x7f4d85ea5ca9bceeab653ab96d1c9cdfd81e4bb32ce14cadb4d58d37e2dde0aa",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP1559/outOfFundsFiller.yml::outOfFunds[fork_Prague-state_test-declaredKeyWrite-g1-v0]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0xff112233445566",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x03e8",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xff9e69113a8c5c2f097bc8434afd60b921725c41": {
+                "nonce": "0x01",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xdf60821daea785f748c8ca31c66bc04c7dccc98a": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600260005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x01",
+            "maxPriorityFeePerGas": "0x174876e800",
+            "maxFeePerGas": "0x174876e800",
+            "gasLimit": [
+                "0x9c40"
+            ],
+            "to": "0xdf60821daea785f748c8ca31c66bc04c7dccc98a",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0xff9e69113a8c5c2f097bc8434afd60b921725c41",
+            "secretKey": "0x4f42c9a189f301b16abc35a7df60821daea785f748c8ca31c66bc04c7dccc98a"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x8d88d0d7a5ed746dd88f691949e8e3acd77cd6f12d83868f6f2c9720f92ddf0b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f86c010185174876e80085174876e800829c4094df60821daea785f748c8ca31c66bc04c7dccc98a8000c001a0808ff420726cd6eb4b6e9be55b866a04c23fe420e84dd53eecc5be6fce441e75a01cf56e0b6fb78690510dd4439bc8d5c1cba3299eacf5af25599d40926a1451dc",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xff9e69113a8c5c2f097bc8434afd60b921725c41": {
+                            "nonce": "0x02",
+                            "balance": "0x0dd280b9144a0000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xdf60821daea785f748c8ca31c66bc04c7dccc98a": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600260005500",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0e35fa90b7a600",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x3136f9e6ea2e3e84855e4ce7f07e85777d4f98cec5be15cc25706a9d3492ed37",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP1559/outOfFundsFiller.yml::outOfFunds[fork_Prague-state_test-declaredKeyWrite-g1-v1]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0xff112233445566",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x03e8",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x11afb806e7faa427da7d951a10e4456ad8d8f57f": {
+                "nonce": "0x01",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x57d96af6de7785280d83aae8ba33dbb2a75ab294": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x600260005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x01",
+            "maxPriorityFeePerGas": "0x174876e800",
+            "maxFeePerGas": "0x174876e800",
+            "gasLimit": [
+                "0x9c40"
+            ],
+            "to": "0x57d96af6de7785280d83aae8ba33dbb2a75ab294",
+            "value": [
+                "0x0de0b6b3a7640000"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0x11afb806e7faa427da7d951a10e4456ad8d8f57f",
+            "secretKey": "0x5555083467243b2a1c1c766e57d96af6de7785280d83aae8ba33dbb2a75ab294"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xd0750622a7601981eeb0edbb6e87b78627aedfbf7b1deb98651b3364b3103ac9",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f874010185174876e80085174876e800829c409457d96af6de7785280d83aae8ba33dbb2a75ab294880de0b6b3a764000000c001a07dcf33912ade93b1a2a3f9d725620f22cc6ba70ba889bba0de1e16085a2e70e7a0574ff7479a42f242cf693388f4d462d9e842303502c00ef711a67b4c865b3976",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x11afb806e7faa427da7d951a10e4456ad8d8f57f": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x57d96af6de7785280d83aae8ba33dbb2a75ab294": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x600260005500",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xbf7ada218ac1f491f84b451316ccafb665c383ac7260da34fa79ec2406591986",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    }
+}

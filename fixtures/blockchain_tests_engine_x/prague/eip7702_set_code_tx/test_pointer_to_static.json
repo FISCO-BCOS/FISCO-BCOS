@@ -1,0 +1,65 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py::test_pointer_to_static[fork_Prague-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x5be8b749e2c98dcda86c70b3fa7229a0edbb237fb0d5aa05d8a7765779fade8a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7db599175678c530e1bb26894e2ed4c17cefa7eda01e75b7fefe73b1ba5276f0",
+                        "receiptsRoot": "0xd2d992f84db56c273a4ae2ce122a0f6814d70bda46950cc877c1fd2ffa39d9a5",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x102eb0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x5be8b749e2c98dcda86c70b3fa7229a0edbb237fb0d5aa05d8a7765779fade8a",
+                        "transactions": [
+                            "0x04f8c101808007832dc6c0948ad5c1bd95f0b2147ec55508372980dcd9a5c37b8080c0f85cf85a8094096fec08774bc2a36c61daa00d11da4a0395f4bb8080a01e47e961cc521742f840e5c2417f9bfcb344b27757e8e5b320a65545e8d7316ba073e70d604ad26877ca9f5feab050ff10dab63bb1174850f09fbdb6e42e78a42180a0dba2948f942a994b7c191da91eb5bc8600f4f25cfa21bb590bea66e6a0f8137ea01b503e0f77310bb446d23e54a2eb37b62833b478f4ab255a8061e270498a1252"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9c9133dabd7da8d712c947ce81a16ec655816e169898a097ace26bd73eb51d48",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tx -> call -> pointer A -> static -> static violation.\n\n    Verify that static context is active when called under pointer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py#L883",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

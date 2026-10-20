@@ -90,7 +90,9 @@ enum LogLevel
     FATAL = 5,
 };
 
-extern LogLevel c_fileLogLevel;
+// atomic: admin_setLogLevel (IPC) and the SIGUSR2 reload (BoostLogInitializer) change it while
+// every logging thread reads it
+extern std::atomic<LogLevel> c_fileLogLevel;
 
 constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
     requires(std::same_as<decltype(_rhs), LogLevel> || std::integral<decltype(_rhs)>)
@@ -124,8 +126,9 @@ inline bool moduleLogEnabled(LogModule _module, LogLevel _level)
 {
     auto configured =
         c_moduleLogLevel[static_cast<size_t>(_module)].load(std::memory_order_relaxed);
-    auto threshold =
-        configured == c_inheritGlobalLogLevel ? static_cast<int>(c_fileLogLevel) : configured;
+    auto threshold = configured == c_inheritGlobalLogLevel ?
+                         static_cast<int>(c_fileLogLevel.load(std::memory_order_relaxed)) :
+                         configured;
     return static_cast<int>(_level) >= threshold;
 }
 
@@ -252,8 +255,8 @@ private:
     LogLevel m_level;
 };
 
-#define BCOS_LOG(level)                                \
-    if (bcos::LogLevel::level >= bcos::c_fileLogLevel) \
+#define BCOS_LOG(level)                                                                \
+    if (bcos::LogLevel::level >= bcos::c_fileLogLevel.load(std::memory_order_relaxed)) \
     bcos::LogStream(bcos::LogLevel::level)
 
 #define BCOS_MODULE_LOG(MODULE, level)                                          \

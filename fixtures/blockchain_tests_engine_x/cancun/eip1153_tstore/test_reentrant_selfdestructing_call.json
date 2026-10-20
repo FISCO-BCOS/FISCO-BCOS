@@ -1,0 +1,722 @@
+{
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Cancun-blockchain_test_engine_x_from_state_test-tload_after_inner_selfdestruct_new_contract]": {
+        "network": "Cancun",
+        "lastblockhash": "0x65b797c1cefd31be7753e3e2347b6271fb09f859952c225573ae7973ee920624",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9429966a1342b55229b1ccb062dd79ed45352e997937d1c585f04aaa57888f91",
+                        "receiptsRoot": "0x64d62bfce4ee4fbbadd1df57dbf6dd44fbe352cac85cb8d3f027aba80bca25ba",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x234a6",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x65b797c1cefd31be7753e3e2347b6271fb09f859952c225573ae7973ee920624",
+                        "transactions": [
+                            "0xf8ba800a830f4240940b3062ba1c0f890f0becadb0137a2ae92b2d118b80b85961004e600081600b8239f3600160003514601c580157600260003514600858015760355801565b6000ff602c5801565b61010060ff5d600260005260206000602060006000305af160ff5c60005260206000f360035801565b26a019c57b3303b6783ec6f284d4951b060e53e2fc4e95d03425e9eef98236a13c94a038f730936e26d2c3f4b08e3c6332ecd186c8e6926d3b1358ce931d3bca3a7973"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x97cc1a4d083af7d57dbf5b700e900e7ea7d54afbc57ce750c670243df8920b6e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Cancun-blockchain_test_engine_x_from_state_test-tload_after_inner_selfdestruct_pre_existing_contract]": {
+        "network": "Cancun",
+        "lastblockhash": "0xe7d62620da8060084cdc1193598d2782feb577a2950d1d4bde61d642c5041a81",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9966d822cd61d8e49e5ee4e552415f4d23561196cdc176e7e0ac83f7e51635e2",
+                        "receiptsRoot": "0x1e149e73d295d36eede5ad3e13fbffdec70cfd4eb445ef961633015690195330",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x174ad",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe7d62620da8060084cdc1193598d2782feb577a2950d1d4bde61d642c5041a81",
+                        "transactions": [
+                            "0xf880800a830f424094a407d57123f86d14a93d01f7556c898159fe2bb880a0000000000000000000000000a407d57123f86d14a93d01f7556c898159fe2cb826a05d2906f7dc3ef68d73ab5ea18fcf7cce6dd2e9cb77793a50c3b90d6c1d385daba073322d3a017ca05d2dbd6b0a8fb7535c486ca3d66a14229ce1cbd4570c293bf4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x575b3133c311001a4943d69e83cf7dd09de15fe288686bd44d5c1618e68dd201",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Cancun-blockchain_test_engine_x_from_state_test-tload_after_selfdestruct_new_contract]": {
+        "network": "Cancun",
+        "lastblockhash": "0x434d9b5b14123cd4486ecad12ce86e657a311f83406b88c8c6c43331efedda24",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2b4f2921407e5acb232b1f6582f6a4bc41f5188c62c698a856f270b03fbe65ec",
+                        "receiptsRoot": "0xade6c1a81050d65cedfd8fc6d6ae8105327d3ac696114b4348cb93528106d15e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x27c5c",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x434d9b5b14123cd4486ecad12ce86e657a311f83406b88c8c6c43331efedda24",
+                        "transactions": [
+                            "0xf8a8800a830f424094006d08262cb680b5c78bc085d58298cec4b5104280b84761003c600081600b8239f36001600035146024580157600260003514600858015760235801565b60ff5c60005260206000f360125801565b61010060ff5d6000ff60035801565b25a01c10d5568d5def42fec55b25862e1731ec8a4ec37d65007c1e95aa075c92d2b8a032d0902671d2bb1a960deec431e97d1f4408dbee748c912853b5b76b2002e055"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xdfc30aa52aca55bed8f369943c02d37ad04c0fac6b64b0625618342d0e5c4616",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Cancun-blockchain_test_engine_x_from_state_test-tload_after_selfdestruct_pre_existing_contract]": {
+        "network": "Cancun",
+        "lastblockhash": "0x5a2afedd798f5a14f724ab2658fe6085567e94812fadfeea890e1577ddacd10a",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6716ce670cc30bf30c8b4a606f0628a25a23082dc947b84948752123aa31e3d6",
+                        "receiptsRoot": "0xeadd2f581f57f41920270a8bf4b0fd42caa828a6322647ab2020b865bbbc837b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1d760",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x5a2afedd798f5a14f724ab2658fe6085567e94812fadfeea890e1577ddacd10a",
+                        "transactions": [
+                            "0xf880800a830f4240941d8cf474ba491e299e8df7bcb6f66ccee27736a280a00000000000000000000000001d8cf474ba491e299e8df7bcb6f66ccee27737a226a04c99cc29c6d633c23bb4c5b275b309d4c79bb288a4c0e2ec6e0f29aa75c01c9ea0436c2b6a10e9deb7c4920558a485603ce1f11d368d1fb4ee2f5caa57d47014b9"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6eb548ea7c423434c0c9d00c907c5b14eecd2c52200268b7fb189c6d2a772aad",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Cancun-blockchain_test_engine_x_from_state_test-tstore_after_selfdestruct_new_contract]": {
+        "network": "Cancun",
+        "lastblockhash": "0x5da867643c6d717fc7b672b6e711f8c0010a582cf83bda1032fa361858646891",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd86dbbb081036a1315809a46472626a1bab42f472026c960ebdc0c84e6d99279",
+                        "receiptsRoot": "0x77e4969fd8319080e7c3dbb87042a88087574d1e7691a4ba42cf034b3b92ac2c",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2e256",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x5da867643c6d717fc7b672b6e711f8c0010a582cf83bda1032fa361858646891",
+                        "transactions": [
+                            "0xf8b9800a830f4240949bb252000e2135a342dab8635b0563ec73ad5fd280b85861004d600081600b8239f3600160003514603b5801576002600035146024580157600360003514600858015760295801565b60ff5c60005260206000f360185801565b61010060ff5d600c5801565b6000ff60035801565b26a0676b928ad50b5c1be8652dd0bd34bfe2d4ba8bcbfb39b419c668fef7bd16726fa006d06e9d349c68f856d5b5f3a4807f62a8a6154a6435a65c6817c4ededb9ac48"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x50045879c5342842256232471fe4629d326ea8c8d357dd25f859a4297848f8b0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Cancun-blockchain_test_engine_x_from_state_test-tstore_after_selfdestruct_pre_existing_contract]": {
+        "network": "Cancun",
+        "lastblockhash": "0x0753f98cbefe9675e9a116ff79970e9e78de2dd4e9b711fefc092147bc85b1e4",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6bd5c89d9fb67bb0e91a4a0e2992792d3d72a1820953e26232af3569c82c7011",
+                        "receiptsRoot": "0xd20e186a3ade14b728fd20e84f952800418b72d2adc279517eab7c5ffeb31297",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x22f08",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0753f98cbefe9675e9a116ff79970e9e78de2dd4e9b711fefc092147bc85b1e4",
+                        "transactions": [
+                            "0xf880800a830f4240945f497deef397e3ac1e943579ce0e3b7a0faadd9b80a00000000000000000000000005f497deef397e3ac1e943579ce0e3b7a0faade9b25a0acb53fa221ab7627f3cc482fc5ffcc7c61a0ae41a18b79469a791f689c3d9377a07d907385a4908dfd51289483fb1ee7cde87073009edd11e17590202991aaddce"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa4d92a006592b9865ea3d9a80a910f53124308a41ecff33ed6cc72dcc12ccc10",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Prague-blockchain_test_engine_x_from_state_test-tload_after_inner_selfdestruct_new_contract]": {
+        "network": "Prague",
+        "lastblockhash": "0x12c1e4aae523a6b3a32299f33b1358253f4273e8227ab54817bff295b4341d2f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8143c9da38fd0ef3ba8d3d19c793dae857efcbf647a011cfe504433d956ba39a",
+                        "receiptsRoot": "0x64d62bfce4ee4fbbadd1df57dbf6dd44fbe352cac85cb8d3f027aba80bca25ba",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x234a6",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x12c1e4aae523a6b3a32299f33b1358253f4273e8227ab54817bff295b4341d2f",
+                        "transactions": [
+                            "0xf8ba800a830f4240940b3062ba1c0f890f0becadb0137a2ae92b2d118b80b85961004e600081600b8239f3600160003514601c580157600260003514600858015760355801565b6000ff602c5801565b61010060ff5d600260005260206000602060006000305af160ff5c60005260206000f360035801565b26a019c57b3303b6783ec6f284d4951b060e53e2fc4e95d03425e9eef98236a13c94a038f730936e26d2c3f4b08e3c6332ecd186c8e6926d3b1358ce931d3bca3a7973"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9e40e26d7ffff69dfca354ca99fff43f80f1a0da4be6468defdce79fbbece34a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Prague-blockchain_test_engine_x_from_state_test-tload_after_inner_selfdestruct_pre_existing_contract]": {
+        "network": "Prague",
+        "lastblockhash": "0x5442cb2e58c76f2f9c40e6eeb7486e22c467cb96eac23af6994daa48199a3860",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7c299ca1ab1e9080431b2a7edd86eb1efd214ccdca9587d7580df9198f465334",
+                        "receiptsRoot": "0x1e149e73d295d36eede5ad3e13fbffdec70cfd4eb445ef961633015690195330",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x174ad",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x5442cb2e58c76f2f9c40e6eeb7486e22c467cb96eac23af6994daa48199a3860",
+                        "transactions": [
+                            "0xf880800a830f424094a407d57123f86d14a93d01f7556c898159fe2bb880a0000000000000000000000000a407d57123f86d14a93d01f7556c898159fe2cb826a05d2906f7dc3ef68d73ab5ea18fcf7cce6dd2e9cb77793a50c3b90d6c1d385daba073322d3a017ca05d2dbd6b0a8fb7535c486ca3d66a14229ce1cbd4570c293bf4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x26eca8d456088e573a2f6eeea00e91783f38caca1973826614ee48aee274ea65",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Prague-blockchain_test_engine_x_from_state_test-tload_after_selfdestruct_new_contract]": {
+        "network": "Prague",
+        "lastblockhash": "0xa2f151412e33974b5c88afa64836d4bb7364c9d22951cbe57c11b96612be871c",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x035a774a763438806b2702574398bfe33c053b5008a799e82fdcfcaa218a40d1",
+                        "receiptsRoot": "0xade6c1a81050d65cedfd8fc6d6ae8105327d3ac696114b4348cb93528106d15e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x27c5c",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xa2f151412e33974b5c88afa64836d4bb7364c9d22951cbe57c11b96612be871c",
+                        "transactions": [
+                            "0xf8a8800a830f424094006d08262cb680b5c78bc085d58298cec4b5104280b84761003c600081600b8239f36001600035146024580157600260003514600858015760235801565b60ff5c60005260206000f360125801565b61010060ff5d6000ff60035801565b25a01c10d5568d5def42fec55b25862e1731ec8a4ec37d65007c1e95aa075c92d2b8a032d0902671d2bb1a960deec431e97d1f4408dbee748c912853b5b76b2002e055"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6d0b7343da88a4473c1b83782f36f02346507be3bf2153d58ad19af3b3fe1ee0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Prague-blockchain_test_engine_x_from_state_test-tload_after_selfdestruct_pre_existing_contract]": {
+        "network": "Prague",
+        "lastblockhash": "0x19cb787d3da157748c322433a03b338142fe58d6e4f37d0783cbcbb8965c8a98",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xff489e2288f1f58fb013beee9d8c44d0d880cde8b8bc407fcb5b5f3caa07efe4",
+                        "receiptsRoot": "0xeadd2f581f57f41920270a8bf4b0fd42caa828a6322647ab2020b865bbbc837b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1d760",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x19cb787d3da157748c322433a03b338142fe58d6e4f37d0783cbcbb8965c8a98",
+                        "transactions": [
+                            "0xf880800a830f4240941d8cf474ba491e299e8df7bcb6f66ccee27736a280a00000000000000000000000001d8cf474ba491e299e8df7bcb6f66ccee27737a226a04c99cc29c6d633c23bb4c5b275b309d4c79bb288a4c0e2ec6e0f29aa75c01c9ea0436c2b6a10e9deb7c4920558a485603ce1f11d368d1fb4ee2f5caa57d47014b9"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6a294c17a90aca17535bd62be0b75210de7fc158a04b6f79ea1cc2e8e049163f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Prague-blockchain_test_engine_x_from_state_test-tstore_after_selfdestruct_new_contract]": {
+        "network": "Prague",
+        "lastblockhash": "0x3e3cf882bc9a1c72195bba136d126ac17af31da91c4846425a1a0d8ca49feb84",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc0ea514c1fbf6e56d9d05176c79d03163ed9b00ce16f6181f7528cfd1b392f8b",
+                        "receiptsRoot": "0x77e4969fd8319080e7c3dbb87042a88087574d1e7691a4ba42cf034b3b92ac2c",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2e256",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3e3cf882bc9a1c72195bba136d126ac17af31da91c4846425a1a0d8ca49feb84",
+                        "transactions": [
+                            "0xf8b9800a830f4240949bb252000e2135a342dab8635b0563ec73ad5fd280b85861004d600081600b8239f3600160003514603b5801576002600035146024580157600360003514600858015760295801565b60ff5c60005260206000f360185801565b61010060ff5d600c5801565b6000ff60035801565b26a0676b928ad50b5c1be8652dd0bd34bfe2d4ba8bcbfb39b419c668fef7bd16726fa006d06e9d349c68f856d5b5f3a4807f62a8a6154a6435a65c6817c4ededb9ac48"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x668876f6af471e6b9546905041f7b6cb9f4cbff3e9eb97c3efb2bc767c06054e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py::test_reentrant_selfdestructing_call[fork_Prague-blockchain_test_engine_x_from_state_test-tstore_after_selfdestruct_pre_existing_contract]": {
+        "network": "Prague",
+        "lastblockhash": "0x7398664baac04a6e038595602eb763dc7a204731809903076fc68c82ce61627b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xa0825d5ac67b113228b7ac47cf28c6f8f63ec7580fcc8379bde01edee59e80da",
+                        "receiptsRoot": "0xd20e186a3ade14b728fd20e84f952800418b72d2adc279517eab7c5ffeb31297",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x22f08",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7398664baac04a6e038595602eb763dc7a204731809903076fc68c82ce61627b",
+                        "transactions": [
+                            "0xf880800a830f4240945f497deef397e3ac1e943579ce0e3b7a0faadd9b80a00000000000000000000000005f497deef397e3ac1e943579ce0e3b7a0faade9b25a0acb53fa221ab7627f3cc482fc5ffcc7c61a0ae41a18b79469a791f689c3d9377a07d907385a4908dfd51289483fb1ee7cde87073009edd11e17590202991aaddce"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x09ee973899ec69de81ff9a0df8ff0c428b826da76233dbb74a4ecf7272280551",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts after\n    selfdestructing.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_selfdestruct.py#L245",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    }
+}

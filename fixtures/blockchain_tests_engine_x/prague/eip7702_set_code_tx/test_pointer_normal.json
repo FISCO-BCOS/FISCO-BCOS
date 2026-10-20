@@ -1,0 +1,96 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py::test_pointer_normal[fork_Prague-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0xe194944ebd6d543c387659d1b239c8d210a076c73d92486b3fbf28921a67523d",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbb81cb63df002be2c2f9626c4052390e9d2b62aa0ba5504a3cdb35c5462e5d24",
+                        "receiptsRoot": "0x995531b6d0e321f51e2440f06c694107cee8fb6df2e35635b25b22129e835cc3",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x13ed8",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe888d68ada7f2700cbe199ad11f115ec4b522a7f8c65b7e1a08677bc08b2186c",
+                        "transactions": [
+                            "0x04f8c101808007830f424094d397c0847369c603c7072da283902f2e50d7ddf48080c0f85cf85a809466a82b8714fb34a85d96b27fe11b43ed13df143a8001a0b18aa759a0d3d9bae809a400c0908a475708e538ebc27159db0ff3df896bfb9fa00b08ee7667b23cf20799e8f89e20b2550213c108e8491b21f2dede9aaa7178e280a0ae4254bbe4c4259ec7fade49654189bf32781a54b399f6a4fd3613477ecae216a031156f18b04a2c810c2e949adfad9493c1a1372607614aafa6a5e069b244d7e0",
+                            "0xf860010a830f424094d397c0847369c603c7072da283902f2e50d7ddf4808026a099ed290d3bc5b5e95f70c1eaeb084053be84ef82959d55b9eebe751182f08a0fa0103a4f760eff095914e3b008270bd647115cd8e774718556f435fd0f3a05a9ba"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe888d68ada7f2700cbe199ad11f115ec4b522a7f8c65b7e1a08677bc08b2186c",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4bfa4f9e6c99d8258cdaba9e8f8dcb356044a59077325490bb496101d15b8a71",
+                        "receiptsRoot": "0xf5a4cad211681b78d25e6fde8dea45961dd1d222a43e4d75e3b7733e50889203",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x659c",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe194944ebd6d543c387659d1b239c8d210a076c73d92486b3fbf28921a67523d",
+                        "transactions": [
+                            "0xf860020a830f424094d397c0847369c603c7072da283902f2e50d7ddf4808025a0cb358001a6241b63a70d5fd7c5f92200a9e4e7fc3102c7e295f421aeddd77b4ca017bd5e2818d7bba0eed2e80da9cf61a0d9529e20e58c59f9d1bcc76d6ff3f3b7"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xcf7705a79527f4ec9872da31314c18931040fd4d03335a5e03df882534a77c64",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tx -> call -> pointer A -> contract.\n\n    Other normal tx can interact with\n    previously assigned pointers.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py#L142",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

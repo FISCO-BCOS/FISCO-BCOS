@@ -1,0 +1,226 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_transaction_fee_validations[fork_Prague-state_test-insufficient_max_fee_per_gas]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x9e98c5f2bcefb8af389246eb9014e91acff3194e": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x00",
+                "storage": {}
+            },
+            "0x8bb47a9fefb16dcd5dff5c0129fbaa4aadfaa3d4": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x06",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xbca0f7918c398892d1a98671b3094e4f8a8d2a16",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                []
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x00",
+                    "address": "0x9e98c5f2bcefb8af389246eb9014e91acff3194e",
+                    "nonce": "0x00",
+                    "v": "0x01",
+                    "r": "0x0d657a3936e249450fbfb84f6fffc791823a4809245706b52e4af36889e53e4b",
+                    "s": "0x117d7e82ccf35c435d0c3700c101d1c880fe3bce418c00f8e0d4593c2f22bba4",
+                    "signer": "0xbca0f7918c398892d1a98671b3094e4f8a8d2a16",
+                    "yParity": "0x01"
+                }
+            ],
+            "sender": "0x8bb47a9fefb16dcd5dff5c0129fbaa4aadfaa3d4",
+            "secretKey": "0x7b8be6f3a31d653241432f869e98c5f2bcefb8af389246eb9014e91acff3194f"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x36ac52594d7d251d34a15ccd7a2ebb976b38f9778e0bf3d6aa7dc6ace19da265",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f8c1018080068307a12094bca0f7918c398892d1a98671b3094e4f8a8d2a168080c0f85cf85a80949e98c5f2bcefb8af389246eb9014e91acff3194e8001a00d657a3936e249450fbfb84f6fffc791823a4809245706b52e4af36889e53e4ba0117d7e82ccf35c435d0c3700c101d1c880fe3bce418c00f8e0d4593c2f22bba401a03465e047a37d56b0d7b04ac39f0f6b91b819c8d9b494af17cfe2d679f7fabe72a07ff14cf6a44f58300456e9acfdcc3336dfa0e3aef4705c0e11ffc668293bd4f1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x9e98c5f2bcefb8af389246eb9014e91acff3194e": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x00",
+                            "storage": {}
+                        },
+                        "0x8bb47a9fefb16dcd5dff5c0129fbaa4aadfaa3d4": {
+                            "nonce": "0x00",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x94cfbd8cf8e1d921c30a76dd488ce99a6993971350a6f534216149845de43cb4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a transaction with an insufficient max fee per gas is rejected.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L3971",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_transaction_fee_validations[fork_Prague-state_test-priority_greater_than_max_fee_per_gas]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x22a20cb0b4f320bc49c68018080a04e28250c973": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x00",
+                "storage": {}
+            },
+            "0x0ab615cfb511bc1c72662f5743da2ed9578263c9": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x08",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xa44ca0b23e7305bb9cf41b97711b3e331d73a10d",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                []
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x00",
+                    "address": "0x22a20cb0b4f320bc49c68018080a04e28250c973",
+                    "nonce": "0x00",
+                    "v": "0x00",
+                    "r": "0xff9d9f4083efcc5c24f5adc21bb69865e11178d1a774a4901c8b9ef91f4cd1ec",
+                    "s": "0x719ab021069885c371a2b923b73ffad721bdbf11e9268c2c2fcd9c1c51bda182",
+                    "signer": "0xa44ca0b23e7305bb9cf41b97711b3e331d73a10d",
+                    "yParity": "0x00"
+                }
+            ],
+            "sender": "0x0ab615cfb511bc1c72662f5743da2ed9578263c9",
+            "secretKey": "0x174fc38f11c5ec46f5834aea22a20cb0b4f320bc49c68018080a04e28250c974"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xbd2ad571874335b9cdd86505a81bafaf47b93e85cdcf7f85b33f141aeb28b08b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f8c1018008078307a12094a44ca0b23e7305bb9cf41b97711b3e331d73a10d8080c0f85cf85a809422a20cb0b4f320bc49c68018080a04e28250c9738080a0ff9d9f4083efcc5c24f5adc21bb69865e11178d1a774a4901c8b9ef91f4cd1eca0719ab021069885c371a2b923b73ffad721bdbf11e9268c2c2fcd9c1c51bda18280a07a4f44a44d6ff097fd14e93eb56ab6f0c446ddc245eb998b216d75d5cce07d7ba0434202c3fb9c04e4e50bf366d61366a249b25ea34ac6d254ed65e448ef3bce5c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x22a20cb0b4f320bc49c68018080a04e28250c973": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x00",
+                            "storage": {}
+                        },
+                        "0x0ab615cfb511bc1c72662f5743da2ed9578263c9": {
+                            "nonce": "0x00",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xdfa172b36e0c9b328ff1fec8a3b38ad765f792ed5d05f01af53c166995f59eaa",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a transaction with an insufficient max fee per gas is rejected.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L3971",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

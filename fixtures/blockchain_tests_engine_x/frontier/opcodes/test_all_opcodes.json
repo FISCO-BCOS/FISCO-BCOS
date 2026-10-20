@@ -1,0 +1,205 @@
+{
+    "tests/frontier/opcodes/test_all_opcodes.py::test_all_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x6177e46bc28d691f0dbc0c71524c992735a71e3eb80c3029528f510534d3de2d",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6d18c108a5eee7949afc113356290a18f6a44151adb8de5b6aeb64e2984589d1",
+                        "receiptsRoot": "0xdaa613d49ceff113de6be79a2fe18ce6d3d5d68baa41dcc531d7906e41eaea32",
+                        "logsBloom": "0x00000000000000000000000000000000000000004001000001000000000000000000000000000000000000000000000000001000000100400000000000040000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000020000000000000000000000000000200000000000000000000000000000000000000001000000080000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000080000000000000000040000000000000000020000004000000000000000000000800000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7d4311",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x6177e46bc28d691f0dbc0c71524c992735a71e3eb80c3029528f510534d3de2d",
+                        "transactions": [
+                            "0xf860800a83895440940eb78fd6fbb27ed4b4f9529d7c795f90f6d0a40f80801ca03e7673c79cc6dcb5ea2931abffd5daf0f76bb33150d4e70ac2eeb3120cbb6843a056e83af820a20e9d0e7d4ea848507f37904993bae8b1dd6ec34afffa3408f1fb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x94c1f004fa3b95da9565d706678c504ef09322898c97d3e20e9feef0d61ac89f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test each possible opcode on the fork with a single contract that calls\n    each opcode in succession. Check that each subcall passes if the opcode is\n    supported and fails otherwise.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_all_opcodes.py#L63",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_all_opcodes.py::test_all_opcodes[fork_Paris-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0xda0b9e64327fad7845699efdf046544b967c810050e492e2de531b525525bcc6",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x87412915ce50a144b141e338677f69d77edc90f02ec1b8b4f0535624d6ab8bd9",
+                        "receiptsRoot": "0x6725ada733eb6a2fa6dcee3513c002f44781c4f03b0cfc09c86465dc0930fb95",
+                        "logsBloom": "0x00000000000000000000000000000000000000004001000001000000000000000000000000000000000000000000000000001000000100400000000000040000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000020000000000000000000000000000200000000000000000000000000000000000000001000000080000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000080000000000000000040000000000000000020000004000000000000000000000800000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7ea1e1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xda0b9e64327fad7845699efdf046544b967c810050e492e2de531b525525bcc6",
+                        "transactions": [
+                            "0xf860800a83895440940eb78fd6fbb27ed4b4f9529d7c795f90f6d0a40f80801ca03e7673c79cc6dcb5ea2931abffd5daf0f76bb33150d4e70ac2eeb3120cbb6843a056e83af820a20e9d0e7d4ea848507f37904993bae8b1dd6ec34afffa3408f1fb"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x08169c1c9cf474808d863d40b4567a9ef3e68ec56804a4e6161ea3b3513c3974",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test each possible opcode on the fork with a single contract that calls\n    each opcode in succession. Check that each subcall passes if the opcode is\n    supported and fails otherwise.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_all_opcodes.py#L63",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_all_opcodes.py::test_all_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x4b7e9c37fbf3d03ddfa9df03b5f7ba906794c22246694da349e9b2a938bc011d",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7a5d9a0ded918ee9abd1f080f6383a86c372370217fd5967c9b91726e76c8842",
+                        "receiptsRoot": "0xdaa613d49ceff113de6be79a2fe18ce6d3d5d68baa41dcc531d7906e41eaea32",
+                        "logsBloom": "0x00000000000000000000000000000000000000004001000001000000000000000000000000000000000000000000000000001000000100400000000000040000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000020000000000000000000000000000200000000000000000000000000000000000000001000000080000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000080000000000000000040000000000000000020000004000000000000000000000800000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7d4311",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4b7e9c37fbf3d03ddfa9df03b5f7ba906794c22246694da349e9b2a938bc011d",
+                        "transactions": [
+                            "0xf860800a83895440940eb78fd6fbb27ed4b4f9529d7c795f90f6d0a40f80801ca03e7673c79cc6dcb5ea2931abffd5daf0f76bb33150d4e70ac2eeb3120cbb6843a056e83af820a20e9d0e7d4ea848507f37904993bae8b1dd6ec34afffa3408f1fb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd909def2bc200c2f4f8a0e528dcb88e1084cc1dfd584e6ad15d1c8b5b12633bc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test each possible opcode on the fork with a single contract that calls\n    each opcode in succession. Check that each subcall passes if the opcode is\n    supported and fails otherwise.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_all_opcodes.py#L63",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_all_opcodes.py::test_all_opcodes[fork_Shanghai-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x3896568bcfbcc9805a5da59a2cf7a675cb17ac2c4dae069b2bca1ab43ecfeaf2",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x46300d7dc6c8af478cc81b0d397a327cea75c48bcd117d921102ba4bdc544ef5",
+                        "receiptsRoot": "0x51a186d4925adaebb36275a6a84ea6460b4220aaf5cec63f24249cfe898af516",
+                        "logsBloom": "0x00000000000000000000000000000000000000004001000001000000000000000000000000000000000000000000000000001000000100400000000000040000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000020000000000000000000000000000200000000000000000000000000000000000000001000000080000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000080000000000000000040000000000000000020000004000000000000000000000800000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7e6747",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x3896568bcfbcc9805a5da59a2cf7a675cb17ac2c4dae069b2bca1ab43ecfeaf2",
+                        "transactions": [
+                            "0xf860800a83895440940eb78fd6fbb27ed4b4f9529d7c795f90f6d0a40f80801ca03e7673c79cc6dcb5ea2931abffd5daf0f76bb33150d4e70ac2eeb3120cbb6843a056e83af820a20e9d0e7d4ea848507f37904993bae8b1dd6ec34afffa3408f1fb"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x75cf4b93da837b2db0036dd4c2baa1c7392bed1892015d29de0668d6cf8bf469",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test each possible opcode on the fork with a single contract that calls\n    each opcode in succession. Check that each subcall passes if the opcode is\n    supported and fails otherwise.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_all_opcodes.py#L63",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

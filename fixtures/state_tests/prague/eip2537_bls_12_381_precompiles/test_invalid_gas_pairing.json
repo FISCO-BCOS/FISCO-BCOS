@@ -1,0 +1,103 @@
+{
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_variable_length_input_contracts.py::test_invalid_gas_pairing[fork_Prague-full_discount_table-state_test-precompile_address_15--insufficient_gas]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xb1d9f8e2a276bb79fe5d8ac8e932117e4fcc1f4c": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6000600061018060006000600f6201129bf16000556000600061030060006000600f620191f3f16001556000600061048060006000600f6202114bf16002556000600061060060006000600f620290a3f16003556000600061078060006000600f62030ffbf16004556000600061090060006000600f62038f53f160055560006000610a8060006000600f62040eabf160065560006000610c0060006000600f62048e03f160075560006000610d8060006000600f62050d5bf160085560006000610f0060006000600f62058cb3f16009556000600061108060006000600f62060c0bf1600a556000600061120060006000600f62068b63f1600b556000600061138060006000600f62070abbf1600c556000600061150060006000600f62078a13f1600d556000600061168060006000600f6208096bf1600e556000600061180060006000600f620888c3f1600f556000600061198060006000600f6209081bf160105560006000611b0060006000600f62098773f160115560006000611c8060006000600f620a06cbf160125560006000611e0060006000600f620a8623f1601355",
+                "storage": {}
+            },
+            "0x2bbb93d10c024a50ebbe6d24218e4d166ea79866": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x7b2a98"
+            ],
+            "to": "0xb1d9f8e2a276bb79fe5d8ac8e932117e4fcc1f4c",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x2bbb93d10c024a50ebbe6d24218e4d166ea79866",
+            "secretKey": "0x226df01253465ddf72ff1de5b1d9f8e2a276bb79fe5d8ac8e932117e4fcc1f4c"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x2563e62c673c7a4c4215f24580094e86ee4499ac9591b6de48eb42da9593e238",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a837b2a9894b1d9f8e2a276bb79fe5d8ac8e932117e4fcc1f4c808025a0c6168edbabe223c6bebb04f0618622025005d5c6fe7432e9897b21fd98f1a7e4a011f4ef73ea7406fe96fd4f3b55122d10182f9dbec0c676c882af06fa64a1c71e",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xb1d9f8e2a276bb79fe5d8ac8e932117e4fcc1f4c": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6000600061018060006000600f6201129bf16000556000600061030060006000600f620191f3f16001556000600061048060006000600f6202114bf16002556000600061060060006000600f620290a3f16003556000600061078060006000600f62030ffbf16004556000600061090060006000600f62038f53f160055560006000610a8060006000600f62040eabf160065560006000610c0060006000600f62048e03f160075560006000610d8060006000600f62050d5bf160085560006000610f0060006000600f62058cb3f16009556000600061108060006000600f62060c0bf1600a556000600061120060006000600f62068b63f1600b556000600061138060006000600f62070abbf1600c556000600061150060006000600f62078a13f1600d556000600061168060006000600f6208096bf1600e556000600061180060006000600f620888c3f1600f556000600061198060006000600f6209081bf160105560006000611b0060006000600f62098773f160115560006000611c8060006000600f620a06cbf160125560006000611e0060006000600f620a8623f1601355",
+                            "storage": {}
+                        },
+                        "0x2bbb93d10c024a50ebbe6d24218e4d166ea79866": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5da0de958",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x015f06cc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x99c73c4658888b36aa11801b47aeb846eef6bfcf941f047854fbc80b02a345b4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_PAIRING precompile, by expecting the call to fail for all\n    possible input lengths (up to k == PAIRINGS_TO_TEST) because the\n    appropriate amount of gas is not provided.\n\n    If any of the calls succeeds, the test will fail.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_variable_length_input_contracts.py#L662",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    }
+}

@@ -1,0 +1,1664 @@
+{
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Berlin-state_test-enough_gas_False-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc7f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad",
+            "secretKey": "0xe57ff635bdafc6eb122c34bd7a692f3bddf613bcfa68a7655778dd6c2eaaffd8"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0xaf6ee5ecc11c17aed08bc88351c9398189bffb34a4e6623b235bfaf5515ff817",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f4240947a692f3bddf613bcfa68a7655778dd6c2eaaffd8808025a0bf421c11d3664cedb79f4deb0c5e6fb9dc57d6d59e776f9737a810163d1cbc50a07c22478e7a25d439b36b79f85f111a1158ba8e73d49210fbc29d80d60596118c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc7f1600055",
+                            "storage": {}
+                        },
+                        "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de976fb2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x08904e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1c6d502bb682a557e8e3fe3ccdc2126d393cc511936175cb4a616b740abbd248",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Berlin-state_test-enough_gas_True-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc8f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xd9ad31688c557f8b53885e167ed430ccc0890616",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22",
+            "secretKey": "0x08cf4a7d4c023ce269639e29d9ad31688c557f8b53885e167ed430ccc0890616"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x72769888b6d0e3b77c65b36f43a2c5f977672f932bc922570856718de9888396",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094d9ad31688c557f8b53885e167ed430ccc0890616808025a0e7560dfc00392a0bcf05c0d380c321de8e301eac33689ba3a2e2f8e5673a0f29a05c1bae13af01adb2fd3d605e7dafbd4acf98d8a3ff2d9acc50fbbc30beaf89f7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9525b8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0ada48",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x23df50528679ffb4e9983f1c02954b2bb2c3a340cd440d46151cd50591812794",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Byzantium-state_test-enough_gas_False-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6000600060006000600060086201869ff1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad",
+            "secretKey": "0xe57ff635bdafc6eb122c34bd7a692f3bddf613bcfa68a7655778dd6c2eaaffd8"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0x162c755c94ecd5cf4bfc1998daa6086ba9e97fa7060abf42cc38f3fd52c59e3b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f4240947a692f3bddf613bcfa68a7655778dd6c2eaaffd8808025a0bf421c11d3664cedb79f4deb0c5e6fb9dc57d6d59e776f9737a810163d1cbc50a07c22478e7a25d439b36b79f85f111a1158ba8e73d49210fbc29d80d60596118c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6000600060006000600060086201869ff1600055",
+                            "storage": {}
+                        },
+                        "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8ef3d2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x110c2e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x9b82b7e21f148eddbca4f952cb68699c64728accca492eb3569878e969d02686",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Byzantium-state_test-enough_gas_True-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060006008620186a0f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xd9ad31688c557f8b53885e167ed430ccc0890616",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22",
+            "secretKey": "0x08cf4a7d4c023ce269639e29d9ad31688c557f8b53885e167ed430ccc0890616"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0x398ca6cab40960307e165f48ae33bf340e3d41bdfcd8d2b912e5a661eab52b14",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094d9ad31688c557f8b53885e167ed430ccc0890616808025a0e7560dfc00392a0bcf05c0d380c321de8e301eac33689ba3a2e2f8e5673a0f29a05c1bae13af01adb2fd3d605e7dafbd4acf98d8a3ff2d9acc50fbbc30beaf89f7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060006008620186a0f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8ca9d8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x135628",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1502a2f22b4cc02852311396dcfc55509add8c57e84e2038573bb2bd586217e4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Cancun-state_test-enough_gas_False-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc7f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad",
+            "secretKey": "0xe57ff635bdafc6eb122c34bd7a692f3bddf613bcfa68a7655778dd6c2eaaffd8"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x9d9ab18101adc1db4a3d05e8f14a8b30721cac892f8a506dd3b03d1d218b9701",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f4240947a692f3bddf613bcfa68a7655778dd6c2eaaffd8808025a0bf421c11d3664cedb79f4deb0c5e6fb9dc57d6d59e776f9737a810163d1cbc50a07c22478e7a25d439b36b79f85f111a1158ba8e73d49210fbc29d80d60596118c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc7f1600055",
+                            "storage": {}
+                        },
+                        "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de95e142",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x030939",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x5fc85d1b8776b415bfee2f57d8c7b3901404eab7b72a4d45c52e1688f7eb5b9d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Cancun-state_test-enough_gas_True-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc8f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xd9ad31688c557f8b53885e167ed430ccc0890616",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22",
+            "secretKey": "0x08cf4a7d4c023ce269639e29d9ad31688c557f8b53885e167ed430ccc0890616"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x0f8731126fa914d9e1572dd5ea4d7501f6376ad62370091a248b6e3db54e9311",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094d9ad31688c557f8b53885e167ed430ccc0890616808025a0e7560dfc00392a0bcf05c0d380c321de8e301eac33689ba3a2e2f8e5673a0f29a05c1bae13af01adb2fd3d605e7dafbd4acf98d8a3ff2d9acc50fbbc30beaf89f7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9525b8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x03417c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x5e12e0db336bd2d4ef4b47901d50faf704c0118aebf2f3b143b38f0b9b9e3ad6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_ConstantinopleFix-state_test-enough_gas_False-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6000600060006000600060086201869ff1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad",
+            "secretKey": "0xe57ff635bdafc6eb122c34bd7a692f3bddf613bcfa68a7655778dd6c2eaaffd8"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0x162c755c94ecd5cf4bfc1998daa6086ba9e97fa7060abf42cc38f3fd52c59e3b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f4240947a692f3bddf613bcfa68a7655778dd6c2eaaffd8808025a0bf421c11d3664cedb79f4deb0c5e6fb9dc57d6d59e776f9737a810163d1cbc50a07c22478e7a25d439b36b79f85f111a1158ba8e73d49210fbc29d80d60596118c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6000600060006000600060086201869ff1600055",
+                            "storage": {}
+                        },
+                        "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8ef3d2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x110c2e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb966a0036aa0e8eb9eebc5ee593e15b80e10fa1b764ace7bac8f08d909257d57",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_ConstantinopleFix-state_test-enough_gas_True-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600060006000600060006008620186a0f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xd9ad31688c557f8b53885e167ed430ccc0890616",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22",
+            "secretKey": "0x08cf4a7d4c023ce269639e29d9ad31688c557f8b53885e167ed430ccc0890616"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0x398ca6cab40960307e165f48ae33bf340e3d41bdfcd8d2b912e5a661eab52b14",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094d9ad31688c557f8b53885e167ed430ccc0890616808025a0e7560dfc00392a0bcf05c0d380c321de8e301eac33689ba3a2e2f8e5673a0f29a05c1bae13af01adb2fd3d605e7dafbd4acf98d8a3ff2d9acc50fbbc30beaf89f7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600060006000600060006008620186a0f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8ca9d8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x135628",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x66a2fa2d37b96eefda926be92e2459ebbfbf81e9969760779eea1f9a702edcfc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Istanbul-state_test-enough_gas_False-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc7f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad",
+            "secretKey": "0xe57ff635bdafc6eb122c34bd7a692f3bddf613bcfa68a7655778dd6c2eaaffd8"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0x1dd596b6c0cb4009c85cf562e04b633795eb2f936587c7e9ffe93b42abad7d5d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f4240947a692f3bddf613bcfa68a7655778dd6c2eaaffd8808025a0bf421c11d3664cedb79f4deb0c5e6fb9dc57d6d59e776f9737a810163d1cbc50a07c22478e7a25d439b36b79f85f111a1158ba8e73d49210fbc29d80d60596118c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc7f1600055",
+                            "storage": {}
+                        },
+                        "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de975842",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x08a7be",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x79b9c433dc43342119b8f67091dfc1a30f25d5f7dd62ae690261c79f43a6a6ee",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Istanbul-state_test-enough_gas_True-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc8f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xd9ad31688c557f8b53885e167ed430ccc0890616",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22",
+            "secretKey": "0x08cf4a7d4c023ce269639e29d9ad31688c557f8b53885e167ed430ccc0890616"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0xff2cae135988b09d336c9e0f50a66f2e7cb7bee35e59994e40496823d8a0159b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094d9ad31688c557f8b53885e167ed430ccc0890616808025a0e7560dfc00392a0bcf05c0d380c321de8e301eac33689ba3a2e2f8e5673a0f29a05c1bae13af01adb2fd3d605e7dafbd4acf98d8a3ff2d9acc50fbbc30beaf89f7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de950e48",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0af1b8",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x8546545733e118202d831a3be9ba1441c4e00c2a6403819489df233a1e284d03",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_London-state_test-enough_gas_False-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc7f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad",
+            "secretKey": "0xe57ff635bdafc6eb122c34bd7a692f3bddf613bcfa68a7655778dd6c2eaaffd8"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0x9d9ab18101adc1db4a3d05e8f14a8b30721cac892f8a506dd3b03d1d218b9701",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f4240947a692f3bddf613bcfa68a7655778dd6c2eaaffd8808025a0bf421c11d3664cedb79f4deb0c5e6fb9dc57d6d59e776f9737a810163d1cbc50a07c22478e7a25d439b36b79f85f111a1158ba8e73d49210fbc29d80d60596118c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc7f1600055",
+                            "storage": {}
+                        },
+                        "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de95e142",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x030939",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1c6b238aa9ceadfa56c2b634ed8fa6800b88a640dfd7a3ea2446609d8432b470",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_London-state_test-enough_gas_True-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc8f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xd9ad31688c557f8b53885e167ed430ccc0890616",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22",
+            "secretKey": "0x08cf4a7d4c023ce269639e29d9ad31688c557f8b53885e167ed430ccc0890616"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0x0f8731126fa914d9e1572dd5ea4d7501f6376ad62370091a248b6e3db54e9311",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094d9ad31688c557f8b53885e167ed430ccc0890616808025a0e7560dfc00392a0bcf05c0d380c321de8e301eac33689ba3a2e2f8e5673a0f29a05c1bae13af01adb2fd3d605e7dafbd4acf98d8a3ff2d9acc50fbbc30beaf89f7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9525b8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x03417c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xdadd2598ac88065033d0e2492e15f24dd544e551cc5eaf7665141e77ba2fd214",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Paris-state_test-enough_gas_False-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc7f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad",
+            "secretKey": "0xe57ff635bdafc6eb122c34bd7a692f3bddf613bcfa68a7655778dd6c2eaaffd8"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0x9d9ab18101adc1db4a3d05e8f14a8b30721cac892f8a506dd3b03d1d218b9701",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f4240947a692f3bddf613bcfa68a7655778dd6c2eaaffd8808025a0bf421c11d3664cedb79f4deb0c5e6fb9dc57d6d59e776f9737a810163d1cbc50a07c22478e7a25d439b36b79f85f111a1158ba8e73d49210fbc29d80d60596118c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc7f1600055",
+                            "storage": {}
+                        },
+                        "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de95e142",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x030939",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x864b3530e5294b9f6f5683c9e9948a99f8287ed93fad3e68ef9effc7f73a26e0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Paris-state_test-enough_gas_True-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc8f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xd9ad31688c557f8b53885e167ed430ccc0890616",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22",
+            "secretKey": "0x08cf4a7d4c023ce269639e29d9ad31688c557f8b53885e167ed430ccc0890616"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0x0f8731126fa914d9e1572dd5ea4d7501f6376ad62370091a248b6e3db54e9311",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094d9ad31688c557f8b53885e167ed430ccc0890616808025a0e7560dfc00392a0bcf05c0d380c321de8e301eac33689ba3a2e2f8e5673a0f29a05c1bae13af01adb2fd3d605e7dafbd4acf98d8a3ff2d9acc50fbbc30beaf89f7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9525b8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x03417c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe9116ba6519c25846a6459bebf610c34d6387123f6bb044af607984baba9cf35",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Prague-state_test-enough_gas_False-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc7f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad",
+            "secretKey": "0xe57ff635bdafc6eb122c34bd7a692f3bddf613bcfa68a7655778dd6c2eaaffd8"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x9d9ab18101adc1db4a3d05e8f14a8b30721cac892f8a506dd3b03d1d218b9701",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f4240947a692f3bddf613bcfa68a7655778dd6c2eaaffd8808025a0bf421c11d3664cedb79f4deb0c5e6fb9dc57d6d59e776f9737a810163d1cbc50a07c22478e7a25d439b36b79f85f111a1158ba8e73d49210fbc29d80d60596118c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc7f1600055",
+                            "storage": {}
+                        },
+                        "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de95e142",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x030939",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe3cdd2a55a524d111b6d275c419ecb71e4d806830924fd5f3972dda09e0d6025",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Prague-state_test-enough_gas_True-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc8f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xd9ad31688c557f8b53885e167ed430ccc0890616",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22",
+            "secretKey": "0x08cf4a7d4c023ce269639e29d9ad31688c557f8b53885e167ed430ccc0890616"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x0f8731126fa914d9e1572dd5ea4d7501f6376ad62370091a248b6e3db54e9311",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094d9ad31688c557f8b53885e167ed430ccc0890616808025a0e7560dfc00392a0bcf05c0d380c321de8e301eac33689ba3a2e2f8e5673a0f29a05c1bae13af01adb2fd3d605e7dafbd4acf98d8a3ff2d9acc50fbbc30beaf89f7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9525b8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x03417c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x2eabd8d7d66f6a80196760497fc1b704757b3f0c70063fdb0ff1d44d9f269d5e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Shanghai-state_test-enough_gas_False-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc7f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad",
+            "secretKey": "0xe57ff635bdafc6eb122c34bd7a692f3bddf613bcfa68a7655778dd6c2eaaffd8"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x9d9ab18101adc1db4a3d05e8f14a8b30721cac892f8a506dd3b03d1d218b9701",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f4240947a692f3bddf613bcfa68a7655778dd6c2eaaffd8808025a0bf421c11d3664cedb79f4deb0c5e6fb9dc57d6d59e776f9737a810163d1cbc50a07c22478e7a25d439b36b79f85f111a1158ba8e73d49210fbc29d80d60596118c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7a692f3bddf613bcfa68a7655778dd6c2eaaffd8": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc7f1600055",
+                            "storage": {}
+                        },
+                        "0x6d74f46a65efb5efe0e979f0d06beaf53d9bf6ad": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de95e142",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x030939",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x2905c8919e4664833cef0831f17c5685e089cf98f5401ad9b07dfa763c26a466",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    },
+    "tests/byzantium/eip197_ec_pairing/test_gas.py::test_gas_costs[fork_Shanghai-state_test-enough_gas_True-ecpairing]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600861afc8f1600055",
+                "storage": {
+                    "0x00": "0xdeadbeef"
+                }
+            },
+            "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xd9ad31688c557f8b53885e167ed430ccc0890616",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22",
+            "secretKey": "0x08cf4a7d4c023ce269639e29d9ad31688c557f8b53885e167ed430ccc0890616"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x0f8731126fa914d9e1572dd5ea4d7501f6376ad62370091a248b6e3db54e9311",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094d9ad31688c557f8b53885e167ed430ccc0890616808025a0e7560dfc00392a0bcf05c0d380c321de8e301eac33689ba3a2e2f8e5673a0f29a05c1bae13af01adb2fd3d605e7dafbd4acf98d8a3ff2d9acc50fbbc30beaf89f7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xd9ad31688c557f8b53885e167ed430ccc0890616": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600861afc8f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xc6166f3873c3b3acf170eb2e8bbf0fbe14870d22": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9525b8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x03417c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x9042757e740b44d3c3de4a24666f759fe64654d63440dc9748c15edfcfd7af23",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the constant gas behavior of `ecadd/ecmul/ecpairing` precompiled\n    contract.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/byzantium/eip197_ec_pairing/test_gas.py#L21",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md",
+            "reference-spec-version": "9f9b3d33440e7c122b6c9192facfc380bc009422"
+        }
+    }
+}

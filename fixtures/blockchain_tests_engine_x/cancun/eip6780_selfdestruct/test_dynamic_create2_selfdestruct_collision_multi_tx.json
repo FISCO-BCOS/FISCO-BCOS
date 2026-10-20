@@ -1,0 +1,647 @@
+{
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Cancun-blockchain_test_engine_x-selfdestruct_on_first_tx_False-recreate_on_first_tx_False]": {
+        "network": "Cancun",
+        "lastblockhash": "0xc8bc799af0e30fdb9262505dbbb7ec9b261e42c000b015ec59232dcb03231491",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6f81c48314465eb77c479d3566ee98b4a048e84868e443731f9aa869c477807e",
+                        "receiptsRoot": "0x99fc67590e462abfa963d9636f66268b3fec771ac39b2f328fcedd8a5f82d942",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x561bf",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc8bc799af0e30fdb9262505dbbb7ec9b261e42c000b015ec59232dcb03231491",
+                        "transactions": [
+                            "0xf8a8800a834c4b40948f7b7bb4bf6688f59d0774f25d8d407fc0f12f8a80b847600160015560006000600060006000738f7b7bb4bf6688f59d0774f25d8d407fc0f12d8a5af161001660008160318239f37352245da47c1dd6369f4132f3d89a82e4abd765caff25a06a5631fe1803d3a9f42a7d648296a5206c4a6b1cb750549c9068f62f2cefc18ca0577d4cab3f428907ff7f3670990800064129063faaa4cc1ab101368b0668acfc",
+                            "0xf8a8010a834c4b40948f7b7bb4bf6688f59d0774f25d8d407fc0f12f8a80b847600160015560006000600060006000738f7b7bb4bf6688f59d0774f25d8d407fc0f12d8a5af161001660008160318239f37352245da47c1dd6369f4132f3d89a82e4abd765caff25a063386f0f5c8bcc28d6b40fb3502ef7970aaeabd84129d4ecda1ff7fd920051f0a01df4d52f09e83361c32f0c20b3448aabeafb644dc0dbb4898f9c045b56b082b5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3727cc2834463e1171dc840b302d4468e6af40628033eae06c424c43168c24f7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Cancun-blockchain_test_engine_x-selfdestruct_on_first_tx_True-recreate_on_first_tx_False]": {
+        "network": "Cancun",
+        "lastblockhash": "0xfce5d3acef86f5baaf508faa857c40687525cdfba3ce298a78c21591a56d89f9",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x522a2a74537f6a43059be4a89ab5c22d894ddcd9d6583cde88deb35bc6bed3b3",
+                        "receiptsRoot": "0x64df771aacd6b73a507aa3d1c68bb3192b6337038ac5b925ede6f8ab40e5a946",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4e14e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xfce5d3acef86f5baaf508faa857c40687525cdfba3ce298a78c21591a56d89f9",
+                        "transactions": [
+                            "0xf8a8800a834c4b40940c9c9c1b975fd1675a29056c7f780a3cc3d0f03e80b847600160015560006000600060006000730c9c9c1b975fd1675a29056c7f780a3cc3d0ee3e5af161001660008160318239f373dbcb2540734e9bdf5ad542b1c81a2cdaf091e645ff25a027c8da62a5ccf2214a850b9f70c088042cd1e34369223c054c1bb1b016218701a01e7fa4142bcf4b9fc8cde6091f8e4aab03748fa8e7c7b033dc816f72d1f863d5",
+                            "0xf8a8010a834c4b40940c9c9c1b975fd1675a29056c7f780a3cc3d0f03e80b847600160015560006000600060006000730c9c9c1b975fd1675a29056c7f780a3cc3d0ee3e5af161001660008160318239f373dbcb2540734e9bdf5ad542b1c81a2cdaf091e645ff25a00879f8518b70278008d7b6fb15aee18f72e779f4da7b8ba41f7583e51c0812a4a00e1c655b2de7b5cca8766eb2492433b20806462c6fbb4ca83a6906051e567ac7"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb6f42e96243eef8f0f2a6a027b76a352cb4d72b224ae585c4c8a7af9a2702e26",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Cancun-blockchain_test_engine_x-selfdestruct_on_first_tx_True-recreate_on_first_tx_True]": {
+        "network": "Cancun",
+        "lastblockhash": "0xb1c6b2b9ffa7a0ab0c4846d00fe3da8697b897f8d2d5360d4915c686267362d9",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe21eab08336fdf7d99655f26f7f8b69dfc9340f04a0e44961ee624bd6f7dfd14",
+                        "receiptsRoot": "0xc576565cbb947cc0ac117ba5774926c66eff69c4c2af524a224747f8417fa5c4",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5a60f",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb1c6b2b9ffa7a0ab0c4846d00fe3da8697b897f8d2d5360d4915c686267362d9",
+                        "transactions": [
+                            "0xf8a8800a834c4b409433dbe18fb78e9cc7ea8ea66b8751855ed66c88be80b8476001600155600060006000600060007333dbe18fb78e9cc7ea8ea66b8751855ed66c86be5af161001660008160318239f37342acc2355e0ecb11ce8cc56be06b648699613412ff26a09a280f8c6a150c51243f9791634bde451719189b064566a9dc3d8e8dd6700304a05920ddbd9dbf2c9d5ab2c47c430dfa552183fe489e7c2f39d0fcd96cf7f6a365",
+                            "0xf8a8010a834c4b409433dbe18fb78e9cc7ea8ea66b8751855ed66c88be80b8476001600155600060006000600060007333dbe18fb78e9cc7ea8ea66b8751855ed66c86be5af161001660008160318239f37342acc2355e0ecb11ce8cc56be06b648699613412ff26a09ff0a974c7efd97ca8c05818f956aa6278d8c31e5aa5b0a76cd9ea66639be4f0a014837eb9953e4be6540f93bc15ab1a7e7d06d315be022479c2872e17df074f76"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa304201baa30a6bd3994d6889b4e11a3b5cfe7086f434d56f5b3ad0597222ddc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Paris-blockchain_test_engine_x-selfdestruct_on_first_tx_False-recreate_on_first_tx_False]": {
+        "network": "Paris",
+        "lastblockhash": "0x8a3a16c11dd20582675f323b9f831237fcdaa7da8aa7c04b7cc6da0b606a8d71",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdfe22917f76fbe62e1b53da2ea2b92933b650e4b6f34135bb86596e7d8b689ec",
+                        "receiptsRoot": "0xce6c94ff88088e6d0a9899fc5f9e5ba67dc57da917970b01d6f3b2b8ccd33a73",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x561b9",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x8a3a16c11dd20582675f323b9f831237fcdaa7da8aa7c04b7cc6da0b606a8d71",
+                        "transactions": [
+                            "0xf8a8800a834c4b40948f7b7bb4bf6688f59d0774f25d8d407fc0f12f8a80b847600160015560006000600060006000738f7b7bb4bf6688f59d0774f25d8d407fc0f12d8a5af161001660008160318239f37352245da47c1dd6369f4132f3d89a82e4abd765caff25a06a5631fe1803d3a9f42a7d648296a5206c4a6b1cb750549c9068f62f2cefc18ca0577d4cab3f428907ff7f3670990800064129063faaa4cc1ab101368b0668acfc",
+                            "0xf8a8010a834c4b40948f7b7bb4bf6688f59d0774f25d8d407fc0f12f8a80b847600160015560006000600060006000738f7b7bb4bf6688f59d0774f25d8d407fc0f12d8a5af161001660008160318239f37352245da47c1dd6369f4132f3d89a82e4abd765caff25a063386f0f5c8bcc28d6b40fb3502ef7970aaeabd84129d4ecda1ff7fd920051f0a01df4d52f09e83361c32f0c20b3448aabeafb644dc0dbb4898f9c045b56b082b5"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x1442aefc85bd6a3b8844467b4a7ba641dc4d942b54b39e8c2595dba25c7c4016",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Paris-blockchain_test_engine_x-selfdestruct_on_first_tx_True-recreate_on_first_tx_False]": {
+        "network": "Paris",
+        "lastblockhash": "0x1773bebe5fd39f57bf661a88b2332a0c283ca356e90355ff542a0afaf63f1e7d",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf613f7f4fb91bfb6a24b9e7efe0779b0027d914fb4f27bb5c26067434429e1e3",
+                        "receiptsRoot": "0xf08b89f789b21148887bbc7ec8c0d4ec08cae57cacb543cef2396239b6a6a5de",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4e142",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x1773bebe5fd39f57bf661a88b2332a0c283ca356e90355ff542a0afaf63f1e7d",
+                        "transactions": [
+                            "0xf8a8800a834c4b40940c9c9c1b975fd1675a29056c7f780a3cc3d0f03e80b847600160015560006000600060006000730c9c9c1b975fd1675a29056c7f780a3cc3d0ee3e5af161001660008160318239f373dbcb2540734e9bdf5ad542b1c81a2cdaf091e645ff25a027c8da62a5ccf2214a850b9f70c088042cd1e34369223c054c1bb1b016218701a01e7fa4142bcf4b9fc8cde6091f8e4aab03748fa8e7c7b033dc816f72d1f863d5",
+                            "0xf8a8010a834c4b40940c9c9c1b975fd1675a29056c7f780a3cc3d0f03e80b847600160015560006000600060006000730c9c9c1b975fd1675a29056c7f780a3cc3d0ee3e5af161001660008160318239f373dbcb2540734e9bdf5ad542b1c81a2cdaf091e645ff25a00879f8518b70278008d7b6fb15aee18f72e779f4da7b8ba41f7583e51c0812a4a00e1c655b2de7b5cca8766eb2492433b20806462c6fbb4ca83a6906051e567ac7"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x23e36958fbceed8c8c1e94bf1be6aed3e106d6de3a4fd9433762de776da4e53e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Paris-blockchain_test_engine_x-selfdestruct_on_first_tx_True-recreate_on_first_tx_True]": {
+        "network": "Paris",
+        "lastblockhash": "0x920898584588c23a09dccdf55f1306af225467e4b984f462c325351b02e924be",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xa336891cff3db6b3c3ed25cd37b80f27e857e2a0c6dc180cc5f939e4d475510b",
+                        "receiptsRoot": "0x6fb17e0618ca054ccaaa5318a97776d9d9ec3339c64c821eaf5c153e1c0fedaa",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5a609",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x920898584588c23a09dccdf55f1306af225467e4b984f462c325351b02e924be",
+                        "transactions": [
+                            "0xf8a8800a834c4b409433dbe18fb78e9cc7ea8ea66b8751855ed66c88be80b8476001600155600060006000600060007333dbe18fb78e9cc7ea8ea66b8751855ed66c86be5af161001660008160318239f37342acc2355e0ecb11ce8cc56be06b648699613412ff26a09a280f8c6a150c51243f9791634bde451719189b064566a9dc3d8e8dd6700304a05920ddbd9dbf2c9d5ab2c47c430dfa552183fe489e7c2f39d0fcd96cf7f6a365",
+                            "0xf8a8010a834c4b409433dbe18fb78e9cc7ea8ea66b8751855ed66c88be80b8476001600155600060006000600060007333dbe18fb78e9cc7ea8ea66b8751855ed66c86be5af161001660008160318239f37342acc2355e0ecb11ce8cc56be06b648699613412ff26a09ff0a974c7efd97ca8c05818f956aa6278d8c31e5aa5b0a76cd9ea66639be4f0a014837eb9953e4be6540f93bc15ab1a7e7d06d315be022479c2872e17df074f76"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x336bc1ebcdd1266119104487fb5cf41029ece5a5e9067760ef06aefc95d83e2c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Prague-blockchain_test_engine_x-selfdestruct_on_first_tx_False-recreate_on_first_tx_False]": {
+        "network": "Prague",
+        "lastblockhash": "0x96a8950588dac3a22ad72825fe5ac9073c6b1682f4960ee865920056f9c6fab5",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb9d4e5ecef4725f0108e0c96ab6703dfed3095b64953697e3299a81ef6bc228d",
+                        "receiptsRoot": "0x99fc67590e462abfa963d9636f66268b3fec771ac39b2f328fcedd8a5f82d942",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x561bf",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x96a8950588dac3a22ad72825fe5ac9073c6b1682f4960ee865920056f9c6fab5",
+                        "transactions": [
+                            "0xf8a8800a834c4b40948f7b7bb4bf6688f59d0774f25d8d407fc0f12f8a80b847600160015560006000600060006000738f7b7bb4bf6688f59d0774f25d8d407fc0f12d8a5af161001660008160318239f37352245da47c1dd6369f4132f3d89a82e4abd765caff25a06a5631fe1803d3a9f42a7d648296a5206c4a6b1cb750549c9068f62f2cefc18ca0577d4cab3f428907ff7f3670990800064129063faaa4cc1ab101368b0668acfc",
+                            "0xf8a8010a834c4b40948f7b7bb4bf6688f59d0774f25d8d407fc0f12f8a80b847600160015560006000600060006000738f7b7bb4bf6688f59d0774f25d8d407fc0f12d8a5af161001660008160318239f37352245da47c1dd6369f4132f3d89a82e4abd765caff25a063386f0f5c8bcc28d6b40fb3502ef7970aaeabd84129d4ecda1ff7fd920051f0a01df4d52f09e83361c32f0c20b3448aabeafb644dc0dbb4898f9c045b56b082b5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6634b47d62a59ea78d62ac0c476a7a726b2b393678259304988f3d11e2009066",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Prague-blockchain_test_engine_x-selfdestruct_on_first_tx_True-recreate_on_first_tx_False]": {
+        "network": "Prague",
+        "lastblockhash": "0xce35a52d9181212b74789bf7d402926b5c3d10879884feee538957ae6c011afd",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1283592b16205f3c17bf76cedaef6502dde105fe267f1f5a8e29c60d094069a0",
+                        "receiptsRoot": "0x64df771aacd6b73a507aa3d1c68bb3192b6337038ac5b925ede6f8ab40e5a946",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4e14e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xce35a52d9181212b74789bf7d402926b5c3d10879884feee538957ae6c011afd",
+                        "transactions": [
+                            "0xf8a8800a834c4b40940c9c9c1b975fd1675a29056c7f780a3cc3d0f03e80b847600160015560006000600060006000730c9c9c1b975fd1675a29056c7f780a3cc3d0ee3e5af161001660008160318239f373dbcb2540734e9bdf5ad542b1c81a2cdaf091e645ff25a027c8da62a5ccf2214a850b9f70c088042cd1e34369223c054c1bb1b016218701a01e7fa4142bcf4b9fc8cde6091f8e4aab03748fa8e7c7b033dc816f72d1f863d5",
+                            "0xf8a8010a834c4b40940c9c9c1b975fd1675a29056c7f780a3cc3d0f03e80b847600160015560006000600060006000730c9c9c1b975fd1675a29056c7f780a3cc3d0ee3e5af161001660008160318239f373dbcb2540734e9bdf5ad542b1c81a2cdaf091e645ff25a00879f8518b70278008d7b6fb15aee18f72e779f4da7b8ba41f7583e51c0812a4a00e1c655b2de7b5cca8766eb2492433b20806462c6fbb4ca83a6906051e567ac7"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x8fbfd28e5d9d54507d223f362e41100430580a55d2e2e994ef769dc257227005",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Prague-blockchain_test_engine_x-selfdestruct_on_first_tx_True-recreate_on_first_tx_True]": {
+        "network": "Prague",
+        "lastblockhash": "0x1f823f0ecddc13633b70e7d8490c1091cf71d55db43aee4a13256a2701f90ac1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x900d90030ff1e4def668401d55835bad0f0d4afe54cb695da7352ec17cd2b987",
+                        "receiptsRoot": "0xc576565cbb947cc0ac117ba5774926c66eff69c4c2af524a224747f8417fa5c4",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5a60f",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x1f823f0ecddc13633b70e7d8490c1091cf71d55db43aee4a13256a2701f90ac1",
+                        "transactions": [
+                            "0xf8a8800a834c4b409433dbe18fb78e9cc7ea8ea66b8751855ed66c88be80b8476001600155600060006000600060007333dbe18fb78e9cc7ea8ea66b8751855ed66c86be5af161001660008160318239f37342acc2355e0ecb11ce8cc56be06b648699613412ff26a09a280f8c6a150c51243f9791634bde451719189b064566a9dc3d8e8dd6700304a05920ddbd9dbf2c9d5ab2c47c430dfa552183fe489e7c2f39d0fcd96cf7f6a365",
+                            "0xf8a8010a834c4b409433dbe18fb78e9cc7ea8ea66b8751855ed66c88be80b8476001600155600060006000600060007333dbe18fb78e9cc7ea8ea66b8751855ed66c86be5af161001660008160318239f37342acc2355e0ecb11ce8cc56be06b648699613412ff26a09ff0a974c7efd97ca8c05818f956aa6278d8c31e5aa5b0a76cd9ea66639be4f0a014837eb9953e4be6540f93bc15ab1a7e7d06d315be022479c2872e17df074f76"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb5676f9c37422b6189af676742845c5faf045259625e8000cae5a464d1c7ee6a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Shanghai-blockchain_test_engine_x-selfdestruct_on_first_tx_False-recreate_on_first_tx_False]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x15086d40d32b60eb78f0751b44046adf507aee5266f1b1c8d014d99c86223a89",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc05bafa1fafd92cb120b0758682572e7d39ef195d389267d9efa63fa9e617823",
+                        "receiptsRoot": "0x99fc67590e462abfa963d9636f66268b3fec771ac39b2f328fcedd8a5f82d942",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x561bf",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x15086d40d32b60eb78f0751b44046adf507aee5266f1b1c8d014d99c86223a89",
+                        "transactions": [
+                            "0xf8a8800a834c4b40948f7b7bb4bf6688f59d0774f25d8d407fc0f12f8a80b847600160015560006000600060006000738f7b7bb4bf6688f59d0774f25d8d407fc0f12d8a5af161001660008160318239f37352245da47c1dd6369f4132f3d89a82e4abd765caff25a06a5631fe1803d3a9f42a7d648296a5206c4a6b1cb750549c9068f62f2cefc18ca0577d4cab3f428907ff7f3670990800064129063faaa4cc1ab101368b0668acfc",
+                            "0xf8a8010a834c4b40948f7b7bb4bf6688f59d0774f25d8d407fc0f12f8a80b847600160015560006000600060006000738f7b7bb4bf6688f59d0774f25d8d407fc0f12d8a5af161001660008160318239f37352245da47c1dd6369f4132f3d89a82e4abd765caff25a063386f0f5c8bcc28d6b40fb3502ef7970aaeabd84129d4ecda1ff7fd920051f0a01df4d52f09e83361c32f0c20b3448aabeafb644dc0dbb4898f9c045b56b082b5"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xc4356be4aab42a6071b65e6547db8a1be0a378b85871d6e27fd1e4fc5456d57b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Shanghai-blockchain_test_engine_x-selfdestruct_on_first_tx_True-recreate_on_first_tx_False]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x3221ab2357c35c764dff881db4d0a301797966ded1c3ed42969fade2aeae2af7",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x35057b9a708d7d5628735f6e74151437698953c033a92a3d1439d9b45772db72",
+                        "receiptsRoot": "0x64df771aacd6b73a507aa3d1c68bb3192b6337038ac5b925ede6f8ab40e5a946",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x4e14e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x3221ab2357c35c764dff881db4d0a301797966ded1c3ed42969fade2aeae2af7",
+                        "transactions": [
+                            "0xf8a8800a834c4b40940c9c9c1b975fd1675a29056c7f780a3cc3d0f03e80b847600160015560006000600060006000730c9c9c1b975fd1675a29056c7f780a3cc3d0ee3e5af161001660008160318239f373dbcb2540734e9bdf5ad542b1c81a2cdaf091e645ff25a027c8da62a5ccf2214a850b9f70c088042cd1e34369223c054c1bb1b016218701a01e7fa4142bcf4b9fc8cde6091f8e4aab03748fa8e7c7b033dc816f72d1f863d5",
+                            "0xf8a8010a834c4b40940c9c9c1b975fd1675a29056c7f780a3cc3d0f03e80b847600160015560006000600060006000730c9c9c1b975fd1675a29056c7f780a3cc3d0ee3e5af161001660008160318239f373dbcb2540734e9bdf5ad542b1c81a2cdaf091e645ff25a00879f8518b70278008d7b6fb15aee18f72e779f4da7b8ba41f7583e51c0812a4a00e1c655b2de7b5cca8766eb2492433b20806462c6fbb4ca83a6906051e567ac7"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x087e46945655583fc4e79508173dc147d032cb42f6326673f995fe57e8269648",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py::test_dynamic_create2_selfdestruct_collision_multi_tx[fork_Shanghai-blockchain_test_engine_x-selfdestruct_on_first_tx_True-recreate_on_first_tx_True]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xefb3737dc3b3921af3b2adc97c132525c3fa99b95f7d0643d8a5b59136b10861",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xba15fa3d666bb5019b1dbb41ce5b5608c2fe31bb84aad3f6a4205e763099eda0",
+                        "receiptsRoot": "0xc576565cbb947cc0ac117ba5774926c66eff69c4c2af524a224747f8417fa5c4",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5a60f",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xefb3737dc3b3921af3b2adc97c132525c3fa99b95f7d0643d8a5b59136b10861",
+                        "transactions": [
+                            "0xf8a8800a834c4b409433dbe18fb78e9cc7ea8ea66b8751855ed66c88be80b8476001600155600060006000600060007333dbe18fb78e9cc7ea8ea66b8751855ed66c86be5af161001660008160318239f37342acc2355e0ecb11ce8cc56be06b648699613412ff26a09a280f8c6a150c51243f9791634bde451719189b064566a9dc3d8e8dd6700304a05920ddbd9dbf2c9d5ab2c47c430dfa552183fe489e7c2f39d0fcd96cf7f6a365",
+                            "0xf8a8010a834c4b409433dbe18fb78e9cc7ea8ea66b8751855ed66c88be80b8476001600155600060006000600060007333dbe18fb78e9cc7ea8ea66b8751855ed66c86be5af161001660008160318239f37342acc2355e0ecb11ce8cc56be06b648699613412ff26a09ff0a974c7efd97ca8c05818f956aa6278d8c31e5aa5b0a76cd9ea66639be4f0a014837eb9953e4be6540f93bc15ab1a7e7d06d315be022479c2872e17df074f76"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x47915c586617ece5d6c38c43301de368b24a4e6841a4e3dd486a58df13181078",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Dynamic Create2->Suicide->Create2 collision scenario over multiple\n    transactions.\n\n    Perform a CREATE2, make sure that the initcode sets at least a couple of\n    storage keys, then on a different call, in the same or different tx but\n    same block, perform a self-destruct.\n    Then:\n      a) on the same tx, attempt to recreate the contract\n      b) on a different tx, attempt to recreate the contract\n\n    Perform a CREATE2, make sure that the initcode sets at least a\n    couple of storage keys, then in a different tx, perform a self-destruct.\n\n    Then:\n      a) on the same tx, attempt to recreate the contract\n         -> Covered in this test\n      b) on a different tx, attempt to recreate the contract\n         -> Covered in this test\n\n    Check the test case described in\n    https://lf-hyperledger.atlassian.net/wiki/spaces/BESU/pages/22156575/2024-01-06\n    +Mainnet+Halting+Event",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_dynamic_create2_selfdestruct_collision.py#L542",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    }
+}

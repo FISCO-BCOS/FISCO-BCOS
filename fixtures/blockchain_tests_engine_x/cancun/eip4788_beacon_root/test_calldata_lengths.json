@@ -1,0 +1,602 @@
+{
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Cancun-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-1024_bytes]": {
+        "network": "Cancun",
+        "lastblockhash": "0x340b1ebd93b858eabbbf552e6ac2124edfe15758406ebb7f6b50623b562ddebd",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9b14f3528f94595e3761e4a3357bccb550c1daca39760f44d54eed2c25061cd4",
+                        "receiptsRoot": "0x109ae7f755049b29c1f7ecb211e3589f6a2b69b6b05d59cdf869027f4bde11a3",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8fd3",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x340b1ebd93b858eabbbf552e6ac2124edfe15758406ebb7f6b50623b562ddebd",
+                        "transactions": [
+                            "0x02f9046501808007830f4240942cfe9adb1d6e7a5ab88358140b5a3788bc7c7c8980b904000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cc080a0dbd55ad40189c0d9547f7fc9a7d8d0705ef9e7de3086473ad53f7fe481b803a4a02adc5dbbab9f5f893ca3b8b4860c97e9c8b54262886a1e1fb26410dd915c6d9d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1f958307f6e51fca4e910ae4a5939c432a3eaef0070e0351ba71cc2795537c4d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Cancun-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-31_bytes]": {
+        "network": "Cancun",
+        "lastblockhash": "0x7ac289e355a4b59978fc561454a351645ab0eee50e127054230e09bbf3f72d2d",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x58078039fa53d13c2e2e69207b5996b7c316c3c7c14726b32e0761d65f2fbc71",
+                        "receiptsRoot": "0xa919fcc8eccef802eac6d215fec477112bde0982333bb6c877e6d0e0bf1f1ec8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7f93",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7ac289e355a4b59978fc561454a351645ab0eee50e127054230e09bbf3f72d2d",
+                        "transactions": [
+                            "0x02f88201808007830f4240941cc862ff6e750229f31aad8fc70c95cd10777e60809f0000000000000000000000000000000000000000000000000000000000000cc001a0f4a42c8e70aecc4500a4f514ce1c4ee69db6b1631cf792103d2d101aa7df6cffa0484c7e28ae239eaf69895494fe74a9937a938443ed9ddcb29eb7a2fc34a2ab59"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x942de2c79ab0c7c8ede11a37c7aef04673f837524b05f63386604955e7a24b72",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Cancun-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-33_bytes]": {
+        "network": "Cancun",
+        "lastblockhash": "0xeecf81b6e1fe3e4f4e15bf3d6c05bf26830c0493dba7f504c60385ff2011e9df",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7838a21dd1d424516b5a2d90bfba0304c1bcc4101a0bc1f564eeda7920b298b2",
+                        "receiptsRoot": "0x56d0e4aee619230d9ddf2dc8c12a85ce9c435b12b4e7171a6b9c29d23eee1187",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7fa1",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xeecf81b6e1fe3e4f4e15bf3d6c05bf26830c0493dba7f504c60385ff2011e9df",
+                        "transactions": [
+                            "0x02f88401808007830f4240943f8ec0fac867a8fcdcb683c8b61bf4705d702c8b80a100000000000000000000000000000000000000000000000000000000000000000cc080a09d15fe6e46044a844d92e5936b26a4a5e1302d04e9dfc5f7d9298d9814012ca9a048aaf5171776909cc245d30d2c5f666d02af14708869a71b1a4ed82054d26000"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa4fe75e561fe5552489ffe18b06b507ed68eb47c339ac44700ba1999d0f2f2fc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Cancun-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-empty_calldata]": {
+        "network": "Cancun",
+        "lastblockhash": "0x4a8dc81d795585e667435b3be32f5a1b3a0b50888ac22c50626099e4ddf15710",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9b630a921ee4a9e7379511f9085947e8e3fad88f4032b979251b73cc8bd42484",
+                        "receiptsRoot": "0x9f998e957859d042126adfe2ea66d3816cf46b1a92af7463fb555e8f0f5f50c1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7f05",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4a8dc81d795585e667435b3be32f5a1b3a0b50888ac22c50626099e4ddf15710",
+                        "transactions": [
+                            "0x02f86301808007830f424094c522d7481113940e56ec4a524def6ce3f326d1e58080c001a07f0024431b0cdce7d013b2efd76bd5a4b21c597b701dead171a2c2fa104c802ca01dda8c4a1c01884d9fc69b92fc59127cc246fc3023a82122d9dc645977d84778"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf96360143a77c542ee570116d3aa02ddc345dbe062c99a6f61dcfb1b1e84ed4f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Cancun-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-one_byte]": {
+        "network": "Cancun",
+        "lastblockhash": "0x4764a61eb611fc914b84d7fdaa78a5a537601dbd1c0ef4bab7ef6bd3ba7f0c10",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc25d7284b0de62195393d629ddcdf3bc135bac7822a2ad98865370da106411b6",
+                        "receiptsRoot": "0x462778f5bf5fba7d10a5e3784ea804a21a7b31a3048647b8a73c8f184c05d32d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7f1b",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4764a61eb611fc914b84d7fdaa78a5a537601dbd1c0ef4bab7ef6bd3ba7f0c10",
+                        "transactions": [
+                            "0x02f86301808007830f424094272f543b5deab89361db36c1ccf99e4a73ea86d2800cc001a095c4ae704f2bd5bc05112c204c29099112380788b60232a1b00f9b45abda944ba004552c411dfa8bc44389d126f873d39bbf85f5f44afb0bd46a7438c12928b090"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xcf78ef3ecbfbb9b10ec6b57ba9be788c07e219d81dd62171a9b7eff459d46664",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Prague-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-1024_bytes]": {
+        "network": "Prague",
+        "lastblockhash": "0x70e582e28b56b00d848b95f59b9199bdae4c44aa66a2790dd8a8160845ef63cd",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x315885f947c64685452b83671523b79857ba1866311eafe5289d5960d9b00a6e",
+                        "receiptsRoot": "0x109ae7f755049b29c1f7ecb211e3589f6a2b69b6b05d59cdf869027f4bde11a3",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8fd3",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x70e582e28b56b00d848b95f59b9199bdae4c44aa66a2790dd8a8160845ef63cd",
+                        "transactions": [
+                            "0x02f9046501808007830f4240942cfe9adb1d6e7a5ab88358140b5a3788bc7c7c8980b904000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cc080a0dbd55ad40189c0d9547f7fc9a7d8d0705ef9e7de3086473ad53f7fe481b803a4a02adc5dbbab9f5f893ca3b8b4860c97e9c8b54262886a1e1fb26410dd915c6d9d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd4f530c8eb473241c11a837206d7f9414c027f320a2a1074073cf0e2d28f066e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Prague-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-31_bytes]": {
+        "network": "Prague",
+        "lastblockhash": "0xee84f692605b45fe4c5f70673b6d3e97ba31bb071c77558263c5e5bf6da6a862",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xed64586fb44d03251e925550a3604bcbab23d1f4bd58218e8ae5ab0047b58418",
+                        "receiptsRoot": "0xa919fcc8eccef802eac6d215fec477112bde0982333bb6c877e6d0e0bf1f1ec8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7f93",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xee84f692605b45fe4c5f70673b6d3e97ba31bb071c77558263c5e5bf6da6a862",
+                        "transactions": [
+                            "0x02f88201808007830f4240941cc862ff6e750229f31aad8fc70c95cd10777e60809f0000000000000000000000000000000000000000000000000000000000000cc001a0f4a42c8e70aecc4500a4f514ce1c4ee69db6b1631cf792103d2d101aa7df6cffa0484c7e28ae239eaf69895494fe74a9937a938443ed9ddcb29eb7a2fc34a2ab59"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x4c03df4ee1d7e6d38dd3befbf382b9fc53e92d55c29b9b0be5a7356ab0c97f08",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Prague-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-33_bytes]": {
+        "network": "Prague",
+        "lastblockhash": "0x13a57f5e8ca3c6b9a7fd7021ecf0b1afa78a0fe7425d013b31e7765595d0aa73",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x12b6a3a8cb68123bf8fbb5338c05c4c9df996175e658abcf6a514285f5962b59",
+                        "receiptsRoot": "0x56d0e4aee619230d9ddf2dc8c12a85ce9c435b12b4e7171a6b9c29d23eee1187",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7fa1",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x13a57f5e8ca3c6b9a7fd7021ecf0b1afa78a0fe7425d013b31e7765595d0aa73",
+                        "transactions": [
+                            "0x02f88401808007830f4240943f8ec0fac867a8fcdcb683c8b61bf4705d702c8b80a100000000000000000000000000000000000000000000000000000000000000000cc080a09d15fe6e46044a844d92e5936b26a4a5e1302d04e9dfc5f7d9298d9814012ca9a048aaf5171776909cc245d30d2c5f666d02af14708869a71b1a4ed82054d26000"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb6e67b2a8fbd996f003ec33bbb736c577c20b0f3ccf4b812d842e85ca7cfb0c1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Prague-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-empty_calldata]": {
+        "network": "Prague",
+        "lastblockhash": "0x9dcf79e397991e97dbb5908aa14a2ae0ec4e06473b3d0c697ec849c4cc909995",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbf5667e3ff2f7b88d75f43452399d15616f9011829e52a3dda43ba034b1bb545",
+                        "receiptsRoot": "0x9f998e957859d042126adfe2ea66d3816cf46b1a92af7463fb555e8f0f5f50c1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7f05",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9dcf79e397991e97dbb5908aa14a2ae0ec4e06473b3d0c697ec849c4cc909995",
+                        "transactions": [
+                            "0x02f86301808007830f424094c522d7481113940e56ec4a524def6ce3f326d1e58080c001a07f0024431b0cdce7d013b2efd76bd5a4b21c597b701dead171a2c2fa104c802ca01dda8c4a1c01884d9fc69b92fc59127cc246fc3023a82122d9dc645977d84778"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6ea7346c27aa9b8f35eaea6bd156d67ca237558c0d7198d7d0bfc4429c08ff01",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_calldata_lengths[fork_Prague-blockchain_test_engine_x-timestamp_12-valid_call_False-valid_input_False-one_byte]": {
+        "network": "Prague",
+        "lastblockhash": "0xcb019b358a60b93ad06c93d594b8ebd78014c383043bbcd5b72e5f814746b224",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x627639ffd23ceb0bd2d07bdb2d8d0c9c72722d29ae9b6c441836ea0bdca91d17",
+                        "receiptsRoot": "0x462778f5bf5fba7d10a5e3784ea804a21a7b31a3048647b8a73c8f184c05d32d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7f1b",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xcb019b358a60b93ad06c93d594b8ebd78014c383043bbcd5b72e5f814746b224",
+                        "transactions": [
+                            "0x02f86301808007830f424094272f543b5deab89361db36c1ccf99e4a73ea86d2800cc001a095c4ae704f2bd5bc05112c204c29099112380788b60232a1b00f9b45abda944ba004552c411dfa8bc44389d126f873d39bbf85f5f44afb0bd46a7438c12928b090"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9ee9f34ab33644df6d80def1d23e299a6b1bb7cbeb769ba6a410a5d65146c4b9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the beacon root contract call using multiple invalid input lengths.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L189",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    }
+}

@@ -1,0 +1,230 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-non_zero_address-missing_address]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8ac01808007830186a09400000000000000000000000000000000000000008080c0f847f845808080a00db487b089395bf00977120a724d9ab9b23383222687873e3bcf03f0dfdc461ea03bd9e9eae7394698b5bbe3b1e5e62a262b3be614f27c6875591e68e6a94317de01a0361c3c3ebec70e8e5776ec97cf6553a1f43dd7d29260aae765c81a3fb7c0c101a05494c1471db5804b49b6e327efd2df1d68f7b45d07131314c95ed8fa124007af",
+        "_info": {
+            "hash": "0xb0309e13b00dca097073444ba55b77a066b4ad9cd8b41c98ab1dcb12ad1e2597",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-non_zero_address-missing_chain_id]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c001808007830186a09400000000000000000000000000000000000000008080c0f85bf8599400000000000000000000000000000000000000018001a060aea33c6282a9527e73ea133690154731b0e5c6fcc9b263bb23b06cb8196922a02f4a4c40a26c6f96beddabec9d2b2671aa8535f5a768f74321df3975d71678fc80a05bd5ac6b66fd017e6e9d81b67d28c07e186be3c6b48e8667120e552f901e73eaa01bc26bb3c8c00c1f2bba2b3802a87c56e7603b3f55308d6945777c371e80601a",
+        "_info": {
+            "hash": "0x86a143c9cbd57419c183c901c59d7ddfe635bc30ce025447d93a476a2b9bd585",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-non_zero_address-missing_nonce]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c001808007830186a09400000000000000000000000000000000000000008080c0f85bf8598094000000000000000000000000000000000000000101a0ee292e52faae04cb195f3dd278afe312b81291036547095b2e33080fa0f1b099a07a3bd05e13c6fd511243952ad17a845813834c622ae6dfe939379f751148d96001a0897b04254bac634d0e5595ceb4192b02aaa16383873114dab8ced2004363fc5ca02944842e8678b2528345d22ced1677eab8db498c6fc64bb9f57dc108e16ce231",
+        "_info": {
+            "hash": "0x884eba9be7f0ffae1893b41cc748a4d0c9343a6f39d9c5e347c517fb417f6637",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-non_zero_address-missing_signature_r]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8a001808007830186a09400000000000000000000000000000000000000008080c0f83bf839809400000000000000000000000000000000000000018001a00259331c0c2e5b59f4d7420f13f847c789ec5d26d570bd046611b832b8a5385980a012b3403c21dba5f430808c799f4f31cb0306ee22b2669ee8dd80e6eeb4977deda049dd7a309db5b28b23404b5ca4d8a9ecb1efae569ffc840dff7c8d1efb586cd2",
+        "_info": {
+            "hash": "0xcfeb811abcd86bb925dedf4fabec321fd71c5eeaf5756196d1bf15e83e09337e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-non_zero_address-missing_signature_s]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8a001808007830186a09400000000000000000000000000000000000000008080c0f83bf839809400000000000000000000000000000000000000018080a00d04f01b749833d232f62f7aa59723a7d4938a3587ffc8179ad224b145f1fc2880a0337fd5ccf14d9228182d91aa01ac33a1a4aaf087687351ab2900e46b5b4812cca0108343cbb0a565ca7075651ef5c02e648efdfb0770b2b21bee65a993c9bb6b56",
+        "_info": {
+            "hash": "0xf69810a007c859719672e1b24a1865ef67911c1bec43969837b1fb3e3b56df17",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-non_zero_address-missing_signature_y_parity]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c001808007830186a09400000000000000000000000000000000000000008080c0f85bf8598094000000000000000000000000000000000000000180a089381d62794983ac8e18b380d20bac9a7f382576a666feaac559d93b3ef36abba0196746697d020ec4a230bde0335ffea7c6523ecbbfbc6a422a73b480578d532d01a0d2cf9854de22cc5a2e71c0f87f86fcf12a38835ea34cbacba4fd889c905d6315a03516891642faaebc9b01152ce11c62d7cd610f09387ba62811770e2ef7699b68",
+        "_info": {
+            "hash": "0xb84921affced40af3665feb53ca2b22d51dbe7468a31e7767da0c3f258840e4a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-reset_delegation_address-missing_address]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8ac01808007830186a09400000000000000000000000000000000000000008080c0f847f845808001a0064b5af1fb09063f706cf91740fca4ae14a0481b3a1df0798f1826a5fd6a579ba03dcc923bfa9a349c24c72a91b4ae9282425d3c27659199315cad7f40f747cb4801a0c06ed700cd5d0de0f3c4e5f7ae459b7934b02f2ba084d2ace43eda83ed00d0ffa02e29fbc2c94a0b92de0d918887c23c64863a8aac79f4da29058af0f9b5c76302",
+        "_info": {
+            "hash": "0xb11851143f74825764a6aadd3b9ca08142920e7e607c3971c3dbe9bc749b60e4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-reset_delegation_address-missing_chain_id]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c001808007830186a09400000000000000000000000000000000000000008080c0f85bf8599400000000000000000000000000000000000000008080a028c93da00535df52236f7d025f296f9c7c9348cc7b799925dad56b7130802b7fa027a12d2359395741a99e37b5ae6d2ac43b19833a4453bf281573dddd42ed42a101a0fa9f791a408a75fd82b1b378d1979b73e619f1fdf03285ec73728c2a40fd3b2fa027594c2845626af6c412a6ec8a395585c3d4d4da575644f2b831e3685026574f",
+        "_info": {
+            "hash": "0xc93f32c06a73c0b86709f5f49d80ec3900770c056cbd6a3faee7e3cfaaa8a979",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-reset_delegation_address-missing_nonce]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c001808007830186a09400000000000000000000000000000000000000008080c0f85bf8598094000000000000000000000000000000000000000001a0261c244709b9d903d7c26c32340b670c020513713f042a2380e34b29ce7376dba07b294c05953bb5f5611a2f348be8d9945912edc62ee29abf601d21b73e3a489180a0e62061811cac3625f2d56862d226d798cf43d513a6c0eaddb21104d79efdc408a0603efc2fcd0a099c3362748d61421d4093551f9c7b410f3514a5ff27112c04dc",
+        "_info": {
+            "hash": "0xf56b8c5bf18190a77ef83de233cc7952a7ae49e3b6204e4f190a1b83ccf7061a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-reset_delegation_address-missing_signature_r]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8a001808007830186a09400000000000000000000000000000000000000008080c0f83bf839809400000000000000000000000000000000000000008080a0323d013f0f4e519e8bb10a22241ca98cdb0fc2446698e7c7e31f73329acd2fea80a0a9e239affd24af98c20e9810cd29641e8be9a6bff1358c1133fcf691a7b0edd4a02182bc98e4e7e68bf258e0d56de1cad8734f5c1981f386ed1287d894eb1e57fb",
+        "_info": {
+            "hash": "0xec65ffb9ec4782e54ee76781fcd4cf0f0681a76b44f3ca3fc29d894ae88bb9d0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-reset_delegation_address-missing_signature_s]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8a001808007830186a09400000000000000000000000000000000000000008080c0f83bf839809400000000000000000000000000000000000000008080a05c423b3acdd48163181e41f51ac5948a8b0037a3cababe006050b819055f447a80a0a75c45c570eb1fb06508c69d944e0a474d4f6062d3fc568edb01e3d60e7c446da030284c7d676073f679f5afb62161867da7efded2b35bcb3b500fd9a4d7d5eccb",
+        "_info": {
+            "hash": "0x7d9ec740f4d639b1981a3cf53bc0f81bd5bd1e7f63c97f4bc3a77d2f675f73fb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_authorization_tuple_missing_element[fork_Prague-transaction_test-reset_delegation_address-missing_signature_y_parity]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c001808007830186a09400000000000000000000000000000000000000008080c0f85bf8598094000000000000000000000000000000000000000080a06707c1bb4d603664fe092353cdfe3dfe608f0d737b09b47531fd4f8181f59ca4a074d9e24d9dd7ca3ce2598cf29199bba491e1e4963fb2caf5b347e98d2ea28e5701a0c997f8ebb73fda6749d55defd0957300a4527499b387ef344fcc9ecb12ea1bc2a0613384bd9c1f501197acfbffe1b9437460d01503041d9b98728ccf068e2f0422",
+        "_info": {
+            "hash": "0x7dacbbf222f702b30e4cf3d484a995d73efc66825168ef1d06bfaa44e0ce8c17",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the authorization tuple field of the\n    type-4 transaction is serialized to miss one element.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L498",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

@@ -1,0 +1,1010 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE-call_set_code_first_False-balance_0-external_sendall_recipient_False]": {
+        "network": "Prague",
+        "lastblockhash": "0x3e2edd7b89b995e44ba58cdf339a4a7051eafbff95c10625cbda264fe49a88b5",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x82308280dc1d4e68cf38443125d0c20831a361e4b1b0a5491afcfecb299766e2",
+                        "receiptsRoot": "0x3eb43f269075428c10302e162fe5fa1374756ba5a47d8fb43be8e72221f409cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x320d2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3e2edd7b89b995e44ba58cdf339a4a7051eafbff95c10625cbda264fe49a88b5",
+                        "transactions": [
+                            "0x04f8e7018080078398968094727892b7bd727dae4369e8ceb00cde328c1f3d7980a661001b600081600b8239f3600160015573b1a0d8912ca4adb51b7a512a072fa0ff95f75e42ffc0f85cf85a809464b1ba5a3312991ca9b66d116d6100ab07e7d14e8080a0de2bd7338b1908a77a7baf18998bb16c791371d078ee649c3f1b76835c71e917a002d1b97db130a98e88f7e8780f75df68dc63fa4718cacf5bc350e22f093448bb80a08a5c13a0aec1a4644c89b2d042b1ded949d32f7814a0d6882d347aaec5cb6061a0512ebf02758685e5002453ed2f4ee6471dc5d2aa6f26e40c02f740b2ac67e464"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xc7db344ad21002332da832ef8c15b30f64d9a24c02b0a19bfcde3d4e38d44a56",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE-call_set_code_first_False-balance_0-external_sendall_recipient_True]": {
+        "network": "Prague",
+        "lastblockhash": "0x653c408bbd4436f6db555452ed35e0349b4c44811fc4e50f6c200953d96e4c59",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x656ef57808066ee53e29801bbef2162de1fde7c4fd0b6c28f23f26012a3b9f68",
+                        "receiptsRoot": "0x11dc697e089a7c11da14653017a931331ed0f545f668c6db171ae0a52d0e4bcb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x32afa",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x653c408bbd4436f6db555452ed35e0349b4c44811fc4e50f6c200953d96e4c59",
+                        "transactions": [
+                            "0x04f8e70180800783989680949a3b9fe7813726a3b896d72e5290454ac9a5abd780a661001b600081600b8239f36001600155732ac55cf2bbd849c6e29ec464b4d5452f10062f71ffc0f85cf85a80947e432bd31ee165948669aa2ac43d72efa50947d38001a0c7837fc3025498a99b3840a4851c0ed1f0e470e49708a69974432ff286aba88aa01009696ab6899d7e1266083d94efad769a3bff022c31f7ec503d08908ecd6a5401a025e9b4d681b9c6b15c4c523bc8d40a315ecc10c3f93e0707af16784d219db12ea049297d6da9a3e5ff8b0b535d287050e37dd25147c780852c8db00950215fb088"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf857ce04b6a738f12cbb4e638a1efa593b5cd023d7eed514cc9f3471c7659eb3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE-call_set_code_first_False-balance_1-external_sendall_recipient_False]": {
+        "network": "Prague",
+        "lastblockhash": "0x9204633f1b5ff2b593d7a4944dfaa0e0c39811ce1dcb6b7f9e443f152a8cf3b3",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x46513ad651c2eed6fe4c98af8aac536850e07c0af602311120d10ef7e749790c",
+                        "receiptsRoot": "0x2261ff33da7321f5414db04a40f94abe51dca8be78643471283c2bde26b453c8",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2effe",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9204633f1b5ff2b593d7a4944dfaa0e0c39811ce1dcb6b7f9e443f152a8cf3b3",
+                        "transactions": [
+                            "0x04f8e7018080078398968094cba8a55a85e2b8d40b6f2f95c8e9d0437e23a3f780a661001b600081600b8239f36001600155732a8c423b55706b56371d60d6d417c68e3284baa1ffc0f85cf85a8094f3e77849112e8987eaab4eee882a394405e24c658001a0cfd9082bf8c7b5e229a7a807b2254d78b8b9e88416cf8c2690c490c2d6080db9a0294f404bfafed9afd6211909b9c767049c840b1bf6f09118e849586c3dbc399e80a016c6b20c2ec60799b6e9c8c849144ab2700c4c06f3e2edaa0cc05b78001ac0dfa0205f64df6e3085b3806acf186e296f200fe5caebb29b98eee417e7fcc0bc9475"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xad1d6fd9298150a74250b2f67bcd5f69440d7692c8ee60381eeb441fa6ad56a3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE-call_set_code_first_False-balance_1-external_sendall_recipient_True]": {
+        "network": "Prague",
+        "lastblockhash": "0xea351adcb15fa73206ef09305211c65eb4115de04463a49e42123f1f682294be",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfb83572129dfacdc672172b50aa573ece31eae046dd83787cffc722b85457585",
+                        "receiptsRoot": "0xa1b6ac0769034f6c2e3c2be88bc582a8e91168d276c80c105a92d7392ff6d17c",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x35bce",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xea351adcb15fa73206ef09305211c65eb4115de04463a49e42123f1f682294be",
+                        "transactions": [
+                            "0x04f8e7018080078398968094d6661ad064c232a644916ddc563146306b46d58680a661001b600081600b8239f360016001557399fc883e17224b1dbbed4a998ec5d3ecc502c0d1ffc0f85cf85a8094b8ee8443270b6a3c0033eb22e9aec8e43d040b9a8001a057d5918d588092cd72438d9cecf985d72d3da1828f7158de843aebe1ced081eba01031df5fe418fbdd2da526189eb84faacd3956ccb93ddd541fc6662a515e1a6f80a055eb0764cdbad6afa9b70ee2a81232d9bbd9be34d5ee8157cef18fc3c10d3017a0611a7b344cd656975a13439364543a3199615871a7c8305463772271bb314666"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb3f962128578b2a7cf520611d160303906a3a8d41f2f57a2871b3228c6cfd3c2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE-call_set_code_first_True-balance_0-external_sendall_recipient_False]": {
+        "network": "Prague",
+        "lastblockhash": "0xb78ac3ceafc3fa9bf04093f9be26f45dfcf315537199e16c7bc64ae905f2fbfa",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf75587dcb11e14b77738cb463898d19de61bd3c26130923b670b8cd2d0802d0e",
+                        "receiptsRoot": "0x3eb43f269075428c10302e162fe5fa1374756ba5a47d8fb43be8e72221f409cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x320d2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb78ac3ceafc3fa9bf04093f9be26f45dfcf315537199e16c7bc64ae905f2fbfa",
+                        "transactions": [
+                            "0x04f8e70180800783989680943d64256167dbf1cc88a90f85c51d38ea20f158b880a661001b600081600b8239f3600160015573b1598229cebdc3e5cfab591b172574d6a31e5038ffc0f85cf85a8094f03b0abb4e1ba176d1c6568a16b0c296d1e913e58001a016db2f1f8c619d299f69995a5b0479244e58a85857b18c0bf9b7f0c09bb890f4a035ec2cf1c714f66b10b42135be0ab2d63ea2fcf655270167323a89d318d0459201a0280d07d880a1c6fbb28d88c2628817de0c0871a567c05214dfe7accf859a6a96a074ccbdde78bd40668d9f2c2e49a2e4644abcedd6d6473c4209d774ad57d974fa"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf206beb0a03f35e53ee92630e56d48bfb6b6f20fe19dd716f9a82f8b1f62141a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE-call_set_code_first_True-balance_0-external_sendall_recipient_True]": {
+        "network": "Prague",
+        "lastblockhash": "0x48c39ac9b18570fc8fe3ba229415bb0ac923a606940725f9f5048f7d6cb4e43a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x33d7853cea4512136f83405e38c376f61b9e438b0dcec9b43b46c9504de3aa8c",
+                        "receiptsRoot": "0x11dc697e089a7c11da14653017a931331ed0f545f668c6db171ae0a52d0e4bcb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x32afa",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x48c39ac9b18570fc8fe3ba229415bb0ac923a606940725f9f5048f7d6cb4e43a",
+                        "transactions": [
+                            "0x04f8e70180800783989680948192e1ca36e2efb5b6fa2ee6861e7e9225db1a8580a661001b600081600b8239f3600160015573c6bfc887e22ee4d92db82a382abfe97b149053eeffc0f85cf85a809426af37637718a9ba25cf9dcdc83b41ab4e5063c68001a043725c0fd3d48c77be777e17e98fcdd5776ba1d3b1d4577834a65cea9c7d4b1aa00ddc84b2d019d470d9c23ed7f57fdd20a083e74597a6633cc7a9f6eda28a51cb80a016f9adb99f8f02c7804a74fda05c2aeccd234c3b0016239acc78e23ee3b368aaa02d0f625685ea457f2757f000d0831350eb4d52364b9216b6cb134a5f156c1383"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x8537be8ad679e1738a8b71e434ed57c084e5b645633accec426d47e5dde0b8c8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE-call_set_code_first_True-balance_1-external_sendall_recipient_False]": {
+        "network": "Prague",
+        "lastblockhash": "0x8bad7e6a83b3c0a8fc05c1c84bcdcdc3dcb23a7f90985d9fd8505611a3274859",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3d976cb29f2aab44650cb1deff889936fdcba23e167f45a0a7240e88b8b361e4",
+                        "receiptsRoot": "0x74ce7a39bda3375eb4382bdae4046541e46872d6890af76f5238e01448667cdd",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2eff2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8bad7e6a83b3c0a8fc05c1c84bcdcdc3dcb23a7f90985d9fd8505611a3274859",
+                        "transactions": [
+                            "0x04f8e7018080078398968094526abb1c011c0e81a1516f7bb256a28ad639a7bd80a661001b600081600b8239f3600160015573cd59b3d701c6fc51fd3eab96f81f81094800c8acffc0f85cf85a8094ede99222a1746c96b1a4e44776e5b6247668654b8080a0738d98ec125ec0ecad21c8663ad43c2250b6c9d157c4c8b5c948097a6acd474aa07901e6b7439d6bb324e8eabd3627d042def25c545f21e063c271f09c5a31406a01a058e6ce44f0a250cd65f6f17411827a5e7d2c9ae0f6563264c592f6b80d9b718fa023ff94a1e158d6d777d67847e5c39f6d297e7f2156cf80e28edc3eb0abbac314"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2437793799b9190965652857b0fc22b7823777615726d1c0fb8d4484b79b9707",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE-call_set_code_first_True-balance_1-external_sendall_recipient_True]": {
+        "network": "Prague",
+        "lastblockhash": "0x8d968158846e4f38f5dc13ee04743c9fc1cd427633e841be5f8d9a686b202945",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2eee002303201c394f211a5a39283ea8919b723eec3e0008ea3918c09b5573d2",
+                        "receiptsRoot": "0xa1b6ac0769034f6c2e3c2be88bc582a8e91168d276c80c105a92d7392ff6d17c",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x35bce",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8d968158846e4f38f5dc13ee04743c9fc1cd427633e841be5f8d9a686b202945",
+                        "transactions": [
+                            "0x04f8e7018080078398968094847fe4687f24fb72974ba58011f6c9f15f76e81480a661001b600081600b8239f3600160015573446aea1b6f56b50b6f8fed1547dd24b83072f754ffc0f85cf85a8094b0fa6c03c0c73d7d531a26b3d2a814afbef012608001a0a7244b8c9cc88da3091bea5ecf289d3920699ddfe13e8f6f611a4fa88871d79ba0754147ae4d24238322b49137129625d3606ccae6d2962060445dadde8b90be5280a09502beb54f9bed3d7dc074469caa1c5113994385d41a4fce5b6f5d48352eac3ca05a09530db6be3e831df1bee3a15a9661ec2aa0cf377357bc62b784bdd932ef86"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9a571e924f62dcef795d2dd5f72663de19c661fff84c1662a45ef8fdae6f58f3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE2-call_set_code_first_False-balance_0-external_sendall_recipient_False]": {
+        "network": "Prague",
+        "lastblockhash": "0xf93a9c1b1bb6275291a2233ca53e3b2a8520731f69d5e7e2d414c9718daa2af4",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1b31b990cd787b7b20fe51b0f391e60250dcb82083d0a2ea6c9a179fe6ac9955",
+                        "receiptsRoot": "0xe7d2f675d4c65054eb8ab7fa302590c4492dfd31c1d30f8f1b0228d6964bac19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x320e1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf93a9c1b1bb6275291a2233ca53e3b2a8520731f69d5e7e2d414c9718daa2af4",
+                        "transactions": [
+                            "0x04f8e701808007839896809454fae10d9bbbef5b5d9e3dd1ed385cce43cda12980a661001b600081600b8239f36001600155733290a682230ecaf96f256c6017407098d03d1ff8ffc0f85cf85a80947594726f4b85dade278286ff8c91dad31b45813a8080a0fe2ae46a22dd1462e0ee98108c5f2b38b696e249eab5c4d99069706549d32ec0a03ad31714a479be58a38449eeca91bb488e247af192881bb1fb9c2fbe3b64330980a078ad057f71bb1e0862e86a40634e233fd24f0fa5f722a38080fe4bee48d58b63a055a1fd6a6b68565d3caa38a988a06f1203fb034f7100b72a976a14bf52c197d6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x685ec133ea0c82dbfe764eff74d5396f47287d0ceb986aee4ffc0dc4c69cecc7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE2-call_set_code_first_False-balance_0-external_sendall_recipient_True]": {
+        "network": "Prague",
+        "lastblockhash": "0x285872e632a3816dd4615985ffadbb204b57f9ac03c393d1a7e80ce5598ba2ea",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x99af0a00b2d94c67e9b3f0eef3ee07f7544d2292c379d32b00228221c86ae27c",
+                        "receiptsRoot": "0xf6b44da2c96c925fea6ac317e36e2579e92eed2844cbd85f991592c62e66268d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x32b09",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x285872e632a3816dd4615985ffadbb204b57f9ac03c393d1a7e80ce5598ba2ea",
+                        "transactions": [
+                            "0x04f8e701808007839896809421709dd9000356d9bb3f4210d7657417aac9741c80a661001b600081600b8239f36001600155733ca9cff911d30e881e765b1b1681957e4f40460affc0f85cf85a80949305a01a92044f26e38bf603a4d9f6ffd0b14bc98001a080f53343ea3082d2e57b2cfb2fbea69004b1b05699a8a00cda8a10af48b3c5e4a003fb8d11ce034347ebd098748de0a10964f8e740d2f5b685f5bc2fb44b65376201a0b9a7f0541afccc87b8d74d98242b4a9cfb2134aef1ed1975ba1f29f1aa951ddba0162e9cee0108815980dacf8a00936829b4c30c073979ec5af00e4e053aa33939"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3a39a1796413115fc82f24a5b803ed6a0bd99bbc558c7d52ca4d0d82116feeb6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE2-call_set_code_first_False-balance_1-external_sendall_recipient_False]": {
+        "network": "Prague",
+        "lastblockhash": "0x55a5c985edd41e2ba232e531df9625b757639b948fe70027c061b9cc3a7cdc8b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf34b90a8a966d2d9a96a0523819b6fa7d00c5f9aea3a71ef413615f7cb527f03",
+                        "receiptsRoot": "0x8bcb00a285062bb8bac30bc06cf048ad99ca7d18ba793ac53815484b094c7875",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2f00d",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x55a5c985edd41e2ba232e531df9625b757639b948fe70027c061b9cc3a7cdc8b",
+                        "transactions": [
+                            "0x04f8e7018080078398968094e695be88fccf32a108bd4ea805b44b264781c3cc80a661001b600081600b8239f3600160015573f863efee9bb558a03cb7faa54a319fd4f417ae1bffc0f85cf85a80944574f3e2c6c6cf3a6d968c9240cd7681f2e03cde8001a01b9f223183ecdb3006084849fa4310c36aa60194c5d7965bed831bbc5ec500fca05a5b3ad8a63c2b6bdec8be38a3db79bb430e23392d9c7d0d2c0151c05f05df9d80a0b9a075317f7a562a299ab67f0ecb7f948f8f30d409f061e7a0a1ce091b045f75a01867a8f98629fc129ef7331e74a11e5f5d5c3916bde5318811450a8d8fc0753d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x4f705cbe3e290e6a3008b5d2dd91163b4a23ef7c63de165e6326637b5e8aea26",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE2-call_set_code_first_False-balance_1-external_sendall_recipient_True]": {
+        "network": "Prague",
+        "lastblockhash": "0xbc8a234d8a7093b56cc87bc7d988a77e4a812e89b6e847e6fb565578fa8251de",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x48528cf8300dd7fc05c3a01770686743f8ab0f9b58bee9d1a47d5b971cd2f3a0",
+                        "receiptsRoot": "0xbd406b23ab94358570a006b051494259ed5c26298d3a8f577a703b6fff2a6556",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x35bdd",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xbc8a234d8a7093b56cc87bc7d988a77e4a812e89b6e847e6fb565578fa8251de",
+                        "transactions": [
+                            "0x04f8e70180800783989680947d3715c93caa54370aeb17eaf0303c3c13e4949e80a661001b600081600b8239f36001600155737f5791d1820bd5056393b3d84eb284bd17368dbeffc0f85cf85a809435b9bdd93a0b917c378b3048fcaba1e297b62bb18080a023a794ef4fac3e6562d1f7f60cb0756ff39d21037fa19d7f1d9a9577cf182458a07ff94348ad85d93b1076e633711a3fa9a6ca4a1e237d4bf5ccee5613d5e2514601a003ef7177b29e479c338510225945bb950dfecae4f92e1df157edd6e51cf2b733a04d4830f4af196b584a9d82f2a5dd99e7aabc13bd017d0c4f5872ca98adb79a00"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3f91d7eb02a3272020fad8e38f69fb0978cc5f71ecdaa7ffc6d4803a10795bdb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE2-call_set_code_first_True-balance_0-external_sendall_recipient_False]": {
+        "network": "Prague",
+        "lastblockhash": "0x7bace17575f113c2589909eeff211f19d026ec72915bec6ca471bec7b30da6d0",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x55b99a1aed86690db38daaa5f7e02f30b7aee618100023147cc582efa169f66e",
+                        "receiptsRoot": "0xe7d2f675d4c65054eb8ab7fa302590c4492dfd31c1d30f8f1b0228d6964bac19",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x320e1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7bace17575f113c2589909eeff211f19d026ec72915bec6ca471bec7b30da6d0",
+                        "transactions": [
+                            "0x04f8e70180800783989680940acef99b4e17856deb4e47b00cf926d568ccf0ea80a661001b600081600b8239f36001600155739008dba4ac7ba6c44c531b40270e8d66c3e2d9f6ffc0f85cf85a8094189d67f720e3caf1faf0caec96e84b0642213aa28001a0486d68753fd3bf04180c117077df0870bb960570811bbe719b540c76bdad5b64a04af00febdc8575c65873fa4c83459ffd2805af04cb00ff820450088d5eea816780a0ffe139c73f826c43f51860ab33db394a64b1207251d6a37578404703f6c9d3d5a011bc6b8f4daa03728a0122d017cd99166ff75d9a8ef6eec17c55abca56d0b98b"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa1cf69c23ca1031cdd80540d83a3c50b1ae4e42bb582dbf704062bdcd8edc378",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE2-call_set_code_first_True-balance_0-external_sendall_recipient_True]": {
+        "network": "Prague",
+        "lastblockhash": "0x40863d67da94b7f99e43abbc90bc6789cccc10018909f3beeed4df5efbf7ce97",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x41449d3a18a1a5d59bfaa13872d79542ea2b998d808836014b6d837bd053685e",
+                        "receiptsRoot": "0xf6b44da2c96c925fea6ac317e36e2579e92eed2844cbd85f991592c62e66268d",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x32b09",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x40863d67da94b7f99e43abbc90bc6789cccc10018909f3beeed4df5efbf7ce97",
+                        "transactions": [
+                            "0x04f8e7018080078398968094f18c7743ea0507d5036540221aaa24221dc824fd80a661001b600081600b8239f3600160015573465a47c23afb7692a3f8b9e321bc11566c122fcaffc0f85cf85a80949e573634cab79dfb2bab8b9f03f0b6a810af5d198080a06594f4ffa67c79a3c2d8b2a61b2a12c20c40eeb50ce4d650f9594bde0807cb2fa064edeae7ff4941a7da0d2abab3150b0994030b946469fcb813746f0a2cafb76301a01e52578fc90dc02038d6be1b8eb27d83cb7e936e9a305935dac71fefa6e1b797a03c6f539c3eb86aeeca052adf0eb55651f154e21d04fe0dc8531b4dbe29e41c49"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa4ea1c05a3a86d4f8714c8eb8ec7c3b3e2a6489c02b3ff829d509a525b6a87ad",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE2-call_set_code_first_True-balance_1-external_sendall_recipient_False]": {
+        "network": "Prague",
+        "lastblockhash": "0xa44b294cc078f7f3282b0494c6780dcdb7c772d63936d784e0a421068b8a81ff",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0bab912378994c9c7ca0ddc1ab3e7c914642b50e8d11ef007628e2b3e726ec2a",
+                        "receiptsRoot": "0x8bcb00a285062bb8bac30bc06cf048ad99ca7d18ba793ac53815484b094c7875",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2f00d",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xa44b294cc078f7f3282b0494c6780dcdb7c772d63936d784e0a421068b8a81ff",
+                        "transactions": [
+                            "0x04f8e7018080078398968094057e4031b84635a05c6bcd4661d5feaba580a88280a661001b600081600b8239f36001600155739dc87b8a18c829068a2e8cf52815fe4d2614952bffc0f85cf85a80944904205bab8d26b292f088a8a3376878f7372fb18080a0ecb5b1cdf0bc0b45f36dc99947f4140f61dd24423e33382d8bb86946e567d69da0687a7d1feb9f90355ecbab33db679fedfe55bbf3ce1979f33d4046824662842d80a0623ba3f0dd972cf2290cafcfb102c14aa61d9ca216109e038626fb539547c77fa01d7464cc1c6cbe3ad0ecbb6f5d3d7b767bf0f8b2be804ea171fc4a6f5c2a09a8"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xcbd27ecf967e9388e9f82269858ed7d4ce31d93a68ce6f62adaf9decfaecfc8c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_self_destructing_account_deployed_in_same_tx[fork_Prague-blockchain_test_engine_x_from_state_test-create_opcode_CREATE2-call_set_code_first_True-balance_1-external_sendall_recipient_True]": {
+        "network": "Prague",
+        "lastblockhash": "0x07682bfd7d7c2bae4a18730dc8f997babe76110f75b1d704f8e6424b428f763f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xffcb39d2431849d2756ec074c4a81bf25d0976defd410d837577d4477073aae3",
+                        "receiptsRoot": "0xbd406b23ab94358570a006b051494259ed5c26298d3a8f577a703b6fff2a6556",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x35bdd",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x07682bfd7d7c2bae4a18730dc8f997babe76110f75b1d704f8e6424b428f763f",
+                        "transactions": [
+                            "0x04f8e70180800783989680948e7407ea9c7154b5f6112e4cb5c06dddd3628da580a661001b600081600b8239f360016001557387f9cb78104b1a636ad25790aef97d251929d26affc0f85cf85a8094ca855239d45a95b1878a131fca366f03fe7f73da8001a0031867d85af4a8ed26ee3c19b88de2cc66ec0b9d565a7e450e13e4fdd331044ca02074b7ce6f3ec457b82bef5087ea1b472a0ee1eccd41039c984d1874934cc9c901a0c1abda106774abfc7a51b6a49f68c8ba29ff5859a4f39fff85a2922070b1d58ea01532ddd3cb0f7630c044a9ca38d68f3580179da5dbce6abbed88b56b61a340b4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x5d45582a5bedb3cd89f84a47ed7b4ac6dd0f84d9306c046d799038659c7c7da7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an account to an account that contains the\n    SELFDESTRUCT opcode and was deployed in the same transaction, and test\n    calling the set-code address and the deployed in both sequence orders.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1793",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

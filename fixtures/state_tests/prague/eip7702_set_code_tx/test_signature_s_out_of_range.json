@@ -1,0 +1,127 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_signature_s_out_of_range[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x58816a45d82af63a0ae8510fe82825a0b184b313": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x00",
+                "storage": {}
+            },
+            "0x58816a45d82af63a0ae8510fe82825a0b184b413": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160015500",
+                "storage": {}
+            },
+            "0xf2f17e9592237e15de595964e81128b9f2e48cd0": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x58816a45d82af63a0ae8510fe82825a0b184b413",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                []
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x01",
+                    "address": "0x58816a45d82af63a0ae8510fe82825a0b184b313",
+                    "nonce": "0x00",
+                    "v": "0x00",
+                    "r": "0x03b790670e58033a3e7944f7dc070127053ddbc2a1dcf2e8c133793bf638b8b7",
+                    "s": "0x8ce6aa3d2c0890a8c0025a302b3c1f541023297cb0203e323c71a1ea6ee3df40",
+                    "signer": "0x81ca91d054ee9ed1a8cfda1c6c2765277eadf3f7",
+                    "yParity": "0x00"
+                }
+            ],
+            "sender": "0xf2f17e9592237e15de595964e81128b9f2e48cd0",
+            "secretKey": "0x1deb6ce736dfe1b698be838358816a45d82af63a0ae8510fe82825a0b184b314"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x2eee68a9ee923f1e31b27c0d40226ae54a9fe0d1856aab40711df1d5c24f37ff",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f8c101808007830186a09458816a45d82af63a0ae8510fe82825a0b184b4138080c0f85cf85a019458816a45d82af63a0ae8510fe82825a0b184b3138080a003b790670e58033a3e7944f7dc070127053ddbc2a1dcf2e8c133793bf638b8b7a08ce6aa3d2c0890a8c0025a302b3c1f541023297cb0203e323c71a1ea6ee3df4001a06ec1adaa6c5b1c82e176deea4ba11686889dc6aba36f43a1a2f825d097602f84a055266ee20682be2388e3d43d6fc6a3fa1a5abb19ae43b366b46733ca27aea261",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x58816a45d82af63a0ae8510fe82825a0b184b313": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x00",
+                            "storage": {}
+                        },
+                        "0x58816a45d82af63a0ae8510fe82825a0b184b413": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160015500",
+                            "storage": {
+                                "0x01": "0x01"
+                            }
+                        },
+                        "0xf2f17e9592237e15de595964e81128b9f2e48cd0": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de98b9ba",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa35ee8b382180847caa638e69006e9d4a60c4fac33930abf5e406be02ce21e97",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction with an authorization tuple where the signature\n    s value is out of range by modifying its value to be `SECP256K1N - S` and\n    flipping the v value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L2361",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

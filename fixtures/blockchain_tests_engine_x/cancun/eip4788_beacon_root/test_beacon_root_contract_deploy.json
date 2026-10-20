@@ -1,0 +1,222 @@
+{
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_deploy[fork_ShanghaiToCancunAtTime15k-blockchain_test_engine_x-deploy_on_cancun]": {
+        "network": "ShanghaiToCancunAtTime15k",
+        "lastblockhash": "0x9b26dd359f2952421e66fc76d931f353a39143a66ccd62fc786300c444a60b4d",
+        "config": {
+            "network": "ShanghaiToCancunAtTime15k",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x77f1ef958c421f34",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xdfc8044f258877f7255bf8b299faff83f991f39a20628401f9cfd5ec2d0b16a0",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb038228d7a7ae7ce4e06212f0cc989b0b98259aff580aba7be9a03647a9f5a98",
+                        "receiptsRoot": "0xd5caddb93c844bd1c4a6364ec17b3f09afea9b2f335d8aba110ef6b0c9d9bfeb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x12164",
+                        "timestamp": "0x3a98",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xef2b447fc8c8cca3aa3edb87edae9ee33753f1548c384723236e0565cbbf90aa",
+                        "transactions": [
+                            "0xf8838085e8d4a510008303d0908080b86a60618060095f395ff33373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff0155001b820539851b9b6eb1f0"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x000f3df6d732807ef1319fb7b8bb8522d0beac02",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x1",
+                                "address": "0xfffffffffffffffffffffffffffffffffffffffe",
+                                "amount": "0x1"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0xef2b447fc8c8cca3aa3edb87edae9ee33753f1548c384723236e0565cbbf90aa",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xba334bc96ce9590ffc3d13010518e39c70911fdae0fbbf3874c871d6b5d9c779",
+                        "receiptsRoot": "0x1ccaf316c85ab72468f194a8a6bf7f7cac5730696d7dd3a5dc298fac47cfe273",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c748",
+                        "timestamp": "0x7530",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9b26dd359f2952421e66fc76d931f353a39143a66ccd62fc786300c444a60b4d",
+                        "transactions": [
+                            "0x02f88301808007830f424094fc70a5905a3413cc1b07c1cadd888e352aa3430a80a00000000000000000000000000000000000000000000000000000000000007530c001a083b1efa57d2bff4872845bd6da86aa88d8ef466d751cc9c9b8a77674ef2ed225a051294c73e82f09b85d5ae000b0cc85b9df6825250465b75dc7d563b42b864601"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x2",
+                                "validatorIndex": "0x0",
+                                "address": "0x000f3df6d732807ef1319fb7b8bb8522d0beac02",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x3",
+                                "validatorIndex": "0x1",
+                                "address": "0xfffffffffffffffffffffffffffffffffffffffe",
+                                "amount": "0x1"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x197681ca5fb32d2e7b6cbc60de03cc3be68c5756d570698ac8c5c7affd7bef4c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the fork transition to cancun deploying the contract during Shanghai\n    and verifying the code deployed and its functionality after Cancun.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L774",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_deploy[fork_ShanghaiToCancunAtTime15k-blockchain_test_engine_x-deploy_on_shanghai]": {
+        "network": "ShanghaiToCancunAtTime15k",
+        "lastblockhash": "0x37092c02f6f6206c747da71432564c58e7168ddf15a2a5aa729ca725f23a82c5",
+        "config": {
+            "network": "ShanghaiToCancunAtTime15k",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x77f1ef958c421f34",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xdfc8044f258877f7255bf8b299faff83f991f39a20628401f9cfd5ec2d0b16a0",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb038228d7a7ae7ce4e06212f0cc989b0b98259aff580aba7be9a03647a9f5a98",
+                        "receiptsRoot": "0xd5caddb93c844bd1c4a6364ec17b3f09afea9b2f335d8aba110ef6b0c9d9bfeb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x12164",
+                        "timestamp": "0x1d4c",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xaef08b1120bc4d6a3e0580d43be890f322bd312d8b9701526dfe93c93c747a5e",
+                        "transactions": [
+                            "0xf8838085e8d4a510008303d0908080b86a60618060095f395ff33373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff0155001b820539851b9b6eb1f0"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x000f3df6d732807ef1319fb7b8bb8522d0beac02",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x1",
+                                "validatorIndex": "0x1",
+                                "address": "0xfffffffffffffffffffffffffffffffffffffffe",
+                                "amount": "0x1"
+                            }
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0xaef08b1120bc4d6a3e0580d43be890f322bd312d8b9701526dfe93c93c747a5e",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf8500385c50282fc5290e3432b44684522fb88887b1d0e4320b1bde6330aefdc",
+                        "receiptsRoot": "0x1ccaf316c85ab72468f194a8a6bf7f7cac5730696d7dd3a5dc298fac47cfe273",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c748",
+                        "timestamp": "0x3a98",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x37092c02f6f6206c747da71432564c58e7168ddf15a2a5aa729ca725f23a82c5",
+                        "transactions": [
+                            "0x02f88301808007830f4240941225477f6b687fc6100adf77df908a654a51674980a00000000000000000000000000000000000000000000000000000000000003a98c001a02dab6cff3e4d3bb24ec8b83ab3f35384d29a54d9d97748b0cebf80781271617ea00c22e159b244e5386a8f2745597543fd9017b6bd8ad213437de4b8c98654e8bf"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x2",
+                                "validatorIndex": "0x0",
+                                "address": "0x000f3df6d732807ef1319fb7b8bb8522d0beac02",
+                                "amount": "0x1"
+                            },
+                            {
+                                "index": "0x3",
+                                "validatorIndex": "0x1",
+                                "address": "0xfffffffffffffffffffffffffffffffffffffffe",
+                                "amount": "0x1"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3f4dfaf86e440ed4c227f49f4b5f0d1c8da5cf06bcdbdb88005b04a3d13a1e83",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the fork transition to cancun deploying the contract during Shanghai\n    and verifying the code deployed and its functionality after Cancun.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L774",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    }
+}

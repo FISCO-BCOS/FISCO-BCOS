@@ -1,0 +1,40 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_auth_chain_id[fork_Prague-transaction_test-non_zero_address-auth_chain_id=2**256]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8e201808007830186a09400000000000000000000000000000000000000008080c0f87df87ba10100000000000000000000000000000000000000000000000000000000000000009400000000000000000000000000000000000000018080a0dbd33f05766f0fedb4e5bf2226cf9242750be7be600cd8a622fc634129de56eea0744b42448306115cbf098be2f1d281c4824ce859937d4165f91fdd4256c8483e80a0dec61fbf150b56704735379b5c4e4ef1ce94879ee5e8d6c483c597a90e3de8c2a067cb2ef4025bc37201961d96f41a4ad157d36a0516d736a72d9c94541b5d3a1d",
+        "_info": {
+            "hash": "0x75feeb332577d19b98132293f1846a3900db5c461eae00e16b04848baac15960",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the chain id field of an authorization\n    overflows the maximum value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L143",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_auth_chain_id[fork_Prague-transaction_test-reset_delegation_address-auth_chain_id=2**256]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8e201808007830186a09400000000000000000000000000000000000000008080c0f87df87ba10100000000000000000000000000000000000000000000000000000000000000009400000000000000000000000000000000000000008001a032e84beb42fe232de3925f0ff47f3189f25813f6a5227a3b1df57574c4a81d56a001422205f53dc8987d2edcb9183c8d4ae3579555e54af94dbd4f91079b29ff6201a0e201a673a7a22efe0592dc20a2c4920a890e83c189ffb2e86a679797565795c2a0112e864943c3e3c5a4d5638b4fca61266974c46632007ea62560b80021ade756",
+        "_info": {
+            "hash": "0x0e07c86e5e6f9d4afddf958bd381d35eccc8d9b26cfdb28c3b2e0a31e448684b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the chain id field of an authorization\n    overflows the maximum value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L143",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

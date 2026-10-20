@@ -1,0 +1,786 @@
+{
+    "tests/cancun/eip4844_blobs/test_excess_blob_gas.py::test_invalid_non_multiple_excess_blob_gas[fork_Cancun-parent_excess_blobs_4-parent_blobs_2-header_excess_blob_gas_delta_-1-blockchain_test_engine_x-new_blobs_1]": {
+        "network": "Cancun",
+        "lastblockhash": "0xa1c6d01059addf0023317334516262b4162cff213ea396a2bbfcc535e44b7c0c",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x5dd9710e8d42163d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xd5ba6a7a4a2b782f3bdebc5a448c4008d3ecf55244fb7290f7c7192767752c3f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0afd6660acb04c84ec23be24ac8277800417cda258aee38ffa8107466ac40e11",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x40000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0xa1c6d01059addf0023317334516262b4162cff213ea396a2bbfcc535e44b7c0c",
+                        "transactions": [
+                            "0x03f8a70180800782520894df6259b455e9d7e6e9cdf7004ac64fd3deb231c60180c001f842a00100000000000000000000000000000000000000000000000000000000000000a0010000000000000000000000000000000000000000000000000000000000000101a0ee80636240000632a0750841674f82751b80fad9a15cfe878f131efc99422814a07bce8b1dea8f24281799ff8ef993b24bddb49f2f0e4357345ccf254007e28d20"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000",
+                        "0x0100000000000000000000000000000000000000000000000000000000000001"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa1c6d01059addf0023317334516262b4162cff213ea396a2bbfcc535e44b7c0c",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb2f4c192f0f4769356c316b57a5042ef1c92417398c5d0280f6db55f04ce8916",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x5ffff",
+                        "blockHash": "0x0be6cc2ddf8db2872220cecd013567844085d84203c752063eb513c28dd68c16",
+                        "transactions": [
+                            "0x03f8850180800782afc894937b56eff60c219d4b022b67e12d8c0c876660e90180c001e1a0010000000000000000000000000000000000000000000000000000000000000080a0b792b118e3ad9c2416239cc48776fc3ca5cdcba4026063a87c2fbbecb841aee3a02e19be0e566ed910e9d5637c1a562f679b94989b36e1e542252a60706728b5bb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INCORRECT_EXCESS_BLOB_GAS"
+            }
+        ],
+        "_info": {
+            "hash": "0xda1848a6d25ca953b63f9d0c9c38486e5b589fe41218406854dedc932c55ef8c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test rejection of blocks where the `excessBlobGas` changes to a value that\n    is not a multiple of Spec.GAS_PER_BLOB`.\n\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK + 1` blobs, but\n       `excessBlobGas` is off by +/-1\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK - 1` blobs, but\n       `excessBlobGas` is off by +/-1",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_excess_blob_gas.py#L826",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_excess_blob_gas.py::test_invalid_non_multiple_excess_blob_gas[fork_Cancun-parent_excess_blobs_4-parent_blobs_2-header_excess_blob_gas_delta_-131071-blockchain_test_engine_x-new_blobs_1]": {
+        "network": "Cancun",
+        "lastblockhash": "0xd54b110b7eac9553918486a7e33f319bcb71d2827a6ce5f038bd5fb7e29568db",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xd888bd4f56d723b3",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x65333914dfdc75f15501fe8e08be354c8d0e7cde3d6e84c57035287c6b5c38e2",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xace2dbd5337b2fc68cf3332f7b912859730cae222b60a4b04949d29b76532d1f",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x40000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0xd54b110b7eac9553918486a7e33f319bcb71d2827a6ce5f038bd5fb7e29568db",
+                        "transactions": [
+                            "0x03f8a70180800782520894752106ee91595f1ff9ff7b80b9dcfe7bc6a8405d0180c001f842a00100000000000000000000000000000000000000000000000000000000000000a0010000000000000000000000000000000000000000000000000000000000000180a02e813d41f4c6aea1950f3b4f0c0dca6a5c60d3b68c55f6d75c219c6ef9e5ae49a00a7b309fffd31686a8e9ab2bd96a16e9de127b511cfb3274931b6583a6496c2c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000",
+                        "0x0100000000000000000000000000000000000000000000000000000000000001"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0xd54b110b7eac9553918486a7e33f319bcb71d2827a6ce5f038bd5fb7e29568db",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x30ff80238d533142b48092913065b54fbcf69edf42d418e4b922deb2e415f990",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x40001",
+                        "blockHash": "0xcef5e1772070f435daeb97d456cfe12e0fd2d904731f4712134a0dfb4abd3a80",
+                        "transactions": [
+                            "0x03f8850180800782afc89479b123f69c32aef7d6390454e3d15fdbd557dab10180c001e1a0010000000000000000000000000000000000000000000000000000000000000080a07fadf57b6a25bab4df91934273435d659ddaabeeeccbcd6481bf04ef6fbdff18a073688b75b2a76717e170e9bb0adb96e03eb154b9590b1273ea07f875426ec20d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INCORRECT_EXCESS_BLOB_GAS"
+            }
+        ],
+        "_info": {
+            "hash": "0x8eb79416e706c5e9998226e657ca4dbc886c32ddc94615ccb510549b55fadb1f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test rejection of blocks where the `excessBlobGas` changes to a value that\n    is not a multiple of Spec.GAS_PER_BLOB`.\n\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK + 1` blobs, but\n       `excessBlobGas` is off by +/-1\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK - 1` blobs, but\n       `excessBlobGas` is off by +/-1",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_excess_blob_gas.py#L826",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_excess_blob_gas.py::test_invalid_non_multiple_excess_blob_gas[fork_Cancun-parent_excess_blobs_4-parent_blobs_4-header_excess_blob_gas_delta_1-blockchain_test_engine_x-new_blobs_1]": {
+        "network": "Cancun",
+        "lastblockhash": "0xe2bd285a35263eeea4c005f937c21e41551000fb9ddeff765f8797272737fb0f",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x1aecd68950d32675",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xaf0609841749a326d4c2aaf590e063fdcbff2e852b6f19ce0394f63a19ac96ba",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x22693cf8138f59898ecf313b071a432d7055bfd4b38562a9135520082ca99e3a",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x80000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0xe2bd285a35263eeea4c005f937c21e41551000fb9ddeff765f8797272737fb0f",
+                        "transactions": [
+                            "0x03f8e901808007825208941575c019594a755780f03316d1b30f96d4e9c6680180c001f884a00100000000000000000000000000000000000000000000000000000000000000a00100000000000000000000000000000000000000000000000000000000000001a00100000000000000000000000000000000000000000000000000000000000002a0010000000000000000000000000000000000000000000000000000000000000380a0c799b25eeaed4c41d73839d6525fa965d7ad073230e003652936e40ad8239262a00819bb5b480395734fd2c3a0f4eee1acb9c624646eb161cdfc73d15d24af2d9c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000",
+                        "0x0100000000000000000000000000000000000000000000000000000000000001",
+                        "0x0100000000000000000000000000000000000000000000000000000000000002",
+                        "0x0100000000000000000000000000000000000000000000000000000000000003"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe2bd285a35263eeea4c005f937c21e41551000fb9ddeff765f8797272737fb0f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdd48024a7e121cf4ef5a9e02da6232cb935fc4f634d422bb9fdb4db99e7a5500",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xa0001",
+                        "blockHash": "0x9ee452bb6867a2d0e34ed909e90ff662b69a6f8c0ced1a44ad7109f269ba2c34",
+                        "transactions": [
+                            "0x03f8850180800782afc8949f2f901ce06ff41ef333ae1f6e0e2cbacd0237d20180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a038670a4e9c4ffb514ca3218af4d8aa8c34454a5d0df165b91bff7c47f8e85bbea00753c901f13f30f26a4aae149b1e14a130fb14b53cd4e9f2e7410bb531f735d5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INCORRECT_EXCESS_BLOB_GAS"
+            }
+        ],
+        "_info": {
+            "hash": "0x7952273d58bfb3f933993216665db33b8a19a393eda968a4ff1d2b249a3449b5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test rejection of blocks where the `excessBlobGas` changes to a value that\n    is not a multiple of Spec.GAS_PER_BLOB`.\n\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK + 1` blobs, but\n       `excessBlobGas` is off by +/-1\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK - 1` blobs, but\n       `excessBlobGas` is off by +/-1",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_excess_blob_gas.py#L826",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_excess_blob_gas.py::test_invalid_non_multiple_excess_blob_gas[fork_Cancun-parent_excess_blobs_4-parent_blobs_4-header_excess_blob_gas_delta_131071-blockchain_test_engine_x-new_blobs_1]": {
+        "network": "Cancun",
+        "lastblockhash": "0x4af7a18c2bf9ff3d59b62e761137991ca57b6444eaed55913a049a87ec94adc2",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x410e9ce9d13cacc9",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x6bda3590b3dbe2f1f6bc8a9f953777efe406f0f0b3c473cb357f01a3c036cbd1",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x43c280157f0478a0b0391e7f3c98c4263e7d963b25f237bfe1360c2609620e8e",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x80000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x4af7a18c2bf9ff3d59b62e761137991ca57b6444eaed55913a049a87ec94adc2",
+                        "transactions": [
+                            "0x03f8e90180800782520894d53237b3698d1f6ef16072590d1ff43c47eff5c00180c001f884a00100000000000000000000000000000000000000000000000000000000000000a00100000000000000000000000000000000000000000000000000000000000001a00100000000000000000000000000000000000000000000000000000000000002a0010000000000000000000000000000000000000000000000000000000000000380a09f3d3b8dc14196b30f588fea624907e3b8dd694b3e0587a5830ecc590f55533fa0195e959ba52374a15902bfd964984180ca5c59923534e1d2cca66789d35e92e1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000",
+                        "0x0100000000000000000000000000000000000000000000000000000000000001",
+                        "0x0100000000000000000000000000000000000000000000000000000000000002",
+                        "0x0100000000000000000000000000000000000000000000000000000000000003"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0x4af7a18c2bf9ff3d59b62e761137991ca57b6444eaed55913a049a87ec94adc2",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x13c5f22053b8556ad92b810b43d575ea2d1df1a28ff663709f9584bf9c2d483f",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xbffff",
+                        "blockHash": "0x55154970a18f5517a1687e72188da60d9e40892997fc2903c059eaf22f3161b1",
+                        "transactions": [
+                            "0x03f8850180800782afc894afedd4d8cef36f9cb7970155a3df86388e686acd0180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a0249e2ad30cde4bccb5a88893f9836c2d8c5fee0c19c5ef332ce32f3901401f1ca03c113d4c1a51db33ac4a617d613558fb3a00212fee14588518ec946c73faf87a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INCORRECT_EXCESS_BLOB_GAS"
+            }
+        ],
+        "_info": {
+            "hash": "0x448b1f5b79717d22aedbbe94abe0df4de183c38087a3bf5e6c0a37ba70228951",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test rejection of blocks where the `excessBlobGas` changes to a value that\n    is not a multiple of Spec.GAS_PER_BLOB`.\n\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK + 1` blobs, but\n       `excessBlobGas` is off by +/-1\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK - 1` blobs, but\n       `excessBlobGas` is off by +/-1",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_excess_blob_gas.py#L826",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_excess_blob_gas.py::test_invalid_non_multiple_excess_blob_gas[fork_Prague-parent_excess_blobs_7-parent_blobs_5-header_excess_blob_gas_delta_-1-blockchain_test_engine_x-new_blobs_1]": {
+        "network": "Prague",
+        "lastblockhash": "0xddb3e853b97556a5b655a63900d7bf423371cd893bfbd4a887b2b2288a6f753c",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x7943c18792570e6c",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x57bebf6368c9b20f8b1debfac359b74f361615492e8473b7db3fbe30db9b5f42",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x13ea1181071e22b4ad7f08c9d0f90a810ec4231168db3022bcd86031d85866a1",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0xa0000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0xddb3e853b97556a5b655a63900d7bf423371cd893bfbd4a887b2b2288a6f753c",
+                        "transactions": [
+                            "0x03f9010a01808007825208944eb1ae22455ec843c44d7d5650b3918bfbdd775a0180c001f8a5a00100000000000000000000000000000000000000000000000000000000000000a00100000000000000000000000000000000000000000000000000000000000001a00100000000000000000000000000000000000000000000000000000000000002a00100000000000000000000000000000000000000000000000000000000000003a0010000000000000000000000000000000000000000000000000000000000000480a0dc2cc15d99a7eab5f8b872bc47736a1b69fd86155061a630890d8f78e0eef060a001d86702534dd5e246ed55f28db7452d7621fbc0e93b08f08e12b40aa4f183bb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000",
+                        "0x0100000000000000000000000000000000000000000000000000000000000001",
+                        "0x0100000000000000000000000000000000000000000000000000000000000002",
+                        "0x0100000000000000000000000000000000000000000000000000000000000003",
+                        "0x0100000000000000000000000000000000000000000000000000000000000004"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0xddb3e853b97556a5b655a63900d7bf423371cd893bfbd4a887b2b2288a6f753c",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe334e5d405bbfe49ab5a0e34d65bcf1e3b6b8e962c2f27817fd82acf2bff3b6a",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xbffff",
+                        "blockHash": "0xb6a862564e5e268cfdf511786be9ac11ab4343d7e1c64b7f0ae51fba60ef1773",
+                        "transactions": [
+                            "0x03f8850180800782afc894de860f4e5163f51bc68fc20a701d3fd8898a8cbc0180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a05c9ccec82cd5630944c6c01774c7aa1a12e43ed0b6b1ac1f5d9aea9cb10882a8a066b800357b94e2ea6647708bcb2dea024742e064f0b59751a9186867deecfdb3"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INCORRECT_EXCESS_BLOB_GAS"
+            }
+        ],
+        "_info": {
+            "hash": "0x5b74ae1e9a16dc5d6fff1b73798caac9bc5c9da7db1d242d31bdb304dcb5edd2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test rejection of blocks where the `excessBlobGas` changes to a value that\n    is not a multiple of Spec.GAS_PER_BLOB`.\n\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK + 1` blobs, but\n       `excessBlobGas` is off by +/-1\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK - 1` blobs, but\n       `excessBlobGas` is off by +/-1",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_excess_blob_gas.py#L826",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_excess_blob_gas.py::test_invalid_non_multiple_excess_blob_gas[fork_Prague-parent_excess_blobs_7-parent_blobs_5-header_excess_blob_gas_delta_-131071-blockchain_test_engine_x-new_blobs_1]": {
+        "network": "Prague",
+        "lastblockhash": "0x88023b29c9d7083707027de679f29fb2ad3f18b405e6006c33adcc39f80eb67a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x022031a3b5e4eb47",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x6ce5a76a8df0f67ef3955a268f38c2510c098a6c686639ffff5ddbe2f43e3cdd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x478c6a3bdac9b9b190ce93452496974125b983f6220bdfc9ca83a684bf6c16e6",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0xa0000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x88023b29c9d7083707027de679f29fb2ad3f18b405e6006c33adcc39f80eb67a",
+                        "transactions": [
+                            "0x03f9010a018080078252089408931beba558446fe9e5d997ed2cc983b403703d0180c001f8a5a00100000000000000000000000000000000000000000000000000000000000000a00100000000000000000000000000000000000000000000000000000000000001a00100000000000000000000000000000000000000000000000000000000000002a00100000000000000000000000000000000000000000000000000000000000003a0010000000000000000000000000000000000000000000000000000000000000480a08747343fdc916218fe8f9d0c61fd1d3c437161580b5665fe0de9989d033367b1a067ddbe6ba279e701756b4862df790b01a5e5e610ca88ac039622ba6b27353e1c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000",
+                        "0x0100000000000000000000000000000000000000000000000000000000000001",
+                        "0x0100000000000000000000000000000000000000000000000000000000000002",
+                        "0x0100000000000000000000000000000000000000000000000000000000000003",
+                        "0x0100000000000000000000000000000000000000000000000000000000000004"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0x88023b29c9d7083707027de679f29fb2ad3f18b405e6006c33adcc39f80eb67a",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc8d7c6a85745736f4cd5f608f2079eb42dc62c0582145a5794b22a2ff03d2c80",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xa0001",
+                        "blockHash": "0x28de22f91341c989716444d073798e270fca82eb2c4d558d809fef52634699ab",
+                        "transactions": [
+                            "0x03f8850180800782afc894a14bbd4466055c0e2d74334a3f8577c5941b67a30180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a085ff5f219daa8439e26d79e245f087ce4176cc94e0db4fdd7629448c1466f09aa037e6e3ee81aa0a53a6484071d184606dc8105ec6afa6442745ae24b92ace0a67"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INCORRECT_EXCESS_BLOB_GAS"
+            }
+        ],
+        "_info": {
+            "hash": "0x53ba423923c1a7d8d43961baa57b9eae26b73e227468e6786b209a93b9c09bb0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test rejection of blocks where the `excessBlobGas` changes to a value that\n    is not a multiple of Spec.GAS_PER_BLOB`.\n\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK + 1` blobs, but\n       `excessBlobGas` is off by +/-1\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK - 1` blobs, but\n       `excessBlobGas` is off by +/-1",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_excess_blob_gas.py#L826",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_excess_blob_gas.py::test_invalid_non_multiple_excess_blob_gas[fork_Prague-parent_excess_blobs_7-parent_blobs_7-header_excess_blob_gas_delta_1-blockchain_test_engine_x-new_blobs_1]": {
+        "network": "Prague",
+        "lastblockhash": "0xce47977333b680776c5f4197d62e6ec43361d578cee42643acfbc16db130d944",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x34892970511f5f29",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x2aac893c5c4a44cf9d703078b4b244e29e46728af4b6c3d7b6a73c0cb6ef6783",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xcc22167b755b034bac91912913a8d06a83397fa331ce561c375cb8c490e29310",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0xe0000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0xce47977333b680776c5f4197d62e6ec43361d578cee42643acfbc16db130d944",
+                        "transactions": [
+                            "0x03f9014c0180800782520894bebe5b3bef3e71efe13d347263e5d16a51e08c000180c001f8e7a00100000000000000000000000000000000000000000000000000000000000000a00100000000000000000000000000000000000000000000000000000000000001a00100000000000000000000000000000000000000000000000000000000000002a00100000000000000000000000000000000000000000000000000000000000003a00100000000000000000000000000000000000000000000000000000000000004a00100000000000000000000000000000000000000000000000000000000000005a0010000000000000000000000000000000000000000000000000000000000000680a06c0e2aa9afcec158874ae5c032bd653eb7e56b44cd6b0f88bbd29bba12766d18a02e96a06e739547e5767f0de7eb2c63a6da9bdb8a55f5610f76cf3c5563ccb064"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000",
+                        "0x0100000000000000000000000000000000000000000000000000000000000001",
+                        "0x0100000000000000000000000000000000000000000000000000000000000002",
+                        "0x0100000000000000000000000000000000000000000000000000000000000003",
+                        "0x0100000000000000000000000000000000000000000000000000000000000004",
+                        "0x0100000000000000000000000000000000000000000000000000000000000005",
+                        "0x0100000000000000000000000000000000000000000000000000000000000006"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0xce47977333b680776c5f4197d62e6ec43361d578cee42643acfbc16db130d944",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd660077ed18a3b33836ca24d7debad7d7e6a740fbed74d327a18d7fc6b27d404",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x100001",
+                        "blockHash": "0x1beee1e6adfd5ef5e14b2e679c1ab0b22083a294267cab23368a9871429f71d3",
+                        "transactions": [
+                            "0x03f8850180800782afc894bc300539231688271b6a0974cf68149528c484060180c001e1a0010000000000000000000000000000000000000000000000000000000000000080a01497caa2855bdb6906875cc541717866185e3123577f90d8673141e8a88ee338a02787458ca5bc5ae7baefe4594a4f2c690639ad456fc855ff45d9f6ea41c5eab2"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INCORRECT_EXCESS_BLOB_GAS"
+            }
+        ],
+        "_info": {
+            "hash": "0x4d5a3d6a190c3bf2f4262ffcf91469cbaa5eb9ee9a297463d131d401ebabdf58",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test rejection of blocks where the `excessBlobGas` changes to a value that\n    is not a multiple of Spec.GAS_PER_BLOB`.\n\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK + 1` blobs, but\n       `excessBlobGas` is off by +/-1\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK - 1` blobs, but\n       `excessBlobGas` is off by +/-1",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_excess_blob_gas.py#L826",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_excess_blob_gas.py::test_invalid_non_multiple_excess_blob_gas[fork_Prague-parent_excess_blobs_7-parent_blobs_7-header_excess_blob_gas_delta_131071-blockchain_test_engine_x-new_blobs_1]": {
+        "network": "Prague",
+        "lastblockhash": "0x24467b185d2dfcdbd2d35992509f298763e7837eb5dad3d8f5c01b86a9bb379d",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe7271d091d44622d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa39b1eb32fda5f23c8690d2b0ed55aecb21d3171fd9d8a3ff95693cd5b8d2424",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfba8134abefb01f3e929bcd6b35992ebcdcd10e2e6beb5f8fba29bf9da835af2",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0xe0000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x24467b185d2dfcdbd2d35992509f298763e7837eb5dad3d8f5c01b86a9bb379d",
+                        "transactions": [
+                            "0x03f9014c0180800782520894ad791fd80a27049790f521cf1ef9b4d990b59cce0180c001f8e7a00100000000000000000000000000000000000000000000000000000000000000a00100000000000000000000000000000000000000000000000000000000000001a00100000000000000000000000000000000000000000000000000000000000002a00100000000000000000000000000000000000000000000000000000000000003a00100000000000000000000000000000000000000000000000000000000000004a00100000000000000000000000000000000000000000000000000000000000005a0010000000000000000000000000000000000000000000000000000000000000680a012b44b717a327dd3924803a0aa3093b23cbbfd959d9d824d414976127c123dc1a0635cdb44abc8d63c7e2d7a5f72a693ed2e9fb37e7adc9cf14b12fca13c381781"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000",
+                        "0x0100000000000000000000000000000000000000000000000000000000000001",
+                        "0x0100000000000000000000000000000000000000000000000000000000000002",
+                        "0x0100000000000000000000000000000000000000000000000000000000000003",
+                        "0x0100000000000000000000000000000000000000000000000000000000000004",
+                        "0x0100000000000000000000000000000000000000000000000000000000000005",
+                        "0x0100000000000000000000000000000000000000000000000000000000000006"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0x24467b185d2dfcdbd2d35992509f298763e7837eb5dad3d8f5c01b86a9bb379d",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xcdd59fd670edcf4bdaa5ffcf0c5d4f6782d2f585053c87d2791ad14e51c3c541",
+                        "receiptsRoot": "0xc117ad0158b04d4277c8a0d1b440360bf3f011ad7caccf8740df472c96e8f5cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa861",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x11ffff",
+                        "blockHash": "0x78892a09616bb301b88c357aaf13ca1500243969c7155bb0d6dd145f5ea2dd74",
+                        "transactions": [
+                            "0x03f8850180800782afc8944420330566caec0a9e1cb9c17cddfa2cdb5739330180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a047e1474b6dfd31c75742da45adae73440815589baf4be6b20b04c093a04643f4a0319fed1af789f5149e2342a846e1a6c3cc0bddd5048fb936a90b250fc9f3667e"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.INCORRECT_EXCESS_BLOB_GAS"
+            }
+        ],
+        "_info": {
+            "hash": "0xf86230c06c98deee55d896403adeaa4c726b2f896f1ef564c93633499d219736",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test rejection of blocks where the `excessBlobGas` changes to a value that\n    is not a multiple of Spec.GAS_PER_BLOB`.\n\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK + 1` blobs, but\n       `excessBlobGas` is off by +/-1\n    - Parent block contains `TARGET_BLOBS_PER_BLOCK - 1` blobs, but\n       `excessBlobGas` is off by +/-1",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_excess_blob_gas.py#L826",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    }
+}

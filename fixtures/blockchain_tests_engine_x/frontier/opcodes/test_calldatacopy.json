@@ -1,0 +1,1626 @@
+{
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Cancun-blockchain_test_engine_x_from_state_test-cdc 0 0 0]": {
+        "network": "Cancun",
+        "lastblockhash": "0x4058d003cf2b000c47b859bd975d36ab92a0becd38a6a723520534266e246ab4",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xea82e323737f96bf08824fb24222cf8050f97ad7c93a10f614aab692ddbb45e0",
+                        "receiptsRoot": "0x09c7b9ae1c0b878139495b5668db793747d1c7432e10fafd41e9a288b004a0eb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7665",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4058d003cf2b000c47b859bd975d36ab92a0becd38a6a723520534266e246ab4",
+                        "transactions": [
+                            "0xf860800a830186a09459b9ddabaa2d2a2c76c33daee20f0dc915d8f039010325a0b49d16888da2f1fdddedb13629bf83d4fab9a59a98dab109fc76b6abc49060f5a0491ba953d75ffdcb50ce2b5f38083aa8620553a6581ef3a7967b11ecb48a1b63"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2f9445a24b46aa29efef7be571dfc14142732debbc3f0f420fa8318547a4cf35",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Cancun-blockchain_test_engine_x_from_state_test-cdc 0 1 0]": {
+        "network": "Cancun",
+        "lastblockhash": "0x8d16560faa120f0fcb7b37179dc96fb110cbfc9bed81158d70d5e65baf10a279",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x33170f86b4f910f17d054c12b160250510bf7221382314b6492f8f9f07d711af",
+                        "receiptsRoot": "0x09c7b9ae1c0b878139495b5668db793747d1c7432e10fafd41e9a288b004a0eb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7665",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8d16560faa120f0fcb7b37179dc96fb110cbfc9bed81158d70d5e65baf10a279",
+                        "transactions": [
+                            "0xf860800a830186a0943e380ff0077869033024c8283c8486242541d830010226a0e598bc22bcb375220eedf4309d1eacc0f5bd88fd70a2cd17fc7f632227841143a03efce396b15a47495f6678eb80962462367e26f68cf71fdd0571ad25413c25d2"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf2bdd41bc24ef7d990d05930aeb708278302b7c6949bc2707e753c45c2d32b48",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Cancun-blockchain_test_engine_x_from_state_test-cdc 0 1 1]": {
+        "network": "Cancun",
+        "lastblockhash": "0x09787bab7b5e09b4f105f6d995d98f36cd44c199810f8514cbc6dfc5c717c148",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x951417acb9cee825b3fa2b7f3b7ab91e6cc6c95b3cace1645a60d5c4aa48244b",
+                        "receiptsRoot": "0x37fbf4fb99b9eb6615a88430ad291b769ef693df7e0f7eafefbcae69680cac82",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x111e0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x09787bab7b5e09b4f105f6d995d98f36cd44c199810f8514cbc6dfc5c717c148",
+                        "transactions": [
+                            "0xf860800a830186a0946d448f05437d7bd7daa4e3b8bf33bfa5f77c53cd010125a021cdd8261aaa46b35ea03d3f43d357675fbefe1b5b01a12c8b59f5e901a8c8f1a077ae59b12cdd4097a2992a202369f018e009df28c5ea8c2a01c030832aa6d29f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1e594e14a5d3220079d1f96905323b499ab3fd60b3e688bcd9c64e8bdd0b9512",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Cancun-blockchain_test_engine_x_from_state_test-cdc 0 1 2]": {
+        "network": "Cancun",
+        "lastblockhash": "0xebc59391225f4057daf416d56da15fac80edfc14b79cf4ed05fa7caf697e5a8a",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe9e186d7cd44743317a37e1da420eaf518832e951a8338757e15852620caaf33",
+                        "receiptsRoot": "0xb8fbcfd45c948159dbea7af5f117b56da577a0518133c9d58ac6e874fcdfb5f9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x111d4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xebc59391225f4057daf416d56da15fac80edfc14b79cf4ed05fa7caf697e5a8a",
+                        "transactions": [
+                            "0xf860800a830186a09434fa681c0d85cceaa2843d0511377bb715876145010026a09e516f949a2a245b8e65d7b4e28616be30b99679eaaf3a70db109d31bb4374aea0290351c5715f8950206da9835cf666ce8cfa4f3d70e5226a03c07381a810dd62"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1799412972dc0aef08014056675ab38bc8086792577ba40759569448c133ad38",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Cancun-blockchain_test_engine_x_from_state_test-cdc 0 neg6 9]": {
+        "network": "Cancun",
+        "lastblockhash": "0xc587d93d315d0b091ec2f8ded8b5b455413d58a598c5faadaca08d63ed717b55",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb5017eb4218387727a9f8625795fb56248212a674755c7c3069fc4aae1a6c070",
+                        "receiptsRoot": "0xcfb83d583c5126b26d7f39120e13b3cc6e225dda012668fa1722af547b5e406b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7668",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc587d93d315d0b091ec2f8ded8b5b455413d58a598c5faadaca08d63ed717b55",
+                        "transactions": [
+                            "0xf860800a830186a094107ccc906dd3eeb425339c07846bcdfc714b4431010525a0ab4a1212955554ecc6687c6ae24feabe0cd90e9c5cc5915a794672d245db1f51a01e0990b6b136695b40adfd5fd891b64bfd8f59244d5b5dd8a83d75c940937720"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb807e0b0cbcda37feac6b7b23f93ccffad03a63fd14605c2c53c8a8e1532d23b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Cancun-blockchain_test_engine_x_from_state_test-cdc 0 neg6 ff]": {
+        "network": "Cancun",
+        "lastblockhash": "0xe3cedff93c7383fd9bb065708ee924b1a1a29bd715f2936790d09241c7c43111",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd924ffe309e610f439ee66f084baf8035101f768258013272c4b3b490377e267",
+                        "receiptsRoot": "0x265be0971ea348f8730c05bdf94103a7a6ff657accc8be5f116ec07f36605eda",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7692",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe3cedff93c7383fd9bb065708ee924b1a1a29bd715f2936790d09241c7c43111",
+                        "transactions": [
+                            "0xf860800a830186a0942f0ae422741221d4ca4e3bebf65e3ea43ee57848010425a054f352aa3fcc7c6fa96d0d0d757acde22bbbddf069791d9e77abd553cc06b55ea051b68f6c1ccc2e79832686327f00b6beb14df1f904644d8994c8d72d1ea42e83"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7c7bd61b40a278a3703323d3981dd4c35773f09f2aa0c511f10aca36d95857a3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Cancun-blockchain_test_engine_x_from_state_test-sec]": {
+        "network": "Cancun",
+        "lastblockhash": "0xdd576f68f8269309aef2be74453a096b47fd00c3d7d698a76bff4ee2abf8765b",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x49dc87a00682af8814c233bcfb643729b26f1959891165bc1b8374b74a89e5a7",
+                        "receiptsRoot": "0xd632fbfcd8fc6911b4a6a8769a1faee3ff257ae283f301ccbc9de27240d69013",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xc480",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdd576f68f8269309aef2be74453a096b47fd00c3d7d698a76bff4ee2abf8765b",
+                        "transactions": [
+                            "0xf860800a830186a094eab58bc9502699f6630494caa62c4bed9963722e011125a0932ed32aa2da5dcde156d00d16d36391748dd37a96f80a19178db8b2f2aea00aa0391f636c0ce486c937aa77dd4636bd79443572d504f668a5d78846c588329172"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x91a715d73ea91f5468d19fed8264e266d560b7d9a81e7063cfb199ac83e2cf1d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Cancun-blockchain_test_engine_x_from_state_test-underflow]": {
+        "network": "Cancun",
+        "lastblockhash": "0xc497bf976eb8586349a57c4da0035f1f7070c2b03ec054334052b8a28fb28080",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9d3fa6c796195105b4c1d36d2732610963203f2903064a88c4b4e7b0685f5430",
+                        "receiptsRoot": "0x777f1c1c378807634128348e4f0eeca6a0e7f516ea411690ca04266323f671a4",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x186a0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc497bf976eb8586349a57c4da0035f1f7070c2b03ec054334052b8a28fb28080",
+                        "transactions": [
+                            "0xf860800a830186a094218a692a8096a3657b61b483cff1e04941848b73011025a094b02ebbd851a8db2276baf6d5b7274e529505c7c79e72a0790e4025b2520763a011c5bf91997602e132b81117f1e41ff3560569f1116a54de415cbc7af2e5bac1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9f20dcdb1862736d15f9943888465f70112cd8c2257664c791a2ab42d273d075",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Paris-blockchain_test_engine_x_from_state_test-cdc 0 0 0]": {
+        "network": "Paris",
+        "lastblockhash": "0x38c36c194147f0ce5e502716e4ecef5859b8ee62d495bcebccd576188c2457a7",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd1ba1444b38ede85a6b5779a31d385ab96b4e216be2ea06b9b18c825732fab49",
+                        "receiptsRoot": "0x09c7b9ae1c0b878139495b5668db793747d1c7432e10fafd41e9a288b004a0eb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7665",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x38c36c194147f0ce5e502716e4ecef5859b8ee62d495bcebccd576188c2457a7",
+                        "transactions": [
+                            "0xf860800a830186a09459b9ddabaa2d2a2c76c33daee20f0dc915d8f039010325a0b49d16888da2f1fdddedb13629bf83d4fab9a59a98dab109fc76b6abc49060f5a0491ba953d75ffdcb50ce2b5f38083aa8620553a6581ef3a7967b11ecb48a1b63"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xf19d9e28c940ffbc154dc0016f93f69eeee8aa9a84b9d14f2999fd4dfc9e19c8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Paris-blockchain_test_engine_x_from_state_test-cdc 0 1 0]": {
+        "network": "Paris",
+        "lastblockhash": "0x3af6c40b7fea1b4176c2e2f8a4632a456d4102646049b5feb7cc22c6abc27ea0",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x008fb5b4d9978ace73f8530b8ffddd137a71b622c11685dbb2d4fc57677083ed",
+                        "receiptsRoot": "0x09c7b9ae1c0b878139495b5668db793747d1c7432e10fafd41e9a288b004a0eb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7665",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x3af6c40b7fea1b4176c2e2f8a4632a456d4102646049b5feb7cc22c6abc27ea0",
+                        "transactions": [
+                            "0xf860800a830186a0943e380ff0077869033024c8283c8486242541d830010226a0e598bc22bcb375220eedf4309d1eacc0f5bd88fd70a2cd17fc7f632227841143a03efce396b15a47495f6678eb80962462367e26f68cf71fdd0571ad25413c25d2"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x43bd1fbbd1f26447fc94b4c1a0f4c39bcc6a19f1a3a346e1debed630b7be0e5f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Paris-blockchain_test_engine_x_from_state_test-cdc 0 1 1]": {
+        "network": "Paris",
+        "lastblockhash": "0xca46ca0cf7357e1b4569166ea38f5c3d56c602e33be3ed3adea061b9577c9c36",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdc4bef6890b282be513a289ceb8c7f48153948df3b119c2727674542bb07bb05",
+                        "receiptsRoot": "0x37fbf4fb99b9eb6615a88430ad291b769ef693df7e0f7eafefbcae69680cac82",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x111e0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xca46ca0cf7357e1b4569166ea38f5c3d56c602e33be3ed3adea061b9577c9c36",
+                        "transactions": [
+                            "0xf860800a830186a0946d448f05437d7bd7daa4e3b8bf33bfa5f77c53cd010125a021cdd8261aaa46b35ea03d3f43d357675fbefe1b5b01a12c8b59f5e901a8c8f1a077ae59b12cdd4097a2992a202369f018e009df28c5ea8c2a01c030832aa6d29f"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x4e779ca7a4c53a6c84046021f27b8528a21fd9ed3e0e2595917159bcc9c4f024",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Paris-blockchain_test_engine_x_from_state_test-cdc 0 1 2]": {
+        "network": "Paris",
+        "lastblockhash": "0x6ec711478156c093a1abca3a40031d032b27dbfddea8e5fd4636c880c4b52d11",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x45bfabae16fa0a564c9c538bbcda4c1d53e9c64ea4b0a1f9785f4b543d78cb6a",
+                        "receiptsRoot": "0xb8fbcfd45c948159dbea7af5f117b56da577a0518133c9d58ac6e874fcdfb5f9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x111d4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x6ec711478156c093a1abca3a40031d032b27dbfddea8e5fd4636c880c4b52d11",
+                        "transactions": [
+                            "0xf860800a830186a09434fa681c0d85cceaa2843d0511377bb715876145010026a09e516f949a2a245b8e65d7b4e28616be30b99679eaaf3a70db109d31bb4374aea0290351c5715f8950206da9835cf666ce8cfa4f3d70e5226a03c07381a810dd62"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x90e458411cf3ae37abe9921098ffebdcbbec7c509d8610a10e055eb719c374a2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Paris-blockchain_test_engine_x_from_state_test-cdc 0 neg6 9]": {
+        "network": "Paris",
+        "lastblockhash": "0x113be6f1b70460c1d195c70c00213b35c02747d8651d181b9787ddbeff677adb",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x660edad69e0ba7cc931af4e03fb68d1da208c86f7cad9d344af58c5126641185",
+                        "receiptsRoot": "0xcfb83d583c5126b26d7f39120e13b3cc6e225dda012668fa1722af547b5e406b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7668",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x113be6f1b70460c1d195c70c00213b35c02747d8651d181b9787ddbeff677adb",
+                        "transactions": [
+                            "0xf860800a830186a094107ccc906dd3eeb425339c07846bcdfc714b4431010525a0ab4a1212955554ecc6687c6ae24feabe0cd90e9c5cc5915a794672d245db1f51a01e0990b6b136695b40adfd5fd891b64bfd8f59244d5b5dd8a83d75c940937720"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x5046ae708f6d1cd1151a8ab072eb6ca16d9822737c63cd616c035c87f7376646",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Paris-blockchain_test_engine_x_from_state_test-cdc 0 neg6 ff]": {
+        "network": "Paris",
+        "lastblockhash": "0x04bbcb0baa14bf0d47271b14bdcdf3ac284a5bbf16c6978160b67871264955ec",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9145cadf3d001e6cba1ecc19c7fd6081a310a37aa613d9d5c9745d8e5385cd95",
+                        "receiptsRoot": "0x265be0971ea348f8730c05bdf94103a7a6ff657accc8be5f116ec07f36605eda",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7692",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x04bbcb0baa14bf0d47271b14bdcdf3ac284a5bbf16c6978160b67871264955ec",
+                        "transactions": [
+                            "0xf860800a830186a0942f0ae422741221d4ca4e3bebf65e3ea43ee57848010425a054f352aa3fcc7c6fa96d0d0d757acde22bbbddf069791d9e77abd553cc06b55ea051b68f6c1ccc2e79832686327f00b6beb14df1f904644d8994c8d72d1ea42e83"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x36f81dd587cd48f675b2e4f2da1eb42d54a9331564704df2cc96bb856e478472",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Paris-blockchain_test_engine_x_from_state_test-sec]": {
+        "network": "Paris",
+        "lastblockhash": "0x617afca3da747ffbf9a94d82601552ba8498a2aeba5f6804e11e75ec248cc1cc",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x719c98a8a0b1f8ad0b28cbd8bc1040ab13596a15245051427c7ce3662aa2991d",
+                        "receiptsRoot": "0xd632fbfcd8fc6911b4a6a8769a1faee3ff257ae283f301ccbc9de27240d69013",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xc480",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x617afca3da747ffbf9a94d82601552ba8498a2aeba5f6804e11e75ec248cc1cc",
+                        "transactions": [
+                            "0xf860800a830186a094eab58bc9502699f6630494caa62c4bed9963722e011125a0932ed32aa2da5dcde156d00d16d36391748dd37a96f80a19178db8b2f2aea00aa0391f636c0ce486c937aa77dd4636bd79443572d504f668a5d78846c588329172"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x009fd71d7dc3651679a363bec9cf32a79b5516719bfc55777f7723aad11a4345",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Paris-blockchain_test_engine_x_from_state_test-underflow]": {
+        "network": "Paris",
+        "lastblockhash": "0x4a459035ceddc42a8fbbc4501826e1d96fdf4b2b008f9eb0242cd1f8f09f89ba",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6fdce7973a61f2bc85ca2ee5c215c04081274f4aa532761399feb983da14e846",
+                        "receiptsRoot": "0x777f1c1c378807634128348e4f0eeca6a0e7f516ea411690ca04266323f671a4",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x186a0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x4a459035ceddc42a8fbbc4501826e1d96fdf4b2b008f9eb0242cd1f8f09f89ba",
+                        "transactions": [
+                            "0xf860800a830186a094218a692a8096a3657b61b483cff1e04941848b73011025a094b02ebbd851a8db2276baf6d5b7274e529505c7c79e72a0790e4025b2520763a011c5bf91997602e132b81117f1e41ff3560569f1116a54de415cbc7af2e5bac1"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x25e420b06eb0c450b27acdd340b085b8ff8d058eee2bca9cc3fad311f631f361",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Prague-blockchain_test_engine_x_from_state_test-cdc 0 0 0]": {
+        "network": "Prague",
+        "lastblockhash": "0x561d732f1ded378dcfe5a4fb6cf926688be6cca9bafc5ceb2dc2591025f16234",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe6bfc384939833559cb1c745303b32c8a09585398b2a12187058875ecfdbebae",
+                        "receiptsRoot": "0x09c7b9ae1c0b878139495b5668db793747d1c7432e10fafd41e9a288b004a0eb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7665",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x561d732f1ded378dcfe5a4fb6cf926688be6cca9bafc5ceb2dc2591025f16234",
+                        "transactions": [
+                            "0xf860800a830186a09459b9ddabaa2d2a2c76c33daee20f0dc915d8f039010325a0b49d16888da2f1fdddedb13629bf83d4fab9a59a98dab109fc76b6abc49060f5a0491ba953d75ffdcb50ce2b5f38083aa8620553a6581ef3a7967b11ecb48a1b63"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2d29a37b30c56eb64292b094e477041be2080b6aab51b8ef70b9f6e8ce5b293a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Prague-blockchain_test_engine_x_from_state_test-cdc 0 1 0]": {
+        "network": "Prague",
+        "lastblockhash": "0xdbd3986f5d975eeb6002287aa4d2338522eb3d87c5deeec36a6be87d602e26d2",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9585f672994059adfb87bf038ecfcc33b5a72e8fd81592a78ac02d70aeae1bc9",
+                        "receiptsRoot": "0x09c7b9ae1c0b878139495b5668db793747d1c7432e10fafd41e9a288b004a0eb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7665",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdbd3986f5d975eeb6002287aa4d2338522eb3d87c5deeec36a6be87d602e26d2",
+                        "transactions": [
+                            "0xf860800a830186a0943e380ff0077869033024c8283c8486242541d830010226a0e598bc22bcb375220eedf4309d1eacc0f5bd88fd70a2cd17fc7f632227841143a03efce396b15a47495f6678eb80962462367e26f68cf71fdd0571ad25413c25d2"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x71a0418c9b49737ba362fcd91dd4b190a045faa22d9c4d6460e637ff49dccc8e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Prague-blockchain_test_engine_x_from_state_test-cdc 0 1 1]": {
+        "network": "Prague",
+        "lastblockhash": "0xe81af6caee4ec568dd3a5545d26c722ee675e157471d103c5193571fa0f5b289",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2610bccba8da561fa28ea3b7eeba4cc472802f8513977ff8a1d90ee8054867a2",
+                        "receiptsRoot": "0x37fbf4fb99b9eb6615a88430ad291b769ef693df7e0f7eafefbcae69680cac82",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x111e0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe81af6caee4ec568dd3a5545d26c722ee675e157471d103c5193571fa0f5b289",
+                        "transactions": [
+                            "0xf860800a830186a0946d448f05437d7bd7daa4e3b8bf33bfa5f77c53cd010125a021cdd8261aaa46b35ea03d3f43d357675fbefe1b5b01a12c8b59f5e901a8c8f1a077ae59b12cdd4097a2992a202369f018e009df28c5ea8c2a01c030832aa6d29f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x65bbcca0ca16a455f269980fb7235e84139d90c1f7bb80b311f19742ef63e479",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Prague-blockchain_test_engine_x_from_state_test-cdc 0 1 2]": {
+        "network": "Prague",
+        "lastblockhash": "0xb4aefc06c7dbb8cfd9758e328ad1706ca42a008567854415af4c37ed0833357f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4eebcfce44d94cfa5ddc74f6c98bd59d8661f84ea2c07e88c99af919f7cf5ac6",
+                        "receiptsRoot": "0xb8fbcfd45c948159dbea7af5f117b56da577a0518133c9d58ac6e874fcdfb5f9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x111d4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb4aefc06c7dbb8cfd9758e328ad1706ca42a008567854415af4c37ed0833357f",
+                        "transactions": [
+                            "0xf860800a830186a09434fa681c0d85cceaa2843d0511377bb715876145010026a09e516f949a2a245b8e65d7b4e28616be30b99679eaaf3a70db109d31bb4374aea0290351c5715f8950206da9835cf666ce8cfa4f3d70e5226a03c07381a810dd62"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf983aabba7650678e6700cf2aa7d9c6b9ab62852d2d3040315e1c918bf31574c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Prague-blockchain_test_engine_x_from_state_test-cdc 0 neg6 9]": {
+        "network": "Prague",
+        "lastblockhash": "0x9eb7143dab4bc02afbc6f0f9000392e06722787c64e423a2b5c3d9d1a6328ea9",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9a2611142f49d8a44d543724e082a9d794c095e77fb19ef6666b84a0b73eae81",
+                        "receiptsRoot": "0xcfb83d583c5126b26d7f39120e13b3cc6e225dda012668fa1722af547b5e406b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7668",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9eb7143dab4bc02afbc6f0f9000392e06722787c64e423a2b5c3d9d1a6328ea9",
+                        "transactions": [
+                            "0xf860800a830186a094107ccc906dd3eeb425339c07846bcdfc714b4431010525a0ab4a1212955554ecc6687c6ae24feabe0cd90e9c5cc5915a794672d245db1f51a01e0990b6b136695b40adfd5fd891b64bfd8f59244d5b5dd8a83d75c940937720"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x55f517c697001ac55fab6842a230ad366094c3c7b13568b47216cc7751adaf56",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Prague-blockchain_test_engine_x_from_state_test-cdc 0 neg6 ff]": {
+        "network": "Prague",
+        "lastblockhash": "0xdbe29ee1e2f61387006ebb6b0c033d45ad35d40e9e06d62225db884b11602295",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfffc4bc6419c781b18639bb09d36aaeb07661b141197c1bbc31aa502d459572f",
+                        "receiptsRoot": "0x265be0971ea348f8730c05bdf94103a7a6ff657accc8be5f116ec07f36605eda",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7692",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdbe29ee1e2f61387006ebb6b0c033d45ad35d40e9e06d62225db884b11602295",
+                        "transactions": [
+                            "0xf860800a830186a0942f0ae422741221d4ca4e3bebf65e3ea43ee57848010425a054f352aa3fcc7c6fa96d0d0d757acde22bbbddf069791d9e77abd553cc06b55ea051b68f6c1ccc2e79832686327f00b6beb14df1f904644d8994c8d72d1ea42e83"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb3cbf64ff9f07f75ee8cd815c564b8d728855e7565a5b88158cb5acdc6a879b7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Prague-blockchain_test_engine_x_from_state_test-sec]": {
+        "network": "Prague",
+        "lastblockhash": "0x49273923a9b013aa41e2066a3f7cdcd8b74fdf386a1ee67ac7f3d1f3566ebe1a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x412c1225694b073a116dd541e45752d4b32a5f9e0daa9fccda1d9dd03813292c",
+                        "receiptsRoot": "0xd632fbfcd8fc6911b4a6a8769a1faee3ff257ae283f301ccbc9de27240d69013",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xc480",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x49273923a9b013aa41e2066a3f7cdcd8b74fdf386a1ee67ac7f3d1f3566ebe1a",
+                        "transactions": [
+                            "0xf860800a830186a094eab58bc9502699f6630494caa62c4bed9963722e011125a0932ed32aa2da5dcde156d00d16d36391748dd37a96f80a19178db8b2f2aea00aa0391f636c0ce486c937aa77dd4636bd79443572d504f668a5d78846c588329172"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x00f1615cd52683099b8df571370ba7553d0de86450f85678c450948a80682f8f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Prague-blockchain_test_engine_x_from_state_test-underflow]": {
+        "network": "Prague",
+        "lastblockhash": "0x7d48b3f83a63dc999f4a2618b3146194735c3211909111c6e5a576f2258e8072",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf3c762fb8297ac34cecb13ba53c561289044be7111f309eec9e14c2fc2d5d277",
+                        "receiptsRoot": "0x777f1c1c378807634128348e4f0eeca6a0e7f516ea411690ca04266323f671a4",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x186a0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7d48b3f83a63dc999f4a2618b3146194735c3211909111c6e5a576f2258e8072",
+                        "transactions": [
+                            "0xf860800a830186a094218a692a8096a3657b61b483cff1e04941848b73011025a094b02ebbd851a8db2276baf6d5b7274e529505c7c79e72a0790e4025b2520763a011c5bf91997602e132b81117f1e41ff3560569f1116a54de415cbc7af2e5bac1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xfd4aba096af6bc1e6e9a28ca9b164c4b995dbe79b2d3b9fe398978981a2c83a9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Shanghai-blockchain_test_engine_x_from_state_test-cdc 0 0 0]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x6846aa2acb527cc915d6f2cc145ddb80499396439c5ec30a97fb4ddf510cf951",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xa065f73147747d25213e7f55900f36bc8b5b8056b7ac3646a49129b044ddca96",
+                        "receiptsRoot": "0x09c7b9ae1c0b878139495b5668db793747d1c7432e10fafd41e9a288b004a0eb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7665",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x6846aa2acb527cc915d6f2cc145ddb80499396439c5ec30a97fb4ddf510cf951",
+                        "transactions": [
+                            "0xf860800a830186a09459b9ddabaa2d2a2c76c33daee20f0dc915d8f039010325a0b49d16888da2f1fdddedb13629bf83d4fab9a59a98dab109fc76b6abc49060f5a0491ba953d75ffdcb50ce2b5f38083aa8620553a6581ef3a7967b11ecb48a1b63"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xa54040fbb05e6ca732e6a7a20c80e0a1fefa4617949367c289187c616a4690af",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Shanghai-blockchain_test_engine_x_from_state_test-cdc 0 1 0]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x5bec3abdbe405881bd00c6b88a513c1a174b0b031faabc9f27edc1c4ce08ac20",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0cf01eb3aa2f39df56f83e7d360c5f14dd49a2fc742f7c6ae9ff6d13eff34072",
+                        "receiptsRoot": "0x09c7b9ae1c0b878139495b5668db793747d1c7432e10fafd41e9a288b004a0eb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7665",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x5bec3abdbe405881bd00c6b88a513c1a174b0b031faabc9f27edc1c4ce08ac20",
+                        "transactions": [
+                            "0xf860800a830186a0943e380ff0077869033024c8283c8486242541d830010226a0e598bc22bcb375220eedf4309d1eacc0f5bd88fd70a2cd17fc7f632227841143a03efce396b15a47495f6678eb80962462367e26f68cf71fdd0571ad25413c25d2"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xa9a2ed960b830876bc51ccbef79dc9d713c6f978120b177c0ac7d47c09d04b78",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Shanghai-blockchain_test_engine_x_from_state_test-cdc 0 1 1]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xb370b84f214d0a2c5890c085e98587fbcf46b06e3eef4310621a0b677c47fda9",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb795d30416c1a75216f9e78a99893af4ad40d7c4bf7d9be71d30028dee923499",
+                        "receiptsRoot": "0x37fbf4fb99b9eb6615a88430ad291b769ef693df7e0f7eafefbcae69680cac82",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x111e0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb370b84f214d0a2c5890c085e98587fbcf46b06e3eef4310621a0b677c47fda9",
+                        "transactions": [
+                            "0xf860800a830186a0946d448f05437d7bd7daa4e3b8bf33bfa5f77c53cd010125a021cdd8261aaa46b35ea03d3f43d357675fbefe1b5b01a12c8b59f5e901a8c8f1a077ae59b12cdd4097a2992a202369f018e009df28c5ea8c2a01c030832aa6d29f"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x03ca777822922c150954471ed336dffd0594214e0945ba72528b954d871fd897",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Shanghai-blockchain_test_engine_x_from_state_test-cdc 0 1 2]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x353ad6d21ce9a1b1a5720c48cd56928b3e4ca2887f6617fd61def779d7f5b717",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb455343dd2767ae19e6367af1e7e5d6d91381943ee0ba5b7f7616127c7b8214c",
+                        "receiptsRoot": "0xb8fbcfd45c948159dbea7af5f117b56da577a0518133c9d58ac6e874fcdfb5f9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x111d4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x353ad6d21ce9a1b1a5720c48cd56928b3e4ca2887f6617fd61def779d7f5b717",
+                        "transactions": [
+                            "0xf860800a830186a09434fa681c0d85cceaa2843d0511377bb715876145010026a09e516f949a2a245b8e65d7b4e28616be30b99679eaaf3a70db109d31bb4374aea0290351c5715f8950206da9835cf666ce8cfa4f3d70e5226a03c07381a810dd62"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xb2887e77619024f4a9c599dbbcf18fa5f13ecb80fdbcc67c5c17548384902b4c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Shanghai-blockchain_test_engine_x_from_state_test-cdc 0 neg6 9]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x8cc297c78d9636b5fab2d8aca5ae39bf8bf5d65b58648bc11ace5842e1cb1fb0",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd3e6e56477cd8ff397f2955fed4f21514aafcb70d95b9ce24060a3dcd6090267",
+                        "receiptsRoot": "0xcfb83d583c5126b26d7f39120e13b3cc6e225dda012668fa1722af547b5e406b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7668",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x8cc297c78d9636b5fab2d8aca5ae39bf8bf5d65b58648bc11ace5842e1cb1fb0",
+                        "transactions": [
+                            "0xf860800a830186a094107ccc906dd3eeb425339c07846bcdfc714b4431010525a0ab4a1212955554ecc6687c6ae24feabe0cd90e9c5cc5915a794672d245db1f51a01e0990b6b136695b40adfd5fd891b64bfd8f59244d5b5dd8a83d75c940937720"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x92e39952613bc836d7e419a79b2dcbfd172b25c1c904d1e3d5f4a32a8282f169",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Shanghai-blockchain_test_engine_x_from_state_test-cdc 0 neg6 ff]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xb80d6afe1ddcaeeb0413f7e68e9429edbb03e36a9a53c316ea64b4d40f38d78a",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd5c59ac9ba405e415ff3022a1c8bd9d6b48621fc963d1674482d8f580f2ca4a0",
+                        "receiptsRoot": "0x265be0971ea348f8730c05bdf94103a7a6ff657accc8be5f116ec07f36605eda",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7692",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb80d6afe1ddcaeeb0413f7e68e9429edbb03e36a9a53c316ea64b4d40f38d78a",
+                        "transactions": [
+                            "0xf860800a830186a0942f0ae422741221d4ca4e3bebf65e3ea43ee57848010425a054f352aa3fcc7c6fa96d0d0d757acde22bbbddf069791d9e77abd553cc06b55ea051b68f6c1ccc2e79832686327f00b6beb14df1f904644d8994c8d72d1ea42e83"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xcb64eae9d9796e81f935239075bf58eb8b83fb829e4211917cb7301a170df5da",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Shanghai-blockchain_test_engine_x_from_state_test-sec]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x415e41a3ff386f8ab33c8ad642a9a79ca4d569475f5b4e0281c5a638817d366c",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfa87c554a0d1b057643239d2fcf77c94ed1d6f3d198a3617b7edc0d71e95b51e",
+                        "receiptsRoot": "0xd632fbfcd8fc6911b4a6a8769a1faee3ff257ae283f301ccbc9de27240d69013",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xc480",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x415e41a3ff386f8ab33c8ad642a9a79ca4d569475f5b4e0281c5a638817d366c",
+                        "transactions": [
+                            "0xf860800a830186a094eab58bc9502699f6630494caa62c4bed9963722e011125a0932ed32aa2da5dcde156d00d16d36391748dd37a96f80a19178db8b2f2aea00aa0391f636c0ce486c937aa77dd4636bd79443572d504f668a5d78846c588329172"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xe911e092871a63464bd8fcc05f676df823b9ee92830cf3605d78694899360fa9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatacopy.py::test_calldatacopy[fork_Shanghai-blockchain_test_engine_x_from_state_test-underflow]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x49316e4cec6fe40d7034ba4dda24ebd7a757c4bed3d973fbf4019d8153dacc68",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x13a63b7a112adab712ecf892cb82507617e9ce27679390f15cc4bc9f97456fa4",
+                        "receiptsRoot": "0x777f1c1c378807634128348e4f0eeca6a0e7f516ea411690ca04266323f671a4",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x186a0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x49316e4cec6fe40d7034ba4dda24ebd7a757c4bed3d973fbf4019d8153dacc68",
+                        "transactions": [
+                            "0xf860800a830186a094218a692a8096a3657b61b483cff1e04941848b73011025a094b02ebbd851a8db2276baf6d5b7274e529505c7c79e72a0790e4025b2520763a011c5bf91997602e132b81117f1e41ff3560569f1116a54de415cbc7af2e5bac1"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x1fdac4744e632b3154a1df651aa08ed09d59dee3d9ff0530402c79716ea3d6f9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATACOPY` opcode.\n\n    Based on https://github.com/ethereum/tests/blob/ae4791077e8fcf716136e70fe8392f1a1f1495fb/src/GeneralStateTestsFiller/VMTests/vmTests/calldatacopyFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatacopy.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

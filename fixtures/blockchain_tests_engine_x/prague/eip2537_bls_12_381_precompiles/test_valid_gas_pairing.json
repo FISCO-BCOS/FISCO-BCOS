@@ -1,0 +1,65 @@
+{
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_variable_length_input_contracts.py::test_valid_gas_pairing[fork_Prague-full_discount_table-blockchain_test_engine_x_from_state_test-precompile_address_15--exact_gas]": {
+        "network": "Prague",
+        "lastblockhash": "0x0474f911056bd8e62ef920d15792bde41c36fd2cd42bb1e815ce0a1660df81bc",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4479f00af1f65d22",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x3f4c2e5bd981535bb07972b465e9c523b4afae1b342b398417a5223c464478b2",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe9bebd35e365e961bee442534d8032567c985d81ee2f0f727567a0a85259ee8d",
+                        "receiptsRoot": "0x77a00bb6173971dc268c0e6b87b2f1f513ce7e53546591d93c24edac0285212f",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x7b1508",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0474f911056bd8e62ef920d15792bde41c36fd2cd42bb1e815ce0a1660df81bc",
+                        "transactions": [
+                            "0xf860800a837b2a989409ffda7681090ec02fa25b2ebcbe7fc0b62c5cf7808025a0755ceb9f9a6df479a8064b6216e83a38932d3d34da8cc7634e592db193c8b57aa05bc4c3b29601af2e07dccc272c8c7cb53df021e117a696c9ef610bc121970826"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6a9a257afc26afcb7a2594077a213346878b617d26324f0f000e14aeaf310883",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_PAIRING precompile, by expecting the call to succeed for all\n    possible input lengths (up to k == PAIRINGS_TO_TEST).\n\n    If any of the calls fails, the test will fail.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_variable_length_input_contracts.py#L603",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    }
+}

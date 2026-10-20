@@ -1,0 +1,65 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py::test_delegation_replacement_call_previous_contract[fork_Prague-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x6cf580599c4f0fe323088e8249a1dfc3b6fdb09b4276ec5dea348702b273e7ad",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3bb66e253a9b45d6b2c5ffac98944d19caff08b1a8a82e2cfaf4a91458e6e344",
+                        "receiptsRoot": "0x78497ec6e35e1ec59fb9673373652f087a3df013876fb5acacac1ad95e78fcf2",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xe388",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x6cf580599c4f0fe323088e8249a1dfc3b6fdb09b4276ec5dea348702b273e7ad",
+                        "transactions": [
+                            "0x04f8c1018080078307a120941368c4676b252e9057d9079ff8d4062dc575a73c8080c0f85cf85a8094c042a3cef1b85ff2b989e620ce86eb30b78138fe0180a0b1424448a2afaa76b4eb8693c828c45e798f5ff4ee909de86090a2ae1ab09a25a04852622429cff61e6824b90aa230f43646087d9ce77e2366ddca5391a1446a2c80a09ca3ae4af4180feeafeeed43fb539e877a60421e679c6eee1ebb05c62fd539daa04ed7200e96476ffc83b74aa8bb33c88f5245d004d51b743de0b2f145043f232d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x8aec5c63bda81ae07b90443aaa9278f33ec04f3f398875f4046c86b7ccd3e0c1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test setting the code of an EOA that already has delegation, calling the\n    previous delegated contract. Previous contract shouldn't be warm when doing\n    the CALL.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py#L1954",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

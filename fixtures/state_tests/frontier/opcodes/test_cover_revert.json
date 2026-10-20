@@ -1,0 +1,171 @@
+{
+    "tests/frontier/opcodes/test_all_opcodes.py::test_cover_revert[fork_Cancun-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x0a16f360235334164b5f50ca2fa0d37e420cedb8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x600160015560006000fd"
+            ],
+            "sender": "0x0a16f360235334164b5f50ca2fa0d37e420cedb8",
+            "secretKey": "0xf5f0650b2e65e494cf980df8220fc1635987686c02e1ab1184a2a2de8bf696f7",
+            "to": ""
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xdfe3e551e5a9ad38d8e078915698609e11a4fdd5fd4c0db4213a4532ab34ccee",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf856800a830f424080808a600160015560006000fd1ba0aeb31a2cc02627d0117ed31cc20f490a9a0fd3f313eaf459cc45092b9467c67da07af3ebeaa748580d1fe8c12e92039fa199a8b299230f62577478ff86f405f3e9",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a16f360235334164b5f50ca2fa0d37e420cedb8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de94848c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0371d6",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa8c501403b200712f5a6ac4ac9d69873f1cd456d4d2a86d8a73493c86391152d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Cover state revert from original tests for the coverage script.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_all_opcodes.py#L128",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_all_opcodes.py::test_cover_revert[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x0a16f360235334164b5f50ca2fa0d37e420cedb8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x600160015560006000fd"
+            ],
+            "sender": "0x0a16f360235334164b5f50ca2fa0d37e420cedb8",
+            "secretKey": "0xf5f0650b2e65e494cf980df8220fc1635987686c02e1ab1184a2a2de8bf696f7",
+            "to": ""
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xdfe3e551e5a9ad38d8e078915698609e11a4fdd5fd4c0db4213a4532ab34ccee",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf856800a830f424080808a600160015560006000fd1ba0aeb31a2cc02627d0117ed31cc20f490a9a0fd3f313eaf459cc45092b9467c67da07af3ebeaa748580d1fe8c12e92039fa199a8b299230f62577478ff86f405f3e9",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x0a16f360235334164b5f50ca2fa0d37e420cedb8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de94848c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0371d6",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x821705e5b35892034c8b2d552cf560f05445d217ac8b93991c8e858afa49b0eb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Cover state revert from original tests for the coverage script.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_all_opcodes.py#L128",
+            "fixture-format": "state_test"
+        }
+    }
+}

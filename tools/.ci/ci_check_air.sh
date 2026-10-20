@@ -295,6 +295,36 @@ export RUN_DMC="false"
 init ""
 expand_node ""
 check_consensus
+# ops_checks_pass <exit-code> <json-file>: status exits 2 when a check is in state "fail". The only
+# failure a healthy idle chain shows is consensus_stable: a fresh chain stays in timeout until its
+# first block, and until #5643 every block is followed by one consensus-timeout view change about
+# one timeout later; a snapshot can land inside either. Exit 2 passes when that is the sole
+# failing check.
+ops_checks_pass()
+{
+    [[ "${1}" == "0" ]] && return 0
+    [[ "${1}" == "2" ]] && jq -e '[.checks[] | select(.state == "fail") | .name] == ["consensus_stable"]' "${2}" > /dev/null
+}
+# built-in ops commands run beside the Java console tests for one release cycle; the local
+# socket under node0/data makes them independent of the RPC port's TLS setting
+ops_tool_test()
+{
+    LOG_INFO "=== ops tool: status + tx smoke on node0 ==="
+    ${fisco_bcos_path} status --node-dir ${current_path}/nodes/127.0.0.1/node0 --json > ${current_path}/ops_status.json
+    if ! ops_checks_pass ${?} ${current_path}/ops_status.json; then
+        LOG_ERROR "ops status failed"
+        cat ${current_path}/ops_status.json
+        exit 1
+    fi
+    ${fisco_bcos_path} tx smoke --node-dir ${current_path}/nodes/127.0.0.1/node0 --json > ${current_path}/ops_smoke.json
+    if [[ ${?} != "0" ]]; then
+        LOG_ERROR "ops tx smoke failed"
+        cat ${current_path}/ops_smoke.json
+        exit 1
+    fi
+    LOG_INFO "=== ops tool: success ==="
+}
+ops_tool_test
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "console_integrationTest error"

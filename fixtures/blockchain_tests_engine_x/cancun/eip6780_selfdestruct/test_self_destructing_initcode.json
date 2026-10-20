@@ -1,0 +1,1330 @@
+{
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Cancun-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_0-create_opcode_CREATE2]": {
+        "network": "Cancun",
+        "lastblockhash": "0x43d58664040875dada5e5d0432d01ea5acf2c664d62661279f5c103f43dfb1a5",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd42b6af339f9aba389547883f14094e135468dcd925303dbaebcae34fba4b086",
+                        "receiptsRoot": "0x2a84469e371b2efb8cb92f00e24ea3279ab5e02c6f6ab96a825a36985b018a6b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2870a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x43d58664040875dada5e5d0432d01ea5acf2c664d62661279f5c103f43dfb1a5",
+                        "transactions": [
+                            "0xf8ac800a8307a1208080b85f60256000600073b1dbcdbc4693945c0e37de6f4c7419117aeeb0583c6000602560006000f560005573fe4846e17ad0228be2dad3fff8038829aa56a8683b60015573fe4846e17ad0228be2dad3fff8038829aa56a8683f60025560016025f325a04943c8d768f817e52b3aa3fabe5d8ff847f4626c87cccfdd3ba40807bd9be771a020c376b48fcf98a4575dbbb7d56da88305758daab51ac66f442ccbd95221f2d9"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x40e0c787395bc487fc7f84751f2eaeb80162076b1e4f972ca2ebd02251a07bda",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Cancun-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_0-create_opcode_CREATE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x3e554a41f07905ab31e437849f59b825c5d7a995bd19d37fdc3d12d1610a2fb1",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x623a114aed7ebe3a518fd6007d242896546d3422d4701f19355ab5468e336cee",
+                        "receiptsRoot": "0x1069e7ea37105aef7ca67e84236004c3e1bd2fab716bc93aa063476ea9569820",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x286e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3e554a41f07905ab31e437849f59b825c5d7a995bd19d37fdc3d12d1610a2fb1",
+                        "transactions": [
+                            "0xf8a9800a8307a1208080b85d60256000600073faf8077de85b153d2907533907e1ef83d9ba3a183c602560006000f060005573c856a8cabc0b568adb5261e1f0b00ec3702ac1de3b60015573c856a8cabc0b568adb5261e1f0b00ec3702ac1de3f60025560016025f325a09eeac7efe31b50f51e54bd8d411d834290c4f4d57fcbe83b5cdba560b5a679919f04289302c31980e10f724863960332bac7e845ba19d769eeb0331947616df1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb618243d8a839ace3f1462640d334693ebcc16250d1f28c60bbe05b3c72afe9b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Cancun-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_1-create_opcode_CREATE2]": {
+        "network": "Cancun",
+        "lastblockhash": "0x916252aeef1868ef32ae9eafdb7a9d29d48b965bdc98f2bd055be33061bcba91",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9399f483c06ff91ef2d45954242dd8e9d4175f21911ba7da4344b673b19cfb33",
+                        "receiptsRoot": "0x1cc6c5f0c5e31b7f86a32e6d3ed7f324376853df44c32f789a526fb3248898c2",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea73",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x916252aeef1868ef32ae9eafdb7a9d29d48b965bdc98f2bd055be33061bcba91",
+                        "transactions": [
+                            "0xf8e9800a8307a1208080b89c602560006000739a8693013f2d8c7299d6909e271c588bca1014d93c6000602560006000f56000557371b36e6fda1fd69b9277cf12c7a74ad39e9129133b6001557371b36e6fda1fd69b9277cf12c7a74ad39e9129133f600255600060006000600060007371b36e6fda1fd69b9277cf12c7a74ad39e91291345f16003557371b36e6fda1fd69b9277cf12c7a74ad39e9129133160045560016025f325a0bde8c5331b68c48a9410849c7ed97f4afb08831a56f761d5c56cbab053745926a079e275b7c6e49b474bff1b067615a3f83f6bb7bb196c2d5ac105a526c737bafd"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x8b12fee6c1c5b5d0ec1bd8b3a7230e263b548d350bde8c3372b57c0f0964ced9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Cancun-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_1-create_opcode_CREATE]": {
+        "network": "Cancun",
+        "lastblockhash": "0xef4220cefd89b70907153a912199aa3f49891419835103af1b261f3a0fa21233",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8b68533c277a2744edc8cf309a17d05cfd88e1aefefdd318c01fb171a63b79c4",
+                        "receiptsRoot": "0x716f1e8fc4340415bb1adc13f0f7d7cd536f626c67d8c95b3d06547920218d56",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea50",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xef4220cefd89b70907153a912199aa3f49891419835103af1b261f3a0fa21233",
+                        "transactions": [
+                            "0xf8e7800a8307a1208080b89a60256000600073718d5f210c7b9da18fc08f98d64bf974d3499b0a3c602560006000f0600055735b0841b71ada8b3bf582f21b3bda420af467ef2c3b600155735b0841b71ada8b3bf582f21b3bda420af467ef2c3f60025560006000600060006000735b0841b71ada8b3bf582f21b3bda420af467ef2c45f1600355735b0841b71ada8b3bf582f21b3bda420af467ef2c3160045560016025f326a02e7702ee015ec4b83136a824428487dcb35c7b5c4a2d88da5e88a740cc77a157a03e7f1c2b76852199c4c301388672d2080a6052cf465a84cf709717fac2810135"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x26567fe3fd770e80f5a923ae1a0c8b098a2b790ae6d387c8ae3ae5930b265554",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Cancun-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_0-create_opcode_CREATE2]": {
+        "network": "Cancun",
+        "lastblockhash": "0x7f0131f6550f73102cb1405151d31159faa8e060ae5ea5e70b3786dd117d3d5b",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfe8f7c38d787467665f0f680194e6d92a19c90af144236aaa9dc67910d499e76",
+                        "receiptsRoot": "0xb34de6781b6c720d1f2cb81232bb8b1382cdf57518e517344e716fa5c8b826ad",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x286fe",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7f0131f6550f73102cb1405151d31159faa8e060ae5ea5e70b3786dd117d3d5b",
+                        "transactions": [
+                            "0xf8ac800a8307a1208080b85f60256000600073a1edacb585dd715da7359fcfe7198adafa6dbc003c6000602560006000f5600055730feffc7c7be955e04d63bee45cc368190c8a9e663b600155730feffc7c7be955e04d63bee45cc368190c8a9e663f60025560016025f325a0086a1e6acb77462a959e66d08f246c1abe799a59229cf23c40f6530dfb20445aa017b1defd0a0167cd66a008f680385f1afba2dc009cf82986efab13a681672e44"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x390754f1d8a5bfb5a83c15d3103f82b6f93d7bea0a3c12a00f7c410a92aa1720",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Cancun-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_0-create_opcode_CREATE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x128aa7450e8ca8a3b4b2c878108ad9bafcbc8144084d2d79fb34c3a4f5bb1dc0",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x00f1a4fb1993d3e40cafc60737ff619f393405c385da6a1b22e0045ee52605ed",
+                        "receiptsRoot": "0x1069e7ea37105aef7ca67e84236004c3e1bd2fab716bc93aa063476ea9569820",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x286e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x128aa7450e8ca8a3b4b2c878108ad9bafcbc8144084d2d79fb34c3a4f5bb1dc0",
+                        "transactions": [
+                            "0xf8aa800a8307a1208080b85d6025600060007340b1828924d7ab68cd1e1c0344f93f2721c5d0573c602560006000f0600055731fd69af63938dcf2cc38b70dc9b7f6654987f7543b600155731fd69af63938dcf2cc38b70dc9b7f6654987f7543f60025560016025f325a0c69859ab9fe641bd95c1456e82d00e1e94a741f0d632d8cac3468b8e0ecef214a021e53607b983bb8afd4cbc12294ef404bd9747ff891860eca01356dfdaae5652"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x754755bbe015eddbd639116da352a5c68cfec4a428b180a574550a216625bfca",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Cancun-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_1-create_opcode_CREATE2]": {
+        "network": "Cancun",
+        "lastblockhash": "0x09dc8c10d7513944fdae96dab81d9af1fc14c0f5e44e101786314e9f4f73b99a",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9ca51a157dc954f26bbf6795831faa92cb10a565d256ca141359c9dcc1717d36",
+                        "receiptsRoot": "0x1cc6c5f0c5e31b7f86a32e6d3ed7f324376853df44c32f789a526fb3248898c2",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea73",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x09dc8c10d7513944fdae96dab81d9af1fc14c0f5e44e101786314e9f4f73b99a",
+                        "transactions": [
+                            "0xf8e9800a8307a1208080b89c60256000600073ae931243e2a6ecf580bcf948851bc36ff8882cba3c6000602560006000f56000557342456dc2a0e44a9edc56ce50fc34290ea027dcd93b6001557342456dc2a0e44a9edc56ce50fc34290ea027dcd93f600255600060006000600060007342456dc2a0e44a9edc56ce50fc34290ea027dcd945f16003557342456dc2a0e44a9edc56ce50fc34290ea027dcd93160045560016025f325a01ff80d6b654c8c3265cb010317f4147d42311833eaebf9a1ee056cc754e49256a07d837ec804c70ee7776c25e0edfdf896e9f2ebf7868915d10ab5ed6f50a45ca6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1af48d19c00fdbc6c7e4fdaca615c2c4271d1b52073f541cbfd2e67d9280a3d3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Cancun-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_1-create_opcode_CREATE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x3f97f360f5df99763023af9781cf0d12cac5f9fc8c5b6514827105cb0f3b132e",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3ed46627f97ac287d1b35f177e3b84c9d196f3f6bd493e24418b79dd28e065f1",
+                        "receiptsRoot": "0x716f1e8fc4340415bb1adc13f0f7d7cd536f626c67d8c95b3d06547920218d56",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea50",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3f97f360f5df99763023af9781cf0d12cac5f9fc8c5b6514827105cb0f3b132e",
+                        "transactions": [
+                            "0xf8e7800a8307a1208080b89a60256000600073eda49ccac8580e6c361dd61707a8571c388c305d3c602560006000f060005573666fdae7e0a0aa64ef0f723e397de8fedf8d37383b60015573666fdae7e0a0aa64ef0f723e397de8fedf8d37383f6002556000600060006000600073666fdae7e0a0aa64ef0f723e397de8fedf8d373845f160035573666fdae7e0a0aa64ef0f723e397de8fedf8d37383160045560016025f326a0d6e4230bf938eefe198265ec32dcd2b6a36eb8d7060a1399579c27cd126b744ba01470e9f2b5534d3e2cdeaacfd149fee5f8bd66aaf868a5533fc55e3e2c9415ed"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x5c3514645c14abc246b66e998810b82aa5cb0ea8bdf5e639131ae7b90770dd94",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Prague-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_0-create_opcode_CREATE2]": {
+        "network": "Prague",
+        "lastblockhash": "0x7816bbb0eac504d50b75425f9ba2aa9e5fc2f1eb973d904b32b045c3ec25b44d",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0773b1a6fc70a2c9f0ac984396f4bf8ed86a8574dc50d48b9165b2c9ceab2d05",
+                        "receiptsRoot": "0x2a84469e371b2efb8cb92f00e24ea3279ab5e02c6f6ab96a825a36985b018a6b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2870a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7816bbb0eac504d50b75425f9ba2aa9e5fc2f1eb973d904b32b045c3ec25b44d",
+                        "transactions": [
+                            "0xf8ac800a8307a1208080b85f60256000600073b1dbcdbc4693945c0e37de6f4c7419117aeeb0583c6000602560006000f560005573fe4846e17ad0228be2dad3fff8038829aa56a8683b60015573fe4846e17ad0228be2dad3fff8038829aa56a8683f60025560016025f325a04943c8d768f817e52b3aa3fabe5d8ff847f4626c87cccfdd3ba40807bd9be771a020c376b48fcf98a4575dbbb7d56da88305758daab51ac66f442ccbd95221f2d9"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x16688b4480a48e1946c9ab6b20d277c9e6f2196d9889217a6b521fa20d927384",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Prague-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_0-create_opcode_CREATE]": {
+        "network": "Prague",
+        "lastblockhash": "0xcf073cc18816cf223655534b610ddbccbd9cc0e767474113b081a84bea39136f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x97b87fb5cc41a0bbd0f6cc1a8602e82f198bd07429024a3717c134c697dff7ec",
+                        "receiptsRoot": "0x1069e7ea37105aef7ca67e84236004c3e1bd2fab716bc93aa063476ea9569820",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x286e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xcf073cc18816cf223655534b610ddbccbd9cc0e767474113b081a84bea39136f",
+                        "transactions": [
+                            "0xf8a9800a8307a1208080b85d60256000600073faf8077de85b153d2907533907e1ef83d9ba3a183c602560006000f060005573c856a8cabc0b568adb5261e1f0b00ec3702ac1de3b60015573c856a8cabc0b568adb5261e1f0b00ec3702ac1de3f60025560016025f325a09eeac7efe31b50f51e54bd8d411d834290c4f4d57fcbe83b5cdba560b5a679919f04289302c31980e10f724863960332bac7e845ba19d769eeb0331947616df1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x39cddf24db03d379ffd389dfc960ec4e665593622a0eefceceed626eb847ab8f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Prague-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_1-create_opcode_CREATE2]": {
+        "network": "Prague",
+        "lastblockhash": "0x6102ca465770c70a4d060ae800407617544566a121e0bf7f3598ccd1d30fccc0",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x04cf3602e09db65f27a84b6c76a993d3bfdec6c07011f2a8ece9a032e475766e",
+                        "receiptsRoot": "0x1cc6c5f0c5e31b7f86a32e6d3ed7f324376853df44c32f789a526fb3248898c2",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea73",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x6102ca465770c70a4d060ae800407617544566a121e0bf7f3598ccd1d30fccc0",
+                        "transactions": [
+                            "0xf8e9800a8307a1208080b89c602560006000739a8693013f2d8c7299d6909e271c588bca1014d93c6000602560006000f56000557371b36e6fda1fd69b9277cf12c7a74ad39e9129133b6001557371b36e6fda1fd69b9277cf12c7a74ad39e9129133f600255600060006000600060007371b36e6fda1fd69b9277cf12c7a74ad39e91291345f16003557371b36e6fda1fd69b9277cf12c7a74ad39e9129133160045560016025f325a0bde8c5331b68c48a9410849c7ed97f4afb08831a56f761d5c56cbab053745926a079e275b7c6e49b474bff1b067615a3f83f6bb7bb196c2d5ac105a526c737bafd"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x61d0adb7d09643b5e469819b4ea0e3a81a205d1cb59e44dbe4af3eace3202b07",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Prague-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_1-create_opcode_CREATE]": {
+        "network": "Prague",
+        "lastblockhash": "0x42a643e461d4a8a36db80970c93c36c5901647be18e485593dffe14f554600a6",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdae42a5d013294deacd0d54650548debe3d5333b6e66051439265f34c15b574a",
+                        "receiptsRoot": "0x716f1e8fc4340415bb1adc13f0f7d7cd536f626c67d8c95b3d06547920218d56",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea50",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x42a643e461d4a8a36db80970c93c36c5901647be18e485593dffe14f554600a6",
+                        "transactions": [
+                            "0xf8e7800a8307a1208080b89a60256000600073718d5f210c7b9da18fc08f98d64bf974d3499b0a3c602560006000f0600055735b0841b71ada8b3bf582f21b3bda420af467ef2c3b600155735b0841b71ada8b3bf582f21b3bda420af467ef2c3f60025560006000600060006000735b0841b71ada8b3bf582f21b3bda420af467ef2c45f1600355735b0841b71ada8b3bf582f21b3bda420af467ef2c3160045560016025f326a02e7702ee015ec4b83136a824428487dcb35c7b5c4a2d88da5e88a740cc77a157a03e7f1c2b76852199c4c301388672d2080a6052cf465a84cf709717fac2810135"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1757f9520112ecb29ae0f344f88f9baa67308febcb246dd664f20864bbf0a9ea",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Prague-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_0-create_opcode_CREATE2]": {
+        "network": "Prague",
+        "lastblockhash": "0x386ab2c86a445f4ce2ef3d2d65fd893f7ef4df495ef79f7889a6dff6db8e6c25",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xaaf30e4455ec7abf9f8d9358c2d0c3bacdfc335690c347304217d5806fb7140c",
+                        "receiptsRoot": "0xb34de6781b6c720d1f2cb81232bb8b1382cdf57518e517344e716fa5c8b826ad",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x286fe",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x386ab2c86a445f4ce2ef3d2d65fd893f7ef4df495ef79f7889a6dff6db8e6c25",
+                        "transactions": [
+                            "0xf8ac800a8307a1208080b85f60256000600073a1edacb585dd715da7359fcfe7198adafa6dbc003c6000602560006000f5600055730feffc7c7be955e04d63bee45cc368190c8a9e663b600155730feffc7c7be955e04d63bee45cc368190c8a9e663f60025560016025f325a0086a1e6acb77462a959e66d08f246c1abe799a59229cf23c40f6530dfb20445aa017b1defd0a0167cd66a008f680385f1afba2dc009cf82986efab13a681672e44"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x814206d335f36fd803711e5f19e2190e44ffad10c6ff354b83a0c4677e65b8f0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Prague-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_0-create_opcode_CREATE]": {
+        "network": "Prague",
+        "lastblockhash": "0x6f7b01ece8a6aa86998e6e372aedf559f9d620f363f5bea10e94206758f27200",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9fcfe4d1662915e3f13e8b47832d6c9e92ff56bb7a5b4c2f23ac2cb6382c326b",
+                        "receiptsRoot": "0x1069e7ea37105aef7ca67e84236004c3e1bd2fab716bc93aa063476ea9569820",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x286e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x6f7b01ece8a6aa86998e6e372aedf559f9d620f363f5bea10e94206758f27200",
+                        "transactions": [
+                            "0xf8aa800a8307a1208080b85d6025600060007340b1828924d7ab68cd1e1c0344f93f2721c5d0573c602560006000f0600055731fd69af63938dcf2cc38b70dc9b7f6654987f7543b600155731fd69af63938dcf2cc38b70dc9b7f6654987f7543f60025560016025f325a0c69859ab9fe641bd95c1456e82d00e1e94a741f0d632d8cac3468b8e0ecef214a021e53607b983bb8afd4cbc12294ef404bd9747ff891860eca01356dfdaae5652"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x0e1e71a4e9cd71df8c8350251ecc9dd5920fd74dc6189fd8eddd97d1da3655ac",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Prague-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_1-create_opcode_CREATE2]": {
+        "network": "Prague",
+        "lastblockhash": "0xec83479fe37ad00d8af970a189b507124175eaa8e1d1a42b2cbda5b6078e51f2",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf0a44f33a197c23fc06e1648275646512b1138329525ffda6006c3daf7ae8eee",
+                        "receiptsRoot": "0x1cc6c5f0c5e31b7f86a32e6d3ed7f324376853df44c32f789a526fb3248898c2",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea73",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xec83479fe37ad00d8af970a189b507124175eaa8e1d1a42b2cbda5b6078e51f2",
+                        "transactions": [
+                            "0xf8e9800a8307a1208080b89c60256000600073ae931243e2a6ecf580bcf948851bc36ff8882cba3c6000602560006000f56000557342456dc2a0e44a9edc56ce50fc34290ea027dcd93b6001557342456dc2a0e44a9edc56ce50fc34290ea027dcd93f600255600060006000600060007342456dc2a0e44a9edc56ce50fc34290ea027dcd945f16003557342456dc2a0e44a9edc56ce50fc34290ea027dcd93160045560016025f325a01ff80d6b654c8c3265cb010317f4147d42311833eaebf9a1ee056cc754e49256a07d837ec804c70ee7776c25e0edfdf896e9f2ebf7868915d10ab5ed6f50a45ca6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6b023b39b13f133ade1a758b35e64c4c7bd316482f036e8b261769dcca3ff55b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Prague-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_1-create_opcode_CREATE]": {
+        "network": "Prague",
+        "lastblockhash": "0xf9e93aa13eab6a91c66238608be8ff809021e4e6fe541dc609a9df7341a26289",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdc08649d7fedc300a44cdc790640191a4ab9351fc2a3a28b728855552974470a",
+                        "receiptsRoot": "0x716f1e8fc4340415bb1adc13f0f7d7cd536f626c67d8c95b3d06547920218d56",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea50",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf9e93aa13eab6a91c66238608be8ff809021e4e6fe541dc609a9df7341a26289",
+                        "transactions": [
+                            "0xf8e7800a8307a1208080b89a60256000600073eda49ccac8580e6c361dd61707a8571c388c305d3c602560006000f060005573666fdae7e0a0aa64ef0f723e397de8fedf8d37383b60015573666fdae7e0a0aa64ef0f723e397de8fedf8d37383f6002556000600060006000600073666fdae7e0a0aa64ef0f723e397de8fedf8d373845f160035573666fdae7e0a0aa64ef0f723e397de8fedf8d37383160045560016025f326a0d6e4230bf938eefe198265ec32dcd2b6a36eb8d7060a1399579c27cd126b744ba01470e9f2b5534d3e2cdeaacfd149fee5f8bd66aaf868a5533fc55e3e2c9415ed"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x29e44fc7a11885c3dc3893bc924af75d0e1fc713d88e934afec2182f05fd51d5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Shanghai-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_0-create_opcode_CREATE2]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xc0854bfe4c07ba1e8cef63ec9026d40949106c0a4bb7220a577e5b974281ab65",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd9939b7fe29e32cfdbc03791d3b69f9a72b90de0ed50b20c8d245f0089ff04aa",
+                        "receiptsRoot": "0x2a84469e371b2efb8cb92f00e24ea3279ab5e02c6f6ab96a825a36985b018a6b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2870a",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xc0854bfe4c07ba1e8cef63ec9026d40949106c0a4bb7220a577e5b974281ab65",
+                        "transactions": [
+                            "0xf8ac800a8307a1208080b85f60256000600073b1dbcdbc4693945c0e37de6f4c7419117aeeb0583c6000602560006000f560005573fe4846e17ad0228be2dad3fff8038829aa56a8683b60015573fe4846e17ad0228be2dad3fff8038829aa56a8683f60025560016025f325a04943c8d768f817e52b3aa3fabe5d8ff847f4626c87cccfdd3ba40807bd9be771a020c376b48fcf98a4575dbbb7d56da88305758daab51ac66f442ccbd95221f2d9"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x46b7ee8d19c3159a57dd8aa6f39556b8279b5255fa69fe1f186e080ec07203aa",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Shanghai-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_0-create_opcode_CREATE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x4aaf8e0e3ce4f5cc9286c65c587e622248f6e00d4dba299ae73027db29242d0d",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x31b2ca1c7815932ba7d8f1568a088256373857851ba3967d2b12eb3138b995a6",
+                        "receiptsRoot": "0x1069e7ea37105aef7ca67e84236004c3e1bd2fab716bc93aa063476ea9569820",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x286e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x4aaf8e0e3ce4f5cc9286c65c587e622248f6e00d4dba299ae73027db29242d0d",
+                        "transactions": [
+                            "0xf8a9800a8307a1208080b85d60256000600073faf8077de85b153d2907533907e1ef83d9ba3a183c602560006000f060005573c856a8cabc0b568adb5261e1f0b00ec3702ac1de3b60015573c856a8cabc0b568adb5261e1f0b00ec3702ac1de3f60025560016025f325a09eeac7efe31b50f51e54bd8d411d834290c4f4d57fcbe83b5cdba560b5a679919f04289302c31980e10f724863960332bac7e845ba19d769eeb0331947616df1"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xf0a7ec971c1e926d8a4b3362d35f201fd1624d92795c79092d4249fdc3f95ca8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Shanghai-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_1-create_opcode_CREATE2]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xb1cb9f3e9d9b9619e4cd0d49df3f9933b419bc5fa0f660da6354cfa07fa32744",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8565c2f17dc891ddc955d13d7152e4534424c3810ae0999aa93c4a194517e9a9",
+                        "receiptsRoot": "0x1cc6c5f0c5e31b7f86a32e6d3ed7f324376853df44c32f789a526fb3248898c2",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea73",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb1cb9f3e9d9b9619e4cd0d49df3f9933b419bc5fa0f660da6354cfa07fa32744",
+                        "transactions": [
+                            "0xf8e9800a8307a1208080b89c602560006000739a8693013f2d8c7299d6909e271c588bca1014d93c6000602560006000f56000557371b36e6fda1fd69b9277cf12c7a74ad39e9129133b6001557371b36e6fda1fd69b9277cf12c7a74ad39e9129133f600255600060006000600060007371b36e6fda1fd69b9277cf12c7a74ad39e91291345f16003557371b36e6fda1fd69b9277cf12c7a74ad39e9129133160045560016025f325a0bde8c5331b68c48a9410849c7ed97f4afb08831a56f761d5c56cbab053745926a079e275b7c6e49b474bff1b067615a3f83f6bb7bb196c2d5ac105a526c737bafd"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x636a6159d118ee74aa7e46fa3fa9c5a36104b47a523d6f84faad016eea7ed8b3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Shanghai-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_0-call_times_1-create_opcode_CREATE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x8866633da7414afc5d7061eb9f115f68c2b5886780d80bc4ad73925ca2f84866",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf37b550a6593f3040bfdd1b64bad0bbddd735ab4a5f958eeab26cb4ba08a03fa",
+                        "receiptsRoot": "0x716f1e8fc4340415bb1adc13f0f7d7cd536f626c67d8c95b3d06547920218d56",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea50",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x8866633da7414afc5d7061eb9f115f68c2b5886780d80bc4ad73925ca2f84866",
+                        "transactions": [
+                            "0xf8e7800a8307a1208080b89a60256000600073718d5f210c7b9da18fc08f98d64bf974d3499b0a3c602560006000f0600055735b0841b71ada8b3bf582f21b3bda420af467ef2c3b600155735b0841b71ada8b3bf582f21b3bda420af467ef2c3f60025560006000600060006000735b0841b71ada8b3bf582f21b3bda420af467ef2c45f1600355735b0841b71ada8b3bf582f21b3bda420af467ef2c3160045560016025f326a02e7702ee015ec4b83136a824428487dcb35c7b5c4a2d88da5e88a740cc77a157a03e7f1c2b76852199c4c301388672d2080a6052cf465a84cf709717fac2810135"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xc61cbd444eacdb360959e31490afc93e016f073195e44c356c1899ec20d2c12f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Shanghai-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_0-create_opcode_CREATE2]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x4ce276bb89bb6136e09424ceb5ef6e2b7661e3705df0515f3a138575e9575059",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc57eb381a31e35079fe35d921cbcc112eb285b29180aea6f0d83e2fb10bd16db",
+                        "receiptsRoot": "0xb34de6781b6c720d1f2cb81232bb8b1382cdf57518e517344e716fa5c8b826ad",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x286fe",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x4ce276bb89bb6136e09424ceb5ef6e2b7661e3705df0515f3a138575e9575059",
+                        "transactions": [
+                            "0xf8ac800a8307a1208080b85f60256000600073a1edacb585dd715da7359fcfe7198adafa6dbc003c6000602560006000f5600055730feffc7c7be955e04d63bee45cc368190c8a9e663b600155730feffc7c7be955e04d63bee45cc368190c8a9e663f60025560016025f325a0086a1e6acb77462a959e66d08f246c1abe799a59229cf23c40f6530dfb20445aa017b1defd0a0167cd66a008f680385f1afba2dc009cf82986efab13a681672e44"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x96e6baf0d76788b0f73b59412c8ae8b67bc4463236740056fe164ab6e4314f11",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Shanghai-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_0-create_opcode_CREATE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x08fa3c967b3fd3d20d210bb8e356d38c193dee152c80c45cb70306322647767e",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2ef841a3dc662d25a2196f3f7d174bdb0a27b4d4ae9e76858ce862ecc4099cab",
+                        "receiptsRoot": "0x1069e7ea37105aef7ca67e84236004c3e1bd2fab716bc93aa063476ea9569820",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x286e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x08fa3c967b3fd3d20d210bb8e356d38c193dee152c80c45cb70306322647767e",
+                        "transactions": [
+                            "0xf8aa800a8307a1208080b85d6025600060007340b1828924d7ab68cd1e1c0344f93f2721c5d0573c602560006000f0600055731fd69af63938dcf2cc38b70dc9b7f6654987f7543b600155731fd69af63938dcf2cc38b70dc9b7f6654987f7543f60025560016025f325a0c69859ab9fe641bd95c1456e82d00e1e94a741f0d632d8cac3468b8e0ecef214a021e53607b983bb8afd4cbc12294ef404bd9747ff891860eca01356dfdaae5652"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x5e1ceee550659c9454cf6f956624375e32baf05a4a80331bae1ac97a149abf94",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Shanghai-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_1-create_opcode_CREATE2]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x86f7a84d611d316678376ad753b0061c903dfaa10e0c94d7fed25f9c0ac95727",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x35c3e13cd63dc19bcc71b539fbf2338699bf7a8bd24c314b9606341fc88a2ec8",
+                        "receiptsRoot": "0x1cc6c5f0c5e31b7f86a32e6d3ed7f324376853df44c32f789a526fb3248898c2",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea73",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x86f7a84d611d316678376ad753b0061c903dfaa10e0c94d7fed25f9c0ac95727",
+                        "transactions": [
+                            "0xf8e9800a8307a1208080b89c60256000600073ae931243e2a6ecf580bcf948851bc36ff8882cba3c6000602560006000f56000557342456dc2a0e44a9edc56ce50fc34290ea027dcd93b6001557342456dc2a0e44a9edc56ce50fc34290ea027dcd93f600255600060006000600060007342456dc2a0e44a9edc56ce50fc34290ea027dcd945f16003557342456dc2a0e44a9edc56ce50fc34290ea027dcd93160045560016025f325a01ff80d6b654c8c3265cb010317f4147d42311833eaebf9a1ee056cc754e49256a07d837ec804c70ee7776c25e0edfdf896e9f2ebf7868915d10ab5ed6f50a45ca6"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x21e5929d8bfa67eda45d2532d1b5d0094c98953b432cb3d81f040c93c5589764",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_self_destructing_initcode[fork_Shanghai-blockchain_test_engine_x_from_state_test-selfdestruct_contract_initial_balance_100000-call_times_1-create_opcode_CREATE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x73d23c5bdb4d719287df79e0a7e0794e57962795bc881badf0033bef97ba1dd8",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x28de59dbfd0ed751455f22d2a49365329eebf9aba589b158065c17b8c47a7475",
+                        "receiptsRoot": "0x716f1e8fc4340415bb1adc13f0f7d7cd536f626c67d8c95b3d06547920218d56",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2ea50",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x73d23c5bdb4d719287df79e0a7e0794e57962795bc881badf0033bef97ba1dd8",
+                        "transactions": [
+                            "0xf8e7800a8307a1208080b89a60256000600073eda49ccac8580e6c361dd61707a8571c388c305d3c602560006000f060005573666fdae7e0a0aa64ef0f723e397de8fedf8d37383b60015573666fdae7e0a0aa64ef0f723e397de8fedf8d37383f6002556000600060006000600073666fdae7e0a0aa64ef0f723e397de8fedf8d373845f160035573666fdae7e0a0aa64ef0f723e397de8fedf8d37383160045560016025f326a0d6e4230bf938eefe198265ec32dcd2b6a36eb8d7060a1399579c27cd126b744ba01470e9f2b5534d3e2cdeaacfd149fee5f8bd66aaf868a5533fc55e3e2c9415ed"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xe8f50600dd4de7e4af5f13fa62336c3e5468d9de65b09a0adafd5360bedf5a81",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that a contract can self-destruct in its initcode.\n\n    Behavior is the same before and after EIP-6780.\n\n    Test using:\n        - Different initial balances for the self-destructing contract\n        - Different opcodes: CREATE, CREATE2\n        - Different number of calls to the self-destructing contract in\n           the same tx",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L359",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    }
+}

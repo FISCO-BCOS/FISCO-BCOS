@@ -1,0 +1,2032 @@
+{
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_0]": {
+        "network": "Cancun",
+        "lastblockhash": "0x09e6b1f038e7dc29e9d21a4a00568d74fa9ea418fb51f13d32c0345eae1d0936",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x7688898ac382dac0",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x12d94296e479aa7221016dc402fd882c638e8c05200cbf4148ac25ad1aba7abb",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x76bd3fb68f2de1ea9ed9a7775391a72aca5252752d13038ab8c34983e4a23aeb",
+                        "receiptsRoot": "0xc8b24e0ac439e08a8a71d1164f7bdebb681cfc4dda6f0c405094298555dd0855",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x64e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x09e6b1f038e7dc29e9d21a4a00568d74fa9ea418fb51f13d32c0345eae1d0936",
+                        "transactions": [
+                            "0xf860800a830186a094b8fca6485226caff87613e36a797d35fdb3c0446808026a006c500fc60cd4ed21bf23c9725123b905b539d5e404a0e4e6c983c5e68a40a10a006c8b74ac9a45485190607854b6fd0ec5f52ad1a5b3223e458bc537b427e8e6a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3aaa6d1ff34226fd4629d94ccafdc7c40a9ddaf94d0abd66f63b1c1e84c9d938",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_16]": {
+        "network": "Cancun",
+        "lastblockhash": "0x4e814c9b2df4a10f4144ba81e45a92a6c607b1cc228266c5a9bdf94f399abb32",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x9c91a5f8050e1cfb",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x33226f3b226047644b68654e1721a713863e85e88452d5af16a298c9af349f88",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3986ade0719bf58165934a9b3d86245c5d490cc1c490b9eb47e344c666a825d8",
+                        "receiptsRoot": "0x1c16fd203dfc35350a3cd5cd2945a6d4cd13d53901fd0669c41270fce8e68c44",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2be",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4e814c9b2df4a10f4144ba81e45a92a6c607b1cc228266c5a9bdf94f399abb32",
+                        "transactions": [
+                            "0xf860800a830186a094392df990c1d29ab14da7f34545f37703f5c36caf808026a0fd09c3215e24c7767841a2066e76a0b29dfe40a9d3f1b521322de35062e84c2ea076ac07fab8216557ba158d4f095194e9d8b38ac2cf02acf8d066152afc587728"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3d4b28254567ff0633053c3e44d052bab3c8f6b137ab2b51ff9a0dddc4a1c951",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_257]": {
+        "network": "Cancun",
+        "lastblockhash": "0xa0b4c876f58cdadd8e92b607de4c6a813aab28c617c89e8f9aa808e24da803a7",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xfb15ec7003d4d11d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x8f1b3e9c15f7cb4360da006144ed5a93af37d269e26601a844e536db64c22443",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x353357b80e37635ae99129192e58d03aa0470711910ac5c85e277523f3e33ec6",
+                        "receiptsRoot": "0x774c7eb845ca58d4feb3ce7a2839dd26b8f0fece305ac071527eadceb101962a",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb31e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xa0b4c876f58cdadd8e92b607de4c6a813aab28c617c89e8f9aa808e24da803a7",
+                        "transactions": [
+                            "0xf860800a830186a094ad9a1bb93a0dfbd9c8ac3d87eae3b74e5c63e192808025a0a598311f277f4f5d159233ca2cc59004267fcf0558c4d78684038eaf1c6aaa4ea00fc85d74ce0947bafd846a5f7a3dd6d9a9233c57e50fffc809876edc4173bafb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x66dfb7abc921ebaabb55d2e66648a52c8f82e726847f5722dace44e54596f12b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_2]": {
+        "network": "Cancun",
+        "lastblockhash": "0x0f48577ebb9a11f0f048ed98d5db19ab43eddbb1e98cbe7d90a3f099c4094f45",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x1031941287ed710d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xbc886be2e6416dd2dcc6b1265ffdcd44cdb302571d99873719093eee39714e43",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0d1647fb6fce6da07909258d32fce9333ad9c714187ff35aff63ec6bf3538023",
+                        "receiptsRoot": "0x1c16fd203dfc35350a3cd5cd2945a6d4cd13d53901fd0669c41270fce8e68c44",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2be",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0f48577ebb9a11f0f048ed98d5db19ab43eddbb1e98cbe7d90a3f099c4094f45",
+                        "transactions": [
+                            "0xf860800a830186a0940a8f50565b785fbd20be42184caab973b0e5648f808026a0151376f8fe26dfaf6b04a2e684fa9ec6f80ae215cbb7ac856540ede42d6f2d40a043878eb3386ce72fb1b29cf980e8ea06438d0207feb0987ae94f07e33421ca7a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6d45ccaa8ee4af74a27b1db1b19bf8f11a92d9c38483dfb4c533baf204e5da27",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_33]": {
+        "network": "Cancun",
+        "lastblockhash": "0xf700290f1a68d383eef73b2a977b4378a1623f86a322846b2b0148e1702ceb27",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x6fb1fb78ce2a0e57",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x355718e32f92a48e6b463040a0823c1c168138321ab217309be0e30edfbd3b3d",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfcf77bd1e817c43ad3101fdfe0e2b587e0977eec2d88d78a5ba095d5374674c9",
+                        "receiptsRoot": "0x6ef5c4458ced3bfd6210a4d6e4d187c40ecf48694a4f991026b08033446b2487",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2ca",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf700290f1a68d383eef73b2a977b4378a1623f86a322846b2b0148e1702ceb27",
+                        "transactions": [
+                            "0xf860800a830186a094ccb6bfd7fa77082ed22efeebaf8e4658ef6e8e44808025a00e07c8fae699ade5f89e827d6cfa17d59fa238eda642fbb4407d9d1a22e66612a009e82fa9c1c5b4ba58a666fc6768ccba3f27b95ba30e0cef7cfe2cec77586d8b"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd0529d93f1765f19f973d675590a94704398d8111e9a522317a542116a8fe8a6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_0]": {
+        "network": "Cancun",
+        "lastblockhash": "0x9aab2d85f8409650408e6b5dfa7e889ff1cfba2b418f36db7ad9bdaece7b188e",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa22b8a8a4c6d2e83",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x062daefb64c838faaaf53e6a40a22087cf710659e41f461fbe960217956714dd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6fb5a728a2db5fbd19fb3ca9b901cb6c5cfd4a30605e3c75d355b2fb3c4ca1b4",
+                        "receiptsRoot": "0xd73ab2e3eef4f114c1041ccfb863eff31076bfea631ae317a470d3c5635d9770",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9aab2d85f8409650408e6b5dfa7e889ff1cfba2b418f36db7ad9bdaece7b188e",
+                        "transactions": [
+                            "0xf860800a830186a094310df82a85c3af94a72512885412a536a3f1bd11808025a0b7756950b7086e0d1292396b6e61312172a8f307f58fa90811d591a160a99ebfa00c92b5ef44bb56b356ac6687194028aefea9e72de3d0645415326b0977d70353"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x438dfb8f805382ed62f0507624223ca8947d04424f4a2eedc8f9d1806ba1a136",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_16]": {
+        "network": "Cancun",
+        "lastblockhash": "0xdd27ac81665a662180913b9ea3732b889583c8b7498f6e2eea764b7bc5f61ba1",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x2e87076da774602e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa027602b0dfdcf9dda691f030d41d47edfbb2873404dc5dd63ce5c3e679648f3",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x84e527f488bf30ac5010d50f5ba0e4b806b028f259850acb5116fd96736ebff4",
+                        "receiptsRoot": "0xb29c3ea0d5477b1596ae4cbcbbb9ec683872406cde59379b2ca479dc0d8b27e5",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa961",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdd27ac81665a662180913b9ea3732b889583c8b7498f6e2eea764b7bc5f61ba1",
+                        "transactions": [
+                            "0xf870800a830186a0940c5f22795cb34c79e3bb00689c3503db0899de7080900101010101010101010101010101010125a08a379166cf51fc4aafa9c4395b0f12ae8152b5cafe824e5193557fa4821bc325a077a953b810260f34aaf0afe3ece6d505637e81ac54e1d75ed767a567d03e728a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6ecbc4cd1c1af24702da397e2e6843ca2951ebe4e72ab095bb8377c5c040051f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_257]": {
+        "network": "Cancun",
+        "lastblockhash": "0x60ebcf3dd381ffae37fcb8401d4129e6b2fe13deab8be32079c55c5c61b2ca6f",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xe20f2aa687a78c1f",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0af97d6048b58a540e5ad0f4c640fbe261d04413a470737803626779adc984b1",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0ebd0c02cfc0e9124d9b8191b479f878249a0b06f26faad0eb1f3342330b4746",
+                        "receiptsRoot": "0xeb28a69743d4f7f4dc063b3c78dbc16a6f3b4109f465bed2f2f1a14b0c330000",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb871",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x60ebcf3dd381ffae37fcb8401d4129e6b2fe13deab8be32079c55c5c61b2ca6f",
+                        "transactions": [
+                            "0xf90163800a830186a0946d9f13243c1081c01981c21176ba2892cacd7ba180b90101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010125a0613b2f3efbc78c0f2fb9751f3260bf7e86cfec0652910bccbe7a288b0254664ba04b96d45ea3f742d4518a85e76541f25ec78b46ea4f0d5f73bb89287f2ab461f3"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x50cf545121f557720b1b94d883bf7b6f82d8ee934660cb0fbe1b32f380acfe0d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_2]": {
+        "network": "Cancun",
+        "lastblockhash": "0x136fd65e8a39214955d72e2d9dd343d3b18f72b69221709d6d7b2103a4db381c",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xf876d7ff013ededd",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xc37581d62dc03459071c31728dc3a0879d2fd23cc65c0bcea8c7eae6a5333c75",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x582da2864c402a176bd98ee0eb58034ade788f39497374c4eaae2a0f18cd1f5f",
+                        "receiptsRoot": "0x875aadb4de0ad3531c6fa49ec80c4214a847f5d2a8f06ea72233a3d05ccf1e89",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa881",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x136fd65e8a39214955d72e2d9dd343d3b18f72b69221709d6d7b2103a4db381c",
+                        "transactions": [
+                            "0xf862800a830186a094817260e0c3ad6f9a69c14702c9328d74826658418082010125a0eb021e6ec112985eeabd403a0aa9ba251ba2bf700a76d652429567cda3be36f5a02369a7e8c7f74e846d105bfd44dc414f102587c3334af005af4b7f3a61ca89fc"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xee7209945047ee90a986607d1c122eddb97ed74315987ebc6cad1d1ffe7bcf74",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Cancun-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_33]": {
+        "network": "Cancun",
+        "lastblockhash": "0x1ef419ab54ed8c7e10687055b76e3992c58cab785744182c8e23010251fb0cc3",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xb571db6ef6ff50c9",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe7e799acc2b81d7d10facb35f4c4efc1f3e3cc1ecdf55cd63feaf96c7e8104a3",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc0f92f04e46ec5d2e68e1471fbe37b50e08daecc0f9eef9fdae28ed8fe621662",
+                        "receiptsRoot": "0xf8be77b765c6e6edccb419a309fbeb58067335a75965a88dc1c57d8f3d84ebed",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xaa71",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x1ef419ab54ed8c7e10687055b76e3992c58cab785744182c8e23010251fb0cc3",
+                        "transactions": [
+                            "0xf881800a830186a0941c5e9f5e8c85cab64c1282222aee022426f996e180a101010101010101010101010101010101010101010101010101010101010101010126a09197a3d064613d0619f9e032a4632bc27ba08e934fced7dbe4ae44a1ada276a6a046f5acc502d659f9c347f1e1f8f633161e49463b56de98a4df90526eb833f8e6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xc5e2dfcbebf91ea6b57e1af500760aa99c9cba0d6cd5ac8d2ccd1a0770d2949c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_0]": {
+        "network": "Paris",
+        "lastblockhash": "0xef91f9ff6adb3180a0acfcbe7ad82fb2df272bdd0ce4bd8ecee80e66e9e28749",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x5cb6d3353854c04c",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xb4ed7c026defc7e15f1f479c7f8caa330e432c706a1cf6f58fec7a5d57c10032",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7f65b7ea07547289c211c487d74997ebe9b922d195a9d95d184eb8a4e97164c2",
+                        "receiptsRoot": "0xc8b24e0ac439e08a8a71d1164f7bdebb681cfc4dda6f0c405094298555dd0855",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x64e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xef91f9ff6adb3180a0acfcbe7ad82fb2df272bdd0ce4bd8ecee80e66e9e28749",
+                        "transactions": [
+                            "0xf860800a830186a094b8fca6485226caff87613e36a797d35fdb3c0446808026a006c500fc60cd4ed21bf23c9725123b905b539d5e404a0e4e6c983c5e68a40a10a006c8b74ac9a45485190607854b6fd0ec5f52ad1a5b3223e458bc537b427e8e6a"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x607d68d80dff6b9b2651046825ba3db8da1e118179fed2209bd94732c16303f9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_16]": {
+        "network": "Paris",
+        "lastblockhash": "0x0a02e068ea76d9bf9b2ed17bcc0d50ef3f1a5276bdd5bc19ddf1d17952f44c5c",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0xc79e6c4a47a582ad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf71a3447f4ed664976b577fbabe68269e1ba807bbac8a98c9bdb72b3f138e003",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8a1cdda10e121efd7b8488b0ce7b9401262dfed2d8d5b03c74bac7980c1f33dc",
+                        "receiptsRoot": "0x1c16fd203dfc35350a3cd5cd2945a6d4cd13d53901fd0669c41270fce8e68c44",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2be",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x0a02e068ea76d9bf9b2ed17bcc0d50ef3f1a5276bdd5bc19ddf1d17952f44c5c",
+                        "transactions": [
+                            "0xf860800a830186a094392df990c1d29ab14da7f34545f37703f5c36caf808026a0fd09c3215e24c7767841a2066e76a0b29dfe40a9d3f1b521322de35062e84c2ea076ac07fab8216557ba158d4f095194e9d8b38ac2cf02acf8d066152afc587728"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x726afc4955d086bb3e1868e5e89a79a218ee1baa0f2674d00ba3dde1887b10d9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_257]": {
+        "network": "Paris",
+        "lastblockhash": "0x95f85112922770d3ba262c4296bc096db8bd325dbeb97fae4f31e4eed1752853",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x58b63e8738a439e7",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x210172c62001ced8e0e04912e55d1b0f9a7fd35fa81162beecb2b94a2dd401fd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3aa1db012c942799b1dfe0993e784f049620b243e8ce91c928483ba177af7c30",
+                        "receiptsRoot": "0x774c7eb845ca58d4feb3ce7a2839dd26b8f0fece305ac071527eadceb101962a",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb31e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x95f85112922770d3ba262c4296bc096db8bd325dbeb97fae4f31e4eed1752853",
+                        "transactions": [
+                            "0xf860800a830186a094ad9a1bb93a0dfbd9c8ac3d87eae3b74e5c63e192808025a0a598311f277f4f5d159233ca2cc59004267fcf0558c4d78684038eaf1c6aaa4ea00fc85d74ce0947bafd846a5f7a3dd6d9a9233c57e50fffc809876edc4173bafb"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x277718edb3f0654724e683c9fdef59eebc0c1181fd6b0fe9dc044de1ddc382fd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_2]": {
+        "network": "Paris",
+        "lastblockhash": "0x5040940b4603a91a51424fb75b5e34b0a685c67b857297cc7e73fe6786652ed5",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0xa0ef6ba270fc3c54",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xeef14141824367b57c4e1d5de2a309ac17b3b5e4530854ee416101a42e65574d",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x16626d9f66eff570522e35e88f9e01f7dcfdfc2322b3b6035d57a76f530ac2a1",
+                        "receiptsRoot": "0x1c16fd203dfc35350a3cd5cd2945a6d4cd13d53901fd0669c41270fce8e68c44",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2be",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x5040940b4603a91a51424fb75b5e34b0a685c67b857297cc7e73fe6786652ed5",
+                        "transactions": [
+                            "0xf860800a830186a0940a8f50565b785fbd20be42184caab973b0e5648f808026a0151376f8fe26dfaf6b04a2e684fa9ec6f80ae215cbb7ac856540ede42d6f2d40a043878eb3386ce72fb1b29cf980e8ea06438d0207feb0987ae94f07e33421ca7a"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x88c4b5f0a892817eddd5f96e81233ee538dca1c072756ced8a6e52ffdef6196b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_33]": {
+        "network": "Paris",
+        "lastblockhash": "0x6bc3b1c3de78a0ed6a1e08c1129b937124d82e50ab191483df961b53ea678c8c",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x8f0ac6bcba1bf4ef",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xedea0c4c514ba0241b25995769ff3b219c00663541fa6067bfe35f35f7211284",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb1c80c2e62d5f4baea7e17d4a928b83690d3a24acc7a6c0af7e4d6f578c32176",
+                        "receiptsRoot": "0x6ef5c4458ced3bfd6210a4d6e4d187c40ecf48694a4f991026b08033446b2487",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2ca",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x6bc3b1c3de78a0ed6a1e08c1129b937124d82e50ab191483df961b53ea678c8c",
+                        "transactions": [
+                            "0xf860800a830186a094ccb6bfd7fa77082ed22efeebaf8e4658ef6e8e44808025a00e07c8fae699ade5f89e827d6cfa17d59fa238eda642fbb4407d9d1a22e66612a009e82fa9c1c5b4ba58a666fc6768ccba3f27b95ba30e0cef7cfe2cec77586d8b"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xd28faafcffe1c5a3fb08cb5c01138818de8af1305ef0cc36aa42d8a3b21f1e0d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_0]": {
+        "network": "Paris",
+        "lastblockhash": "0xf4cb8fc4cc283c3f7530456daf47d472d28638aedba3c4e0da1fe79faf2c9b76",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x55f754940e13cae8",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xdc381532bf520f7029f9baeea82fe1ee8084b37b8e739af7220855f2b6875284",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8e7e687982bd4358280a56f6297385f48200854e2a5e55c1db525a587b15f8f7",
+                        "receiptsRoot": "0xd73ab2e3eef4f114c1041ccfb863eff31076bfea631ae317a470d3c5635d9770",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xf4cb8fc4cc283c3f7530456daf47d472d28638aedba3c4e0da1fe79faf2c9b76",
+                        "transactions": [
+                            "0xf860800a830186a094310df82a85c3af94a72512885412a536a3f1bd11808025a0b7756950b7086e0d1292396b6e61312172a8f307f58fa90811d591a160a99ebfa00c92b5ef44bb56b356ac6687194028aefea9e72de3d0645415326b0977d70353"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xe1c3cb80b5ef19fb4c5702b4c24004fd844ceb25511bddf1581e5404fb5f858b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_16]": {
+        "network": "Paris",
+        "lastblockhash": "0xd40dabea8b8506fb98ccc98e05c5dd4dad0231009ee30a98e37a994045527eb0",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x977ec758d904c0ff",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe5b69c71a533bff647564eb4bf28f498ecf363a4c328f1c2046abd59c5a0d55a",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1e1b8ff887d194c36befa47c04a7219043f58e021ca5ade23ecdbb7c24f56edb",
+                        "receiptsRoot": "0xb29c3ea0d5477b1596ae4cbcbbb9ec683872406cde59379b2ca479dc0d8b27e5",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa961",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xd40dabea8b8506fb98ccc98e05c5dd4dad0231009ee30a98e37a994045527eb0",
+                        "transactions": [
+                            "0xf870800a830186a0940c5f22795cb34c79e3bb00689c3503db0899de7080900101010101010101010101010101010125a08a379166cf51fc4aafa9c4395b0f12ae8152b5cafe824e5193557fa4821bc325a077a953b810260f34aaf0afe3ece6d505637e81ac54e1d75ed767a567d03e728a"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xeb070b2e68e8b1238367d8bea6457b069485cea8e8ccbfcf0801a562819af7f0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_257]": {
+        "network": "Paris",
+        "lastblockhash": "0xb38fd012b92758658e654b8d17b0175286623d0409b3ee09f9e18c4714a5666f",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x5fe53d361719119a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7b85facecf952925069121bd4670a2cb527cb5f3a2ed0b09607ac6dd3f055fb0",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4d1c2cc79a693fda232458ade7731b2cbbd0b4bae971648cc9401a6ee189be1b",
+                        "receiptsRoot": "0xeb28a69743d4f7f4dc063b3c78dbc16a6f3b4109f465bed2f2f1a14b0c330000",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb871",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb38fd012b92758658e654b8d17b0175286623d0409b3ee09f9e18c4714a5666f",
+                        "transactions": [
+                            "0xf90163800a830186a0946d9f13243c1081c01981c21176ba2892cacd7ba180b90101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010125a0613b2f3efbc78c0f2fb9751f3260bf7e86cfec0652910bccbe7a288b0254664ba04b96d45ea3f742d4518a85e76541f25ec78b46ea4f0d5f73bb89287f2ab461f3"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xd983e864098a13d2742a59676a1bb9cfdd6caa0f2b0267510de62a02eccb5885",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_2]": {
+        "network": "Paris",
+        "lastblockhash": "0xcb6d171a7613eb47d4e91aa4dfaf5fad4f3c73cdecda4faa89bf0b3f9f0bea88",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0xdf9e5d948004b218",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x2717465bbfdc4ce4d43596ae8f251ef8d428e5569df827e49035559ae6f97300",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc14075826c14ef2d2870f8bbed218d6f1464bdf189cf3bf639d57d6b0e25e42e",
+                        "receiptsRoot": "0x875aadb4de0ad3531c6fa49ec80c4214a847f5d2a8f06ea72233a3d05ccf1e89",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa881",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xcb6d171a7613eb47d4e91aa4dfaf5fad4f3c73cdecda4faa89bf0b3f9f0bea88",
+                        "transactions": [
+                            "0xf862800a830186a094817260e0c3ad6f9a69c14702c9328d74826658418082010125a0eb021e6ec112985eeabd403a0aa9ba251ba2bf700a76d652429567cda3be36f5a02369a7e8c7f74e846d105bfd44dc414f102587c3334af005af4b7f3a61ca89fc"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x899adc132213d67c5265e39835f7ca8400f477c827b71c4af490d0f454c6954a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Paris-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_33]": {
+        "network": "Paris",
+        "lastblockhash": "0x23bf8498f495d2ea04796d77205152f735d680a49afeb9b080769ab9818f503f",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x4dfb5a2466bb9b65",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x3399b00601a8dbec2d2a7fa86149df4e79e94353962b819fa1f24deb727ac65a",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbba2a4f996122ef5347460beb93f0bd64fc1b0f7bac728bd7630836472e2a39e",
+                        "receiptsRoot": "0xf8be77b765c6e6edccb419a309fbeb58067335a75965a88dc1c57d8f3d84ebed",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xaa71",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x23bf8498f495d2ea04796d77205152f735d680a49afeb9b080769ab9818f503f",
+                        "transactions": [
+                            "0xf881800a830186a0941c5e9f5e8c85cab64c1282222aee022426f996e180a101010101010101010101010101010101010101010101010101010101010101010126a09197a3d064613d0619f9e032a4632bc27ba08e934fced7dbe4ae44a1ada276a6a046f5acc502d659f9c347f1e1f8f633161e49463b56de98a4df90526eb833f8e6"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x6818b7400ba2fdcd326f223040480a121ea07f672af6897130df49921928bddb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_0]": {
+        "network": "Prague",
+        "lastblockhash": "0x60aa0f910c4fafc9a1891d31e4a0ff6135a302be8b81a721020d4cb030ea8adf",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4db5d5c27a3bf028",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x3379c9471776e092268037404f7dddf2096449c40b71af2d8b7bd3aec5c24e3a",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x87de723cebd18be9aa838ddd15a2cbcb7e5a4793a77534e66e1000dcbff14255",
+                        "receiptsRoot": "0xc8b24e0ac439e08a8a71d1164f7bdebb681cfc4dda6f0c405094298555dd0855",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x64e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x60aa0f910c4fafc9a1891d31e4a0ff6135a302be8b81a721020d4cb030ea8adf",
+                        "transactions": [
+                            "0xf860800a830186a094b8fca6485226caff87613e36a797d35fdb3c0446808026a006c500fc60cd4ed21bf23c9725123b905b539d5e404a0e4e6c983c5e68a40a10a006c8b74ac9a45485190607854b6fd0ec5f52ad1a5b3223e458bc537b427e8e6a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x23028708ffb04d41e91363de9fbb38982cfc8870e04a2c664429038409f4361f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_16]": {
+        "network": "Prague",
+        "lastblockhash": "0x3bdf0fa8992c1cbcbf016d714855f5c624a6dc0a0e4fc466d348ce5857d4ce91",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xa2cb02dffa9aeae0",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x6b38b0d6e0a973a236d2bd3fcc3088396860bdbfab68d0c9b6cada5356a239fd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd3dc629e7406a985c1696c7733748cec795144db65361897f1536d10ba13aa0a",
+                        "receiptsRoot": "0x1c16fd203dfc35350a3cd5cd2945a6d4cd13d53901fd0669c41270fce8e68c44",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2be",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3bdf0fa8992c1cbcbf016d714855f5c624a6dc0a0e4fc466d348ce5857d4ce91",
+                        "transactions": [
+                            "0xf860800a830186a094392df990c1d29ab14da7f34545f37703f5c36caf808026a0fd09c3215e24c7767841a2066e76a0b29dfe40a9d3f1b521322de35062e84c2ea076ac07fab8216557ba158d4f095194e9d8b38ac2cf02acf8d066152afc587728"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x5314ecc8774731d85e27dc6b17e428b15cd0b86a8778727291cffc0cd7193f9c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_257]": {
+        "network": "Prague",
+        "lastblockhash": "0xbcf60ddbed3a99df7fa794a00664e3104bd19e9bc876f422a04b5b186b0984c3",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x075d303f2c228e8d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x146996f1a6affe72ca1904169de32c3670aabb855a8ce649ba59113567f2a386",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc45cb995fc50019eb7dc3bb1475690de885477eadf8f3985bcec9ab6b1310616",
+                        "receiptsRoot": "0x774c7eb845ca58d4feb3ce7a2839dd26b8f0fece305ac071527eadceb101962a",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb31e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xbcf60ddbed3a99df7fa794a00664e3104bd19e9bc876f422a04b5b186b0984c3",
+                        "transactions": [
+                            "0xf860800a830186a094ad9a1bb93a0dfbd9c8ac3d87eae3b74e5c63e192808025a0a598311f277f4f5d159233ca2cc59004267fcf0558c4d78684038eaf1c6aaa4ea00fc85d74ce0947bafd846a5f7a3dd6d9a9233c57e50fffc809876edc4173bafb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xc36efa7dc4b0a323e1108a370c383574e987399a6706a48791dba649eb7c3d5c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_2]": {
+        "network": "Prague",
+        "lastblockhash": "0x8c728c6f7ecfa628b8c7651828edc210baabcf22c7e514ade1fb8f76bd317252",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1fc812173ac5e576",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x884d331b5b7c9c027aac9b8f7fa684de81042636799b9f8022d2c3a3591d7000",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdce3c7e95e524bcb75b0dda152c822cdaf0a3837b47f78664d5b560629cf7bfd",
+                        "receiptsRoot": "0x1c16fd203dfc35350a3cd5cd2945a6d4cd13d53901fd0669c41270fce8e68c44",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2be",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8c728c6f7ecfa628b8c7651828edc210baabcf22c7e514ade1fb8f76bd317252",
+                        "transactions": [
+                            "0xf860800a830186a0940a8f50565b785fbd20be42184caab973b0e5648f808026a0151376f8fe26dfaf6b04a2e684fa9ec6f80ae215cbb7ac856540ede42d6f2d40a043878eb3386ce72fb1b29cf980e8ea06438d0207feb0987ae94f07e33421ca7a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x24cbbfc3070cda48297ae6afa884d938380b92c5d33dd5e734be510f52b3b12a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_33]": {
+        "network": "Prague",
+        "lastblockhash": "0x8de5ac5320f5690f9315f5c4b0875d913c3843dbe676913604bdc3e60408e50b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x40b1f0df0d7a063f",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x6f3bc3f20cb53891dc92faaac4873e9892d72089fc6bfb4a95526ef91fc6e9c5",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xadbb95ed574f9b98532d36d6e621b5b0e7b2287e3e52b5f61744f3c7f60e6bdc",
+                        "receiptsRoot": "0x6ef5c4458ced3bfd6210a4d6e4d187c40ecf48694a4f991026b08033446b2487",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2ca",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8de5ac5320f5690f9315f5c4b0875d913c3843dbe676913604bdc3e60408e50b",
+                        "transactions": [
+                            "0xf860800a830186a094ccb6bfd7fa77082ed22efeebaf8e4658ef6e8e44808025a00e07c8fae699ade5f89e827d6cfa17d59fa238eda642fbb4407d9d1a22e66612a009e82fa9c1c5b4ba58a666fc6768ccba3f27b95ba30e0cef7cfe2cec77586d8b"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x46bd798a93c2a602b93d74833dc39b40021f0cf0633f0ef9c173e14afa14f898",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_0]": {
+        "network": "Prague",
+        "lastblockhash": "0x276b40c19f43e76f0233a5815cd04757a6d275c7f24d4b14afcb0d5b6b2f9f81",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x8e6403557720dabe",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xfd0aa8bbcd9e451c90956645041d5bb481d43436fb6f6d6b3b339f0e1525cd8c",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbe28e740298d9353419bbe9d559bc84a57e6df5e74adc4aa852f7bcff47892d5",
+                        "receiptsRoot": "0xd73ab2e3eef4f114c1041ccfb863eff31076bfea631ae317a470d3c5635d9770",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x276b40c19f43e76f0233a5815cd04757a6d275c7f24d4b14afcb0d5b6b2f9f81",
+                        "transactions": [
+                            "0xf860800a830186a094310df82a85c3af94a72512885412a536a3f1bd11808025a0b7756950b7086e0d1292396b6e61312172a8f307f58fa90811d591a160a99ebfa00c92b5ef44bb56b356ac6687194028aefea9e72de3d0645415326b0977d70353"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb4b5b6b7a62f020ef83d4f3825097d2f084a9996b8d12be20ad5b67f54d5f067",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_16]": {
+        "network": "Prague",
+        "lastblockhash": "0xd2274242453252d8785f38cca4fb91217d57607763196e72ce8254965b3437a1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xf2a68bbdfe02cc37",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xc8db20870912bdf9c7a785512bc851483100817419b80ec53aaf8fa352c400b7",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x678ca9b3e39fd4c213849ea259dca8c58753d8e5d6b37b2911d6729efa5fa44f",
+                        "receiptsRoot": "0xb29c3ea0d5477b1596ae4cbcbbb9ec683872406cde59379b2ca479dc0d8b27e5",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa961",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xd2274242453252d8785f38cca4fb91217d57607763196e72ce8254965b3437a1",
+                        "transactions": [
+                            "0xf870800a830186a0940c5f22795cb34c79e3bb00689c3503db0899de7080900101010101010101010101010101010125a08a379166cf51fc4aafa9c4395b0f12ae8152b5cafe824e5193557fa4821bc325a077a953b810260f34aaf0afe3ece6d505637e81ac54e1d75ed767a567d03e728a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x79c3a6b1397cbb133a1fe444481c05ea4573b3303b259dad13b484ca51cf81bd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_257]": {
+        "network": "Prague",
+        "lastblockhash": "0x63af771c81787d09d660df1d1a33fd39451a7a7995c7ae116b3de2d3db67f3af",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4cd72f3d71bf851d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xbb13b301d3e6ac0170f5f19d747f7623740ae3e025bebd88325fbaa79795a8be",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9f4b2f68992980f6bc11921ae868d23f90727bb1c77c227a4b751dc087b104dd",
+                        "receiptsRoot": "0xeb28a69743d4f7f4dc063b3c78dbc16a6f3b4109f465bed2f2f1a14b0c330000",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb871",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x63af771c81787d09d660df1d1a33fd39451a7a7995c7ae116b3de2d3db67f3af",
+                        "transactions": [
+                            "0xf90163800a830186a0946d9f13243c1081c01981c21176ba2892cacd7ba180b90101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010125a0613b2f3efbc78c0f2fb9751f3260bf7e86cfec0652910bccbe7a288b0254664ba04b96d45ea3f742d4518a85e76541f25ec78b46ea4f0d5f73bb89287f2ab461f3"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1b3cf1681bc5f92d48a38d896e1563890773799093f62b2a95b4fc37bcb53ed9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_2]": {
+        "network": "Prague",
+        "lastblockhash": "0x7d123179f0f8d0711ea2a8fb73c5df7af7085bbe0360d6273dc57adacd100367",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x128c14b80ffb0652",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x6e8731c05aabbee5f4689ba010e968bea95ddb3758dba15141add8af6e277199",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf64fcd7800e5bcdabdafcdd634a25c2ddaa11fd00972df35ebffc3a536996257",
+                        "receiptsRoot": "0x875aadb4de0ad3531c6fa49ec80c4214a847f5d2a8f06ea72233a3d05ccf1e89",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa881",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7d123179f0f8d0711ea2a8fb73c5df7af7085bbe0360d6273dc57adacd100367",
+                        "transactions": [
+                            "0xf862800a830186a094817260e0c3ad6f9a69c14702c9328d74826658418082010125a0eb021e6ec112985eeabd403a0aa9ba251ba2bf700a76d652429567cda3be36f5a02369a7e8c7f74e846d105bfd44dc414f102587c3334af005af4b7f3a61ca89fc"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x17cfdad9531be62c653cd668af0c917ececdf4f0b197797ccc543011d95624e7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Prague-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_33]": {
+        "network": "Prague",
+        "lastblockhash": "0x47cedf61426810a8db6c507cc8ed6716650ea1b4cd1abd3a06835b981079eb7d",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x45d888f6f86511ef",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x6c2e92f1acd943faef72b6a97f0e5bad8db1a1cdb5c2a0365230d5367d9ba02c",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf62e1b50d965968c29362d69c8411da1bdedd13d30b95dfd97efdbe79c6036fa",
+                        "receiptsRoot": "0xf8be77b765c6e6edccb419a309fbeb58067335a75965a88dc1c57d8f3d84ebed",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xaa71",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x47cedf61426810a8db6c507cc8ed6716650ea1b4cd1abd3a06835b981079eb7d",
+                        "transactions": [
+                            "0xf881800a830186a0941c5e9f5e8c85cab64c1282222aee022426f996e180a101010101010101010101010101010101010101010101010101010101010101010126a09197a3d064613d0619f9e032a4632bc27ba08e934fced7dbe4ae44a1ada276a6a046f5acc502d659f9c347f1e1f8f633161e49463b56de98a4df90526eb833f8e6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7f1efde8f7975ec854a07baf7e46ab602ca28bf837b46f7684042f160bbb4044",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_0]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xf841d4665e1112817fc382c7f8660b1b60bb664f01f4f16e67bc3ae8566374c3",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0xbc4f383e1173922a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x8ebee0b670c08bebe24e8a2527fdccfa470df4b01f196a570af74d6a176bc010",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7f65b7ea07547289c211c487d74997ebe9b922d195a9d95d184eb8a4e97164c2",
+                        "receiptsRoot": "0xc8b24e0ac439e08a8a71d1164f7bdebb681cfc4dda6f0c405094298555dd0855",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x64e7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xf841d4665e1112817fc382c7f8660b1b60bb664f01f4f16e67bc3ae8566374c3",
+                        "transactions": [
+                            "0xf860800a830186a094b8fca6485226caff87613e36a797d35fdb3c0446808026a006c500fc60cd4ed21bf23c9725123b905b539d5e404a0e4e6c983c5e68a40a10a006c8b74ac9a45485190607854b6fd0ec5f52ad1a5b3223e458bc537b427e8e6a"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x418a3cc9a5de9df925e19e06a9438ac6a6a3640cd442f2d619d110bba0337c61",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_16]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x3f7bf338b42c273ee8ae64bb310665d6a5e29684777efa07090bd44deab3cd9c",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x9f6337546e4af403",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe28a81cf59d6fcbd74441310b823b447f34fce02405d043cb31367bc6e10cacd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8a1cdda10e121efd7b8488b0ce7b9401262dfed2d8d5b03c74bac7980c1f33dc",
+                        "receiptsRoot": "0x1c16fd203dfc35350a3cd5cd2945a6d4cd13d53901fd0669c41270fce8e68c44",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2be",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x3f7bf338b42c273ee8ae64bb310665d6a5e29684777efa07090bd44deab3cd9c",
+                        "transactions": [
+                            "0xf860800a830186a094392df990c1d29ab14da7f34545f37703f5c36caf808026a0fd09c3215e24c7767841a2066e76a0b29dfe40a9d3f1b521322de35062e84c2ea076ac07fab8216557ba158d4f095194e9d8b38ac2cf02acf8d066152afc587728"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x3d7ddac2604dd2475c2378ab46bb4ae3f9639fd11efcb049d5a9f5ed770400e7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_257]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xb8486e33558a5c677878fd978f7a898508802b86a21d7aee7774f6216aa479e2",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x2f897ee8f0f209c2",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x75261bb67a276e18b9b8fafeb043907dad62300c2fe91253b7e1325cf3681523",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3aa1db012c942799b1dfe0993e784f049620b243e8ce91c928483ba177af7c30",
+                        "receiptsRoot": "0x774c7eb845ca58d4feb3ce7a2839dd26b8f0fece305ac071527eadceb101962a",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb31e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb8486e33558a5c677878fd978f7a898508802b86a21d7aee7774f6216aa479e2",
+                        "transactions": [
+                            "0xf860800a830186a094ad9a1bb93a0dfbd9c8ac3d87eae3b74e5c63e192808025a0a598311f277f4f5d159233ca2cc59004267fcf0558c4d78684038eaf1c6aaa4ea00fc85d74ce0947bafd846a5f7a3dd6d9a9233c57e50fffc809876edc4173bafb"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xf309f6014a56dd544726777adf5a10edc95c447ad0f203d5f3473bfddabaa4e6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_2]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x421babe534ff6f0947bbadb661a8d7e05c2ef59caa955fbd7e4d6a60176d30b1",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x182d93e81cf9913c",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x1c12b098a2afddcbc2a69b355c6b0aef742c41641329d9ce5e78caf908b65a01",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x16626d9f66eff570522e35e88f9e01f7dcfdfc2322b3b6035d57a76f530ac2a1",
+                        "receiptsRoot": "0x1c16fd203dfc35350a3cd5cd2945a6d4cd13d53901fd0669c41270fce8e68c44",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2be",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x421babe534ff6f0947bbadb661a8d7e05c2ef59caa955fbd7e4d6a60176d30b1",
+                        "transactions": [
+                            "0xf860800a830186a0940a8f50565b785fbd20be42184caab973b0e5648f808026a0151376f8fe26dfaf6b04a2e684fa9ec6f80ae215cbb7ac856540ede42d6f2d40a043878eb3386ce72fb1b29cf980e8ea06438d0207feb0987ae94f07e33421ca7a"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x666c02ff7237832702648e5009269263c600cfca2a4b8648503610ee727a03e1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_contract-args_size_33]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xb55a9bc482851f628a285e2a588f48f36ba40be012b4f20f14e79ef113f604a3",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x4e2f77cd8b6e17e2",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xc2ab190054807f349a2d97e7cbfdfa4900c1b9e32e3d44f0dd518e45fed898c7",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb1c80c2e62d5f4baea7e17d4a928b83690d3a24acc7a6c0af7e4d6f578c32176",
+                        "receiptsRoot": "0x6ef5c4458ced3bfd6210a4d6e4d187c40ecf48694a4f991026b08033446b2487",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2ca",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb55a9bc482851f628a285e2a588f48f36ba40be012b4f20f14e79ef113f604a3",
+                        "transactions": [
+                            "0xf860800a830186a094ccb6bfd7fa77082ed22efeebaf8e4658ef6e8e44808025a00e07c8fae699ade5f89e827d6cfa17d59fa238eda642fbb4407d9d1a22e66612a009e82fa9c1c5b4ba58a666fc6768ccba3f27b95ba30e0cef7cfe2cec77586d8b"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xa2f23abc6985891d90d6072b46dacae38a9da1a599adec74cead1c3ac8e0b5b6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_0]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x2759accb11d299dd69adbb5c326adecafab6c8b25cc280a7fa1488382568f6d1",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0xc5187e3920cdb4c5",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5ed6391a189de5ba6661cb2e3bc57443f9ce10e43b7b067047dd1b8815ea70af",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8e7e687982bd4358280a56f6297385f48200854e2a5e55c1db525a587b15f8f7",
+                        "receiptsRoot": "0xd73ab2e3eef4f114c1041ccfb863eff31076bfea631ae317a470d3c5635d9770",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x2759accb11d299dd69adbb5c326adecafab6c8b25cc280a7fa1488382568f6d1",
+                        "transactions": [
+                            "0xf860800a830186a094310df82a85c3af94a72512885412a536a3f1bd11808025a0b7756950b7086e0d1292396b6e61312172a8f307f58fa90811d591a160a99ebfa00c92b5ef44bb56b356ac6687194028aefea9e72de3d0645415326b0977d70353"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x26b1bdb978015341f219bfa997eae9a74ea759ecd7ace49e4fb83ad530402fb9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_16]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x82cd8097f4290c8e3215439178c2a23c580422d77a3e9171ed218cc5fa1a6d91",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0xa3b066ca26bb240b",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x68d5e20f063fef603dd6c5fa5e521808acbd66a5c18d714eb663f13f3b47f6b7",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1e1b8ff887d194c36befa47c04a7219043f58e021ca5ade23ecdbb7c24f56edb",
+                        "receiptsRoot": "0xb29c3ea0d5477b1596ae4cbcbbb9ec683872406cde59379b2ca479dc0d8b27e5",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa961",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x82cd8097f4290c8e3215439178c2a23c580422d77a3e9171ed218cc5fa1a6d91",
+                        "transactions": [
+                            "0xf870800a830186a0940c5f22795cb34c79e3bb00689c3503db0899de7080900101010101010101010101010101010125a08a379166cf51fc4aafa9c4395b0f12ae8152b5cafe824e5193557fa4821bc325a077a953b810260f34aaf0afe3ece6d505637e81ac54e1d75ed767a567d03e728a"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x833f45785a0cb6249b63de3eaaeefd0d36075f90f7a8adc52261cef5b1024c2c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_257]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xdb72e9a3ee3304591ce32a39003feb2b5e34791a760ee2489c52bcdfc87c13fa",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x60293cd6930235ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xb99715c777b4d895a1ad9838d574187565b7e8996784b92ce9819da9a35a552e",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4d1c2cc79a693fda232458ade7731b2cbbd0b4bae971648cc9401a6ee189be1b",
+                        "receiptsRoot": "0xeb28a69743d4f7f4dc063b3c78dbc16a6f3b4109f465bed2f2f1a14b0c330000",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb871",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xdb72e9a3ee3304591ce32a39003feb2b5e34791a760ee2489c52bcdfc87c13fa",
+                        "transactions": [
+                            "0xf90163800a830186a0946d9f13243c1081c01981c21176ba2892cacd7ba180b90101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010125a0613b2f3efbc78c0f2fb9751f3260bf7e86cfec0652910bccbe7a288b0254664ba04b96d45ea3f742d4518a85e76541f25ec78b46ea4f0d5f73bb89287f2ab461f3"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x00db6306a916c161549a88c55d413100633ecb886a686329c3c2fc0c7e5c9403",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_2]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xd729b4f6130bd61d823c3d31085802ed0307fb9b6f5770dda9e9ceabc6e454cc",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x7ac41ddae329c41c",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x6d0fda3851a11fc082bed145d88535ff442301b83a3b1b994b3a20d5fe6612fd",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc14075826c14ef2d2870f8bbed218d6f1464bdf189cf3bf639d57d6b0e25e42e",
+                        "receiptsRoot": "0x875aadb4de0ad3531c6fa49ec80c4214a847f5d2a8f06ea72233a3d05ccf1e89",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa881",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xd729b4f6130bd61d823c3d31085802ed0307fb9b6f5770dda9e9ceabc6e454cc",
+                        "transactions": [
+                            "0xf862800a830186a094817260e0c3ad6f9a69c14702c9328d74826658418082010125a0eb021e6ec112985eeabd403a0aa9ba251ba2bf700a76d652429567cda3be36f5a02369a7e8c7f74e846d105bfd44dc414f102587c3334af005af4b7f3a61ca89fc"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x8f0ced0125fc46ff7b47a5e76b8c7a1a56225e238df266c427e298de2902d84b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/opcodes/test_calldatasize.py::test_calldatasize[fork_Shanghai-blockchain_test_engine_x_from_state_test-calldata_source_tx-args_size_33]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xcfbbf04630cd5aa7f6f724984e0198c7f637a82a33479d1d2093096ee0f21e83",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x10c651ce0ec12bcf",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x8a8c955db56a4fcf5c6c4bf1df4d26bea375bdaf919a59c0124d64deed0e5571",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbba2a4f996122ef5347460beb93f0bd64fc1b0f7bac728bd7630836472e2a39e",
+                        "receiptsRoot": "0xf8be77b765c6e6edccb419a309fbeb58067335a75965a88dc1c57d8f3d84ebed",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xaa71",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xcfbbf04630cd5aa7f6f724984e0198c7f637a82a33479d1d2093096ee0f21e83",
+                        "transactions": [
+                            "0xf881800a830186a0941c5e9f5e8c85cab64c1282222aee022426f996e180a101010101010101010101010101010101010101010101010101010101010101010126a09197a3d064613d0619f9e032a4632bc27ba08e934fced7dbe4ae44a1ada276a6a046f5acc502d659f9c347f1e1f8f633161e49463b56de98a4df90526eb833f8e6"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xb538a56a34f0ae5b43ab05128d650cbb1ccfdd13a1d490cfe63085f2527ca414",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test `CALLDATASIZE` opcode.\n\n    Tests two scenarios:\n    - calldata_source is \"contract\": CALLDATASIZE reads from calldata\n                                     passed by another contract\n    - calldata_source is \"tx\": CALLDATASIZE reads directly from\n                               transaction calldata\n\n    Based on\n    https://github.com/ethereum/tests/blob/\n    81862e4848585a438d64f911a19b3825f0f4cd95/src/\n    GeneralStateTestsFiller/VMTests/vmTests/calldatasizeFiller.yml",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_calldatasize.py#L16",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

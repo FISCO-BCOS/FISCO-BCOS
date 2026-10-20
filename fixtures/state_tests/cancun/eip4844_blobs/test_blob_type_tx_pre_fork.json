@@ -1,0 +1,158 @@
+{
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_type_tx_pre_fork[fork_Shanghai-state_test-no_blob_tx]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x73bbc4b3c27a8dd6e7dd18aa9f2773e86ad8d6af": {
+                "nonce": "0x00",
+                "balance": "0x023e39",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x5208"
+            ],
+            "to": "0xe7a246b2936e5811488b842ab2b9506a2122f82c",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                []
+            ],
+            "maxFeePerBlobGas": "0x01",
+            "blobVersionedHashes": [],
+            "sender": "0x73bbc4b3c27a8dd6e7dd18aa9f2773e86ad8d6af",
+            "secretKey": "0x185dc7a24bfc3044b3d7099dde22bf405030c68b0d1451a5348ee3fcc3f2fe6d"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x133fb1fda1ee7ad55c728ceb7ae5f9322c4da17d4f0e72bbe1c4d05e7b498ca0",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x03f8640180800782520894e7a246b2936e5811488b842ab2b9506a2122f82c0180c001c001a076c1ed55132820cc9b180e1e9d3b628523de395e6b15d0f59d00f7347a7775a5a01a12469e33d73f8ce1b0a330f195ce8c0ab8e43797c178c405ed30d14b22d29f",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x73bbc4b3c27a8dd6e7dd18aa9f2773e86ad8d6af": {
+                            "nonce": "0x00",
+                            "balance": "0x023e39",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.TYPE_3_TX_PRE_FORK|TransactionException.TYPE_3_TX_ZERO_BLOBS"
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x8873c1d284c2ad40a69886d6f9e15b896f766df4f8dbaad8e5876534fcc34875",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Reject blocks with blob type transactions before Cancun fork.\n\n    Blocks sent by NewPayloadV2 (Shanghai) that contain blob type transactions,\n    furthermore blobs field within NewPayloadV2 method must be computed as\n    INVALID, due to an invalid block hash.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1424",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_type_tx_pre_fork[fork_Shanghai-state_test-one_blob_tx]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xe941e42690c302be48bdb226f17123f15df03b32": {
+                "nonce": "0x00",
+                "balance": "0x043e39",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x5208"
+            ],
+            "to": "0x3ee5b0a93ad9a615a9335bfb21dd14d0957d7a40",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                []
+            ],
+            "maxFeePerBlobGas": "0x01",
+            "blobVersionedHashes": [
+                "0x0100000000000000000000000000000000000000000000000000000000000000"
+            ],
+            "sender": "0xe941e42690c302be48bdb226f17123f15df03b32",
+            "secretKey": "0x75ea37ec0cb1ae6bcf971cb198b69a9ac1afa6dffa4b02b3627cff1672114a6d"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x45106b6533b3a6a3690de8d3a678e3cacb6df208177da580bb7c7938ba21bbb6",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x03f88501808007825208943ee5b0a93ad9a615a9335bfb21dd14d0957d7a400180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a006d1689e50ae0ce72ffdba1aba060621e3fff96fb8b902510f68f1e17b89e33ba04d967c22050909714bc48498163906cd3473dc035724d22b5bdaf7dccd1f774c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xe941e42690c302be48bdb226f17123f15df03b32": {
+                            "nonce": "0x00",
+                            "balance": "0x043e39",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.TYPE_3_TX_PRE_FORK"
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc4eb864cb6b37ba06e72ea9d9959530474a82a3d3740ff50a9784e8945f01bb5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Reject blocks with blob type transactions before Cancun fork.\n\n    Blocks sent by NewPayloadV2 (Shanghai) that contain blob type transactions,\n    furthermore blobs field within NewPayloadV2 method must be computed as\n    INVALID, due to an invalid block hash.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1424",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    }
+}

@@ -1,0 +1,189 @@
+{
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_self_destructing_account[fork_Cancun-blockchain_test_engine_x]": {
+        "network": "Cancun",
+        "lastblockhash": "0x8f98e60bad8bf12ccef5e610351a8c96a36760dcb2f9a9311660957224d02cc9",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x346378cfcee98acd7410d35b5eab705b0ccd8a46b72771d504f3b5226d5d93df",
+                        "receiptsRoot": "0x1e4d70a492ae5b022afd3a50bf09c7915a4d7732c50aaab5e77a38ad10853e88",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x712e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8f98e60bad8bf12ccef5e610351a8c96a36760dcb2f9a9311660957224d02cc9",
+                        "transactions": [
+                            "0xf880800a830186a0944e26a32b44218458583d6b26b201a3404ff0b52480a000000000000000000000000029fa9f21b1be736f2ecc21a9fdfff17a120dbb2226a03178d44c8cef4c558d6b78bf4c32a31a5eab3a9fb11b4571ad784df0446f7ea3a0383a7fe981b98510aa45342ceb8e53c2407b987b81e9e1d89f6725707e03a1b6"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x4e26a32b44218458583d6b26b201a3404ff0b524",
+                                "amount": "0x63"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x5cc1423d08f1097087d4523811da892ffa6396b0fd9acd8782e332ef208e6848",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawals can be done to self-destructed accounts.\n\n    Account `0x100` self-destructs and sends all its balance to `0x200`. Then,\n    a withdrawal is received at `0x100` with 99 wei.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L412",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_self_destructing_account[fork_Prague-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0x2a1a43e2dd3953917dab9095e8f5e0a0a30abf3535303e59362f3c7b61664330",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xefe81510e7c6eac069aa94ce119defec80e7f2df30ac52395d90917ef6cb3663",
+                        "receiptsRoot": "0x1e4d70a492ae5b022afd3a50bf09c7915a4d7732c50aaab5e77a38ad10853e88",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x712e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x2a1a43e2dd3953917dab9095e8f5e0a0a30abf3535303e59362f3c7b61664330",
+                        "transactions": [
+                            "0xf880800a830186a0944e26a32b44218458583d6b26b201a3404ff0b52480a000000000000000000000000029fa9f21b1be736f2ecc21a9fdfff17a120dbb2226a03178d44c8cef4c558d6b78bf4c32a31a5eab3a9fb11b4571ad784df0446f7ea3a0383a7fe981b98510aa45342ceb8e53c2407b987b81e9e1d89f6725707e03a1b6"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x4e26a32b44218458583d6b26b201a3404ff0b524",
+                                "amount": "0x63"
+                            }
+                        ]
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xe1c8aa3b229b42429f2279f79483af8fd7805203a0cab961a08a3acd980886c8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawals can be done to self-destructed accounts.\n\n    Account `0x100` self-destructs and sends all its balance to `0x200`. Then,\n    a withdrawal is received at `0x100` with 99 wei.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L412",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    },
+    "tests/shanghai/eip4895_withdrawals/test_withdrawals.py::test_self_destructing_account[fork_Shanghai-blockchain_test_engine_x]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x48d7f2c8887b8f08bfaad594c91f06570da78f787993ee316a4e93b101a93a63",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1d1ee633b04c768a9bbfa1bf46de96f9c14e53999f807f2b13e9e5309ce6330d",
+                        "receiptsRoot": "0x1e4d70a492ae5b022afd3a50bf09c7915a4d7732c50aaab5e77a38ad10853e88",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x712e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x48d7f2c8887b8f08bfaad594c91f06570da78f787993ee316a4e93b101a93a63",
+                        "transactions": [
+                            "0xf880800a830186a0944e26a32b44218458583d6b26b201a3404ff0b52480a000000000000000000000000029fa9f21b1be736f2ecc21a9fdfff17a120dbb2226a03178d44c8cef4c558d6b78bf4c32a31a5eab3a9fb11b4571ad784df0446f7ea3a0383a7fe981b98510aa45342ceb8e53c2407b987b81e9e1d89f6725707e03a1b6"
+                        ],
+                        "withdrawals": [
+                            {
+                                "index": "0x0",
+                                "validatorIndex": "0x0",
+                                "address": "0x4e26a32b44218458583d6b26b201a3404ff0b524",
+                                "amount": "0x63"
+                            }
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x8b23539c1007cc5eee95708707416b1541f6c44ec5d230ae573b123d4529803a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test withdrawals can be done to self-destructed accounts.\n\n    Account `0x100` self-destructs and sends all its balance to `0x200`. Then,\n    a withdrawal is received at `0x100` with 99 wei.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/shanghai/eip4895_withdrawals/test_withdrawals.py#L412",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4895.md",
+            "reference-spec-version": "81af3b60b632bc9c03513d1d137f25410e3f4d34"
+        }
+    }
+}

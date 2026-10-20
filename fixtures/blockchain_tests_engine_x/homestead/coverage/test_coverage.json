@@ -1,0 +1,205 @@
+{
+    "tests/homestead/coverage/test_coverage.py::test_coverage[fork_Cancun-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x94e50d0b3ac7d4ca9de85d4c12b6abf6b13437d19bce9947f9113a4b7245e641",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7a108479a66e369969eaf5d26bea41be413b002087036e08b74def8b51914ba5",
+                        "receiptsRoot": "0x40d1d302757dd24ccd5c05fe0762a15f464e44e6a47c440bd8529a639f98c435",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5cb4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x94e50d0b3ac7d4ca9de85d4c12b6abf6b13437d19bce9947f9113a4b7245e641",
+                        "transactions": [
+                            "0x02f8630180050a830186a0948d3a8396df8fe44b96462f913418a70b342fb6ba8080c080a0214ff4b1d8ec0bdc2e838ce6ad4338c7de47b9d976c0ae2d598e043ac7479ba4a022c7a5095e0910fba51566cd2816d7b685b4aed95395afe9839cd0eb36fdf709"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x5e54ac3f7e44054ee23438f8274ef60b07df5d9cbcb00e7542b779a92944e986",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Cover gaps that result from transforming Yul code into our Python opcode\n    wrapper bytecode.\n\n    E.g. Yul tends to optimize stack items by using `SWAP1` and `DUP1` opcodes,\n    which are not regularly used in python code.\n\n    Modify this test to cover more Yul code if required in the future.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/coverage/test_coverage.py#L21",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/coverage/test_coverage.py::test_coverage[fork_Paris-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0xc0c01010abd52cc296475c54992d1ffe90943e0b89396eaee45377575303bf50",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4d6d47926b68b8dd4e91f713898d53cdc6c4a77c89b64da959ea1173fdcb284b",
+                        "receiptsRoot": "0xbf36bd3a0ede6c8e88f8881defe72ef6599753116311edbe7e0c819eedd04440",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x18206",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xc0c01010abd52cc296475c54992d1ffe90943e0b89396eaee45377575303bf50",
+                        "transactions": [
+                            "0xf860800a830186a0948d3a8396df8fe44b96462f913418a70b342fb6ba80801ba04f635adc0e86f583a5ff2058e90aca9df8fc75672d761f584ba9c47a9e758347a0227b44ff1697970bc85183d63e8e6394a13079a8cf00b3cf6aba2d7c0511504b"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x32811ffbabd0710da7d113650bf6cdf78ee242fcba6326864494b5837974d18d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Cover gaps that result from transforming Yul code into our Python opcode\n    wrapper bytecode.\n\n    E.g. Yul tends to optimize stack items by using `SWAP1` and `DUP1` opcodes,\n    which are not regularly used in python code.\n\n    Modify this test to cover more Yul code if required in the future.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/coverage/test_coverage.py#L21",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/coverage/test_coverage.py::test_coverage[fork_Prague-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x2f6a9a0e7315143d71aa3be585cd2bf01946dbb2b22ba8da9f710992c072bab5",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd04e1e5f473836346069a06923fffb449d69f4cbdf790f906baf70858f753840",
+                        "receiptsRoot": "0x40d1d302757dd24ccd5c05fe0762a15f464e44e6a47c440bd8529a639f98c435",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5cb4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x2f6a9a0e7315143d71aa3be585cd2bf01946dbb2b22ba8da9f710992c072bab5",
+                        "transactions": [
+                            "0x02f8630180050a830186a0948d3a8396df8fe44b96462f913418a70b342fb6ba8080c080a0214ff4b1d8ec0bdc2e838ce6ad4338c7de47b9d976c0ae2d598e043ac7479ba4a022c7a5095e0910fba51566cd2816d7b685b4aed95395afe9839cd0eb36fdf709"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x07085112b570938c1428708e7db5fb0eda82d4a2f649539a06d69b9bdb451cab",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Cover gaps that result from transforming Yul code into our Python opcode\n    wrapper bytecode.\n\n    E.g. Yul tends to optimize stack items by using `SWAP1` and `DUP1` opcodes,\n    which are not regularly used in python code.\n\n    Modify this test to cover more Yul code if required in the future.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/coverage/test_coverage.py#L21",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/homestead/coverage/test_coverage.py::test_coverage[fork_Shanghai-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x3b6b5109fc2f7404d4623caf94961fca3f9ea4f9f6d88f43eb419a464f0f626a",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf539906fefe69671402a8d0ac0ad1e0fd47e99195c5f685a9ccbbe421a75b843",
+                        "receiptsRoot": "0x6fc12a73299b91b86c59f9494694dd632c710689019d19e22a0da4d9b9aeb0cc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5cb4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x3b6b5109fc2f7404d4623caf94961fca3f9ea4f9f6d88f43eb419a464f0f626a",
+                        "transactions": [
+                            "0xf860800a830186a0948d3a8396df8fe44b96462f913418a70b342fb6ba80801ba04f635adc0e86f583a5ff2058e90aca9df8fc75672d761f584ba9c47a9e758347a0227b44ff1697970bc85183d63e8e6394a13079a8cf00b3cf6aba2d7c0511504b"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x4540511c16194d166a7b385f16ae3789c77aef6fa83611a961b941a0efa710e8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Cover gaps that result from transforming Yul code into our Python opcode\n    wrapper bytecode.\n\n    E.g. Yul tends to optimize stack items by using `SWAP1` and `DUP1` opcodes,\n    which are not regularly used in python code.\n\n    Modify this test to cover more Yul code if required in the future.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/coverage/test_coverage.py#L21",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

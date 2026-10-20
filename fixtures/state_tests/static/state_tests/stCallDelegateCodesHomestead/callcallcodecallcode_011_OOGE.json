@@ -1,0 +1,265 @@
+{
+    "tests/static/state_tests/stCallDelegateCodesHomestead/callcallcodecallcode_011_OOGEFiller.json::callcallcodecallcode_011_OOGE[fork_Cancun-state_test-]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x01c9c380",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xa9dd5000f3035db531b1c80fa9fd9bcae6d5b598": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x509853fc8c6a66c7970e0ecdf7124e5c5aac8eea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6001600355622fffff60002000",
+                "storage": {}
+            },
+            "0x509853fc8c6a66c7970e0ecdf7124e5c5aac8fea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x604060006040600073509853fc8c6a66c7970e0ecdf7124e5c5aac8eea62061a80f46002556001600b5500",
+                "storage": {}
+            },
+            "0x509853fc8c6a66c7970e0ecdf7124e5c5aac90ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x604060006040600073509853fc8c6a66c7970e0ecdf7124e5c5aac8fea620927c0f460015500",
+                "storage": {}
+            },
+            "0x509853fc8c6a66c7970e0ecdf7124e5c5aac91ea": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x6040600060406000600073509853fc8c6a66c7970e0ecdf7124e5c5aac90ea620c3500f160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x509853fc8c6a66c7970e0ecdf7124e5c5aac91ea",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xa9dd5000f3035db531b1c80fa9fd9bcae6d5b598",
+            "secretKey": "0xe9b91d1d763800af0a5e44fa509853fc8c6a66c7970e0ecdf7124e5c5aac8eea"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xe905836af41cc246d33dab06e6703adc4cebece78085ea7556eb05b88c77b40e",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094509853fc8c6a66c7970e0ecdf7124e5c5aac91ea808025a02b5bcf16f503ca7e947183502396406f7659b4571765414a8b79ae41a93d46b5a07a2df448ada938c974a6858105b0669bc6ac6f16b940242c29159b61490f7d97",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xa9dd5000f3035db531b1c80fa9fd9bcae6d5b598": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7181ab4",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x509853fc8c6a66c7970e0ecdf7124e5c5aac8eea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6001600355622fffff60002000",
+                            "storage": {}
+                        },
+                        "0x509853fc8c6a66c7970e0ecdf7124e5c5aac8fea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x604060006040600073509853fc8c6a66c7970e0ecdf7124e5c5aac8eea62061a80f46002556001600b5500",
+                            "storage": {}
+                        },
+                        "0x509853fc8c6a66c7970e0ecdf7124e5c5aac90ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x604060006040600073509853fc8c6a66c7970e0ecdf7124e5c5aac8fea620927c0f460015500",
+                            "storage": {
+                                "0x0b": "0x01",
+                                "0x01": "0x01"
+                            }
+                        },
+                        "0x509853fc8c6a66c7970e0ecdf7124e5c5aac91ea": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x6040600060406000600073509853fc8c6a66c7970e0ecdf7124e5c5aac90ea620c3500f160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x565b589fdf7fbe969bdee67e58de66663fcf635de9048f912444fc4381c20964",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/static/state_tests/stCallDelegateCodesHomestead/callcallcodecallcode_011_OOGEFiller.json::callcallcodecallcode_011_OOGE[fork_Prague-state_test-]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x01c9c380",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xa9dd5000f3035db531b1c80fa9fd9bcae6d5b598": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x509853fc8c6a66c7970e0ecdf7124e5c5aac8eea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6001600355622fffff60002000",
+                "storage": {}
+            },
+            "0x509853fc8c6a66c7970e0ecdf7124e5c5aac8fea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x604060006040600073509853fc8c6a66c7970e0ecdf7124e5c5aac8eea62061a80f46002556001600b5500",
+                "storage": {}
+            },
+            "0x509853fc8c6a66c7970e0ecdf7124e5c5aac90ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x604060006040600073509853fc8c6a66c7970e0ecdf7124e5c5aac8fea620927c0f460015500",
+                "storage": {}
+            },
+            "0x509853fc8c6a66c7970e0ecdf7124e5c5aac91ea": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x6040600060406000600073509853fc8c6a66c7970e0ecdf7124e5c5aac90ea620c3500f160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x509853fc8c6a66c7970e0ecdf7124e5c5aac91ea",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xa9dd5000f3035db531b1c80fa9fd9bcae6d5b598",
+            "secretKey": "0xe9b91d1d763800af0a5e44fa509853fc8c6a66c7970e0ecdf7124e5c5aac8eea"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xe905836af41cc246d33dab06e6703adc4cebece78085ea7556eb05b88c77b40e",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830f424094509853fc8c6a66c7970e0ecdf7124e5c5aac91ea808025a02b5bcf16f503ca7e947183502396406f7659b4571765414a8b79ae41a93d46b5a07a2df448ada938c974a6858105b0669bc6ac6f16b940242c29159b61490f7d97",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xa9dd5000f3035db531b1c80fa9fd9bcae6d5b598": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7181ab4",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x509853fc8c6a66c7970e0ecdf7124e5c5aac8eea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6001600355622fffff60002000",
+                            "storage": {}
+                        },
+                        "0x509853fc8c6a66c7970e0ecdf7124e5c5aac8fea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x604060006040600073509853fc8c6a66c7970e0ecdf7124e5c5aac8eea62061a80f46002556001600b5500",
+                            "storage": {}
+                        },
+                        "0x509853fc8c6a66c7970e0ecdf7124e5c5aac90ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x604060006040600073509853fc8c6a66c7970e0ecdf7124e5c5aac8fea620927c0f460015500",
+                            "storage": {
+                                "0x0b": "0x01",
+                                "0x01": "0x01"
+                            }
+                        },
+                        "0x509853fc8c6a66c7970e0ecdf7124e5c5aac91ea": {
+                            "nonce": "0x00",
+                            "balance": "0x0de0b6b3a7640000",
+                            "code": "0x6040600060406000600073509853fc8c6a66c7970e0ecdf7124e5c5aac90ea620c3500f160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xd058ffeb22bf5a2c6487f8656b8787db45e04df50b15b827b95c7ecace64cb4e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    }
+}

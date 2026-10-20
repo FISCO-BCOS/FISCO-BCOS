@@ -1,0 +1,55 @@
+{
+    "tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py::test_blobbasefee_before_fork[fork_ShanghaiToCancunAtTime15k-blockchain_test_engine_x_from_state_test-]": {
+        "network": "ShanghaiToCancunAtTime15k",
+        "lastblockhash": "0xc736f28ddf2cdc835ca43a9c2b9bb4cc494aa9903b135100e4a4e222f15387e6",
+        "config": {
+            "network": "ShanghaiToCancunAtTime15k",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x2568bcaf29d39c51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xc288ce8a349ea9cae06789b66856befdd614f851bc241600ca0914dc9f34a79c",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfa89920490b0106b15d48d3a2679366e8ba4520a618dae0154334c71bb54d3ab",
+                        "receiptsRoot": "0x8b675082d025bda02a2de1e950c9c8f53cf364bca626a7504b41b7bc0ec5f194",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x164e1",
+                        "timestamp": "0x1d4c",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xc736f28ddf2cdc835ca43a9c2b9bb4cc494aa9903b135100e4a4e222f15387e6",
+                        "transactions": [
+                            "0xf860800a830f42409498d1b5415b2f51b98bd3e3ca7eb6f7ada86410ee018025a0f9e7f195b965ab19015a4f925694e203f0471fa2a9869f8b921917ad6cb04199a079316d55bb848fe3d33bd8cbdfe4c0a5f50a5ec60716b038eb26fefdbb4490c4"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x573f1ba019ee83480c5dd861ef4baffaa88fc2a23dbb60f162074f2bf0f1dd04",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the BLOBBASEFEE opcode results on exception when called before\n    the fork.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py#L162",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7516.md",
+            "reference-spec-version": "dcd2f4ede58a6ed908acd3cc2c198e9f605cbf3b"
+        }
+    }
+}

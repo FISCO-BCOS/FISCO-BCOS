@@ -1,0 +1,1765 @@
+{
+    "tests/static/state_tests/stMemoryStressTest/RETURN_BoundsFiller.json::RETURN_Bounds[fork_Cancun-state_test--g0]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x7fffffffffffffff",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x6d17cb980b2d3571eacd8b676543b4e2d0824604": {
+                "nonce": "0x00",
+                "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b0ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b1ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b2ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b3ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff63fffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b4ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff630ffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b5ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b6ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b7ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b8ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b9ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399baea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399bbea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399bcea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600067fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399bdea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600063fffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399beea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000630ffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399bfea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399c0ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bfea6707fffffffffffffff16001556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399beea6707fffffffffffffff16002556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bdea6707fffffffffffffff16003556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bcea6707fffffffffffffff16004556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bbea6707fffffffffffffff16005556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16006556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16007556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16008556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16009556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600a556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600b556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600c556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600d556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600e556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600f556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff160105500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0249f0"
+            ],
+            "to": "0xcd86731dfad0244be2f8e6563c3a5b1b4399c0ea",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d17cb980b2d3571eacd8b676543b4e2d0824604",
+            "secretKey": "0x12ec243dd9159ea332b95cbbcd86731dfad0244be2f8e6563c3a5b1b4399b0ea"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x82f2d9d8533bb3585308d526199afa1dd310096595d1ccf04e870ed12dbcda4b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830249f094cd86731dfad0244be2f8e6563c3a5b1b4399c0ea018025a020d15c2176978a92b4dd708421a203be63e959b82658dc9995a7a3c2dbb6d1bda033890b289c81373dd10b576999d278b5d421d6f136f59900e967c94f9e15d080",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x6d17cb980b2d3571eacd8b676543b4e2d0824604": {
+                            "nonce": "0x01",
+                            "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe91c9f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b0ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b1ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b2ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b3ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff63fffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b4ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b5ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b6ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b7ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b8ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b9ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399baea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399bbea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399bcea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600067fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399bdea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600063fffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399beea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6000630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399bfea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399c0ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bfea6707fffffffffffffff16001556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399beea6707fffffffffffffff16002556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bdea6707fffffffffffffff16003556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bcea6707fffffffffffffff16004556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bbea6707fffffffffffffff16005556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16006556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16007556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16008556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16009556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600a556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600b556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600c556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600d556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600e556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600f556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff160105500",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x107a777718df3947d15bbd81a0a2e9d5a322b61823d4816fd78be7a54e5d8e70",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/static/state_tests/stMemoryStressTest/RETURN_BoundsFiller.json::RETURN_Bounds[fork_Cancun-state_test--g1]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x7fffffffffffffff",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x167126478a86d16108c8ad7c7ab3adaa6e92b800": {
+                "nonce": "0x00",
+                "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af07cd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af07dd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af07ed8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af07fd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff63fffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af080d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff630ffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af081d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af082d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af083d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af084d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af085d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af086d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af087d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af088d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600067fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af089d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600063fffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af08ad8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000630ffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af08bd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af08cd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af08bd86707fffffffffffffff16001556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af08ad86707fffffffffffffff16002556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af089d86707fffffffffffffff16003556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af088d86707fffffffffffffff16004556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af087d86707fffffffffffffff16005556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16006556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16007556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16008556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16009556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600a556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600b556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600c556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600d556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600e556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600f556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff160105500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xc18217cbc0ce6e4df8a586df8444f9446af08cd8",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x167126478a86d16108c8ad7c7ab3adaa6e92b800",
+            "secretKey": "0xd74af490e5b8cf77e58b7e1dc18217cbc0ce6e4df8a586df8444f9446af07cd8"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xc71ad751836ebe5d52406345686973f0a0da5707c54108ebbfea316f512c483f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094c18217cbc0ce6e4df8a586df8444f9446af08cd8018025a00c68da348dfd65a6c9f9477431ac5f55f63af5b791cf3fc52cea0b4a801fcd13a059f8d6fe8570a57a502f98f4e841ece6ff55b58e4282a25f4acfe414e69460ab",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x167126478a86d16108c8ad7c7ab3adaa6e92b800": {
+                            "nonce": "0x01",
+                            "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc43bfe",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af07cd8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af07dd8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af07ed8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af07fd8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff63fffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af080d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af081d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af082d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af083d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af084d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af085d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af086d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af087d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af088d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600067fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af089d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600063fffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af08ad8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6000630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af08bd8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af08cd8": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x6000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af08bd86707fffffffffffffff16001556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af08ad86707fffffffffffffff16002556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af089d86707fffffffffffffff16003556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af088d86707fffffffffffffff16004556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af087d86707fffffffffffffff16005556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16006556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16007556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16008556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16009556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600a556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600b556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600c556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600d556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600e556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600f556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff160105500",
+                            "storage": {
+                                "0x01": "0x01",
+                                "0x02": "0x01",
+                                "0x03": "0x01",
+                                "0x04": "0x01",
+                                "0x05": "0x01",
+                                "0x06": "0x01",
+                                "0x07": "0x01",
+                                "0x08": "0x01",
+                                "0x09": "0x01",
+                                "0x0a": "0x01",
+                                "0x0b": "0x01",
+                                "0x0c": "0x01",
+                                "0x0d": "0x01",
+                                "0x0e": "0x01",
+                                "0x0f": "0x01",
+                                "0x10": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xdf6a93f25b50764930a6c948afc52242b5f88331f191653d2137c7575a51d500",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/static/state_tests/stMemoryStressTest/RETURN_BoundsFiller.json::RETURN_Bounds[fork_Cancun-state_test--g2]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x7fffffffffffffff",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x5a32d90be480daa4ef4121297c120a7e7a75ea61": {
+                "nonce": "0x00",
+                "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68265e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68266e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68267e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68268e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff63fffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68269e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff630ffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826ae5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826be5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826ce5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826de5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826ee5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826fe5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68270e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68271e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600067fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68272e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600063fffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68273e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000630ffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68274e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68275e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000600060006000600073e600bb6b982af627faae0e47891140d3d68274e56707fffffffffffffff16001556000600060006000600073e600bb6b982af627faae0e47891140d3d68273e56707fffffffffffffff16002556000600060006000600073e600bb6b982af627faae0e47891140d3d68272e56707fffffffffffffff16003556000600060006000600073e600bb6b982af627faae0e47891140d3d68271e56707fffffffffffffff16004556000600060006000600073e600bb6b982af627faae0e47891140d3d68270e56707fffffffffffffff16005556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16006556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16007556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16008556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16009556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600a556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600b556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600c556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600d556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600e556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600f556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff160105500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0xe4e1c0"
+            ],
+            "to": "0xe600bb6b982af627faae0e47891140d3d68275e5",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x5a32d90be480daa4ef4121297c120a7e7a75ea61",
+            "secretKey": "0xb78d55535c68b4d4532c9c12e600bb6b982af627faae0e47891140d3d68265e5"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xf8fe12b0ae518fb362af1fa37f0dec039cb4ad95ffd2128903351c46fb0618de",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83e4e1c094e600bb6b982af627faae0e47891140d3d68275e5018025a01577368fb0f212b084b2296dd4714715165c812c0b899b6e4eef0da108e9a75ca04cd05cfd531159aebdd1c6a6ae18b778447c3113ebd76d62ba37f89365e968b9",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x5a32d90be480daa4ef4121297c120a7e7a75ea61": {
+                            "nonce": "0x01",
+                            "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc43bfe",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68265e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68266e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68267e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68268e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff63fffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68269e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826ae5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826be5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826ce5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826de5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826ee5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826fe5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68270e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68271e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600067fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68272e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600063fffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68273e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6000630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68274e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68275e5": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x6000600060006000600073e600bb6b982af627faae0e47891140d3d68274e56707fffffffffffffff16001556000600060006000600073e600bb6b982af627faae0e47891140d3d68273e56707fffffffffffffff16002556000600060006000600073e600bb6b982af627faae0e47891140d3d68272e56707fffffffffffffff16003556000600060006000600073e600bb6b982af627faae0e47891140d3d68271e56707fffffffffffffff16004556000600060006000600073e600bb6b982af627faae0e47891140d3d68270e56707fffffffffffffff16005556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16006556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16007556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16008556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16009556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600a556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600b556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600c556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600d556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600e556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600f556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff160105500",
+                            "storage": {
+                                "0x01": "0x01",
+                                "0x02": "0x01",
+                                "0x03": "0x01",
+                                "0x04": "0x01",
+                                "0x05": "0x01",
+                                "0x06": "0x01",
+                                "0x07": "0x01",
+                                "0x08": "0x01",
+                                "0x09": "0x01",
+                                "0x0a": "0x01",
+                                "0x0b": "0x01",
+                                "0x0c": "0x01",
+                                "0x0d": "0x01",
+                                "0x0e": "0x01",
+                                "0x0f": "0x01",
+                                "0x10": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x420e098c488611407821b27b9aa2215f7f1da788739386041e23f3c2293a5766",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/static/state_tests/stMemoryStressTest/RETURN_BoundsFiller.json::RETURN_Bounds[fork_Prague-state_test--g0]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x7fffffffffffffff",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x6d17cb980b2d3571eacd8b676543b4e2d0824604": {
+                "nonce": "0x00",
+                "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b0ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b1ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b2ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b3ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff63fffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b4ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff630ffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b5ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b6ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b7ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b8ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399b9ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff6000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399baea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399bbea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399bcea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600067fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399bdea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600063fffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399beea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000630ffffffff300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399bfea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006000f300",
+                "storage": {}
+            },
+            "0xcd86731dfad0244be2f8e6563c3a5b1b4399c0ea": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bfea6707fffffffffffffff16001556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399beea6707fffffffffffffff16002556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bdea6707fffffffffffffff16003556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bcea6707fffffffffffffff16004556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bbea6707fffffffffffffff16005556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16006556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16007556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16008556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16009556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600a556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600b556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600c556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600d556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600e556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600f556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff160105500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0249f0"
+            ],
+            "to": "0xcd86731dfad0244be2f8e6563c3a5b1b4399c0ea",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6d17cb980b2d3571eacd8b676543b4e2d0824604",
+            "secretKey": "0x12ec243dd9159ea332b95cbbcd86731dfad0244be2f8e6563c3a5b1b4399b0ea"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x82f2d9d8533bb3585308d526199afa1dd310096595d1ccf04e870ed12dbcda4b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830249f094cd86731dfad0244be2f8e6563c3a5b1b4399c0ea018025a020d15c2176978a92b4dd708421a203be63e959b82658dc9995a7a3c2dbb6d1bda033890b289c81373dd10b576999d278b5d421d6f136f59900e967c94f9e15d080",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x6d17cb980b2d3571eacd8b676543b4e2d0824604": {
+                            "nonce": "0x01",
+                            "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe91c9f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b0ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b1ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b2ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b3ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff63fffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b4ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b5ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b6ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b7ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b8ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399b9ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399baea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399bbea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399bcea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600067fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399bdea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600063fffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399beea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6000630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399bfea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006000f300",
+                            "storage": {}
+                        },
+                        "0xcd86731dfad0244be2f8e6563c3a5b1b4399c0ea": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bfea6707fffffffffffffff16001556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399beea6707fffffffffffffff16002556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bdea6707fffffffffffffff16003556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bcea6707fffffffffffffff16004556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399bbea6707fffffffffffffff16005556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16006556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16007556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16008556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff16009556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600a556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600b556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600c556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600d556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600e556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff1600f556000600060006000600073cd86731dfad0244be2f8e6563c3a5b1b4399baea6707fffffffffffffff160105500",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc5c4094ef03820a9f9cdb1af4d748cb862fe70ce42cce4023c186ac2db0650df",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/static/state_tests/stMemoryStressTest/RETURN_BoundsFiller.json::RETURN_Bounds[fork_Prague-state_test--g1]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x7fffffffffffffff",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x167126478a86d16108c8ad7c7ab3adaa6e92b800": {
+                "nonce": "0x00",
+                "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af07cd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af07dd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af07ed8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af07fd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff63fffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af080d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff630ffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af081d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af082d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af083d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af084d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af085d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff6000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af086d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af087d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af088d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600067fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af089d8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600063fffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af08ad8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000630ffffffff300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af08bd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006000f300",
+                "storage": {}
+            },
+            "0xc18217cbc0ce6e4df8a586df8444f9446af08cd8": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af08bd86707fffffffffffffff16001556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af08ad86707fffffffffffffff16002556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af089d86707fffffffffffffff16003556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af088d86707fffffffffffffff16004556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af087d86707fffffffffffffff16005556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16006556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16007556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16008556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16009556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600a556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600b556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600c556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600d556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600e556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600f556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff160105500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xc18217cbc0ce6e4df8a586df8444f9446af08cd8",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x167126478a86d16108c8ad7c7ab3adaa6e92b800",
+            "secretKey": "0xd74af490e5b8cf77e58b7e1dc18217cbc0ce6e4df8a586df8444f9446af07cd8"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xc71ad751836ebe5d52406345686973f0a0da5707c54108ebbfea316f512c483f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094c18217cbc0ce6e4df8a586df8444f9446af08cd8018025a00c68da348dfd65a6c9f9477431ac5f55f63af5b791cf3fc52cea0b4a801fcd13a059f8d6fe8570a57a502f98f4e841ece6ff55b58e4282a25f4acfe414e69460ab",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x167126478a86d16108c8ad7c7ab3adaa6e92b800": {
+                            "nonce": "0x01",
+                            "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc43bfe",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af07cd8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af07dd8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af07ed8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af07fd8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff63fffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af080d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af081d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af082d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af083d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af084d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af085d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af086d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af087d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af088d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600067fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af089d8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600063fffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af08ad8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6000630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af08bd8": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006000f300",
+                            "storage": {}
+                        },
+                        "0xc18217cbc0ce6e4df8a586df8444f9446af08cd8": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x6000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af08bd86707fffffffffffffff16001556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af08ad86707fffffffffffffff16002556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af089d86707fffffffffffffff16003556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af088d86707fffffffffffffff16004556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af087d86707fffffffffffffff16005556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16006556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16007556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16008556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff16009556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600a556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600b556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600c556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600d556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600e556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff1600f556000600060006000600073c18217cbc0ce6e4df8a586df8444f9446af086d86707fffffffffffffff160105500",
+                            "storage": {
+                                "0x01": "0x01",
+                                "0x02": "0x01",
+                                "0x03": "0x01",
+                                "0x04": "0x01",
+                                "0x05": "0x01",
+                                "0x06": "0x01",
+                                "0x07": "0x01",
+                                "0x08": "0x01",
+                                "0x09": "0x01",
+                                "0x0a": "0x01",
+                                "0x0b": "0x01",
+                                "0x0c": "0x01",
+                                "0x0d": "0x01",
+                                "0x0e": "0x01",
+                                "0x0f": "0x01",
+                                "0x10": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xfd96cc3a6446938c7f241327518f69bb388a508c325b2d4d456945ad4036047b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/static/state_tests/stMemoryStressTest/RETURN_BoundsFiller.json::RETURN_Bounds[fork_Prague-state_test--g2]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x7fffffffffffffff",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x5a32d90be480daa4ef4121297c120a7e7a75ea61": {
+                "nonce": "0x00",
+                "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68265e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68266e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68267e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68268e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff63fffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68269e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff630ffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826ae5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826be5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826ce5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x67ffffffffffffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826de5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x63ffffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826ee5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x630fffffff6000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d6826fe5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68270e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68271e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600067fffffffffffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68272e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x600063fffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68273e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000630ffffffff300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68274e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x60006000f300",
+                "storage": {}
+            },
+            "0xe600bb6b982af627faae0e47891140d3d68275e5": {
+                "nonce": "0x00",
+                "balance": "0x00",
+                "code": "0x6000600060006000600073e600bb6b982af627faae0e47891140d3d68274e56707fffffffffffffff16001556000600060006000600073e600bb6b982af627faae0e47891140d3d68273e56707fffffffffffffff16002556000600060006000600073e600bb6b982af627faae0e47891140d3d68272e56707fffffffffffffff16003556000600060006000600073e600bb6b982af627faae0e47891140d3d68271e56707fffffffffffffff16004556000600060006000600073e600bb6b982af627faae0e47891140d3d68270e56707fffffffffffffff16005556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16006556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16007556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16008556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16009556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600a556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600b556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600c556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600d556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600e556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600f556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff160105500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0xe4e1c0"
+            ],
+            "to": "0xe600bb6b982af627faae0e47891140d3d68275e5",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x5a32d90be480daa4ef4121297c120a7e7a75ea61",
+            "secretKey": "0xb78d55535c68b4d4532c9c12e600bb6b982af627faae0e47891140d3d68265e5"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xf8fe12b0ae518fb362af1fa37f0dec039cb4ad95ffd2128903351c46fb0618de",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a83e4e1c094e600bb6b982af627faae0e47891140d3d68275e5018025a01577368fb0f212b084b2296dd4714715165c812c0b899b6e4eef0da108e9a75ca04cd05cfd531159aebdd1c6a6ae18b778447c3113ebd76d62ba37f89365e968b9",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x5a32d90be480daa4ef4121297c120a7e7a75ea61": {
+                            "nonce": "0x01",
+                            "balance": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc43bfe",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68265e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68266e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68267e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff67fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68268e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff63fffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68269e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826ae5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826be5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6d0fffffffffffffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826ce5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x67ffffffffffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826de5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x63ffffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826ee5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x630fffffff6000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d6826fe5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68270e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006d0ffffffffffffffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68271e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600067fffffffffffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68272e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x600063fffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68273e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x6000630ffffffff300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68274e5": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x60006000f300",
+                            "storage": {}
+                        },
+                        "0xe600bb6b982af627faae0e47891140d3d68275e5": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x6000600060006000600073e600bb6b982af627faae0e47891140d3d68274e56707fffffffffffffff16001556000600060006000600073e600bb6b982af627faae0e47891140d3d68273e56707fffffffffffffff16002556000600060006000600073e600bb6b982af627faae0e47891140d3d68272e56707fffffffffffffff16003556000600060006000600073e600bb6b982af627faae0e47891140d3d68271e56707fffffffffffffff16004556000600060006000600073e600bb6b982af627faae0e47891140d3d68270e56707fffffffffffffff16005556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16006556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16007556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16008556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff16009556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600a556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600b556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600c556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600d556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600e556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff1600f556000600060006000600073e600bb6b982af627faae0e47891140d3d6826fe56707fffffffffffffff160105500",
+                            "storage": {
+                                "0x01": "0x01",
+                                "0x02": "0x01",
+                                "0x03": "0x01",
+                                "0x04": "0x01",
+                                "0x05": "0x01",
+                                "0x06": "0x01",
+                                "0x07": "0x01",
+                                "0x08": "0x01",
+                                "0x09": "0x01",
+                                "0x0a": "0x01",
+                                "0x0b": "0x01",
+                                "0x0c": "0x01",
+                                "0x0d": "0x01",
+                                "0x0e": "0x01",
+                                "0x0f": "0x01",
+                                "0x10": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1394c4ca2632e302ef2b6d91f7e55b549fcd5353bfe9e61fc23360ded0a6be72",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    }
+}

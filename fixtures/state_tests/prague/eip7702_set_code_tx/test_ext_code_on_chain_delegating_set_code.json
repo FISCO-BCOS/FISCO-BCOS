@@ -1,0 +1,149 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_ext_code_on_chain_delegating_set_code[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xb5607d23eb6fd710955e22dea0972a36b486b55e": {
+                "nonce": "0x00",
+                "balance": "0x01",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xf7a50596c239f7ed821dc6b8fd990e5ed7fdc04b": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x73b5607d23eb6fd710955e22dea0972a36b486b55e3b60015573b5607d23eb6fd710955e22dea0972a36b486b55e3f60025573b5607d23eb6fd710955e22dea0972a36b486b55e3b6000600073b5607d23eb6fd710955e22dea0972a36b486b55e3c60005160035573b5607d23eb6fd710955e22dea0972a36b486b55e31600455738ca6c9abbad1a1c9d8099a4462b544852ee502f93b600555738ca6c9abbad1a1c9d8099a4462b544852ee502f93f600655738ca6c9abbad1a1c9d8099a4462b544852ee502f93b60006000738ca6c9abbad1a1c9d8099a4462b544852ee502f93c600051600755738ca6c9abbad1a1c9d8099a4462b544852ee502f93160085500",
+                "storage": {}
+            },
+            "0xc10dac237e4eb76627a639a8fb645371755bd228": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x989680"
+            ],
+            "to": "0xf7a50596c239f7ed821dc6b8fd990e5ed7fdc04b",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                []
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x00",
+                    "address": "0x8ca6c9abbad1a1c9d8099a4462b544852ee502f9",
+                    "nonce": "0x00",
+                    "v": "0x00",
+                    "r": "0x367f67fa9bb1e314304184f5ab55801a08ecfa43664f5c244306c2bd647c442e",
+                    "s": "0x55a7db5fd4c52ecb36744e8823320237559bc67e80b8dccac988151ff683f972",
+                    "signer": "0xb5607d23eb6fd710955e22dea0972a36b486b55e",
+                    "yParity": "0x00"
+                },
+                {
+                    "chainId": "0x00",
+                    "address": "0xb5607d23eb6fd710955e22dea0972a36b486b55e",
+                    "nonce": "0x00",
+                    "v": "0x00",
+                    "r": "0x99e78e1929b53af3999dddab5d4efe30a5f8f9acaad98eb6b725147de50de384",
+                    "s": "0x44bcc3bbe5f720a5c9825498465edbca82fc9d39e1577588ce841cf9e2d1a494",
+                    "signer": "0x8ca6c9abbad1a1c9d8099a4462b544852ee502f9",
+                    "yParity": "0x00"
+                }
+            ],
+            "sender": "0xc10dac237e4eb76627a639a8fb645371755bd228",
+            "secretKey": "0x5ae3b235e5dd8e122d8b38f3f7a50596c239f7ed821dc6b8fd990e5ed7fdc04d"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x72f6a44a8993c8aefb066c4e27611dd0d6b60350833112b9ce7abd1f12c3d930",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f9011d018080078398968094f7a50596c239f7ed821dc6b8fd990e5ed7fdc04b8080c0f8b8f85a80948ca6c9abbad1a1c9d8099a4462b544852ee502f98080a0367f67fa9bb1e314304184f5ab55801a08ecfa43664f5c244306c2bd647c442ea055a7db5fd4c52ecb36744e8823320237559bc67e80b8dccac988151ff683f972f85a8094b5607d23eb6fd710955e22dea0972a36b486b55e8080a099e78e1929b53af3999dddab5d4efe30a5f8f9acaad98eb6b725147de50de384a044bcc3bbe5f720a5c9825498465edbca82fc9d39e1577588ce841cf9e2d1a49401a01c483169979c7f2dfb423af795498560154c36efc66d086a97ed2b465b8aad82a05dc8254407179549b7aef8f5257d3efcd552e0024cdf9b13e0b0f65b52f72554",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xb5607d23eb6fd710955e22dea0972a36b486b55e": {
+                            "nonce": "0x01",
+                            "balance": "0x01",
+                            "code": "0xef01008ca6c9abbad1a1c9d8099a4462b544852ee502f9",
+                            "storage": {}
+                        },
+                        "0xf7a50596c239f7ed821dc6b8fd990e5ed7fdc04b": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x73b5607d23eb6fd710955e22dea0972a36b486b55e3b60015573b5607d23eb6fd710955e22dea0972a36b486b55e3f60025573b5607d23eb6fd710955e22dea0972a36b486b55e3b6000600073b5607d23eb6fd710955e22dea0972a36b486b55e3c60005160035573b5607d23eb6fd710955e22dea0972a36b486b55e31600455738ca6c9abbad1a1c9d8099a4462b544852ee502f93b600555738ca6c9abbad1a1c9d8099a4462b544852ee502f93f600655738ca6c9abbad1a1c9d8099a4462b544852ee502f93b60006000738ca6c9abbad1a1c9d8099a4462b544852ee502f93c600051600755738ca6c9abbad1a1c9d8099a4462b544852ee502f93160085500",
+                            "storage": {
+                                "0x01": "0x17",
+                                "0x02": "0x317574cba559e8485780ca486d33699e3aef6a09870eddef01a99578986bbb8b",
+                                "0x03": "0xef01008ca6c9abbad1a1c9d8099a4462b544852ee502f9000000000000000000",
+                                "0x04": "0x01",
+                                "0x05": "0x17",
+                                "0x06": "0xa42c928198679f66e305809f29cd5aa95bd62ace1c20e386a3d63ef0319dbdac",
+                                "0x07": "0xef0100b5607d23eb6fd710955e22dea0972a36b486b55e000000000000000000"
+                            }
+                        },
+                        "0xc10dac237e4eb76627a639a8fb645371755bd228": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de88e06f",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8ca6c9abbad1a1c9d8099a4462b544852ee502f9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0xef0100b5607d23eb6fd710955e22dea0972a36b486b55e",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb6a830fa0fdcadcbefa50a9d6d9414bf19da7cd72b9644a76a0d90c8ca148d39",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test different ext*code operations on a set-code address that references\n    another delegated address.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1518",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

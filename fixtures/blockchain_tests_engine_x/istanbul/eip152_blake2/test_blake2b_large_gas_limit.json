@@ -1,0 +1,2534 @@
+{
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case0-data0-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Cancun",
+        "lastblockhash": "0xe7dd87d904be1edf03cdfb216dac434c8f705affb05c5ed7b25bfc9e4c35e0e6",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x258c7057eb2df62e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x611e18a89753860bf129ce34147cd3e4d50e6c2546967f512af8447db5277e51",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6412c310b8673afbfd303d77b0338578ee9f91d1bb111761673e409eba08c7c7",
+                        "receiptsRoot": "0x5547911183af6498e26f19d5774b231659d3d0626b370a2f15ea88e10976e7a9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8520",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe7dd87d904be1edf03cdfb216dac434c8f705affb05c5ed7b25bfc9e4c35e0e6",
+                        "transactions": [
+                            "0xf861800a8407270e009470f24f753186288d483b23ccfe9ea2067a08ef42808026a082db50deab4099f82eefb3da1a8ff7f0a14710b0faab76cbc40ae2f987ced397a049569a38ccf6c3447f235e0412ee5c6fe6a843dcf1615de0e88d9aa05bb418b6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x0675c3350c7ced150159195f859ab381b87cc6644215dcd0bdc0ac9482bfdffb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case0-data0-large-gas-limit-call_opcode_CALL]": {
+        "network": "Cancun",
+        "lastblockhash": "0x6b42468a0e8a1b8b72bbe9439201c33036c00ab3c3a0f53253ea03ebdb642f7f",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x23f6417193037443",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xb7c29292fe4547b2cc1a37579ff77c87aadcc2e839f706718d5a4d529041af98",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd41ac05cb15c21f1645fa8c5cbbae8cee1e49e84dd8b683cb0050eb14693263a",
+                        "receiptsRoot": "0x5547911183af6498e26f19d5774b231659d3d0626b370a2f15ea88e10976e7a9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8520",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x6b42468a0e8a1b8b72bbe9439201c33036c00ab3c3a0f53253ea03ebdb642f7f",
+                        "transactions": [
+                            "0xf861800a8407270e0094a6221c4d1b28d3f38affc4155fbc28b90470f888808026a00bd6534403cca6e536baba8318cc022f1f627f70442446736b986270b1d0299ea027d970a725b2335c5913bce7ef44f17e21b1f77ffe666c5895e24901581a1f57"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7798aef3c1ffb7713b4f7bf1126e6b80c57428552ecb3549eac039b9fabeef11",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data1-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x84686258d91f462d217dbace05cef48106174621fb51d76442f95bc360e86547",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x4ff7ec214f7ee7b2",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x00975641f4d9705bc649a0ea0970f2eade8e5240e375fe2bbf5f570994e1cfa5",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x706d09920e475417c4e60de73367fcc3c06c22eeaccd57d9a305a54684b1fdf2",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x84686258d91f462d217dbace05cef48106174621fb51d76442f95bc360e86547",
+                        "transactions": [
+                            "0xf90136800a8407270e0094a5e8323fa95e7644637dc495fc40b103a5c9c43c80b8d400000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a0fe889983a1af167410abe3f6cb5be0848359d4d0199fd510a9b6de4dfc1c6546a0069039cb14d23169471276e1a02047b1216a8f994bd456e71b48cb2d6e94fa4e"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb0bc3f0055a804664b87e2b018a54a2b2ccf6b7a46158917a364874b66828764",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data1-large-gas-limit-call_opcode_CALL]": {
+        "network": "Cancun",
+        "lastblockhash": "0x412775bef3ea8c96518e2a2cef2799dbf02807a552bf6494a027604b11ecc444",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x47162400968f360a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xbd7e35719a28057da419680addb8396ae4767879b13d12b8cd7417328d7b4a40",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x63b43262715a2bf6fe7ffe5b5c126af937e12268db7a02f86f09c5163a67246c",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x412775bef3ea8c96518e2a2cef2799dbf02807a552bf6494a027604b11ecc444",
+                        "transactions": [
+                            "0xf90136800a8407270e009450e55f81f9d975465986fe11826baa2e701222b580b8d400000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a0a4eabb90acff7340958120a1a8731cf1ae5f421434ec3795b238946294c6ec10a04fb1e24a94569bd1b2bc01ed5b3e4805198039a88528c3cdf4867a8297b1dbfb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x525532e502a2b7d8c957777812cff243b46006f3eb0886dee99a3ae6128861b1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data2-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x76456cf9e9191e621f394b86520cd466b1a65a27846fd7d1da0b3d46a56db43e",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x20feed7f42e7aa8b",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0f2872869ab76461068e2ae3f4e6339b6f0dfb84bfb3a23fefadf00c37fb2d39",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc93857fd098fe9525a24a26ad26864e0f459f81489f774e9dcfa5b477aa00335",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x76456cf9e9191e621f394b86520cd466b1a65a27846fd7d1da0b3d46a56db43e",
+                        "transactions": [
+                            "0xf90138800a8407270e0094f99e57f299cd70fb439113dca39d9ba0eced857080b8d6000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a0601ec31c5922d295fb2fa89139c6562498010ff2f0c49f8ef604ee152c790779a01568073e7fdb97c8ee5beb98c4cd57ba99517117477ecd84265407d2374b2a11"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xde6ce79a26bc34dc65eab6f7fca9ba8ecb3ad42298397ec22692e5b2268d430e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data2-large-gas-limit-call_opcode_CALL]": {
+        "network": "Cancun",
+        "lastblockhash": "0x74746ed085eacff01b8e5062b643b8640cb5d8521ff3005bfa5301e50bf9f38d",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xb7114a8522d9c451",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xc3ec68a3bae4d803bda2184cd28ff32e2a96a65b3ef41c400b421e4f4308ccc5",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6a2e50e576fa0ced86075d66869752ad73fee38b2b308d347d155e713d4d9b85",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x74746ed085eacff01b8e5062b643b8640cb5d8521ff3005bfa5301e50bf9f38d",
+                        "transactions": [
+                            "0xf90138800a8407270e00946849aa26cfa7d8c424d9e85ab4ac93b62659f9b280b8d6000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a02907bf36eeb1de56aa6d110aa862c558d2e3b5b4e04d75af1ed8af0c242e1b0aa03a7cc9ce388ce7deaacd602f95a1b4dc18a5c39193d47e58edef3da6b36ccf83"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xac46a9c069769200caf0830ab5614e25757bef4bb15c4b216c4ea54238ff716e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data3-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x6c9f722d8b065e2f2943e9ec41ef8cca77a1290dd77b971a288c508ba5809d6c",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x0034c5ceacf447d9",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x307ba602eafbb97d1b9602845eaa552d4530e7d2f49d769c9158197ca7c4d213",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe1a438fd45fe6c1dd154edac2b22a584e8576b16bdd506971d14dc112e91008b",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x6c9f722d8b065e2f2943e9ec41ef8cca77a1290dd77b971a288c508ba5809d6c",
+                        "transactions": [
+                            "0xf90137800a8407270e009480366b1bfe0baf0fd96f4988f04a85ce9069702c80b8d50000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000225a0965d360e2337b826281f49485a405edb007f6ef315dd8b5de1080eaa3fab50e2a04f698fc72e929a5a4b70675fbfd656cba66b4236e8d9f3e74d2adf0e5e9b51ef"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xbb609373f6ed5a33da4c539ad95eba9a2aeecfd21f46b4719ac36a5ec59e3018",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data3-large-gas-limit-call_opcode_CALL]": {
+        "network": "Cancun",
+        "lastblockhash": "0x2814ebe551319fda761a942887b33b0ba1cbe7b9c17cbc1c14bf316ef7acc86d",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xddb4abfcd915e07b",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xc6faef7109e98abfbcda603f092d9c7346dd1f3be27ac769607239f0441008b5",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0f619bd67528e614dae0a9235ac14f0d1c0b48883e7e9687568616de2008e8d3",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x2814ebe551319fda761a942887b33b0ba1cbe7b9c17cbc1c14bf316ef7acc86d",
+                        "transactions": [
+                            "0xf90137800a8407270e0094badc88409192c8666904acb612297986cab0cfd180b8d50000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000226a0bdce5f75509a3ef8db32a62dc21e234f485e6270e21e5f1f708df92f5761b535a00cb201a40c9bc72103f7bf7dadb51c1bc7524e3d590dfb54da7b7f9e209662d5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x0b901565cab8985da9afcc6becbafadf3e79f9c58aef27f828ae84a0d635a378",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case9-data10-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Cancun",
+        "lastblockhash": "0xe8d327f03c18a27b3f65d919c5fba9d036567a45dd77f11c1c7ba4fb320f19d0",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x2c91eed5712de8ef",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x3e391f846f83c37f95b468e4ea6239aaefb4270915f30b5f7f3d6b4988064688",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x30f7e5120547963371354b8ce6c3dfadd91b2c3ba254a8628f924f627745d85f",
+                        "receiptsRoot": "0x355694596703f76fd7085d1d44b6f2119753915fca2361905833a0bcd3fdf7ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8521",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe8d327f03c18a27b3f65d919c5fba9d036567a45dd77f11c1c7ba4fb320f19d0",
+                        "transactions": [
+                            "0xf863800a8407270e00942d40a5b24713df4b8858dade1c3c9cbfa5d1b2238082000c26a0028f76794947f9bc6b2bc73dc9334b6554f659e3a46320bd5a84b4a5def2574aa0697da954f36e5319b4647c48a85cfea5a91da8dfa696418bc82df9b35c2ce78a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x8e72570ff31260445c48fa1d51ae7884332ad0bac54468cdde2d4af2fa25abdb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case9-data10-large-gas-limit-call_opcode_CALL]": {
+        "network": "Cancun",
+        "lastblockhash": "0x72a90b534d7ff642d4cafb8327e9c5725c2d7fcff12d297e64a756bc4d238711",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x1ab343d1a13db102",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xece9a67350bc2ae6102c594edcc0c6387263f6baa3989216887c0114209320f6",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8e6c2c439fc7bd2d868a2e6c265f0047d31f4e1779719d855855b5f5494c5a4d",
+                        "receiptsRoot": "0x355694596703f76fd7085d1d44b6f2119753915fca2361905833a0bcd3fdf7ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8521",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x72a90b534d7ff642d4cafb8327e9c5725c2d7fcff12d297e64a756bc4d238711",
+                        "transactions": [
+                            "0xf863800a8407270e009453580ee2fbcfc249b699b4739b609e0cedb147318082000c26a02446a77b19ee09a60a491b854712fba564c8fa00b56c3ff9f6dc6f89d0d8942da02fae792b5e3e80d9a054f3ace7ce57e9e37325c50243a27d88dd1ab6d72053d5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x256c42b55f71d3133ae8e6a6afa416e9239b7dc25c4a8046dc3ee6e62fef9a95",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-modified-case8-data9-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x0dfd99a74b1486fba6dcb116dd2e9cee624750e3ba2fab25de8dd9dadec29081",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xe50df055bcc19369",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x1be7235a012f5a1c1ec4d5b49d1ac5dbd983f112b62ebaacffc907bc03eed54f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb840bc15257d9b8d69214d68e917910b6616f6ec16cf89574fc7d10114c2b40c",
+                        "receiptsRoot": "0x4a9926e0e68f89085cd8862476d0843379f6e9fa5768ee39e501699949acd5a1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2a06e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0dfd99a74b1486fba6dcb116dd2e9cee624750e3ba2fab25de8dd9dadec29081",
+                        "transactions": [
+                            "0xf90137800a8407270e0094ee10c1a5420a4832b977c83b5354a658d49568b280b8d5000186a048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a06d068ce2ee5a3ff555f5991e116a9fe1a75e0f5c9915af6ff7d83a51beb76c44a0174aa927895a5985fa5a78b9efefce52afd635b7dd20747498fe4feca21b3cb5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x178c3d777d1524817a27f02aa50c439cff5f6f7a3a9701b86529e11e48eaffa4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Cancun-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-modified-case8-data9-large-gas-limit-call_opcode_CALL]": {
+        "network": "Cancun",
+        "lastblockhash": "0xb8bc2a6c355405c5491fefd76e0b4c5823d709b1040e1168b69ae4a8af549cf7",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa9a3d1e36fe13049",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x2a8cdeffa7f0b2200abe81559a20a741e7a85f3cefacc50dffec10c602d721f9",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4b80aa3ffb272b1c2e4c31d00d45fd02b4114ca67e95d6812c7aa13fb3acd421",
+                        "receiptsRoot": "0x4a9926e0e68f89085cd8862476d0843379f6e9fa5768ee39e501699949acd5a1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2a06e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb8bc2a6c355405c5491fefd76e0b4c5823d709b1040e1168b69ae4a8af549cf7",
+                        "transactions": [
+                            "0xf90137800a8407270e0094fa02ae2a4a19e38e5baeadd86bcae6d692043eaa80b8d5000186a048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a07e8f02cd720cf362d965f1591c06690dd620aca407ee7aa94df9c8e050adc3b3a03982db5827dddbaccbb66993d0dfed16d10e2056e2c59514e34b7045879f08f9"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x8273b7e48600553e0353aa4caadb4bc0d79de13eaf8496884591b33b16f4d756",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case0-data0-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Paris",
+        "lastblockhash": "0x94eaefb48fdabcbbe529f4a7bcdbcba5f4f1b3e2b55d1d081a3ce93aae973c04",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0xdb7bdbd477c0c2e6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5e7eb8d1c1037841f9a3ca9fcf10b1ca3eeeb17f9ca13024d673852d1e30df53",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5c1c230ed14af125c6d5d6dd3d3a27a76bb74a2df9ed64ba88a27c35dfc6e7b7",
+                        "receiptsRoot": "0x5547911183af6498e26f19d5774b231659d3d0626b370a2f15ea88e10976e7a9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8520",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x94eaefb48fdabcbbe529f4a7bcdbcba5f4f1b3e2b55d1d081a3ce93aae973c04",
+                        "transactions": [
+                            "0xf861800a8407270e009470f24f753186288d483b23ccfe9ea2067a08ef42808026a082db50deab4099f82eefb3da1a8ff7f0a14710b0faab76cbc40ae2f987ced397a049569a38ccf6c3447f235e0412ee5c6fe6a843dcf1615de0e88d9aa05bb418b6"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x87d9ac4f30f36dee4de21f634a02cd66dc9ba7631044ef346ada0fad13e6f66f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case0-data0-large-gas-limit-call_opcode_CALL]": {
+        "network": "Paris",
+        "lastblockhash": "0xf712bdec7693f9e3e2c9024e4b0c631a27d1f0b67521842a8ac61e2c8765a709",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x0f69cd29288c94c4",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x1c8224bb4c0a00ef011399e2cfaf9fd6fcb99a4586aa352a62761b0dbc49f41d",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x04c39e44b0473e26902bd48be8605ff13572189ecd04b018588b8fa198182c9d",
+                        "receiptsRoot": "0x5547911183af6498e26f19d5774b231659d3d0626b370a2f15ea88e10976e7a9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8520",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xf712bdec7693f9e3e2c9024e4b0c631a27d1f0b67521842a8ac61e2c8765a709",
+                        "transactions": [
+                            "0xf861800a8407270e0094a6221c4d1b28d3f38affc4155fbc28b90470f888808026a00bd6534403cca6e536baba8318cc022f1f627f70442446736b986270b1d0299ea027d970a725b2335c5913bce7ef44f17e21b1f77ffe666c5895e24901581a1f57"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x0385769c87cd3382a589a59dc417e342a0a5b14a2486325d01981e37bbc17494",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data1-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Paris",
+        "lastblockhash": "0xdb2407f987a323f2938e648c0e22517390281a60c41edea7a8993e2f0ec2a97c",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x67b9652a6851f981",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xffff19abd6cb1a1bad174ea4dd931839e4b43956ab545932749cdfee2798fad5",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdce1e4f9306c30e1f71d5c8bae820f5472b2c3a6a4a126ec0cc2b7d6600a763b",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xdb2407f987a323f2938e648c0e22517390281a60c41edea7a8993e2f0ec2a97c",
+                        "transactions": [
+                            "0xf90136800a8407270e0094a5e8323fa95e7644637dc495fc40b103a5c9c43c80b8d400000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a0fe889983a1af167410abe3f6cb5be0848359d4d0199fd510a9b6de4dfc1c6546a0069039cb14d23169471276e1a02047b1216a8f994bd456e71b48cb2d6e94fa4e"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x3102972f98961d0d18c23e23d0630d68d51bcf7454943d6e281013664194e5c7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data1-large-gas-limit-call_opcode_CALL]": {
+        "network": "Paris",
+        "lastblockhash": "0x0e688cda1a9b187f065721ea3bd0f4b30be134a2c58f260f82cb80efd795f4a0",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0xdcd38a6294b47bfc",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa03af0fa1c3149c93af1e2913a44e022d8905782c47fefef8ed327ef679bbbeb",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7f14087c0ca5913a3d7927431eed25908b0969f5748b507414c183633bcc1a70",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x0e688cda1a9b187f065721ea3bd0f4b30be134a2c58f260f82cb80efd795f4a0",
+                        "transactions": [
+                            "0xf90136800a8407270e009450e55f81f9d975465986fe11826baa2e701222b580b8d400000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a0a4eabb90acff7340958120a1a8731cf1ae5f421434ec3795b238946294c6ec10a04fb1e24a94569bd1b2bc01ed5b3e4805198039a88528c3cdf4867a8297b1dbfb"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x2e8cd1f10cf7fc67806a1b20bcaf97062b6f98f08239dd1e47514f1b9f753b0b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data2-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Paris",
+        "lastblockhash": "0xb6f26aa12c79bc51ed3e89df72ae4a82c5dbe609bfde638f6e35bd4ec7d373f2",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0xf6aa50fe0fe15ce9",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x2e01cb9524549b5e2c7c1fc95ead4bb6b9169c529992f37595134060b340ae1c",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x39f1d2fec601048ae533cd08e4d53cc224e51694bb7081dd6c03a9e3d6456161",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb6f26aa12c79bc51ed3e89df72ae4a82c5dbe609bfde638f6e35bd4ec7d373f2",
+                        "transactions": [
+                            "0xf90138800a8407270e0094f99e57f299cd70fb439113dca39d9ba0eced857080b8d6000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a0601ec31c5922d295fb2fa89139c6562498010ff2f0c49f8ef604ee152c790779a01568073e7fdb97c8ee5beb98c4cd57ba99517117477ecd84265407d2374b2a11"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x3f2be3997e69cb25acd467cb188d3892465b7ecff5c3f9aaaae1eb48a5ea92f0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data2-large-gas-limit-call_opcode_CALL]": {
+        "network": "Paris",
+        "lastblockhash": "0xac73820c588f09676258c39d85a714f273b3e5a09a7876b14456e46a398c14ef",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x3c09c8af75d3f121",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xde6080ec3c4226c4d1331a67ee77321600d0e8217ad6589adff9b21661167e12",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x66c56b95a0d1cf8a0975123f2f1e5fcebd4e93529e3497b375940bc35469b34b",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xac73820c588f09676258c39d85a714f273b3e5a09a7876b14456e46a398c14ef",
+                        "transactions": [
+                            "0xf90138800a8407270e00946849aa26cfa7d8c424d9e85ab4ac93b62659f9b280b8d6000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a02907bf36eeb1de56aa6d110aa862c558d2e3b5b4e04d75af1ed8af0c242e1b0aa03a7cc9ce388ce7deaacd602f95a1b4dc18a5c39193d47e58edef3da6b36ccf83"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x99f88760d4de4f3b809dae08362f22777c7b77293f267a1fca44b28505e0f60f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data3-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Paris",
+        "lastblockhash": "0x6f13fa5724c2b35facc3513d0e744ded4b0a8fee9ce60c35b8bae4e781bbc8db",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x409077637535af04",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x08f3acf11a01c81556a3e6a8a5bc9f502b36b1665dd82d0de0bfa4d91a3e3bb2",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6a91ffb58c3a2b5c1b38789a2ce05462df729f33dc9c5774f3377b45c3b45d8b",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x6f13fa5724c2b35facc3513d0e744ded4b0a8fee9ce60c35b8bae4e781bbc8db",
+                        "transactions": [
+                            "0xf90137800a8407270e009480366b1bfe0baf0fd96f4988f04a85ce9069702c80b8d50000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000225a0965d360e2337b826281f49485a405edb007f6ef315dd8b5de1080eaa3fab50e2a04f698fc72e929a5a4b70675fbfd656cba66b4236e8d9f3e74d2adf0e5e9b51ef"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xcb48e053ad6b3c828ede7da635f394a7b5e6984f8d28acf92c5d91450537ed8b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data3-large-gas-limit-call_opcode_CALL]": {
+        "network": "Paris",
+        "lastblockhash": "0x8128bae052c5c0d5db06f44c9ef0a0e3c82554afa50d27967a56f01bf8cb2ab9",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0xdf6375cf68ab9cb6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xac9a11a04a3f586a51d0e4fc02cdb59e1e4ba4ea30eafdbb36053b6345213ec1",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x39e632f032481799d2e96feb5f9c73ad6d44db159ce04a564bddd4a3b9edc4e1",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x8128bae052c5c0d5db06f44c9ef0a0e3c82554afa50d27967a56f01bf8cb2ab9",
+                        "transactions": [
+                            "0xf90137800a8407270e0094badc88409192c8666904acb612297986cab0cfd180b8d50000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000226a0bdce5f75509a3ef8db32a62dc21e234f485e6270e21e5f1f708df92f5761b535a00cb201a40c9bc72103f7bf7dadb51c1bc7524e3d590dfb54da7b7f9e209662d5"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x03c85f1446af2f659042145fbee99c9503efe3df5d0df68b64f1d9f6893c3fa5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case9-data10-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Paris",
+        "lastblockhash": "0x4b5e7f4a2d1def330f175e841de69e9c748284dd3556ae161dcf77d38cc58caa",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0xde6537f671c289b4",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x27a50610b66ca2d584658523bd6f84e0b2c17c7642d0a3daa85ba9342e77fae5",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x24ce53239d9311c585b1f9f41d4f755185080deb6da6541d103f2c34c1cbd45a",
+                        "receiptsRoot": "0x355694596703f76fd7085d1d44b6f2119753915fca2361905833a0bcd3fdf7ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8521",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x4b5e7f4a2d1def330f175e841de69e9c748284dd3556ae161dcf77d38cc58caa",
+                        "transactions": [
+                            "0xf863800a8407270e00942d40a5b24713df4b8858dade1c3c9cbfa5d1b2238082000c26a0028f76794947f9bc6b2bc73dc9334b6554f659e3a46320bd5a84b4a5def2574aa0697da954f36e5319b4647c48a85cfea5a91da8dfa696418bc82df9b35c2ce78a"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xbdc616a5429b27c5ea42c44fb47c570051ba507c47f3379f077f3a7d01e336b9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case9-data10-large-gas-limit-call_opcode_CALL]": {
+        "network": "Paris",
+        "lastblockhash": "0x94b2134813ecc9bb77aa7a061d537d445dc37451c6c0517c106e5b86a3405c5e",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x4273b1358466f4ed",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xc6ac7568597070c5099bd14466108f413f491dfc115a49cbf9e864e6b6abc5e6",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7b50db442ce65e86a67acd1a16b87947e41df551d59e547df913ec8c74be0374",
+                        "receiptsRoot": "0x355694596703f76fd7085d1d44b6f2119753915fca2361905833a0bcd3fdf7ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8521",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x94b2134813ecc9bb77aa7a061d537d445dc37451c6c0517c106e5b86a3405c5e",
+                        "transactions": [
+                            "0xf863800a8407270e009453580ee2fbcfc249b699b4739b609e0cedb147318082000c26a02446a77b19ee09a60a491b854712fba564c8fa00b56c3ff9f6dc6f89d0d8942da02fae792b5e3e80d9a054f3ace7ce57e9e37325c50243a27d88dd1ab6d72053d5"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x51486b22f5bd22c0673c5e11d3e17bef6dbaada9503a981df8fb5ed39e288b0b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-modified-case8-data9-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Paris",
+        "lastblockhash": "0x2762e6d5a7a1f558f16546c857066154f8a1b2ae47008145f4749b0557453cd8",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x3f9d7334d977e74c",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x6bc73a021befdecc8282d868eff9f8bb59156396f3da524a185a79d9ad40e40f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x52824e99c3414dd92c7ed8fa42cb01bdbae514320a6edb168b81e21602978f14",
+                        "receiptsRoot": "0x4a9926e0e68f89085cd8862476d0843379f6e9fa5768ee39e501699949acd5a1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2a06e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x2762e6d5a7a1f558f16546c857066154f8a1b2ae47008145f4749b0557453cd8",
+                        "transactions": [
+                            "0xf90137800a8407270e0094ee10c1a5420a4832b977c83b5354a658d49568b280b8d5000186a048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a06d068ce2ee5a3ff555f5991e116a9fe1a75e0f5c9915af6ff7d83a51beb76c44a0174aa927895a5985fa5a78b9efefce52afd635b7dd20747498fe4feca21b3cb5"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xc8674e0f1ef708fb1dbd9371770d9886b4b79aa4f7b903c193ea998c17a2ed9e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Paris-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-modified-case8-data9-large-gas-limit-call_opcode_CALL]": {
+        "network": "Paris",
+        "lastblockhash": "0x8c86cc7d54485209f88a77219cd837ca32d45edb60f58b602637e1818269c07a",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x1f7e97fde95cc026",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x71369e2de53df899e95d5a5a551ef7cd816a49f1654a4e1edeae20c3ef801799",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x415c6a8c369e1f87d9ca67ac036c26cbec038ce6db032b2da47247993ec421cd",
+                        "receiptsRoot": "0x4a9926e0e68f89085cd8862476d0843379f6e9fa5768ee39e501699949acd5a1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2a06e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x8c86cc7d54485209f88a77219cd837ca32d45edb60f58b602637e1818269c07a",
+                        "transactions": [
+                            "0xf90137800a8407270e0094fa02ae2a4a19e38e5baeadd86bcae6d692043eaa80b8d5000186a048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a07e8f02cd720cf362d965f1591c06690dd620aca407ee7aa94df9c8e050adc3b3a03982db5827dddbaccbb66993d0dfed16d10e2056e2c59514e34b7045879f08f9"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0xda7f2c2b31baba3c97fc84f937c0b679face95a16e8cabca8bce6fa689ed725b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case0-data0-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Prague",
+        "lastblockhash": "0x92326b4d9392b0c97317b65f9a97b05318ffa0a397d482770747b410acb888f7",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x3555782edfee51bb",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e933dac7b53d22384670e7a665366e5ca5d70380b85e63b6348ff6f94169cbc",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc9d527cfd40d815fc6f1e1a3cf58bb5a2fc154d97574c4a5dccdacd652d06e13",
+                        "receiptsRoot": "0x5547911183af6498e26f19d5774b231659d3d0626b370a2f15ea88e10976e7a9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8520",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x92326b4d9392b0c97317b65f9a97b05318ffa0a397d482770747b410acb888f7",
+                        "transactions": [
+                            "0xf861800a8407270e009470f24f753186288d483b23ccfe9ea2067a08ef42808026a082db50deab4099f82eefb3da1a8ff7f0a14710b0faab76cbc40ae2f987ced397a049569a38ccf6c3447f235e0412ee5c6fe6a843dcf1615de0e88d9aa05bb418b6"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x40a5b1c958ff2c9a24598bdf5223bffec83fdd1a91f0bde2b0d7ee8a3b22a127",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case0-data0-large-gas-limit-call_opcode_CALL]": {
+        "network": "Prague",
+        "lastblockhash": "0x632ca534a1806fa87bc67dc8b121a8a12c350cfee1a3f1210c5b4beeab3fe977",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x6deb7fe9a10ddbcf",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x267cd2de695ef9e20462290b1c1f561e90c5275a603ccd4a06d77e33ac52030c",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4b61b2f1a0ecf1ed9102c9e19cfe2cc62328199009e8fc5058878b75c0ff8eac",
+                        "receiptsRoot": "0x5547911183af6498e26f19d5774b231659d3d0626b370a2f15ea88e10976e7a9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8520",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x632ca534a1806fa87bc67dc8b121a8a12c350cfee1a3f1210c5b4beeab3fe977",
+                        "transactions": [
+                            "0xf861800a8407270e0094a6221c4d1b28d3f38affc4155fbc28b90470f888808026a00bd6534403cca6e536baba8318cc022f1f627f70442446736b986270b1d0299ea027d970a725b2335c5913bce7ef44f17e21b1f77ffe666c5895e24901581a1f57"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6c4ef4dc6c6c1d6a9a6cd5149bd9dd685d41d6e693c1457362de6ddedafcf99b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data1-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Prague",
+        "lastblockhash": "0x1d39ebd208243ad32d0f8af4292ed0b23da105dc07172f5840c7a89813b27b4f",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x36567e140e142f02",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xaef5a7db2480418babf001a2f34b24272107373a0536b63c2d81253efe2292d6",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x179b9d79ee76a48ec9678818e84a540c104126dd65c344a294fe24303d41e29b",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x1d39ebd208243ad32d0f8af4292ed0b23da105dc07172f5840c7a89813b27b4f",
+                        "transactions": [
+                            "0xf90136800a8407270e0094a5e8323fa95e7644637dc495fc40b103a5c9c43c80b8d400000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a0fe889983a1af167410abe3f6cb5be0848359d4d0199fd510a9b6de4dfc1c6546a0069039cb14d23169471276e1a02047b1216a8f994bd456e71b48cb2d6e94fa4e"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb712d67cf986344303d9e8dad8c920382bf07b43fc7622d0dc21f50037e91f9f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data1-large-gas-limit-call_opcode_CALL]": {
+        "network": "Prague",
+        "lastblockhash": "0xa54e656e24e894aad6ab04aa7d1ee556db060561a492d8b26e71b1987d25cf12",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4bf2fe5c7dbd3201",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf05e67f3d4bd8d41d63424c95c63f2a95c0505f6567622f5668067d00616a096",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x067402a47c2f355b448d9fa66171523b6f8933050192681401baaa61f4aceeca",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xa54e656e24e894aad6ab04aa7d1ee556db060561a492d8b26e71b1987d25cf12",
+                        "transactions": [
+                            "0xf90136800a8407270e009450e55f81f9d975465986fe11826baa2e701222b580b8d400000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a0a4eabb90acff7340958120a1a8731cf1ae5f421434ec3795b238946294c6ec10a04fb1e24a94569bd1b2bc01ed5b3e4805198039a88528c3cdf4867a8297b1dbfb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x345f1bd94b95d33bdb008b9a6ee0a9a80f5d167b5f0db55d24eca5a013df346e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data2-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Prague",
+        "lastblockhash": "0x06774b758773582896ecd85310828b0508d043144176dba75a684213c02e6473",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x6a32684a9f98ee8f",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x66aa9516540c6cf6247e3b04966f4a40b9d3c2599f43456e1b18119cfaa9e29e",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x76260d00804449229d7f49bb90b7807aa0b54ffb4331c5b8a5f5b3edfa81be5e",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x06774b758773582896ecd85310828b0508d043144176dba75a684213c02e6473",
+                        "transactions": [
+                            "0xf90138800a8407270e0094f99e57f299cd70fb439113dca39d9ba0eced857080b8d6000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a0601ec31c5922d295fb2fa89139c6562498010ff2f0c49f8ef604ee152c790779a01568073e7fdb97c8ee5beb98c4cd57ba99517117477ecd84265407d2374b2a11"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x60f9e77416e8d6a3c83ab527d0085e57e048fa19434c75ec52fe70b3a1d551a2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data2-large-gas-limit-call_opcode_CALL]": {
+        "network": "Prague",
+        "lastblockhash": "0xa7956faa685c1965edc7f19775641c71fa85b58aecc27a052ef893020526dd36",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x356b2cbc3d36c856",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0987b6ab40c04e0a627b915a3d48c67391a6348045a143f50207b7c3bdc1ddad",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x36965b952df83e82f5ddfecebf66540f78a445b06e3107292a20ed94fa95c666",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xa7956faa685c1965edc7f19775641c71fa85b58aecc27a052ef893020526dd36",
+                        "transactions": [
+                            "0xf90138800a8407270e00946849aa26cfa7d8c424d9e85ab4ac93b62659f9b280b8d6000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a02907bf36eeb1de56aa6d110aa862c558d2e3b5b4e04d75af1ed8af0c242e1b0aa03a7cc9ce388ce7deaacd602f95a1b4dc18a5c39193d47e58edef3da6b36ccf83"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2ee2b477650d7a9a6612ad8a3b9ee8ed99f1d6fd956d6b8a68bdd989d6b0e417",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data3-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Prague",
+        "lastblockhash": "0x647ec511f680163844ffe5028bf356a3a531803d1245016ae040c3a7b1d63492",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xe089badfbd22de4b",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x88fd9bf398c65209e2b83524af0635dfb78723399ee0bdda7386565498f2f1d2",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf93b49dbe3cd1d158a8369b032e7fccbc258f317e0927c9b8782c98bb5305589",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x647ec511f680163844ffe5028bf356a3a531803d1245016ae040c3a7b1d63492",
+                        "transactions": [
+                            "0xf90137800a8407270e009480366b1bfe0baf0fd96f4988f04a85ce9069702c80b8d50000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000225a0965d360e2337b826281f49485a405edb007f6ef315dd8b5de1080eaa3fab50e2a04f698fc72e929a5a4b70675fbfd656cba66b4236e8d9f3e74d2adf0e5e9b51ef"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1a293684924b20f8676cc7e850465c38020fe4c6f2cff4129dc2fac47061f784",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data3-large-gas-limit-call_opcode_CALL]": {
+        "network": "Prague",
+        "lastblockhash": "0x0ab2ff30b9c14e5904b5fe20eeed44929f07d64ca52edba363fb720784f44088",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xf47551af11204add",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x4e7bdbf7ffa9dd71f040a400f3dcc6d3c1eb15332f96ef7cfc4a8805a39cdae8",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xde2be07280b07f413cf70e6541eb63f2afb85b5702fdffbfdd52c3017e4d38b0",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0ab2ff30b9c14e5904b5fe20eeed44929f07d64ca52edba363fb720784f44088",
+                        "transactions": [
+                            "0xf90137800a8407270e0094badc88409192c8666904acb612297986cab0cfd180b8d50000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000226a0bdce5f75509a3ef8db32a62dc21e234f485e6270e21e5f1f708df92f5761b535a00cb201a40c9bc72103f7bf7dadb51c1bc7524e3d590dfb54da7b7f9e209662d5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xfe316cbbdc21853e8ba27757700665d63771cfc716bdc9cfc3f15facbd86e708",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case9-data10-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Prague",
+        "lastblockhash": "0x11b0cf8d0c801b4b42669672721f860ab86fe5b05e7dd55616650d4617f1362c",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaaaa61f73f585c75",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xd88291a74d75a87ec174c9a267574e312b1d3a91846b9fe47006bfc980d21fa5",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5a0a3f857243f33f0f4208941c59ac4ef566e94954c25190d20ceeeec71fc202",
+                        "receiptsRoot": "0x355694596703f76fd7085d1d44b6f2119753915fca2361905833a0bcd3fdf7ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8521",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x11b0cf8d0c801b4b42669672721f860ab86fe5b05e7dd55616650d4617f1362c",
+                        "transactions": [
+                            "0xf863800a8407270e00942d40a5b24713df4b8858dade1c3c9cbfa5d1b2238082000c26a0028f76794947f9bc6b2bc73dc9334b6554f659e3a46320bd5a84b4a5def2574aa0697da954f36e5319b4647c48a85cfea5a91da8dfa696418bc82df9b35c2ce78a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa8584eb46f1429026333d9528c1a988b259a9c98b7c90eb163d3fb5e6afe6dd5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case9-data10-large-gas-limit-call_opcode_CALL]": {
+        "network": "Prague",
+        "lastblockhash": "0xfb2c25d2c23d122e4f68124143fead19390de4ab2007e8ec7408bbd58b4fe20d",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x6d78f087e0caa8a1",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xbb2971be287668b347769a9356cfab62cbfcbd12cec006f0d26c8ea6b74cb8e7",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf30391c5bfcb5f71a95e25c90924f4d1e7ed3d1a52808ccc0e6f3f9f67379400",
+                        "receiptsRoot": "0x355694596703f76fd7085d1d44b6f2119753915fca2361905833a0bcd3fdf7ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8521",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xfb2c25d2c23d122e4f68124143fead19390de4ab2007e8ec7408bbd58b4fe20d",
+                        "transactions": [
+                            "0xf863800a8407270e009453580ee2fbcfc249b699b4739b609e0cedb147318082000c26a02446a77b19ee09a60a491b854712fba564c8fa00b56c3ff9f6dc6f89d0d8942da02fae792b5e3e80d9a054f3ace7ce57e9e37325c50243a27d88dd1ab6d72053d5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x777ec52c3776476928f29610b7b3a7bb32bb7e9c5de1802de1cbdeaa5a05dda3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-modified-case8-data9-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Prague",
+        "lastblockhash": "0x783db1f0e95936705967a33c65a625672715f079188c5049ee3e2f3586b11ad1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xd59382b14875c2ee",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x73f26e1c78873bae291128165a3fbbf93869d0bf1c2e422b38de40dbbfea4527",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x166e4d03da7b9639c1d54aef2990effe26239958f7bff4f6ae92ab8e4aa60da7",
+                        "receiptsRoot": "0x4a9926e0e68f89085cd8862476d0843379f6e9fa5768ee39e501699949acd5a1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2a06e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x783db1f0e95936705967a33c65a625672715f079188c5049ee3e2f3586b11ad1",
+                        "transactions": [
+                            "0xf90137800a8407270e0094ee10c1a5420a4832b977c83b5354a658d49568b280b8d5000186a048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a06d068ce2ee5a3ff555f5991e116a9fe1a75e0f5c9915af6ff7d83a51beb76c44a0174aa927895a5985fa5a78b9efefce52afd635b7dd20747498fe4feca21b3cb5"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf50c23641cc1f29dd7154da6c0ffac32919005b4911bd92082027cfc24494029",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Prague-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-modified-case8-data9-large-gas-limit-call_opcode_CALL]": {
+        "network": "Prague",
+        "lastblockhash": "0x625da5db8d718a408ce91eb6ac5c870cf125f3d52b020d49017d4674096281a6",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x0d5694e675948846",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x392e23f743c50b500ebf16ccfeaa39386ff4bc3ab011227d2b6c6468c33961a7",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x200c96ac78db6c314964e920f148d44bc78add08d98056c6f6ae9eb94341914d",
+                        "receiptsRoot": "0x4a9926e0e68f89085cd8862476d0843379f6e9fa5768ee39e501699949acd5a1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2a06e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x625da5db8d718a408ce91eb6ac5c870cf125f3d52b020d49017d4674096281a6",
+                        "transactions": [
+                            "0xf90137800a8407270e0094fa02ae2a4a19e38e5baeadd86bcae6d692043eaa80b8d5000186a048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a07e8f02cd720cf362d965f1591c06690dd620aca407ee7aa94df9c8e050adc3b3a03982db5827dddbaccbb66993d0dfed16d10e2056e2c59514e34b7045879f08f9"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xdcb90a1743ea076d5579bc5a6bb6eea16b5f682a110704c42ec839161a773203",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case0-data0-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x05af414bfd9fbee644cf45eedddebae88b5fa47396faf27eaed8094aca0c5751",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x64a19ccdd89554bc",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xd875f35aa050e75e72d91db816cf2b9041adb4ed5aeb72bb3946431cd798b11f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5c1c230ed14af125c6d5d6dd3d3a27a76bb74a2df9ed64ba88a27c35dfc6e7b7",
+                        "receiptsRoot": "0x5547911183af6498e26f19d5774b231659d3d0626b370a2f15ea88e10976e7a9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8520",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x05af414bfd9fbee644cf45eedddebae88b5fa47396faf27eaed8094aca0c5751",
+                        "transactions": [
+                            "0xf861800a8407270e009470f24f753186288d483b23ccfe9ea2067a08ef42808026a082db50deab4099f82eefb3da1a8ff7f0a14710b0faab76cbc40ae2f987ced397a049569a38ccf6c3447f235e0412ee5c6fe6a843dcf1615de0e88d9aa05bb418b6"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x9f340c1be3e346fe31ec824d1f4c7dd1bd80d8d0715fc9f15ef9da6b56772860",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case0-data0-large-gas-limit-call_opcode_CALL]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xcf9c762410526c806971e983d864fa22c8c9fec3cd3094cf9758148b16a9ae8c",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x29fdea139d6605fb",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xf8c0d5af4262ede034ca72c4f02ec01536e3ab16331b8f43e8906584c108a75a",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x04c39e44b0473e26902bd48be8605ff13572189ecd04b018588b8fa198182c9d",
+                        "receiptsRoot": "0x5547911183af6498e26f19d5774b231659d3d0626b370a2f15ea88e10976e7a9",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8520",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xcf9c762410526c806971e983d864fa22c8c9fec3cd3094cf9758148b16a9ae8c",
+                        "transactions": [
+                            "0xf861800a8407270e0094a6221c4d1b28d3f38affc4155fbc28b90470f888808026a00bd6534403cca6e536baba8318cc022f1f627f70442446736b986270b1d0299ea027d970a725b2335c5913bce7ef44f17e21b1f77ffe666c5895e24901581a1f57"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xdd4cdf720950a327ab1e77b7cdc6e7026035c7d84a1583a5a9ecadd66d27869a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data1-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xb8864b09df0b46c01686b19472fbbadc216cb650382fc29df62b0c3ccd455076",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x8871f7435f294498",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x24d23161b3041a6f042795abee6fae86969b7e3cec441bbad47c5a22ad698945",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdce1e4f9306c30e1f71d5c8bae820f5472b2c3a6a4a126ec0cc2b7d6600a763b",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xb8864b09df0b46c01686b19472fbbadc216cb650382fc29df62b0c3ccd455076",
+                        "transactions": [
+                            "0xf90136800a8407270e0094a5e8323fa95e7644637dc495fc40b103a5c9c43c80b8d400000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a0fe889983a1af167410abe3f6cb5be0848359d4d0199fd510a9b6de4dfc1c6546a0069039cb14d23169471276e1a02047b1216a8f994bd456e71b48cb2d6e94fa4e"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x2b729f2518c6aec962b49cfec46971e30d87c16fb2205de830e894cdd79d2a87",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data1-large-gas-limit-call_opcode_CALL]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x0eaaff8677ac4dc3783dc1db353773cc3c4a18d46ae62ec5a9df975d18d4cb4f",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x9a118a9e72ea38c0",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x9e2a5541e934a8da86dc3c03407eff1f5c8e4311d8cb9431c3785d3610b468b3",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7f14087c0ca5913a3d7927431eed25908b0969f5748b507414c183633bcc1a70",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x0eaaff8677ac4dc3783dc1db353773cc3c4a18d46ae62ec5a9df975d18d4cb4f",
+                        "transactions": [
+                            "0xf90136800a8407270e009450e55f81f9d975465986fe11826baa2e701222b580b8d400000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a0a4eabb90acff7340958120a1a8731cf1ae5f421434ec3795b238946294c6ec10a04fb1e24a94569bd1b2bc01ed5b3e4805198039a88528c3cdf4867a8297b1dbfb"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x22b06e971451dfa4a18dfa73c488479ebe91edbc9e90d036bee0dda028322a2b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data2-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xf0a17cc5bf85eae1ff47735319ad7603de4296cfc16d9da162035c099895e0bc",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0xf6434abe4a283eca",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xea74f54f3ca2e048fd0fef071f44002fb17ab8298ac4e098f96cc94df0fd7476",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x39f1d2fec601048ae533cd08e4d53cc224e51694bb7081dd6c03a9e3d6456161",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xf0a17cc5bf85eae1ff47735319ad7603de4296cfc16d9da162035c099895e0bc",
+                        "transactions": [
+                            "0xf90138800a8407270e0094f99e57f299cd70fb439113dca39d9ba0eced857080b8d6000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a0601ec31c5922d295fb2fa89139c6562498010ff2f0c49f8ef604ee152c790779a01568073e7fdb97c8ee5beb98c4cd57ba99517117477ecd84265407d2374b2a11"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x485052b11c78f8be978b545bcf18c147437556ed72142d6f11e12c0ac1ac7f03",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data2-large-gas-limit-call_opcode_CALL]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xa8a37677f8be14d2a87a07f124222870f117805aa3c4521941aa46d2f388cdb0",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0xb5ae9a39a36e8f0b",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xfd25393696fe0e1666734b871b21f2a9a448d615a52917862490b0bfea767469",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x66c56b95a0d1cf8a0975123f2f1e5fcebd4e93529e3497b375940bc35469b34b",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xa8a37677f8be14d2a87a07f124222870f117805aa3c4521941aa46d2f388cdb0",
+                        "transactions": [
+                            "0xf90138800a8407270e00946849aa26cfa7d8c424d9e85ab4ac93b62659f9b280b8d6000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000126a02907bf36eeb1de56aa6d110aa862c558d2e3b5b4e04d75af1ed8af0c242e1b0aa03a7cc9ce388ce7deaacd602f95a1b4dc18a5c39193d47e58edef3da6b36ccf83"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xb587d91def3d041be40d5b4953f19af398c1c9946c3256a2da4a2ec2555625a9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data3-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x3600d891b95277f191cca89c58658210a872d38f02f5fbff2fa095146091fef0",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x4b78f7916242ec62",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x05b8747cb3887d1a35847cb61c95d91a1c5e44ed0d2733bd93856009bc073cf4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6a91ffb58c3a2b5c1b38789a2ce05462df729f33dc9c5774f3377b45c3b45d8b",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x3600d891b95277f191cca89c58658210a872d38f02f5fbff2fa095146091fef0",
+                        "transactions": [
+                            "0xf90137800a8407270e009480366b1bfe0baf0fd96f4988f04a85ce9069702c80b8d50000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000225a0965d360e2337b826281f49485a405edb007f6ef315dd8b5de1080eaa3fab50e2a04f698fc72e929a5a4b70675fbfd656cba66b4236e8d9f3e74d2adf0e5e9b51ef"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xb406121f1a6f721b93ea83ea92190da5e42ef37c1a2df93212a04867479abe1e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case2-data3-large-gas-limit-call_opcode_CALL]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x1d0bd10639f3fee9b9176e21addfe990ae7e5304f584dbc71869b8df930c65a1",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0xba612d1defaeec4e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x6f23ff5944b8ffb9c4c1493cd8c7ed43e5f144467c59380284573b749967ec94",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x39e632f032481799d2e96feb5f9c73ad6d44db159ce04a564bddd4a3b9edc4e1",
+                        "receiptsRoot": "0x004292111246b412427c29b208b0d14286cb58a99b42409b1c286a53a73364bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a853b",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x1d0bd10639f3fee9b9176e21addfe990ae7e5304f584dbc71869b8df930c65a1",
+                        "transactions": [
+                            "0xf90137800a8407270e0094badc88409192c8666904acb612297986cab0cfd180b8d50000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000226a0bdce5f75509a3ef8db32a62dc21e234f485e6270e21e5f1f708df92f5761b535a00cb201a40c9bc72103f7bf7dadb51c1bc7524e3d590dfb54da7b7f9e209662d5"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x9270954cdfe0e60b2f1cfba2808e4cda46bc9e2933b88c66d12f89d7354793b4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case9-data10-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xf1bb39e4afe58dbb6ad041ff7821f8c6fc824e1b2855a7ba38206c35a082416f",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0xab408aa12671da97",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xde3579c3c09af02c90fd22d3f87b30902ca782866b945daf81fcec295c5b3181",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x24ce53239d9311c585b1f9f41d4f755185080deb6da6541d103f2c34c1cbd45a",
+                        "receiptsRoot": "0x355694596703f76fd7085d1d44b6f2119753915fca2361905833a0bcd3fdf7ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8521",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xf1bb39e4afe58dbb6ad041ff7821f8c6fc824e1b2855a7ba38206c35a082416f",
+                        "transactions": [
+                            "0xf863800a8407270e00942d40a5b24713df4b8858dade1c3c9cbfa5d1b2238082000c26a0028f76794947f9bc6b2bc73dc9334b6554f659e3a46320bd5a84b4a5def2574aa0697da954f36e5319b4647c48a85cfea5a91da8dfa696418bc82df9b35c2ce78a"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x97270f50e85c1bf7ed17dfb6ec8af58a0e0b337c4974869932be434e04d6f347",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-case9-data10-large-gas-limit-call_opcode_CALL]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x8b72a931944408e13f659b25b866204e78dd3ba04ee877a0029f3bfa198fb5c3",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0xf3887480b3d06806",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe9b44f7cefc32ada8f497e1fc82da83a00610ced240cebf760328db617391ab1",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7b50db442ce65e86a67acd1a16b87947e41df551d59e547df913ec8c74be0374",
+                        "receiptsRoot": "0x355694596703f76fd7085d1d44b6f2119753915fca2361905833a0bcd3fdf7ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x70a8521",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x8b72a931944408e13f659b25b866204e78dd3ba04ee877a0029f3bfa198fb5c3",
+                        "transactions": [
+                            "0xf863800a8407270e009453580ee2fbcfc249b699b4739b609e0cedb147318082000c26a02446a77b19ee09a60a491b854712fba564c8fa00b56c3ff9f6dc6f89d0d8942da02fae792b5e3e80d9a054f3ace7ce57e9e37325c50243a27d88dd1ab6d72053d5"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xe62dfa3c2cd27b187d2fb9744042f3bd778f4d7050b589783dc49c132069ddfc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-modified-case8-data9-large-gas-limit-call_opcode_CALLCODE]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x2859bf9630d46c17d9f8b20cab4e88eb9b6e08d62a162a80068756d2bc073101",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x659684d2b67d209e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x8971c3c46504062d739603ea5347701c86dcf78421f5f813a6ef6feae22a2ec3",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x52824e99c3414dd92c7ed8fa42cb01bdbae514320a6edb168b81e21602978f14",
+                        "receiptsRoot": "0x4a9926e0e68f89085cd8862476d0843379f6e9fa5768ee39e501699949acd5a1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2a06e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x2859bf9630d46c17d9f8b20cab4e88eb9b6e08d62a162a80068756d2bc073101",
+                        "transactions": [
+                            "0xf90137800a8407270e0094ee10c1a5420a4832b977c83b5354a658d49568b280b8d5000186a048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a06d068ce2ee5a3ff555f5991e116a9fe1a75e0f5c9915af6ff7d83a51beb76c44a0174aa927895a5985fa5a78b9efefce52afd635b7dd20747498fe4feca21b3cb5"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x6502b9554e7091b40911f95fafed6255c3a40a1596a8d5482eea9cc40b3323d7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    },
+    "tests/istanbul/eip152_blake2/test_blake2.py::test_blake2b_large_gas_limit[fork_Shanghai-gas_limit_0x07270e00-blockchain_test_engine_x_from_state_test-EIP-152-modified-case8-data9-large-gas-limit-call_opcode_CALL]": {
+        "network": "Shanghai",
+        "lastblockhash": "0xa4b26ad7b6f1b3bd85aa5b7d0bb504da5ed2fedf679cdd9ba50b9d0961dd1839",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0xbfa2884027aa4f78",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xd7ea24bc75ac33ac34ae7653ca9a2cb899253a3ec80af4e7190057e367ed6002",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x415c6a8c369e1f87d9ca67ac036c26cbec038ce6db032b2da47247993ec421cd",
+                        "receiptsRoot": "0x4a9926e0e68f89085cd8862476d0843379f6e9fa5768ee39e501699949acd5a1",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x2a06e",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xa4b26ad7b6f1b3bd85aa5b7d0bb504da5ed2fedf679cdd9ba50b9d0961dd1839",
+                        "transactions": [
+                            "0xf90137800a8407270e0094fa02ae2a4a19e38e5baeadd86bcae6d692043eaa80b8d5000186a048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b6162630000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000125a07e8f02cd720cf362d965f1591c06690dd620aca407ee7aa94df9c8e050adc3b3a03982db5827dddbaccbb66993d0dfed16d10e2056e2c59514e34b7045879f08f9"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x3c0a4259027b8e8ea5555e8d94d1fc93d611fc7bdf13493142bc6e515d96b551",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test BLAKE2b precompile with large gas limit.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/istanbul/eip152_blake2/test_blake2.py#L681",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md",
+            "reference-spec-version": "2762bfcff3e549ef263342e5239ef03ac2b07400"
+        }
+    }
+}

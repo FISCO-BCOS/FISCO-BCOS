@@ -1,0 +1,3218 @@
+{
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Berlin-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x2948db106245b059a671828a9b4f189355620f54": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x2948db106245b059a671828a9b4f189355620f54",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8c96ce21b944ecd075115fd23cf29d216868796d",
+            "secretKey": "0x975f3e72b6a48d407043d52b2948db106245b059a671828a9b4f189355620f54"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x13eb4385a0c900fc8a80159f497561a9d016ebaa764eb4ec08256a4ceb102918",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2948db106245b059a671828a9b4f189355620f54": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x069cc6",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x8ce57c1a09d428d2b68820eefa12c1a15078a812c3b9be474ff147412f03fbe0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Berlin-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x80df25b9b165b85b71ab5e2b1243058f61233f7e",
+            "secretKey": "0x3e49f7395cca25f7e7575d9eaf03b914d204e1d2d57d48c7e6f4aa25025076d9"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x235a9e4d355695d61d0e23797ec4aedf89044d188f7464a9bf8ee584746f6116",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x069cc6",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb2bb9f5ac4645fbb337dbc2a2495b15a641129051d94c4cbd37f44151d6a68b1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Berlin-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x26aea0af722d8665cec88e722df9d844a8ef4047",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x59f141565bcdb07e7f64ce5353000fe19b1f117f",
+            "secretKey": "0x4bbb0f6fd6729a8bd7bb8a3f26aea0af722d8665cec88e722df9d844a8ef4047"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0xf0fe692d29409007a118537aea4edf8703c43e5788f562bb4b7be32202818e1c",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x069ca8",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x248a5f66588edef92da0ced0206baf96baf2dbd8f5b1a40ab85da7b8cabf4eee",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Berlin-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x96ef3a38aa599c5267eb6e5790924009a8c3223f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09838a993c6ecabd475ba17b74be0b1878ab3df1",
+            "secretKey": "0x7541bb84779b5e0524d8a49596ef3a38aa599c5267eb6e5790924009a8c3223f"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0xca70649e8eea909c66e97a38320efe55ef00efda294fdfea27e4e80a93194ea9",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x069ca8",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x191e70cb913927b485c89516817596d29e211defffd5e0511ac37d439241da6e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Byzantium-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x2948db106245b059a671828a9b4f189355620f54": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x2948db106245b059a671828a9b4f189355620f54",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8c96ce21b944ecd075115fd23cf29d216868796d",
+            "secretKey": "0x975f3e72b6a48d407043d52b2948db106245b059a671828a9b4f189355620f54"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0x1f02b0eababa2f441d56e0c209a336953c512ae4b948ae0897b8cfe62fc314c4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2948db106245b059a671828a9b4f189355620f54": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999dd2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06622e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc6d320879c575ae7106638580de0eb2f747d7475ca98786e9b215db4ee732fa2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Byzantium-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x80df25b9b165b85b71ab5e2b1243058f61233f7e",
+            "secretKey": "0x3e49f7395cca25f7e7575d9eaf03b914d204e1d2d57d48c7e6f4aa25025076d9"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0x6397f99dd7e7636e7bbd3cf7d34b70e8601befbab3dca0dded8ddad225dae06f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999dd2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06622e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xfc230e443dec228a0857a32e36d4b86064aabc888745c130fa597218d0c83fff",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Byzantium-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x26aea0af722d8665cec88e722df9d844a8ef4047",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x59f141565bcdb07e7f64ce5353000fe19b1f117f",
+            "secretKey": "0x4bbb0f6fd6729a8bd7bb8a3f26aea0af722d8665cec88e722df9d844a8ef4047"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0x2e6e637173f8e584e15fb4fc746a05f9d3fea8e85f0a40e13b5fc272bbe4bc71",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999df0",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x066210",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xf031ea930b442c1dc451a46b620dfb61d604c4b54a1f83e4ce7c87e532ddcd09",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Byzantium-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x96ef3a38aa599c5267eb6e5790924009a8c3223f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09838a993c6ecabd475ba17b74be0b1878ab3df1",
+            "secretKey": "0x7541bb84779b5e0524d8a49596ef3a38aa599c5267eb6e5790924009a8c3223f"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0x0d537f677cefc36400f1ae8dc1508570a8f8646b33f025cc0bd28655fa752c37",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999df0",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x066210",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xce0130dd27b7bc325d493dc2439e8aa96e4f50d69764ffe034bcb5e01c63cb99",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Cancun-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x2948db106245b059a671828a9b4f189355620f54": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x2948db106245b059a671828a9b4f189355620f54",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8c96ce21b944ecd075115fd23cf29d216868796d",
+            "secretKey": "0x975f3e72b6a48d407043d52b2948db106245b059a671828a9b4f189355620f54"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x3e2ac8763d4bc25b30352d8cdc29f157f910bac5d9476161e2e19c179e5bb08e",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2948db106245b059a671828a9b4f189355620f54": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xd1db484bce26995a3236d9e4430763b7520ccd515b818fc7b183347261df2ed2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Cancun-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x80df25b9b165b85b71ab5e2b1243058f61233f7e",
+            "secretKey": "0x3e49f7395cca25f7e7575d9eaf03b914d204e1d2d57d48c7e6f4aa25025076d9"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xd6f3def04c41a105f5db41b37c87c454b1bc94a9c7ef6d39868a2e1e8c7214ef",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x7e94c9735d94e50a3911e3de1495fbf29dd2bfe074fbeb86fc6c49bc58ced967",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Cancun-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x26aea0af722d8665cec88e722df9d844a8ef4047",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x59f141565bcdb07e7f64ce5353000fe19b1f117f",
+            "secretKey": "0x4bbb0f6fd6729a8bd7bb8a3f26aea0af722d8665cec88e722df9d844a8ef4047"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x5153ef54bfc382615d5657a065731d344e338619619fadbed465df5df8755151",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x5f65224b7a4563555fe3e39e8c7675076f14d6fafdeb28a790f86c4557abf15c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Cancun-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x96ef3a38aa599c5267eb6e5790924009a8c3223f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09838a993c6ecabd475ba17b74be0b1878ab3df1",
+            "secretKey": "0x7541bb84779b5e0524d8a49596ef3a38aa599c5267eb6e5790924009a8c3223f"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x1a3a7c591abf09165dd6d9a56725eedfc92e2c8ff0ed3a3ac6bc0dfacd8b4586",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x59b83618b6425c5d6b361ba0c2307ff2bf5ee9b8b98e06abb744b0c019bb3836",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_ConstantinopleFix-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x2948db106245b059a671828a9b4f189355620f54": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x2948db106245b059a671828a9b4f189355620f54",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8c96ce21b944ecd075115fd23cf29d216868796d",
+            "secretKey": "0x975f3e72b6a48d407043d52b2948db106245b059a671828a9b4f189355620f54"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0x1f02b0eababa2f441d56e0c209a336953c512ae4b948ae0897b8cfe62fc314c4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2948db106245b059a671828a9b4f189355620f54": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999dd2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06622e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x34ae1455a9332a9f50dbac8604b7a808fd57d0a53e941e56365fdc78ff5ec93a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_ConstantinopleFix-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x80df25b9b165b85b71ab5e2b1243058f61233f7e",
+            "secretKey": "0x3e49f7395cca25f7e7575d9eaf03b914d204e1d2d57d48c7e6f4aa25025076d9"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0x6397f99dd7e7636e7bbd3cf7d34b70e8601befbab3dca0dded8ddad225dae06f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999dd2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06622e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x16a475ee5151caaad0c3fd90c3cf58ed12311c62810854a9741a03da14e749e4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_ConstantinopleFix-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x26aea0af722d8665cec88e722df9d844a8ef4047",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x59f141565bcdb07e7f64ce5353000fe19b1f117f",
+            "secretKey": "0x4bbb0f6fd6729a8bd7bb8a3f26aea0af722d8665cec88e722df9d844a8ef4047"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0x2e6e637173f8e584e15fb4fc746a05f9d3fea8e85f0a40e13b5fc272bbe4bc71",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999df0",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x066210",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x38e9523ed5e411b62dae82c4f7daf15009ddeaca3b51769a0b7f4c0e5a5628d7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_ConstantinopleFix-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x96ef3a38aa599c5267eb6e5790924009a8c3223f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09838a993c6ecabd475ba17b74be0b1878ab3df1",
+            "secretKey": "0x7541bb84779b5e0524d8a49596ef3a38aa599c5267eb6e5790924009a8c3223f"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0x0d537f677cefc36400f1ae8dc1508570a8f8646b33f025cc0bd28655fa752c37",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999df0",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x066210",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x830d38778520d57179a130e847bbe477837f19058ed05e0b67ec30b089293716",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Istanbul-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x2948db106245b059a671828a9b4f189355620f54": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x2948db106245b059a671828a9b4f189355620f54",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8c96ce21b944ecd075115fd23cf29d216868796d",
+            "secretKey": "0x975f3e72b6a48d407043d52b2948db106245b059a671828a9b4f189355620f54"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0x1f02b0eababa2f441d56e0c209a336953c512ae4b948ae0897b8cfe62fc314c4",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2948db106245b059a671828a9b4f189355620f54": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999dd2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06622e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x9a92b5178947db1ff0d433aacc35bd6efdee9c968307c99b48d05dab33e34f75",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Istanbul-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x80df25b9b165b85b71ab5e2b1243058f61233f7e",
+            "secretKey": "0x3e49f7395cca25f7e7575d9eaf03b914d204e1d2d57d48c7e6f4aa25025076d9"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0x6397f99dd7e7636e7bbd3cf7d34b70e8601befbab3dca0dded8ddad225dae06f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999dd2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06622e",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x701da4c4f0612c3656e4700729a87fbf45239c9c54a976168d94fbaf0b3e76ce",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Istanbul-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x26aea0af722d8665cec88e722df9d844a8ef4047",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x59f141565bcdb07e7f64ce5353000fe19b1f117f",
+            "secretKey": "0x4bbb0f6fd6729a8bd7bb8a3f26aea0af722d8665cec88e722df9d844a8ef4047"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0x2e6e637173f8e584e15fb4fc746a05f9d3fea8e85f0a40e13b5fc272bbe4bc71",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999df0",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x066210",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x0305258d8f962d05aa43fd4b5dd4c35d3c57983f566afde47f48c982ab04e3c6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Istanbul-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x96ef3a38aa599c5267eb6e5790924009a8c3223f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09838a993c6ecabd475ba17b74be0b1878ab3df1",
+            "secretKey": "0x7541bb84779b5e0524d8a49596ef3a38aa599c5267eb6e5790924009a8c3223f"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0x0d537f677cefc36400f1ae8dc1508570a8f8646b33f025cc0bd28655fa752c37",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de999df0",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x066210",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe8c21a5cb7b82b6ac7d2d47a6e8a58cf7a2260258b80b871c98cb466636b7d4c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_London-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x2948db106245b059a671828a9b4f189355620f54": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x2948db106245b059a671828a9b4f189355620f54",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8c96ce21b944ecd075115fd23cf29d216868796d",
+            "secretKey": "0x975f3e72b6a48d407043d52b2948db106245b059a671828a9b4f189355620f54"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0x3e2ac8763d4bc25b30352d8cdc29f157f910bac5d9476161e2e19c179e5bb08e",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2948db106245b059a671828a9b4f189355620f54": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xbfcb9d629f380095b628a6d772c04368b5beed72ff6798d706e067e3104fea1f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_London-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x80df25b9b165b85b71ab5e2b1243058f61233f7e",
+            "secretKey": "0x3e49f7395cca25f7e7575d9eaf03b914d204e1d2d57d48c7e6f4aa25025076d9"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0xd6f3def04c41a105f5db41b37c87c454b1bc94a9c7ef6d39868a2e1e8c7214ef",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xf2e0194e07a2743de06ef21b72780aad079a781225a7fbff604167480e44f0bd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_London-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x26aea0af722d8665cec88e722df9d844a8ef4047",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x59f141565bcdb07e7f64ce5353000fe19b1f117f",
+            "secretKey": "0x4bbb0f6fd6729a8bd7bb8a3f26aea0af722d8665cec88e722df9d844a8ef4047"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0x5153ef54bfc382615d5657a065731d344e338619619fadbed465df5df8755151",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe00354d8ba7d5c2504ae1e9ada487dfa1b852eba7d3948bc30c0bb28ec66a020",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_London-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x96ef3a38aa599c5267eb6e5790924009a8c3223f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09838a993c6ecabd475ba17b74be0b1878ab3df1",
+            "secretKey": "0x7541bb84779b5e0524d8a49596ef3a38aa599c5267eb6e5790924009a8c3223f"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0x1a3a7c591abf09165dd6d9a56725eedfc92e2c8ff0ed3a3ac6bc0dfacd8b4586",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x67d6f95c00bdd873ea132d3fd85a8a09d41220dcc395df76f75e091822c6c050",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Paris-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x2948db106245b059a671828a9b4f189355620f54": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x2948db106245b059a671828a9b4f189355620f54",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8c96ce21b944ecd075115fd23cf29d216868796d",
+            "secretKey": "0x975f3e72b6a48d407043d52b2948db106245b059a671828a9b4f189355620f54"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0x3e2ac8763d4bc25b30352d8cdc29f157f910bac5d9476161e2e19c179e5bb08e",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2948db106245b059a671828a9b4f189355620f54": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x5823a46f7ce0621494862edf76dd2fb322006f9a73281be8b395ccb10c8c8db6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Paris-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x80df25b9b165b85b71ab5e2b1243058f61233f7e",
+            "secretKey": "0x3e49f7395cca25f7e7575d9eaf03b914d204e1d2d57d48c7e6f4aa25025076d9"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0xd6f3def04c41a105f5db41b37c87c454b1bc94a9c7ef6d39868a2e1e8c7214ef",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe09268c46a216047e0a7d3dde95e144c827cd17251a5b46c1d7d97dd50933b3c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Paris-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x26aea0af722d8665cec88e722df9d844a8ef4047",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x59f141565bcdb07e7f64ce5353000fe19b1f117f",
+            "secretKey": "0x4bbb0f6fd6729a8bd7bb8a3f26aea0af722d8665cec88e722df9d844a8ef4047"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0x5153ef54bfc382615d5657a065731d344e338619619fadbed465df5df8755151",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe2424eec576bdd625d8dff4ddeaa3efacc118e4852b3597d9d83e8ef228208e4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Paris-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x96ef3a38aa599c5267eb6e5790924009a8c3223f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09838a993c6ecabd475ba17b74be0b1878ab3df1",
+            "secretKey": "0x7541bb84779b5e0524d8a49596ef3a38aa599c5267eb6e5790924009a8c3223f"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0x1a3a7c591abf09165dd6d9a56725eedfc92e2c8ff0ed3a3ac6bc0dfacd8b4586",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x61ffad941cdf4d57714f80f8031df9a256ed93a61b9cb113e476af6505a7bd56",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x2948db106245b059a671828a9b4f189355620f54": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x2948db106245b059a671828a9b4f189355620f54",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8c96ce21b944ecd075115fd23cf29d216868796d",
+            "secretKey": "0x975f3e72b6a48d407043d52b2948db106245b059a671828a9b4f189355620f54"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x3e2ac8763d4bc25b30352d8cdc29f157f910bac5d9476161e2e19c179e5bb08e",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2948db106245b059a671828a9b4f189355620f54": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x20b79f74f32f4657619ae624c89ded4e3cc75adf75aac4c71a400d287f26b583",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Prague-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x80df25b9b165b85b71ab5e2b1243058f61233f7e",
+            "secretKey": "0x3e49f7395cca25f7e7575d9eaf03b914d204e1d2d57d48c7e6f4aa25025076d9"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xd6f3def04c41a105f5db41b37c87c454b1bc94a9c7ef6d39868a2e1e8c7214ef",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x2bf4912379d184fff2f338ed78435a26acdcd9bddd37cbd2b2e6edb8e8fe2a24",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Prague-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x26aea0af722d8665cec88e722df9d844a8ef4047",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x59f141565bcdb07e7f64ce5353000fe19b1f117f",
+            "secretKey": "0x4bbb0f6fd6729a8bd7bb8a3f26aea0af722d8665cec88e722df9d844a8ef4047"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x5153ef54bfc382615d5657a065731d344e338619619fadbed465df5df8755151",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1edf65c55ca4d082c56ad8f0444ab6c2806d80f10be2cbdf62f1cb4da57dbe48",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Prague-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x96ef3a38aa599c5267eb6e5790924009a8c3223f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09838a993c6ecabd475ba17b74be0b1878ab3df1",
+            "secretKey": "0x7541bb84779b5e0524d8a49596ef3a38aa599c5267eb6e5790924009a8c3223f"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x1a3a7c591abf09165dd6d9a56725eedfc92e2c8ff0ed3a3ac6bc0dfacd8b4586",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe5bf64b6d7bffaa6eaf38b5078a8bfdccb81642707b8c5e89c649e01d8a0dbf0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Shanghai-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x2948db106245b059a671828a9b4f189355620f54": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x2948db106245b059a671828a9b4f189355620f54",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8c96ce21b944ecd075115fd23cf29d216868796d",
+            "secretKey": "0x975f3e72b6a48d407043d52b2948db106245b059a671828a9b4f189355620f54"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x3e2ac8763d4bc25b30352d8cdc29f157f910bac5d9476161e2e19c179e5bb08e",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a0942948db106245b059a671828a9b4f189355620f54808026a00e7f5e68f47cf6b0241cd991331e86e8ee79c5b14b0daeacf60d0324bc13decca022176527c192acfb99ed8f561968f2dd14bb092eab744e21ccd79cb518aa2fb1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2948db106245b059a671828a9b4f189355620f54": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af13d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x8c96ce21b944ecd075115fd23cf29d216868796d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe21d989bce22ac2daad39492c2d5def61c492bd00e12c2f6d5e69c0bc4fb11df",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Shanghai-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x80df25b9b165b85b71ab5e2b1243058f61233f7e",
+            "secretKey": "0x3e49f7395cca25f7e7575d9eaf03b914d204e1d2d57d48c7e6f4aa25025076d9"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0xd6f3def04c41a105f5db41b37c87c454b1bc94a9c7ef6d39868a2e1e8c7214ef",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a094af03b914d204e1d2d57d48c7e6f4aa25025076d9808026a0e2b0069d534663774644e24f090db18c6c93ff2487315c1e7f406c9f0c9f758fa05a1c3d41ebdbc2def53f02578efac3a7f28bc817277f4a216f01e3cfcd20b224",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xaf03b914d204e1d2d57d48c7e6f4aa25025076d9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60016000536002600153600360025360046003536004600160046000600060045af23d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x80df25b9b165b85b71ab5e2b1243058f61233f7e": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99633a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbd5",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x2258a1773e26756708bef34b4ea0cc64ff8197835983c6ca875bd9e35d9eb62c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Shanghai-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x26aea0af722d8665cec88e722df9d844a8ef4047",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x59f141565bcdb07e7f64ce5353000fe19b1f117f",
+            "secretKey": "0x4bbb0f6fd6729a8bd7bb8a3f26aea0af722d8665cec88e722df9d844a8ef4047"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x5153ef54bfc382615d5657a065731d344e338619619fadbed465df5df8755151",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09426aea0af722d8665cec88e722df9d844a8ef4047808025a07b73acd4d13a7d0d4474b0a2ad670028d733613990fa7f868eb0e27eb341d2b7a060470db7007c3f68a00d8f7a7d71ca1d1276d55ab20512c818f4c5322b13adda",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x26aea0af722d8665cec88e722df9d844a8ef4047": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045af43d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x59f141565bcdb07e7f64ce5353000fe19b1f117f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc88e1501895978c4cc154428268d239660bdd53baa64d43dad4cda71e77203b2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/homestead/identity_precompile/test_identity.py::test_identity_return_overwrite[fork_Shanghai-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                "storage": {}
+            },
+            "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0186a0"
+            ],
+            "to": "0x96ef3a38aa599c5267eb6e5790924009a8c3223f",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x09838a993c6ecabd475ba17b74be0b1878ab3df1",
+            "secretKey": "0x7541bb84779b5e0524d8a49596ef3a38aa599c5267eb6e5790924009a8c3223f"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x1a3a7c591abf09165dd6d9a56725eedfc92e2c8ff0ed3a3ac6bc0dfacd8b4586",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a830186a09496ef3a38aa599c5267eb6e5790924009a8c3223f808026a021e6f344e2723f60441bb81faf0a814c039210a6cb2949625009da68de380b25a04a92d5a943fc4edaee965963dac72f6b77730184225354a1366e199f4c4c08e1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x96ef3a38aa599c5267eb6e5790924009a8c3223f": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600053600260015360036002536004600353600460016004600060045afa3d600060003e59600020600155",
+                            "storage": {
+                                "0x01": "0x52d7963d9a152455cd39d5b7efa696eb4d4fac938d51cf5d779e3792944aff7b"
+                            }
+                        },
+                        "0x09838a993c6ecabd475ba17b74be0b1878ab3df1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996358",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01fbcc",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x785b2e32e34395030e5a8e7547d25acebccd28c90eaf9358bd5342047883985f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the return data of the identity precompile overwriting its input.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/homestead/identity_precompile/test_identity.py#L15",
+            "fixture-format": "state_test"
+        }
+    }
+}

@@ -1,0 +1,78 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_rlp_encoding[fork_Prague-transaction_test-non_zero_address-extra_bytes]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c101808007830186a09400000000000000000000000000000000000000008080c0f85cf85a809400000000000000000000000000000000000000018080a0467fc44702b3b9d11ab278956073c62b48cce792144f22dd78c42de7f2acc8d9a0325942041887b2e21cb18e4d1572648de8eaed37819da5fea35822975d32188901a0d11458ced3b7aafd513813453d0e494dea1d0f5c33ab073ffd957c2731895254a039b94b69a7c3122f7ff8a107fbef966a75c6b6387c5a5ece4094627e3403538900",
+        "_info": {
+            "hash": "0xa96c6e3e494568545b73a00e46e2391a7bc30cd0d7e0c83e94d04574e1630afb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction type-4 where the RLP encoding of the transaction\n    is invalid.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L608",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_rlp_encoding[fork_Prague-transaction_test-non_zero_address-truncated_rlp]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c101808007830186a09400000000000000000000000000000000000000008080c0f85cf85a809400000000000000000000000000000000000000018001a040fcf25cb4ef02b82c3b59a84df0841cb1a15a935119e9df8d6516047bca7aefa0745f6265aaa9b5b91f3fd08773c7fbb533437c1bbeaed6d634ac1631497ac83480a02902b2ce7dd0acb1d0b66a6bb60909ac7f83c558b13ff00d16ad81d64201963ca0354b6b188961f5e2ee8569ce6acb990144173e3b4b5e7363a9704c6e198b47",
+        "_info": {
+            "hash": "0xbd3d80f152d0c5f74e27e16da7ec50f7f4c04985b6637c24451eb82fd76d5424",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction type-4 where the RLP encoding of the transaction\n    is invalid.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L608",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_rlp_encoding[fork_Prague-transaction_test-reset_delegation_address-extra_bytes]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c101808007830186a09400000000000000000000000000000000000000008080c0f85cf85a809400000000000000000000000000000000000000008080a0a79282c597c946a34e38daa6d7bb6c83b0a17161a1828dbfc5df6e65eae6bc00a048e2e28080395850b3ff94bca0f510d62b94d688457c26bb3e93c758c2ba07e401a0a6707added081aae9fad027a4f811d2500562ec434e3f224a4e8a8491d0c63daa04ea1708426d3de62cdce10c3e5d6fdbc9e710a0916ead507e1fc8793b789899500",
+        "_info": {
+            "hash": "0x1c9e3e2636656f7954d5b09138ce59de3bf7885942ec7b2f1d8cd30a0b02edcc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction type-4 where the RLP encoding of the transaction\n    is invalid.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L608",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_rlp_encoding[fork_Prague-transaction_test-reset_delegation_address-truncated_rlp]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c101808007830186a09400000000000000000000000000000000000000008080c0f85cf85a809400000000000000000000000000000000000000008080a021bf5b65d0b36d50e0610050246ca7d15496cf17fe2ed7403e85b119e30bea71a0775ce33d3b57b00d82734c7d0349fc3b1c1247289474b832e1074b898d88c6d601a0fd502a7a601e9ebe7c4eaef93945391cbfe57eb8bcb9fbc949a6d57bc2ec2f6ca064caa903809bf1ba1ba03fe72fff70b48ef096f17663cb2adf508ca189d3ed",
+        "_info": {
+            "hash": "0xeec77f1c8ac0aad7fc3abcfc400ad871180de54ba9a4ec4b842d7f6bee1851d1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction type-4 where the RLP encoding of the transaction\n    is invalid.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L608",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

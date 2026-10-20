@@ -1,0 +1,258 @@
+{
+    "tests/prague/eip6110_deposits/test_modified_contract.py::test_extra_logs[fork_Prague-blockchain_test_engine_x-include_deposit_event_False-extra_event_type_no_topics]": {
+        "network": "Prague",
+        "lastblockhash": "0x44fb1458e77085229d4ad90bf2443fcbdbe44738e9534fd76edf7e69d8551392",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xf404ec5ea95aaf9b",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x10ada61aa429631c02622f4d65e9bb983130ed37d2c86fdb1185ff634061ed86",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x211d4cc54ca966b28639d4968943261a544b7476cbf47a2bcfc6d9fbdd3c9b83",
+                        "receiptsRoot": "0x710fd1e315cbc16b33833a06be541414a87bca04b7f4fec3f3328c4c6140fbd4",
+                        "logsBloom": "0x00000000000000000000400000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5488",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x44fb1458e77085229d4ad90bf2443fcbdbe44738e9534fd76edf7e69d8551392",
+                        "transactions": [
+                            "0xf860800a830186a09400000000219ab540356cbb839cbe05303d7705fa808025a035407704046c13eb21d9116fbc869688cdf79df75d372948d6d78a82a2ea9fb6a0306f14d91a90c9d45dc1f03c8b69b433c46dc11e74863f26fca0df7948ce2286"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2e3e17dda2a557381dd6cb7b8b933ab98be16b111acdc134ca0028d438669c28",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test deposit contract emitting more log event types than the ones in\n    mainnet.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip6110_deposits/test_modified_contract.py#L73",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6110.md",
+            "reference-spec-version": "cbe8bf6a28fa1d096f9756af3513675849c4158e"
+        }
+    },
+    "tests/prague/eip6110_deposits/test_modified_contract.py::test_extra_logs[fork_Prague-blockchain_test_engine_x-include_deposit_event_False-extra_event_type_transfer_log]": {
+        "network": "Prague",
+        "lastblockhash": "0x3a20703fb3a7150433e9d5fd7f8e19a6b99572d3c91e51afe90008fbb4907210",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xde532d56905a0a7d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0ea37757ebd024509c04a03df9db0ddb4be4e2849a113b85d684941de6222138",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf5270d1cd599b351e21d1d685ddcfd5c868f71f305a7e8cee0e4128e3c50f095",
+                        "receiptsRoot": "0xafa4be162517ed9e4d09118fbe47d5a1de2671add0c2d1daa55a658e7c3e26b0",
+                        "logsBloom": "0x00000000000000000000400000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000800040000000000000000000000000000000000000000040000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000040000000000000400000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x58f6",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3a20703fb3a7150433e9d5fd7f8e19a6b99572d3c91e51afe90008fbb4907210",
+                        "transactions": [
+                            "0xf860800a830186a09400000000219ab540356cbb839cbe05303d7705fa808025a0eaa075a980e4df741795de0d496569460f4450e6a24711f5b6bbd7df6a4fb2a7a0328e98517ee95d15009c74051f2ceb603f91ccff957c0aff2969796cf5bc7265"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x4813d9c78e878cd8e909d461ee279b90dbe7118bd919f00165ec11fc833c58fd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test deposit contract emitting more log event types than the ones in\n    mainnet.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip6110_deposits/test_modified_contract.py#L73",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6110.md",
+            "reference-spec-version": "cbe8bf6a28fa1d096f9756af3513675849c4158e"
+        }
+    },
+    "tests/prague/eip6110_deposits/test_modified_contract.py::test_extra_logs[fork_Prague-blockchain_test_engine_x-include_deposit_event_True-extra_event_type_no_topics]": {
+        "network": "Prague",
+        "lastblockhash": "0xe6da3b546f3a90f0600ac0fdd1ba749ad972302855b6ff3220e25d18c57b3798",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x6f678265d3e02562",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xd66b8e3959fbe0d9fb1fdcb827a49565611a671bd9fca4c17ff2fc1c7ddfe502",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8b12cbcdf409fcefd04825b6609a15f1c899bc059449103880719622e37235a8",
+                        "receiptsRoot": "0xb12550fac069d84822a16ca231de5c0d69fde91c6ed3b5636af0a532c7ea6f70",
+                        "logsBloom": "0x00000000000000000000400000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000020000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x6a54",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe6da3b546f3a90f0600ac0fdd1ba749ad972302855b6ff3220e25d18c57b3798",
+                        "transactions": [
+                            "0xf860800a830186a09400000000219ab540356cbb839cbe05303d7705fa808026a0f84e611c9d49b2b7221d7d74001293d1a88316755c11f43d17a56bc3935b8741a027352e1fc2d2bc682f0214db6449a1eb23fc7761c860d669b04dd13545bc61fb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000c3d5d53aa010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd8bccf554bd443be2ff8703fcf021793658fd8936d908f52b3931e0eacb84315",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test deposit contract emitting more log event types than the ones in\n    mainnet.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip6110_deposits/test_modified_contract.py#L73",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6110.md",
+            "reference-spec-version": "cbe8bf6a28fa1d096f9756af3513675849c4158e"
+        }
+    },
+    "tests/prague/eip6110_deposits/test_modified_contract.py::test_extra_logs[fork_Prague-blockchain_test_engine_x-include_deposit_event_True-extra_event_type_transfer_log]": {
+        "network": "Prague",
+        "lastblockhash": "0xd8010f3129ed146e03075f54e80fc580108380189a43847759ce4d4bb7ea5b39",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xf4dca38075825f1a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x72b05d30f51cc4d86140e2a85cc7e8b6ecd4d9841c7209d20f4532881ab6223f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x60871dfbff65588cf094af24f6bd59af45a099e8d79ab6166586c9f7c4f0fcdf",
+                        "receiptsRoot": "0x3c25fb2ac0b18297110f68390f3981ac4dc6e6005ab9569750bf4f1d5fc57985",
+                        "logsBloom": "0x00000000000000000000400000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000800040000000000000000000000000000000000000000040000010000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000420000000000000040000000000000400000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000008000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x6ec2",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xd8010f3129ed146e03075f54e80fc580108380189a43847759ce4d4bb7ea5b39",
+                        "transactions": [
+                            "0xf860800a830186a09400000000219ab540356cbb839cbe05303d7705fa808026a07efe286d3ad0b6221c2930fb3af59dc53a53afb172b699a3f80066be0e18b058a0533427fae6da0614deb9b16692cf2c8afcca51a62d27199e88e25cc8722d0f34"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    [
+                        "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000c3d5d53aa010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000"
+                    ]
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa90b08a90b794515be35aa8a63ef315c746275212fbecb61dee974ac8c2eeb03",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test deposit contract emitting more log event types than the ones in\n    mainnet.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip6110_deposits/test_modified_contract.py#L73",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6110.md",
+            "reference-spec-version": "cbe8bf6a28fa1d096f9756af3513675849c4158e"
+        }
+    }
+}

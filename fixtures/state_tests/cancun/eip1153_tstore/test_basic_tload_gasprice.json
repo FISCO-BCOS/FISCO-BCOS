@@ -1,0 +1,213 @@
+{
+    "tests/cancun/eip1153_tstore/test_basic_tload.py::test_basic_tload_gasprice[fork_Cancun-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xcb206c7ed2de6c1cd4a58ac73ab680e9f643fb10": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5b600260105d5a6000525a60005260105c5a60205260205160005103600155600b600154036001555a60005260055c5a60205260205160005103600255600b600254036002556001600355",
+                "storage": {
+                    "0x01": "0xff",
+                    "0x02": "0xff"
+                }
+            },
+            "0x342736eec627b07258418f612a7d9b452edc0761": {
+                "nonce": "0x00",
+                "balance": "0x6124fee993bc0000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x4c4b40"
+            ],
+            "to": "0xcb206c7ed2de6c1cd4a58ac73ab680e9f643fb10",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x342736eec627b07258418f612a7d9b452edc0761",
+            "secretKey": "0x27533d157e20118805250709cb206c7ed2de6c1cd4a58ac73ab680e9f643fb10"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x2b5f79f5ebc2c89e5c51f52374d76f8a4ece99ff105e75f90df692125a47bf2b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a834c4b4094cb206c7ed2de6c1cd4a58ac73ab680e9f643fb10808026a076c4b758fef54a0a3bf3151d2d0aa2b21bdc62e6f9729d8979b28dd819b51850a07333992bf808fac5e2e4e296740d390f0f47dbc323943214e9f1d6d5310f0dfb",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xcb206c7ed2de6c1cd4a58ac73ab680e9f643fb10": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5b600260105d5a6000525a60005260105c5a60205260205160005103600155600b600154036001555a60005260055c5a60205260205160005103600255600b600254036002556001600355",
+                            "storage": {
+                                "0x01": "0x64",
+                                "0x02": "0x64",
+                                "0x03": "0x01"
+                            }
+                        },
+                        "0x342736eec627b07258418f612a7d9b452edc0761": {
+                            "nonce": "0x01",
+                            "balance": "0x6124fee993b3c58e",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0277ef",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb94cac316b496491e59ddf79d0b2eafb6cd7d17b8823d4c47dfb472b05ae8600",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Ported .json vectors.\n\n    (16_tloadGasFiller.yml)\n    tload costs 100 gas same as a warm sload",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_basic_tload.py#L188",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_basic_tload.py::test_basic_tload_gasprice[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xcb206c7ed2de6c1cd4a58ac73ab680e9f643fb10": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5b600260105d5a6000525a60005260105c5a60205260205160005103600155600b600154036001555a60005260055c5a60205260205160005103600255600b600254036002556001600355",
+                "storage": {
+                    "0x01": "0xff",
+                    "0x02": "0xff"
+                }
+            },
+            "0x342736eec627b07258418f612a7d9b452edc0761": {
+                "nonce": "0x00",
+                "balance": "0x6124fee993bc0000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x4c4b40"
+            ],
+            "to": "0xcb206c7ed2de6c1cd4a58ac73ab680e9f643fb10",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x342736eec627b07258418f612a7d9b452edc0761",
+            "secretKey": "0x27533d157e20118805250709cb206c7ed2de6c1cd4a58ac73ab680e9f643fb10"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x2b5f79f5ebc2c89e5c51f52374d76f8a4ece99ff105e75f90df692125a47bf2b",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a834c4b4094cb206c7ed2de6c1cd4a58ac73ab680e9f643fb10808026a076c4b758fef54a0a3bf3151d2d0aa2b21bdc62e6f9729d8979b28dd819b51850a07333992bf808fac5e2e4e296740d390f0f47dbc323943214e9f1d6d5310f0dfb",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xcb206c7ed2de6c1cd4a58ac73ab680e9f643fb10": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5b600260105d5a6000525a60005260105c5a60205260205160005103600155600b600154036001555a60005260055c5a60205260205160005103600255600b600254036002556001600355",
+                            "storage": {
+                                "0x01": "0x64",
+                                "0x02": "0x64",
+                                "0x03": "0x01"
+                            }
+                        },
+                        "0x342736eec627b07258418f612a7d9b452edc0761": {
+                            "nonce": "0x01",
+                            "balance": "0x6124fee993b3c58e",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0277ef",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x57b2e0225af822d46cfcb2350f160c4d2000ba1d342062e4f57c761c5dcea273",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Ported .json vectors.\n\n    (16_tloadGasFiller.yml)\n    tload costs 100 gas same as a warm sload",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_basic_tload.py#L188",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    }
+}

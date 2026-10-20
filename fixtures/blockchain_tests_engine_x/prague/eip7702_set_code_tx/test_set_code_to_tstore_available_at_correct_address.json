@@ -1,0 +1,128 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_available_at_correct_address[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-call_eoa_first_False]": {
+        "network": "Prague",
+        "lastblockhash": "0xfcaaaf19fef1cb48c92bdca06e52e7a8d6e23f8ca1425f8f16d3b79d8f76ff3c",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7210c111a64ad9298581bddeb7af473729f7facebf4fb4f361bf98fe97bd7985",
+                        "receiptsRoot": "0x51b358d19831b5c9cf37ddce7c88bac01ade49bcad543b6630413462fce63656",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xd1a0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xfcaaaf19fef1cb48c92bdca06e52e7a8d6e23f8ca1425f8f16d3b79d8f76ff3c",
+                        "transactions": [
+                            "0x04f8c101808007830186a094e6e2117abfb20c4f6534691192889639e788bb5c8080c0f85cf85a8094e6e2117abfb20c4f6534691192889639e788ba5c8080a0284d19f7be2e76aeca0b09962785e3c82ff320a94e6b321bf9a61e8a7dbc32f8a04c71ed029e70fa37cedaef071942596edfb6eb18821dbf925307476b4d84ea4901a0db6059593941a1a50e15082593375226383da6a948f7bc6f73d7a8e2e1530c47a05d10c7b2161cb72cd36b24d71e0e979a1e8e1e043542b19e900f7f845ab53f4b"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb876091415a235167764d7f7e96c73e1b7d16ee5dd84e72142b3d79c05f03a78",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test TLOADing from slot 2 and then SSTORE this in slot 1, then TSTORE 3 in\n    slot 2. This is done both from the EOA which is delegated to account A, and\n    then A is called. The storage should stay empty on both the EOA and the\n    delegated account.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L423",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_available_at_correct_address[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-call_eoa_first_True]": {
+        "network": "Prague",
+        "lastblockhash": "0x21df06a5550e1f099c7c80e102a80c38742b6aaf4552337e044827c7b3711605",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2667e6170e66924aed969d72be70571dc94ec92e5f7094e3384b35e848096a9e",
+                        "receiptsRoot": "0x51b358d19831b5c9cf37ddce7c88bac01ade49bcad543b6630413462fce63656",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xd1a0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x21df06a5550e1f099c7c80e102a80c38742b6aaf4552337e044827c7b3711605",
+                        "transactions": [
+                            "0x04f8c101808007830186a0942ad64e19e363944d789772f7c62e2c94f1d9f63e8080c0f85cf85a80942ad64e19e363944d789772f7c62e2c94f1d9f53e8080a04f3831d8446b3a3eddcfde27de1459db94471af3c5d1703c20f6404fc3ef8d38a067a9e4f687b7d34e4683b25e2379622391c459478311a90e1677b435a457a7dd80a0a5eb4c3a995fd96f948e165d1518256423f3d54d1b28156b6ddbb589bbc9c93ca03de14171cdba8687e2d0ff0bd191edd34fee189a918326a86b368ab07f39fb0d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x19c272a30fdc4e9a5e2b3225a63bb208b16c95877cee50048366dd302f20e50f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test TLOADing from slot 2 and then SSTORE this in slot 1, then TSTORE 3 in\n    slot 2. This is done both from the EOA which is delegated to account A, and\n    then A is called. The storage should stay empty on both the EOA and the\n    delegated account.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L423",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

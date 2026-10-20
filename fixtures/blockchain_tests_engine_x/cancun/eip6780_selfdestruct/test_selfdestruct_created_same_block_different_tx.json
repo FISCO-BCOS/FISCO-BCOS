@@ -1,0 +1,678 @@
+{
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Cancun-blockchain_test_engine_x-call_times_1-selfdestruct_contract_initial_balance_0]": {
+        "network": "Cancun",
+        "lastblockhash": "0x38f133cc46f8d5455c3400a6ded8ff396c53bf40d398233ccf7580789010e764",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3d67400ee96ab1a153764dc57dd6219126dc47356ae887ffc8504796597fc77d",
+                        "receiptsRoot": "0x025ac81a72e0442608451a0328428685c0862f422e00341b16f45ffa8a631d48",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x350be",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x38f133cc46f8d5455c3400a6ded8ff396c53bf40d398233ccf7580789010e764",
+                        "transactions": [
+                            "0xf87c800a8307a1208080b0610025600081600b8239f360016000540160005573065cbc680854ad18a193bb3729aaf23639fd6f07ff60006000550026a0b41250c283df000b53a9cda27bded8e42636bd8210965bd1281737613d491149a0542711bf5e414d60a60af34a7375487caee21346908b8519239060d6f94ed0fe",
+                            "0xf8c1010a8307a1208080b8746000600060006000600073a84d8049b9f6e6813f3e2ff1082f23d6469f79f945f160005573a84d8049b9f6e6813f3e2ff1082f23d6469f79f93160015573a84d8049b9f6e6813f3e2ff1082f23d6469f79f93b60025573a84d8049b9f6e6813f3e2ff1082f23d6469f79f93f60035560016020f325a0ab357da28fb9f46eed0a33eb43498421bcdd3b790b8f08982f5cba14cd66957fa06df65c8141c846e68f0ff2a1898bfabca5d1a94b683e9c03b976e7496b90e2ab"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xe363adc434978dd1b593d1f7639d5f27e40c5aab5824cff73de5b97825271f78",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Cancun-blockchain_test_engine_x-call_times_1-selfdestruct_contract_initial_balance_1]": {
+        "network": "Cancun",
+        "lastblockhash": "0x711de35ddaaa33223a9db71a606e3222fa704ef9ff82682398a020e0d98c70f0",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xa08bb34e008318b350e1098765955745d8657054b4d10f4d1b7a62ad76ce9a5d",
+                        "receiptsRoot": "0x025ac81a72e0442608451a0328428685c0862f422e00341b16f45ffa8a631d48",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x350be",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x711de35ddaaa33223a9db71a606e3222fa704ef9ff82682398a020e0d98c70f0",
+                        "transactions": [
+                            "0xf87c800a8307a1208001b0610025600081600b8239f360016000540160005573ff84c4e295f2fbf97683ea3ed4aa82540739df0fff60006000550026a07a6b22a3beb0bacc688af973c989f4b21e26912bc98274ec523f92f5d960fe2ba02499d33c9fe93d8a9b112018f40fc2fdc1138125a404598812e5aa7024eb60d0",
+                            "0xf8c1010a8307a1208080b87460006000600060006000730a509cea30dbe8951c8c90bc188fc4e1c8ce503c45f1600055730a509cea30dbe8951c8c90bc188fc4e1c8ce503c31600155730a509cea30dbe8951c8c90bc188fc4e1c8ce503c3b600255730a509cea30dbe8951c8c90bc188fc4e1c8ce503c3f60035560016020f326a09b515084a06b2dcac9b362d72564007ccc870c8851f67873e61a1f54bfe54d30a00941ffd636c66832c2a0d2bdce4c2d7c0e815478512be14fe9a24aa691b632c4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xc96e898702ce79303b4343d2bced0478a0a42b652ea71ba2a79ce582d5b462dd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Cancun-blockchain_test_engine_x-call_times_10-selfdestruct_contract_initial_balance_0]": {
+        "network": "Cancun",
+        "lastblockhash": "0x62b06d8c558dba607278bc5161a2a1644fab6350d853e1f59d3f73fa43033149",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x45000b7ab2cbeb6f43ae58a39b016b4a339c3110523f30ba801932f027a6dbbf",
+                        "receiptsRoot": "0x8f8cdb0324e400ee8596037eb67dab17ee9f40d35d2b44c3365f1f5bbdbaab40",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x872bc",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x62b06d8c558dba607278bc5161a2a1644fab6350d853e1f59d3f73fa43033149",
+                        "transactions": [
+                            "0xf87c800a8307a1208080b0610025600081600b8239f3600160005401600055737e1dd35617addd81ca3a91de3ca8e6d3ebfdce4bff60006000550026a087931c2cacf17b2ff53a9a3d9d19a053a9fb95110d7f47593a8f3459c93ef1cda0630afd7faaccff280a3d8d128b61b741ac7e873172db94c9ab5184882d607983",
+                            "0xf902e7010a8307a120802db902996000600060006000600073e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160005573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316001556000600060006000600173e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160025573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316003556000600060006000600273e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160045573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316005556000600060006000600373e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160065573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316007556000600060006000600473e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160085573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316009556000600060006000600573e3a1fc79cee7f585fd276d3f21342d1fe32142a445f1600a5573e3a1fc79cee7f585fd276d3f21342d1fe32142a431600b556000600060006000600673e3a1fc79cee7f585fd276d3f21342d1fe32142a445f1600c5573e3a1fc79cee7f585fd276d3f21342d1fe32142a431600d556000600060006000600773e3a1fc79cee7f585fd276d3f21342d1fe32142a445f1600e5573e3a1fc79cee7f585fd276d3f21342d1fe32142a431600f556000600060006000600873e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160105573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316011556000600060006000600973e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160125573e3a1fc79cee7f585fd276d3f21342d1fe32142a43160135573e3a1fc79cee7f585fd276d3f21342d1fe32142a43b60145573e3a1fc79cee7f585fd276d3f21342d1fe32142a43f60155560016020f325a0e24af1c11ca38e7529db8c7624d60c45e1551b49fc2fade927ad04097bbbf0aea059cdec8255ba574a2fae4d96c58cd4d7d152d5619022be2ae53c3358cec99ec2"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x40e21d35fe2d3019402cc1b8c6382685c716094fdffd1a59befdd7dd6ff96ed3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Cancun-blockchain_test_engine_x-call_times_10-selfdestruct_contract_initial_balance_1]": {
+        "network": "Cancun",
+        "lastblockhash": "0xaaf42954de4fefef65e011c5b2b604187ec28d86358bba879ebfd1b18154680d",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4435eb2e4a24a5c8548ffbe147588fa4f698eca346576dc2cd4af9494faa5eac",
+                        "receiptsRoot": "0x8f8cdb0324e400ee8596037eb67dab17ee9f40d35d2b44c3365f1f5bbdbaab40",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x872bc",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xaaf42954de4fefef65e011c5b2b604187ec28d86358bba879ebfd1b18154680d",
+                        "transactions": [
+                            "0xf87c800a8307a1208001b0610025600081600b8239f360016000540160005573fc4c3759bc67950d83ced97a82ecd04e1f9591c8ff60006000550026a025cc19457993e698a6b2406d319e70fed60a8f3643d20050042eecb2310f444ea033925019c9cce2fca758881d2c5760009d14a05f6be790e3162559518fb15f4f",
+                            "0xf902e7010a8307a120802db9029960006000600060006000736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600055736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160015560006000600060006001736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600255736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160035560006000600060006002736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600455736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160055560006000600060006003736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600655736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160075560006000600060006004736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600855736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160095560006000600060006005736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600a55736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31600b5560006000600060006006736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600c55736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31600d5560006000600060006007736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600e55736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31600f5560006000600060006008736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1601055736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160115560006000600060006009736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1601255736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31601355736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3b601455736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3f60155560016020f325a0e2d0ae7fb013dc8e0a3dfa6a610533687da8fab6214c306ad7189294aa1a705ea0498161f7af7ed71ddd51db6757230af2ea9026789446dc48be30011d088f2719"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7f188278740f31ff7094b67a886eeb20cf59d8ac564e58b4d3f2d1442008a109",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Prague-blockchain_test_engine_x-call_times_1-selfdestruct_contract_initial_balance_0]": {
+        "network": "Prague",
+        "lastblockhash": "0xf0fe2a1a593f766040977347681a89bd78335c1d068a46da154d6430025d5aa1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x15e80c52ca9c1c2d8206ad4ec0f97b70612589d6d0c92ef37dce37d138869cb6",
+                        "receiptsRoot": "0x025ac81a72e0442608451a0328428685c0862f422e00341b16f45ffa8a631d48",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x350be",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf0fe2a1a593f766040977347681a89bd78335c1d068a46da154d6430025d5aa1",
+                        "transactions": [
+                            "0xf87c800a8307a1208080b0610025600081600b8239f360016000540160005573065cbc680854ad18a193bb3729aaf23639fd6f07ff60006000550026a0b41250c283df000b53a9cda27bded8e42636bd8210965bd1281737613d491149a0542711bf5e414d60a60af34a7375487caee21346908b8519239060d6f94ed0fe",
+                            "0xf8c1010a8307a1208080b8746000600060006000600073a84d8049b9f6e6813f3e2ff1082f23d6469f79f945f160005573a84d8049b9f6e6813f3e2ff1082f23d6469f79f93160015573a84d8049b9f6e6813f3e2ff1082f23d6469f79f93b60025573a84d8049b9f6e6813f3e2ff1082f23d6469f79f93f60035560016020f325a0ab357da28fb9f46eed0a33eb43498421bcdd3b790b8f08982f5cba14cd66957fa06df65c8141c846e68f0ff2a1898bfabca5d1a94b683e9c03b976e7496b90e2ab"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x17c24fa03eb2a94cab32834789a492d5b19d9efd0c218134dd8a0029b9743a8e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Prague-blockchain_test_engine_x-call_times_1-selfdestruct_contract_initial_balance_1]": {
+        "network": "Prague",
+        "lastblockhash": "0x9d97dd1f0b9f9bdbbd5cff10d5a4a75c1b7f7665f767b97e77a456f60ec1a6ea",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4ae100e83a5ad3b02ef38f9f932053ff05a6e31a0c6754074a6ebe9a58748724",
+                        "receiptsRoot": "0x025ac81a72e0442608451a0328428685c0862f422e00341b16f45ffa8a631d48",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x350be",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9d97dd1f0b9f9bdbbd5cff10d5a4a75c1b7f7665f767b97e77a456f60ec1a6ea",
+                        "transactions": [
+                            "0xf87c800a8307a1208001b0610025600081600b8239f360016000540160005573ff84c4e295f2fbf97683ea3ed4aa82540739df0fff60006000550026a07a6b22a3beb0bacc688af973c989f4b21e26912bc98274ec523f92f5d960fe2ba02499d33c9fe93d8a9b112018f40fc2fdc1138125a404598812e5aa7024eb60d0",
+                            "0xf8c1010a8307a1208080b87460006000600060006000730a509cea30dbe8951c8c90bc188fc4e1c8ce503c45f1600055730a509cea30dbe8951c8c90bc188fc4e1c8ce503c31600155730a509cea30dbe8951c8c90bc188fc4e1c8ce503c3b600255730a509cea30dbe8951c8c90bc188fc4e1c8ce503c3f60035560016020f326a09b515084a06b2dcac9b362d72564007ccc870c8851f67873e61a1f54bfe54d30a00941ffd636c66832c2a0d2bdce4c2d7c0e815478512be14fe9a24aa691b632c4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2ade1cac5e3be8cde28802c697e628b7960395916c06c914bb45778bdd6bc0de",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Prague-blockchain_test_engine_x-call_times_10-selfdestruct_contract_initial_balance_0]": {
+        "network": "Prague",
+        "lastblockhash": "0x4adc2940e47fe6d96d521b78f9a266aa1cac1ebfd10975ae57789fecf3d5cc64",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe2d0468ee044d2d40563689d752ad11ef20e603721f8694cc959d10b2d6de186",
+                        "receiptsRoot": "0x8f8cdb0324e400ee8596037eb67dab17ee9f40d35d2b44c3365f1f5bbdbaab40",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x872bc",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4adc2940e47fe6d96d521b78f9a266aa1cac1ebfd10975ae57789fecf3d5cc64",
+                        "transactions": [
+                            "0xf87c800a8307a1208080b0610025600081600b8239f3600160005401600055737e1dd35617addd81ca3a91de3ca8e6d3ebfdce4bff60006000550026a087931c2cacf17b2ff53a9a3d9d19a053a9fb95110d7f47593a8f3459c93ef1cda0630afd7faaccff280a3d8d128b61b741ac7e873172db94c9ab5184882d607983",
+                            "0xf902e7010a8307a120802db902996000600060006000600073e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160005573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316001556000600060006000600173e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160025573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316003556000600060006000600273e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160045573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316005556000600060006000600373e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160065573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316007556000600060006000600473e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160085573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316009556000600060006000600573e3a1fc79cee7f585fd276d3f21342d1fe32142a445f1600a5573e3a1fc79cee7f585fd276d3f21342d1fe32142a431600b556000600060006000600673e3a1fc79cee7f585fd276d3f21342d1fe32142a445f1600c5573e3a1fc79cee7f585fd276d3f21342d1fe32142a431600d556000600060006000600773e3a1fc79cee7f585fd276d3f21342d1fe32142a445f1600e5573e3a1fc79cee7f585fd276d3f21342d1fe32142a431600f556000600060006000600873e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160105573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316011556000600060006000600973e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160125573e3a1fc79cee7f585fd276d3f21342d1fe32142a43160135573e3a1fc79cee7f585fd276d3f21342d1fe32142a43b60145573e3a1fc79cee7f585fd276d3f21342d1fe32142a43f60155560016020f325a0e24af1c11ca38e7529db8c7624d60c45e1551b49fc2fade927ad04097bbbf0aea059cdec8255ba574a2fae4d96c58cd4d7d152d5619022be2ae53c3358cec99ec2"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xe425ad9a4db6dd29f541aca2b3c8afddee3ae5ff423275586d49c5c2c4c471b5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Prague-blockchain_test_engine_x-call_times_10-selfdestruct_contract_initial_balance_1]": {
+        "network": "Prague",
+        "lastblockhash": "0x50a3bd29425cea650acbde7f0c73ff3a211ac1128fd212874bbf4993f78d9f40",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe4a34d1ecf8c04d2b25a2317c93cdd5742c840c2d1d0c9675b56734813d9398b",
+                        "receiptsRoot": "0x8f8cdb0324e400ee8596037eb67dab17ee9f40d35d2b44c3365f1f5bbdbaab40",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x872bc",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x50a3bd29425cea650acbde7f0c73ff3a211ac1128fd212874bbf4993f78d9f40",
+                        "transactions": [
+                            "0xf87c800a8307a1208001b0610025600081600b8239f360016000540160005573fc4c3759bc67950d83ced97a82ecd04e1f9591c8ff60006000550026a025cc19457993e698a6b2406d319e70fed60a8f3643d20050042eecb2310f444ea033925019c9cce2fca758881d2c5760009d14a05f6be790e3162559518fb15f4f",
+                            "0xf902e7010a8307a120802db9029960006000600060006000736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600055736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160015560006000600060006001736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600255736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160035560006000600060006002736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600455736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160055560006000600060006003736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600655736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160075560006000600060006004736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600855736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160095560006000600060006005736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600a55736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31600b5560006000600060006006736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600c55736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31600d5560006000600060006007736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600e55736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31600f5560006000600060006008736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1601055736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160115560006000600060006009736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1601255736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31601355736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3b601455736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3f60155560016020f325a0e2d0ae7fb013dc8e0a3dfa6a610533687da8fab6214c306ad7189294aa1a705ea0498161f7af7ed71ddd51db6757230af2ea9026789446dc48be30011d088f2719"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x85be86f102edf90457f953ad11caecdbc8b4481a2f81ba35076d47433ed661a6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Shanghai-blockchain_test_engine_x-call_times_1-selfdestruct_contract_initial_balance_0]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x471c7cda8e5a9e6fbfd35a71a35b797015dfb3c39b76cb8d830b06313974042e",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5e2a74b92de146c2acda8a3f43546eca2063ae8102a3408f41e71f4f0c85fa72",
+                        "receiptsRoot": "0x025ac81a72e0442608451a0328428685c0862f422e00341b16f45ffa8a631d48",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x350be",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x471c7cda8e5a9e6fbfd35a71a35b797015dfb3c39b76cb8d830b06313974042e",
+                        "transactions": [
+                            "0xf87c800a8307a1208080b0610025600081600b8239f360016000540160005573065cbc680854ad18a193bb3729aaf23639fd6f07ff60006000550026a0b41250c283df000b53a9cda27bded8e42636bd8210965bd1281737613d491149a0542711bf5e414d60a60af34a7375487caee21346908b8519239060d6f94ed0fe",
+                            "0xf8c1010a8307a1208080b8746000600060006000600073a84d8049b9f6e6813f3e2ff1082f23d6469f79f945f160005573a84d8049b9f6e6813f3e2ff1082f23d6469f79f93160015573a84d8049b9f6e6813f3e2ff1082f23d6469f79f93b60025573a84d8049b9f6e6813f3e2ff1082f23d6469f79f93f60035560016020f325a0ab357da28fb9f46eed0a33eb43498421bcdd3b790b8f08982f5cba14cd66957fa06df65c8141c846e68f0ff2a1898bfabca5d1a94b683e9c03b976e7496b90e2ab"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x9b5cb3985f7d000da1b17d6b0e7bda210e9e8d934dda5ad3d93774582327b856",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Shanghai-blockchain_test_engine_x-call_times_1-selfdestruct_contract_initial_balance_1]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x1ea805ce5da3b63356acfc3281012e7dae37d7392ce1e7a161b767fccbec5ddc",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3ccb87a6880862b2d69646e61ab29e4e61874706f79355414f108b40e5ebfd9a",
+                        "receiptsRoot": "0x025ac81a72e0442608451a0328428685c0862f422e00341b16f45ffa8a631d48",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x350be",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x1ea805ce5da3b63356acfc3281012e7dae37d7392ce1e7a161b767fccbec5ddc",
+                        "transactions": [
+                            "0xf87c800a8307a1208001b0610025600081600b8239f360016000540160005573ff84c4e295f2fbf97683ea3ed4aa82540739df0fff60006000550026a07a6b22a3beb0bacc688af973c989f4b21e26912bc98274ec523f92f5d960fe2ba02499d33c9fe93d8a9b112018f40fc2fdc1138125a404598812e5aa7024eb60d0",
+                            "0xf8c1010a8307a1208080b87460006000600060006000730a509cea30dbe8951c8c90bc188fc4e1c8ce503c45f1600055730a509cea30dbe8951c8c90bc188fc4e1c8ce503c31600155730a509cea30dbe8951c8c90bc188fc4e1c8ce503c3b600255730a509cea30dbe8951c8c90bc188fc4e1c8ce503c3f60035560016020f326a09b515084a06b2dcac9b362d72564007ccc870c8851f67873e61a1f54bfe54d30a00941ffd636c66832c2a0d2bdce4c2d7c0e815478512be14fe9a24aa691b632c4"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xf9263b4aec5c3caa2040c628724f907aabb55d4966f56240dcb709db3cb73712",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Shanghai-blockchain_test_engine_x-call_times_10-selfdestruct_contract_initial_balance_0]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x47ec0bdb547422d3f2f45c29258329bdf29ac59b97f5b1abf9e958b71b0a5be8",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbd7beba137796102f21aef72c776685a46079651fd5c44ff2dce653a6f5ce601",
+                        "receiptsRoot": "0x8f8cdb0324e400ee8596037eb67dab17ee9f40d35d2b44c3365f1f5bbdbaab40",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x872bc",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x47ec0bdb547422d3f2f45c29258329bdf29ac59b97f5b1abf9e958b71b0a5be8",
+                        "transactions": [
+                            "0xf87c800a8307a1208080b0610025600081600b8239f3600160005401600055737e1dd35617addd81ca3a91de3ca8e6d3ebfdce4bff60006000550026a087931c2cacf17b2ff53a9a3d9d19a053a9fb95110d7f47593a8f3459c93ef1cda0630afd7faaccff280a3d8d128b61b741ac7e873172db94c9ab5184882d607983",
+                            "0xf902e7010a8307a120802db902996000600060006000600073e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160005573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316001556000600060006000600173e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160025573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316003556000600060006000600273e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160045573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316005556000600060006000600373e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160065573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316007556000600060006000600473e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160085573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316009556000600060006000600573e3a1fc79cee7f585fd276d3f21342d1fe32142a445f1600a5573e3a1fc79cee7f585fd276d3f21342d1fe32142a431600b556000600060006000600673e3a1fc79cee7f585fd276d3f21342d1fe32142a445f1600c5573e3a1fc79cee7f585fd276d3f21342d1fe32142a431600d556000600060006000600773e3a1fc79cee7f585fd276d3f21342d1fe32142a445f1600e5573e3a1fc79cee7f585fd276d3f21342d1fe32142a431600f556000600060006000600873e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160105573e3a1fc79cee7f585fd276d3f21342d1fe32142a4316011556000600060006000600973e3a1fc79cee7f585fd276d3f21342d1fe32142a445f160125573e3a1fc79cee7f585fd276d3f21342d1fe32142a43160135573e3a1fc79cee7f585fd276d3f21342d1fe32142a43b60145573e3a1fc79cee7f585fd276d3f21342d1fe32142a43f60155560016020f325a0e24af1c11ca38e7529db8c7624d60c45e1551b49fc2fade927ad04097bbbf0aea059cdec8255ba574a2fae4d96c58cd4d7d152d5619022be2ae53c3358cec99ec2"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x68357e07fe30e73a8dea34d2ff38f849e84b0359404f13f114e68975c555d43f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    },
+    "tests/cancun/eip6780_selfdestruct/test_selfdestruct.py::test_selfdestruct_created_same_block_different_tx[fork_Shanghai-blockchain_test_engine_x-call_times_10-selfdestruct_contract_initial_balance_1]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x0eac4a8fdfe2db2fbe6816dc18284a2fc5b9105f941e5a1a7c8b6fe717826d15",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x53d7cfb99ba71fe4f3a0ca4f4fd6c7f12f13d33f465440313f823017a87221ef",
+                        "receiptsRoot": "0x8f8cdb0324e400ee8596037eb67dab17ee9f40d35d2b44c3365f1f5bbdbaab40",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x872bc",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x0eac4a8fdfe2db2fbe6816dc18284a2fc5b9105f941e5a1a7c8b6fe717826d15",
+                        "transactions": [
+                            "0xf87c800a8307a1208001b0610025600081600b8239f360016000540160005573fc4c3759bc67950d83ced97a82ecd04e1f9591c8ff60006000550026a025cc19457993e698a6b2406d319e70fed60a8f3643d20050042eecb2310f444ea033925019c9cce2fca758881d2c5760009d14a05f6be790e3162559518fb15f4f",
+                            "0xf902e7010a8307a120802db9029960006000600060006000736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600055736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160015560006000600060006001736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600255736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160035560006000600060006002736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600455736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160055560006000600060006003736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600655736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160075560006000600060006004736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600855736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160095560006000600060006005736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600a55736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31600b5560006000600060006006736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600c55736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31600d5560006000600060006007736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1600e55736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31600f5560006000600060006008736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1601055736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3160115560006000600060006009736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc45f1601255736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc31601355736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3b601455736f1cf3623cb0afdca9cbd0ebbd82917eed66c5cc3f60155560016020f325a0e2d0ae7fb013dc8e0a3dfa6a610533687da8fab6214c306ad7189294aa1a705ea0498161f7af7ed71ddd51db6757230af2ea9026789446dc48be30011d088f2719"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x3021e26d6aa9b82e9d8abf37683d7df3d3e173a30d522d56299b9c7c79110d0a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that if an account created in the same block that contains a\n    selfdestruct is called, its balance is sent to the send-all address, but\n    the account is not deleted.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip6780_selfdestruct/test_selfdestruct.py#L859",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6780.md",
+            "reference-spec-version": "1b6a0e94cc47e859b9866e570391cf37dc55059a"
+        }
+    }
+}

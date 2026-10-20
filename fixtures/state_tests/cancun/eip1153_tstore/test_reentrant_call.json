@@ -1,0 +1,2048 @@
+{
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-invalid_undoes_all]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x8d39790777f8945d40dc9344880439a8075a1659": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514602158015761020160fe5d61020260fe5d61020160ff5d61020260ff5dfe60335801565b61010060fe5d61010160ff5d6002600052600060006020600060003061fffff160005560fe5c60015560ff5c6002555b",
+                "storage": {}
+            },
+            "0x9c50bf10c42eb5546e1ec061b03c79217b6e1f1d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x8d39790777f8945d40dc9344880439a8075a1659",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0x9c50bf10c42eb5546e1ec061b03c79217b6e1f1d",
+            "secretKey": "0x74742d2d221d14afca1e823c8d39790777f8945d40dc9344880439a8075a1659"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xe5dded74a300c595be57f58e85f40fed169acf2937bda5a14e28bc0f6056b306",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f4240948d39790777f8945d40dc9344880439a8075a165980a0000000000000000000000000000000000000000000000000000000000000000126a063c73399f9885ca100f2077433b2d9830f0442b1e9ed04902e559a18d88ac66fa0130d09e49fc8695de3757bfa80af6be9113e0543614193134c52fb193591b665",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8d39790777f8945d40dc9344880439a8075a1659": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514602158015761020160fe5d61020260fe5d61020160ff5d61020260ff5dfe60335801565b61010060fe5d61010160ff5d6002600052600060006020600060003061fffff160005560fe5c60015560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0101"
+                            }
+                        },
+                        "0x9c50bf10c42eb5546e1ec061b03c79217b6e1f1d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8b9aac",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x061e66",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x9f0fc2718fd012026a6f4312f0a9be8df4ab5acdba64f9127f216b633f164fc4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-invalid_undoes_tstorage_after_successful_call]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x02f6fab812e3444f378a1af6a7bdd69927dc3b17": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600260003514604e580157600360003514603758015761010060ff5d60ff5c6002556002600052602060206020600060003061fffff160005560205160015560ff5c600355602b5801565b61010160ff5d601f5801565b600360005260006000602060006000305af1600052fe60035801565b",
+                "storage": {}
+            },
+            "0x4d58970591329ecfaaee053f35c11c154a85b0f2": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x02f6fab812e3444f378a1af6a7bdd69927dc3b17",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0x4d58970591329ecfaaee053f35c11c154a85b0f2",
+            "secretKey": "0xeff58077646dece9c3fc406a02f6fab812e3444f378a1af6a7bdd69927dc3b17"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x03746a7b6d95141d745f5295ee028e74fd1c1951a6908ce89fddaeb882c2092d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f42409402f6fab812e3444f378a1af6a7bdd69927dc3b1780a0000000000000000000000000000000000000000000000000000000000000000126a07f7dae84b76a7c732adaecb972b32f6625d2309086a350650015782f2a467d81a01db869b52610be2e291bfa6b40b0b42263c02ea33bb7660deeb80c6caded8309",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x02f6fab812e3444f378a1af6a7bdd69927dc3b17": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600260003514604e580157600360003514603758015761010060ff5d60ff5c6002556002600052602060206020600060003061fffff160005560205160015560ff5c600355602b5801565b61010160ff5d601f5801565b600360005260006000602060006000305af1600052fe60035801565b",
+                            "storage": {
+                                "0x02": "0x0100",
+                                "0x03": "0x0100"
+                            }
+                        },
+                        "0x4d58970591329ecfaaee053f35c11c154a85b0f2": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8b46a6",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06379b",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb5459ec4f0ec2c98212ed8069ceaad66ad9c7816516de657c96e9559643b1f6b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-manipulate_in_reentrant_call]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x605072258618e98396be251259a531d145b61f34": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514601458015761010160ff5d60ff5c600255602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6003555b",
+                "storage": {}
+            },
+            "0xa6d38c80646941d8f235f91d787d14a5f120cc85": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x605072258618e98396be251259a531d145b61f34",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xa6d38c80646941d8f235f91d787d14a5f120cc85",
+            "secretKey": "0x3dbff96d2b36aa3c05b40f03605072258618e98396be251259a531d145b61f34"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xf63514e449b0f8cfc16899bcce74608dbaffa58b5320b9dedeb0d764b0a5e1a8",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f424094605072258618e98396be251259a531d145b61f3480a0000000000000000000000000000000000000000000000000000000000000000126a0a90ef02816af0ec0abac894e771e5c36bae3fcb8bb24729773604dd7438a6422a076de6cb2479c3393f4b431af9d32cb7bbc8ebc03f54296293f571c7ee8fafbb6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x605072258618e98396be251259a531d145b61f34": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514601458015761010160ff5d60ff5c600255602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6003555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0101",
+                                "0x00": "0x01",
+                                "0x03": "0x0101"
+                            }
+                        },
+                        "0xa6d38c80646941d8f235f91d787d14a5f120cc85": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8f2c12",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x050c61",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x5e5d5a96f6be18fd50e5552e8be5a869aa5f87899ecc5ea8b99e65b29373eb3c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-revert_undoes_all]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x97f969efb8cad2b11b80a63a95f3ef88b48eb27a": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514602558015761020160fe5d61020260fe5d61020160ff5d61020260ff5d60006000fd60315801565b61010060fe5d61010160ff5d600260005260006000602060006000305af160005560fe5c60015560ff5c6002555b",
+                "storage": {}
+            },
+            "0x1fe13226efc6799999f52286bd8e40ce9e3cbd12": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x97f969efb8cad2b11b80a63a95f3ef88b48eb27a",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0x1fe13226efc6799999f52286bd8e40ce9e3cbd12",
+            "secretKey": "0xa0a98889cae91df58d51a19297f969efb8cad2b11b80a63a95f3ef88b48eb27a"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x0298ae7e0e73fc90b95b2b29aa64d36b8e1c6b4690327143e430f4fff8eb0cbc",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f42409497f969efb8cad2b11b80a63a95f3ef88b48eb27a80a0000000000000000000000000000000000000000000000000000000000000000125a04052fa05f27e5bd45d8ecfcdb7e228e65958fb72f671b1c9431b43316de6b57ea03c751013bfc56397519d0948dd91dfa7073bac3205b293cd53f267884060ec4f",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x97f969efb8cad2b11b80a63a95f3ef88b48eb27a": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514602558015761020160fe5d61020260fe5d61020160ff5d61020260ff5d60006000fd60315801565b61010060fe5d61010160ff5d600260005260006000602060006000305af160005560fe5c60015560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0101"
+                            }
+                        },
+                        "0x1fe13226efc6799999f52286bd8e40ce9e3cbd12": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9588b4",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0323ca",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x93cebaae56866ca959dd30ff1ccc0ffd5c12fec077ba095579738425f00e9ce0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-revert_undoes_tstorage_after_successful_call]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x8491a34529f8e896166921362dfe5bab750197a4": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600260003514604c580157600360003514603558015761010060ff5d60ff5c600255600260005260206020602060006000305af160005560205160015560ff5c600355602f5801565b61010160ff5d60235801565b600360005260006000602060006000305af160005260206000fd60035801565b",
+                "storage": {}
+            },
+            "0xaec0118513137d77771c08692d9d87e90315ed9b": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x8491a34529f8e896166921362dfe5bab750197a4",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xaec0118513137d77771c08692d9d87e90315ed9b",
+            "secretKey": "0x181bdf4d708b6bf8786938358491a34529f8e896166921362dfe5bab750197a4"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x9d6eedba33c8dbe9dc054b8d5eef21691af70b83172d833096b5c70cbe2fe6d5",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f4240948491a34529f8e896166921362dfe5bab750197a480a0000000000000000000000000000000000000000000000000000000000000000125a0600d2931221843bfef5ffff676aab3fa5bbb62087629c57cd12970f79b959ce3a027dcfccb662b3eaa6b8d5585822092968136a7fbf9e1107759d7b936651216d6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8491a34529f8e896166921362dfe5bab750197a4": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600260003514604c580157600360003514603558015761010060ff5d60ff5c600255600260005260206020602060006000305af160005560205160015560ff5c600355602f5801565b61010160ff5d60235801565b600360005260006000602060006000305af160005260206000fd60035801565b",
+                            "storage": {
+                                "0x02": "0x0100",
+                                "0x01": "0x01",
+                                "0x03": "0x0100"
+                            }
+                        },
+                        "0xaec0118513137d77771c08692d9d87e90315ed9b": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de922f52",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x042501",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x5833b8bccc7a8641a6a057d158cec85ea65746780e8e03f272386f6c32bee79f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-tload_after_reentrant_tstore]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xbefaecf7d517857088fdcbbfe3c8c0cefaae2d53": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514600e58015761010160ff5d602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6002555b",
+                "storage": {}
+            },
+            "0xd83d0dfe8e6af0a34b90e1a0fb9def6ce2dfe9bc": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xbefaecf7d517857088fdcbbfe3c8c0cefaae2d53",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xd83d0dfe8e6af0a34b90e1a0fb9def6ce2dfe9bc",
+            "secretKey": "0x9b30b8559f4fac3944680baebefaecf7d517857088fdcbbfe3c8c0cefaae2d53"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x057490a1e6e9c71f2e9c72e6ecc4a68febefd261a350c45ec11b09454e5fbea2",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f424094befaecf7d517857088fdcbbfe3c8c0cefaae2d5380a0000000000000000000000000000000000000000000000000000000000000000126a0b1ac656201a1d75ce1a368cdd0fabfe7e02049f77d1881927f69fe858feb56b3a05e431b3cad4d968642c2170c98117857010d55cbddfa09d99a5ecded9086f362",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xbefaecf7d517857088fdcbbfe3c8c0cefaae2d53": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514600e58015761010160ff5d602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x00": "0x01",
+                                "0x02": "0x0101"
+                            }
+                        },
+                        "0xd83d0dfe8e6af0a34b90e1a0fb9def6ce2dfe9bc": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de928f7e",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x040827",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe44312d6b354e44a6c11515d26b75594468e601e3d382af6878dba6656dedc2e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-tstore_before_invalid_has_no_effect]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x3570ad10684e1c82068e01cf2f04038a352e7089": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514600f58015761010160ff5dfe602d5801565b61010060ff5d60ff5c6001556002600052600060006020600060003061fffff160005560ff5c6002555b",
+                "storage": {}
+            },
+            "0xea4ad153df39bc5e77a32c1d75f9c9641e323cd6": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x3570ad10684e1c82068e01cf2f04038a352e7089",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xea4ad153df39bc5e77a32c1d75f9c9641e323cd6",
+            "secretKey": "0x035ad15cd708184b73f8da933570ad10684e1c82068e01cf2f04038a352e7089"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x6af14acc1d5d9f62ac0feb9e5dff7f4ca958d1fc226c4fad2bc4cb275ed077a1",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f4240943570ad10684e1c82068e01cf2f04038a352e708980a0000000000000000000000000000000000000000000000000000000000000000125a0eefb9428e2905768412a027e10213ba06612043e46470a53ddbb673efa9afe04a06db03c8b1ab6588e4e472193100e59db20d92c80deb933a0c6dc856d4a577ee2",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3570ad10684e1c82068e01cf2f04038a352e7089": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514600f58015761010160ff5dfe602d5801565b61010060ff5d60ff5c6001556002600052600060006020600060003061fffff160005560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0100"
+                            }
+                        },
+                        "0xea4ad153df39bc5e77a32c1d75f9c9641e323cd6": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8b9ed0",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x061d28",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x8e44bd4a073dda10006619ed0b3e1b8354fa40a0b3a6aa51386cc0822f083466",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-tstore_before_revert_has_no_effect]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x206e6c14e13b536be87a1fdbffb3e7fc03eceff4": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514601358015761010160ff5d60006000fd602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6002555b",
+                "storage": {}
+            },
+            "0xa190191a347266d598fcf419f78f3ec293ed0849": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x206e6c14e13b536be87a1fdbffb3e7fc03eceff4",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xa190191a347266d598fcf419f78f3ec293ed0849",
+            "secretKey": "0x362b77f164b84ef63eb8db64206e6c14e13b536be87a1fdbffb3e7fc03eceff4"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x333cf0f023d4c75e7271c4cc15efec01d0c05d684893e5a8198fe95f7f5af4d6",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f424094206e6c14e13b536be87a1fdbffb3e7fc03eceff480a0000000000000000000000000000000000000000000000000000000000000000126a09c6e71d025c5bae5f93fad56eba50b48e488291b0c5de0a1a628d7dabb8b9889a03205ee50e5302ebceaa8faf0f755c21e75250af81b7b28e5285dc9782bd8d150",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x206e6c14e13b536be87a1fdbffb3e7fc03eceff4": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514601358015761010160ff5d60006000fd602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0100"
+                            }
+                        },
+                        "0xa190191a347266d598fcf419f78f3ec293ed0849": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de959944",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x031ed2",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe1619dfce144f7eb210795a4b21859fee781794bab36aec237fdb5bd84f5c723",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-tstore_in_call_then_tload_return_in_staticcall]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xc8e4207f76af04c108cc4113931b6add4db36726": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600260003514604b580157600360003514602f58015761010060ff5d60ff5c600255600260005260006000602060006000305af160005560fe5c60045560395801565b60fe5c60005260206000f360285801565b61010160fe5d60036000526020600060206000305afa60015560005160035560035801565b",
+                "storage": {}
+            },
+            "0xa0b8da2d1498f42394bf9d07398d0236003c808c": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xc8e4207f76af04c108cc4113931b6add4db36726",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xa0b8da2d1498f42394bf9d07398d0236003c808c",
+            "secretKey": "0x71f1e12ff01eca56e08d2de0c8e4207f76af04c108cc4113931b6add4db36726"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x41ba4939fe63f4b4ad515bc84f058bd8dc32a0f90a98e408caa07a1fc5d39546",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f424094c8e4207f76af04c108cc4113931b6add4db3672680a0000000000000000000000000000000000000000000000000000000000000000126a077e2ffdda89d57ae4dcd6c7ad2af49cd4aa52e6b8aaf4456284989c9d5da7527a0429d9c44f2fe730531ac488fa137301b5d138cf3fed6cb1d3940b2dde3e52357",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xc8e4207f76af04c108cc4113931b6add4db36726": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600260003514604b580157600360003514602f58015761010060ff5d60ff5c600255600260005260006000602060006000305af160005560fe5c60045560395801565b60fe5c60005260206000f360285801565b61010160fe5d60036000526020600060206000305afa60015560005160035560035801565b",
+                            "storage": {
+                                "0x02": "0x0100",
+                                "0x01": "0x01",
+                                "0x03": "0x0101",
+                                "0x00": "0x01",
+                                "0x04": "0x0101"
+                            }
+                        },
+                        "0xa0b8da2d1498f42394bf9d07398d0236003c808c": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8bc2ac",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x061266",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc6b53820fdbe0b76587458e27c4c3350243c4bd70121fac929d937fb2a40ea98",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Cancun-state_test-tstore_in_reentrant_call]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x4c6ccbd7490e406a85461715f4d5bf1fcf97634a": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514600e58015760005c60015560255801565b61010060005d600260005260006000602060006000305af160005560005c6002555b",
+                "storage": {}
+            },
+            "0x74a7bf80a2ff0a2399d9178b3fe899c66ee71ab1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x4c6ccbd7490e406a85461715f4d5bf1fcf97634a",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0x74a7bf80a2ff0a2399d9178b3fe899c66ee71ab1",
+            "secretKey": "0x10c5c7ba5ea622ea341d0a894c6ccbd7490e406a85461715f4d5bf1fcf97634a"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xcdd6907aeb2a9a65110d1df21bd0c2dcaed58d831c9a435d8c8a505d1dcc00b8",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f4240944c6ccbd7490e406a85461715f4d5bf1fcf97634a80a0000000000000000000000000000000000000000000000000000000000000000125a0a75d665888e673979041c52ad5c62bf5c1f59f341f8d69ceb8d0d4c37f1cf566a036b3097c3d822d725431859c2f32f63cf85e695e20098cb05d681fa3d22c7cd3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x4c6ccbd7490e406a85461715f4d5bf1fcf97634a": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514600e58015760005c60015560255801565b61010060005d600260005260006000602060006000305af160005560005c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x00": "0x01",
+                                "0x02": "0x0100"
+                            }
+                        },
+                        "0x74a7bf80a2ff0a2399d9178b3fe899c66ee71ab1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9293a2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0406e9",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x7fb96ef7ded343db87f8a5173e4cc3a29ed883bafe47f05b79455271f766cb87",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-invalid_undoes_all]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x8d39790777f8945d40dc9344880439a8075a1659": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514602158015761020160fe5d61020260fe5d61020160ff5d61020260ff5dfe60335801565b61010060fe5d61010160ff5d6002600052600060006020600060003061fffff160005560fe5c60015560ff5c6002555b",
+                "storage": {}
+            },
+            "0x9c50bf10c42eb5546e1ec061b03c79217b6e1f1d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x8d39790777f8945d40dc9344880439a8075a1659",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0x9c50bf10c42eb5546e1ec061b03c79217b6e1f1d",
+            "secretKey": "0x74742d2d221d14afca1e823c8d39790777f8945d40dc9344880439a8075a1659"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xe5dded74a300c595be57f58e85f40fed169acf2937bda5a14e28bc0f6056b306",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f4240948d39790777f8945d40dc9344880439a8075a165980a0000000000000000000000000000000000000000000000000000000000000000126a063c73399f9885ca100f2077433b2d9830f0442b1e9ed04902e559a18d88ac66fa0130d09e49fc8695de3757bfa80af6be9113e0543614193134c52fb193591b665",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8d39790777f8945d40dc9344880439a8075a1659": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514602158015761020160fe5d61020260fe5d61020160ff5d61020260ff5dfe60335801565b61010060fe5d61010160ff5d6002600052600060006020600060003061fffff160005560fe5c60015560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0101"
+                            }
+                        },
+                        "0x9c50bf10c42eb5546e1ec061b03c79217b6e1f1d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8b9aac",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x061e66",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x46b0cf3179ee870bf38c8e51677cfbbf04e7e604437cc61799669759e72edecc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-invalid_undoes_tstorage_after_successful_call]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x02f6fab812e3444f378a1af6a7bdd69927dc3b17": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600260003514604e580157600360003514603758015761010060ff5d60ff5c6002556002600052602060206020600060003061fffff160005560205160015560ff5c600355602b5801565b61010160ff5d601f5801565b600360005260006000602060006000305af1600052fe60035801565b",
+                "storage": {}
+            },
+            "0x4d58970591329ecfaaee053f35c11c154a85b0f2": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x02f6fab812e3444f378a1af6a7bdd69927dc3b17",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0x4d58970591329ecfaaee053f35c11c154a85b0f2",
+            "secretKey": "0xeff58077646dece9c3fc406a02f6fab812e3444f378a1af6a7bdd69927dc3b17"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x03746a7b6d95141d745f5295ee028e74fd1c1951a6908ce89fddaeb882c2092d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f42409402f6fab812e3444f378a1af6a7bdd69927dc3b1780a0000000000000000000000000000000000000000000000000000000000000000126a07f7dae84b76a7c732adaecb972b32f6625d2309086a350650015782f2a467d81a01db869b52610be2e291bfa6b40b0b42263c02ea33bb7660deeb80c6caded8309",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x02f6fab812e3444f378a1af6a7bdd69927dc3b17": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600260003514604e580157600360003514603758015761010060ff5d60ff5c6002556002600052602060206020600060003061fffff160005560205160015560ff5c600355602b5801565b61010160ff5d601f5801565b600360005260006000602060006000305af1600052fe60035801565b",
+                            "storage": {
+                                "0x02": "0x0100",
+                                "0x03": "0x0100"
+                            }
+                        },
+                        "0x4d58970591329ecfaaee053f35c11c154a85b0f2": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8b46a6",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06379b",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x4403fa4bce2c926d72748102051638db54853922497cf3ca3ac528cf3dcfd44d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-manipulate_in_reentrant_call]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x605072258618e98396be251259a531d145b61f34": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514601458015761010160ff5d60ff5c600255602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6003555b",
+                "storage": {}
+            },
+            "0xa6d38c80646941d8f235f91d787d14a5f120cc85": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x605072258618e98396be251259a531d145b61f34",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xa6d38c80646941d8f235f91d787d14a5f120cc85",
+            "secretKey": "0x3dbff96d2b36aa3c05b40f03605072258618e98396be251259a531d145b61f34"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xf63514e449b0f8cfc16899bcce74608dbaffa58b5320b9dedeb0d764b0a5e1a8",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f424094605072258618e98396be251259a531d145b61f3480a0000000000000000000000000000000000000000000000000000000000000000126a0a90ef02816af0ec0abac894e771e5c36bae3fcb8bb24729773604dd7438a6422a076de6cb2479c3393f4b431af9d32cb7bbc8ebc03f54296293f571c7ee8fafbb6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x605072258618e98396be251259a531d145b61f34": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514601458015761010160ff5d60ff5c600255602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6003555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0101",
+                                "0x00": "0x01",
+                                "0x03": "0x0101"
+                            }
+                        },
+                        "0xa6d38c80646941d8f235f91d787d14a5f120cc85": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8f2c12",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x050c61",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x7747bfba1ee8616d724ee5b85099e5ef012db99aaba4146642fccd4c173facb2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-revert_undoes_all]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x97f969efb8cad2b11b80a63a95f3ef88b48eb27a": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514602558015761020160fe5d61020260fe5d61020160ff5d61020260ff5d60006000fd60315801565b61010060fe5d61010160ff5d600260005260006000602060006000305af160005560fe5c60015560ff5c6002555b",
+                "storage": {}
+            },
+            "0x1fe13226efc6799999f52286bd8e40ce9e3cbd12": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x97f969efb8cad2b11b80a63a95f3ef88b48eb27a",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0x1fe13226efc6799999f52286bd8e40ce9e3cbd12",
+            "secretKey": "0xa0a98889cae91df58d51a19297f969efb8cad2b11b80a63a95f3ef88b48eb27a"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x0298ae7e0e73fc90b95b2b29aa64d36b8e1c6b4690327143e430f4fff8eb0cbc",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f42409497f969efb8cad2b11b80a63a95f3ef88b48eb27a80a0000000000000000000000000000000000000000000000000000000000000000125a04052fa05f27e5bd45d8ecfcdb7e228e65958fb72f671b1c9431b43316de6b57ea03c751013bfc56397519d0948dd91dfa7073bac3205b293cd53f267884060ec4f",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x97f969efb8cad2b11b80a63a95f3ef88b48eb27a": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514602558015761020160fe5d61020260fe5d61020160ff5d61020260ff5d60006000fd60315801565b61010060fe5d61010160ff5d600260005260006000602060006000305af160005560fe5c60015560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0101"
+                            }
+                        },
+                        "0x1fe13226efc6799999f52286bd8e40ce9e3cbd12": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9588b4",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0323ca",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xbef51ef0843382f33351d2d7eb6076ceb25809504acff9117fb5a6624730698a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-revert_undoes_tstorage_after_successful_call]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x8491a34529f8e896166921362dfe5bab750197a4": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600260003514604c580157600360003514603558015761010060ff5d60ff5c600255600260005260206020602060006000305af160005560205160015560ff5c600355602f5801565b61010160ff5d60235801565b600360005260006000602060006000305af160005260206000fd60035801565b",
+                "storage": {}
+            },
+            "0xaec0118513137d77771c08692d9d87e90315ed9b": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x8491a34529f8e896166921362dfe5bab750197a4",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xaec0118513137d77771c08692d9d87e90315ed9b",
+            "secretKey": "0x181bdf4d708b6bf8786938358491a34529f8e896166921362dfe5bab750197a4"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x9d6eedba33c8dbe9dc054b8d5eef21691af70b83172d833096b5c70cbe2fe6d5",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f4240948491a34529f8e896166921362dfe5bab750197a480a0000000000000000000000000000000000000000000000000000000000000000125a0600d2931221843bfef5ffff676aab3fa5bbb62087629c57cd12970f79b959ce3a027dcfccb662b3eaa6b8d5585822092968136a7fbf9e1107759d7b936651216d6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8491a34529f8e896166921362dfe5bab750197a4": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600260003514604c580157600360003514603558015761010060ff5d60ff5c600255600260005260206020602060006000305af160005560205160015560ff5c600355602f5801565b61010160ff5d60235801565b600360005260006000602060006000305af160005260206000fd60035801565b",
+                            "storage": {
+                                "0x02": "0x0100",
+                                "0x01": "0x01",
+                                "0x03": "0x0100"
+                            }
+                        },
+                        "0xaec0118513137d77771c08692d9d87e90315ed9b": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de922f52",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x042501",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xf52e9c61f547b1415a73211c6f97d9d1a4c5965f5dc46be141a03d4bfef7e289",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-tload_after_reentrant_tstore]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xbefaecf7d517857088fdcbbfe3c8c0cefaae2d53": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514600e58015761010160ff5d602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6002555b",
+                "storage": {}
+            },
+            "0xd83d0dfe8e6af0a34b90e1a0fb9def6ce2dfe9bc": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xbefaecf7d517857088fdcbbfe3c8c0cefaae2d53",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xd83d0dfe8e6af0a34b90e1a0fb9def6ce2dfe9bc",
+            "secretKey": "0x9b30b8559f4fac3944680baebefaecf7d517857088fdcbbfe3c8c0cefaae2d53"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x057490a1e6e9c71f2e9c72e6ecc4a68febefd261a350c45ec11b09454e5fbea2",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f424094befaecf7d517857088fdcbbfe3c8c0cefaae2d5380a0000000000000000000000000000000000000000000000000000000000000000126a0b1ac656201a1d75ce1a368cdd0fabfe7e02049f77d1881927f69fe858feb56b3a05e431b3cad4d968642c2170c98117857010d55cbddfa09d99a5ecded9086f362",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xbefaecf7d517857088fdcbbfe3c8c0cefaae2d53": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514600e58015761010160ff5d602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x00": "0x01",
+                                "0x02": "0x0101"
+                            }
+                        },
+                        "0xd83d0dfe8e6af0a34b90e1a0fb9def6ce2dfe9bc": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de928f7e",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x040827",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa8b102b4e888139b2272cafa6a69f2b8755169261bf85969fbbef5ba7dc53712",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-tstore_before_invalid_has_no_effect]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x3570ad10684e1c82068e01cf2f04038a352e7089": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514600f58015761010160ff5dfe602d5801565b61010060ff5d60ff5c6001556002600052600060006020600060003061fffff160005560ff5c6002555b",
+                "storage": {}
+            },
+            "0xea4ad153df39bc5e77a32c1d75f9c9641e323cd6": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x3570ad10684e1c82068e01cf2f04038a352e7089",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xea4ad153df39bc5e77a32c1d75f9c9641e323cd6",
+            "secretKey": "0x035ad15cd708184b73f8da933570ad10684e1c82068e01cf2f04038a352e7089"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x6af14acc1d5d9f62ac0feb9e5dff7f4ca958d1fc226c4fad2bc4cb275ed077a1",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f4240943570ad10684e1c82068e01cf2f04038a352e708980a0000000000000000000000000000000000000000000000000000000000000000125a0eefb9428e2905768412a027e10213ba06612043e46470a53ddbb673efa9afe04a06db03c8b1ab6588e4e472193100e59db20d92c80deb933a0c6dc856d4a577ee2",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3570ad10684e1c82068e01cf2f04038a352e7089": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514600f58015761010160ff5dfe602d5801565b61010060ff5d60ff5c6001556002600052600060006020600060003061fffff160005560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0100"
+                            }
+                        },
+                        "0xea4ad153df39bc5e77a32c1d75f9c9641e323cd6": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8b9ed0",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x061d28",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x40571bbb656855ec0968a4e602a0ff54dcba958509706f425d51e438a0bd7f3c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-tstore_before_revert_has_no_effect]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x206e6c14e13b536be87a1fdbffb3e7fc03eceff4": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514601358015761010160ff5d60006000fd602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6002555b",
+                "storage": {}
+            },
+            "0xa190191a347266d598fcf419f78f3ec293ed0849": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x206e6c14e13b536be87a1fdbffb3e7fc03eceff4",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xa190191a347266d598fcf419f78f3ec293ed0849",
+            "secretKey": "0x362b77f164b84ef63eb8db64206e6c14e13b536be87a1fdbffb3e7fc03eceff4"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x333cf0f023d4c75e7271c4cc15efec01d0c05d684893e5a8198fe95f7f5af4d6",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f424094206e6c14e13b536be87a1fdbffb3e7fc03eceff480a0000000000000000000000000000000000000000000000000000000000000000126a09c6e71d025c5bae5f93fad56eba50b48e488291b0c5de0a1a628d7dabb8b9889a03205ee50e5302ebceaa8faf0f755c21e75250af81b7b28e5285dc9782bd8d150",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x206e6c14e13b536be87a1fdbffb3e7fc03eceff4": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514601358015761010160ff5d60006000fd602b5801565b61010060ff5d60ff5c600155600260005260006000602060006000305af160005560ff5c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x02": "0x0100"
+                            }
+                        },
+                        "0xa190191a347266d598fcf419f78f3ec293ed0849": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de959944",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x031ed2",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x7ea0aa20d3a628c17968b75db5274dadb931632471ccc9b71dfde30c232e3156",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-tstore_in_call_then_tload_return_in_staticcall]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xc8e4207f76af04c108cc4113931b6add4db36726": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600260003514604b580157600360003514602f58015761010060ff5d60ff5c600255600260005260006000602060006000305af160005560fe5c60045560395801565b60fe5c60005260206000f360285801565b61010160fe5d60036000526020600060206000305afa60015560005160035560035801565b",
+                "storage": {}
+            },
+            "0xa0b8da2d1498f42394bf9d07398d0236003c808c": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0xc8e4207f76af04c108cc4113931b6add4db36726",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0xa0b8da2d1498f42394bf9d07398d0236003c808c",
+            "secretKey": "0x71f1e12ff01eca56e08d2de0c8e4207f76af04c108cc4113931b6add4db36726"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x41ba4939fe63f4b4ad515bc84f058bd8dc32a0f90a98e408caa07a1fc5d39546",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f424094c8e4207f76af04c108cc4113931b6add4db3672680a0000000000000000000000000000000000000000000000000000000000000000126a077e2ffdda89d57ae4dcd6c7ad2af49cd4aa52e6b8aaf4456284989c9d5da7527a0429d9c44f2fe730531ac488fa137301b5d138cf3fed6cb1d3940b2dde3e52357",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xc8e4207f76af04c108cc4113931b6add4db36726": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600260003514604b580157600360003514602f58015761010060ff5d60ff5c600255600260005260006000602060006000305af160005560fe5c60045560395801565b60fe5c60005260206000f360285801565b61010160fe5d60036000526020600060206000305afa60015560005160035560035801565b",
+                            "storage": {
+                                "0x02": "0x0100",
+                                "0x01": "0x01",
+                                "0x03": "0x0101",
+                                "0x00": "0x01",
+                                "0x04": "0x0101"
+                            }
+                        },
+                        "0xa0b8da2d1498f42394bf9d07398d0236003c808c": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de8bc2ac",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x061266",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x6abefcc4737b501fef6e932a537725c0e39d29e32af7b8d374cd16f0a7a3de4b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py::test_reentrant_call[fork_Prague-state_test-tstore_in_reentrant_call]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x4c6ccbd7490e406a85461715f4d5bf1fcf97634a": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160003514600e58015760005c60015560255801565b61010060005d600260005260006000602060006000305af160005560005c6002555b",
+                "storage": {}
+            },
+            "0x74a7bf80a2ff0a2399d9178b3fe899c66ee71ab1": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0f4240"
+            ],
+            "to": "0x4c6ccbd7490e406a85461715f4d5bf1fcf97634a",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0x74a7bf80a2ff0a2399d9178b3fe899c66ee71ab1",
+            "secretKey": "0x10c5c7ba5ea622ea341d0a894c6ccbd7490e406a85461715f4d5bf1fcf97634a"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xcdd6907aeb2a9a65110d1df21bd0c2dcaed58d831c9a435d8c8a505d1dcc00b8",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf880800a830f4240944c6ccbd7490e406a85461715f4d5bf1fcf97634a80a0000000000000000000000000000000000000000000000000000000000000000125a0a75d665888e673979041c52ad5c62bf5c1f59f341f8d69ceb8d0d4c37f1cf566a036b3097c3d822d725431859c2f32f63cf85e695e20098cb05d681fa3d22c7cd3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x4c6ccbd7490e406a85461715f4d5bf1fcf97634a": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160003514600e58015760005c60015560255801565b61010060005d600260005260006000602060006000305af160005560005c6002555b",
+                            "storage": {
+                                "0x01": "0x0100",
+                                "0x00": "0x01",
+                                "0x02": "0x0100"
+                            }
+                        },
+                        "0x74a7bf80a2ff0a2399d9178b3fe899c66ee71ab1": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9293a2",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0406e9",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xfd932a395b66e1c6384bb8402af673dcf23904dc8545d3613080a4b1eabea030",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test transient storage in different reentrancy contexts.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_reentrancy_contexts.py#L337",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    }
+}

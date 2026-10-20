@@ -1,0 +1,128 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_gas.py::test_self_set_code_cost[fork_Prague-blockchain_test_engine_x_from_state_test-pre_authorized_False]": {
+        "network": "Prague",
+        "lastblockhash": "0xdb83535aadd39b833b131e07157dead9f5ea365c85f14759addbbffee8a7c989",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x91c7bfee76c66b07bb4b1e9d0c7486b46e259506971bd9a09a87c7dfb18270d8",
+                        "receiptsRoot": "0xe36ffb908365b9453c49161d103822c98667021319d30c122f8ac519d44ac3ac",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10afc",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdb83535aadd39b833b131e07157dead9f5ea365c85f14759addbbffee8a7c989",
+                        "transactions": [
+                            "0x04f8c101808007830f424094d6f4edb6673d6887ac8d8f1ca52895258869ad808080c0f85cf85a8094d244a803d9f3efc2dd92ed6fcf6ee62b68c5473f8080a03bcabecf2cdceb99a369fd9a8c3e8128986e91dec9a5ed272838cfb0f632f54aa0487664d7846e35149445e35f8f144db125efe7f22fc181baa68a4c6457e05cde80a0343aa79703a816d1196f83c4a41af28a0559a6c4072e7d4af464d6f95dfacd90a00f80a411659ad3c0e0b027447a242af57c704ef0dc3d5280fa07f862110cc234"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7387e134447885768bf5cce578219c3cbb2f4f6abfe8bb62ab672f6cfb37be87",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test set to code account access cost when it delegates to itself.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_gas.py#L1174",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_gas.py::test_self_set_code_cost[fork_Prague-blockchain_test_engine_x_from_state_test-pre_authorized_True]": {
+        "network": "Prague",
+        "lastblockhash": "0xf92a88c80ccd7e10437fc58c04183b7df766720944b973ddd99fe04b35bfbb11",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7c80188024a2d1b3a1262f56986cbae641299a376e0dc7f078613775fd7058e6",
+                        "receiptsRoot": "0x073d14bc6015a5a6d55707b94062609b98ccdd5a29733dbf2c9204ab9c65a9e5",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb318",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf92a88c80ccd7e10437fc58c04183b7df766720944b973ddd99fe04b35bfbb11",
+                        "transactions": [
+                            "0xf860800a830f424094c49898199251d9a5c8e4809eaa0ef716457cc284808025a0753ed479cd409ae6f11d7dc4158d0d86f68a9a4d5fedb09d5421986bc780ccbea04fc31e3c74ce525869f4faf96525d593d9380384d15027527e8ae6e2a6b633a1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1a642fe27d3436a885d86ab0a496ab356ab9a6070ddd1d31ac65f815ea57ff32",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test set to code account access cost when it delegates to itself.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_gas.py#L1174",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

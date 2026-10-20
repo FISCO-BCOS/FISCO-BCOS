@@ -1,0 +1,154 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_auth_signature[fork_Prague-transaction_test-non_zero_address-r=2**256]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE|TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE_S_TOO_HIGH"
+            }
+        },
+        "txbytes": "0x04f8a201808007830186a09400000000000000000000000000000000000000008080c0f83df83b019400000000000000000000000000000000000000018001a10100000000000000000000000000000000000000000000000000000000000000000101a042e393a8ac61e200274cd5ed6dd2bfda288f0230261da7c11da3224ce3e93a1ba0334ddb44dbfe417fe876afbddc0f6f8ee310fbc97573c4824dfec410ac3be0a2",
+        "_info": {
+            "hash": "0x53f0c26024f6168ac51dec09660faab63d07797bd1e5b1a3b34f25bac52f56c5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where one of the signature elements is out of\n    range.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L85",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_auth_signature[fork_Prague-transaction_test-non_zero_address-s=2**256]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE|TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE_S_TOO_HIGH"
+            }
+        },
+        "txbytes": "0x04f8a201808007830186a09400000000000000000000000000000000000000008080c0f83df83b01940000000000000000000000000000000000000001800101a101000000000000000000000000000000000000000000000000000000000000000080a03d3d8acd5c3b68ad5ccc5aa370181ca095a0cdd7cb126b157e797a4f908f2965a0528dedd5cf19a39764aef11625db7cfce57f6a3d089d8b9fc470145e3497fe58",
+        "_info": {
+            "hash": "0x283d35ae7e510f5ff1eecafa52bd808b494684567c5febcd098e1bb9e07c366b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where one of the signature elements is out of\n    range.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L85",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_auth_signature[fork_Prague-transaction_test-non_zero_address-v=2**8,r=s=2**256]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE|TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE_S_TOO_HIGH"
+            }
+        },
+        "txbytes": "0x04f8c501808007830186a09400000000000000000000000000000000000000008080c0f860f85e0194000000000000000000000000000000000000000180820100a1010000000000000000000000000000000000000000000000000000000000000000a101000000000000000000000000000000000000000000000000000000000000000001a02b19578f6e379e930f244f65e9f00e56decd7a5953b104bbbede908904fa0f0ea01d2f64e6aa2e7b25db11194dc4e9d4ec98048b934c9a00a61bc2d806e44346c7",
+        "_info": {
+            "hash": "0x78e56f6172e8f8c9a08e10f1daedfc960046e8f94105c06ea2c715dc746436ca",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where one of the signature elements is out of\n    range.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L85",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_auth_signature[fork_Prague-transaction_test-non_zero_address-v=2**8]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE|TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE_S_TOO_HIGH"
+            }
+        },
+        "txbytes": "0x04f88101808007830186a09400000000000000000000000000000000000000008080c0dddc0194000000000000000000000000000000000000000180820100010101a0dad69e035264c68ef3da1218d23cdf5ae76f7414948112150d46c21be4d44ac3a0538d1bf7cb8964eaebb226be00341e5df92c94b32723ca173a1de437c912cb9e",
+        "_info": {
+            "hash": "0x13d8d323d4b334163106af539e5da964000d0bbdc3188cce22e1552c0b40b097",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where one of the signature elements is out of\n    range.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L85",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_auth_signature[fork_Prague-transaction_test-reset_delegation_address-r=2**256]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE|TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE_S_TOO_HIGH"
+            }
+        },
+        "txbytes": "0x04f8a201808007830186a09400000000000000000000000000000000000000008080c0f83df83b019400000000000000000000000000000000000000008001a10100000000000000000000000000000000000000000000000000000000000000000180a063d1da8434ef928f5ec493bd1d6cadb7fc75dade0c030ea6bab415f0fbcdd444a051f86c6e24d42fd09eaeeac12bb2fa1b9a204efe4f5543a512745fca8346495e",
+        "_info": {
+            "hash": "0x12701a1a6149ae94b68340de437f505dbcc48044192b0fd758a2367c15f1d221",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where one of the signature elements is out of\n    range.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L85",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_auth_signature[fork_Prague-transaction_test-reset_delegation_address-s=2**256]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE|TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE_S_TOO_HIGH"
+            }
+        },
+        "txbytes": "0x04f8a101808007830186a09400000000000000000000000000000000000000008080c0f83df83b01940000000000000000000000000000000000000000800101a1010000000000000000000000000000000000000000000000000000000000000000019ff0368a8614843ca90cc536598d605067f05a9bc2419391b721c03c9146161da037114109326818fabde1594f71a7535ded6a9b3eaffd2ff7db3fb75eacc82c22",
+        "_info": {
+            "hash": "0x3a05fbcc11610b717356583f3cf0ca0cec0dcd98bea433c6de6a5eb2beb4e2ad",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where one of the signature elements is out of\n    range.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L85",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_auth_signature[fork_Prague-transaction_test-reset_delegation_address-v=2**8,r=s=2**256]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE|TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE_S_TOO_HIGH"
+            }
+        },
+        "txbytes": "0x04f8c501808007830186a09400000000000000000000000000000000000000008080c0f860f85e0194000000000000000000000000000000000000000080820100a1010000000000000000000000000000000000000000000000000000000000000000a101000000000000000000000000000000000000000000000000000000000000000080a0fae1a6230f475446562b091f60c8199864aa1c9b3d2356d882c5f103cb02c8d4a02f09868eac9313248ac58973b035605d1269d329cb329f57408e67634a322d98",
+        "_info": {
+            "hash": "0x9fe6d9c310656fbb908ae5246abfb8bbcbff59c13de7f62c073197a2a427cadc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where one of the signature elements is out of\n    range.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L85",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_auth_signature[fork_Prague-transaction_test-reset_delegation_address-v=2**8]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE|TransactionException.TYPE_4_INVALID_AUTHORITY_SIGNATURE_S_TOO_HIGH"
+            }
+        },
+        "txbytes": "0x04f88101808007830186a09400000000000000000000000000000000000000008080c0dddc0194000000000000000000000000000000000000000080820100010101a077f74e56d51680b3492444e63afe572ffa0e4bece0b9db633386546999b10594a075fbb6c0218fc5a349a2d4db4986d93de1c77cbe6cecaf0e8976b78438c241d8",
+        "_info": {
+            "hash": "0xae4be940ce9bf1e179dd62ae46731434d4a644f3de3c9b969bb185d7dc2f75a6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where one of the signature elements is out of\n    range.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L85",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

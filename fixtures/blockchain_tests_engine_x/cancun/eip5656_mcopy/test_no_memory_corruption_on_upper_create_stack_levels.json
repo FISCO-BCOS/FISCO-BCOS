@@ -1,0 +1,242 @@
+{
+    "tests/cancun/eip5656_mcopy/test_mcopy_contexts.py::test_no_memory_corruption_on_upper_create_stack_levels[fork_Cancun-blockchain_test_engine_x_from_state_test-call_opcode_CREATE2]": {
+        "network": "Cancun",
+        "lastblockhash": "0x4643552af2bc54877e2509649f1ec54cf3c53cd4a2d1bc337b232b92303d6684",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x57da82a0f50846c18341735725f4551a57dea9a69ca13bc6c6168d7d0dd2476e",
+                        "receiptsRoot": "0x20d14a8133d3233351441b40f67ae1815e2072440e38d68509c1604a84376afa",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xc4a81",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4643552af2bc54877e2509649f1ec54cf3c53cd4a2d1bc337b232b92303d6684",
+                        "transactions": [
+                            "0xf860800a830f424094c0d38dd714ef004666f45a2a801c288593ba0650808026a0f2de888acb64d2a8781f55452d4e829784ceb0abbbfd9165ef5c7032d4d48d8fa01f9ef32b42fa9fc745c7d79d8eb3dea524d81c92ac5ec04298c79cb854835b32"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x28f7ffccac815ecf93b4bb922df4e60ade42bb1a53071e114e9250e03c9afa64",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Perform a subcall with any of the following opcodes, which uses MCOPY\n    during its execution, and verify that the caller's memory is unaffected:\n      - `CREATE`\n      - `CREATE2`.\n\n    TODO: [EOF] Add EOFCREATE opcode",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip5656_mcopy/test_mcopy_contexts.py#L187",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-5656.md",
+            "reference-spec-version": "d0cd8902e2243b66e2b9a858b691bc106cebddfc"
+        }
+    },
+    "tests/cancun/eip5656_mcopy/test_mcopy_contexts.py::test_no_memory_corruption_on_upper_create_stack_levels[fork_Cancun-blockchain_test_engine_x_from_state_test-call_opcode_CREATE]": {
+        "network": "Cancun",
+        "lastblockhash": "0xb8a3220586c6f4a37a4589749b2e764ac3f3f5002894bb4479190914a1fdd4c6",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8ba6a44f0e7480b657bdd485120e27540811abe7baf87b05762d04997aadd766",
+                        "receiptsRoot": "0xb2a44bdc3967524deea44be194bfb35140b2b58d12a19272443ec6f88e2159be",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xc4a72",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb8a3220586c6f4a37a4589749b2e764ac3f3f5002894bb4479190914a1fdd4c6",
+                        "transactions": [
+                            "0xf860800a830f42409468f024b73ddc818a27a010d0ed7c389503c68dda808025a06dd7881f511237afc88fe8125bee6faa4e95828971b962ee64d36b9066456e18a05a0ab07606236c340de120e8a48ef5eee5882f5777e385178b2e5e49657aaecd"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd445a82b10cdeee053192bc1a8222e26fe564f59727bf98273fd5cf4a7f6888b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Perform a subcall with any of the following opcodes, which uses MCOPY\n    during its execution, and verify that the caller's memory is unaffected:\n      - `CREATE`\n      - `CREATE2`.\n\n    TODO: [EOF] Add EOFCREATE opcode",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip5656_mcopy/test_mcopy_contexts.py#L187",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-5656.md",
+            "reference-spec-version": "d0cd8902e2243b66e2b9a858b691bc106cebddfc"
+        }
+    },
+    "tests/cancun/eip5656_mcopy/test_mcopy_contexts.py::test_no_memory_corruption_on_upper_create_stack_levels[fork_Prague-blockchain_test_engine_x_from_state_test-call_opcode_CREATE2]": {
+        "network": "Prague",
+        "lastblockhash": "0x21084ee0eaf6f684fc51399bf40eb14208143a4bdfd9e77826f97775cbcfca27",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x35c8e777d7842c44661b131d1d66eda17d7b8df93ce1d654b549f038a84f27ae",
+                        "receiptsRoot": "0x20d14a8133d3233351441b40f67ae1815e2072440e38d68509c1604a84376afa",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xc4a81",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x21084ee0eaf6f684fc51399bf40eb14208143a4bdfd9e77826f97775cbcfca27",
+                        "transactions": [
+                            "0xf860800a830f424094c0d38dd714ef004666f45a2a801c288593ba0650808026a0f2de888acb64d2a8781f55452d4e829784ceb0abbbfd9165ef5c7032d4d48d8fa01f9ef32b42fa9fc745c7d79d8eb3dea524d81c92ac5ec04298c79cb854835b32"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x0310758aa635d44a6e24ea690a8037d7ba1eec252624069dd0e6c9cc06a557e6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Perform a subcall with any of the following opcodes, which uses MCOPY\n    during its execution, and verify that the caller's memory is unaffected:\n      - `CREATE`\n      - `CREATE2`.\n\n    TODO: [EOF] Add EOFCREATE opcode",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip5656_mcopy/test_mcopy_contexts.py#L187",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-5656.md",
+            "reference-spec-version": "d0cd8902e2243b66e2b9a858b691bc106cebddfc"
+        }
+    },
+    "tests/cancun/eip5656_mcopy/test_mcopy_contexts.py::test_no_memory_corruption_on_upper_create_stack_levels[fork_Prague-blockchain_test_engine_x_from_state_test-call_opcode_CREATE]": {
+        "network": "Prague",
+        "lastblockhash": "0x7db9e82f47867211da0e248f412767e8cbd5a905db45ad95885bc0e302286029",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbf187e1a65bccc056fda82a21a86ca88242b93efee58f495be4dcb07b2f63dc3",
+                        "receiptsRoot": "0xb2a44bdc3967524deea44be194bfb35140b2b58d12a19272443ec6f88e2159be",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xc4a72",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7db9e82f47867211da0e248f412767e8cbd5a905db45ad95885bc0e302286029",
+                        "transactions": [
+                            "0xf860800a830f42409468f024b73ddc818a27a010d0ed7c389503c68dda808025a06dd7881f511237afc88fe8125bee6faa4e95828971b962ee64d36b9066456e18a05a0ab07606236c340de120e8a48ef5eee5882f5777e385178b2e5e49657aaecd"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xac11b8b12a27281ae472f764f8e14fbbc5eae08412a4e65d2ee56121a401b04c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Perform a subcall with any of the following opcodes, which uses MCOPY\n    during its execution, and verify that the caller's memory is unaffected:\n      - `CREATE`\n      - `CREATE2`.\n\n    TODO: [EOF] Add EOFCREATE opcode",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip5656_mcopy/test_mcopy_contexts.py#L187",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-5656.md",
+            "reference-spec-version": "d0cd8902e2243b66e2b9a858b691bc106cebddfc"
+        }
+    }
+}

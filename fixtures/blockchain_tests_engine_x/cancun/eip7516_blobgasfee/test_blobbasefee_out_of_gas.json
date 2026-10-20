@@ -1,0 +1,242 @@
+{
+    "tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py::test_blobbasefee_out_of_gas[fork_Cancun-blockchain_test_engine_x_from_state_test-enough_gas]": {
+        "network": "Cancun",
+        "lastblockhash": "0xd6c5b7ac95a208af1f5b748f917d652f95fdc7b6c6c3f1eeff9a9bc51c9323f8",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbdf7147a40f996800a99ddff0881d88aaba25b5ce760666d11bcffb33a3761e1",
+                        "receiptsRoot": "0xa880648b64dc75bf4b5f6d7d1644e60097635749ee40deab509cd8d356dc7cde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2a0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xd6c5b7ac95a208af1f5b748f917d652f95fdc7b6c6c3f1eeff9a9bc51c9323f8",
+                        "transactions": [
+                            "0xf860800a830f424094c9bab4265d11c21d76a7facafa7f61f206afd78d018025a08a3f04c1feecdfcd4ff75b0f296d9f3bb0903c213d73c13c27d94be76b0e9a2ba0786ad180bbcfb9ca5ff1cbfe336cdce9e297d99c9c9763a999d66e0c51e2b897"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xccb993a00055d324cf033ccc7c8dff7c4c3533da5db93ea6bc7f9fd90c0e35b0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the BLOBBASEFEE opcode fails with insufficient gas.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py#L129",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7516.md",
+            "reference-spec-version": "dcd2f4ede58a6ed908acd3cc2c198e9f605cbf3b"
+        }
+    },
+    "tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py::test_blobbasefee_out_of_gas[fork_Cancun-blockchain_test_engine_x_from_state_test-out_of_gas]": {
+        "network": "Cancun",
+        "lastblockhash": "0x6b4ec88f98e08a077ba600ab895d73e7c2d0331306bb6bb3f94f617acf38c7bc",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xef2755e06d17d4002b64dc36cae9b81714a37ef89227b32f19c2cce6dc40db01",
+                        "receiptsRoot": "0x0c306233c35d35f4a820ac7c0daba33e320f2ec9f8163a61468ab92fafbb8ced",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x64e3",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x6b4ec88f98e08a077ba600ab895d73e7c2d0331306bb6bb3f94f617acf38c7bc",
+                        "transactions": [
+                            "0xf860800a830f42409428ab22d15214366b7b379868ec1646f2753ec68c018025a012ba051d5b03c1bd2fd79929ba6dfa6b2e0dc4aebd8673b086c890e921c815b5a030f8ac201460b05da3be3162ef56eb861fba98e64b3626dd80c8978c32d8cb0d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x96b1b4bddf4d84fd0a8a12f32eb53cbd1d94670e7989687d5ad68c1c276b71d1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the BLOBBASEFEE opcode fails with insufficient gas.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py#L129",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7516.md",
+            "reference-spec-version": "dcd2f4ede58a6ed908acd3cc2c198e9f605cbf3b"
+        }
+    },
+    "tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py::test_blobbasefee_out_of_gas[fork_Prague-blockchain_test_engine_x_from_state_test-enough_gas]": {
+        "network": "Prague",
+        "lastblockhash": "0xed5719f8395b26b2c199e5e9d9d166c9062405784fff69c9f760ae6a0a5b8901",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc8680ac077b53709819bfd04fd30f9ae4a45cfaea40ee1ed6007cfeb7bd41afb",
+                        "receiptsRoot": "0xa880648b64dc75bf4b5f6d7d1644e60097635749ee40deab509cd8d356dc7cde",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xb2a0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xed5719f8395b26b2c199e5e9d9d166c9062405784fff69c9f760ae6a0a5b8901",
+                        "transactions": [
+                            "0xf860800a830f424094c9bab4265d11c21d76a7facafa7f61f206afd78d018025a08a3f04c1feecdfcd4ff75b0f296d9f3bb0903c213d73c13c27d94be76b0e9a2ba0786ad180bbcfb9ca5ff1cbfe336cdce9e297d99c9c9763a999d66e0c51e2b897"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xde35154c174f1c30b50ec8e396c6b129a1945e6e6634ea762d07cdaaf558e14d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the BLOBBASEFEE opcode fails with insufficient gas.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py#L129",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7516.md",
+            "reference-spec-version": "dcd2f4ede58a6ed908acd3cc2c198e9f605cbf3b"
+        }
+    },
+    "tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py::test_blobbasefee_out_of_gas[fork_Prague-blockchain_test_engine_x_from_state_test-out_of_gas]": {
+        "network": "Prague",
+        "lastblockhash": "0x55219f99ed85c616070f1d653d2011624218fb17b8b5800925787307038851e1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x456cc1ccfefeb4e3a233fd46ca2d92680cc5fee5dd797ae338e2ca168bfa8c4c",
+                        "receiptsRoot": "0x0c306233c35d35f4a820ac7c0daba33e320f2ec9f8163a61468ab92fafbb8ced",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x64e3",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x55219f99ed85c616070f1d653d2011624218fb17b8b5800925787307038851e1",
+                        "transactions": [
+                            "0xf860800a830f42409428ab22d15214366b7b379868ec1646f2753ec68c018025a012ba051d5b03c1bd2fd79929ba6dfa6b2e0dc4aebd8673b086c890e921c815b5a030f8ac201460b05da3be3162ef56eb861fba98e64b3626dd80c8978c32d8cb0d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd720b9a4dfbb166ac899a866c3a2cff86f63f04916580368c152b99e6bcbc478",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that the BLOBBASEFEE opcode fails with insufficient gas.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip7516_blobgasfee/test_blobgasfee_opcode.py#L129",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7516.md",
+            "reference-spec-version": "dcd2f4ede58a6ed908acd3cc2c198e9f605cbf3b"
+        }
+    }
+}

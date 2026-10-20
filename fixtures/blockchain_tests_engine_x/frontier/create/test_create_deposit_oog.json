@@ -1,0 +1,408 @@
+{
+    "tests/frontier/create/test_create_deposit_oog.py::test_create_deposit_oog[fork_Cancun-create_opcode_CREATE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x0fb8dea0e01821802979d17d2ce0860485e6b6507b28933216492fe4210807ff",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5bebbd415b51c35d49aeb0a5f9bf31aacf3852153df2caedc150a3d5dacada58",
+                        "receiptsRoot": "0x8bd982aecde5d70f7e87328e496cbacfe06705bda1b22c76ff37d973ee9ce791",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xf093f",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0fb8dea0e01821802979d17d2ce0860485e6b6507b28933216492fe4210807ff",
+                        "transactions": [
+                            "0xf860800a830f42409402cf416fbb5692d3ca6b6133da9b74b46cd2c6bb808026a0ece0dfa089cabb1cbe074b87afa206d2a0133ad028d424a8aab430b7be0869d1a07bf9714898ab7a2f00074757b752f06b29bd642a003ea3840e26625b231dfe5d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x37d48e827c3a61176d51a4228c98a87b524bd1cff266e16e9c6c809104f2d2da",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Run create deploys with a lot of deposited code.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/create/test_create_deposit_oog.py#L23",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/create/test_create_deposit_oog.py::test_create_deposit_oog[fork_Cancun-create_opcode_CREATE2-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x38b9785e996bbd1d07ba9e6f8cae6a35e6f0e6f6c94f6a7da8e7f18a0771c53e",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf9db99a95e6ecbfdcf0ff7e93715984c563af50c6df011340242abe0eb5d1c71",
+                        "receiptsRoot": "0x8bd982aecde5d70f7e87328e496cbacfe06705bda1b22c76ff37d973ee9ce791",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xf093f",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x38b9785e996bbd1d07ba9e6f8cae6a35e6f0e6f6c94f6a7da8e7f18a0771c53e",
+                        "transactions": [
+                            "0xf860800a830f424094f733af2aec0c71f783f4caae966df0aff7adc2de808026a00559d420d3cfb3d0570a240663cae4bf1278b0643d2a87e81bf48be1b5bcf7cfa07db19b291315eb004c699db85ae11361195775e43778806008e6e2ebda8c7738"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xb4ffc4ee970dad01ac023f675c3aedcdfb34b482f150058b03d03923370bf76c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Run create deploys with a lot of deposited code.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/create/test_create_deposit_oog.py#L23",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/create/test_create_deposit_oog.py::test_create_deposit_oog[fork_Paris-create_opcode_CREATE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0x39643e9942e1861466c10bf975895bb6b2f32c5bb26601bc992bb89898b1f67b",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd12f90fccb22b2ec28d84672b06790f45da7c88f248e9eb5fec32c6565558d44",
+                        "receiptsRoot": "0x8bd982aecde5d70f7e87328e496cbacfe06705bda1b22c76ff37d973ee9ce791",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xf093f",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x39643e9942e1861466c10bf975895bb6b2f32c5bb26601bc992bb89898b1f67b",
+                        "transactions": [
+                            "0xf860800a830f42409402cf416fbb5692d3ca6b6133da9b74b46cd2c6bb808026a0ece0dfa089cabb1cbe074b87afa206d2a0133ad028d424a8aab430b7be0869d1a07bf9714898ab7a2f00074757b752f06b29bd642a003ea3840e26625b231dfe5d"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x83ef2b44b1a4fe0e28da43ed65613038fbda82eef96f5fcc110c374504a46d34",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Run create deploys with a lot of deposited code.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/create/test_create_deposit_oog.py#L23",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/create/test_create_deposit_oog.py::test_create_deposit_oog[fork_Paris-create_opcode_CREATE2-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Paris",
+        "lastblockhash": "0xdb9036673052b43ec3dc81b25c2b5959d027239e4fdd028da84ef40e1d1051ba",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x44291ebe60a0735a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0e5b30973b26c55e15e69ed2327f1d2f4e3ffb51ae94bb88915669e5b73c0157",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6a2797668bbdbdb8c2c819e4f32d273568043d2875cad069cad80cca2239c05c",
+                        "receiptsRoot": "0x8bd982aecde5d70f7e87328e496cbacfe06705bda1b22c76ff37d973ee9ce791",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xf093f",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0xdb9036673052b43ec3dc81b25c2b5959d027239e4fdd028da84ef40e1d1051ba",
+                        "transactions": [
+                            "0xf860800a830f424094f733af2aec0c71f783f4caae966df0aff7adc2de808026a00559d420d3cfb3d0570a240663cae4bf1278b0643d2a87e81bf48be1b5bcf7cfa07db19b291315eb004c699db85ae11361195775e43778806008e6e2ebda8c7738"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1"
+            }
+        ],
+        "_info": {
+            "hash": "0x2a109487048c7f818cc3e383898278e509b003df005369e6ebc64867963fbf68",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Run create deploys with a lot of deposited code.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/create/test_create_deposit_oog.py#L23",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/create/test_create_deposit_oog.py::test_create_deposit_oog[fork_Prague-create_opcode_CREATE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x6da5c29c7b2710d5062e915e82a959debd65b7dda8d982725986f60bc533670a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xfdf248710b3e2cd433a5209bc1f38d0ca2a3e031c6e0085ade2bbe373deadf66",
+                        "receiptsRoot": "0x8bd982aecde5d70f7e87328e496cbacfe06705bda1b22c76ff37d973ee9ce791",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xf093f",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x6da5c29c7b2710d5062e915e82a959debd65b7dda8d982725986f60bc533670a",
+                        "transactions": [
+                            "0xf860800a830f42409402cf416fbb5692d3ca6b6133da9b74b46cd2c6bb808026a0ece0dfa089cabb1cbe074b87afa206d2a0133ad028d424a8aab430b7be0869d1a07bf9714898ab7a2f00074757b752f06b29bd642a003ea3840e26625b231dfe5d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7b504250e9842c8b4b0b003dda88e069f84ad0e3811ae92ccf2681b6638b9a81",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Run create deploys with a lot of deposited code.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/create/test_create_deposit_oog.py#L23",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/create/test_create_deposit_oog.py::test_create_deposit_oog[fork_Prague-create_opcode_CREATE2-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x16d19d0276e05001910c7df394195613a3cb4a4a0cd066f2dc153208e59a58a1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x69e6284887283937f44b7d37339794c65e7fd648f205ff90be011b228635bc86",
+                        "receiptsRoot": "0x8bd982aecde5d70f7e87328e496cbacfe06705bda1b22c76ff37d973ee9ce791",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xf093f",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x16d19d0276e05001910c7df394195613a3cb4a4a0cd066f2dc153208e59a58a1",
+                        "transactions": [
+                            "0xf860800a830f424094f733af2aec0c71f783f4caae966df0aff7adc2de808026a00559d420d3cfb3d0570a240663cae4bf1278b0643d2a87e81bf48be1b5bcf7cfa07db19b291315eb004c699db85ae11361195775e43778806008e6e2ebda8c7738"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xeb33ed386af3acbeca790ffc0c9e92882e08761036af2d50a5d96eb569ed5d30",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Run create deploys with a lot of deposited code.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/create/test_create_deposit_oog.py#L23",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/create/test_create_deposit_oog.py::test_create_deposit_oog[fork_Shanghai-create_opcode_CREATE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x8d929ff076b3c6df459037adfdb3ab66b546dda97dceaeb84489872cecabfb89",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb2d9b6a3ca5bba70e33df26d3911fb99ca63597b69c127581bd2bc00431c9e60",
+                        "receiptsRoot": "0x8bd982aecde5d70f7e87328e496cbacfe06705bda1b22c76ff37d973ee9ce791",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xf093f",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x8d929ff076b3c6df459037adfdb3ab66b546dda97dceaeb84489872cecabfb89",
+                        "transactions": [
+                            "0xf860800a830f42409402cf416fbb5692d3ca6b6133da9b74b46cd2c6bb808026a0ece0dfa089cabb1cbe074b87afa206d2a0133ad028d424a8aab430b7be0869d1a07bf9714898ab7a2f00074757b752f06b29bd642a003ea3840e26625b231dfe5d"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0xdb2a760c3888bd9e0759da20e9082177c0370d8f8853260145d392426bbfd32e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Run create deploys with a lot of deposited code.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/create/test_create_deposit_oog.py#L23",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/create/test_create_deposit_oog.py::test_create_deposit_oog[fork_Shanghai-create_opcode_CREATE2-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x39ee05dac64bdc1eed063b4e22d1b5a9245437d324e07f5f52b7b35291d90130",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x11b5bd0a95851d6d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50d07edac5244b997b6f654f50b16eeafc1416a05b5854647a8b5e568a2b872f",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf5f6e642fa619586532931e2aa1ea62cff7c055329cdf7c1c81c852d354890e4",
+                        "receiptsRoot": "0x8bd982aecde5d70f7e87328e496cbacfe06705bda1b22c76ff37d973ee9ce791",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xf093f",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x39ee05dac64bdc1eed063b4e22d1b5a9245437d324e07f5f52b7b35291d90130",
+                        "transactions": [
+                            "0xf860800a830f424094f733af2aec0c71f783f4caae966df0aff7adc2de808026a00559d420d3cfb3d0570a240663cae4bf1278b0643d2a87e81bf48be1b5bcf7cfa07db19b291315eb004c699db85ae11361195775e43778806008e6e2ebda8c7738"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x6116ecc1d0bde1a3c4b00afcab7439570781dc9a716b194f73b975a135f9f36b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Run create deploys with a lot of deposited code.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/create/test_create_deposit_oog.py#L23",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

@@ -1,0 +1,554 @@
+{
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_Berlin-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x15745df94bf08ccd66af1956383166be24cb045d",
+            "secretKey": "0xe4ab04167c216e5a30d0b7c36ffb8b20a96bfbf22d02e3614a3445b19b59e579"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0xccdf09c312401e0a4bce079a19813ff0fbd138c50ac971ea0bfa632f89391cb0",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de90cdba",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                            "storage": {
+                                "0x00": "0x8608",
+                                "0x01": "0x03"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0f3246",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xfbff5cb33c2974a2eabcac3d8c520699566cfa5f7af25df752c0c4c0d0e213b9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_Cancun-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x15745df94bf08ccd66af1956383166be24cb045d",
+            "secretKey": "0xe4ab04167c216e5a30d0b7c36ffb8b20a96bfbf22d02e3614a3445b19b59e579"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xd21d9bed239cb4107b3ee19e425b48dc4500479ef7cae050f1b88e6a8424ff0d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de90cdba",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                            "storage": {
+                                "0x00": "0x8608",
+                                "0x01": "0x03"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x048f15",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xf53f68e0ebff7041a722eb4fa0ebb646202cc3b0d8160a75f4fa9f0fee04f314",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_London-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x15745df94bf08ccd66af1956383166be24cb045d",
+            "secretKey": "0xe4ab04167c216e5a30d0b7c36ffb8b20a96bfbf22d02e3614a3445b19b59e579"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0xd21d9bed239cb4107b3ee19e425b48dc4500479ef7cae050f1b88e6a8424ff0d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de90cdba",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                            "storage": {
+                                "0x00": "0x8608",
+                                "0x01": "0x03"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x048f15",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x759cc366af15f140e4e7f59b36f6156fdef991a7c0f50a6d4601b18c822ea2d1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_Paris-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x15745df94bf08ccd66af1956383166be24cb045d",
+            "secretKey": "0xe4ab04167c216e5a30d0b7c36ffb8b20a96bfbf22d02e3614a3445b19b59e579"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0xd21d9bed239cb4107b3ee19e425b48dc4500479ef7cae050f1b88e6a8424ff0d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de90cdba",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                            "storage": {
+                                "0x00": "0x8608",
+                                "0x01": "0x03"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x048f15",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe3ccd597968c804848142e3cb38566705cd84af618760b5fd7166953ab460099",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x15745df94bf08ccd66af1956383166be24cb045d",
+            "secretKey": "0xe4ab04167c216e5a30d0b7c36ffb8b20a96bfbf22d02e3614a3445b19b59e579"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xd21d9bed239cb4107b3ee19e425b48dc4500479ef7cae050f1b88e6a8424ff0d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de90cdba",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                            "storage": {
+                                "0x00": "0x8608",
+                                "0x01": "0x03"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x048f15",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x96da15232ae2fc937179b3899b13ec71bbad576325c0db09244612d1a62718c9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_memory_expands_on_early_revert[fork_Shanghai-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x15745df94bf08ccd66af1956383166be24cb045d",
+            "secretKey": "0xe4ab04167c216e5a30d0b7c36ffb8b20a96bfbf22d02e3614a3445b19b59e579"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0xd21d9bed239cb4107b3ee19e425b48dc4500479ef7cae050f1b88e6a8424ff0d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120946ffb8b20a96bfbf22d02e3614a3445b19b59e579808025a0f1f176b415839e1711360fcb5c86b400adce555b6dc3589882aa9a2534baaabaa06b1376b9856abd547efad087ea607426c9a1dedb18e33d56eeb9c562eecdf9f6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x15745df94bf08ccd66af1956383166be24cb045d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de90cdba",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x6ffb8b20a96bfbf22d02e3614a3445b19b59e579": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6080600060006000606460006000f15a90509003601790036000555a60016040525a90036008900360015500",
+                            "storage": {
+                                "0x00": "0x8608",
+                                "0x01": "0x03"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x048f15",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x92d3e53ff54ba81882e1aec16c0e12eb558272082c910a27528442ce84cdcc2b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "When CALL reverts early (e.g. because of not enough balance by the sender),\n    memory should be expanded anyway. We check this with an MSTORE.\n\n    This is for a bug in an EVM implementation where memory is expanded after\n    executing a CALL, but not when an early revert happens.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L88",
+            "fixture-format": "state_test"
+        }
+    }
+}

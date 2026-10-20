@@ -1,0 +1,99 @@
+{
+  "testIds": [
+    "tests/static/state_tests/stSpecialTest/eoaEmptyParisFiller.yml::eoaEmptyParis[fork_Cancun-blockchain_test_engine_x_from_state_test-d0-g0-v0]"
+  ],
+  "environment": {
+    "currentCoinbase": "0x0000000000000000000000000000000000000000",
+    "currentGasLimit": "0x05500000",
+    "currentNumber": "0x00",
+    "currentTimestamp": "0x00",
+    "currentRandom": "0x00",
+    "currentDifficulty": "0x00",
+    "currentBaseFee": "0x0b",
+    "currentExcessBlobGas": "0x00",
+    "currentBlobGasUsed": "0x00",
+    "parentUncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "blockHashes": {},
+    "ommers": [],
+    "withdrawals": []
+  },
+  "network": "Cancun",
+  "pre": {
+    "0x000f3df6d732807ef1319fb7b8bb8522d0beac02": {
+      "nonce": "0x01",
+      "balance": "0x00",
+      "code": "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500",
+      "storage": {}
+    },
+    "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+      "nonce": "0x00",
+      "balance": "0x3b9aca00",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x000000000000000000000000000000000000bad1": {
+      "nonce": "0x00",
+      "balance": "0x01",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x000000000000000000000000000000000000bad2": {
+      "nonce": "0x01",
+      "balance": "0x00",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x000000000000000000000000000000000000bad3": {
+      "nonce": "0x01",
+      "balance": "0x01",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x000000000000000000000000000000000000bad4": {
+      "nonce": "0x00",
+      "balance": "0x0a",
+      "code": "0x",
+      "storage": {
+        "0xdead": "0xbeef"
+      }
+    },
+    "0x000000000000000000000000000000000000dead": {
+      "nonce": "0x01",
+      "balance": "0x2710",
+      "code": "0x32ff",
+      "storage": {}
+    },
+    "0x000000000000000000000000000000000000c0de": {
+      "nonce": "0x01",
+      "balance": "0x00",
+      "code": "0x32806000558031603155803b603b55803f603f55600181013f61013f5561bad13f61bad15561bad23f61bad25561bad33f61bad35561bad43f61bad45561bad53f61bad55560008080805a94600435905af1505a900360f1555a60008080808061dead5af1505a900360ff5500",
+      "storage": {}
+    }
+  },
+  "genesis": {
+    "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "uncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "coinbase": "0x0000000000000000000000000000000000000000",
+    "stateRoot": "0x085775c8bad10915ecf7b8a08d86ec60ac51fe67cf73a5e0c54e5dc306c1e632",
+    "transactionsTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "receiptTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "difficulty": "0x00",
+    "number": "0x00",
+    "gasLimit": "0x05500000",
+    "gasUsed": "0x00",
+    "timestamp": "0x00",
+    "extraData": "0x00",
+    "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "nonce": "0x0000000000000000",
+    "baseFeePerGas": "0x0b",
+    "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "blobGasUsed": "0x00",
+    "excessBlobGas": "0x00",
+    "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "0x3159b01f5ba198189d4f69cab73ecfc8aaea075ff39f2efc6af2c904c1d0de26"
+  },
+  "preAccountCount": 8,
+  "testCount": 1
+}

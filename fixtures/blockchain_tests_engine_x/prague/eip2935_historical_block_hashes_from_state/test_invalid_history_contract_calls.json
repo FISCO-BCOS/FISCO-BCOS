@@ -1,0 +1,254 @@
+{
+    "tests/prague/eip2935_historical_block_hashes_from_state/test_block_hashes.py::test_invalid_history_contract_calls[fork_Prague-blockchain_test_engine_x-2**64-1]": {
+        "network": "Prague",
+        "lastblockhash": "0x48a2ddd61ff7d631fcfb31fc8d4a73cbf00ba6ed6758cfeeedb6d9bf8ce58cc3",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2a6412abc6267900bf07af3b6249799868ad3b0f3f47cf4ba710a0757c7fd61f",
+                        "receiptsRoot": "0x96c8611f3233e4a08da00ae0f616fd8590ebda500281e93feed357834f40b9ed",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x791c",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x48a2ddd61ff7d631fcfb31fc8d4a73cbf00ba6ed6758cfeeedb6d9bf8ce58cc3",
+                        "transactions": [
+                            "0xf860800a83989680942f6257ae8a787608b979420731e9cbd72c25a5d0808026a06a25bdbf04736c4e39978fbbc27e3762006231d0a8d4b22e9648773b2b053816a07e140d5e9a12ff61ea6cf9dad7e3ca49d62c8db38de9bab030154ab29601c323"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x48c66140e73fef0c6a9fd3b01565d0a59352584b8776d10f888f258c2b1f902f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the history contract with invalid block numbers, such as\n    blocks from the future or overflowing block numbers.\n\n    Also test the BLOCKHASH opcode with the same block numbers, which should\n    not affect the behavior of the opcode, even after verkle.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2935_historical_block_hashes_from_state/test_block_hashes.py#L398",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2935.md",
+            "reference-spec-version": "06aadd458ee04ede80498db55927b052eb5bef38"
+        }
+    },
+    "tests/prague/eip2935_historical_block_hashes_from_state/test_block_hashes.py::test_invalid_history_contract_calls[fork_Prague-blockchain_test_engine_x-2**64]": {
+        "network": "Prague",
+        "lastblockhash": "0x8e3d4f8e222508c4b3ecf318d133504911b9d47ac3c091e08ce98f6222a77177",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd3654f6ea3d6de48f7523a0618ddd14dc041009b8113bccc26acc3d67ff6cb2b",
+                        "receiptsRoot": "0x96c8611f3233e4a08da00ae0f616fd8590ebda500281e93feed357834f40b9ed",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x791c",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8e3d4f8e222508c4b3ecf318d133504911b9d47ac3c091e08ce98f6222a77177",
+                        "transactions": [
+                            "0xf860800a83989680944be8630c7887b785d9943327e137058b119ccadb808026a00c5387ab45a7890e6a88329df3f4238f327f0454cd09e7eaff461b03a51535d2a01b45af7f47c08484e10b10d315ed64bdca61c9b0175964456f649830d3bbb523"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x8e614392c81177675cd27ca7b91c92b8f2f65c5f0e2d7badaa7397b51828e19c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the history contract with invalid block numbers, such as\n    blocks from the future or overflowing block numbers.\n\n    Also test the BLOCKHASH opcode with the same block numbers, which should\n    not affect the behavior of the opcode, even after verkle.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2935_historical_block_hashes_from_state/test_block_hashes.py#L398",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2935.md",
+            "reference-spec-version": "06aadd458ee04ede80498db55927b052eb5bef38"
+        }
+    },
+    "tests/prague/eip2935_historical_block_hashes_from_state/test_block_hashes.py::test_invalid_history_contract_calls[fork_Prague-blockchain_test_engine_x-current_block]": {
+        "network": "Prague",
+        "lastblockhash": "0x1435ad6306bdb49a8c290405b7b6dd8e5071d76676f6ea258ecdcd2dc02652bb",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6a518c62ccd0bb38c665fd12a0613836778c7aa617c32d0f34ea59c0f2ea3d12",
+                        "receiptsRoot": "0x96c8611f3233e4a08da00ae0f616fd8590ebda500281e93feed357834f40b9ed",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x791c",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x1435ad6306bdb49a8c290405b7b6dd8e5071d76676f6ea258ecdcd2dc02652bb",
+                        "transactions": [
+                            "0xf860800a8398968094cf87318e1d20e7fdc1938982edb80904cd64eff8808025a0b3282ad9af493b8007db704d34c3eca0173696e3a03ac875e03105782b8fd223a010df491c45c8e16f03e4fdfc1601ad00842d39aa2d83d024cb446c3108502304"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xc4bd83a9bd8c0eaa54727005af64ff6a22e060caa7e02729f0c49d9142db3241",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the history contract with invalid block numbers, such as\n    blocks from the future or overflowing block numbers.\n\n    Also test the BLOCKHASH opcode with the same block numbers, which should\n    not affect the behavior of the opcode, even after verkle.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2935_historical_block_hashes_from_state/test_block_hashes.py#L398",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2935.md",
+            "reference-spec-version": "06aadd458ee04ede80498db55927b052eb5bef38"
+        }
+    },
+    "tests/prague/eip2935_historical_block_hashes_from_state/test_block_hashes.py::test_invalid_history_contract_calls[fork_Prague-blockchain_test_engine_x-future_block]": {
+        "network": "Prague",
+        "lastblockhash": "0xcee3b823a0eb571c8e2e53ad200060d93e5166017f58db7e9c74e2a6340a5eb9",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x297a5a68b077196db1638261a9c318623ba7cfe3214ea57ac5bc194c84c568e0",
+                        "receiptsRoot": "0x96c8611f3233e4a08da00ae0f616fd8590ebda500281e93feed357834f40b9ed",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x791c",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xcee3b823a0eb571c8e2e53ad200060d93e5166017f58db7e9c74e2a6340a5eb9",
+                        "transactions": [
+                            "0xf860800a8398968094d9699775eb8e02980a8aa6bdd8d62ed79620145c808026a0b58e8bbbcf81f0c43bc590d1279e3f2df969905ac572fbb01cabc6007ae2c83ba004a900afa86c55b73c4283ae9df73b5e0aaae462f4ffd0d6a2295eeafc908b82"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1276486cce8c5ae0400d2a8bae69ff7a7615ad2fa59dbfc0b8da5536878e68fe",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the history contract with invalid block numbers, such as\n    blocks from the future or overflowing block numbers.\n\n    Also test the BLOCKHASH opcode with the same block numbers, which should\n    not affect the behavior of the opcode, even after verkle.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2935_historical_block_hashes_from_state/test_block_hashes.py#L398",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2935.md",
+            "reference-spec-version": "06aadd458ee04ede80498db55927b052eb5bef38"
+        }
+    }
+}

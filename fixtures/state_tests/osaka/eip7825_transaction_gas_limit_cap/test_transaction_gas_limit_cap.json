@@ -1,0 +1,564 @@
+{
+    "tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py::test_transaction_gas_limit_cap[fork_Prague-tx_gas_limit_cap_none0-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x1a2e20b2fb1346f5751ec4d05f1964042f06c072": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x7050718520e6e10e77224126e185e63a87e88af6": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x01000001"
+            ],
+            "to": "0x7050718520e6e10e77224126e185e63a87e88af6",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x7050718520e6e10e77224126e185e63a87e88af6",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    }
+                ]
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x00",
+                    "address": "0x0000000000000000000000000000000000000000",
+                    "nonce": "0x00",
+                    "v": "0x00",
+                    "r": "0x5817035c2e62f46823f5385b1d8b81d119ba4c6233929476f4fccbeaef0333e1",
+                    "s": "0x58434bf27df5285158b805967729a7a200891c29d2385ee324f481de9a4758f8",
+                    "signer": "0xffb0f6d70218558b8de2493b04eefa9359ef451a",
+                    "yParity": "0x00"
+                }
+            ],
+            "sender": "0x1a2e20b2fb1346f5751ec4d05f1964042f06c072",
+            "secretKey": "0x488554e9a906ce0ea203d46c7050718520e6e10e77224126e185e63a87e88af6"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x3c0d873ae61614cae4c5a187b0c511fad40fac85758fc18e52f2dc1a410c4460",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f8fb018080078401000001947050718520e6e10e77224126e185e63a87e88af68080f838f7947050718520e6e10e77224126e185e63a87e88af6e1a00000000000000000000000000000000000000000000000000000000000000000f85cf85a809400000000000000000000000000000000000000008080a05817035c2e62f46823f5385b1d8b81d119ba4c6233929476f4fccbeaef0333e1a058434bf27df5285158b805967729a7a200891c29d2385ee324f481de9a4758f880a002e84389abcc26aeabee6b57922b9d6d52256cb6780512991a6c50e8a37463eea00d1a050cadd2323006c841f51a6553aedb1c86b0807e3bcc5f4c5f7be68b083f",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x1a2e20b2fb1346f5751ec4d05f1964042f06c072": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de987d92",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x7050718520e6e10e77224126e185e63a87e88af6": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0xffb0f6d70218558b8de2493b04eefa9359ef451a": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa3bc0f57f38481c9f065ab9b94ba4ccbc2f13ce7caf757fd9732dd3dc77ad449",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the transaction gas limit cap behavior for all transaction types.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py#L65",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7825.md",
+            "reference-spec-version": "1ed95cbac750539c2aac67c8cbbcc2d77974231c"
+        }
+    },
+    "tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py::test_transaction_gas_limit_cap[fork_Prague-tx_gas_limit_cap_none1-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xdfe36aafb6cf2401c846587f60f013c268c63ec4": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x197809ff740a35433d88b4ed91d3cc88a8c18551": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x01000001"
+            ],
+            "to": "0x197809ff740a35433d88b4ed91d3cc88a8c18551",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x197809ff740a35433d88b4ed91d3cc88a8c18551",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    }
+                ]
+            ],
+            "maxFeePerBlobGas": "0x01",
+            "blobVersionedHashes": [
+                "0x0100000000000000000000000000000000000000000000000000000000000000"
+            ],
+            "sender": "0xdfe36aafb6cf2401c846587f60f013c268c63ec4",
+            "secretKey": "0x4010cc4137defc4fc12b606a197809ff740a35433d88b4ed91d3cc88a8c18551"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x3daf2ab49b87a2d8629eff17cd4d21ac9e15c93f7c1a2d2212560f07d2b09805",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x03f8c001808007840100000194197809ff740a35433d88b4ed91d3cc88a8c185518080f838f794197809ff740a35433d88b4ed91d3cc88a8c18551e1a0000000000000000000000000000000000000000000000000000000000000000001e1a0010000000000000000000000000000000000000000000000000000000000000001a00edec5fa9757b4b2c6d574aff994cd7804ed890bfcdb01992f8601003239d7bba03f1f356ddd229bef69f969c91039867872508e91664798ad1daf376fa9a09f84",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xdfe36aafb6cf2401c846587f60f013c268c63ec4": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99292a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x197809ff740a35433d88b4ed91d3cc88a8c18551": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x3daf6172262fe4a8feb5f8f7c05ad592a734c0023541d294136c1bf2207d5976",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the transaction gas limit cap behavior for all transaction types.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py#L65",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7825.md",
+            "reference-spec-version": "1ed95cbac750539c2aac67c8cbbcc2d77974231c"
+        }
+    },
+    "tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py::test_transaction_gas_limit_cap[fork_Prague-tx_gas_limit_cap_none2-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x13957d4303e3dabd0405a916a3b3cd7fd4f2ea03": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x58cc24230f12dd9b2d879697e737f498339118c2": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x01000001"
+            ],
+            "to": "0x58cc24230f12dd9b2d879697e737f498339118c2",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x58cc24230f12dd9b2d879697e737f498339118c2",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    }
+                ]
+            ],
+            "sender": "0x13957d4303e3dabd0405a916a3b3cd7fd4f2ea03",
+            "secretKey": "0x1dbf308e9d0c8c5fc71e469458cc24230f12dd9b2d879697e737f498339118c2"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xcf787b3b936bd3cd388d7692af3e280a6401d96cdb58ec389f03891b015e67c7",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f89d0180800784010000019458cc24230f12dd9b2d879697e737f498339118c28080f838f79458cc24230f12dd9b2d879697e737f498339118c2e1a0000000000000000000000000000000000000000000000000000000000000000080a0222c0470e4b36653a7029dbaf1bac232172262f91ef703a88a8275478428653ca05ba98a4224cde735c54945727ed381fbf677e21d9da45b44ccda7d4fdb5ef063",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x13957d4303e3dabd0405a916a3b3cd7fd4f2ea03": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9b292a",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x58cc24230f12dd9b2d879697e737f498339118c2": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x71476f821a6764a130920a5d04c0e91e991b675c0539277b4c3ad708c661130b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the transaction gas limit cap behavior for all transaction types.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py#L65",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7825.md",
+            "reference-spec-version": "1ed95cbac750539c2aac67c8cbbcc2d77974231c"
+        }
+    },
+    "tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py::test_transaction_gas_limit_cap[fork_Prague-tx_gas_limit_cap_none3-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x89e7092db0f790c0b19debff84498db956bbdec0": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x2f3b54d43f22d11aded5608200b5c6e218a63259": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x01000001"
+            ],
+            "to": "0x2f3b54d43f22d11aded5608200b5c6e218a63259",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x2f3b54d43f22d11aded5608200b5c6e218a63259",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    }
+                ]
+            ],
+            "sender": "0x89e7092db0f790c0b19debff84498db956bbdec0",
+            "secretKey": "0x6d2ee455292b096987b929df2f3b54d43f22d11aded5608200b5c6e218a63259"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xd8b2d9444fdb7ae3179997e25236c207bd0df99facc7eefd8368ffe46b24e8fc",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x01f89c01800a8401000001942f3b54d43f22d11aded5608200b5c6e218a632598080f838f7942f3b54d43f22d11aded5608200b5c6e218a63259e1a0000000000000000000000000000000000000000000000000000000000000000080a04db64a347860d0c45d573f4e45b1b9a3379c84a8a84b853da87510d2e0692487a07f600848d14403c504a07065641f35d01a0f7c36e16b0151581f87969df8222c",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x89e7092db0f790c0b19debff84498db956bbdec0": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99163c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2f3b54d43f22d11aded5608200b5c6e218a63259": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0212ee",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x509151b9130c49e57ba326b5f09b31fb39948065e6014372da8b21be4a7e12a2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the transaction gas limit cap behavior for all transaction types.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py#L65",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7825.md",
+            "reference-spec-version": "1ed95cbac750539c2aac67c8cbbcc2d77974231c"
+        }
+    },
+    "tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py::test_transaction_gas_limit_cap[fork_Prague-tx_gas_limit_cap_none4-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x451ab15cabb4cb09ea164ed916b6436e3cae2f53": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xc0a486c2989bb2e7694300099b7e3d078bb79c11": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x01000001"
+            ],
+            "to": "0xc0a486c2989bb2e7694300099b7e3d078bb79c11",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x451ab15cabb4cb09ea164ed916b6436e3cae2f53",
+            "secretKey": "0x2f21cc325666ea0c29897c29c0a486c2989bb2e7694300099b7e3d078bb79c11"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xe5dcf29f5cb33808000b579c696d3eef2e3512301de76c289acacaa55724b4df",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf861800a840100000194c0a486c2989bb2e7694300099b7e3d078bb79c11808026a094c16168b82596ecc27a5a0841b235a675c02e7a0599e7159a07d2a9232814f2a046ba34914eed281d8306dbe1e0485172e2a9e8d1b185c079fb41f87c53d10589",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x451ab15cabb4cb09ea164ed916b6436e3cae2f53": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de996c2c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xc0a486c2989bb2e7694300099b7e3d078bb79c11": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01f926",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x82ce869907af7208b8fef8a195fa56f1307577bbb7acf6059587de4b51478df1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the transaction gas limit cap behavior for all transaction types.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/osaka/eip7825_transaction_gas_limit_cap/test_tx_gas_limit.py#L65",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7825.md",
+            "reference-spec-version": "1ed95cbac750539c2aac67c8cbbcc2d77974231c"
+        }
+    }
+}

@@ -1,0 +1,254 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_delegation_clearing[fork_Prague-blockchain_test_engine_x_from_state_test-delegated_account-not_self_sponsored]": {
+        "network": "Prague",
+        "lastblockhash": "0x485cbb2a76e95b50b18c6e48a2cdcb41350366034f3803d46d18358ac96c13ff",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb67743f30e8b1ac5229632de79c5e0936caf505dbb5f3cbf3fda2e19dff5cd76",
+                        "receiptsRoot": "0x81dd11a2f2aaffd109342bdac155edfe1e4c289d8dd20af8e7b295383d5c03fd",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x14b22",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x485cbb2a76e95b50b18c6e48a2cdcb41350366034f3803d46d18358ac96c13ff",
+                        "transactions": [
+                            "0x04f8c10180800783030d40943b410c270638c00bfd1c6bb748b5f5742abc2f2a8080c0f85cf85a809400000000000000000000000000000000000000000180a0f4a259d364cafd17547e7c18fbd3337779e26f15baec07da7e46a4b40614e39ca05cdc836f922fa14be912cca27d7fd7db0674f27503219b40fd31ae15ae813abb01a0d2812f73eccfa8101cc57233bcef288e054d70e6e694bfbaa789112096e56242a057dc163dc37b04013160dac925d71299a73cfe245725225bdc74a7fd2acf32bc"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xfa1f23be6611a86707beefddf0b59cde1f9814ce9e18c4c562bd29d260ae3296",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test clearing the delegation of an account under a variety of\n    circumstances.\n\n    - pre_set_delegation_code: The code to set on the account before clearing\n                               delegation, or None if the account should not\n                               have any code set.\n    - self_sponsored: Whether the delegation clearing transaction is\n                      self-sponsored.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L3314",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_delegation_clearing[fork_Prague-blockchain_test_engine_x_from_state_test-delegated_account-self_sponsored]": {
+        "network": "Prague",
+        "lastblockhash": "0x4dec3f2078d968e92169d7dd71e0671c2581f3d5c02854a88b1d0292eddde2e6",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xa183e89505cea6f6ccaef2ad8f5a3ec066b8dfed42b1f557ec9ca4f52b9a1ab1",
+                        "receiptsRoot": "0x81dd11a2f2aaffd109342bdac155edfe1e4c289d8dd20af8e7b295383d5c03fd",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x14b22",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4dec3f2078d968e92169d7dd71e0671c2581f3d5c02854a88b1d0292eddde2e6",
+                        "transactions": [
+                            "0x04f8c10101800783030d40943ae15e12272b5c38a4a134781a569789739a74a38080c0f85cf85a809400000000000000000000000000000000000000000201a0c0c4d273f5765d70ef91a6f7d066a6493321f1546e8ccc9688f49156a2f4cd21a0225d0e51a6fb1e8206f3fb3398f36ea4c33191a9285f5791d605786e9fc8cb5001a0b0b9f0b728cc1fd2b68899e8ffee91b74c1b535e1bb48b40dc6488c54ed6f0c6a036a023b01514458e8577a1d22ac5d51b3e5ad75e55d4dc80dcb49eb1132d5f10"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7e2e7d6bb4bee0788d9465796a699d7522853fda7d4808862c33fe3f203bc063",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test clearing the delegation of an account under a variety of\n    circumstances.\n\n    - pre_set_delegation_code: The code to set on the account before clearing\n                               delegation, or None if the account should not\n                               have any code set.\n    - self_sponsored: Whether the delegation clearing transaction is\n                      self-sponsored.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L3314",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_delegation_clearing[fork_Prague-blockchain_test_engine_x_from_state_test-undelegated_account-not_self_sponsored]": {
+        "network": "Prague",
+        "lastblockhash": "0xea2b493d42453e8a46c037c2f5d0c1975739794378bcee4e48e4382f75e8785b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7f9e807aa45bc9420279b46af1b91921a96901024028511b31028a6a714f8401",
+                        "receiptsRoot": "0xf14e407883ea9fa9e945dd5072b8921295fed2d983e14c5e70b88d7f9f5f4e44",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x17bf6",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xea2b493d42453e8a46c037c2f5d0c1975739794378bcee4e48e4382f75e8785b",
+                        "transactions": [
+                            "0x04f8c10180800783030d40947f9da7277935af436f3eda203413a20d7176d8df8080c0f85cf85a809400000000000000000000000000000000000000008080a09aad7b69739b2f95fa07ad3ed10e384077d26f7c7f0374d4c8099b25434945a8a0411c6daa42670ab821389a42a3d33ae50fa31a38754c45269acaa2b29a98a30c01a0dfb6fa6bb001835a7167afee34551d041f91ab7728587fb9998125b0742a69e7a041e0be4090c98801dd9897cac546b40e8656096379af695e29f9ea17df8196f1"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x25b41d3aa831c098274d0599c81d163e4a35e3d6ff14d25e9b6763e47f5ae4bf",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test clearing the delegation of an account under a variety of\n    circumstances.\n\n    - pre_set_delegation_code: The code to set on the account before clearing\n                               delegation, or None if the account should not\n                               have any code set.\n    - self_sponsored: Whether the delegation clearing transaction is\n                      self-sponsored.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L3314",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_delegation_clearing[fork_Prague-blockchain_test_engine_x_from_state_test-undelegated_account-self_sponsored]": {
+        "network": "Prague",
+        "lastblockhash": "0x464deff9a6fdcf4902ac32994d05fce0cfaf0e62733ae972bde9a1a377c9cbb7",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0ee7e43200b4ce0162e655ba69009f5edf06b3cd2827c8c674328580bce30b4e",
+                        "receiptsRoot": "0x81dd11a2f2aaffd109342bdac155edfe1e4c289d8dd20af8e7b295383d5c03fd",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x14b22",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x464deff9a6fdcf4902ac32994d05fce0cfaf0e62733ae972bde9a1a377c9cbb7",
+                        "transactions": [
+                            "0x04f8c10180800783030d40947890a38dc4852814801cc048d26fcd317a07d7498080c0f85cf85a809400000000000000000000000000000000000000000101a0d536cb43d0ab2b5b3d4685da1d744243b5db469cbd6d9f97daf62159a2c8be31a030622be0f016a14ac2a93504ff83e055ef8ebf37653bb8cdbda1265478a33f9001a072295dd98d683baf88d59e1bd609c96bdd9cdc85f13ea3ec9236801c660f7467a06f6981cab00c01bc8c0e58256950dbed0dee483b5cef71198ab7c27e79d8b9eb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xe46dc7c58c5eb577beff5df53c253603ce44461c7a54b40f069ce5e7c2469649",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test clearing the delegation of an account under a variety of\n    circumstances.\n\n    - pre_set_delegation_code: The code to set on the account before clearing\n                               delegation, or None if the account should not\n                               have any code set.\n    - self_sponsored: Whether the delegation clearing transaction is\n                      self-sponsored.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L3314",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

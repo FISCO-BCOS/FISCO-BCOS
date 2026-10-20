@@ -1,0 +1,78 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_auth_chain_id_encoding[fork_Prague-transaction_test-non_zero_address-auth_chain_id_0]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c301808007830186a09400000000000000000000000000000000000000008080c0f85ef85c8200009400000000000000000000000000000000000000018080a06b1d09cf18c37950db7feaf3de364fa84740438199c2025a381fb24985f6f94ca0466a3eaf8f98f86e25004118dcb206edd45d1959d42560bc2b06de28179f012e80a0d3973b74d2144985fc0db318db268067911f5785c518757f69b7448ca66a09e6a0126ded1e7cd9ed16b2f268db28d88c8f804b41afcac6cd13168acd97d1d04230",
+        "_info": {
+            "hash": "0x40ca51c9130635e6e5fa4fc09ccfc41edb6b40ffd959374cd9a8152babba4b70",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the chain id field of an authorization has\n    an incorrect encoding.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L190",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_auth_chain_id_encoding[fork_Prague-transaction_test-non_zero_address-auth_chain_id_1]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c301808007830186a09400000000000000000000000000000000000000008080c0f85ef85c8200019400000000000000000000000000000000000000018080a0250e478836a152c465ddf513e225de3cd92a6f3fc12c622ea3f3142622cbe754a02b4ba6f92d73eb4c04e157bccec45241302324e0cd8d340eea73f8ca5b5f5e8101a03eeed762f0efad0a5dbf0072a8000990f849e15234ea36ddebea3dd4be8e8280a05d7683133f2d34612a5c3041bdc8a706f563a5de759cd4ec12560d9110dfb7a9",
+        "_info": {
+            "hash": "0x35f766c784c077c8659f121342295112d66e43916497f995db358575e17d070a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the chain id field of an authorization has\n    an incorrect encoding.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L190",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_auth_chain_id_encoding[fork_Prague-transaction_test-reset_delegation_address-auth_chain_id_0]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c301808007830186a09400000000000000000000000000000000000000008080c0f85ef85c8200009400000000000000000000000000000000000000008001a08c3fd230195eb7b5a4dee261586eba4b4bc22d4cca24a502a284d82426e172f5a027a7a9465d4a1b67bd6c6d10094d2913a1a38a239c6c6b9c97d1172ac99ce7f401a0ab4c2dcd3fef6af62df85fef46146fba4455beac61861e255f9ddcc8c68e283fa0420e254a776c4e7a7f4ffba2e4a06c6ae31112ea5f2916df9368aff97c81c0e7",
+        "_info": {
+            "hash": "0x4f5aec08c9ae9bf2cc785be3688fb9edff6a78b7e300c7b6ed051eaff3bb52fd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the chain id field of an authorization has\n    an incorrect encoding.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L190",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_invalid_tx.py::test_invalid_tx_invalid_auth_chain_id_encoding[fork_Prague-transaction_test-reset_delegation_address-auth_chain_id_1]": {
+        "result": {
+            "Prague": {
+                "intrinsicGas": "0x00",
+                "exception": "TransactionException.TYPE_4_INVALID_AUTHORIZATION_FORMAT"
+            }
+        },
+        "txbytes": "0x04f8c301808007830186a09400000000000000000000000000000000000000008080c0f85ef85c8200019400000000000000000000000000000000000000008080a07e0e85b126424fb02961cf8e35e08039e2c373d5da04a0c747c9ab5ab17887aba060fc52d94fc37455d8cb16a2e598539ec57b55ed41349d4867ffa064b830216301a096606c1c5602e188fb421ee02d4e2d606af111d125e002bcb24b6fbe60f5bf83a01846278ba74106f12209ec2d0d791208a9e1caa31d8e12c6dab5b71d79aaad93",
+        "_info": {
+            "hash": "0x9b6499f17716f218dfca069dcac1394a74d11c35f50be80e2bc99861132677a5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a transaction where the chain id field of an authorization has\n    an incorrect encoding.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_invalid_tx.py#L190",
+            "fixture-format": "transaction_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

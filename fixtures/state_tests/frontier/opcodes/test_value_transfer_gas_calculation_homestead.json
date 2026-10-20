@@ -1,0 +1,878 @@
+{
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_homestead[fork_Homestead-state_test-gas_shortage_0-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x51e03bb121ccc655acbd97cbf3977eb215012763": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x168da3219729984fdedf756dd9386448f0acf518": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173da0e8bd2cff67800f4d8e1e9a3240eda7736bdea6001f2",
+                "storage": {}
+            },
+            "0x168da3219729984fdedf756dd9386448f0acf618": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073168da3219729984fdedf756dd9386448f0acf518612366f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x168da3219729984fdedf756dd9386448f0acf618",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x51e03bb121ccc655acbd97cbf3977eb215012763",
+            "secretKey": "0x6c1a51b61ad49ef1dc478af0168da3219729984fdedf756dd9386448f0acf518"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0xf82b7c3e155097e6960af76671c7b3bdd520277231695ab896479fc970c7a43c",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094168da3219729984fdedf756dd9386448f0acf61801801ba0403ffd42d640232c273105bf33c16c8c70b251c8ddbc238811b07026f5e2895da021969254b454321b40aca3c11ff8d2bb39bc94460cdefebd9bb57186d2b254f5",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x51e03bb121ccc655acbd97cbf3977eb215012763": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de98b3d5",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x168da3219729984fdedf756dd9386448f0acf518": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173da0e8bd2cff67800f4d8e1e9a3240eda7736bdea6001f2",
+                            "storage": {}
+                        },
+                        "0x168da3219729984fdedf756dd9386448f0acf618": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073168da3219729984fdedf756dd9386448f0acf518612366f1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x074c2a",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb2ace99bba759144dc276c807a0abd57949cb1d5cbaa4ec5a14ca613f9544577",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L237",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_homestead[fork_Homestead-state_test-gas_shortage_0-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xa15bb56dfcc8bbd14cfa10a93831004aff7b9a6d": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x134a8de12218b5ed04ccf0e562b61fd724483568": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006001736c5e94d8e07f563329ec4fd23ea1416d74f173f46001f1",
+                "storage": {}
+            },
+            "0x134a8de12218b5ed04ccf0e562b61fd724483668": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073134a8de12218b5ed04ccf0e562b61fd72448356861850ef1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x134a8de12218b5ed04ccf0e562b61fd724483668",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xa15bb56dfcc8bbd14cfa10a93831004aff7b9a6d",
+            "secretKey": "0x2c80e3c261c45c547f3bb868134a8de12218b5ed04ccf0e562b61fd724483568"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0x50e904aa77aa8b6cfa7b4998b21de9671069cee07ee268675726a027507fbca6",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094134a8de12218b5ed04ccf0e562b61fd72448366801801ba0eb93761a965bafee7a71f65a1dc7dc197f4905892c4dd0411192b11c99d81591a07fb7180ea32912e308b39f1130b1cf59a0188e150d46ba72f21987ea9a051360",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xa15bb56dfcc8bbd14cfa10a93831004aff7b9a6d": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de94e345",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x134a8de12218b5ed04ccf0e562b61fd724483568": {
+                            "nonce": "0x01",
+                            "balance": "0x02",
+                            "code": "0x60006000600060006001736c5e94d8e07f563329ec4fd23ea1416d74f173f46001f1",
+                            "storage": {}
+                        },
+                        "0x134a8de12218b5ed04ccf0e562b61fd724483668": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073134a8de12218b5ed04ccf0e562b61fd72448356861850ef1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x6c5e94d8e07f563329ec4fd23ea1416d74f173f4": {
+                            "nonce": "0x00",
+                            "balance": "0x01",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0b1cba",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1ad1fd9d8518f443a7274105305e12a5d427f35c5431a564de833799718b40a2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L237",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_homestead[fork_Homestead-state_test-gas_shortage_0-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x935c39c1b7cc2c6b97be22ad23e9ab59f983666c": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x7f19051c4a7aab2d23d6a1efb1cd922742bc3914": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073cfaaeffaa6a16fa808cde3aaf1b42a5d4f8eecc16001f4",
+                "storage": {}
+            },
+            "0x7f19051c4a7aab2d23d6a1efb1cd922742bc3a14": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000737f19051c4a7aab2d23d6a1efb1cd922742bc3914603bf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x7f19051c4a7aab2d23d6a1efb1cd922742bc3a14",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x935c39c1b7cc2c6b97be22ad23e9ab59f983666c",
+            "secretKey": "0x5c7f35be20fe30867cf977687f19051c4a7aab2d23d6a1efb1cd922742bc3914"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0x9523378f099bb2e91e23c495a7a0dd9010ca2f1351ae46ee4f5cdca93f29009a",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120947f19051c4a7aab2d23d6a1efb1cd922742bc3a1401801ba0820fcbbd504f8dc8bc6525c1d09fd3ac0c49d0e1b04c15b4d656ffad07ee734da04bb9581f32075a8c05d434efe4452d489c34eb68234effddb13a889ea41c44de",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x935c39c1b7cc2c6b97be22ad23e9ab59f983666c": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de99b9ab",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x7f19051c4a7aab2d23d6a1efb1cd922742bc3914": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073cfaaeffaa6a16fa808cde3aaf1b42a5d4f8eecc16001f4",
+                            "storage": {}
+                        },
+                        "0x7f19051c4a7aab2d23d6a1efb1cd922742bc3a14": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000737f19051c4a7aab2d23d6a1efb1cd922742bc3914603bf1600055",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x064654",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa6070c491c16a4972133a61f80f40801b2d631128735f6b28d23e61e32b5a6ec",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L237",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_homestead[fork_Homestead-state_test-gas_shortage_1-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xe4059afc8eb49035d348a93c0e634e435682d874": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x404ce4ea977bcf659b9fcec69731cbb0b3ecf84d": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600173f9c9bb0750a61230879e4abec28761da9153c2156001f2",
+                "storage": {}
+            },
+            "0x404ce4ea977bcf659b9fcec69731cbb0b3ecf94d": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073404ce4ea977bcf659b9fcec69731cbb0b3ecf84d612365f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x404ce4ea977bcf659b9fcec69731cbb0b3ecf94d",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xe4059afc8eb49035d348a93c0e634e435682d874",
+            "secretKey": "0x5b4184cd9528c7e85efe583b404ce4ea977bcf659b9fcec69731cbb0b3ecf84d"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0x0965aa8078ad2c170898a95c231fe0c0b129acc7c8bd68b883870151c852d9a2",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094404ce4ea977bcf659b9fcec69731cbb0b3ecf94d01801ca03af29968e033675211d58cc23a50b22c4590c571c9cbc17e717c16978d5a2860a01d0b1b601176e1d02dd90bd864d3643fddf77e7b7411c242fbd75ea2c95ad3d1",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xe4059afc8eb49035d348a93c0e634e435682d874": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9aa3ed",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x404ce4ea977bcf659b9fcec69731cbb0b3ecf84d": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x6000600060006000600173f9c9bb0750a61230879e4abec28761da9153c2156001f2",
+                            "storage": {}
+                        },
+                        "0x404ce4ea977bcf659b9fcec69731cbb0b3ecf94d": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073404ce4ea977bcf659b9fcec69731cbb0b3ecf84d612365f1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x055c12",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x9f0a1fc5a3668d48cb7c688fbc1c4bba130fcae04ee7cbeef26130ed4097a8a5",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L237",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_homestead[fork_Homestead-state_test-gas_shortage_1-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x1e3aba6d54c1e9693f37065f0b5140a9167457b2": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x97755fd012621fe3c4239e86ad36638953817479": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006001736bf902a592f748b798c6d5388db71a7825047fba6001f1",
+                "storage": {}
+            },
+            "0x97755fd012621fe3c4239e86ad36638953817579": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600060007397755fd012621fe3c4239e86ad3663895381747961850df1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x97755fd012621fe3c4239e86ad36638953817579",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x1e3aba6d54c1e9693f37065f0b5140a9167457b2",
+            "secretKey": "0xbc60f6b532954040c92f960097755fd012621fe3c4239e86ad36638953817479"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0x04fd29cd1a8a85783e3bcca21b3588f195cb04c1fd991e210d1e4deffd6ded0d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a1209497755fd012621fe3c4239e86ad3663895381757901801ca0cf20bf62a833477c23996af11b08c3f732fdaba7f8555d371b7bc512c57c669aa0015c9e5061ce2714edc61b3afb7b508e9d087af41925c453e6628b7a905bb1a6",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x1e3aba6d54c1e9693f37065f0b5140a9167457b2": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de96d35d",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x97755fd012621fe3c4239e86ad36638953817479": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x60006000600060006001736bf902a592f748b798c6d5388db71a7825047fba6001f1",
+                            "storage": {}
+                        },
+                        "0x97755fd012621fe3c4239e86ad36638953817579": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x600060006000600060007397755fd012621fe3c4239e86ad3663895381747961850df1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x092ca2",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xe701811ef2a1cdfe1d39790d143b246cbc272ee3f23c179d8549334647526ea3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L237",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_homestead[fork_Homestead-state_test-gas_shortage_1-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x871db58a598767d4c6bb8661e2c7d3dae6da3895": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x4686fb6545c13616b27190e69920f4663ad66768": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073ee5d66ba6fa877b836ffcc2f8cfdabfad4093db66001f4",
+                "storage": {}
+            },
+            "0x4686fb6545c13616b27190e69920f4663ad66868": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x60006000600060006000734686fb6545c13616b27190e69920f4663ad66768603af1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x4686fb6545c13616b27190e69920f4663ad66868",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x871db58a598767d4c6bb8661e2c7d3dae6da3895",
+            "secretKey": "0xc80f433b9386ca96ac7200074686fb6545c13616b27190e69920f4663ad66768"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0x61c32b834ca284cd0071afed10c28c47dda04d44f2e642e293833460a5e0ca3a",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a120944686fb6545c13616b27190e69920f4663ad6686801801ca038b5d2d602b8c2d988844a7a85992dfd497ce51930a7d81dd8c5c7c1d5c62124a06d3208daaff7027a7588e230015a55ad3ebe333746f49a4be12818062d0e0c80",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x871db58a598767d4c6bb8661e2c7d3dae6da3895": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9c039b",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x4686fb6545c13616b27190e69920f4663ad66768": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073ee5d66ba6fa877b836ffcc2f8cfdabfad4093db66001f4",
+                            "storage": {}
+                        },
+                        "0x4686fb6545c13616b27190e69920f4663ad66868": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x60006000600060006000734686fb6545c13616b27190e69920f4663ad66768603af1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x03fc64",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x6e05e95e00d25d0c86e618a27016c29839caa59fd1bab1bf670c6a290f30be51",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L237",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_homestead[fork_Homestead-state_test-gas_shortage_2-callee_opcode_CALLCODE]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xfc12eb3dbc991fee145d18bf1600cd09c3a8fe0f": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xefaaf58e311ff6f89e07a11b303ff45f313dad69": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600060017340e09aec1a11111f7a4d13abf499558fb6303eb06001f2",
+                "storage": {}
+            },
+            "0xefaaf58e311ff6f89e07a11b303ff45f313dae69": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073efaaf58e311ff6f89e07a11b303ff45f313dad69612364f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xefaaf58e311ff6f89e07a11b303ff45f313dae69",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xfc12eb3dbc991fee145d18bf1600cd09c3a8fe0f",
+            "secretKey": "0x752723fefba4751463ad4cbbefaaf58e311ff6f89e07a11b303ff45f313dad69"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0x39be7176bd5e33bfb135e0709efc5b5df2730d17a8c2f4367089025baed1c22a",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094efaaf58e311ff6f89e07a11b303ff45f313dae6901801ba033205000d86782184ab25a4442aa1764769f5e62dae067b19ba2291f537254c0a00d9fa145d8ccb474f3302e7128d8e8e1e2cd9bd3718fb472749e46323b7000ed",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xfc12eb3dbc991fee145d18bf1600cd09c3a8fe0f": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9aa3f7",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xefaaf58e311ff6f89e07a11b303ff45f313dad69": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600060017340e09aec1a11111f7a4d13abf499558fb6303eb06001f2",
+                            "storage": {}
+                        },
+                        "0xefaaf58e311ff6f89e07a11b303ff45f313dae69": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073efaaf58e311ff6f89e07a11b303ff45f313dad69612364f1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x055c08",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x528841d68d6e18b2bc9244480e17ec30dbec5b624dc519fd782eb7e7b19431cd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L237",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_homestead[fork_Homestead-state_test-gas_shortage_2-callee_opcode_CALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x8a3c8ca4dc5bbe350ee7960799598f38a37a0ffa": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xd2eb28bb9e74e50f2cbbeb763e7a59d9a489ae3d": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600060017375ca04091d8f3bfafbcb060b088953ad1c3974e46001f1",
+                "storage": {}
+            },
+            "0xd2eb28bb9e74e50f2cbbeb763e7a59d9a489af3d": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073d2eb28bb9e74e50f2cbbeb763e7a59d9a489ae3d61850cf1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xd2eb28bb9e74e50f2cbbeb763e7a59d9a489af3d",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x8a3c8ca4dc5bbe350ee7960799598f38a37a0ffa",
+            "secretKey": "0x4835cdf04e21ea84d8e1a1ded2eb28bb9e74e50f2cbbeb763e7a59d9a489ae3d"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0x6ed0ee5d12171491f9cf5766eba2e5f665174126ff97e70973eb7b2eea5e2dac",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094d2eb28bb9e74e50f2cbbeb763e7a59d9a489af3d01801ba0213c9090ad0044369543a8522e5f9f55a39614ace545fe1021a7c8f8221ad47ba0248db7b9bc8b45e115478892d018eb3b512bb2dd45bf0f0314fcdcd9dc31f4df",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8a3c8ca4dc5bbe350ee7960799598f38a37a0ffa": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de96d367",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xd2eb28bb9e74e50f2cbbeb763e7a59d9a489ae3d": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600060017375ca04091d8f3bfafbcb060b088953ad1c3974e46001f1",
+                            "storage": {}
+                        },
+                        "0xd2eb28bb9e74e50f2cbbeb763e7a59d9a489af3d": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073d2eb28bb9e74e50f2cbbeb763e7a59d9a489ae3d61850cf1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x092c98",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x450eae8865d2953b2d3565526e53a1978bcab832e41da699c7fbfd7255e8ab12",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L237",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py::test_value_transfer_gas_calculation_homestead[fork_Homestead-state_test-gas_shortage_2-callee_opcode_DELEGATECALL]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x3236161d473db1a82e8e7d5f4de392d2385dd706": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x333873f8b2f60669c9abfdd6de3b0746bed7971f": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x600060006000600073490e6d0ae34e1e8b1a794f506bf1e4aa2b5276ca6001f4",
+                "storage": {}
+            },
+            "0x333873f8b2f60669c9abfdd6de3b0746bed7981f": {
+                "nonce": "0x01",
+                "balance": "0x03",
+                "code": "0x6000600060006000600073333873f8b2f60669c9abfdd6de3b0746bed7971f6039f1600055",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x333873f8b2f60669c9abfdd6de3b0746bed7981f",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x3236161d473db1a82e8e7d5f4de392d2385dd706",
+            "secretKey": "0x8b6d584a5935ac824f6d8d0d333873f8b2f60669c9abfdd6de3b0746bed7971f"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0xaa624957a22db728fa5170faa8a5bcf7b94e1ff7ea46545b209e78c64ad9b221",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094333873f8b2f60669c9abfdd6de3b0746bed7981f01801ca024df813db4670f6a3cbd6ddebb88c54ddb1589dfcc759bf8ad65f086f021582da073ed4209cf61704cc8d69b802a7406d4f1534c14c28e745b6b89bbf4319d172d",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3236161d473db1a82e8e7d5f4de392d2385dd706": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9c03a5",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x333873f8b2f60669c9abfdd6de3b0746bed7971f": {
+                            "nonce": "0x01",
+                            "balance": "0x03",
+                            "code": "0x600060006000600073490e6d0ae34e1e8b1a794f506bf1e4aa2b5276ca6001f4",
+                            "storage": {}
+                        },
+                        "0x333873f8b2f60669c9abfdd6de3b0746bed7981f": {
+                            "nonce": "0x01",
+                            "balance": "0x04",
+                            "code": "0x6000600060006000600073333873f8b2f60669c9abfdd6de3b0746bed7971f6039f1600055",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x03fc5a",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x78315d940e82563a9463b5911780fe32bc821b0edba37fb859d48b1e80110e7a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests the nested CALL/CALLCODE/DELEGATECALL opcode gas\n    consumption with a positive value transfer.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call_and_callcode_gas_calculation.py#L237",
+            "fixture-format": "state_test"
+        }
+    }
+}

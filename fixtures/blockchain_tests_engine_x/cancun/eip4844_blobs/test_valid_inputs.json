@@ -1,0 +1,242 @@
+{
+    "tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py::test_valid_inputs[fork_Cancun-blockchain_test_engine_x_from_state_test-result_Result.SUCCESS-in_bounds_z]": {
+        "network": "Cancun",
+        "lastblockhash": "0xf5b6749a8a0333e7833030e5a45c7118e77515f24b1ee400b20d830c8813bf8a",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x34f0700d1a8c3802483c577c6db764a740c15e15ae8df0a4a300ea186e8a5972",
+                        "receiptsRoot": "0xc405aaafd22760fcb9bafb77d0835201328135a9ea336b981e9f038ba1a18b14",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x19154",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf5b6749a8a0333e7833030e5a45c7118e77515f24b1ee400b20d830c8813bf8a",
+                        "transactions": [
+                            "0xf90121800a834c4b40945e3e243186bbb09d70a4a31f5fb05d3e29a67f4e80b8c0010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c44401473eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000026a0f5407d7a6f58d7cbc4b1b436ab88e47201f8274b4a4f1cb0b35a890742027825a035ed02a043b757ea0924c0cda7a6100f3d9ca886285d76535be508e0c661f17a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf3e1dd4ea54dadbd83df8a537917591031a3c5264b512196d188d78b25757925",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test valid sanity precompile calls that are expected to succeed.\n\n    - `kzg_commitment` and `kzg_proof` are set to values such that `p(z)==0`\n        for all values of `z`, hence `y` is tested to be zero, and call to be\n        successful.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py#L270",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py::test_valid_inputs[fork_Cancun-blockchain_test_engine_x_from_state_test-result_Result.SUCCESS-mainnet_1]": {
+        "network": "Cancun",
+        "lastblockhash": "0x4160f491113748708f867f5e4580ff19a764bdd35f018d0d027903f27f4e6882",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x483d43508628ef99b351e8ea69290de634d26a04eef23dda0e731eaca0678f00",
+                        "receiptsRoot": "0x8230a44dee36507f3df6c73db76b636aed9c349efc0ddbc823addd04a21d4aa3",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1976c",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4160f491113748708f867f5e4580ff19a764bdd35f018d0d027903f27f4e6882",
+                        "transactions": [
+                            "0xf90121800a834c4b40949ed9ef14fbe1b54eb724c97eb66fe3bba68ad5a680b8c0018156b94fe9735e573bab36dad05d60feb720d424ccd20aaf719343c31e4246019123bcb9d06356701f7be08b4494625b87a7b02edc566126fb81f6306e915f6c2eb1e94c2532935b8465351ba1bd88eabe2b3fa1aadff7d1cd816e8315bd38a9546d41993e10df2a7429b8490394ea9ee62807bae6f326d1044a51581306f58d4b9dfd5931e044688855280ff3799ea2ea83d9391e0ee42e0c650acc7a1f842a7d385189485ddb4fd54ade3d9fd50d608167dca6c776aad4b8ad5c20691bfe25a0a064f393f3c5e495a66aff0747cfe6d44f58e1840e4069349566ccbeacd847dca070ed223c7f6047e29f9f026d24e189c5ec8f2ee3ffcfdb66aba7ebf44494a4f9"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xeb9f208218e94a309ad2de0da52891c083bcf9c2db2b64edcc7ba92d31355b04",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test valid sanity precompile calls that are expected to succeed.\n\n    - `kzg_commitment` and `kzg_proof` are set to values such that `p(z)==0`\n        for all values of `z`, hence `y` is tested to be zero, and call to be\n        successful.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py#L270",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py::test_valid_inputs[fork_Prague-blockchain_test_engine_x_from_state_test-result_Result.SUCCESS-in_bounds_z]": {
+        "network": "Prague",
+        "lastblockhash": "0x7362a0805e2e833314c609d7e3bda91585181d8461ec227b419f885ea7d3ca75",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5093f0ad8f47879e1f3eb39c57fc96f5d08250537847160c54092fd15a652840",
+                        "receiptsRoot": "0xc405aaafd22760fcb9bafb77d0835201328135a9ea336b981e9f038ba1a18b14",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x19154",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x7362a0805e2e833314c609d7e3bda91585181d8461ec227b419f885ea7d3ca75",
+                        "transactions": [
+                            "0xf90121800a834c4b40945e3e243186bbb09d70a4a31f5fb05d3e29a67f4e80b8c0010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c44401473eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000026a0f5407d7a6f58d7cbc4b1b436ab88e47201f8274b4a4f1cb0b35a890742027825a035ed02a043b757ea0924c0cda7a6100f3d9ca886285d76535be508e0c661f17a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x50840a4ca7e4bea462191dd5e0a9b6dc1d417c3023221b8b6f8baf448d50c17a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test valid sanity precompile calls that are expected to succeed.\n\n    - `kzg_commitment` and `kzg_proof` are set to values such that `p(z)==0`\n        for all values of `z`, hence `y` is tested to be zero, and call to be\n        successful.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py#L270",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py::test_valid_inputs[fork_Prague-blockchain_test_engine_x_from_state_test-result_Result.SUCCESS-mainnet_1]": {
+        "network": "Prague",
+        "lastblockhash": "0xcbadbfbbbed66a09d86406897f204cda6a03c85282c550ee96a9a472dcff74ca",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xa9ba531b0c31f7e8077602a9d79fb38fb3f5048e38f7c0c36d5ce7e06f47ce2c",
+                        "receiptsRoot": "0x8230a44dee36507f3df6c73db76b636aed9c349efc0ddbc823addd04a21d4aa3",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1976c",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xcbadbfbbbed66a09d86406897f204cda6a03c85282c550ee96a9a472dcff74ca",
+                        "transactions": [
+                            "0xf90121800a834c4b40949ed9ef14fbe1b54eb724c97eb66fe3bba68ad5a680b8c0018156b94fe9735e573bab36dad05d60feb720d424ccd20aaf719343c31e4246019123bcb9d06356701f7be08b4494625b87a7b02edc566126fb81f6306e915f6c2eb1e94c2532935b8465351ba1bd88eabe2b3fa1aadff7d1cd816e8315bd38a9546d41993e10df2a7429b8490394ea9ee62807bae6f326d1044a51581306f58d4b9dfd5931e044688855280ff3799ea2ea83d9391e0ee42e0c650acc7a1f842a7d385189485ddb4fd54ade3d9fd50d608167dca6c776aad4b8ad5c20691bfe25a0a064f393f3c5e495a66aff0747cfe6d44f58e1840e4069349566ccbeacd847dca070ed223c7f6047e29f9f026d24e189c5ec8f2ee3ffcfdb66aba7ebf44494a4f9"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xcabe0b07adef7201f6818d96229c2d7783ce948eb2ce8dd209a85d9c12f40d49",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test valid sanity precompile calls that are expected to succeed.\n\n    - `kzg_commitment` and `kzg_proof` are set to values such that `p(z)==0`\n        for all values of `z`, hence `y` is tested to be zero, and call to be\n        successful.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py#L270",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    }
+}

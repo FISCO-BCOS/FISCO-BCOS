@@ -1,0 +1,122 @@
+{
+    "tests/cancun/eip1153_tstore/test_tstorage.py::test_transient_storage_unset_values[fork_Cancun-blockchain_test_engine_x_from_state_test]": {
+        "network": "Cancun",
+        "lastblockhash": "0x188071c0c86ef765fb5ab9bbabb9732bc3e410851c505c40ace92ed1c137220e",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc16fa760b2ed31c2a3745a0425f454b44989e7ddff7ce2fb55db9dd67ac827e3",
+                        "receiptsRoot": "0x519e5212b196562963b31744d3553714f018b6e645aea97b4687401a49978770",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x9168",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x188071c0c86ef765fb5ab9bbabb9732bc3e410851c505c40ace92ed1c137220e",
+                        "transactions": [
+                            "0xf860800a830f4240942751b1d0ebadb8e4e33cb62babe4670aa100e049808026a05ee6cfbe3a29794b13c8ffbf6ca0aa3beacce34c2f18ef86a5688a4920e50e2ea031761ef786d8a8ce2807c75cc84794df1875067bddf194c5df442c9b3d923590"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1f91d85140814d536c68eca0ca0c70c5381bee9cd068d4a03cecddf6ca46464d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that tload returns zero for unset values. Loading an arbitrary value\n    is 0 at beginning of transaction: TLOAD(x) is 0.\n\n    Based on\n    [ethereum/tests/.../01_tloadBeginningTxnFiller.yml]\n    (https://github.com/ethereum/tests/blob/\n    9b00b68593f5869eb51a6659e1cc983e875e616b/src/EIPTestsFiller/StateTests/\n    stEIP1153-transientStorage/01_tloadBeginningTxnFiller.yml)\",",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage.py#L34",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage.py::test_transient_storage_unset_values[fork_Prague-blockchain_test_engine_x_from_state_test]": {
+        "network": "Prague",
+        "lastblockhash": "0x391f57913923de2023455dad7aaaf5c6733db72e23af44982dddcbc39db2de77",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x105d92e8e3e238c90afdc9645ac6d4d52defea0e1799804447b760d4fce941a7",
+                        "receiptsRoot": "0x519e5212b196562963b31744d3553714f018b6e645aea97b4687401a49978770",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x9168",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x391f57913923de2023455dad7aaaf5c6733db72e23af44982dddcbc39db2de77",
+                        "transactions": [
+                            "0xf860800a830f4240942751b1d0ebadb8e4e33cb62babe4670aa100e049808026a05ee6cfbe3a29794b13c8ffbf6ca0aa3beacce34c2f18ef86a5688a4920e50e2ea031761ef786d8a8ce2807c75cc84794df1875067bddf194c5df442c9b3d923590"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xed0b91ae5d3060a293e4e6c41c14dcdff87fe36a24f18c2cc46e1ac25ab87169",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test that tload returns zero for unset values. Loading an arbitrary value\n    is 0 at beginning of transaction: TLOAD(x) is 0.\n\n    Based on\n    [ethereum/tests/.../01_tloadBeginningTxnFiller.yml]\n    (https://github.com/ethereum/tests/blob/\n    9b00b68593f5869eb51a6659e1cc983e875e616b/src/EIPTestsFiller/StateTests/\n    stEIP1153-transientStorage/01_tloadBeginningTxnFiller.yml)\",",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage.py#L34",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    }
+}

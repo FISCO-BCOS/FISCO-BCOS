@@ -1,0 +1,1118 @@
+{
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-empty-opcode_CALLDATACOPY]": {
+        "network": "Cancun",
+        "lastblockhash": "0x352b4100810ab96369f71018648b2861942086a9f4cd7e04acecc8858c38211f",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0b37d95c466ce757cccf8d21052ef77d19269f7e5d0fc5ac7c37d80f8ec0537e",
+                        "receiptsRoot": "0xcaedb3349f16dbe45c4b0eaa0a21c0939b6f841eab4e7ad79db9c9a7a13e91f0",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5ab7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x352b4100810ab96369f71018648b2861942086a9f4cd7e04acecc8858c38211f",
+                        "transactions": [
+                            "0x03f886018080078307a120947438dee6d5a27bb4420b90daca5b540acd57833e0180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a057760b78dcf50a8b716c083835228aca226e0a5a52f316ff3b51fbfddca61563a0303d391fa1e534458bc4a2fc0921719b1f579642f1c3a0820df625c76709d4db"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf6336c9c9cc989b97a53a6080388c9bda8c9a4099ea286efcf92f2fcf1d8d1cc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-empty-opcode_CALLDATALOAD]": {
+        "network": "Cancun",
+        "lastblockhash": "0x08db36568496ba321bb84a1d03919636828768f103c69d957aa12b95616c5073",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x08fce3181f708db515bb79ac500afeec666089fbfefde822b9435509ef9bcd73",
+                        "receiptsRoot": "0x92b9b37e879f056258d13f15f2eefe780f041e6a5e5c53ab506c6302295ec369",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa9",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x08db36568496ba321bb84a1d03919636828768f103c69d957aa12b95616c5073",
+                        "transactions": [
+                            "0x03f886018080078307a120946572770a39eaa2ab55deeae14e2e38eff9c4cb190180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a086faca6710ec43330562e6fd1ffa783f1285304a00dc7a6858d669e255f03676a021579bf35e24184e3ab1329882b0d96334ae8751f06b4154682eb5f1bb27fbf4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x66ca82790034f18969a4cda8f197b84874bce4b45317e5aa22d3162464769ebb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-empty-opcode_CALLDATASIZE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x6599ce2fb618bc250f5e1f0217c63fc95903fb4c171a0a9c8ee1d8d68329f258",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1b6fd8ba4c0cc80a2fe097e95bdf5d2b2646243e85a65f74ce1db34e0fb3820a",
+                        "receiptsRoot": "0x177fa2fb1e9167ed2b44e478ba54b39da40523cc985950390a475b658986a486",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x6599ce2fb618bc250f5e1f0217c63fc95903fb4c171a0a9c8ee1d8d68329f258",
+                        "transactions": [
+                            "0x03f886018080078307a1209472387ffda2dc832e34617996cc097276281ed4820180c001e1a0010000000000000000000000000000000000000000000000000000000000000080a08d9d3c784d257b925445c52f97d73d5cc648351900ebf298c93eee05e3eb6568a01242ad354e5c2b23de5d5b68a7028eddc8ee1ceb28c95b17022f1bc9bfe2ba73"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa53b1e0bb53181835d466ce929b8c3fc6557b5d6b09286452f59afbbba905e4c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-single_byte-opcode_CALLDATACOPY]": {
+        "network": "Cancun",
+        "lastblockhash": "0x734a16b1d58b998acf64ddd5e4ce848b2de6d107fea43fee08ace376360c3baf",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4a4b0c2ec3e637d42a87c35aacdb5c709073f5acc3bac64e2c13bbb3720177f0",
+                        "receiptsRoot": "0x863b0aecceb3d1ea64053afd085b45c6b9e3b2fd2bfee7dd053b0bd8b4a34638",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa886",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x734a16b1d58b998acf64ddd5e4ce848b2de6d107fea43fee08ace376360c3baf",
+                        "transactions": [
+                            "0x03f886018080078307a12094605fa68d4ac9d886207fe3e3ecc4cc253e9caf600101c001e1a0010000000000000000000000000000000000000000000000000000000000000001a067b2ed80dee913d65f8819e07faa4cacab2476b306937249d4dd61a811781c43a042bce3f359ddec95707764d6239ca00cfe5a790a862f4266492adfd327097200"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7c64ece102f5da9897b0058206979829179889ff19e62f42db37155881285123",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-single_byte-opcode_CALLDATALOAD]": {
+        "network": "Cancun",
+        "lastblockhash": "0xc320d0d84e1ac0ec2d1764c1768383f3a04a7910c6b4bfd7a01565e7f85de7df",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xac245a77fb80f02e0a4d74ab85dde67c2acc1f61e1cf3fdb1cdd7b13e07a62c1",
+                        "receiptsRoot": "0x4b0345772e0a2f0d4fa4364185b526c10ef53a4b0360a48752cb88fc11af3ebf",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa875",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0xc320d0d84e1ac0ec2d1764c1768383f3a04a7910c6b4bfd7a01565e7f85de7df",
+                        "transactions": [
+                            "0x03f886018080078307a12094637902479f6c2503c2449d6d665b7b2809de46e00101c001e1a0010000000000000000000000000000000000000000000000000000000000000080a0fce7e1b806a97cb316ca93ae03f441ba52efc33eb482cb3d1167af890ac2ada4a049615e95fd58a351439a514b976dde81acd2ec0133a1ea6a60de3cac9b870e0e"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x886ed1a62a649d68f46c99f6879c4a3d78d9d6d6a2241b4bf703bdc0175c0f87",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-single_byte-opcode_CALLDATASIZE]": {
+        "network": "Cancun",
+        "lastblockhash": "0x5fc272a269bd26243fddd0cf228e9a881e297297a0690ece219f3f1d10423563",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x699cebcf0061e4f749c2c6f0d487e0150e336a5566fe3493e46b0151ac6bcb54",
+                        "receiptsRoot": "0x606dab7ada4d0260b57d39ead97173042a2fcba3bb34fd4f70e8be0e7b443a0f",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa871",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x5fc272a269bd26243fddd0cf228e9a881e297297a0690ece219f3f1d10423563",
+                        "transactions": [
+                            "0x03f886018080078307a12094cefaf1319b636daabd523e296eecac0de9a5c3eb0101c001e1a0010000000000000000000000000000000000000000000000000000000000000080a047ba4dcf913f3c43eb45bb3c9e5fbc8bcf949e2a878e4277e881c72cb3fafa5ea0315fb9d9a2ceb9d683cac9904897e48bd1c448336a139fb52693a8f44b4e5e99"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x91510d1ab964680f20f9a024588de7d1bf5d393079f9e2b25f74c61c88399df0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-word-opcode_CALLDATACOPY]": {
+        "network": "Cancun",
+        "lastblockhash": "0xabc85d3b83926257d2a184c0b1724b11a232f86fa139a8820fd46541df88b5fd",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9f397b10ff3dcb2669716dd2db24ed98baa6d06870e0c4b1069b686e64cc8505",
+                        "receiptsRoot": "0xe752136b4f946affd0d55ab477f296ea537d8691d44596c6c2e60fd168a9e931",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa9b6",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0xabc85d3b83926257d2a184c0b1724b11a232f86fa139a8820fd46541df88b5fd",
+                        "transactions": [
+                            "0x03f8a6018080078307a1209484ddea96a8398036f31f29a46369b9e5b91bbfbd01a00001000100010001000100010001000100010001000100010001000100010001c001e1a0010000000000000000000000000000000000000000000000000000000000000001a0fe33046761a93031f5de1d8eb2ae68d462b257e196946ac150bd2f2c2fe1cfb7a0224ea93dcaa61380f9329105c45626969f5b6d755fcb555cdac56b3c0163ef9a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x67c5646d1999ea44e69c48f9da5ea6ac1a2e867f44e5008457057d6414e4008a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-word-opcode_CALLDATALOAD]": {
+        "network": "Cancun",
+        "lastblockhash": "0xe09197eec5de79c80de6eb58e02be53ab90bc0706b9cbef98958b7cc9a97b66c",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe9318ae2466e97de16a8abf9eb7d7f97f8a2dddd8dd4ec29ea04b4c5af174e51",
+                        "receiptsRoot": "0x8bf4295ae61d13b33f667f112075ba2ae027fb4c6da10dcc1318fc9912e9d624",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa9a5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0xe09197eec5de79c80de6eb58e02be53ab90bc0706b9cbef98958b7cc9a97b66c",
+                        "transactions": [
+                            "0x03f8a6018080078307a12094b82fc576de066ba3c4eb304670f1e164b310acd301a00001000100010001000100010001000100010001000100010001000100010001c001e1a0010000000000000000000000000000000000000000000000000000000000000080a010ff9c0d02d253133067dfc00e4a8e1fda853404b95661cc51f0169f3de6f9caa04906d7268ddb94005eb32cc6730a3b5471741f417b9a6e42c0b6a192fae9d821"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xbef5a6c6e0cdfdafcdfe83d6367096de9b2154ea3ba76dca1ee88d4651a9dd75",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Cancun-blockchain_test_engine_x_from_state_test-tx_gas_500000-word-opcode_CALLDATASIZE]": {
+        "network": "Cancun",
+        "lastblockhash": "0xa4cd119ef3b3e2ce516905b6f7867e92e429a5f2f6b36b553daac11997debc1a",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x36046425469445e7cd7996c436ff62df92b2aa857790054e030c9ae9312d5c13",
+                        "receiptsRoot": "0x92484b6a6d6d4f6c5f7c6769cd24aa7af266e9eac029394bf7d1524adecc62bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa9a1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0xa4cd119ef3b3e2ce516905b6f7867e92e429a5f2f6b36b553daac11997debc1a",
+                        "transactions": [
+                            "0x03f8a6018080078307a1209436ca08827ee953a88ef2e89db26713e9d958725601a00001000100010001000100010001000100010001000100010001000100010001c001e1a0010000000000000000000000000000000000000000000000000000000000000001a0866eac43e8d4d19f2a743191ed095c830aa3f8c77576b1e8842b3fce07f7d3e2a06cafc0f4c2fd51588c14ecee0abe715a0152f715572566defe6faf3e0e4def01"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6bf478c6c653ff88d78d7d1b2e9306961d4bf24ed205f236521e2e7a5599fb87",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-empty-opcode_CALLDATACOPY]": {
+        "network": "Prague",
+        "lastblockhash": "0x0d3c3c4c9ad44a92d3662aec57ef1ac6e8071678b828cffcf84899b4a4b53952",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1bd72b9159c44a7ac48b00c24bbf0f6df808e0ba1cd9ead0230c80ee7c55fe0b",
+                        "receiptsRoot": "0xcaedb3349f16dbe45c4b0eaa0a21c0939b6f841eab4e7ad79db9c9a7a13e91f0",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5ab7",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x0d3c3c4c9ad44a92d3662aec57ef1ac6e8071678b828cffcf84899b4a4b53952",
+                        "transactions": [
+                            "0x03f886018080078307a120947438dee6d5a27bb4420b90daca5b540acd57833e0180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a057760b78dcf50a8b716c083835228aca226e0a5a52f316ff3b51fbfddca61563a0303d391fa1e534458bc4a2fc0921719b1f579642f1c3a0820df625c76709d4db"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xef7eefaa4e131b16d06e76315bbd253a87e765b1af35328592567528237c1e63",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-empty-opcode_CALLDATALOAD]": {
+        "network": "Prague",
+        "lastblockhash": "0x7e3912ba8b0b2c97360078ba3dad18f1ad64d6e0d6315fbc48d426813c8b88f6",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1a507a77251a5fbd64677b89d5731bfc819418b3a5a93ffd0bd364e1e65cebd3",
+                        "receiptsRoot": "0x92b9b37e879f056258d13f15f2eefe780f041e6a5e5c53ab506c6302295ec369",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa9",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x7e3912ba8b0b2c97360078ba3dad18f1ad64d6e0d6315fbc48d426813c8b88f6",
+                        "transactions": [
+                            "0x03f886018080078307a120946572770a39eaa2ab55deeae14e2e38eff9c4cb190180c001e1a0010000000000000000000000000000000000000000000000000000000000000001a086faca6710ec43330562e6fd1ffa783f1285304a00dc7a6858d669e255f03676a021579bf35e24184e3ab1329882b0d96334ae8751f06b4154682eb5f1bb27fbf4"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x215a579492b589bf530777b0ea4ef6ab31db98f52969174f944e8cf882f4da24",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-empty-opcode_CALLDATASIZE]": {
+        "network": "Prague",
+        "lastblockhash": "0x01c5c8bcfab2a8be8078d9ae2a5fca283b12160bae3c4d423b5415436e280d1b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3e247332c6af6fa45f018fb4e699594738d644e92e0fc2d5415e476b706e6cbe",
+                        "receiptsRoot": "0x177fa2fb1e9167ed2b44e478ba54b39da40523cc985950390a475b658986a486",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5aa5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x01c5c8bcfab2a8be8078d9ae2a5fca283b12160bae3c4d423b5415436e280d1b",
+                        "transactions": [
+                            "0x03f886018080078307a1209472387ffda2dc832e34617996cc097276281ed4820180c001e1a0010000000000000000000000000000000000000000000000000000000000000080a08d9d3c784d257b925445c52f97d73d5cc648351900ebf298c93eee05e3eb6568a01242ad354e5c2b23de5d5b68a7028eddc8ee1ceb28c95b17022f1bc9bfe2ba73"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xfbe81c5f2eceeaf1873799664149c614bae983f6cbe4fe73364e40cba245aac6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-single_byte-opcode_CALLDATACOPY]": {
+        "network": "Prague",
+        "lastblockhash": "0x7805cd5860f9af630ae6f9584414fc1a7567a2c7aab8b44e2365c677c77f2090",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4d4331267610845b7db6e755ed169d80ae2840096f057fa8ddb6de246dcdd4bb",
+                        "receiptsRoot": "0x863b0aecceb3d1ea64053afd085b45c6b9e3b2fd2bfee7dd053b0bd8b4a34638",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa886",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x7805cd5860f9af630ae6f9584414fc1a7567a2c7aab8b44e2365c677c77f2090",
+                        "transactions": [
+                            "0x03f886018080078307a12094605fa68d4ac9d886207fe3e3ecc4cc253e9caf600101c001e1a0010000000000000000000000000000000000000000000000000000000000000001a067b2ed80dee913d65f8819e07faa4cacab2476b306937249d4dd61a811781c43a042bce3f359ddec95707764d6239ca00cfe5a790a862f4266492adfd327097200"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2e09a15859389b3a6495e3ea65472c113558a13be718db45ffea0c8d6a31f135",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-single_byte-opcode_CALLDATALOAD]": {
+        "network": "Prague",
+        "lastblockhash": "0x50afaf6bc8069390fcc1af1b85fdb6ebd390475dc93a12e6809ba0201e2acfcb",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x5b1fe4da5f481f4d5877121fc9915ebe2af809859c27c3ac9c3f24229d74e3c8",
+                        "receiptsRoot": "0x4b0345772e0a2f0d4fa4364185b526c10ef53a4b0360a48752cb88fc11af3ebf",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa875",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x50afaf6bc8069390fcc1af1b85fdb6ebd390475dc93a12e6809ba0201e2acfcb",
+                        "transactions": [
+                            "0x03f886018080078307a12094637902479f6c2503c2449d6d665b7b2809de46e00101c001e1a0010000000000000000000000000000000000000000000000000000000000000080a0fce7e1b806a97cb316ca93ae03f441ba52efc33eb482cb3d1167af890ac2ada4a049615e95fd58a351439a514b976dde81acd2ec0133a1ea6a60de3cac9b870e0e"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xc92305bdc8fca1feacbda984ea7b34a273b3cc41249b4bea2a93b0c2618b0c1d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-single_byte-opcode_CALLDATASIZE]": {
+        "network": "Prague",
+        "lastblockhash": "0xe89174628a5473f637bea24b06927be3351583eb56330cd61737281fc72f45ca",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x1196298875a61e30af5b2cd88efa764bebafce72c0d1939404a40825016a2767",
+                        "receiptsRoot": "0x606dab7ada4d0260b57d39ead97173042a2fcba3bb34fd4f70e8be0e7b443a0f",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa871",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0xe89174628a5473f637bea24b06927be3351583eb56330cd61737281fc72f45ca",
+                        "transactions": [
+                            "0x03f886018080078307a12094cefaf1319b636daabd523e296eecac0de9a5c3eb0101c001e1a0010000000000000000000000000000000000000000000000000000000000000080a047ba4dcf913f3c43eb45bb3c9e5fbc8bcf949e2a878e4277e881c72cb3fafa5ea0315fb9d9a2ceb9d683cac9904897e48bd1c448336a139fb52693a8f44b4e5e99"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x719b46a9e02b16a9d7e8becbe25f52fa7c2118c76c2b22c0fa4b5b836b6b802b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-word-opcode_CALLDATACOPY]": {
+        "network": "Prague",
+        "lastblockhash": "0xac24df3578d7812bc7c472e05e864da76162078baa91b2948d082feb4b4adab8",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8cf7576e291a912a8cadad662ce7703bdf2c8427fceef57ec60a5f927db2000d",
+                        "receiptsRoot": "0xe752136b4f946affd0d55ab477f296ea537d8691d44596c6c2e60fd168a9e931",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa9b6",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0xac24df3578d7812bc7c472e05e864da76162078baa91b2948d082feb4b4adab8",
+                        "transactions": [
+                            "0x03f8a6018080078307a1209484ddea96a8398036f31f29a46369b9e5b91bbfbd01a00001000100010001000100010001000100010001000100010001000100010001c001e1a0010000000000000000000000000000000000000000000000000000000000000001a0fe33046761a93031f5de1d8eb2ae68d462b257e196946ac150bd2f2c2fe1cfb7a0224ea93dcaa61380f9329105c45626969f5b6d755fcb555cdac56b3c0163ef9a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x02ffde8c8a9de09effc020c1cb2931faeb30119ada51c329ea14535cba2963c1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-word-opcode_CALLDATALOAD]": {
+        "network": "Prague",
+        "lastblockhash": "0xe2471b62b8a23a965244254aad43f16b443ef9f8229e5285cdd25f78b070fef7",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc67bbfb293da7677faee2acec70fd7edf75f160534a84376966e353c64774fb0",
+                        "receiptsRoot": "0x8bf4295ae61d13b33f667f112075ba2ae027fb4c6da10dcc1318fc9912e9d624",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa9a5",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0xe2471b62b8a23a965244254aad43f16b443ef9f8229e5285cdd25f78b070fef7",
+                        "transactions": [
+                            "0x03f8a6018080078307a12094b82fc576de066ba3c4eb304670f1e164b310acd301a00001000100010001000100010001000100010001000100010001000100010001c001e1a0010000000000000000000000000000000000000000000000000000000000000080a010ff9c0d02d253133067dfc00e4a8e1fda853404b95661cc51f0169f3de6f9caa04906d7268ddb94005eb32cc6730a3b5471741f417b9a6e42c0b6a192fae9d821"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xaa16df6e66bc7ff312527c442e8b738e779bb4f3787d66f29896d1ef4733cf49",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_blob_tx_attribute_calldata_opcodes[fork_Prague-blockchain_test_engine_x_from_state_test-tx_gas_500000-word-opcode_CALLDATASIZE]": {
+        "network": "Prague",
+        "lastblockhash": "0x709b80655577e6c4ec41529495b169f1ebb8ffdac5377eed7843e53b75c744ae",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3b971b881f14b095bc06237935bef3310c6f1fa4f71990c6c886c3e832fe54cb",
+                        "receiptsRoot": "0x92484b6a6d6d4f6c5f7c6769cd24aa7af266e9eac029394bf7d1524adecc62bc",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa9a1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x709b80655577e6c4ec41529495b169f1ebb8ffdac5377eed7843e53b75c744ae",
+                        "transactions": [
+                            "0x03f8a6018080078307a1209436ca08827ee953a88ef2e89db26713e9d958725601a00001000100010001000100010001000100010001000100010001000100010001c001e1a0010000000000000000000000000000000000000000000000000000000000000001a0866eac43e8d4d19f2a743191ed095c830aa3f8c77576b1e8842b3fce07f7d3e2a06cafc0f4c2fd51588c14ecee0abe715a0152f715572566defe6faf3e0e4def01"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa0bb015611efc4efdc2384bd39f4fb597896a6a86aefd13f30bdd4a8afdc9b4c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calldata related opcodes to verify their behavior is not affected by\n    blobs.\n\n    - CALLDATALOAD\n    - CALLDATASIZE\n    - CALLDATACOPY",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1293",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    }
+}

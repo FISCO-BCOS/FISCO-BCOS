@@ -1,0 +1,128 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_address_and_authority_warm_state[fork_Prague-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-call_authority_first_then_set_code_address]": {
+        "network": "Prague",
+        "lastblockhash": "0xbcdadbb7fe1a779f4de48262e64115a1ea7b1535d6165c22ac9fe61c1868e84c",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbb39c9296385beec035507b912703ddcd78f6a704f107caa00831b7e1b9f50d4",
+                        "receiptsRoot": "0x47a8940db6ae9d0680ad2cf3d810dfe1254a1dfd76d008bae1e1210939af38af",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c200",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xbcdadbb7fe1a779f4de48262e64115a1ea7b1535d6165c22ac9fe61c1868e84c",
+                        "transactions": [
+                            "0x04f8c101808007830f42409423e6502420e57168050b65938b8d5e7066c990118080c0f85cf85a809423e6502420e57168050b65938b8d5e7066c98f118001a04abc4d5ec2310f41e5c6805b125e11f0cbca4827327218a467b3d2c7ed93f75fa073d60188712b88478fb95089f603703a862b0771d9a8b562401c665543fb9da801a0e2466f5e1d82954fbf9cf4208bbabeb0c7f76235456fa7ba61a105018a4a5671a04e84487a7a6051f0a37a7d4feb9c840157f79593ea6098f3994781d30550e2eb"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x0ab6a73b81397ae8e660c1c4f4125923e0d09be20636978d795603431db762f1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test set to code address and authority warm status after a call to\n    authority address, or vice-versa.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1276",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_address_and_authority_warm_state[fork_Prague-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-call_set_code_address_first_then_authority]": {
+        "network": "Prague",
+        "lastblockhash": "0xb70d97629cef40957728efe34a94af937c668fd0115d600f27ed5bda9ae30923",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x2e044f7ab657aff12cc1147c208325f6a562e595f7a98e7c0a9bf18ff5f7aad1",
+                        "receiptsRoot": "0x47a8940db6ae9d0680ad2cf3d810dfe1254a1dfd76d008bae1e1210939af38af",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c200",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb70d97629cef40957728efe34a94af937c668fd0115d600f27ed5bda9ae30923",
+                        "transactions": [
+                            "0x04f8c101808007830f424094f4df6db48f0841bb07bc4f223b50a7ada47773d78080c0f85cf85a8094f4df6db48f0841bb07bc4f223b50a7ada47772d78080a06913b287def868a9dd14ede2ca51e4b264f982360f8f26879b9bc42c81eb96cea048f9e7b91fa0fd87c415ada7904429bdb31e66c077b2e76e22ef366d2f66e86601a040fa534c3533e72368eb721e50a4203991abc4a2324527ba85d582bc0a903875a01d2162384bbef3c43de653b7ed8b0269143609ca42b19cca196d4ce77a8689b2"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xcbf255b17bc471bfc0bf5b9dc59083cd647bb87218a2f46c5bd76d9b68ccbb75",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test set to code address and authority warm status after a call to\n    authority address, or vice-versa.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L1276",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

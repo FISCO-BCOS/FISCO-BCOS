@@ -1,0 +1,494 @@
+{
+    "tests/frontier/touch/test_touch.py::test_zero_gas_price_and_touching[fork_Berlin-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x00",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xcc6872e307074e29d88504ef9cc7cc22c0310bba",
+            "secretKey": "0x58312a146c50fac52837aa1f30e2c29a12092a510c50bcdba5d7b2de7c8bc840"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0xe475c3ef3ac00e3f080a340ccb9cca461f0dcff576c014f8c39b64367c7d3396",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf86080808307a1209430e2c29a12092a510c50bcdba5d7b2de7c8bc84080801ba023163f1a56b14d36c5430c91decfcaf77dd7dbff4420b8f162a4a55a15edd667a07b60135d2afc503810ffd2efdc02f88d8a0f2c2a366ae4fe8804bf586deb7092",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x6b3ca34df43a0832ee63c35886be18009893bb0e170ccf73c8efc889fadd8cb3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a zero gasprice transaction in early forks respects\n    account touching rules.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/touch/test_touch.py#L14",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/touch/test_touch.py::test_zero_gas_price_and_touching[fork_Byzantium-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x00",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xcc6872e307074e29d88504ef9cc7cc22c0310bba",
+            "secretKey": "0x58312a146c50fac52837aa1f30e2c29a12092a510c50bcdba5d7b2de7c8bc840"
+        },
+        "post": {
+            "Byzantium": [
+                {
+                    "hash": "0xe475c3ef3ac00e3f080a340ccb9cca461f0dcff576c014f8c39b64367c7d3396",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf86080808307a1209430e2c29a12092a510c50bcdba5d7b2de7c8bc84080801ba023163f1a56b14d36c5430c91decfcaf77dd7dbff4420b8f162a4a55a15edd667a07b60135d2afc503810ffd2efdc02f88d8a0f2c2a366ae4fe8804bf586deb7092",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x4933b7656ca424eaf289c60afc7e67cfb51870ad4da7b912bbcba237b7084843",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a zero gasprice transaction in early forks respects\n    account touching rules.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/touch/test_touch.py#L14",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/touch/test_touch.py::test_zero_gas_price_and_touching[fork_ConstantinopleFix-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x00",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xcc6872e307074e29d88504ef9cc7cc22c0310bba",
+            "secretKey": "0x58312a146c50fac52837aa1f30e2c29a12092a510c50bcdba5d7b2de7c8bc840"
+        },
+        "post": {
+            "ConstantinopleFix": [
+                {
+                    "hash": "0xe475c3ef3ac00e3f080a340ccb9cca461f0dcff576c014f8c39b64367c7d3396",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf86080808307a1209430e2c29a12092a510c50bcdba5d7b2de7c8bc84080801ba023163f1a56b14d36c5430c91decfcaf77dd7dbff4420b8f162a4a55a15edd667a07b60135d2afc503810ffd2efdc02f88d8a0f2c2a366ae4fe8804bf586deb7092",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xd71d955ff20644806c9aa757ec84134edb2e266519564f2d376024ef82c21021",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a zero gasprice transaction in early forks respects\n    account touching rules.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/touch/test_touch.py#L14",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/touch/test_touch.py::test_zero_gas_price_and_touching[fork_Frontier-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x00",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xcc6872e307074e29d88504ef9cc7cc22c0310bba",
+            "secretKey": "0x58312a146c50fac52837aa1f30e2c29a12092a510c50bcdba5d7b2de7c8bc840"
+        },
+        "post": {
+            "Frontier": [
+                {
+                    "hash": "0x86d5ed0de01cab2622b7d441cc3662d5289a4f008de0585f1def99ebe7dff479",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf86080808307a1209430e2c29a12092a510c50bcdba5d7b2de7c8bc84080801ba023163f1a56b14d36c5430c91decfcaf77dd7dbff4420b8f162a4a55a15edd667a07b60135d2afc503810ffd2efdc02f88d8a0f2c2a366ae4fe8804bf586deb7092",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x52f18a3c458f19f543f2f9ef1b1f2107a312b1b3e4b9cf03058c3e0e49712716",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a zero gasprice transaction in early forks respects\n    account touching rules.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/touch/test_touch.py#L14",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/touch/test_touch.py::test_zero_gas_price_and_touching[fork_Homestead-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x00",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xcc6872e307074e29d88504ef9cc7cc22c0310bba",
+            "secretKey": "0x58312a146c50fac52837aa1f30e2c29a12092a510c50bcdba5d7b2de7c8bc840"
+        },
+        "post": {
+            "Homestead": [
+                {
+                    "hash": "0x86d5ed0de01cab2622b7d441cc3662d5289a4f008de0585f1def99ebe7dff479",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf86080808307a1209430e2c29a12092a510c50bcdba5d7b2de7c8bc84080801ba023163f1a56b14d36c5430c91decfcaf77dd7dbff4420b8f162a4a55a15edd667a07b60135d2afc503810ffd2efdc02f88d8a0f2c2a366ae4fe8804bf586deb7092",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x00",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xd89403df1b4547cddd216c008788c26cd8ba065717ab44c045fc5680911c6485",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a zero gasprice transaction in early forks respects\n    account touching rules.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/touch/test_touch.py#L14",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/touch/test_touch.py::test_zero_gas_price_and_touching[fork_Istanbul-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x00",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xcc6872e307074e29d88504ef9cc7cc22c0310bba",
+            "secretKey": "0x58312a146c50fac52837aa1f30e2c29a12092a510c50bcdba5d7b2de7c8bc840"
+        },
+        "post": {
+            "Istanbul": [
+                {
+                    "hash": "0xe475c3ef3ac00e3f080a340ccb9cca461f0dcff576c014f8c39b64367c7d3396",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf86080808307a1209430e2c29a12092a510c50bcdba5d7b2de7c8bc84080801ba023163f1a56b14d36c5430c91decfcaf77dd7dbff4420b8f162a4a55a15edd667a07b60135d2afc503810ffd2efdc02f88d8a0f2c2a366ae4fe8804bf586deb7092",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xcc6872e307074e29d88504ef9cc7cc22c0310bba": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x30e2c29a12092a510c50bcdba5d7b2de7c8bc840": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600160005500",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x226dc964be0fbea7d1a163087fe18e620f1c2c7a57209efe1da68f52f817ab78",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test sending a zero gasprice transaction in early forks respects\n    account touching rules.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/touch/test_touch.py#L14",
+            "fixture-format": "state_test"
+        }
+    }
+}

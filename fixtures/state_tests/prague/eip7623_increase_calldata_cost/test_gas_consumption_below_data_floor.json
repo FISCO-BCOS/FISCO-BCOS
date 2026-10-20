@@ -1,0 +1,627 @@
+{
+    "tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py::TestGasConsumptionBelowDataFloor::test_gas_consumption_below_data_floor[fork_Prague-state_test-exact_gas-type_0_protected]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x70088a8d5bbab6e116b08378c5101d17429539ff": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xe7ecff9e84792581f355b6a464037db91a369450": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5b5b5b5b5b00",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x5212"
+            ],
+            "to": "0xe7ecff9e84792581f355b6a464037db91a369450",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "sender": "0x70088a8d5bbab6e116b08378c5101d17429539ff",
+            "secretKey": "0xe45b2a1a32b76361cf0430b8e7ecff9e84792581f355b6a464037db91a369450"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x04576c145e1596f2faa4ccbb6e6e76bf354f385cf849ab2248df21bb8053e7d7",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf85f800a82521294e7ecff9e84792581f355b6a464037db91a369450800026a00d963981b0567b94ef1513de3a551113dd9729d81a5be68ef0060169453a1f21a05e0bfcd4997e53b1c724951d4ce8a64975e8a937fb87649cadf9996059452a92",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x70088a8d5bbab6e116b08378c5101d17429539ff": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9ccb4c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xe7ecff9e84792581f355b6a464037db91a369450": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5b5b5b5b5b00",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0xf636",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xef9c7adffc0c534629dacbca2b249669cfc706aff8cba0ad79ccdc266f3caebd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\nTest gas consumption barely below the floor data cost (1 gas below).\n\n\n        Test executing a transaction that almost consumes the floor data cost.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py#L136",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7623.md",
+            "reference-spec-version": "744f2075ba5deee9c1040eb089104d55bd89960d"
+        }
+    },
+    "tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py::TestGasConsumptionBelowDataFloor::test_gas_consumption_below_data_floor[fork_Prague-state_test-exact_gas-type_0_unprotected]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xf6323669d5cbcfc02f3f98ace5aefdf6b0e57831": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x064d9a4110e2f70c9aa1d8df20049adfa4ce5dc9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5b5b5b5b5b00",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x5212"
+            ],
+            "to": "0x064d9a4110e2f70c9aa1d8df20049adfa4ce5dc9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "sender": "0xf6323669d5cbcfc02f3f98ace5aefdf6b0e57831",
+            "secretKey": "0xe594526c716175042af3b4c3064d9a4110e2f70c9aa1d8df20049adfa4ce5dc9"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x8673dc512102f814ec644cd75b3c1765c751599a7f65270b5090a7fb096c5682",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf85f800a82521294064d9a4110e2f70c9aa1d8df20049adfa4ce5dc980001ca040a133022cb749511df63e7aaf86076be27d915d3f21da3b5705e8214aa304bda01f772208122ee40b72ea9851ce57dbcbfc8004b89611998e35383f3301787f18",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xf6323669d5cbcfc02f3f98ace5aefdf6b0e57831": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9ccb4c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x064d9a4110e2f70c9aa1d8df20049adfa4ce5dc9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5b5b5b5b5b00",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0xf636",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1452e4901befff5a73090328777cc66fba63f05c0bcd30774e4878197d0b39bc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\nTest gas consumption barely below the floor data cost (1 gas below).\n\n\n        Test executing a transaction that almost consumes the floor data cost.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py#L136",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7623.md",
+            "reference-spec-version": "744f2075ba5deee9c1040eb089104d55bd89960d"
+        }
+    },
+    "tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py::TestGasConsumptionBelowDataFloor::test_gas_consumption_below_data_floor[fork_Prague-state_test-exact_gas-type_1]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xb3d967de450f05d199bf0ddf2c9bd382176ff474": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xbcf33808e19ae87d270be6f75cfd7ca5c025fdc5": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5b5b5b5b5b00",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x5212"
+            ],
+            "to": "0xbcf33808e19ae87d270be6f75cfd7ca5c025fdc5",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0xb3d967de450f05d199bf0ddf2c9bd382176ff474",
+            "secretKey": "0xc52478418ec6b7b028ff5552bcf33808e19ae87d270be6f75cfd7ca5c025fdc5"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x7df57706c62b423df1e0a544f354fdb133f6be3731e64005dc3ffaf95f6b0d25",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x01f86101800a82521294bcf33808e19ae87d270be6f75cfd7ca5c025fdc58000c001a01750a4920f0409579f3eb279a219d8109fcd3ef226a0b7379bcbe91df6644f5ca049c3af18be22df063d8579ca82c018c23809b8bd60a758a9488b3b7707a179e3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xb3d967de450f05d199bf0ddf2c9bd382176ff474": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9ccb4c",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xbcf33808e19ae87d270be6f75cfd7ca5c025fdc5": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5b5b5b5b5b00",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0xf636",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x415fc7e17d2b6a3883beb8abc633647c6014efaf9826931248254018e775d499",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\nTest gas consumption barely below the floor data cost (1 gas below).\n\n\n        Test executing a transaction that almost consumes the floor data cost.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py#L136",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7623.md",
+            "reference-spec-version": "744f2075ba5deee9c1040eb089104d55bd89960d"
+        }
+    },
+    "tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py::TestGasConsumptionBelowDataFloor::test_gas_consumption_below_data_floor[fork_Prague-state_test-exact_gas-type_2]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x8db529a149ef34859fef6e0e195c19f5015745c8": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x0694f579792e00af8ff2606c7007db64082da3e2": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5b5b5b5b5b00",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x5212"
+            ],
+            "to": "0x0694f579792e00af8ff2606c7007db64082da3e2",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "sender": "0x8db529a149ef34859fef6e0e195c19f5015745c8",
+            "secretKey": "0x8dfdc28973b8e68ed4681de50694f579792e00af8ff2606c7007db64082da3e2"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xf930fa2cfb6517ec24a280f6835799ecc1e3eb87bf6158e5160229b7735fa654",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x02f86201808007825212940694f579792e00af8ff2606c7007db64082da3e28000c001a07c3c6e8eb5469fae67994adbf3aa5edec8ac276031c0babf1a80aa4af1c36fe5a025dacdccd766bdb2cfcecb086973e69129b70ef97abc1428bd32efbb5ea12dc3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x8db529a149ef34859fef6e0e195c19f5015745c8": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9dc182",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x0694f579792e00af8ff2606c7007db64082da3e2": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5b5b5b5b5b00",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xbf913f48a877f7e0f841e0dd02a9f71a1dfaf112cf3f563bcff8c212f0180767",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\nTest gas consumption barely below the floor data cost (1 gas below).\n\n\n        Test executing a transaction that almost consumes the floor data cost.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py#L136",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7623.md",
+            "reference-spec-version": "744f2075ba5deee9c1040eb089104d55bd89960d"
+        }
+    },
+    "tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py::TestGasConsumptionBelowDataFloor::test_gas_consumption_below_data_floor[fork_Prague-state_test-exact_gas-type_3]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x3c8dc13cf0d55b135de5d9f86a928f716cfe1faa": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x979adbebef750df926aa9d03271caeb5f2ef93d6": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5b5b5b5b5b00",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x5212"
+            ],
+            "to": "0x979adbebef750df926aa9d03271caeb5f2ef93d6",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x00"
+            ],
+            "accessLists": [
+                []
+            ],
+            "maxFeePerBlobGas": "0x01",
+            "blobVersionedHashes": [
+                "0x0100000000000000000000000000000000000000000000000000000000000001"
+            ],
+            "sender": "0x3c8dc13cf0d55b135de5d9f86a928f716cfe1faa",
+            "secretKey": "0x41f0ad28b439d247ff4cf74f979adbebef750df926aa9d03271caeb5f2ef93d6"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x2891c33272bfc6814c3075966452693d49bf92283c16436d1d8c26b9ffb2f7a3",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x03f8850180800782521294979adbebef750df926aa9d03271caeb5f2ef93d68000c001e1a0010000000000000000000000000000000000000000000000000000000000000101a0a43a0c1499a00963fc6740b8998a9c7acb0509d4e41a17762ede20d7a4384b0da07283ef8b8c68010de2b17780edff1f7bd4390fe45f7013c23fd3995b0c641edd",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3c8dc13cf0d55b135de5d9f86a928f716cfe1faa": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9bc182",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x979adbebef750df926aa9d03271caeb5f2ef93d6": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5b5b5b5b5b00",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1aacd99a8d1532b48784d7e56d1d62e7b52dd462e88c675b42474b3af2b86c59",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\nTest gas consumption barely below the floor data cost (1 gas below).\n\n\n        Test executing a transaction that almost consumes the floor data cost.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py#L136",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7623.md",
+            "reference-spec-version": "744f2075ba5deee9c1040eb089104d55bd89960d"
+        }
+    },
+    "tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py::TestGasConsumptionBelowDataFloor::test_gas_consumption_below_data_floor[fork_Prague-state_test-exact_gas-type_4]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x2d597f3494841b04d3c8233b2d4d2dfd8995abe4": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xddf7395f09b5004c58269930b4772c368b5ed6b7": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5b00",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0xf4ce"
+            ],
+            "to": "0xddf7395f09b5004c58269930b4772c368b5ed6b7",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101000000"
+            ],
+            "accessLists": [
+                []
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x00",
+                    "address": "0x0000000000000000000000000000000000000001",
+                    "nonce": "0x00",
+                    "v": "0x01",
+                    "r": "0xc513dc0b3effcb3546778cded39e793cf436b135b9f4a2a02e94b38de2477eee",
+                    "s": "0x7be8842c73d2f106568b7efa584cb4750af17db1b2040d01cc2581f30b45e845",
+                    "signer": "0x174517fb44db0edb4e83d70858c94195ac5e5e0c",
+                    "yParity": "0x01"
+                }
+            ],
+            "sender": "0x2d597f3494841b04d3c8233b2d4d2dfd8995abe4",
+            "secretKey": "0x22578c3738d5ce35fdf6a681ddf7395f09b5004c58269930b4772c368b5ed6b7"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x95bb93294937361172559f37cf5da7f0ce4f8ae6aee19f2b7ca7e47599f5667e",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f904d60180800782f4ce94ddf7395f09b5004c58269930b4772c368b5ed6b780b90414010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101000000c0f85cf85a809400000000000000000000000000000000000000018001a0c513dc0b3effcb3546778cded39e793cf436b135b9f4a2a02e94b38de2477eeea07be8842c73d2f106568b7efa584cb4750af17db1b2040d01cc2581f30b45e84501a0d91a8f7617cf505f9232f6e975f3108e18d9fb60f23c75717b595eb6f932d4b4a076ac5ea7728ce4bbc4bbcdf3e4ebc4e626c6808a058f1a05f79003f6433d03c4",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x2d597f3494841b04d3c8233b2d4d2dfd8995abe4": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de994e5e",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xddf7395f09b5004c58269930b4772c368b5ed6b7": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5b00",
+                            "storage": {}
+                        },
+                        "0x174517fb44db0edb4e83d70858c94195ac5e5e0c": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0xef01000000000000000000000000000000000000000001",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x6cd117bf8982569a41dbb27f1d9e4bc461de72afae51cf385d33597dd084b654",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test class documentation:\nTest gas consumption barely below the floor data cost (1 gas below).\n\n\n        Test executing a transaction that almost consumes the floor data cost.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7623_increase_calldata_cost/test_execution_gas.py#L136",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7623.md",
+            "reference-spec-version": "744f2075ba5deee9c1040eb089104d55bd89960d"
+        }
+    }
+}

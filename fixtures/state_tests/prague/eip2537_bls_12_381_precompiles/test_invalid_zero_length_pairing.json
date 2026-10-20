@@ -1,0 +1,103 @@
+{
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_variable_length_input_contracts.py::test_invalid_zero_length_pairing[fork_Prague-state_test-precompile_address_15--zero_length]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xabc87044821356e73c24f0ee016188344178edcd": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x60006000600060006000600f6201129cf1600055",
+                "storage": {}
+            },
+            "0x5d767dc8febfaf35553ad542249605485eefe961": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x01bc88"
+            ],
+            "to": "0xabc87044821356e73c24f0ee016188344178edcd",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x5d767dc8febfaf35553ad542249605485eefe961",
+            "secretKey": "0x0030314883e3d646716e8312abc87044821356e73c24f0ee016188344178edcd"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x908d4aca6dc13b124df3a940a5ae80258573750bd53b044b0b0e1356ce732e25",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8301bc8894abc87044821356e73c24f0ee016188344178edcd808026a05a0bc59dee67843cf0a2251b058919e9a618623a4062214818b6b91ea8ee934ca063d2b99c0ad53b26640e767d16a0e66561fa29aca2908c5490a8c7e5ce67000b",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xabc87044821356e73c24f0ee016188344178edcd": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x60006000600060006000600f6201129cf1600055",
+                            "storage": {}
+                        },
+                        "0x5d767dc8febfaf35553ad542249605485eefe961": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de91b6d0",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x044928",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x8248852e3501851f5d251df3188eccf3a5b09a9a49511102638d2d290d93852f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_PAIRING precompile by passing an input with zero length.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_variable_length_input_contracts.py#L695",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    }
+}

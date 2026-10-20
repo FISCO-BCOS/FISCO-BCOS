@@ -1,0 +1,104 @@
+{
+  "testIds": [
+    "tests/static/state_tests/stStaticCall/static_Call50000_identity2Filler.json::static_Call50000_identity2[fork_Cancun-blockchain_test_engine_x_from_state_test-d0]",
+    "tests/static/state_tests/stStaticCall/static_Call50000_identity2Filler.json::static_Call50000_identity2[fork_Cancun-blockchain_test_engine_x_from_state_test-d1]"
+  ],
+  "environment": {
+    "currentCoinbase": "0x0000000000000000000000000000000000000000",
+    "currentGasLimit": "0x0213f8b140",
+    "currentNumber": "0x00",
+    "currentTimestamp": "0x00",
+    "currentRandom": "0x00",
+    "currentDifficulty": "0x00",
+    "currentBaseFee": "0x0b",
+    "currentExcessBlobGas": "0x00",
+    "currentBlobGasUsed": "0x00",
+    "parentUncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "blockHashes": {},
+    "ommers": [],
+    "withdrawals": []
+  },
+  "network": "Cancun",
+  "pre": {
+    "0x000f3df6d732807ef1319fb7b8bb8522d0beac02": {
+      "nonce": "0x01",
+      "balance": "0x00",
+      "code": "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500",
+      "storage": {}
+    },
+    "0x1fbecd8599251cf0e53f88c5281da39216e09fa1": {
+      "nonce": "0x00",
+      "balance": "0x0fffffffffffff",
+      "code": "0x602a6001525b61c350608051101560305761c350600161c3506000600461061cfa6000526001608051016080526005565b60805160205260015160405200",
+      "storage": {}
+    },
+    "0x1fbecd8599251cf0e53f88c5281da39216e0a0a1": {
+      "nonce": "0x00",
+      "balance": "0x0fffffffffffff",
+      "code": "0x602a6001525b61c350608051101560305761c350600161c3506000600461061cfa6000556001608051016080526005565b60805160015560015160025500",
+      "storage": {}
+    },
+    "0x1fbecd8599251cf0e53f88c5281da39216e0a1a1": {
+      "nonce": "0x00",
+      "balance": "0x00",
+      "code": "0x6000600060006000346000355af1600055600160015500",
+      "storage": {}
+    },
+    "0x278e1167cf5de67fab962324b6e7448350f51abf": {
+      "nonce": "0x00",
+      "balance": "0xffffffffffffffffffffffffffffffff",
+      "code": "0x",
+      "storage": {}
+    },
+    "0x2b92a9623cecc206d41c402d68d2249f91fd0492": {
+      "nonce": "0x00",
+      "balance": "0x0fffffffffffff",
+      "code": "0x602a6001525b61c350608051101560305761c350600161c3506000600461061cfa6000526001608051016080526005565b60805160205260015160405200",
+      "storage": {}
+    },
+    "0x2b92a9623cecc206d41c402d68d2249f91fd0592": {
+      "nonce": "0x00",
+      "balance": "0x0fffffffffffff",
+      "code": "0x602a6001525b61c350608051101560305761c350600161c3506000600461061cfa6000556001608051016080526005565b60805160015560015160025500",
+      "storage": {}
+    },
+    "0x2b92a9623cecc206d41c402d68d2249f91fd0692": {
+      "nonce": "0x00",
+      "balance": "0x00",
+      "code": "0x6000600060006000346000355af1600055600160015500",
+      "storage": {}
+    },
+    "0x36745e468dd83b3ae25bfd0a688d3e7d809b1ad7": {
+      "nonce": "0x00",
+      "balance": "0xffffffffffffffffffffffffffffffff",
+      "code": "0x",
+      "storage": {}
+    }
+  },
+  "genesis": {
+    "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "uncleHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "coinbase": "0x0000000000000000000000000000000000000000",
+    "stateRoot": "0x9bec016a42b9f3edf2ba44e41b73527cf501db2a4add173b2d2cdb615b6677cd",
+    "transactionsTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "receiptTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "difficulty": "0x00",
+    "number": "0x00",
+    "gasLimit": "0x0213f8b140",
+    "gasUsed": "0x00",
+    "timestamp": "0x00",
+    "extraData": "0x00",
+    "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "nonce": "0x0000000000000000",
+    "baseFeePerGas": "0x0b",
+    "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "blobGasUsed": "0x00",
+    "excessBlobGas": "0x00",
+    "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "0x6b874eade2a38c341039d96c8c48c7460d7dd6aa45cea975c3929889434900f5"
+  },
+  "preAccountCount": 9,
+  "testCount": 2
+}

@@ -1,0 +1,65 @@
+{
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_variable_length_input_contracts.py::test_valid_gas_g2msm[fork_Prague-full_discount_table-blockchain_test_engine_x_from_state_test-precompile_address_14--exact_gas]": {
+        "network": "Prague",
+        "lastblockhash": "0xf0628083dd66b80dcdb47f5c9cb54fc34bb5440e975f445b06ecab0fe98574d4",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xb0b31797f106db72",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x40851521837495e234936791a7d9d52d5ee8fabed287a1f546544ece00c2e776",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x796241cb0312ec9db7bd60ad05ff71d451e848055e48269926fcdd1a93d1bf95",
+                        "receiptsRoot": "0x4908db1c8c813c6420d4522c52bfffec1bcc84fb15e6dad16d0b4c74c4095f47",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x6885774",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf0628083dd66b80dcdb47f5c9cb54fc34bb5440e975f445b06ecab0fe98574d4",
+                        "transactions": [
+                            "0xf861800a840688e28894b4d7e28e05dd45e5f89900653a751d80d8e2774a808026a018d796b366c7123711494f297f664ffbbc72b839951adb7a79481d4861d86399a054ed253087ca279163cb412fb42c0dae701c2a5dcdbc19d88e89714e4c393f32"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x82cf84fb5bfbf09234a37364c3b0f4d4966c88f1a59024770578b2f9d1f53f3f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_G2MSM discount gas table in full, by expecting the call to\n    succeed for all possible input lengths because the appropriate amount of\n    gas is provided.\n\n    If any of the calls fail, the test will fail.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_variable_length_input_contracts.py#L445",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    }
+}

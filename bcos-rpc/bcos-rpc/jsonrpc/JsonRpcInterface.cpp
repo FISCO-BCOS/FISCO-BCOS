@@ -121,6 +121,16 @@ void JsonRpcInterface::initMethod()
 
 void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sender)
 {
+    dispatch(_requestBody, std::move(_sender), false);
+}
+
+void JsonRpcInterface::onIpcRequest(std::string_view _requestBody, Sender _sender)
+{
+    dispatch(_requestBody, std::move(_sender), true);
+}
+
+void JsonRpcInterface::dispatch(std::string_view _requestBody, Sender _sender, bool _allowIpcOnly)
+{
     JsonRequest request;
     JsonResponse response;
     try
@@ -132,7 +142,16 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
 
         const auto& method = request.method;
         auto it = m_methodToFunc.find(method);
-        if (it == m_methodToFunc.end())
+        if (it == m_methodToFunc.end() && _allowIpcOnly)
+        {
+            it = m_ipcOnlyMethods.find(method);
+            if (it == m_ipcOnlyMethods.end())
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    JsonRpcError::MethodNotFound, "The method does not exist/is not available."));
+            }
+        }
+        else if (it == m_methodToFunc.end())
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 JsonRpcError::MethodNotFound, "The method does not exist/is not available."));

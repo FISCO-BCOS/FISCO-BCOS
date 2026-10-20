@@ -1,0 +1,490 @@
+{
+    "tests/static/state_tests/stEIP3607/transactionCollidingWithNonEmptyAccount_init_ParisFiller.yml::transactionCollidingWithNonEmptyAccount_init_Paris[fork_Cancun-blockchain_test_engine_x_from_state_test-d0]": {
+        "network": "Cancun",
+        "lastblockhash": "0xa134b588fdacf2b2e6a53fa34224af2bb0f7bb6f78fed27dac0c81cabc1b9868",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x808232ffba4ccb75",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa134b588fdacf2b2e6a53fa34224af2bb0f7bb6f78fed27dac0c81cabc1b9868",
+                        "feeRecipient": "0x2d6d9992f15af251a28ea5d935d789b9af6dc7fa",
+                        "stateRoot": "0xc85cc24a776f4196c264f716c3e117db7e622b7a0bac8f93e7200abe7d00e34f",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0xff112233445566",
+                        "gasUsed": "0x0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x84d9537a9856e2fc082a7e91c740a9f7f342835af8842540eda4c91b30efa180",
+                        "transactions": [
+                            "0xf84f800a83061a8080830186a00026a014276d2a0f2d17871980f7ddf25c5b097e57782e3aea471fcef4a2eb2c656ba4a077a05d260e99c2caf09c6c8f27b624d049ec8bc09a90eab85c09443ba310f808"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.SENDER_NOT_EOA"
+            }
+        ],
+        "_info": {
+            "hash": "0x5d2a5562451256146a64929e4b9ef7e076a2ade3b62d792457f784cb54fe8a36",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP3607/transactionCollidingWithNonEmptyAccount_init_ParisFiller.yml::transactionCollidingWithNonEmptyAccount_init_Paris[fork_Cancun-blockchain_test_engine_x_from_state_test-d1]": {
+        "network": "Cancun",
+        "lastblockhash": "0xa134b588fdacf2b2e6a53fa34224af2bb0f7bb6f78fed27dac0c81cabc1b9868",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x808232ffba4ccb75",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa134b588fdacf2b2e6a53fa34224af2bb0f7bb6f78fed27dac0c81cabc1b9868",
+                        "feeRecipient": "0x8eb73a04924d186c345b8ddffb1e81d2669f1119",
+                        "stateRoot": "0xc85cc24a776f4196c264f716c3e117db7e622b7a0bac8f93e7200abe7d00e34f",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0xff112233445566",
+                        "gasUsed": "0x0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0952611ff3b85d59e8ac3a6fb680b7811ba3d30ba8557d1112b22e99adf251dc",
+                        "transactions": [
+                            "0xf854800a83061a8080830186a08560206000f325a0a5b96d406c533df20daad1fd7e0254dca7dab837b71c953ae22ed44c4e207533a00bc83b99664f1f5255c2e6c54c3c29f6e180e338ce7007b738fe09bc13d0795d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.SENDER_NOT_EOA"
+            }
+        ],
+        "_info": {
+            "hash": "0x8807d6d5e88c766318bf98cdc539cad2bdb23fd8883c8e793407b5e944fc172a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP3607/transactionCollidingWithNonEmptyAccount_init_ParisFiller.yml::transactionCollidingWithNonEmptyAccount_init_Paris[fork_Cancun-blockchain_test_engine_x_from_state_test-d2]": {
+        "network": "Cancun",
+        "lastblockhash": "0xa134b588fdacf2b2e6a53fa34224af2bb0f7bb6f78fed27dac0c81cabc1b9868",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x808232ffba4ccb75",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa134b588fdacf2b2e6a53fa34224af2bb0f7bb6f78fed27dac0c81cabc1b9868",
+                        "feeRecipient": "0xd6154f383872d2fed6257e2b13bc4d672bd0c991",
+                        "stateRoot": "0xc85cc24a776f4196c264f716c3e117db7e622b7a0bac8f93e7200abe7d00e34f",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0xff112233445566",
+                        "gasUsed": "0x0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8c0ab2fbbc308355fdbf498797ac3a8c26043dbbc1cf06b60150832db1fd3df3",
+                        "transactions": [
+                            "0xf86f800a83061a8080830186a0a0600080808061271073125a44b666040e33c21894b1f6c0a3bdd44a712b5af10025a0d5ee0188b1922c2ea6ec2d676b8fbd1022d021bd652f45dabde0a99186cf6749a0086597921257d5d38eb01caa0ff981009bac5ba50f94db54785c01ca90261086"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.SENDER_NOT_EOA"
+            }
+        ],
+        "_info": {
+            "hash": "0x15843cd65c3758bf175bced307520e4ac1420576534cb273a79af32280796f7d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP3607/transactionCollidingWithNonEmptyAccount_init_ParisFiller.yml::transactionCollidingWithNonEmptyAccount_init_Paris[fork_Cancun-blockchain_test_engine_x_from_state_test-d3]": {
+        "network": "Cancun",
+        "lastblockhash": "0xa134b588fdacf2b2e6a53fa34224af2bb0f7bb6f78fed27dac0c81cabc1b9868",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x808232ffba4ccb75",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa134b588fdacf2b2e6a53fa34224af2bb0f7bb6f78fed27dac0c81cabc1b9868",
+                        "feeRecipient": "0x0abd7332881dc82504cc5635a46b14863944d4e4",
+                        "stateRoot": "0xc85cc24a776f4196c264f716c3e117db7e622b7a0bac8f93e7200abe7d00e34f",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0xff112233445566",
+                        "gasUsed": "0x0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0db57026a759962d47e32d7eb8bfff7267d9f9e11fc127bc4864550fd3bf406e",
+                        "transactions": [
+                            "0xf86c800a83061a8080830186a09d600080808073b1ad5f8a661d8faa0ca6479a01c47bfc5222b6415af40026a01f0c9bcdc262b22a26961eee69a66381d4065984bc8731e562d6b364708db178a0068ce91ae224fa0232513dd3ea74874be699e7c150a543c11bd650c2ea011918"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.SENDER_NOT_EOA"
+            }
+        ],
+        "_info": {
+            "hash": "0x52f584f4b326ddb6ab03cb608b50ffd54169752ec7d0cf7ef59835abd88ddbdc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP3607/transactionCollidingWithNonEmptyAccount_init_ParisFiller.yml::transactionCollidingWithNonEmptyAccount_init_Paris[fork_Prague-blockchain_test_engine_x_from_state_test-d0]": {
+        "network": "Prague",
+        "lastblockhash": "0x1611660c7a5cedf7d3e235909b79308c5f9a362cc9079c4421f34834fa3180dc",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x3cd8c437a2c63019",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x1611660c7a5cedf7d3e235909b79308c5f9a362cc9079c4421f34834fa3180dc",
+                        "feeRecipient": "0x2d6d9992f15af251a28ea5d935d789b9af6dc7fa",
+                        "stateRoot": "0x412a12a75c617c94c9d0de3e839c6cca53c93033fa8f03fcfe54a792712c023a",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0xff112233445566",
+                        "gasUsed": "0x0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf6e37ad9b4aa18e525206bc8fe1f6ae799d459ac22c2b5643aee13a6d9d0594a",
+                        "transactions": [
+                            "0xf84f800a83061a8080830186a00026a014276d2a0f2d17871980f7ddf25c5b097e57782e3aea471fcef4a2eb2c656ba4a077a05d260e99c2caf09c6c8f27b624d049ec8bc09a90eab85c09443ba310f808"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.SENDER_NOT_EOA"
+            }
+        ],
+        "_info": {
+            "hash": "0xc83f4ef3a875db3bacfb4e2c1521871e02ce671b2f8e4dd7e3c041c8c9b9d6b8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP3607/transactionCollidingWithNonEmptyAccount_init_ParisFiller.yml::transactionCollidingWithNonEmptyAccount_init_Paris[fork_Prague-blockchain_test_engine_x_from_state_test-d1]": {
+        "network": "Prague",
+        "lastblockhash": "0x1611660c7a5cedf7d3e235909b79308c5f9a362cc9079c4421f34834fa3180dc",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x3cd8c437a2c63019",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x1611660c7a5cedf7d3e235909b79308c5f9a362cc9079c4421f34834fa3180dc",
+                        "feeRecipient": "0x8eb73a04924d186c345b8ddffb1e81d2669f1119",
+                        "stateRoot": "0x412a12a75c617c94c9d0de3e839c6cca53c93033fa8f03fcfe54a792712c023a",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0xff112233445566",
+                        "gasUsed": "0x0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3f31226762a6382e7ab9448c4223fe3cc2b2424d67d66f262d2ec737d456426b",
+                        "transactions": [
+                            "0xf854800a83061a8080830186a08560206000f325a0a5b96d406c533df20daad1fd7e0254dca7dab837b71c953ae22ed44c4e207533a00bc83b99664f1f5255c2e6c54c3c29f6e180e338ce7007b738fe09bc13d0795d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.SENDER_NOT_EOA"
+            }
+        ],
+        "_info": {
+            "hash": "0x309760ad4ee13b77afed3e669528d6d3a08c9e204633e1602be7c562c98bea9c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP3607/transactionCollidingWithNonEmptyAccount_init_ParisFiller.yml::transactionCollidingWithNonEmptyAccount_init_Paris[fork_Prague-blockchain_test_engine_x_from_state_test-d2]": {
+        "network": "Prague",
+        "lastblockhash": "0x1611660c7a5cedf7d3e235909b79308c5f9a362cc9079c4421f34834fa3180dc",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x3cd8c437a2c63019",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x1611660c7a5cedf7d3e235909b79308c5f9a362cc9079c4421f34834fa3180dc",
+                        "feeRecipient": "0xd6154f383872d2fed6257e2b13bc4d672bd0c991",
+                        "stateRoot": "0x412a12a75c617c94c9d0de3e839c6cca53c93033fa8f03fcfe54a792712c023a",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0xff112233445566",
+                        "gasUsed": "0x0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x5372064859196ed217c224f23bf56c6c51e642ac7db3b4d965cc315716c2a2bc",
+                        "transactions": [
+                            "0xf86f800a83061a8080830186a0a0600080808061271073125a44b666040e33c21894b1f6c0a3bdd44a712b5af10025a0d5ee0188b1922c2ea6ec2d676b8fbd1022d021bd652f45dabde0a99186cf6749a0086597921257d5d38eb01caa0ff981009bac5ba50f94db54785c01ca90261086"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.SENDER_NOT_EOA"
+            }
+        ],
+        "_info": {
+            "hash": "0x40de22d0c2e49e8e119672a340ca817c9f420adb1da47c193cdbc2be674c4be1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    },
+    "tests/static/state_tests/stEIP3607/transactionCollidingWithNonEmptyAccount_init_ParisFiller.yml::transactionCollidingWithNonEmptyAccount_init_Paris[fork_Prague-blockchain_test_engine_x_from_state_test-d3]": {
+        "network": "Prague",
+        "lastblockhash": "0x1611660c7a5cedf7d3e235909b79308c5f9a362cc9079c4421f34834fa3180dc",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x3cd8c437a2c63019",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x1611660c7a5cedf7d3e235909b79308c5f9a362cc9079c4421f34834fa3180dc",
+                        "feeRecipient": "0x0abd7332881dc82504cc5635a46b14863944d4e4",
+                        "stateRoot": "0x412a12a75c617c94c9d0de3e839c6cca53c93033fa8f03fcfe54a792712c023a",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0xff112233445566",
+                        "gasUsed": "0x0",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000020000",
+                        "baseFeePerGas": "0xa",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x26e1c08cf57d213111ccdc8edbfcc9063adf6db95ba971d8ffe18d5f0929f320",
+                        "transactions": [
+                            "0xf86c800a83061a8080830186a09d600080808073b1ad5f8a661d8faa0ca6479a01c47bfc5222b6415af40026a01f0c9bcdc262b22a26961eee69a66381d4065984bc8731e562d6b364708db178a0068ce91ae224fa0232513dd3ea74874be699e7c150a543c11bd650c2ea011918"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.SENDER_NOT_EOA"
+            }
+        ],
+        "_info": {
+            "hash": "0x7925e1c63362f144076650ed8951d4956d8de014323495215473bad24c222dcc",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/",
+            "reference-spec-version": ""
+        }
+    }
+}

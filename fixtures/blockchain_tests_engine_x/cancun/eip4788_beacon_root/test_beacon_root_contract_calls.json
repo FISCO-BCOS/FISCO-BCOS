@@ -1,0 +1,1202 @@
+{
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_CALL-call_value_0-valid_input_True-call_gas_1000-valid_call_False]": {
+        "network": "Cancun",
+        "lastblockhash": "0xc6bc73216e73572d1d5d7b52512dbcca191617cdbf84d42fb798e10c08acacad",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x7b200fdfe85711e357a298512255b076e94f8cc749b9a401dd1456b5d8962733",
+                        "receiptsRoot": "0x1a55138d5a4f9df98b51595d38f5cf0aac621470a34f7657ebe6a2fc1c293e5e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8351",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc6bc73216e73572d1d5d7b52512dbcca191617cdbf84d42fb798e10c08acacad",
+                        "transactions": [
+                            "0x02f88301808007830f424094c8c101aa636d61b4277fb78e26d001931271bb3080a0000000000000000000000000000000000000000000000000000000000000000cc080a085fd8717be47370fa740a8092100ab56d141ed2113e001bcf30da8c585d95024a0366704106c0a8951cb4251cd233428186e520992092868642ae092e1bcd72276"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7f91b05448581754a46146b17b24f94a715d071d4e723b8e7983172135bf17ad",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_CALL-call_value_0-valid_input_True-call_gas_100000-valid_call_True]": {
+        "network": "Cancun",
+        "lastblockhash": "0xfe5f4648dc05063c0b71f630886f9a0cba30c0f465efdc4c049d88066752f332",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x60e7e16faf92fe5c962b0737a09fad865a6e717c8e1555f200b3ffffd657270f",
+                        "receiptsRoot": "0x56c22a6b2c9ca708dca598477f7c7391409272310505c9844e52aac13bf08af0",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c73c",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xfe5f4648dc05063c0b71f630886f9a0cba30c0f465efdc4c049d88066752f332",
+                        "transactions": [
+                            "0x02f88301808007830f4240940b8ca5086109677d9f1c2381f33ec418f0d933c380a0000000000000000000000000000000000000000000000000000000000000000cc001a0f467275f4090123dafb8f78a94a804937022b088d83be907d97e9ab67b081ef5a00148489bb4b53b2fdc5aafb00dd8892b865c7892309544a2749a3a28fa99d65d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9d11a9a4126fe70cef391a407de36de2fd6ac8d390860a9cec7c47872580994e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_CALL-call_value_1-valid_input_True-call_gas_1000-valid_call_False]": {
+        "network": "Cancun",
+        "lastblockhash": "0x779b19bdc84c81dad80911ffb2f901b32c7b176ca76867795752e93e64908115",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf3cf60e9ea0470ce1dd1a4e41572dde25eb57aa4879b5766ede2310678232127",
+                        "receiptsRoot": "0x947fdf5cc17a8d6a0327ead70a42723e880e9e5e973ba0f9f472269086af76d6",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa679",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x779b19bdc84c81dad80911ffb2f901b32c7b176ca76867795752e93e64908115",
+                        "transactions": [
+                            "0x02f88301808007830f424094a528c10e4a7a5f4200bde5c5381127973696eb4980a0000000000000000000000000000000000000000000000000000000000000000cc001a0411d7778a3e476f34fb66b3b47f2dfbf20e62504657eed01a043c81e104a7d61a061f904b49852dd375e4e3524d9cbefa10d556fd018fed7cd488bc9c637e4eece"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xc57478b4d125263b290dd7914670937510f1cd32b958db9c373bf92b46cc974c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_CALL-call_value_1-valid_input_True-call_gas_100000-valid_call_True]": {
+        "network": "Cancun",
+        "lastblockhash": "0xa172032e611281d082f788626059be403ef28fdc2acb287fc2c5709c92b95616",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc42f6bba10fcad4b8a768444a26ee246181b7604a44261ce7c8090e1fffe93cc",
+                        "receiptsRoot": "0x17fef3d479cbd7c6573951bd89795c2020be4769f162c2e03e198926c4d46636",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1e168",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xa172032e611281d082f788626059be403ef28fdc2acb287fc2c5709c92b95616",
+                        "transactions": [
+                            "0x02f88301808007830f4240944047d38c6c06114a7f1730fe91f2b651909bea7880a0000000000000000000000000000000000000000000000000000000000000000cc001a092f9788f27b079ec407600a121872ab6a61449f44d379abea770dfb2c7269d00a001e61d7dd38417234491f94b26df7d6db9a9910a97d2a34f6cd198f693a762c0"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x003a277cb6fb6a4a0746d0657d082673ee85baa1932303245f2ceecb81998d78",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_CALLCODE-call_value_0-valid_input_False-call_gas_1000-valid_call_False]": {
+        "network": "Cancun",
+        "lastblockhash": "0x3826758b61814ccce2616002b24cce767a9768b7db7dfae52d3be14bd27a550c",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x779295414eacce64ebc87a7f38eb4493b8c69338e53fb544e002960cedbc2b70",
+                        "receiptsRoot": "0x1a55138d5a4f9df98b51595d38f5cf0aac621470a34f7657ebe6a2fc1c293e5e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8351",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3826758b61814ccce2616002b24cce767a9768b7db7dfae52d3be14bd27a550c",
+                        "transactions": [
+                            "0x02f88301808007830f42409484005c17bc935530f43314a20a394914bfe04cd980a0000000000000000000000000000000000000000000000000000000000000000cc001a0b5920e8cffbcf1828d85d0bb984fb9f4980d88a8e1cc35d0ca9a43912d1c078ba06e209eb15053db71ac3239e45d5fead8224d141ba070a9b729b7f48fc979740c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xaaea7d8b7035c6b917833bf7751d014dc0c1d0b48ee426824c387ce32979a283",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_CALLCODE-call_value_0-valid_input_False-call_gas_100000-valid_call_True]": {
+        "network": "Cancun",
+        "lastblockhash": "0xa76bcf32e286494470ac51620fa30c510cfc5dab93130e6b5a4d027067dac45b",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe6732cbbb15dfe3b41a6d8ccb7a165a95f4769947fad6b3d6af7cbc6fc8bbd23",
+                        "receiptsRoot": "0x8e0a942dfe760a71fa34568dc0540f3f05a09930f7880044b025673e44a7c2af",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8805",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xa76bcf32e286494470ac51620fa30c510cfc5dab93130e6b5a4d027067dac45b",
+                        "transactions": [
+                            "0x02f88301808007830f424094851eb3eb13e1ad72edcf798e157afb21668ca87280a0000000000000000000000000000000000000000000000000000000000000000cc080a014ee33d3ac124bb9c0119172c4d822d58773f415b23e5da20c47c6866aafc29fa011366dd72b9ac7c750c157db015aae7f7c203286bb0c979f5c1f24c40c10c30c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x3fb27e81ef85ce4169ed635c7023aaf1fc3860fb8e1242a3a762ad613a0726d0",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_DELEGATECALL-call_value_0-valid_input_False-call_gas_1000-valid_call_False]": {
+        "network": "Cancun",
+        "lastblockhash": "0xd82191dac2bf351d6c542e65f44a7caa442c71434f4cbf54412383387ad5746c",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x21c4a1edfd80f077fe99de0c867987f582063877f2f54de7a9790d20c9190164",
+                        "receiptsRoot": "0x154578192b09996d0d1459030c94221c5004c0e8b498be713a91e4d0d6520a86",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x834e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xd82191dac2bf351d6c542e65f44a7caa442c71434f4cbf54412383387ad5746c",
+                        "transactions": [
+                            "0x02f88301808007830f42409442eff00076500764098122a279e9cd7495ab933180a0000000000000000000000000000000000000000000000000000000000000000cc080a0a00e8a3aa42696de838c8ca0c95ab118a708f84cfcd65d7b78d601a3732f7feca05a2b3d7c5b1c15d118dc35fac3b42ee747aba9370e5110d5282fa0dc56793979"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6fcf9d7ecb576cc388b66ac1c905468915829460d9629e009a03f49994443bd9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_DELEGATECALL-call_value_0-valid_input_False-call_gas_100000-valid_call_True]": {
+        "network": "Cancun",
+        "lastblockhash": "0xc8523b51bc2d3b8b2eb76c011799106f1c93ea8d136dc476649ee4441887424a",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x50e28f1e15b57135ae05a7eefd3e3eb74e3541359605f28e58d052d100d455b0",
+                        "receiptsRoot": "0x53944171db1339ae2ad204499e9ad9f8223228bab80f6b4c2b87f4dfafdd6c22",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8802",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc8523b51bc2d3b8b2eb76c011799106f1c93ea8d136dc476649ee4441887424a",
+                        "transactions": [
+                            "0x02f88301808007830f424094e69f76a1228130c80ef1f27afce31b6573b0a89a80a0000000000000000000000000000000000000000000000000000000000000000cc080a0dc0eb17315acc71ca9b59b70aaab749dd42797b0f1bea39d80dfce0f4d1ff4e6a06289116f1748359a3d05b8dd8b71dea9499bb853dc6f2c0896de749e089aab7c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x06f0c1e96912c7a322c775a4f6519de97171e5612c86030e1db2f0d98fbd19e4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_STATICCALL-call_value_0-valid_input_True-call_gas_1000-valid_call_False]": {
+        "network": "Cancun",
+        "lastblockhash": "0x8769a85dc6034d84e87e8fabd8d66f5ed72c10129da9dc28810626f7ba3d992c",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc4c4f3597305363b532695ccf2cfef0cfaf41470bdb229b225a25c61b2b2b037",
+                        "receiptsRoot": "0x154578192b09996d0d1459030c94221c5004c0e8b498be713a91e4d0d6520a86",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x834e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x8769a85dc6034d84e87e8fabd8d66f5ed72c10129da9dc28810626f7ba3d992c",
+                        "transactions": [
+                            "0x02f88301808007830f4240943f61bfd5b58cbd47d1f82ccccf1b7820cc0bc69b80a0000000000000000000000000000000000000000000000000000000000000000cc080a0f2926501ccc84ed720be890d07b8b9ed85dade5a27fbe129af3b819700a72b1ba05a45537f824c7be7cdfbac86036e96cffc2bfcf5e8db3788ecd13666293b29e7"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x099f2d3b05a5d942f5a92c3291eaa8c7c07b9b0b15ee5d7a81dfa5a5963723f2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Cancun-blockchain_test_engine_x-call_type_STATICCALL-call_value_0-valid_input_True-call_gas_100000-valid_call_True]": {
+        "network": "Cancun",
+        "lastblockhash": "0x12bfdba15db757e0d697daca8292acc5e492a2e6f06160900013d055cfe28257",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x16baaedcc96819d6",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xa683301a72804ff0d1f93c0a3fb10a95f506929bdbd63577a5a7b62a29897377",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x9b9d0a17fcaa6bff90f7ef03d560dfd8f6a6cef599235da6586bbdc5e0e2eef7",
+                        "receiptsRoot": "0x5fbffd9166c9a0be936078329b8ef4c08848029ca8e7b054aa6b17ff6231f07a",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c739",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x12bfdba15db757e0d697daca8292acc5e492a2e6f06160900013d055cfe28257",
+                        "transactions": [
+                            "0x02f88301808007830f4240947e8d1898a362a961f242c3a32acd97a3fee3784580a0000000000000000000000000000000000000000000000000000000000000000cc080a01f647f6c0d4d9d0cc14f777fefcacf007a23ce5fc0e591dce8294d374b580220a00f5af983497b0254a960708d6f52b99e21ee27c32cb77849c5160a39463b294f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6f2164f71eb8d8edb5c04864631205a37102f320aab26cbac9f6e5611ca2e664",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_CALL-call_value_0-valid_input_True-call_gas_1000-valid_call_False]": {
+        "network": "Prague",
+        "lastblockhash": "0xf913299210aac820c56ce25517fd351c5351cf6fdf24fb211f2d8fee0085e491",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x20f1d05560abcbff480c1e1d6e4d69949d6419b5e7cc858dc0f6700d7b62ec88",
+                        "receiptsRoot": "0x1a55138d5a4f9df98b51595d38f5cf0aac621470a34f7657ebe6a2fc1c293e5e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8351",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf913299210aac820c56ce25517fd351c5351cf6fdf24fb211f2d8fee0085e491",
+                        "transactions": [
+                            "0x02f88301808007830f424094c8c101aa636d61b4277fb78e26d001931271bb3080a0000000000000000000000000000000000000000000000000000000000000000cc080a085fd8717be47370fa740a8092100ab56d141ed2113e001bcf30da8c585d95024a0366704106c0a8951cb4251cd233428186e520992092868642ae092e1bcd72276"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x0835ed12e334b2daaf8f4af001c6a355a6994a1b4527975512319e65abe9508f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_CALL-call_value_0-valid_input_True-call_gas_100000-valid_call_True]": {
+        "network": "Prague",
+        "lastblockhash": "0x4818c00f909ea698cc7f570426d59208a80031a7ca5c9b1f1b35fe6b20fa0492",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc7b0d0f8dec8daf724e462b003875afc88dcce5dd8e1c44d36380c74295d3ea7",
+                        "receiptsRoot": "0x56c22a6b2c9ca708dca598477f7c7391409272310505c9844e52aac13bf08af0",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c73c",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4818c00f909ea698cc7f570426d59208a80031a7ca5c9b1f1b35fe6b20fa0492",
+                        "transactions": [
+                            "0x02f88301808007830f4240940b8ca5086109677d9f1c2381f33ec418f0d933c380a0000000000000000000000000000000000000000000000000000000000000000cc001a0f467275f4090123dafb8f78a94a804937022b088d83be907d97e9ab67b081ef5a00148489bb4b53b2fdc5aafb00dd8892b865c7892309544a2749a3a28fa99d65d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6245a2b0679193e21353a018b65534c450a77bb54124a96afde88820edb7487e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_CALL-call_value_1-valid_input_True-call_gas_1000-valid_call_False]": {
+        "network": "Prague",
+        "lastblockhash": "0x4bc8ef9a13ed4d55da82e3615513267aac4b543480ca1d343f0f396ce25b8722",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdaad600f808d3d44414d83325eb7bafb16e1769d03d33d50c7cd4e97cce087bb",
+                        "receiptsRoot": "0x947fdf5cc17a8d6a0327ead70a42723e880e9e5e973ba0f9f472269086af76d6",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0xa679",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4bc8ef9a13ed4d55da82e3615513267aac4b543480ca1d343f0f396ce25b8722",
+                        "transactions": [
+                            "0x02f88301808007830f424094a528c10e4a7a5f4200bde5c5381127973696eb4980a0000000000000000000000000000000000000000000000000000000000000000cc001a0411d7778a3e476f34fb66b3b47f2dfbf20e62504657eed01a043c81e104a7d61a061f904b49852dd375e4e3524d9cbefa10d556fd018fed7cd488bc9c637e4eece"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xda35e1de0ce638f07ff1840491e166a0d95788884fbcbbcad0648ec66f164b9a",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_CALL-call_value_1-valid_input_True-call_gas_100000-valid_call_True]": {
+        "network": "Prague",
+        "lastblockhash": "0xb42cfb08580140a72fdf058c881d9bf05b44557068ceb94d90dd0e56e93cbd4b",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3b7bc3ffa8f4a5507281321b4ac310ecd0c90e5021c76ae4e1ad68986f66afcf",
+                        "receiptsRoot": "0x17fef3d479cbd7c6573951bd89795c2020be4769f162c2e03e198926c4d46636",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1e168",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb42cfb08580140a72fdf058c881d9bf05b44557068ceb94d90dd0e56e93cbd4b",
+                        "transactions": [
+                            "0x02f88301808007830f4240944047d38c6c06114a7f1730fe91f2b651909bea7880a0000000000000000000000000000000000000000000000000000000000000000cc001a092f9788f27b079ec407600a121872ab6a61449f44d379abea770dfb2c7269d00a001e61d7dd38417234491f94b26df7d6db9a9910a97d2a34f6cd198f693a762c0"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xc31f208fceb049766fbc56f0bbd4c473a283fe056ed9d9d495a6ad459e39662f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_CALLCODE-call_value_0-valid_input_False-call_gas_1000-valid_call_False]": {
+        "network": "Prague",
+        "lastblockhash": "0x46add9f98b859be327ba465248a6225bbb65f1b1b4210fafbcae60471ac6f207",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf8e5a445741adcb2df8c6dbbb7aba7f60893b4e698c52a880aa92935eb450b5e",
+                        "receiptsRoot": "0x1a55138d5a4f9df98b51595d38f5cf0aac621470a34f7657ebe6a2fc1c293e5e",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8351",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x46add9f98b859be327ba465248a6225bbb65f1b1b4210fafbcae60471ac6f207",
+                        "transactions": [
+                            "0x02f88301808007830f42409484005c17bc935530f43314a20a394914bfe04cd980a0000000000000000000000000000000000000000000000000000000000000000cc001a0b5920e8cffbcf1828d85d0bb984fb9f4980d88a8e1cc35d0ca9a43912d1c078ba06e209eb15053db71ac3239e45d5fead8224d141ba070a9b729b7f48fc979740c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x1fec24aad2e4f861d1ee9a0749fca416e7ef6d1b68addc044268b14a0954d8eb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_CALLCODE-call_value_0-valid_input_False-call_gas_100000-valid_call_True]": {
+        "network": "Prague",
+        "lastblockhash": "0xae655edad6175d947158f56e1f93dc430de965fd410d9db4062f432b4ebabde7",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf339602a1100b4589ffac8d2c342ecd7b5a8e3a1681f4a00bdeafe5d9b1995f4",
+                        "receiptsRoot": "0x8e0a942dfe760a71fa34568dc0540f3f05a09930f7880044b025673e44a7c2af",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8805",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xae655edad6175d947158f56e1f93dc430de965fd410d9db4062f432b4ebabde7",
+                        "transactions": [
+                            "0x02f88301808007830f424094851eb3eb13e1ad72edcf798e157afb21668ca87280a0000000000000000000000000000000000000000000000000000000000000000cc080a014ee33d3ac124bb9c0119172c4d822d58773f415b23e5da20c47c6866aafc29fa011366dd72b9ac7c750c157db015aae7f7c203286bb0c979f5c1f24c40c10c30c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x26b445bfaf370bc721d0c27967c32b47d0915160d98257c9ed0d15b576bd9173",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_DELEGATECALL-call_value_0-valid_input_False-call_gas_1000-valid_call_False]": {
+        "network": "Prague",
+        "lastblockhash": "0xb6987d18f2fcf131fbc55253e52ca0e9965159a7c8848a2737ce0b472e755a4e",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf674faa5bbc094b85aa68443a192013223d93139ba8847ec2f744a6234ec889c",
+                        "receiptsRoot": "0x154578192b09996d0d1459030c94221c5004c0e8b498be713a91e4d0d6520a86",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x834e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xb6987d18f2fcf131fbc55253e52ca0e9965159a7c8848a2737ce0b472e755a4e",
+                        "transactions": [
+                            "0x02f88301808007830f42409442eff00076500764098122a279e9cd7495ab933180a0000000000000000000000000000000000000000000000000000000000000000cc080a0a00e8a3aa42696de838c8ca0c95ab118a708f84cfcd65d7b78d601a3732f7feca05a2b3d7c5b1c15d118dc35fac3b42ee747aba9370e5110d5282fa0dc56793979"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9059ae39c9f556faf239a309893cdb96a09bdd2d358faae6124a0736026c6446",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_DELEGATECALL-call_value_0-valid_input_False-call_gas_100000-valid_call_True]": {
+        "network": "Prague",
+        "lastblockhash": "0xd7d5bec8d4c346630729d2edf4904d2e489f8b49e8322caf9a4cb2b415365ce1",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xd6f5b1d3508b8edc766b38fc9860164f8499b203982dbe53c0d322c894638d8b",
+                        "receiptsRoot": "0x53944171db1339ae2ad204499e9ad9f8223228bab80f6b4c2b87f4dfafdd6c22",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x8802",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xd7d5bec8d4c346630729d2edf4904d2e489f8b49e8322caf9a4cb2b415365ce1",
+                        "transactions": [
+                            "0x02f88301808007830f424094e69f76a1228130c80ef1f27afce31b6573b0a89a80a0000000000000000000000000000000000000000000000000000000000000000cc080a0dc0eb17315acc71ca9b59b70aaab749dd42797b0f1bea39d80dfce0f4d1ff4e6a06289116f1748359a3d05b8dd8b71dea9499bb853dc6f2c0896de749e089aab7c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xbda247c06bca30e1849f8d6452a1254494bbe5526cc1c700841b8f722a441777",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_STATICCALL-call_value_0-valid_input_True-call_gas_1000-valid_call_False]": {
+        "network": "Prague",
+        "lastblockhash": "0xbd1114c30c9fc98d47b8c1541b198cd314e6390761eb38d5cf45773d580eb9c0",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x15c73010f4eb73d90fe7b4400c41347d1b4e1edd8f28e3b67b5d583de7affd8f",
+                        "receiptsRoot": "0x154578192b09996d0d1459030c94221c5004c0e8b498be713a91e4d0d6520a86",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x834e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xbd1114c30c9fc98d47b8c1541b198cd314e6390761eb38d5cf45773d580eb9c0",
+                        "transactions": [
+                            "0x02f88301808007830f4240943f61bfd5b58cbd47d1f82ccccf1b7820cc0bc69b80a0000000000000000000000000000000000000000000000000000000000000000cc080a0f2926501ccc84ed720be890d07b8b9ed85dade5a27fbe129af3b819700a72b1ba05a45537f824c7be7cdfbac86036e96cffc2bfcf5e8db3788ecd13666293b29e7"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x2f018f793e0a981fc8de2e2234d478ce86b36f6ed2590a90abac6ed1f2edf1d3",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    },
+    "tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py::test_beacon_root_contract_calls[fork_Prague-blockchain_test_engine_x-call_type_STATICCALL-call_value_0-valid_input_True-call_gas_100000-valid_call_True]": {
+        "network": "Prague",
+        "lastblockhash": "0xc7147afe8d7ab39d3db27fa42976f908aec4846d26273240f176b028c130cdaa",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0xaae05814d1e2e2ba",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x50c70aab1b96c84211f9be050d238b27d8be3fec3c92ab2dbd5358e599d2f580",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x078f214b48ab62163c78f5168e4c27809b7bec1ebc7e0e110eb8eea0dc577ac0",
+                        "receiptsRoot": "0x5fbffd9166c9a0be936078329b8ef4c08848029ca8e7b054aa6b17ff6231f07a",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1c739",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc7147afe8d7ab39d3db27fa42976f908aec4846d26273240f176b028c130cdaa",
+                        "transactions": [
+                            "0x02f88301808007830f4240947e8d1898a362a961f242c3a32acd97a3fee3784580a0000000000000000000000000000000000000000000000000000000000000000cc080a01f647f6c0d4d9d0cc14f777fefcacf007a23ce5fc0e591dce8294d374b580220a00f5af983497b0254a960708d6f52b99e21ee27c32cb77849c5160a39463b294f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x6c31fc15422ebad28aaf9089c306702f67540b53c7eea8b7d2941044b027100f",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x0fb283e1acff65b68d5ec638f35ecf3f0cb0df53971c74c0934c283d2c447673",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the beacon root contract in various call contexts.\n\n    These call contexts are tested:\n    - `CALL`\n    - `DELEGATECALL`\n    - `CALLCODE`\n    - `STATICCALL`\n    for different call gas amounts:\n    - exact gas (valid call)\n    - extra gas (valid call)\n    - insufficient gas (invalid call).\n\n    The expected result is that the contract call will be executed if the gas\n    amount is met and return the correct`parent_beacon_block_root`. Otherwise\n    the call will be invalid, and not be executed. This is highlighted within\n    storage by storing the return value of each call context.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4788_beacon_root/test_beacon_root_contract.py#L58",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4788.md",
+            "reference-spec-version": "efcac43ef9aadd87dd4e0a2fbd14d5d1317eddf3"
+        }
+    }
+}

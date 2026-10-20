@@ -1,0 +1,128 @@
+{
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_invalid_blob_tx_contract_creation[fork_Cancun-blockchain_test_engine_x-]": {
+        "network": "Cancun",
+        "lastblockhash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x92f62cf8fcbb3a7e",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x89eaff9e1bbc8ac965fb6910184f5df720252a8a6a7e8da7bb08a35e70775a63",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0f4e03790ad715d374a23313ea8e06b60ec02576322e1ce45baff6915dbc3c56",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0xe0000",
+                        "blockHash": "0x94424ff71c98b49cae47ff824cb8be26d1ddf0801c7ddfed28b79292ed8750c3",
+                        "transactions": [
+                            "0x03f872018080078307a120800180c001e1a0010000000000000000000000000000000000000000000000000000000000000080a0e879f60b0e92a42f72fbff0cfe80c0e8c80eca4c5626a6a23689acbf46c9d751a01ad29450b9f4ad4d63549b18e00fd29d068acfb5d05cc12db58e62548eb2ae0d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.RLP_STRUCTURES_ENCODING|TransactionException.TYPE_3_TX_CONTRACT_CREATION"
+            }
+        ],
+        "_info": {
+            "hash": "0xb0a7d437151ac6be1f1c3fa88942390fce5f5584ee12fdd9af41b8f9a27b0749",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Reject blocks that include blob transactions that have nil to value\n    (contract creating).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1075",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    },
+    "tests/cancun/eip4844_blobs/test_blob_txs.py::test_invalid_blob_tx_contract_creation[fork_Prague-blockchain_test_engine_x-]": {
+        "network": "Prague",
+        "lastblockhash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2eacda30e431c112",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xe6181abb66a9c5d9c67c064ca356ad22e7fd57c182e8ff385e42cf39e6e01478",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xf0bfa8bc887f941bca6f244340369aa83ad4a73f8776c498d96337ec1fb3e16a",
+                        "receiptsRoot": "0xeaa8c40899a61ae59615cf9985f5e2194f8fd2b57d273be63bde6733e89b12ab",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x5208",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x20000",
+                        "excessBlobGas": "0x80000",
+                        "blockHash": "0x0fc7396080cfc99cb0602f3bfb5cb87262a9936878b2aaaf242872a248e1d053",
+                        "transactions": [
+                            "0x03f872018080078307a120800180c001e1a0010000000000000000000000000000000000000000000000000000000000000080a0e879f60b0e92a42f72fbff0cfe80c0e8c80eca4c5626a6a23689acbf46c9d751a01ad29450b9f4ad4d63549b18e00fd29d068acfb5d05cc12db58e62548eb2ae0d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [
+                        "0x0100000000000000000000000000000000000000000000000000000000000000"
+                    ],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "BlockException.RLP_STRUCTURES_ENCODING|TransactionException.TYPE_3_TX_CONTRACT_CREATION"
+            }
+        ],
+        "_info": {
+            "hash": "0xd293295dda704a6819a412428c66af7023c5113d55d342f9bb056770796f402c",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Reject blocks that include blob transactions that have nil to value\n    (contract creating).",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_blob_txs.py#L1075",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    }
+}

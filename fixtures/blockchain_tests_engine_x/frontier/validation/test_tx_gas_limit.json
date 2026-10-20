@@ -1,0 +1,209 @@
+{
+    "tests/frontier/validation/test_transaction.py::test_tx_gas_limit[fork_Cancun-blockchain_test_engine_x]": {
+        "network": "Cancun",
+        "lastblockhash": "0x0a3053fa888cb3b1609175d40772ffa452b617f1431afba0e0fbb7cfca80d3a4",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x9a18a6b4bc1e9145",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x0a3053fa888cb3b1609175d40772ffa452b617f1431afba0e0fbb7cfca80d3a4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x8775de6bf9617a01db134abccb3367d643aea70c041c68229133dbb350862008",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x5208",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9684ef80271da5a13efdd0e49bd467ed6e3267b548b5077dbccbe8ceca09fcf5",
+                        "transactions": [
+                            "0xf85f800182520994c126ac1563771086bb682b28ef0b0f2f7505de3b80801ca05530618c121b79b029444702600349463487ee4dc9cf24949e95b359d983a93fa070164fb5ba77c0f06d37d215be6bb1c25d58629674e3c75b88e85912eec19394"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.GAS_ALLOWANCE_EXCEEDED"
+            }
+        ],
+        "_info": {
+            "hash": "0x9bca1282e69f2a2c7a462fcab43b46cc6ff8d366a8320595733bf29e70b81a71",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that if a tx gas limit is higher than the block with a gas limit,\n    an exception is raised.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/validation/test_transaction.py#L17",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/validation/test_transaction.py::test_tx_gas_limit[fork_Paris-blockchain_test_engine_x]": {
+        "network": "Paris",
+        "lastblockhash": "0xfecd043af8a27081610289ec8a5393a3f5ff0153aa81b0f3b457cd46cc2babf1",
+        "config": {
+            "network": "Paris",
+            "chainid": "0x01"
+        },
+        "preHash": "0x43112421bc1b707a",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xfecd043af8a27081610289ec8a5393a3f5ff0153aa81b0f3b457cd46cc2babf1",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbcd3ebd9e95e2c1abaad8c6e8029b3be9d15bb0386dd6785cb2eea3fb12d32c5",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x5208",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x0436805375c8df723a833fe1b88dac2f0c8dfbf80f49bcd0c1cbffb2435ae9aa",
+                        "transactions": [
+                            "0xf85f800182520994c126ac1563771086bb682b28ef0b0f2f7505de3b80801ca05530618c121b79b029444702600349463487ee4dc9cf24949e95b359d983a93fa070164fb5ba77c0f06d37d215be6bb1c25d58629674e3c75b88e85912eec19394"
+                        ]
+                    }
+                ],
+                "newPayloadVersion": "1",
+                "forkchoiceUpdatedVersion": "1",
+                "validationError": "TransactionException.GAS_ALLOWANCE_EXCEEDED"
+            }
+        ],
+        "_info": {
+            "hash": "0x40b429a1eff750034bbd6c1d6030af219b74d0bb3c9a30afc1dfba448fd5bb41",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that if a tx gas limit is higher than the block with a gas limit,\n    an exception is raised.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/validation/test_transaction.py#L17",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/validation/test_transaction.py::test_tx_gas_limit[fork_Prague-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0x3cbfa935b8f345f7fe1dd3f03beb8be1eb12bce74383ab574cd9771cbb89c092",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x2642507ca4946a29",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x3cbfa935b8f345f7fe1dd3f03beb8be1eb12bce74383ab574cd9771cbb89c092",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x90f955d1e06c7e2fab63f8e6466ce12380c98dcc5d7eb22a5d6962da7ea6e7d7",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x5208",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x6211d6b028b40af1b38ccd73042d2964e7b63e23eff9c900846963471e911b3c",
+                        "transactions": [
+                            "0xf85f800182520994c126ac1563771086bb682b28ef0b0f2f7505de3b80801ca05530618c121b79b029444702600349463487ee4dc9cf24949e95b359d983a93fa070164fb5ba77c0f06d37d215be6bb1c25d58629674e3c75b88e85912eec19394"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3",
+                "validationError": "TransactionException.GAS_ALLOWANCE_EXCEEDED"
+            }
+        ],
+        "_info": {
+            "hash": "0x51a9bcde56f191f6121bb8780681843c645e708f8008e6c2428ba66ae73a781d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that if a tx gas limit is higher than the block with a gas limit,\n    an exception is raised.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/validation/test_transaction.py#L17",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    },
+    "tests/frontier/validation/test_transaction.py::test_tx_gas_limit[fork_Shanghai-blockchain_test_engine_x]": {
+        "network": "Shanghai",
+        "lastblockhash": "0x1c4eeabf6d7c6634834213087ec2645c29b412168c9f891764f9c0ea63aef1d3",
+        "config": {
+            "network": "Shanghai",
+            "chainid": "0x01"
+        },
+        "preHash": "0x23c9255d492de4e2",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x1c4eeabf6d7c6634834213087ec2645c29b412168c9f891764f9c0ea63aef1d3",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xbcd3ebd9e95e2c1abaad8c6e8029b3be9d15bb0386dd6785cb2eea3fb12d32c5",
+                        "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x5208",
+                        "gasUsed": "0x0",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x91eed0acbe0cbdd63e8856a91d81041caa6ed17191fe986e5d5dea62a3e090d7",
+                        "transactions": [
+                            "0xf85f800182520994c126ac1563771086bb682b28ef0b0f2f7505de3b80801ca05530618c121b79b029444702600349463487ee4dc9cf24949e95b359d983a93fa070164fb5ba77c0f06d37d215be6bb1c25d58629674e3c75b88e85912eec19394"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2",
+                "validationError": "TransactionException.GAS_ALLOWANCE_EXCEEDED"
+            }
+        ],
+        "_info": {
+            "hash": "0xf17ab671a75dd9d6ff37fde6035a7522fa30a09806f52fe50124db34e224fff2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Tests that if a tx gas limit is higher than the block with a gas limit,\n    an exception is raised.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/validation/test_transaction.py#L17",
+            "fixture-format": "blockchain_test_engine_x"
+        }
+    }
+}

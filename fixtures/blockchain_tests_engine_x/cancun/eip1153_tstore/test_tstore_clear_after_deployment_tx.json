@@ -1,0 +1,124 @@
+{
+    "tests/cancun/eip1153_tstore/test_tstorage_clear_after_tx.py::test_tstore_clear_after_deployment_tx[fork_Cancun-evm_code_type_LEGACY-blockchain_test_engine_x]": {
+        "network": "Cancun",
+        "lastblockhash": "0x9870ef3c2ad7e126f1704d1795154dce6e5f89a10075d705e4cf7bbca6583742",
+        "config": {
+            "network": "Cancun",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0xa15e9ec8299de43d",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x247655e9b191e0cb5b17babd290991bcfd0c78b8048f90ab44c10c11711d4638",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x913db20b554bdd85e89a8bcf05978b75a6bb59b543e00541144df100e590c37d",
+                        "receiptsRoot": "0x0dc810eaf2ac6fc612ce2ef6b0105e0aa308185d5f7a3a40145e59890aaa3583",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1308e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x9870ef3c2ad7e126f1704d1795154dce6e5f89a10075d705e4cf7bbca6583742",
+                        "transactions": [
+                            "0xf862800a830186a0808096600160015d61000660008160108239f360015c60015526a08c2997faa1a5c8c8b9d080f08396d1ec62ccb46beef31855bf4a581e081fa542a048c69432e7aae67e03f6dfddd766788c1040b0f7b409d6aec54c2cfc68492017",
+                            "0xf860010a830186a094bbd82cced4505247c1201a2bf486423cd3d0e024808025a07a1d60caee3297336df032c3c5e66f946345ff00dd8abac6171fc967fb1f1374a0487b6104a3fb18bdc4644fa7bce57e08f0934dd9ee68cde544f1dfe73e044e8f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "newPayloadVersion": "3",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x418ad4be1083eea8a9af6a34e0587d26811939a47242ed1037d2bc21cfd5cda6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "First creates a contract, which TSTOREs a value 1 in slot 1. After creating\n    the contract, a new tx will call this contract, storing TLOAD(1) into slot\n    1. The transient storage should be cleared after creating the contract (at\n    tx-level), so the storage should stay empty.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_clear_after_tx.py#L25",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    },
+    "tests/cancun/eip1153_tstore/test_tstorage_clear_after_tx.py::test_tstore_clear_after_deployment_tx[fork_Prague-evm_code_type_LEGACY-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0x27b1f5347e688e6acadad865f1719b83f30d6ef15d25cccc3442716e7fc449f6",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x869cc6ec14bc5e108a59d2be9e934635a56330cd939eab50963708468bf7938a",
+                        "receiptsRoot": "0x0dc810eaf2ac6fc612ce2ef6b0105e0aa308185d5f7a3a40145e59890aaa3583",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x1308e",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x27b1f5347e688e6acadad865f1719b83f30d6ef15d25cccc3442716e7fc449f6",
+                        "transactions": [
+                            "0xf862800a830186a0808096600160015d61000660008160108239f360015c60015526a08c2997faa1a5c8c8b9d080f08396d1ec62ccb46beef31855bf4a581e081fa542a048c69432e7aae67e03f6dfddd766788c1040b0f7b409d6aec54c2cfc68492017",
+                            "0xf860010a830186a094bbd82cced4505247c1201a2bf486423cd3d0e024808025a07a1d60caee3297336df032c3c5e66f946345ff00dd8abac6171fc967fb1f1374a0487b6104a3fb18bdc4644fa7bce57e08f0934dd9ee68cde544f1dfe73e044e8f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x722143c2a687a0338b9fd7c2418b1eb682b58f85c459ff79e4e00429a9446060",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "First creates a contract, which TSTOREs a value 1 in slot 1. After creating\n    the contract, a new tx will call this contract, storing TLOAD(1) into slot\n    1. The transient storage should be cleared after creating the contract (at\n    tx-level), so the storage should stay empty.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip1153_tstore/test_tstorage_clear_after_tx.py#L25",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1153.md",
+            "reference-spec-version": "1eb863b534a5a3e19e9c196ab2a7f3db4bb9da17"
+        }
+    }
+}

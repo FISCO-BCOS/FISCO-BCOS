@@ -1,0 +1,2186 @@
+{
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Berlin-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x625b034ac1c21d25113989f2aef8e666d7b38afe",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584",
+            "secretKey": "0xcc292f580ed622508bc071f8625b034ac1c21d25113989f2aef8e666d7b38afe"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x6c830d6f4b233fb9ab3550a3c7eba3f127083dbd04d6050328b56126bd6e6127",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06fb08",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x58016a978db673d64f69e04eac0b0ff2e6f0ad5c53e5fbfc7a86c106dcb9ad07",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Berlin-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x672932839ed0009b031f604fee13bbb6f47cf6eb",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xff169e7b3daf07037ec1f50039e7d907a782d1db",
+            "secretKey": "0x7104b77cd797f052a0013d37672932839ed0009b031f604fee13bbb6f47cf6eb"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x69fefb3101aad534b3ec8d5eb4b1c91d9c0f2e7be254f82f6bbcf9f7ab8407a8",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06fb08",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xa705bd717a15845747d13364c26fb0a36c7ea1c039cdcd9f4c9142a0664f87b6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Berlin-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x953a640fc000e793f62c5b027ff271818ed50e2c",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa",
+            "secretKey": "0x1b64b111f7f0c1ddbe45790c953a640fc000e793f62c5b027ff271818ed50e2c"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0xb78988fae3dec4828df5b6b789ed34cce0fb634cae9fa3a37a9f282607927f31",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06faea",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x3be05653bfec1ceeca0e53190cf98f1989caa8cf0c3ee6bed718f70f331ddbe6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Berlin-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xab2ec70d4809e422a55628561864791f375d43d5",
+            "secretKey": "0x154ed881f8e40113ea0d6597e5e7cbb33484c7c8efa0e2f629c985b74c9951b6"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x3a9c1e913506af293e28c0fbeb1165822c7459bac57ddfd54fe333189647712a",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x06faea",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x28cdf63799ca739caaae9f0d28ffc5eba5dfac6b571efe33bcb1b6b42c73407b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Cancun-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x625b034ac1c21d25113989f2aef8e666d7b38afe",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584",
+            "secretKey": "0xcc292f580ed622508bc071f8625b034ac1c21d25113989f2aef8e666d7b38afe"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xb0c474f8e07462e7b8e145c6f5603f92e01349a578724e1cf3a2ba38f06e0e0f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x83de2c3b9679133dbd7e8de45e6d2dcab4f0ea93b643230b76a9ff255af55032",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Cancun-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x672932839ed0009b031f604fee13bbb6f47cf6eb",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xff169e7b3daf07037ec1f50039e7d907a782d1db",
+            "secretKey": "0x7104b77cd797f052a0013d37672932839ed0009b031f604fee13bbb6f47cf6eb"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xfb0befbf82419045fbad36639a19d8566ac095845874dbee85c6c87e1a572d38",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x818cfa4e5635dcfc776620ec462907c61451c9035566ed797e476c96b2cd8bd8",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Cancun-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x953a640fc000e793f62c5b027ff271818ed50e2c",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa",
+            "secretKey": "0x1b64b111f7f0c1ddbe45790c953a640fc000e793f62c5b027ff271818ed50e2c"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0xb91b4049c920c7cab8083e024b1f2f8c7559d7bf42b1eef7e8e88a9674d96375",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x11050412baa85bdd5709672addd161669b3a0318ed6d64caecd0963e7bda3e1e",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Cancun-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xab2ec70d4809e422a55628561864791f375d43d5",
+            "secretKey": "0x154ed881f8e40113ea0d6597e5e7cbb33484c7c8efa0e2f629c985b74c9951b6"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x81aedef40da35fbbc376d973e3cba510191bb10fae91c314c6b7f6907d3ec5aa",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb694a1522bfb9c3c24e32454be76e37ea1f35c018ae996484b6b23532e995cb7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_London-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x625b034ac1c21d25113989f2aef8e666d7b38afe",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584",
+            "secretKey": "0xcc292f580ed622508bc071f8625b034ac1c21d25113989f2aef8e666d7b38afe"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0xb0c474f8e07462e7b8e145c6f5603f92e01349a578724e1cf3a2ba38f06e0e0f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x749b449566ea62740284fb9ec0f04391c154ed6c37640a22b855be043cd727cb",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_London-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x672932839ed0009b031f604fee13bbb6f47cf6eb",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xff169e7b3daf07037ec1f50039e7d907a782d1db",
+            "secretKey": "0x7104b77cd797f052a0013d37672932839ed0009b031f604fee13bbb6f47cf6eb"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0xfb0befbf82419045fbad36639a19d8566ac095845874dbee85c6c87e1a572d38",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xb242da653be86777f732c254855e80d07c38b20606e2b82fff31409b549d199b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_London-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x953a640fc000e793f62c5b027ff271818ed50e2c",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa",
+            "secretKey": "0x1b64b111f7f0c1ddbe45790c953a640fc000e793f62c5b027ff271818ed50e2c"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0xb91b4049c920c7cab8083e024b1f2f8c7559d7bf42b1eef7e8e88a9674d96375",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xabc9dcbfd1962801d3657d5a5f44e78054ad724d70f846a07554e74fde846465",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_London-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xab2ec70d4809e422a55628561864791f375d43d5",
+            "secretKey": "0x154ed881f8e40113ea0d6597e5e7cbb33484c7c8efa0e2f629c985b74c9951b6"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0x81aedef40da35fbbc376d973e3cba510191bb10fae91c314c6b7f6907d3ec5aa",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x6c88e3fee0211ab7be38b45f3331d26060cfacbcdea73b57bf4bcfd92c0746b4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Paris-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x625b034ac1c21d25113989f2aef8e666d7b38afe",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584",
+            "secretKey": "0xcc292f580ed622508bc071f8625b034ac1c21d25113989f2aef8e666d7b38afe"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0xb0c474f8e07462e7b8e145c6f5603f92e01349a578724e1cf3a2ba38f06e0e0f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xbb556f1927f5d2714b322f382bbdccb662e61f19af0bcfa8d349ed69b3f4d178",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Paris-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x672932839ed0009b031f604fee13bbb6f47cf6eb",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xff169e7b3daf07037ec1f50039e7d907a782d1db",
+            "secretKey": "0x7104b77cd797f052a0013d37672932839ed0009b031f604fee13bbb6f47cf6eb"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0xfb0befbf82419045fbad36639a19d8566ac095845874dbee85c6c87e1a572d38",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xd5fd38917a7b1bdbe5bae95dd63cee21806be20df58ccfcd09cecd47009a98ed",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Paris-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x953a640fc000e793f62c5b027ff271818ed50e2c",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa",
+            "secretKey": "0x1b64b111f7f0c1ddbe45790c953a640fc000e793f62c5b027ff271818ed50e2c"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0xb91b4049c920c7cab8083e024b1f2f8c7559d7bf42b1eef7e8e88a9674d96375",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x14317dd6ea3d2a87149e5f2fbf208da79b5efa855fb9710f1ec7127115b61859",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Paris-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xab2ec70d4809e422a55628561864791f375d43d5",
+            "secretKey": "0x154ed881f8e40113ea0d6597e5e7cbb33484c7c8efa0e2f629c985b74c9951b6"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0x81aedef40da35fbbc376d973e3cba510191bb10fae91c314c6b7f6907d3ec5aa",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x7444b4f934e90582c0bcddf5036f4b4dac17859120290156a8efd8d5d77db6b1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x625b034ac1c21d25113989f2aef8e666d7b38afe",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584",
+            "secretKey": "0xcc292f580ed622508bc071f8625b034ac1c21d25113989f2aef8e666d7b38afe"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xb0c474f8e07462e7b8e145c6f5603f92e01349a578724e1cf3a2ba38f06e0e0f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x9bbe40dfefc4b39cbe0f42ed86a7bd7f8b6f08405a217a11b7e3748f0fff1e16",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Prague-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x672932839ed0009b031f604fee13bbb6f47cf6eb",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xff169e7b3daf07037ec1f50039e7d907a782d1db",
+            "secretKey": "0x7104b77cd797f052a0013d37672932839ed0009b031f604fee13bbb6f47cf6eb"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xfb0befbf82419045fbad36639a19d8566ac095845874dbee85c6c87e1a572d38",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc7068322f02bc81545b0298b6afcf1bca83b5b15e2381eb2598e9b75ee30e8fd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Prague-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x953a640fc000e793f62c5b027ff271818ed50e2c",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa",
+            "secretKey": "0x1b64b111f7f0c1ddbe45790c953a640fc000e793f62c5b027ff271818ed50e2c"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xb91b4049c920c7cab8083e024b1f2f8c7559d7bf42b1eef7e8e88a9674d96375",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x961c7d61d499ccd049dac37dadc471b39652d2115553928c6ab7794d32e10c17",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Prague-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xab2ec70d4809e422a55628561864791f375d43d5",
+            "secretKey": "0x154ed881f8e40113ea0d6597e5e7cbb33484c7c8efa0e2f629c985b74c9951b6"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x81aedef40da35fbbc376d973e3cba510191bb10fae91c314c6b7f6907d3ec5aa",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1f291ec4622c2a2b7f837022522fd216bee9b8362d6eeb4882ddae0515db11b7",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Shanghai-call_opcode_CALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x625b034ac1c21d25113989f2aef8e666d7b38afe",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584",
+            "secretKey": "0xcc292f580ed622508bc071f8625b034ac1c21d25113989f2aef8e666d7b38afe"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0xb0c474f8e07462e7b8e145c6f5603f92e01349a578724e1cf3a2ba38f06e0e0f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094625b034ac1c21d25113989f2aef8e666d7b38afe808026a03fc4c0220c8cf580001077be15cb1d05cb8af618cf8c341b847358b6cc1cd163a023e759ca9abaec0c4c548e72a7c5df379ea16a20764cf6bc0e44671f85fd11b7",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x909a212a69ff7a72e00d3507a6bf7a46d53d3584": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x625b034ac1c21d25113989f2aef8e666d7b38afe": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f15a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xaba6d42760b2f34ae70c16b03ae986d7c394822a711c6248d48fd4e28dc5ef35",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Shanghai-call_opcode_CALLCODE-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x672932839ed0009b031f604fee13bbb6f47cf6eb",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xff169e7b3daf07037ec1f50039e7d907a782d1db",
+            "secretKey": "0x7104b77cd797f052a0013d37672932839ed0009b031f604fee13bbb6f47cf6eb"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0xfb0befbf82419045fbad36639a19d8566ac095845874dbee85c6c87e1a572d38",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094672932839ed0009b031f604fee13bbb6f47cf6eb808026a02cc2ec1de9cb99d5c8eecb18c69c31339837b97aac3dac7cb6446daac3ec4cada01d669e79bb186a1a6f48eb6811698c8d8c96921d950e5fbb9766f1e0682d60b3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xff169e7b3daf07037ec1f50039e7d907a782d1db": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de9904f8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x672932839ed0009b031f604fee13bbb6f47cf6eb": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c10000000000000000000000000600060006000f25a905090036017900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x02181c",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x55b4cfe652e98514c7a0ab211a3ef2fa50d62a720104f084207467a0f65ff788",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Shanghai-call_opcode_DELEGATECALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x953a640fc000e793f62c5b027ff271818ed50e2c",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa",
+            "secretKey": "0x1b64b111f7f0c1ddbe45790c953a640fc000e793f62c5b027ff271818ed50e2c"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0xb91b4049c920c7cab8083e024b1f2f8c7559d7bf42b1eef7e8e88a9674d96375",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094953a640fc000e793f62c5b027ff271818ed50e2c808025a0e231e537655eca98da13f28d0211347c2f7da85b2a9907400dc641be993d41c8a07e152aea5d1324471c1f745ff8a280d9ed97a5e6a33515223647cb7080904f87",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3fccbf7f358b301806eaad5bf2e748b6bc6bcafa": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x953a640fc000e793f62c5b027ff271818ed50e2c": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000f45a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc7ef5a6d214ffca2c64a6e775360b3a87e91a4dc7ccb46b94f716b063cad4aec",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/frontier/opcodes/test_call.py::test_call_large_args_offset_size_zero[fork_Shanghai-call_opcode_STATICCALL-evm_code_type_LEGACY-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0xab2ec70d4809e422a55628561864791f375d43d5",
+            "secretKey": "0x154ed881f8e40113ea0d6597e5e7cbb33484c7c8efa0e2f629c985b74c9951b6"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x81aedef40da35fbbc376d973e3cba510191bb10fae91c314c6b7f6907d3ec5aa",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860800a8307a12094e5e7cbb33484c7c8efa0e2f629c985b74c9951b6808025a0566955382a2894c2bedf396cdafa382c2e0ede8b3639d92c8a3138efb93dd37aa00df66b3003da56ad966e3f0f3d08a066be8112cb3fb9243b49c454374d07be3a",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xab2ec70d4809e422a55628561864791f375d43d5": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de990516",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xe5e7cbb33484c7c8efa0e2f629c985b74c9951b6": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000600060006c1000000000000000000000000060006000fa5a905090036014900360005500",
+                            "storage": {
+                                "0x00": "0x0a28"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x021813",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xfb28a2b08673083aed6ee18a35bd3b8c1447d340308aa5f392d5d3c6c873fd5f",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test xCALL with an extremely large args_offset and args_size set to zero.\n    Since the size is zero, the large offset should not cause a revert.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/frontier/opcodes/test_call.py#L171",
+            "fixture-format": "state_test"
+        }
+    }
+}

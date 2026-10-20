@@ -1,0 +1,506 @@
+{
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py::test_isogeny_kernel_values[fork_Prague-blockchain_test_engine_x_from_state_test-isogeny_kernel_0--]": {
+        "network": "Prague",
+        "lastblockhash": "0xfc94e6514ce5e8658ba43b3bbfbf7bbe3e73ce2f1f06c2bc85772efc9c3e06f9",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x0b1330313e6e689d760694fa9b941628a52f8e9010a74c9cf434afcb6197a706",
+                        "receiptsRoot": "0xa8d58b8718a834aef31c5226366369cd6b035ac5b720d1c5d3d71f362b916ecb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x16eb2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xfc94e6514ce5e8658ba43b3bbfbf7bbe3e73ce2f1f06c2bc85772efc9c3e06f9",
+                        "transactions": [
+                            "0xf8a1800a8301f64a94d6631c8ccaba1949b1540eb97c57fb157242214d80b840000000000000000000000000000000000b3f3f9519ff3ab349e4ffc214f99998a697b02358fcfe44830e29129f58d6f9154a23fd14dfa660a75d4aaec9b607c326a0d5a4b6af8eaa1236c2c7df3152982ae146fb0337b3f99c556622e9e1bf494f6ba012d56b412676db72b75533e357e0414d174efaa5e64df8631a72b1ca6c7c94ca"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xe8a4d14150339fed1a972efdfe235851a3c0ee536ef07e24e64119a517ac7174",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_MAP_FP_TO_G1 precompile with isogeny kernel inputs.\n\n    The isogeny kernel is simply the set of special field values, that after\n    the two step mapping (first SWU onto an auxiliary curve, then an 11-degree\n    isogeny back to G1), collapse exactly to the identity point.\n\n    Please proceed to the generator in `helpers.py` to see how the isogeny\n    kernel values are generated.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py#L82",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    },
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py::test_isogeny_kernel_values[fork_Prague-blockchain_test_engine_x_from_state_test-isogeny_kernel_1--]": {
+        "network": "Prague",
+        "lastblockhash": "0x1bcf815275e78a58b648e1a24e1f597a35836b8def4841fce0017523a2cdb8dc",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x315ae15b82f4d2d3a84bcf5004007d75ecd8055eec726b3cfbd2dd7c70a12c03",
+                        "receiptsRoot": "0xa8d58b8718a834aef31c5226366369cd6b035ac5b720d1c5d3d71f362b916ecb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x16eb2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x1bcf815275e78a58b648e1a24e1f597a35836b8def4841fce0017523a2cdb8dc",
+                        "transactions": [
+                            "0xf8a1800a8301f64a94c30bea3b3f585c0304fc7ba9ee21d3691787f04780b840000000000000000000000000000000000598c1367bbd9d3b73dfefb263a117bcdbcb4c7a282897d4a20589ad2ea80da73b23a465e2c291e7ef0fde593438f51325a00efef11e1401a0f2ea93691ba785cea414adab43444c1063119516b3de9c8561a07bc2d4410f11b0196b35277b4b07ecae0391e048d02a85dd11aa01d2c0c9d035"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x7901d1415fac94bdafb45b3efecdffd2fe1a4e93c707cac322a4fa67eaf72187",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_MAP_FP_TO_G1 precompile with isogeny kernel inputs.\n\n    The isogeny kernel is simply the set of special field values, that after\n    the two step mapping (first SWU onto an auxiliary curve, then an 11-degree\n    isogeny back to G1), collapse exactly to the identity point.\n\n    Please proceed to the generator in `helpers.py` to see how the isogeny\n    kernel values are generated.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py#L82",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    },
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py::test_isogeny_kernel_values[fork_Prague-blockchain_test_engine_x_from_state_test-isogeny_kernel_2--]": {
+        "network": "Prague",
+        "lastblockhash": "0x3bbcf77a3565079bb7c9eb780d6a6cd8f6b9617c443cd9fc3517a92ec2cbc162",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x328c2ad2a91e2e183cc8837b1e541a5f676f23d6cb57e256da8f325c8d9c1b2a",
+                        "receiptsRoot": "0xa8d58b8718a834aef31c5226366369cd6b035ac5b720d1c5d3d71f362b916ecb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x16eb2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x3bbcf77a3565079bb7c9eb780d6a6cd8f6b9617c443cd9fc3517a92ec2cbc162",
+                        "transactions": [
+                            "0xf8a1800a8301f64a94ee4ea5e9cf9a50772519e39ff8b1b18742a71b0280b84000000000000000000000000000000000068951d10be6961019aa800a51cf48b707fc9e40700510406be9242d0c8dd866afdec0d66f9dc2cf1dc944702ec161bb25a058291d1432268ea2ab4d91b517fcb1684a602ba53019ce21d9b75ee4c111289fa008c50b35c581bc0c057082df3706a0b9029db6b7a7227456e75e143c1362f40a"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xea7b9fd2922d0f75f4da9ad8449d0d29d1c5e7f13cc87a24fb6944a90075c308",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_MAP_FP_TO_G1 precompile with isogeny kernel inputs.\n\n    The isogeny kernel is simply the set of special field values, that after\n    the two step mapping (first SWU onto an auxiliary curve, then an 11-degree\n    isogeny back to G1), collapse exactly to the identity point.\n\n    Please proceed to the generator in `helpers.py` to see how the isogeny\n    kernel values are generated.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py#L82",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    },
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py::test_isogeny_kernel_values[fork_Prague-blockchain_test_engine_x_from_state_test-isogeny_kernel_3--]": {
+        "network": "Prague",
+        "lastblockhash": "0x0aa8a8adc41c64cee55919d4eaadc8b33388761d580d5274c5916d9557802b0c",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xdd19b5cb9f3832c133297dde92aaf2e7f2ae2fce5d65fb5a153b7cca83536f03",
+                        "receiptsRoot": "0xa8d58b8718a834aef31c5226366369cd6b035ac5b720d1c5d3d71f362b916ecb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x16eb2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x0aa8a8adc41c64cee55919d4eaadc8b33388761d580d5274c5916d9557802b0c",
+                        "transactions": [
+                            "0xf8a1800a8301f64a94c291d982f0d4572a44b77332323bbe19a2a6e08380b840000000000000000000000000000000000a2605e5991fcf3e63728a7a1468d79bacaa5f23f3816aadcd38efdd330c6d4f5bbf450f92156e0e23e16e3252bcd04225a0657b163842ff923370bbe61b7ac306daa4f3a3098636f7a131534098df3cbf19a00c30b8ac028b8166bf31e2b4dd63d5624694a8e4fdc999d96e04adbe88c02585"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9380505ecacc49263bb9c3bf9c69bda544cd98d12d35555a7c7e3bcf2e737f72",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_MAP_FP_TO_G1 precompile with isogeny kernel inputs.\n\n    The isogeny kernel is simply the set of special field values, that after\n    the two step mapping (first SWU onto an auxiliary curve, then an 11-degree\n    isogeny back to G1), collapse exactly to the identity point.\n\n    Please proceed to the generator in `helpers.py` to see how the isogeny\n    kernel values are generated.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py#L82",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    },
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py::test_isogeny_kernel_values[fork_Prague-blockchain_test_engine_x_from_state_test-isogeny_kernel_4--]": {
+        "network": "Prague",
+        "lastblockhash": "0xdd2a1ca9af9144756a0753a5b9b902b2e5fd8ff7cc0e62592f3ecb3cf6868333",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4188716c400060c8fa600d0061521828d81c671be9755bb7b32e685a59efea58",
+                        "receiptsRoot": "0xa8d58b8718a834aef31c5226366369cd6b035ac5b720d1c5d3d71f362b916ecb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x16eb2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xdd2a1ca9af9144756a0753a5b9b902b2e5fd8ff7cc0e62592f3ecb3cf6868333",
+                        "transactions": [
+                            "0xf8a1800a8301f64a9453ebee25e6d96ebeaee6e5b0b757aa6a967b8b1680b840000000000000000000000000000000000ec1d2551f80abe70136a7f42e52133ebddf9b619a88147ae422a98e57581f2b0961dc019c74599f12a1b5513649a2e825a00d2873d1e9c1568e5b78e9a7ea322f356d25462d98ed10ae6a86c58142b69305a00a65d30129336d57aaaf4dc47ffef8dd33ec6398ac3f41afdf427c7aed668229"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x497bcacffd454f309aaa2ec477036b8116fbdcad0c43759a3a3e41dbb38c22e2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_MAP_FP_TO_G1 precompile with isogeny kernel inputs.\n\n    The isogeny kernel is simply the set of special field values, that after\n    the two step mapping (first SWU onto an auxiliary curve, then an 11-degree\n    isogeny back to G1), collapse exactly to the identity point.\n\n    Please proceed to the generator in `helpers.py` to see how the isogeny\n    kernel values are generated.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py#L82",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    },
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py::test_isogeny_kernel_values[fork_Prague-blockchain_test_engine_x_from_state_test-isogeny_kernel_5--]": {
+        "network": "Prague",
+        "lastblockhash": "0x83328b482ef57d17c41f54c1cb9c5a7b48bc4b801ff07e639808299af3cedb30",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x425ac441a2d5dfb97c2e595640d81abccf81460aec70a565577825073f1e8345",
+                        "receiptsRoot": "0xa8d58b8718a834aef31c5226366369cd6b035ac5b720d1c5d3d71f362b916ecb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x16eb2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x83328b482ef57d17c41f54c1cb9c5a7b48bc4b801ff07e639808299af3cedb30",
+                        "transactions": [
+                            "0xf8a1800a8301f64a949932308426c0b59c3d6c2dd889a608a413cf04a580b84000000000000000000000000000000000146850b3bdc2495ed73bb803dfaa951a88abff0acb5c7aeac52b48f3c808e87ce3885b98ce916e17caef21a6cbc6b59825a08d8f6e9996dc88c880a3992364da2cf310b51050ccc66d216f9975c8c7c5cb5fa03ef53fc1c7804ee1e30f45724ddbaa4740c7ba088850c19bb6c4722970a62e6c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xd5411cb58aab21446d3ade9ca136a02916d64b9ec1a032436c9ffafefe302e5d",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_MAP_FP_TO_G1 precompile with isogeny kernel inputs.\n\n    The isogeny kernel is simply the set of special field values, that after\n    the two step mapping (first SWU onto an auxiliary curve, then an 11-degree\n    isogeny back to G1), collapse exactly to the identity point.\n\n    Please proceed to the generator in `helpers.py` to see how the isogeny\n    kernel values are generated.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py#L82",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    },
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py::test_isogeny_kernel_values[fork_Prague-blockchain_test_engine_x_from_state_test-isogeny_kernel_6--]": {
+        "network": "Prague",
+        "lastblockhash": "0xe91f0df45ff6b632a9ad4433346c3571fa797dec520c7359741966db7cadc7da",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x4983c8374548c64931600386f21662252494ece850749fc500dfbbc1ebd9b054",
+                        "receiptsRoot": "0xa8d58b8718a834aef31c5226366369cd6b035ac5b720d1c5d3d71f362b916ecb",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x16eb2",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xe91f0df45ff6b632a9ad4433346c3571fa797dec520c7359741966db7cadc7da",
+                        "transactions": [
+                            "0xf8a1800a8301f64a94c252d7375f3c05b4ee859a7bd27d9067b07aac9b80b840000000000000000000000000000000001377c0192d99508a317127abf17c64205c7aad448380027efb47ae73ea231dbd6ecd3f2841b63d309c35bb8fd13e48f026a06b6594b6795cc49ab190282387a46372d0caa46aff3d1e103707d79c0c19e0eca079c0b74ebee0ab2cfba6f77e6261dfac5ffc6512c10d87f8e4416fe28e4f05af"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x6295a9fee4dab6fca1e6df3e29b033befda4b22f9be1b84944df1dc2bbac50a2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_MAP_FP_TO_G1 precompile with isogeny kernel inputs.\n\n    The isogeny kernel is simply the set of special field values, that after\n    the two step mapping (first SWU onto an auxiliary curve, then an 11-degree\n    isogeny back to G1), collapse exactly to the identity point.\n\n    Please proceed to the generator in `helpers.py` to see how the isogeny\n    kernel values are generated.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py#L82",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    },
+    "tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py::test_isogeny_kernel_values[fork_Prague-blockchain_test_engine_x_from_state_test-isogeny_kernel_7--]": {
+        "network": "Prague",
+        "lastblockhash": "0xf581db63d75b1e71b1fac69327558ab304d883d3a156cc57d00d2872a00508df",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xabcb15ab52603acd88dfd2761f3916120e78314d5a34e2668e93f17e3219cbe3",
+                        "receiptsRoot": "0xe28433cc99029bdb8d95778c6d5d8dedf17aa6f49bbe12a8fde4d095b0982cf2",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x16ea6",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xf581db63d75b1e71b1fac69327558ab304d883d3a156cc57d00d2872a00508df",
+                        "transactions": [
+                            "0xf8a1800a8301f62c94e065731f49425466d65bfb8958bda988950be4ac80b840000000000000000000000000000000000fdb0c04a060175be7a91d3c2ee2d53bb7ccec610003a81199f7e2c3c3a488d4c2ecbaef1f3e91f1961d91cdad42da6926a098b2119a8e10ca1898b06dc6a8452c14533affad9ff164f803c54c547f95aee0a069997860e89652e599a41bb9d31f4117cdca65467c68de55e4a8453bcaf88760"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x118ff9e77bec83868e485bfe74f395118c660c5cca5fb0e2b303cc553eae8241",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the BLS12_MAP_FP_TO_G1 precompile with isogeny kernel inputs.\n\n    The isogeny kernel is simply the set of special field values, that after\n    the two step mapping (first SWU onto an auxiliary curve, then an 11-degree\n    isogeny back to G1), collapse exactly to the identity point.\n\n    Please proceed to the generator in `helpers.py` to see how the isogeny\n    kernel values are generated.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip2537_bls_12_381_precompiles/test_bls12_map_fp_to_g1.py#L82",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2537.md",
+            "reference-spec-version": "c561ec1426fe5ec470eade499a0bd4174f270583"
+        }
+    }
+}

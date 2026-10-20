@@ -1,0 +1,151 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py::test_pointer_reentry[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x7d46457c9b6039d6466004d64da2518a327767f5": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x14dc6ea2a549569d510b56b4abf744a05632496b": {
+                "nonce": "0x00",
+                "balance": "0x03e8",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x161110dd7d8b9fe2e301070c6d42e5784cab0eba": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x600035600052602035602052600060006040600060007314dc6ea2a549569d510b56b4abf744a05632496b62061a80f1",
+                "storage": {}
+            },
+            "0x161110dd7d8b9fe2e301070c6d42e5784cab0fba": {
+                "nonce": "0x01",
+                "balance": "0x64",
+                "code": "0x600035600052602035602052600160005401600055600160015c0160015d60015c60015560006020511460615801576001602051146029580157600260205114600858015760765801565b3260035530600255476004553360055560605801565b326002553060035547600455336005556002602052600060006040600060006000516207a120f160335801565b60016020526000600060406000600073161110dd7d8b9fe2e301070c6d42e5784cab0eba6207a120f10060035801565b",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x1e8480"
+            ],
+            "to": "0x14dc6ea2a549569d510b56b4abf744a05632496b",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x000000000000000000000000161110dd7d8b9fe2e301070c6d42e5784cab0fba0000000000000000000000000000000000000000000000000000000000000000"
+            ],
+            "accessLists": [
+                []
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x00",
+                    "address": "0x161110dd7d8b9fe2e301070c6d42e5784cab0fba",
+                    "nonce": "0x00",
+                    "v": "0x00",
+                    "r": "0xcbe634b853c03f5268d84628ff999078ce30cd28b8ee4bcbc64bedd78135ebe4",
+                    "s": "0x6e9eb0b9f2edebfce214bdbb60d0158d1106a575d4c8c3439b051adfc3a0f64b",
+                    "signer": "0x14dc6ea2a549569d510b56b4abf744a05632496b",
+                    "yParity": "0x00"
+                }
+            ],
+            "sender": "0x7d46457c9b6039d6466004d64da2518a327767f5",
+            "secretKey": "0x886260c826a07053ca299332161110dd7d8b9fe2e301070c6d42e5784cab0eba"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0xc61fa1108d3765bf103bc2372d5c348bf5905816642028838cd7267b32b1ad75",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f9010201808007831e84809414dc6ea2a549569d510b56b4abf744a05632496b80b840000000000000000000000000161110dd7d8b9fe2e301070c6d42e5784cab0fba0000000000000000000000000000000000000000000000000000000000000000c0f85cf85a8094161110dd7d8b9fe2e301070c6d42e5784cab0fba8080a0cbe634b853c03f5268d84628ff999078ce30cd28b8ee4bcbc64bedd78135ebe4a06e9eb0b9f2edebfce214bdbb60d0158d1106a575d4c8c3439b051adfc3a0f64b80a0e22d19923e40d017b2a2fb52aa29c4827a221566f22781016e2d218bca2234a2a059b3eca4b9d3d7050671cdb63721b57e08edb86258f681a9681f3446cc567d28",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x7d46457c9b6039d6466004d64da2518a327767f5": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de7f8b85",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x14dc6ea2a549569d510b56b4abf744a05632496b": {
+                            "nonce": "0x01",
+                            "balance": "0x03e8",
+                            "code": "0xef0100161110dd7d8b9fe2e301070c6d42e5784cab0fba",
+                            "storage": {
+                                "0x00": "0x02",
+                                "0x01": "0x02",
+                                "0x02": "0x7d46457c9b6039d6466004d64da2518a327767f5",
+                                "0x03": "0x14dc6ea2a549569d510b56b4abf744a05632496b",
+                                "0x04": "0x03e8",
+                                "0x05": "0x161110dd7d8b9fe2e301070c6d42e5784cab0eba"
+                            }
+                        },
+                        "0x161110dd7d8b9fe2e301070c6d42e5784cab0eba": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x600035600052602035602052600060006040600060007314dc6ea2a549569d510b56b4abf744a05632496b62061a80f1",
+                            "storage": {}
+                        },
+                        "0x161110dd7d8b9fe2e301070c6d42e5784cab0fba": {
+                            "nonce": "0x01",
+                            "balance": "0x64",
+                            "code": "0x600035600052602035602052600160005401600055600160015c0160015d60015c60015560006020511460615801576001602051146029580157600260205114600858015760765801565b3260035530600255476004553360055560605801565b326002553060035547600455336005556002602052600060006040600060006000516207a120f160335801565b60016020526000600060406000600073161110dd7d8b9fe2e301070c6d42e5784cab0eba6207a120f10060035801565b",
+                            "storage": {
+                                "0x00": "0x01",
+                                "0x01": "0x01",
+                                "0x03": "0x7d46457c9b6039d6466004d64da2518a327767f5",
+                                "0x02": "0x161110dd7d8b9fe2e301070c6d42e5784cab0fba",
+                                "0x04": "0x64",
+                                "0x05": "0x14dc6ea2a549569d510b56b4abf744a05632496b"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x9cc09c8373ce2442ccc3b1eded36f4ddce66112b8c5a87fc99c68c46037ebcb1",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Check operations when reenter the pointer again.\n\n    TODO: feel free to extend the code checks under given scenarios in\n          switch case.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py#L1227",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

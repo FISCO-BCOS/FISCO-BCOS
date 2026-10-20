@@ -1,0 +1,506 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_reentry[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-return_opcode_RETURN]": {
+        "network": "Prague",
+        "lastblockhash": "0xc9c5ac0fad939f9af34ba8e64637d1bb3f6da0c15d1af8bb6dcd28cc06d6ee5a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb9922d5b6c171f7cf7f7eb0efef1e47d0540eff1514cce9c31917c7a98d75948",
+                        "receiptsRoot": "0xaa253ebc8e4c15dfc8cef73f7cc21f32a5b199b0952dd8498ba37688b9d6758b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10cd4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc9c5ac0fad939f9af34ba8e64637d1bb3f6da0c15d1af8bb6dcd28cc06d6ee5a",
+                        "transactions": [
+                            "0x04f8c101808007830186a09499a4946f980e182bf5fbf30b6638741e5a8d0fd88080c0f85cf85a8094dd6c9a0cd9ad4c349480bcf60bdfe9926bc5f1398001a02b1e0602829d1eacc9f06ba590f8c1d965040c182960802f8fc7c658c910745aa048d19808bf0f7fc9e0eda4d603df06f93ba21b6338c751f93e170cb1fc31da2f01a013b10bfefd7056e4e2e134637bc104f1f458eb7046180fd1cc2ddfdfe517fb2da02b0693c3d831ffbe79f684e7cc3a098d704d982288e097b42099b2149132dd0c"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x5e6519bb096049e064868765203b0f767b3fd3771b4fb43b2bd655df716411f4",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple TSTORE in a set-code transaction, which also\n    performs a re-entry to TLOAD the value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L362",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_reentry[fork_Prague-call_opcode_CALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-return_opcode_REVERT]": {
+        "network": "Prague",
+        "lastblockhash": "0x60e7c36f230cd8a095e80559c5bd9f0f3de3246187a222ec754b5c9fffe87866",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xe95a3b294e1d0fb51dda9a2384a7c8a04df6c58cd93694d4b83ca7b4f4dfa782",
+                        "receiptsRoot": "0xaa253ebc8e4c15dfc8cef73f7cc21f32a5b199b0952dd8498ba37688b9d6758b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10cd4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x60e7c36f230cd8a095e80559c5bd9f0f3de3246187a222ec754b5c9fffe87866",
+                        "transactions": [
+                            "0x04f8c101808007830186a094ef648e14b47d6544163871411c038f37be6158e18080c0f85cf85a8094c902435d40c4b284864d0a4f2db1c4b093fa8fbf8001a06ae65917429b04a2ad68a4b2aa117b198d2ae761d8d5aac455252f8961b70916a062b4f18aa6fc31dfea517e58d0b24ab1551873f2c6e2218de21745bca5713d5280a04d14f3e2beb2c8a23fed142a3c7d8d3c0c6fc469e4234454307d6496d64327aea0354fadae19a34223fbe45825fb7b87e746857a7162412a0f79ea47d649537f4f"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xa0256e7a1b300758ffde799e9e97ee356291f538a503144d88ff70d0028a00c2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple TSTORE in a set-code transaction, which also\n    performs a re-entry to TLOAD the value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L362",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_reentry[fork_Prague-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-return_opcode_RETURN]": {
+        "network": "Prague",
+        "lastblockhash": "0x4e7f10c90146e23030c4e12452680c8534f5c038f9b73f220428ddfe9a0a4b73",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xb1abcb777a56de6a9b1cc445213ecffdd7a9c417773658e1bb194525418604b3",
+                        "receiptsRoot": "0xaa253ebc8e4c15dfc8cef73f7cc21f32a5b199b0952dd8498ba37688b9d6758b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10cd4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4e7f10c90146e23030c4e12452680c8534f5c038f9b73f220428ddfe9a0a4b73",
+                        "transactions": [
+                            "0x04f8c101808007830186a0941a15d5549a8715ed07abd58da7e83efcbea73a068080c0f85cf85a80940030ac3e72d5c5cce85dde2f0afc474a3384a4318001a0b566e768a98879c7826a0ec8c731537f0d7ddc68dd37121c87866abbc56f408fa0787b302977b1a86baf195b47b2868de8316650aeb3d20a2401a7e5d825972cb080a04dbd158fc8236c93ebc8cb91707e954e14415d209e492a7b7d28d0f9cc3446d2a03081f5826d5e5823b70909255760eb3c1043ab3bc12b546d3d48181028334188"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x105aa16d43c3afb12acb160dc290ef6ae004d620781046ce135305b1d4007bfe",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple TSTORE in a set-code transaction, which also\n    performs a re-entry to TLOAD the value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L362",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_reentry[fork_Prague-call_opcode_CALLCODE-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-return_opcode_REVERT]": {
+        "network": "Prague",
+        "lastblockhash": "0xc012b3aaf1a2fb63d06feef1c852a38012e69f7fd5ed854333764ae38beffb1e",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x615e0d32f6211b254e53d3de2edf445feda0ffe5af276cf08a77f7bc134cbbb4",
+                        "receiptsRoot": "0xaa253ebc8e4c15dfc8cef73f7cc21f32a5b199b0952dd8498ba37688b9d6758b",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10cd4",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xc012b3aaf1a2fb63d06feef1c852a38012e69f7fd5ed854333764ae38beffb1e",
+                        "transactions": [
+                            "0x04f8c101808007830186a094fc315121ee5b93fd793493fbb4ad48080b5790758080c0f85cf85a8094fd1534c0763f41e4b5e10833fc2e48926790dfdb8001a0b86b4a4074c9c98c1534e6e023d33fb277f22922c2b37424446314862e9930dba06e844dda8f3a143e5ec28fc1a29efa8584bb9d77fe252a87a51e474a025a82a480a0f8c2eca4825571cd8e015426d2c6c33ad7053e1b5ed5a1ee4d6156504e9f1872a043609f102e13503fa7ed255886c362142dc83896c9310ccdea3c8b1bf87d4017"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf0923c35d888713fe9b675e3074e35e06846fb39f6cc9a097d0488118eb6b41b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple TSTORE in a set-code transaction, which also\n    performs a re-entry to TLOAD the value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L362",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_reentry[fork_Prague-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-return_opcode_RETURN]": {
+        "network": "Prague",
+        "lastblockhash": "0x4169bbe8982532731b18f4d1b33a4ea3a5ae2ecb912c241430cbbbf9aa469050",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x75fc318e3be969ec7af2a8ac2858f9865f6a84e1fae1085a85a8cca02b7a17c7",
+                        "receiptsRoot": "0xeda0338f058648f1d627e0f746c179424a04352dd240a85bc661a7071a0abb96",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10cd1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x4169bbe8982532731b18f4d1b33a4ea3a5ae2ecb912c241430cbbbf9aa469050",
+                        "transactions": [
+                            "0x04f8c101808007830186a09446e5b38a3687d16723d7f3ba97b0af709cf1ae518080c0f85cf85a80943afbe33c5542d8e0e2701f912aee011c5750bf768080a06369386f11e7147ede141f8ccbf18aa9964e126b0ae042f811e3f8d175c10716a064897c83a34f797bf65f72bd9c50ee92e0bfb0f7ed24b1a68b523aa8af7f4d4880a09bbfa5b03f1e42b78ffd7ad17c38b33515d43690aa743bb3291eead331a65ba3a07029d8b33a4488fecc265f8fd8c0a0fba820276212cbe73f9a22ba32b8b5d39d"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x67b318fae2e959dcec2f85afcf125bb854bd281a3e911d5041a77a706d943f47",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple TSTORE in a set-code transaction, which also\n    performs a re-entry to TLOAD the value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L362",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_reentry[fork_Prague-call_opcode_DELEGATECALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-return_opcode_REVERT]": {
+        "network": "Prague",
+        "lastblockhash": "0xee4c2dac633d880a0d74ea7f29d76050613ae6ac3335aa040ff9ee7edc9b0212",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3efea68230b892a8c67698fbf662474d95056d514c8c9df0fea9db37fa029f75",
+                        "receiptsRoot": "0xeda0338f058648f1d627e0f746c179424a04352dd240a85bc661a7071a0abb96",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10cd1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0xee4c2dac633d880a0d74ea7f29d76050613ae6ac3335aa040ff9ee7edc9b0212",
+                        "transactions": [
+                            "0x04f8c101808007830186a094d5ebd7ba66f76d045a9d55ef2b516b54fb744fe08080c0f85cf85a8094f2ab588d5bb142229f14950f6707a965cd5c72478080a0a62b2662aa74c5e08edffa368499b8048fcc2352d7beaabaeed4bda36fae1fb9a074215cbea59f41340c872e0d84ef7fb6c63ebfce4d4ebbb008c38cec3b82b6b180a074cecf6060a5effe00935891a4a6f5ec577329b9bcf3c13a5dff9370a9715934a0607db7e2fd88bf926c44d9489e2e9bca1dcf4ada20f9352945fba19a51a2ad81"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x732910166e69312c02503ca8e91ecdb8f9da4b4f8f8993b7559173fa247a910b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple TSTORE in a set-code transaction, which also\n    performs a re-entry to TLOAD the value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L362",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_reentry[fork_Prague-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-return_opcode_RETURN]": {
+        "network": "Prague",
+        "lastblockhash": "0x206df112fd84741f5c83a012a772468d836a275d62bd52b15c07a899bdd6b7b9",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x6c48d3ce10d2572bc434c37688ff51277e8dad70d771285e6437cf115e58462c",
+                        "receiptsRoot": "0xeda0338f058648f1d627e0f746c179424a04352dd240a85bc661a7071a0abb96",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10cd1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x206df112fd84741f5c83a012a772468d836a275d62bd52b15c07a899bdd6b7b9",
+                        "transactions": [
+                            "0x04f8c101808007830186a094242d228d399c2fa08dbd96fdfd9c8d893285e24c8080c0f85cf85a8094e18d1b7a7d777e2cb6d303235aa8a02426dba17c8001a0d80f67ac112810ea5643ac0e611241f286a8dfd1f1732318a38b92b7681412d4a03dfeb6868622e926605691e3a1f5a5924b0744b84d0b4cd3d41bbdad8f09212780a0e138a92d9376e0524cb62531d0eb7acd1b023db519c3d557415380843e00f165a0517e0705a6a8ee824c579ad542790ec02fe165dbeabf0cf6b7e5ae9cf3d6bf91"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x47148f798f0eb94b602fdd6c28d93abf7974c5ee63b4b4d8b163e4069d1ef549",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple TSTORE in a set-code transaction, which also\n    performs a re-entry to TLOAD the value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L362",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_set_code_to_tstore_reentry[fork_Prague-call_opcode_STATICCALL-evm_code_type_LEGACY-blockchain_test_engine_x_from_state_test-return_opcode_REVERT]": {
+        "network": "Prague",
+        "lastblockhash": "0x59ff24804cc43f36bcb0e47d335be257cf608629f35676f45db0098aeaa46a9a",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x4530ce1b0128ddad",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x7e15bc8915e839b1ad96b90964a543b8305cdaa6ad8ee492ab15e741e81583f4",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xc20da25be1e4204034b82e1fedfc9daad516069fdc0d65157abdb528c13f4b2c",
+                        "receiptsRoot": "0xeda0338f058648f1d627e0f746c179424a04352dd240a85bc661a7071a0abb96",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x10cd1",
+                        "timestamp": "0x3e8",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x59ff24804cc43f36bcb0e47d335be257cf608629f35676f45db0098aeaa46a9a",
+                        "transactions": [
+                            "0x04f8c101808007830186a09412d437c630fe22d6605251461a911a6499051d728080c0f85cf85a8094f5825237595b8eb7c0e144a38adde17308fcf1c28001a046dfc21f073576ab1067fbdfaec26c615f9c6b11e1f7156b3dd7530b805c3ffaa03c4f7d72cbf9e6c2021fe4d4138ac73b0ea6a38a6f533a829dc50922dddd7a9f80a0af26190e965bd7b7ad54202d38cfe6b4b8ca087fbed8fff55a6ba0d26c14038ca061825ef7621c6f9866cac95ea7e386bc8836729dfc31e46299bdf960723bc353"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0x9ba6aba6a47e152702510c7b072e7f1495658d01a2f1ea3a2c87cd739ca189e9",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test the executing a simple TSTORE in a set-code transaction, which also\n    performs a re-entry to TLOAD the value.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs.py#L362",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

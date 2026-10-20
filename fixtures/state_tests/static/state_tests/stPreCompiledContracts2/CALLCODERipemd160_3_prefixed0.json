@@ -1,0 +1,189 @@
+{
+    "tests/static/state_tests/stPreCompiledContracts2/CALLCODERipemd160_3_prefixed0Filler.json::CALLCODERipemd160_3_prefixed0[fork_Cancun-state_test-]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x989680",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x4cafeddfff28c8f4190062d32e1cf0fb1e2dfa3b": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x6ee8fd86e2a40be43270954bed82e3bff98ff702": {
+                "nonce": "0x00",
+                "balance": "0x01312d00",
+                "code": "0x64f34578907f600052602060006025600060006003611770f260025560005160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0592a8"
+            ],
+            "to": "0x6ee8fd86e2a40be43270954bed82e3bff98ff702",
+            "value": [
+                "0x0186a0"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x4cafeddfff28c8f4190062d32e1cf0fb1e2dfa3b",
+            "secretKey": "0xd2abe1f1f23f7f23fb09bcbd6ee8fd86e2a40be43270954bed82e3bff98ff702"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x07c6597c3cbb2fda61c1144f5f72f092854637a590a79b9c3632f2d13ae5154f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf863800a830592a8946ee8fd86e2a40be43270954bed82e3bff98ff702830186a08025a0a75ea0100f22e8837fb20e846cfd6f1eb77581bfaa149efc7409426781c5115ea0152bb6f3b9e60dfc46fc304ced0dbb4390dbb2d8c5e50e5ac815160b577ea706",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x4cafeddfff28c8f4190062d32e1cf0fb1e2dfa3b": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7585fe8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x6ee8fd86e2a40be43270954bed82e3bff98ff702": {
+                            "nonce": "0x00",
+                            "balance": "0x0132b3a0",
+                            "code": "0x64f34578907f600052602060006025600060006003611770f260025560005160005500",
+                            "storage": {
+                                "0x02": "0x01",
+                                "0x00": "0x316750573f9be26bc17727b47cacedbd0ab3e6ca"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xbe80576e025bf3af48d92f17f2801fb40051ed37899700c3eabafa8c8327d7da",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    },
+    "tests/static/state_tests/stPreCompiledContracts2/CALLCODERipemd160_3_prefixed0Filler.json::CALLCODERipemd160_3_prefixed0[fork_Prague-state_test-]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x989680",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x0a",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x4cafeddfff28c8f4190062d32e1cf0fb1e2dfa3b": {
+                "nonce": "0x00",
+                "balance": "0x0de0b6b3a7640000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x6ee8fd86e2a40be43270954bed82e3bff98ff702": {
+                "nonce": "0x00",
+                "balance": "0x01312d00",
+                "code": "0x64f34578907f600052602060006025600060006003611770f260025560005160005500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x0592a8"
+            ],
+            "to": "0x6ee8fd86e2a40be43270954bed82e3bff98ff702",
+            "value": [
+                "0x0186a0"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x4cafeddfff28c8f4190062d32e1cf0fb1e2dfa3b",
+            "secretKey": "0xd2abe1f1f23f7f23fb09bcbd6ee8fd86e2a40be43270954bed82e3bff98ff702"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x07c6597c3cbb2fda61c1144f5f72f092854637a590a79b9c3632f2d13ae5154f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf863800a830592a8946ee8fd86e2a40be43270954bed82e3bff98ff702830186a08025a0a75ea0100f22e8837fb20e846cfd6f1eb77581bfaa149efc7409426781c5115ea0152bb6f3b9e60dfc46fc304ced0dbb4390dbb2d8c5e50e5ac815160b577ea706",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x4cafeddfff28c8f4190062d32e1cf0fb1e2dfa3b": {
+                            "nonce": "0x01",
+                            "balance": "0x0de0b6b3a7585fe8",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x6ee8fd86e2a40be43270954bed82e3bff98ff702": {
+                            "nonce": "0x00",
+                            "balance": "0x0132b3a0",
+                            "code": "0x64f34578907f600052602060006025600060006003611770f260025560005160005500",
+                            "storage": {
+                                "0x02": "0x01",
+                                "0x00": "0x316750573f9be26bc17727b47cacedbd0ab3e6ca"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc1005870868143bca7db0eeb59ab0c45f0b24fd46ac2fcc0f9c044ee7d0c81bf",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "No description available - add a docstring to the python test class or function.",
+            "url": "",
+            "fixture-format": "state_test"
+        }
+    }
+}

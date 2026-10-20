@@ -1,0 +1,55 @@
+{
+    "tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py::test_precompile_before_fork[fork_ShanghaiToCancunAtTime15k-blockchain_test_engine_x_from_state_test----correct_proof]": {
+        "network": "ShanghaiToCancunAtTime15k",
+        "lastblockhash": "0x35d49b6522241d464acf74a9d1d7cc6458a0a840956253a24f82201f051e3941",
+        "config": {
+            "network": "ShanghaiToCancunAtTime15k",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            }
+        },
+        "preHash": "0x2568bcaf29d39c51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0xc288ce8a349ea9cae06789b66856befdd614f851bc241600ca0914dc9f34a79c",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x135f5f368901ed551b38e6f3c54a8ab829afb8011f393d1f36c399b7b7eec799",
+                        "receiptsRoot": "0x293d302ee07a15a99db519e4aa6614a95f099c0ea9ee82d87809600cff941027",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x134a8",
+                        "timestamp": "0x1d4c",
+                        "extraData": "0x00",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blockHash": "0x35d49b6522241d464acf74a9d1d7cc6458a0a840956253a24f82201f051e3941",
+                        "transactions": [
+                            "0xf90121800a834c4b4094661037065a50edff3952a917d584485a8866815680b8c0010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014623ce31cf9759a5c8daf3a357992f9f3dd7f9339d8998bc8e68373e54f00b75e0000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025a0e3570ea958ea846fa97c8d709820eb4815400e5253998414cba7acd63c972a92a02b345bbf0f2c80d3d37790b15d9391e08b331913a8b5dfde318f63369ce60f02"
+                        ],
+                        "withdrawals": []
+                    }
+                ],
+                "newPayloadVersion": "2",
+                "forkchoiceUpdatedVersion": "2"
+            }
+        ],
+        "_info": {
+            "hash": "0x0ed82b4b471894f2939ce130196495dbfc65335b0336c5adc0a35016893fb2b6",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Test calling the Point Evaluation Precompile before the appropriate fork.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/cancun/eip4844_blobs/test_point_evaluation_precompile.py#L631",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md",
+            "reference-spec-version": "de2e4a46ad93fc04e6fe3174dc6e90a3307bdb5f"
+        }
+    }
+}

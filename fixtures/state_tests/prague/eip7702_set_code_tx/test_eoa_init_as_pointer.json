@@ -1,0 +1,105 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py::test_eoa_init_as_pointer[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xdf1bfc5a388bdfa56f01af3a28e22dacffde09b9": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x6001600055",
+                "storage": {}
+            },
+            "0x6050c08170506108238cdf3060664c7493063603": {
+                "nonce": "0x01",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0xef0100df1bfc5a388bdfa56f01af3a28e22dacffde09b9",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x01",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x030d40"
+            ],
+            "to": "0x6050c08170506108238cdf3060664c7493063603",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "sender": "0x6050c08170506108238cdf3060664c7493063603",
+            "secretKey": "0xa5eccd1dadf6bd38884b57a1df1bfc5a388bdfa56f01af3a28e22dacffde09b9"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x4fef9315693a926e3454927f2fe1e15e70b90689824370e2c5cb7fb0599b0d8a",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0xf860010a83030d40946050c08170506108238cdf3060664c7493063603808025a0a6e0db9d6da915a4111a710ae23ecee835ecce93a2c23c98c58cdeb06d154ac9a05faab11f7891c6fc6f58d1dbdca3c152880d1166c01774fe6bc30c9f8fb735af",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xdf1bfc5a388bdfa56f01af3a28e22dacffde09b9": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x6001600055",
+                            "storage": {}
+                        },
+                        "0x6050c08170506108238cdf3060664c7493063603": {
+                            "nonce": "0x02",
+                            "balance": "0x3635c9adc5de996c2c",
+                            "code": "0xef0100df1bfc5a388bdfa56f01af3a28e22dacffde09b9",
+                            "storage": {
+                                "0x00": "0x01"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x01f926",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x63d6491d4703fc1ce16e8dc58ec44cfc87b60877cc438b29f94348211728b541",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "It was agreed before that senders don't have code.\n\n    And there were issues with tests sending transactions from account's\n    with code With EIP7702 it is again possible,\n    let's check the test runners are ok.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py#L1367",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

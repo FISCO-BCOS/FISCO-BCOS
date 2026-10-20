@@ -1,0 +1,98 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py::test_pointer_resets_an_empty_code_account_with_storage[fork_Prague-blockchain_test_engine_x]": {
+        "network": "Prague",
+        "lastblockhash": "0x75eaac5f82a17fae915702e52d904068d9f14430407a46297b6b4503f4afd428",
+        "config": {
+            "network": "Prague",
+            "chainid": "0x01",
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            }
+        },
+        "preHash": "0x1d04680031171f51",
+        "engineNewPayloads": [
+            {
+                "params": [
+                    {
+                        "parentHash": "0x5522a48586ff12043c90f5b3d882d6089c0f8b7bf9d3c8c71094272069e6fc7b",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0x3cd7ff8473a47ca0629534858b09aabe024137602be8f21a792969599f91af45",
+                        "receiptsRoot": "0xcefe591066d513f461e0aaa5d7a09988a36d8cd493a5a33e7b1671da84aa9620",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x1",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x41636",
+                        "timestamp": "0xc",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x52c9d098825678876f1a5990b0ddeb0269b638db62cf81a61cd0f0edeeb202fe",
+                        "transactions": [
+                            "0x04f8c10180800783030d409494391a2b56cdcf93081bd8d20372031018e938288080c0f85cf85a80947d29e74b97280912df1f66641610fb370e24b7b68001a05259702d6bfa0cc983586489332bd380f4f712cc1b7d4d7b9d119ad56a144573a0321e104416a8b5d80b49a6449d459727cbcae491665124d59482aacd788d9d5380a0e39866f9dc106dee86497a083d76b005cc19e3355da20218c49af1845c5c914ea04ce1053c3dcfb7d1c61671b931795bc9e426e083b7ee8d16ff9ed0ad38832d1d",
+                            "0x04f8c10101800783030d409418207e83f13580081c12e940a65cad62e8ac7cf48080c0f85cf85a80947d29e74b97280912df1f66641610fb370e24b7b60201a09f76b7ce7adf802a87913f7e4a555a6ed3adce84173e420faae68a7def028488a00bc8f49052cc1f105af99752862629117e5db2f6504c76306839039c97092b9c80a074f6d46a780db216114c5cc3b3bfb684cce7890ef8f20896cccf141c2859789da043a859aff72bf4495c379bff3a2ac50d72b45f0b4d9126dbdb5dcc54261dc8e8",
+                            "0x04f9011d0103800783030d409494391a2b56cdcf93081bd8d20372031018e938288080c0f8b8f85a809400000000000000000000000000000000000000000101a00194685f1972e9aa6fc162baf86c0646cc7c8a54ceb56fdb77d5b8d0753998aaa038c79a8ae519b7f77a4ffbef721fe2486cd7ec4eb563806c408198fdf5eded84f85a809400000000000000000000000000000000000000000401a02fde87eea74e3031c9c40fdcbcae3688aa086174f0e804bd6cecd98630f3f413a04f020fbbdb770587f5520afc44e76012841565579db80874bc0f9fbecdfc789701a0b2e52535a0627d69999adc49473f7d7771ae63e94e7ac1fc28e4a14f120767a5a03fd20aaffcae5db138a3d5d04d8298d5e3992fea31ad250b4519725bd3ce06b4",
+                            "0xf860050a83030d40947d29e74b97280912df1f66641610fb370e24b8b6808026a082e8dce1fed138da0260cda58cba2eea2ff619bb3771bd76395ae213050a20d6a060644db9fb5a1d7708ec3d44c23906c3ebf01e97acef0ddf619966fb446956dd"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            },
+            {
+                "params": [
+                    {
+                        "parentHash": "0x52c9d098825678876f1a5990b0ddeb0269b638db62cf81a61cd0f0edeeb202fe",
+                        "feeRecipient": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                        "stateRoot": "0xa6424f266cbca8f60bee1f7690f9ca8185d8164b2341dfa8716bfda725424870",
+                        "receiptsRoot": "0x30b49e73e67c75c8107d6feefa8b1ad63d6a7620b41a1ca720be560f372058de",
+                        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "blockNumber": "0x2",
+                        "gasLimit": "0x7270e00",
+                        "gasUsed": "0x3a14c",
+                        "timestamp": "0x18",
+                        "extraData": "0x",
+                        "prevRandao": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "baseFeePerGas": "0x7",
+                        "blobGasUsed": "0x0",
+                        "excessBlobGas": "0x0",
+                        "blockHash": "0x75eaac5f82a17fae915702e52d904068d9f14430407a46297b6b4503f4afd428",
+                        "transactions": [
+                            "0x04f9014801068007830c3500947d29e74b97280912df1f66641610fb370e24b9b68203e8a960066006557a6005600555737c34815226e84deb8cfe255e72f6be46d01b21f3ff600052601b6005f3c0f8b8f85a8094e580d5395bbc1fd6a1385bbde95149c958499c710780a06d614f380e06355c46c14bde179fbb07fe768a162dc724d73fc5c5cab14a2165a01aed43ba4b5f5775680db8ca7bcc42db00c122e9fc80be9b072a88a591161a9ef85a8094e580d5395bbc1fd6a1385bbde95149c958499c718080a0cb42802982a4d6e9b9e6b453848fb56350a68b99f2cfd440fe670f2b139ef461a0649ab1ad07b9e1c9e72279c0163f4edb52039401f441a9ce4d83267b0f14e6c780a058d3e4214b9d05b3f68e6f224ea9ceaad5e9a83053f73d553f6d835746fa3e0aa0262055e4f1cad8c25dfae2300e9a8b7e8a9a0cf694e10545a2d7cd796b1d0b96"
+                        ],
+                        "withdrawals": []
+                    },
+                    [],
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    []
+                ],
+                "newPayloadVersion": "4",
+                "forkchoiceUpdatedVersion": "3"
+            }
+        ],
+        "_info": {
+            "hash": "0xf8c1c9c89d57245d214fc60c20afaa480e2123c4cb11debcd2b6e573705c469b",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "So in Block1 we create a sender with empty code, but non empty storage\n    using pointers.\n\n    In Block2 we create account that perform suicide, then we\n    check that when calling a pointer, that points to newly created account and\n    runs suicide, is not deleted as well as its storage.\n\n    This one is a little messy.",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py#L1721",
+            "fixture-format": "blockchain_test_engine_x",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}

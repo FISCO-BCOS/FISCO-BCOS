@@ -1,0 +1,216 @@
+{
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py::test_set_code_type_tx_pre_fork[fork_Cancun-state_test-tx_value_0]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x3461110a9355df95af25eab1bb50f45d8af927b9": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xcb1bacdb803c94c0aaf89e988b173c582a6b3b78": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x32600055336001553460025500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x989680"
+            ],
+            "to": "0x3461110a9355df95af25eab1bb50f45d8af927b9",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                []
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x00",
+                    "address": "0xcb1bacdb803c94c0aaf89e988b173c582a6b3b78",
+                    "nonce": "0x01",
+                    "v": "0x00",
+                    "r": "0x96cdc82014b33eaf20634af2cb7b51c6a172653c8811f8cbbd351796703a5302",
+                    "s": "0x23661afaef37f9a2ce98881cf22bca40b5a3fae0901abfec8c4e856aa46201c8",
+                    "signer": "0x3461110a9355df95af25eab1bb50f45d8af927b9",
+                    "yParity": "0x00"
+                }
+            ],
+            "sender": "0x3461110a9355df95af25eab1bb50f45d8af927b9",
+            "secretKey": "0x3ab4a16c3511c2115bb681c0cb1bacdb803c94c0aaf89e988b173c582a6b3b78"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x5a494093a6e4ca240be333656137763ef125c9ef137aae00b5aee7adc4c3a4eb",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f8c10180800783989680943461110a9355df95af25eab1bb50f45d8af927b98080c0f85cf85a8094cb1bacdb803c94c0aaf89e988b173c582a6b3b780180a096cdc82014b33eaf20634af2cb7b51c6a172653c8811f8cbbd351796703a5302a023661afaef37f9a2ce98881cf22bca40b5a3fae0901abfec8c4e856aa46201c880a02d6c95459c87ecd951e63db1b63dfd5ee1f582211bc55de1dc95ec59c13c1123a067e9d5b000c1d98247dedb4cd03ebcad72d9f1a8810381053b0f20d170ffe9d3",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x3461110a9355df95af25eab1bb50f45d8af927b9": {
+                            "nonce": "0x00",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xcb1bacdb803c94c0aaf89e988b173c582a6b3b78": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x32600055336001553460025500",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.TYPE_4_TX_PRE_FORK"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1482e419c43bce2d96e2f5c71258741a396227661f2c814ce93de74e78c238cd",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Reject blocks with set code type transactions before the Prague fork.\n\n    This test was based on:\n    tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_self_sponsored_set_\n    code",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py#L1893",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    },
+    "tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py::test_set_code_type_tx_pre_fork[fork_Cancun-state_test-tx_value_1]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x07270e00",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0x5ad9cd7b31e43c9dd0b1c13cda97e21a7b9df772": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0xd35fa212abd4a782f7cfd3b639e1fd4f4717e576": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x32600055336001553460025500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "maxPriorityFeePerGas": "0x00",
+            "maxFeePerGas": "0x07",
+            "gasLimit": [
+                "0x989680"
+            ],
+            "to": "0x5ad9cd7b31e43c9dd0b1c13cda97e21a7b9df772",
+            "value": [
+                "0x01"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                []
+            ],
+            "authorizationList": [
+                {
+                    "chainId": "0x00",
+                    "address": "0xd35fa212abd4a782f7cfd3b639e1fd4f4717e576",
+                    "nonce": "0x01",
+                    "v": "0x01",
+                    "r": "0xc1b744eb9285ca049ebd83efce5ebd43a93ea87bcadcc7894c84b1ccd509c2c8",
+                    "s": "0x5cd5db1b823b6d653e331237e761054361bdaa990c49258442f2c027f3bca709",
+                    "signer": "0x5ad9cd7b31e43c9dd0b1c13cda97e21a7b9df772",
+                    "yParity": "0x01"
+                }
+            ],
+            "sender": "0x5ad9cd7b31e43c9dd0b1c13cda97e21a7b9df772",
+            "secretKey": "0x37f082c732a3e2a54d769775d35fa212abd4a782f7cfd3b639e1fd4f4717e576"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x35c9622d93aff8d0b00a6a3243c77a4be561a8e787a3d8d09f89aa3a0ebc5658",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x04f8c10180800783989680945ad9cd7b31e43c9dd0b1c13cda97e21a7b9df7720180c0f85cf85a8094d35fa212abd4a782f7cfd3b639e1fd4f4717e5760101a0c1b744eb9285ca049ebd83efce5ebd43a93ea87bcadcc7894c84b1ccd509c2c8a05cd5db1b823b6d653e331237e761054361bdaa990c49258442f2c027f3bca70980a06846817471b73b912323f207566a9f02287a49a074202e60497eff8254155776a0203b8e5329713a03d5563c7ba758b9c3443ba82ca039637ed925b441f7e88610",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0x5ad9cd7b31e43c9dd0b1c13cda97e21a7b9df772": {
+                            "nonce": "0x00",
+                            "balance": "0x3635c9adc5dea00000",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0xd35fa212abd4a782f7cfd3b639e1fd4f4717e576": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x32600055336001553460025500",
+                            "storage": {}
+                        }
+                    },
+                    "expectException": "TransactionException.TYPE_4_TX_PRE_FORK"
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x57c4038cc7dfa0ed3cb459f3525a7d556afb3c78226a73acd60270f977a78cb2",
+            "comment": "`execution-specs` generated test",
+            "filling-transition-tool": "2.18.0rc6",
+            "description": "Reject blocks with set code type transactions before the Prague fork.\n\n    This test was based on:\n    tests/prague/eip7702_set_code_tx/test_set_code_txs.py::test_self_sponsored_set_\n    code",
+            "url": "https://github.com/ethereum/execution-specs/blob/tests-v5.4.0/tests/prague/eip7702_set_code_tx/test_set_code_txs_2.py#L1893",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7702.md",
+            "reference-spec-version": "99f1be49f37c034bdd5c082946f5968710dbfc87"
+        }
+    }
+}
