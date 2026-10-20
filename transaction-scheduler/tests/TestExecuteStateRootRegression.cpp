@@ -180,7 +180,7 @@ public:
         auto blockHeader = block->blockHeader();
         task::syncWait(ledger::prewriteBlock(mockLedger.get(),
             std::make_shared<protocol::ConstTransactions>(), block, false, backendStorage));
-        bytes headerBuffer;
+        bcos::bytes headerBuffer;
         blockHeader->encode(headerBuffer);
 
         storage::Entry number2HeaderEntry;
@@ -197,7 +197,7 @@ public:
         blockHeader->setNumber(number);
         blockHeader->setVersion(blockVersion);
         blockHeader->calculateHash(*hashImpl);
-        bytes input;
+        bcos::bytes input;
         block->appendTransaction(transactionFactory->createTransaction(
             0, "to", input, std::to_string(number), 100, "chain", "group", 0));
         writeBlock(block);

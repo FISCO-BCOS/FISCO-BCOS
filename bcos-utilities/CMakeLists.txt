@@ -40,7 +40,6 @@ if (ONLY_CPP_SDK)
 else ()
     target_link_libraries(bcos-utilities PUBLIC bcos-task Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB zstd::libzstd_static ittapi)
 endif ()
-set_target_properties(bcos-utilities PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
     enable_testing()

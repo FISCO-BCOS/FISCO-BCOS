@@ -449,7 +449,7 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
 
 // A skipped case is not a PASS: when the corpus is absent on a local run the macro warns
 // (visible in the summary) instead of returning silently; CI fails via BOOST_FAIL above.
-#define SKIP_IF_NO_T8N_CORPUS()                                                              \
+#define SKIP_EXEC_IF_NO_T8N_CORPUS()                                                         \
     do                                                                                       \
     {                                                                                        \
         if (!w6test::t8nCorpusAvailable())                                                   \
@@ -497,42 +497,42 @@ BOOST_AUTO_TEST_CASE(load_json_file_reports_cannot_open)
 BOOST_AUTO_TEST_CASE(op_e2e_isthmus_deposit_only_matches_golden)
 {
     // Matrix: S6
-    SKIP_IF_NO_T8N_CORPUS();
+    SKIP_EXEC_IF_NO_T8N_CORPUS();
     runGoldenVector("isthmus_deposit_only");
 }
 
 BOOST_AUTO_TEST_CASE(op_e2e_jovian_deposit_only_matches_golden)
 {
     // Matrix: S6
-    SKIP_IF_NO_T8N_CORPUS();
+    SKIP_EXEC_IF_NO_T8N_CORPUS();
     runGoldenVector("jovian_deposit_only");
 }
 
 BOOST_AUTO_TEST_CASE(op_e2e_jovian_transfer_multi_matches_golden)
 {
     // Matrix: S6
-    SKIP_IF_NO_T8N_CORPUS();
+    SKIP_EXEC_IF_NO_T8N_CORPUS();
     runGoldenVector("jovian_transfer_multi");
 }
 
 BOOST_AUTO_TEST_CASE(op_invalid_state_root_returns_invalid)
 {
     // Matrix: S6
-    SKIP_IF_NO_T8N_CORPUS();
+    SKIP_EXEC_IF_NO_T8N_CORPUS();
     runInvalidFieldParity("jovian_deposit_only", "stateRoot");
 }
 
 BOOST_AUTO_TEST_CASE(op_invalid_receipts_root_returns_invalid)
 {
     // Matrix: S6
-    SKIP_IF_NO_T8N_CORPUS();
+    SKIP_EXEC_IF_NO_T8N_CORPUS();
     runInvalidFieldParity("jovian_deposit_only", "receiptsRoot");
 }
 
 BOOST_AUTO_TEST_CASE(op_invalid_gas_used_returns_invalid)
 {
     // Matrix: S6
-    SKIP_IF_NO_T8N_CORPUS();
+    SKIP_EXEC_IF_NO_T8N_CORPUS();
     runInvalidFieldParity("jovian_deposit_only", "gasUsed");
 }
 
@@ -541,7 +541,7 @@ BOOST_AUTO_TEST_CASE(s6_request_rebuild_matches_golden_without_calling_newpayloa
     // discriminator: rebuildOpEthHeader copies stateRoot/receiptsRoot/gasUsed
     // from the request JSON. That comparison is green even when newPayload never runs.
     // runGoldenVector must therefore read lastExecutedHeader(), not this rebuild.
-    SKIP_IF_NO_T8N_CORPUS();
+    SKIP_EXEC_IF_NO_T8N_CORPUS();
     auto sample = w6test::loadVectorSample("isthmus_deposit_only");
     auto fixture = std::make_unique<OpE2eFixture>(forkScheduleFor(sample.jovian));
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);

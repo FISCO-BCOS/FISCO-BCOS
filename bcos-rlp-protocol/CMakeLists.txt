@@ -10,7 +10,6 @@ target_include_directories(rlp-protocol PUBLIC
     $<INSTALL_INTERFACE:include/bcos-rlp-protocol>
 )
 target_link_libraries(rlp-protocol PUBLIC bcos-crypto codec bcos-framework PRIVATE bcos-protocol)
-set_target_properties(rlp-protocol PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
     enable_testing()

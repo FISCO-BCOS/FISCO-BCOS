@@ -34,7 +34,7 @@ BOOST_AUTO_TEST_SUITE(SyncTest)
 
 BOOST_AUTO_TEST_CASE(downloadChainFromFakePeer)
 {
-    auto chain = test::makeTestChain(5);
+    auto chain = devp2p::test::makeTestChain(5);
 
     rlpx::EccKeyPair serverKey;
     rlpx::EccKeyPair clientKey;
@@ -49,7 +49,7 @@ BOOST_AUTO_TEST_CASE(downloadChainFromFakePeer)
         try
         {
             auto established = server.accept();
-            test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established.session, chain);
             serverDone = true;
         }
         catch (std::exception const& e)
@@ -97,7 +97,7 @@ BOOST_AUTO_TEST_CASE(downloadChainFromFakePeer)
 // A peer that returns a broken parent chain must be rejected.
 BOOST_AUTO_TEST_CASE(brokenParentChainRejected)
 {
-    auto chain = test::makeTestChain(3);
+    auto chain = devp2p::test::makeTestChain(3);
     // Corrupt the second header's parentHash link by re-hashing a tampered copy.
     chain[1].header.parentInfo.blockHash = h256{0xdeadbeef};
     {
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(brokenParentChainRejected)
         try
         {
             auto established = server.accept();
-            test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established.session, chain);
         }
         catch (...)
         {}
@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(brokenParentChainRejected)
 // Ethereum PoS field rules.
 BOOST_AUTO_TEST_CASE(downloadChainWithPoSValidation)
 {
-    auto chain = test::makeTestChain(5);
+    auto chain = devp2p::test::makeTestChain(5);
 
     rlpx::EccKeyPair serverKey;
     rlpx::EccKeyPair clientKey;
@@ -159,7 +159,7 @@ BOOST_AUTO_TEST_CASE(downloadChainWithPoSValidation)
         try
         {
             auto established = server.accept();
-            test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established.session, chain);
         }
         catch (...)
         {}
@@ -205,7 +205,7 @@ BOOST_AUTO_TEST_CASE(downloadChainWithPoSValidation)
 // even though the parent-hash chain is intact.
 BOOST_AUTO_TEST_CASE(posValidationRejectsBadBaseFee)
 {
-    auto chain = test::makeTestChain(3);
+    auto chain = devp2p::test::makeTestChain(3);
     // Tamper block 1's base fee and re-encode its header RLP (the server serves
     // raw RLP). The parent-hash link to block 0 stays intact.
     chain[1].header.baseFee = *chain[1].header.baseFee + 1;
@@ -227,7 +227,7 @@ BOOST_AUTO_TEST_CASE(posValidationRejectsBadBaseFee)
         try
         {
             auto established = server.accept();
-            test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established.session, chain);
         }
         catch (...)
         {}
@@ -267,7 +267,7 @@ BOOST_AUTO_TEST_CASE(posValidationRejectsBadBaseFee)
 // untyped "broken parent chain" throw and does not pin this type.)
 BOOST_AUTO_TEST_CASE(firstHeaderParentMismatchThrowsTyped)
 {
-    auto chain = test::makeTestChain(3);
+    auto chain = devp2p::test::makeTestChain(3);
     // Corrupt the FIRST header's parent link so it no longer matches the
     // anchor, and re-encode its header RLP (the server serves raw RLP).
     chain[0].header.parentInfo.blockHash = h256{0xdeadbeef};
@@ -289,7 +289,7 @@ BOOST_AUTO_TEST_CASE(firstHeaderParentMismatchThrowsTyped)
         try
         {
             auto established = server.accept();
-            test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established.session, chain);
         }
         catch (...)
         {}
@@ -383,7 +383,7 @@ void runOpRound(std::vector<sync::Block> const& chain, F&& download)
         try
         {
             auto established = server.accept();
-            test::serveRequests(established.session, chain);
+            devp2p::test::serveRequests(established.session, chain);
         }
         catch (...)
         {
@@ -411,7 +411,7 @@ void runOpRound(std::vector<sync::Block> const& chain, F&& download)
 BOOST_AUTO_TEST_CASE(opBedrockChainDownloadsWithOpValidator)
 {
     auto config = bedrockConfig();
-    auto chain = test::makeOpTestChain(5, config);
+    auto chain = devp2p::test::makeOpTestChain(5, config);
 
     std::vector<sync::Block> downloaded;
     runOpRound(chain, [&](rlpx::Session& session) {
@@ -438,7 +438,7 @@ BOOST_AUTO_TEST_CASE(opBedrockChainDownloadsWithOpValidator)
 BOOST_AUTO_TEST_CASE(defaultL1ValidatorRejectsOpChain)
 {
     auto config = bedrockConfig();
-    auto chain = test::makeOpTestChain(3, config);
+    auto chain = devp2p::test::makeOpTestChain(3, config);
 
     runOpRound(chain, [&](rlpx::Session& session) {
         sync::ChainConfig l1Config;
@@ -457,7 +457,7 @@ BOOST_AUTO_TEST_CASE(defaultL1ValidatorRejectsOpChain)
 BOOST_AUTO_TEST_CASE(opCanyonChainDownloadsWithOpValidator)
 {
     auto config = canyonConfig();
-    auto chain = test::makeOpTestChain(5, config);
+    auto chain = devp2p::test::makeOpTestChain(5, config);
 
     std::vector<sync::Block> downloaded;
     runOpRound(chain, [&](rlpx::Session& session) {
@@ -482,7 +482,7 @@ BOOST_AUTO_TEST_CASE(opCanyonChainDownloadsWithOpValidator)
 BOOST_AUTO_TEST_CASE(opEcotoneChainDownloadsWithOpValidator)
 {
     auto config = ecotoneConfig();
-    auto chain = test::makeOpTestChain(5, config);
+    auto chain = devp2p::test::makeOpTestChain(5, config);
 
     std::vector<sync::Block> downloaded;
     runOpRound(chain, [&](rlpx::Session& session) {
@@ -509,7 +509,7 @@ BOOST_AUTO_TEST_CASE(opEcotoneChainDownloadsWithOpValidator)
 BOOST_AUTO_TEST_CASE(opJovianChainDownloadsWithOpValidator)
 {
     auto config = jovianConfig();
-    auto chain = test::makeOpTestChain(5, config);
+    auto chain = devp2p::test::makeOpTestChain(5, config);
 
     std::vector<sync::Block> downloaded;
     runOpRound(chain, [&](rlpx::Session& session) {
@@ -536,9 +536,9 @@ BOOST_AUTO_TEST_CASE(opJovianChainDownloadsWithOpValidator)
 BOOST_AUTO_TEST_CASE(canyonHeaderMissingWithdrawalsHashThrows)
 {
     auto config = canyonConfig();
-    auto chain = test::makeOpTestChain(3, config);
+    auto chain = devp2p::test::makeOpTestChain(3, config);
     chain[1].header.withdrawalsHash.reset();
-    test::reencodeOpHeader(chain[1]);
+    devp2p::test::reencodeOpHeader(chain[1]);
 
     runOpRound(chain, [&](rlpx::Session& session) {
         sync::HeaderChain headers(1, chain[0].header, sync::ChainConfig{});
@@ -554,9 +554,9 @@ BOOST_AUTO_TEST_CASE(canyonHeaderMissingWithdrawalsHashThrows)
 BOOST_AUTO_TEST_CASE(holoceneHeaderBadExtraDataThrows)
 {
     auto config = holoceneConfig();
-    auto chain = test::makeOpTestChain(3, config);
+    auto chain = devp2p::test::makeOpTestChain(3, config);
     chain[1].header.extraData = bcos::bytes(5, 0);
-    test::reencodeOpHeader(chain[1]);
+    devp2p::test::reencodeOpHeader(chain[1]);
 
     runOpRound(chain, [&](rlpx::Session& session) {
         sync::HeaderChain headers(1, chain[0].header, sync::ChainConfig{});

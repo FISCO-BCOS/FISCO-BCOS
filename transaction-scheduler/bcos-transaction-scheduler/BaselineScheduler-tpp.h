@@ -146,8 +146,21 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         [&]() {
             block.clearReceipts();
             totalGasUsed = protocol::normalizeReceipts(receipts);
+            auto transactionIt = ::ranges::begin(transactions);
+            auto const transactionEnd = ::ranges::end(transactions);
             for (auto const& receipt : receipts)
             {
+                // one DEBUG line per tx (the handbook's TxExecuted stage, baseline lane)
+                if (transactionIt != transactionEnd)
+                {
+                    BASELINE_SCHEDULER_LOG(DEBUG)
+                        << LOG_DESC("TxExecuted")
+                        << LOG_KV("tx", (*transactionIt)->hash().abridged())
+                        << LOG_KV("number", block.blockHeader()->number())
+                        << LOG_KV("status", receipt->status())
+                        << LOG_KV("gasUsed", receipt->gasUsed());
+                    ++transactionIt;
+                }
                 block.appendReceipt(receipt);
             }
         },
@@ -411,7 +424,8 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
                 .m_executedBlockHeader = executedBlockHeader,
                 .m_block = std::move(block),
                 .m_sysBlock = sysBlock,
-                .m_mptDelta = std::move(mptDelta)});
+                .m_mptDelta = std::move(mptDelta),
+                .m_executeMs = static_cast<int64_t>(current() - now)});
 
         // FIB-103 / FIB-104: Commit the execution result in a strict order:
         // push the view first (so we have a rollback target), then push the
@@ -659,6 +673,13 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
 
         BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                      << " | elapsed: " << (current() - now) << "ms";
+        if (bcos::BlockStat::enabled())
+        {
+            BASELINE_SCHEDULER_LOG(INFO)
+                << METRIC << LOG_DESC("BlockStat") << LOG_KV("number", header->number())
+                << LOG_KV("txs", result->m_receipts.size()) << LOG_KV("execMs", result->m_executeMs)
+                << LOG_KV("commitMs", current() - now);
+        }
         commitLock.unlock();
 
         m_asyncGroup.run([&, result = std::move(result), blockHash = ledgerConfig->hash(),

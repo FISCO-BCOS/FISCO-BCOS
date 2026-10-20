@@ -61,6 +61,26 @@ macro(configure_project)
         set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
     endif()
 
+    # Unity build is the repo-wide default; individual targets opt out with
+    # set_target_properties(<target> PROPERTIES UNITY_BUILD OFF) and individual
+    # sources with SKIP_UNITY_BUILD_INCLUSION. CompilerSettings.cmake applies
+    # these as CMAKE_UNITY_BUILD / CMAKE_UNITY_BUILD_BATCH_SIZE.
+    # Batch size stays at CMake's default 8: measured on GCC 16 / MinSizeRel / -j20
+    # (20-core box, heavy-lib subset: executor, rpc, ledger, pbft, txpool, sync,
+    # scheduler, ...):
+    #   8 -> 96.4s wall / 2.8GB max TU; 16 -> 95.1s / 2.8GB; 32 -> 116s / 3.4GB;
+    #   0 (one TU per target) -> 113s / 3.4GB.
+    # 16 buys ~1.3% wall time on that subset, but the library subset is not where the memory
+    # ceiling lives: the test targets peak higher (test-bcos-rpc / test-transaction-scheduler
+    # reached ~3.7GB at batch 16; the batch-8 peak is unmeasured - follow-up issue). 8 matches
+    # 16 on wall time at lower peak memory and half the incremental-rebuild granularity, so it
+    # is the default; bump it locally with -DUNITY_BUILD_BATCH_SIZE=N if a full-build
+    # measurement says otherwise.
+    default_option(UNITY_BUILD ON)
+    if(NOT DEFINED UNITY_BUILD_BATCH_SIZE)
+        set(UNITY_BUILD_BATCH_SIZE "8")
+    endif()
+
     default_option(TESTS OFF)
     default_option(COVERAGE OFF)
 
@@ -146,6 +166,7 @@ macro(print_config NAME)
     message("-- TESTS              Build tests                  ${TESTS}")
     message("-- NATIVE             Build native binary          ${NATIVE}")
     message("-- IPO                Enable IPO optimization      ${IPO}")
+    message("-- UNITY_BUILD        Enable unity build           ${UNITY_BUILD} (batch size ${UNITY_BUILD_BATCH_SIZE})")
     message("-- TOOLS              Tools                        ${TOOLS}")
     message("-- SANITIZE_ADDRESS   Enable sanitize              ${SANITIZE_ADDRESS}")
     message("-- SANITIZE_THREAD    Enable sanitize              ${SANITIZE_THREAD}")

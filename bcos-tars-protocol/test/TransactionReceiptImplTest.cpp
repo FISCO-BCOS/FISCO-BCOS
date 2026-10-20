@@ -25,7 +25,7 @@ namespace bcos::test
 {
 namespace
 {
-CryptoSuite::Ptr makeSuite()
+CryptoSuite::Ptr makeReceiptImplSuite()
 {
     return std::make_shared<CryptoSuite>(
         std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
@@ -49,7 +49,7 @@ BOOST_AUTO_TEST_SUITE(TarsTransactionReceiptImplTest)
 
 BOOST_AUTO_TEST_CASE(createReceiptPopulatesCoreFields)
 {
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     bcos::bytes output{0x01, 0x02, 0x03};
@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE(createReceiptPopulatesCoreFields)
 
 BOOST_AUTO_TEST_CASE(settersRoundTrip)
 {
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     bcos::bytes output;
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(settersRoundTrip)
 
 BOOST_AUTO_TEST_CASE(logEntriesRoundTrip)
 {
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     bcos::bytes output;
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(hashThrowsBeforeCompute)
     BOOST_CHECK_THROW(receipt.hash(), bcos::Exception);
 
     // After calculateHash the guard is satisfied and a real hash is returned.
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     receipt.calculateHash(*suite->hashImpl());
     BOOST_CHECK_NE(receipt.hash(), bcos::crypto::HashType{});
 }
@@ -131,7 +131,7 @@ BOOST_AUTO_TEST_CASE(hashThrowsBeforeCompute)
 // C++-side cache is empty (the just-decoded state).
 BOOST_AUTO_TEST_CASE(takeLogEntriesFromPayload)
 {
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     logs.emplace_back(bcos::bytes{0x11}, bcos::h256s{}, bcos::bytes{0x0a, 0x0b});
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(sizeGasUsedAndLogIndex)
 
     // size() accumulates output + log payload + message; check it tracks the
     // message delta rather than an exact byte total (robust to encoding).
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     logs.emplace_back(bcos::bytes{0x11, 0x22}, bcos::h256s{}, bcos::bytes{0x0a, 0x0b, 0x0c});
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(sizeGasUsedAndLogIndex)
 // under-reported by the hex length of the scalar (block-size RPC estimate).
 BOOST_AUTO_TEST_CASE(opStackMetaSizeCountsL1FeeScalar)
 {
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     bcos::bytes output;
@@ -237,7 +237,7 @@ BOOST_AUTO_TEST_CASE(opStackMetaSizeCountsL1FeeScalar)
 // reports them as present-with-value-0 -- never conflated with "field was never set".
 BOOST_AUTO_TEST_CASE(opStackMetaRoundTripZeroValues)
 {
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     bcos::bytes output;
@@ -273,7 +273,7 @@ BOOST_AUTO_TEST_CASE(opStackMetaRoundTripZeroValues)
 // round-trip without truncation (no narrowing through a 64-bit intermediate).
 BOOST_AUTO_TEST_CASE(opStackMetaRoundTripFullWidthU256)
 {
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     bcos::bytes output;
@@ -306,7 +306,7 @@ BOOST_AUTO_TEST_CASE(opStackMetaRoundTripFullWidthU256)
 // deposit transaction.
 BOOST_AUTO_TEST_CASE(opStackMetaDepositRoundTrip)
 {
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     bcos::bytes output;
@@ -408,7 +408,7 @@ BOOST_AUTO_TEST_CASE(opStackMetaLoneFeeScalarKeepsMetaPresent)
     BOOST_CHECK_EQUAL(*got->l1_fee_scalar, bcos::u256(1'000'000));
 
     // Shape B: public setOpStackMeta() with only l1_fee_scalar.
-    auto suite = makeSuite();
+    auto suite = makeReceiptImplSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     bcos::bytes output;
@@ -432,7 +432,7 @@ BOOST_AUTO_TEST_CASE(opStackMetaLoneFeeScalarKeepsMetaPresent)
 BOOST_AUTO_TEST_CASE(opStackMetaRoundTripL1FeeScalarWire)
 {
     auto const roundTrip = [](bcos::u256 scalar) {
-        auto suite = makeSuite();
+        auto suite = makeReceiptImplSuite();
         TransactionReceiptFactoryImpl factory(suite);
         std::vector<bcos::protocol::LogEntry> logs;
         bcos::bytes output;

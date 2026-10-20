@@ -28,7 +28,6 @@
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-task/Wait.h"
 
-using namespace std;
 using namespace bcos::executor;
 using namespace bcos::protocol;
 

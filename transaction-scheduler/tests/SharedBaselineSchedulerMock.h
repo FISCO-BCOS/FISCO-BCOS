@@ -1,4 +1,6 @@
 #pragma once
+#include <chrono>
+#include <thread>
 
 // Shared mock executor / scheduler / storage for the BaselineScheduler unit tests.
 //
@@ -174,6 +176,9 @@ struct SharedMockScheduler
     std::map<protocol::BlockNumber, std::vector<RowOp>> const* m_plan{};
     std::vector<RowOp> m_everyBlockRows;
     bool m_receiptsWithLogs{};
+    // executing this block number takes at least m_slowBlockMs (execution-timing tests)
+    protocol::BlockNumber m_slowBlock{-1};
+    int m_slowBlockMs{};
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
         auto& /*executor*/, protocol::BlockHeader const& blockHeader,
@@ -196,6 +201,10 @@ struct SharedMockScheduler
                 }
             }
         };
+        if (blockHeader.number() == m_slowBlock)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(m_slowBlockMs));
+        }
         co_await writeRows(m_everyBlockRows);
         if (m_plan)
         {

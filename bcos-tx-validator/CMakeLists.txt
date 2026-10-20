@@ -26,7 +26,6 @@ target_include_directories(bcos-tx-validator PUBLIC
 # bcos-utilities, which bcos-framework already propagates.
 target_link_libraries(bcos-tx-validator PUBLIC
     bcos-framework bcos-protocol bcos-crypto ledger rlp-protocol protocol-tars TBB::tbb)
-set_target_properties(bcos-tx-validator PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
     enable_testing()

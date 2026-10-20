@@ -42,9 +42,19 @@ GroupFacts groupFacts(
         throw OpsError(c_exitUsage, "getGroupInfo: empty nodeList for group " + _group);
     }
     auto ini = parseJson((*self)["iniConfig"].asString(), "getGroupInfo.iniConfig");
-    facts.version = ini["binaryInfo"]["version"].asString();
-    facts.smCrypto = ini["smCryptoType"].asBool();
-    facts.authCheck = ini["isAuthCheck"].asBool();
+    // an absent key stays nullopt rather than becoming "" / false
+    if (ini["binaryInfo"].isMember("version"))
+    {
+        facts.version = ini["binaryInfo"]["version"].asString();
+    }
+    if (ini.isMember("smCryptoType"))
+    {
+        facts.smCrypto = ini["smCryptoType"].asBool();
+    }
+    if (ini.isMember("isAuthCheck"))
+    {
+        facts.authCheck = ini["isAuthCheck"].asBool();
+    }
     return facts;
 }
 }  // namespace bcos::ops

@@ -4,6 +4,7 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/BlockStat.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -372,7 +373,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
             }
             else
             {
-                SCHEDULER_LOG(INFO)
+                SCHEDULER_LOG(DEBUG)
                     << BLOCK_NUMBER(requestBlockNumber) << LOG_BADGE("BlockTrace")
                     << "ExecuteBlock success, return executed block"
                     << LOG_KV("signatureSize", signature.size()) << LOG_KV("verify", verify);
@@ -467,8 +468,8 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
             return;
         }
 
-        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(requestBlockNumber) << LOG_BADGE("BlockTrace")
-                            << "ExecuteBlock start" << LOG_KV("time(ms)", utcTime() - start);
+        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(requestBlockNumber) << LOG_BADGE("BlockTrace")
+                             << "ExecuteBlock start" << LOG_KV("time(ms)", utcTime() - start);
         auto startTime = utcTime();
         try
         {
@@ -728,6 +729,27 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                         << BLOCK_NUMBER(blockNumber) << LOG_BADGE("BlockTrace")
                         << "CommitBlock success" << LOG_KV("gas limit", self->m_gasLimit)
                         << LOG_KV("timeCost", utcTime() - startTime);
+                    if (bcos::BlockStat::enabled())
+                    {
+                        auto const& block = *blockExecutive->block();
+                        uint64_t txs = block.receiptsSize();
+                        uint64_t failed = 0;
+                        for (auto const& receipt : block.receipts())
+                        {
+                            if (receipt->status() != 0)
+                            {
+                                ++failed;
+                            }
+                        }
+                        // the committed block's own executive: several blocks can execute
+                        // before the front one commits, so no shared accumulator
+                        auto execMs = blockExecutive->executeMs();
+                        SCHEDULER_LOG(INFO)
+                            << METRIC << LOG_DESC("BlockStat") << LOG_KV("number", blockNumber)
+                            << LOG_KV("txs", txs) << LOG_KV("failed", failed)
+                            << LOG_KV("execMs", execMs) << LOG_KV("commitMs", utcTime() - startTime)
+                            << LOG_KV("execPerTxUs", txs == 0 ? 0 : execMs * 1000 / txs);
+                    }
                     self->m_ledgerConfig = ledgerConfig;
                     commitLock->unlock();  // just unlock here
 

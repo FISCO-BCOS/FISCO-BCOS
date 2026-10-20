@@ -111,6 +111,8 @@ public:
                                  << LOG_KV("blockHeader", blockHeader);
             blockHeader->setNumber(m_blockNumber);
             blockHeader->calculateHash(*hashImpl);
+            // a per-block execute time the BlockStat test can tell apart (block N: N * 100 ms)
+            m_executeElapsed = std::chrono::milliseconds(m_blockNumber * 100);
             m_result = blockHeader;
             callback(nullptr, blockHeader, false);
             return;

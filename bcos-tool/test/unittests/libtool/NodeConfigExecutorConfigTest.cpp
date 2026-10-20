@@ -8,6 +8,8 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
+#include "NodeConfigLoaderProbe.h"
+
 #include <bcos-tool/Exceptions.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/property_tree/ini_parser.hpp>
@@ -28,14 +30,6 @@ struct ExecutorLoaderProbe : public NodeConfig
     using NodeConfig::loadExecutorConfig;
     using NodeConfig::NodeConfig;
 };
-
-boost::property_tree::ptree fromIni(std::string const& ini)
-{
-    boost::property_tree::ptree pt;
-    std::stringstream ss(ini);
-    boost::property_tree::read_ini(ss, pt);
-    return pt;
-}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(NodeConfigExecutorConfigTest)

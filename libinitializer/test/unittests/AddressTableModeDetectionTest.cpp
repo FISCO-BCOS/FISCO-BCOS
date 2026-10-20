@@ -27,11 +27,11 @@
 
 using namespace bcos;
 using namespace bcos::initializer;
-using namespace bcos::ledger;
+namespace account = bcos::ledger::account;
 
 namespace
 {
-constexpr std::string_view kHexTable = "/apps/4200000000000000000000000000000000001234";
+constexpr std::string_view kDetectHexTable = "/apps/4200000000000000000000000000000000001234";
 
 std::string binaryTableName()
 {
@@ -40,9 +40,9 @@ std::string binaryTableName()
     return name;
 }
 
-struct TempRocksDB
+struct DetectTempRocksDB
 {
-    TempRocksDB() : dir(std::filesystem::temp_directory_path() / "addr_mode_detect_test")
+    DetectTempRocksDB() : dir(std::filesystem::temp_directory_path() / "addr_mode_detect_test")
     {
         std::filesystem::remove_all(dir);
         std::filesystem::create_directories(dir);
@@ -53,7 +53,7 @@ struct TempRocksDB
         BOOST_REQUIRE(status.ok());
         db.reset(raw);
     }
-    ~TempRocksDB()
+    ~DetectTempRocksDB()
     {
         db.reset();
         std::filesystem::remove_all(dir);
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_SUITE(AddressTableModeDetectionSuite)
 
 BOOST_AUTO_TEST_CASE(LayoutFlagRoundtrip)
 {
-    TempRocksDB fixture;
+    DetectTempRocksDB fixture;
     // Absent: a pre-flag (hex) chain or a brand-new DB.
     BOOST_CHECK(!readAccountTableLayoutFlag(*fixture.db).has_value());
 
@@ -97,13 +97,13 @@ BOOST_AUTO_TEST_CASE(HasAnyTableRegistrationIsBoundedAndExact)
 {
     // An empty DB (a brand-new chain) has no registrations.
     {
-        TempRocksDB fixture;
+        DetectTempRocksDB fixture;
         BOOST_CHECK(!hasAnyTableRegistration(*fixture.db));
     }
     // Genesis registers the system tables, so any committed chain answers true — even one
     // holding nothing but a /sys/ row.
     {
-        TempRocksDB fixture;
+        DetectTempRocksDB fixture;
         fixture.putRegistration("/sys/status");
         BOOST_CHECK(hasAnyTableRegistration(*fixture.db));
     }
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(HasAnyTableRegistrationIsBoundedAndExact)
     // "s_tables:" and is skipped by the probe — otherwise a fresh chain born binary (flag
     // written before genesis) would misread itself as a pre-flag hex chain on the next boot.
     {
-        TempRocksDB fixture;
+        DetectTempRocksDB fixture;
         writeAccountTableLayoutFlag(*fixture.db, ACCOUNT_TABLE_LAYOUT_BINARY);
         BOOST_CHECK(!hasAnyTableRegistration(*fixture.db));
     }
@@ -170,8 +170,8 @@ BOOST_AUTO_TEST_CASE(RefuseBinaryDataWithoutFlag)
     // Binary registrations but no flag: the flag was lost (partial backup/restore) —
     // refuse to boot, never publish Hex over binary data.
     {
-        TempRocksDB fixture;
-        fixture.putRegistration(std::string(kHexTable));
+        DetectTempRocksDB fixture;
+        fixture.putRegistration(std::string(kDetectHexTable));
         fixture.putRegistration(binaryTableName());
         BOOST_CHECK(hasBinaryTableRegistration(*fixture.db));
         BOOST_CHECK_THROW(
@@ -179,15 +179,15 @@ BOOST_AUTO_TEST_CASE(RefuseBinaryDataWithoutFlag)
     }
     // Flag present (bin): the legal binary layout — no refusal, no probe needed.
     {
-        TempRocksDB fixture;
+        DetectTempRocksDB fixture;
         fixture.putRegistration(binaryTableName());
         BOOST_CHECK_NO_THROW(refuseBinaryDataWithoutFlag(*fixture.db, kBin));
     }
     // Hex-only chain, no flag: the pre-3.18 steady state — no refusal. A "/s/" name of
     // the wrong length is not a binary account table and must not trip the probe.
     {
-        TempRocksDB fixture;
-        fixture.putRegistration(std::string(kHexTable));
+        DetectTempRocksDB fixture;
+        fixture.putRegistration(std::string(kDetectHexTable));
         fixture.putRegistration("/s/" + std::string(19, 'b'));
         fixture.putRow("/s/" + std::string(19, 'b') + ":balance");  // short name, not a row
         BOOST_CHECK(!hasBinaryTableRegistration(*fixture.db));
@@ -199,9 +199,9 @@ BOOST_AUTO_TEST_CASE(RefuseBinaryDataWithoutFlag)
     // rows exist. The registration probe alone reads this as pure hex — the account-row
     // probe is what refuses the silent Hex boot.
     {
-        TempRocksDB fixture;
-        fixture.putRegistration(std::string(kHexTable));
-        fixture.putRow(std::string(kHexTable) + ":nonce");
+        DetectTempRocksDB fixture;
+        fixture.putRegistration(std::string(kDetectHexTable));
+        fixture.putRow(std::string(kDetectHexTable) + ":nonce");
         fixture.putRow(binaryTableName() + ":balance");
         BOOST_CHECK(!hasBinaryTableRegistration(*fixture.db));
         BOOST_CHECK(hasBinaryAccountRow(*fixture.db));
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(RefuseBinaryDataWithoutFlag)
     }
     // Brand-new DB: nothing at all.
     {
-        TempRocksDB fixture;
+        DetectTempRocksDB fixture;
         BOOST_CHECK(!hasBinaryTableRegistration(*fixture.db));
         BOOST_CHECK_NO_THROW(refuseBinaryDataWithoutFlag(*fixture.db, kAbsent));
     }

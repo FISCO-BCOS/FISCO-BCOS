@@ -27,6 +27,7 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "bcos-framework/testutils/LogCapture.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
@@ -37,8 +38,11 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/Immediate.h"
+#include "bcos-utilities/BlockStat.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
+#include <future>
+#include <regex>
 
 // Wrap the entire fixture / mock surface in an anonymous namespace so the
 // `using namespace bcos::*` directives below do not leak into other unity-build
@@ -360,6 +364,68 @@ BOOST_AUTO_TEST_CASE(commitHeaderMustMatchOldestExecutionResult)
         [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { retryError = std::move(error); });
     BOOST_REQUIRE(retryError);
     BOOST_CHECK(retryError->errorMessage().find(prewriteFailure) != std::string::npos);
+}
+
+// BlockStat at commit prints the committed block's own execution time. Two blocks execute before
+// the first commits; a scheduler-wide "last execute" value would report block 801's duration
+// (a few ms) for block 800 (at least 150 ms).
+BOOST_AUTO_TEST_CASE(blockStatExecMsBelongsToTheCommittedBlock)
+{
+    mockScheduler.m_slowBlock = 800;
+    mockScheduler.m_slowBlockMs = 150;
+    auto slowHeader = executeOneBlock(800);
+    BOOST_REQUIRE(slowHeader);
+    BOOST_REQUIRE(executeOneBlock(801));
+
+    // what a successful commit reads after the merge (ledger::getLedgerConfig) and notifies
+    fakeit::When(Method(mockLedger, asyncGetBlockNumber))
+        .AlwaysDo([](std::function<void(Error::Ptr, protocol::BlockNumber)> callback) {
+            callback(nullptr, 799);
+        });
+    fakeit::When(Method(mockLedger, asyncGetNodeListByType))
+        .AlwaysDo([](std::string_view const&,
+                      std::function<void(Error::Ptr, consensus::ConsensusNodeList)> callback) {
+            callback(nullptr, {});
+        });
+    fakeit::When(Method(mockLedger, asyncGetBlockDataByNumber))
+        .AlwaysDo([](protocol::BlockNumber, int32_t,
+                      std::function<void(Error::Ptr, protocol::Block::Ptr)> callback) {
+            callback(nullptr, nullptr);
+        });
+    fakeit::When(Method(mockLedger, asyncGetBlockHashByNumber))
+        .AlwaysDo(
+            [](protocol::BlockNumber, std::function<void(Error::Ptr, crypto::HashType)> callback) {
+                callback(nullptr, crypto::HashType{});
+            });
+    fakeit::When(Method(mockLedger, fetchAllSystemConfigs))
+        .AlwaysDo([](protocol::BlockNumber) -> task::Task<ledger::SystemConfigs> {
+            co_return ledger::SystemConfigs{};
+        });
+    fakeit::When(Method(mockLedger, fetchAllFeatures))
+        .AlwaysDo([](protocol::BlockNumber) -> task::Task<ledger::Features> {
+            co_return ledger::Features{};
+        });
+    baselineScheduler.registerBlockNumberNotifier([](protocol::BlockNumber) {});
+    baselineScheduler.registerTransactionNotifier(
+        [](protocol::BlockNumber, protocol::TransactionSubmitResultsPtr,
+            std::function<void(Error::Ptr)> callback) { callback(nullptr); });
+
+    BlockStat::enable();
+    bcos::test::LogCapture capture;
+    std::promise<Error::Ptr> committed;
+    baselineScheduler.commitBlock(slowHeader, [&](Error::Ptr error, ledger::LedgerConfig::Ptr) {
+        committed.set_value(std::move(error));
+    });
+    auto commitError = committed.get_future().get();
+    auto text = capture.text();
+    BlockStat::disable();
+    BOOST_REQUIRE(!commitError);
+
+    std::smatch match;
+    BOOST_REQUIRE_MESSAGE(
+        std::regex_search(text, match, std::regex("BlockStat,number=800,txs=1,execMs=(-?[0-9]+)")),
+        text);
+    BOOST_CHECK_GE(std::stoll(match[1].str()), 150);
 }
 
 // FIB-101 / FIB-104: Sequential execution and cached-duplicate execution still
