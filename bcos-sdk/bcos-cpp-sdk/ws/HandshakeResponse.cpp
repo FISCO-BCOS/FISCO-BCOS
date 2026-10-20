@@ -23,6 +23,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <json/json.h>
 #include <json/value.h>
+#include <boost/exception/diagnostic_information.hpp>
 
 using namespace bcos;
 using namespace bcos::cppsdk;

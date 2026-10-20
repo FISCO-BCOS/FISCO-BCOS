@@ -25,4 +25,8 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 find_package(Boost REQUIRED unit_test_framework)
 
 target_link_libraries(${TEST_BINARY_NAME} codec Boost::unit_test_framework)
+# unittests/main/main.cpp defines BOOST_TEST_MODULE; merged into the unity batch
+# the boost.test entry macro is disabled, breaking the link with undefined
+# init_unit_test_suite.
+set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 add_test(NAME test-codec WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

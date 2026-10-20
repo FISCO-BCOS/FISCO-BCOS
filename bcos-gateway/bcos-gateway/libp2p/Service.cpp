@@ -6,6 +6,7 @@
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
+#include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"  // for SocketFace
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"  // for SocketFace

@@ -18,6 +18,7 @@
  * @date 2022-1-07
  */
 #include "GatewayStatus.h"
+#include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <mutex>
 #include <random>
 

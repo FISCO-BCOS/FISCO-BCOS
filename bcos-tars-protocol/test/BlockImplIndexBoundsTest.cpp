@@ -28,7 +28,7 @@ BOOST_AUTO_TEST_SUITE(BlockImplIndexBoundsTest)
 
 namespace
 {
-bcos::crypto::CryptoSuite::Ptr makeSuite()
+bcos::crypto::CryptoSuite::Ptr makeIndexBoundsSuite()
 {
     return std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
         std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
@@ -42,7 +42,7 @@ bcos::protocol::Transaction::Ptr makeTx(TransactionFactoryImpl& factory, bcos::b
 
 BOOST_AUTO_TEST_CASE(setTransactionPastSizeThrows)
 {
-    auto suite = makeSuite();
+    auto suite = makeIndexBoundsSuite();
     TransactionFactoryImpl txFactory(suite);
     auto block = std::make_shared<BlockImpl>();
     block->appendTransaction(makeTx(txFactory, 0x01));
@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(setTransactionPastSizeThrows)
 
 BOOST_AUTO_TEST_CASE(setReceiptPastTransactionCountThrows)
 {
-    auto suite = makeSuite();
+    auto suite = makeIndexBoundsSuite();
     TransactionFactoryImpl txFactory(suite);
     TransactionReceiptFactoryImpl rFactory(suite);
     std::vector<bcos::protocol::LogEntry> logs;

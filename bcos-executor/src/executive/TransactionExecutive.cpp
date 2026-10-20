@@ -59,7 +59,8 @@
 #include <string>
 
 
-using namespace std;
+using std::exception;
+using std::string;
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;

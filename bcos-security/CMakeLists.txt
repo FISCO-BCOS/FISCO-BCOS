@@ -46,7 +46,6 @@ target_include_directories(security PRIVATE
 )
 
 target_link_libraries(security PUBLIC bcos-utilities tool bcos-crypto jsoncpp_static)
-set_target_properties(security PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
   enable_testing()

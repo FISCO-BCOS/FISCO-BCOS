@@ -27,7 +27,6 @@ target_include_directories(sealer PUBLIC
 find_package(tarscpp REQUIRED)
 
 target_link_libraries(sealer PUBLIC tool bcos-utilities bcos-framework txpool pbft protocol-tars)
-set_target_properties(sealer PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
   enable_testing()

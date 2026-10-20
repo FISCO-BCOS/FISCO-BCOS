@@ -29,7 +29,6 @@ target_include_directories(table PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-table>)
 target_link_libraries(table PUBLIC bcos-utilities bcos-framework Boost::serialization TBB::tbb)
-set_target_properties(table PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

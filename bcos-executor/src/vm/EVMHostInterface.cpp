@@ -35,8 +35,6 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
 
-using namespace std;
-
 namespace bcos
 {
 namespace executor

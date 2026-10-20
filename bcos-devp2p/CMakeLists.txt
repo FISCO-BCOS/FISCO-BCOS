@@ -17,7 +17,6 @@ target_link_libraries(bcos-devp2p PUBLIC
     rlp-protocol
     OpenSSL::Crypto
     jsoncpp_static)
-set_target_properties(bcos-devp2p PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
     enable_testing()

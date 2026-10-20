@@ -21,6 +21,8 @@
 #include <bcos-rpc/event/Common.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-utilities/BoostLog.h>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/zip.hpp>
 
 using namespace bcos;
 using namespace bcos::event;
