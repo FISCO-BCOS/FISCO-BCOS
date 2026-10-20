@@ -139,12 +139,10 @@ BOOST_AUTO_TEST_CASE(ExpiryRunsTheHandlerOnce)
     Deadline deadline(io, 5);
     int calls = 0;
     bool sawEmptyError = false;
-    deadline.arm(
-        [&calls, &sawEmptyError](boost::system::error_code error)
-        {
-            ++calls;
-            sawEmptyError = !error;
-        });
+    deadline.arm([&calls, &sawEmptyError](boost::system::error_code error) {
+        ++calls;
+        sawEmptyError = !error;
+    });
 
     advanceClock(200ms);
     BOOST_CHECK_EQUAL(poll(io), 1);

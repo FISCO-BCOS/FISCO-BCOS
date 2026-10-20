@@ -123,9 +123,9 @@ public:
         {
             return false;
         }
-        m_result.error = error ? std::move(error) :
-                                 std::make_exception_ptr(
-                                     std::runtime_error("one-shot slot cancelled"));
+        m_result.error = error ?
+                             std::move(error) :
+                             std::make_exception_ptr(std::runtime_error("one-shot slot cancelled"));
         publish();
         return true;
     }
@@ -153,8 +153,8 @@ private:
     bool claim() noexcept
     {
         auto expected = false;
-        return m_result.completed.compare_exchange_strong(expected, true,
-            std::memory_order_acq_rel, std::memory_order_acquire);
+        return m_result.completed.compare_exchange_strong(
+            expected, true, std::memory_order_acq_rel, std::memory_order_acquire);
     }
 
     // Publish the settled state: resume the parked awaiter, or record the settle when nobody is
@@ -165,10 +165,7 @@ private:
     // exception propagate back out of publish() to the caller of complete()/cancel(). Like
     // complete(), this is therefore deliberately NOT noexcept — marking it noexcept would turn an
     // uncaught consumer exception into std::terminate on the settling thread.
-    void publish()
-    {
-        GetResultAwaitable<Values...>::publish(m_result);
-    }
+    void publish() { GetResultAwaitable<Values...>::publish(m_result); }
 
     Result m_result;
 };

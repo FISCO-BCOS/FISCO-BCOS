@@ -17,8 +17,8 @@
  *        cancel() as the teardown settle path, and the racing producers it exists to replace.
  * @file TestOneShot.cpp
  */
-#include "bcos-task/Task.h"
 #include "bcos-task/OneShot.h"
+#include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -178,7 +178,7 @@ BOOST_AUTO_TEST_CASE(CancelEscapesToCallerWhenWaitLaunchedConsumerDoesNotCatch)
 {
     auto once = std::make_shared<OneShot<int>>();
 
-    wait([once]() -> Task<void> {
+    bcos::task::wait([once]() -> Task<void> {
         auto [value] = co_await *once;  // parks; the cancellation rethrow is NOT caught here
         (void)value;
         co_return;

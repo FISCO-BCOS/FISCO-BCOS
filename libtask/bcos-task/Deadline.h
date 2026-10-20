@@ -82,20 +82,18 @@ struct SleepAwaitable
     void await_suspend(std::coroutine_handle<> handle)
     {
         m_state->handle = handle;
-        m_state->timer.async_wait(
-            [state = m_state](const boost::system::error_code& error)
+        m_state->timer.async_wait([state = m_state](const boost::system::error_code& error) {
+            if (!state->alive.load(std::memory_order_acquire))
             {
-                if (!state->alive.load(std::memory_order_acquire))
-                {
-                    return;
-                }
-                state->error = error;
-                // resumeDetached, not a bare resume: an escaping unhandled_exception() from the
-                // resumed chain strands its top frame in the escaped-frame registry (Task.h), and
-                // this handler — the resumer — is responsible for reclaiming it. A bare resume
-                // would leak the chain until this (typically long-lived io) thread exits.
-                detail::resumeDetached(state->handle);
-            });
+                return;
+            }
+            state->error = error;
+            // resumeDetached, not a bare resume: an escaping unhandled_exception() from the
+            // resumed chain strands its top frame in the escaped-frame registry (Task.h), and
+            // this handler — the resumer — is responsible for reclaiming it. A bare resume
+            // would leak the chain until this (typically long-lived io) thread exits.
+            detail::resumeDetached(state->handle);
+        });
     }
 
     boost::system::error_code await_resume() const noexcept { return m_state->error; }

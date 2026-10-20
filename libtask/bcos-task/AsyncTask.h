@@ -61,8 +61,7 @@ public:
         // not with the unwinding body), which is how the inner task's frame is reclaimed too.
         void unhandled_exception()
         {
-            detail::registerEscapedFrame(
-                std::coroutine_handle<promise_type>::from_promise(*this));
+            detail::registerEscapedFrame(std::coroutine_handle<promise_type>::from_promise(*this));
             std::rethrow_exception(std::current_exception());
         }
         constexpr static void return_void() noexcept {}
