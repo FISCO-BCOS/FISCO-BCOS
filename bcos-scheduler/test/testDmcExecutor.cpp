@@ -528,6 +528,192 @@ BOOST_AUTO_TEST_CASE(delegateNoCodeResumeArmStampsSchedulerSeq)
     BOOST_CHECK_EQUAL(state->message->schedulerSeq(), 7);
 }
 
+// [R7 F2] The sentinel's safety is the universal claim that every response sent to an
+// executor resumes a live frame carrying the hand-back. Encode that as one predicate
+// over the message type instead of relying on each arm to remember the stamp: request
+// types (MESSAGE/TXHASH) may open a frame, so they are exempt; FINISHED/REVERT/
+// PRE_FINISH only ever resume one, so an unstamped value there is a producer bug.
+BOOST_AUTO_TEST_CASE(schedulerStampRequiredOnlyForResumeMessages)
+{
+    auto makeMessage = [](protocol::ExecutionMessage::Type type, int64_t stamp) {
+        auto message = std::make_unique<executor::NativeExecutionMessage>();
+        message->setType(type);
+        message->setSchedulerSeq(stamp);
+        return message;
+    };
+    for (auto type : {protocol::ExecutionMessage::FINISHED, protocol::ExecutionMessage::REVERT,
+             protocol::ExecutionMessage::PRE_FINISH})
+    {
+        auto unstamped = makeMessage(type, -1);
+        auto stamped = makeMessage(type, 0);
+        BOOST_CHECK(DmcExecutor::requiresSchedulerStamp(*unstamped));
+        BOOST_CHECK(!DmcExecutor::hasRequiredSchedulerStamp(*unstamped));
+        BOOST_CHECK(DmcExecutor::hasRequiredSchedulerStamp(*stamped));
+    }
+    for (auto type : {protocol::ExecutionMessage::MESSAGE, protocol::ExecutionMessage::TXHASH,
+             protocol::ExecutionMessage::KEY_LOCK})
+    {
+        auto unstamped = makeMessage(type, -1);
+        BOOST_CHECK(!DmcExecutor::requiresSchedulerStamp(*unstamped));
+        BOOST_CHECK(DmcExecutor::hasRequiredSchedulerStamp(*unstamped));
+    }
+}
+
+// [R7 F2] The four V2 resume arms that had no scheduler-side assertion. Each starts
+// from a state the corresponding arm can be reached with and checks the hand-back
+// value the executor will adopt (currentSeq - 1).
+BOOST_AUTO_TEST_CASE(v2RemainingResumeArmsStampSchedulerSeq)
+{
+    struct ResumeProbe : DmcExecutor
+    {
+        using DmcExecutor::DmcExecutor;
+        using DmcExecutor::handleExecutiveMessageV2;
+    };
+    auto block = blockFactory->createBlock();
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(3);
+    header->calculateHash(*cryptoSuite->hashImpl());
+    block->setBlockHeader(header);
+    ResumeProbe dmc("DmcExecutor-v2-resume", "0xaabbccdd", block, executor1, keyLocks,
+        std::make_shared<Keccak256>(), dmcRecorder, false, ledger::Features{});
+
+    auto run = [&dmc](protocol::ExecutionMessage::Type type,
+                   std::function<void(scheduler::ExecutiveState&)> arrange)
+        -> scheduler::ExecutiveState::Ptr {
+        auto message = std::make_unique<executor::NativeExecutionMessage>();
+        message->setType(type);
+        message->setContextID(9);
+        message->setSeq(5);
+        message->setFrom("0xaabbccdd");
+        message->setTo("0xaabbccdd");
+        auto state = std::make_shared<scheduler::ExecutiveState>(9, std::move(message), false);
+        state->currentSeq = 7;
+        arrange(*state);
+        dmc.handleExecutiveMessageV2(state);
+        return state;
+    };
+
+    // PRE_FINISH: pop the child and resume the parent.
+    auto preFinish = run(protocol::ExecutionMessage::PRE_FINISH, [](scheduler::ExecutiveState& s) {
+        s.callStack.push(3);
+        s.callStack.push(5);
+    });
+    BOOST_CHECK_EQUAL(preFinish->message->seq(), 3);
+    BOOST_CHECK_EQUAL(preFinish->message->schedulerSeq(), 6);
+
+    // FINISHED revert-stack generator: regenerate the parent's finish message.
+    auto finished = run(protocol::ExecutionMessage::FINISHED, [](scheduler::ExecutiveState& s) {
+        s.revertStack.push({5, std::string("0xaabbccdd")});
+    });
+    BOOST_CHECK_EQUAL(finished->message->seq(), 5);
+    BOOST_CHECK_EQUAL(finished->message->schedulerSeq(), 6);
+
+    // REVERT of a child frame: hand the revert back to the parent.
+    auto childRevert = run(protocol::ExecutionMessage::REVERT, [](scheduler::ExecutiveState& s) {
+        s.callStack.push(3);
+        s.callStack.push(5);
+        s.revertStack.push({7, std::string("0xaabbccdd")});
+    });
+    BOOST_CHECK_EQUAL(childRevert->message->seq(), 7);
+    BOOST_CHECK_EQUAL(childRevert->message->schedulerSeq(), 6);
+
+    // REVERT with no pending revert frame: pop and resume the caller.
+    auto finalRevert = run(protocol::ExecutionMessage::REVERT, [](scheduler::ExecutiveState& s) {
+        s.callStack.push(3);
+        s.callStack.push(5);
+    });
+    BOOST_CHECK_EQUAL(finalRevert->message->seq(), 3);
+    BOOST_CHECK_EQUAL(finalRevert->message->schedulerSeq(), 6);
+    for (auto const& state : {preFinish, finished, childRevert, finalRevert})
+    {
+        BOOST_CHECK(DmcExecutor::hasRequiredSchedulerStamp(*state->message));
+    }
+}
+
+// [R7 F2] Through-flow pin for the sensor the sentinel depends on: drive the real
+// DmcExecutor with bugfix_dmc_revert on, let the executor ask for external code
+// (the EXTCODESIZE shape), and check the response that actually leaves the scheduler
+// carries the hand-back. This is the property a per-arm test cannot prove: the frame
+// resumes with a stamped message even when no arm test is updated.
+BOOST_AUTO_TEST_CASE(getCodeHandbackReachesTheExecutorStamped)
+{
+    struct ScriptedExecutor : MockDmcExecutor
+    {
+        using MockDmcExecutor::MockDmcExecutor;
+
+        int64_t capturedStamp = -2;
+        protocol::ExecutionMessage::Type capturedType = protocol::ExecutionMessage::TXHASH;
+        int round = 0;
+
+        void dmcExecuteTransactions(std::string /*contractAddress*/,
+            gsl::span<protocol::ExecutionMessage::UniquePtr> inputs,
+            std::function<void(
+                bcos::Error::UniquePtr, std::vector<protocol::ExecutionMessage::UniquePtr>)>
+                callback) override
+        {
+            std::vector<protocol::ExecutionMessage::UniquePtr> outputs;
+            for (auto& input : inputs)
+            {
+                ++round;
+                if (round == 1)
+                {
+                    // First send is the transaction itself; answer with the external
+                    // code request an EXTCODESIZE performs inside the frame.
+                    auto request = std::make_unique<executor::NativeExecutionMessage>();
+                    request->setType(protocol::ExecutionMessage::MESSAGE);
+                    request->setContextID(input->contextID());
+                    request->setSeq(input->seq());
+                    request->setFrom(std::string(input->from()));
+                    request->setTo(std::string(input->to()));
+                    request->setDelegateCallAddress("0xbbccdd");
+                    request->setData(protocol::GET_CODE_INPUT_BYTES);
+                    outputs.push_back(std::move(request));
+                }
+                else
+                {
+                    capturedStamp = input->schedulerSeq();
+                    capturedType = input->type();
+                    input->setType(protocol::ExecutionMessage::FINISHED);
+                    outputs.push_back(std::move(input));
+                }
+            }
+            callback(nullptr, std::move(outputs));
+        }
+    };
+
+    auto scripted = std::make_shared<ScriptedExecutor>("scripted");
+    auto block = blockFactory->createBlock();
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(3);
+    header->calculateHash(*cryptoSuite->hashImpl());
+    block->setBlockHeader(header);
+    auto dmc = std::make_shared<DmcExecutor>("DmcExecutor-flow", "0xaabbccdd", block, scripted,
+        keyLocks, std::make_shared<Keccak256>(), dmcRecorder, false, ledger::Features{});
+    dmc->setEnablePreFinishType(true);  // bugfix_dmc_revert on
+    dmc->setOnGetCodeHandler([](std::string_view) { return bcos::bytes{0x60, 0x00}; });
+    dmc->setOnTxFinishedHandler([](protocol::ExecutionMessage::UniquePtr) {});
+    dmc->setOnNeedSwitchEventHandler([] {});
+    dmc->setSchedulerOutHandler([](scheduler::ExecutiveState::Ptr) {});
+
+    auto message = createMessage(9, 3, protocol::ExecutionMessage::TXHASH, "0xaabbccdd", false);
+    message->setFrom("0x1111111111111111111111111111111111111111");
+    dmc->submit(std::move(message), false);
+
+    auto callback = [](bcos::Error::UniquePtr, DmcExecutor::Status) {};
+    dmc->prepare();  // TXHASH -> NEED_SEND (currentSeq -> 1)
+    dmc->go(callback);
+    BOOST_REQUIRE_EQUAL(scripted->round, 1);
+    dmc->prepare();  // getCode arm -> PRE_FINISH with the hand-back
+    dmc->prepare();  // PRE_FINISH resume arm -> NEED_SEND
+    dmc->go(callback);
+
+    BOOST_CHECK_EQUAL(scripted->round, 2);
+    BOOST_CHECK_EQUAL(static_cast<int>(scripted->capturedType),
+        static_cast<int>(protocol::ExecutionMessage::PRE_FINISH));
+    BOOST_CHECK_GE(scripted->capturedStamp, 0);
+    BOOST_CHECK_EQUAL(scripted->capturedStamp, 0);  // currentSeq(1) - 1
+}
+
 // Empty-to create addresses follow the version-gated lane rule (review F2):
 // with bugfix_dmc_create_address_rule AND feature_evm_address on, the DMC lane derives
 // the same keccak(rlp(sender, nonce)) address as SerialBlockExecutive; with the flag off

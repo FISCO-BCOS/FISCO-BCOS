@@ -85,6 +85,24 @@ void DmcExecutor::setIsCall(bool isCall)
     m_isCall = isCall;
 }
 
+bool DmcExecutor::requiresSchedulerStamp(protocol::ExecutionMessage const& message)
+{
+    switch (message.type())
+    {
+    case protocol::ExecutionMessage::FINISHED:
+    case protocol::ExecutionMessage::REVERT:
+    case protocol::ExecutionMessage::PRE_FINISH:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool DmcExecutor::hasRequiredSchedulerStamp(protocol::ExecutionMessage const& message)
+{
+    return !requiresSchedulerStamp(message) || message.schedulerSeq() >= 0;
+}
+
 void DmcExecutor::setEnablePreFinishType(bool enable)
 {
     m_enablePreFinishType = enable;
@@ -308,6 +326,11 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
             {
                 return true;
             }
+            // Structural guard for the schedulerSeq sentinel: every response sent to
+            // an executor resumes an existing frame, so a missing stamp is a producer
+            // bug. Debug builds fail here on the arm that forgot it; the predicate
+            // itself is unit-tested so the rule stays visible in release test runs.
+            assert(hasRequiredSchedulerStamp(*message));
 
             auto keyLocks = m_keyLocks->getKeyLocksNotHoldingByContext(message->to(), contextID);
             message->setKeyLocks(std::move(keyLocks));

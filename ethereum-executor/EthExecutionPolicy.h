@@ -158,8 +158,9 @@ inline std::optional<std::error_code> validateRegularTypeHierarchy(
             return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
 
         if (maxPriorityGasPrice > maxGasPrice)
-            return make_error_code(evm::ErrorCode::PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS);  // Priority gas price is too
-                                                                     // high.
+            return make_error_code(
+                evm::ErrorCode::PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS);  // Priority gas price is
+                                                                         // too high.
         [[fallthrough]];
 
     case 1:  // access_list

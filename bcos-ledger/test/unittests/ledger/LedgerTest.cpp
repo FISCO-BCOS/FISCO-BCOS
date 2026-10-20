@@ -1908,7 +1908,7 @@ BOOST_AUTO_TEST_CASE(genesisWritesNoEVMCRevisionRow)
 BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
 {
     for (int rev = static_cast<int>(EVMC_FRONTIER); rev <= static_cast<int>(EVMC_MAX_REVISION);
-        ++rev)
+         ++rev)
     {
         auto r = static_cast<evmc_revision>(rev);
         auto name = ledger::evmcRevisionName(r);
@@ -1940,19 +1940,28 @@ BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
         BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(0)), rev);
     }
 
-    // The constantinople spellings cannot be reached through the loop above (ABI 19 has
-    // no EVMC_CONSTANTINOPLE value), so pin their refusal explicitly: Constantinople's
-    // EIP-1283 SSTORE metering differs from Petersburg's, and ConstantinopleFix names
-    // the same schedule as Petersburg — accepting either would silently retarget a
-    // persisted row under different gas pricing. Re-acceptance here must turn this red.
-    for (auto const* refused : {"constantinople", "constantinoplefix", "amsterdam", "experimental"})
+    // `constantinople` cannot be reached through the loop above (ABI 19 has no
+    // EVMC_CONSTANTINOPLE value), and it must stay refused: EIP-1283 SSTORE metering
+    // differs from Petersburg's. `constantinoplefix` is the retesteth/geth name for
+    // the Petersburg schedule and is accepted as an alias of it below.
+    for (auto const* refused : {"constantinople", "amsterdam", "experimental"})
     {
         BOOST_CHECK_MESSAGE(!ledger::evmcRevisionFromName(refused),
             "evmcRevisionFromName must refuse the spelling: " << refused);
     }
+    auto constantinopleFix = ledger::evmcRevisionFromName("constantinoplefix");
+    BOOST_REQUIRE(constantinopleFix.has_value());
+    BOOST_CHECK_EQUAL(static_cast<int>(*constantinopleFix), static_cast<int>(EVMC_PETERSBURG));
+    {
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, "100000:constantinoplefix");
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(100000).has_value());
+        BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(100000)),
+            static_cast<int>(EVMC_PETERSBURG));
+    }
     // And the refusal is halt-loudly where a persisted row would consume it: the
     // apply path throws instead of retargeting to petersburg.
-    for (auto const* refused : {"constantinople", "constantinoplefix", "amsterdam"})
+    for (auto const* refused : {"constantinople", "amsterdam"})
     {
         // A persisted row naming the refused spelling (100000:<name>) must throw
         // instead of retargeting the chain onto the petersburg schedule. Pin the
