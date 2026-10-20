@@ -348,8 +348,17 @@ struct EthL1Policy
     static protocol::TransactionReceipt::Ptr buildReceipt(Host& host, evmc::Result const& result,
         int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber)
     {
-        auto logs = takeBcosLogs(host);
-        bcos::bytes output;
+        std::vector<protocol::LogEntry> logs;
+        for (auto const& l : host.take_logs())
+        {
+            bcos::bytes addr(l.addr.bytes, l.addr.bytes + sizeof(evmc_address));
+            bcos::h256s topics;
+            for (auto const& t : l.topics)
+                topics.emplace_back(bcos::bytesConstRef(t.bytes, sizeof(evmc_bytes32)));
+            bcos::bytes data(l.data.begin(), l.data.end());
+            logs.emplace_back(std::move(addr), std::move(topics), std::move(data));
+        }
+        bcos::bytes output(result.output_data, result.output_data + result.output_size);
         return rf.createReceipt(bcos::u256(static_cast<uint64_t>(gasUsed)), std::string{}, logs,
             mapEvmcStatusToBcosStatus(result.status_code), bcos::ref(output), blockNumber);
     }
