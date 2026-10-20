@@ -21,6 +21,7 @@
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
+#include "bcos-rpc/ipc/IpcServer.h"
 #include "bcos-rpc/web3jsonrpc/Web3Subscribe.h"
 #include "web3jsonrpc/Web3JsonRpcImpl.h"
 
@@ -93,6 +94,12 @@ public:
         m_web3Service = std::move(_web3Service);
     }
 
+    void setIpcServer(std::shared_ptr<IpcServer> _ipcServer)
+    {
+        m_ipcServer = std::move(_ipcServer);
+    }
+    std::shared_ptr<IpcServer> ipcServer() const { return m_ipcServer; }
+
     void setWeb3JsonRpcImpl(bcos::rpc::Web3JsonRpcImpl::Ptr _web3JsonRpcImpl)
     {
         m_web3JsonRpcImpl = std::move(_web3JsonRpcImpl);
@@ -146,6 +153,7 @@ protected:
 
 private:
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
+    std::shared_ptr<IpcServer> m_ipcServer;
     bcos::rpc::JsonRpcImpl_2_0::Ptr m_jsonRpcImpl;
     bcos::event::EventSub::Ptr m_eventSub;
     AMOPClient::Ptr m_amopClient;
