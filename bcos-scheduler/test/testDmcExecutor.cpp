@@ -584,13 +584,22 @@ BOOST_AUTO_TEST_CASE(schedulerStampViolationIsRecordedInAllBuilds)
     BOOST_CHECK(dmc->checkSchedulerStamp(*stamped));
     BOOST_CHECK_EQUAL(dmcRecorder->schedulerStampViolations(), 0);
 
-    auto unstamped = makeMessage(protocol::ExecutionMessage::FINISHED, -1);
-    BOOST_CHECK(!dmc->checkSchedulerStamp(*unstamped));
-    BOOST_CHECK_EQUAL(dmcRecorder->schedulerStampViolations(), 1);
-
-    // Request types open a frame and are exempt from the resume rule.
-    auto request = makeMessage(protocol::ExecutionMessage::MESSAGE, -1);
-    BOOST_CHECK(dmc->checkSchedulerStamp(*request));
+    // Drive the check through the real send path, not only the predicate: prepare puts
+    // one message in NEED_SEND, the probe makes it an unstamped resume, and go() must
+    // record the violation even when NDEBUG removed the assert.
+    auto message = createMessage(9, 3, protocol::ExecutionMessage::MESSAGE, "0xaabbccdd", false);
+    message->setFrom("0x1111111111111111111111111111111111111111");
+    dmc->setSchedulerOutHandler([](scheduler::ExecutiveState::Ptr) {});
+    dmc->setOnGetCodeHandler([](std::string_view) { return bcos::bytes{}; });
+    dmc->setOnTxFinishedHandler([](protocol::ExecutionMessage::UniquePtr) {});
+    dmc->setOnNeedSwitchEventHandler([] {});
+    dmc->submit(std::move(message), false);
+    dmc->prepare();
+    dmc->forEachExecutive([](int64_t, scheduler::ExecutiveState::Ptr state) {
+        state->message->setType(protocol::ExecutionMessage::FINISHED);
+        state->message->setSchedulerSeq(-1);
+    });
+    dmc->go([](bcos::Error::UniquePtr, DmcExecutor::Status) {});
     BOOST_CHECK_EQUAL(dmcRecorder->schedulerStampViolations(), 1);
 }
 

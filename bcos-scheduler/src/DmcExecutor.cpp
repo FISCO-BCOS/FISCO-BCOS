@@ -357,9 +357,11 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
             }
             // Structural guard for the schedulerSeq sentinel: every response sent to
             // an executor resumes an existing frame, so a missing stamp is a producer
-            // bug. The check is always compiled (ERROR log + recorder counter), and a
-            // debug build still stops at the assert.
-            assert(checkSchedulerStamp(*message));
+            // bug. The call must stay outside assert: NDEBUG removes the assertion's
+            // operand, which would also remove the ERROR log and recorder counter.
+            auto const stamped = checkSchedulerStamp(*message);
+            assert(stamped);
+            (void)stamped;
 
             auto keyLocks = m_keyLocks->getKeyLocksNotHoldingByContext(message->to(), contextID);
             message->setKeyLocks(std::move(keyLocks));
