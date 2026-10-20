@@ -559,6 +559,41 @@ BOOST_AUTO_TEST_CASE(schedulerStampRequiredOnlyForResumeMessages)
     }
 }
 
+// [R7 F2] The send-path check must be observable in release builds too: the predicate
+// alone is only classification, while checkSchedulerStamp is what the executor send
+// path calls. A missing hand-back is logged and counted instead of vanishing with
+// NDEBUG.
+BOOST_AUTO_TEST_CASE(schedulerStampViolationIsRecordedInAllBuilds)
+{
+    auto block = blockFactory->createBlock();
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(3);
+    header->calculateHash(*cryptoSuite->hashImpl());
+    block->setBlockHeader(header);
+    auto dmc = std::make_shared<DmcExecutor>("DmcExecutor-stamp-check", "0xaabbccdd", block,
+        executor1, keyLocks, std::make_shared<Keccak256>(), dmcRecorder, false, ledger::Features{});
+    auto makeMessage = [](protocol::ExecutionMessage::Type type, int64_t stamp) {
+        auto message = std::make_unique<executor::NativeExecutionMessage>();
+        message->setType(type);
+        message->setSeq(9);
+        message->setSchedulerSeq(stamp);
+        return message;
+    };
+
+    auto stamped = makeMessage(protocol::ExecutionMessage::FINISHED, 3);
+    BOOST_CHECK(dmc->checkSchedulerStamp(*stamped));
+    BOOST_CHECK_EQUAL(dmcRecorder->schedulerStampViolations(), 0);
+
+    auto unstamped = makeMessage(protocol::ExecutionMessage::FINISHED, -1);
+    BOOST_CHECK(!dmc->checkSchedulerStamp(*unstamped));
+    BOOST_CHECK_EQUAL(dmcRecorder->schedulerStampViolations(), 1);
+
+    // Request types open a frame and are exempt from the resume rule.
+    auto request = makeMessage(protocol::ExecutionMessage::MESSAGE, -1);
+    BOOST_CHECK(dmc->checkSchedulerStamp(*request));
+    BOOST_CHECK_EQUAL(dmcRecorder->schedulerStampViolations(), 1);
+}
+
 // [R7 F2] The four V2 resume arms that had no scheduler-side assertion. Each starts
 // from a state the corresponding arm can be reached with and checks the hand-back
 // value the executor will adopt (currentSeq - 1).

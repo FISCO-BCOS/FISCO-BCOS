@@ -114,6 +114,15 @@ void DmcStepRecorder::recordReceive(
     m_receiveChecksum.fetch_add(sum);
 }
 
+void DmcStepRecorder::recordSchedulerStampViolation(std::string_view address, int64_t seq, int type)
+{
+    ++m_schedulerStampViolations;
+    DMC_LOG(ERROR) << LOG_BADGE("DmcStepRecorder")
+                   << LOG_DESC("resume message lost the schedulerSeq hand-back")
+                   << LOG_KV("contract", address) << LOG_KV("seq", seq) << LOG_KV("type", type)
+                   << LOG_KV("violations", m_schedulerStampViolations.load());
+}
+
 void DmcStepRecorder::recordSends(
     std::string_view address, const std::vector<protocol::ExecutionMessage::UniquePtr>& message)
 {

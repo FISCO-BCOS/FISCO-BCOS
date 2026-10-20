@@ -129,6 +129,11 @@ public:
     static bool requiresSchedulerStamp(protocol::ExecutionMessage const& message);
     static bool hasRequiredSchedulerStamp(protocol::ExecutionMessage const& message);
 
+    /// Send-path enforcement. Returns false (and records the violation) when a resume
+    /// message reaches the executor without the hand-back. Always compiled, so release
+    /// builds log and count the defect instead of silently resuming.
+    bool checkSchedulerStamp(protocol::ExecutionMessage const& message);
+
 protected:
     std::string m_name;
     std::string m_contractAddress;

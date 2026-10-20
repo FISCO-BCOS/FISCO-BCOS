@@ -31,6 +31,12 @@ public:
     void recordReceives(std::string_view address,
         const std::vector<protocol::ExecutionMessage::UniquePtr>& message);
 
+    /// A response handed to an executor resumed a live frame without the schedulerSeq
+    /// hand-back. Recorded (not asserted) so release builds can observe the defect and
+    /// a test can prove the check itself is wired.
+    void recordSchedulerStampViolation(std::string_view address, int64_t seq, int type);
+    uint32_t schedulerStampViolations() const { return m_schedulerStampViolations.load(); }
+
     void nextDmcRound();
 
     uint32_t getRound();
@@ -53,6 +59,7 @@ public:
 private:
     std::atomic<uint32_t> m_sendChecksum = 0;
     std::atomic<uint32_t> m_receiveChecksum = 0;
+    std::atomic<uint32_t> m_schedulerStampViolations = 0;
     uint32_t m_round = 0;
     uint32_t m_checksum = 0;
 

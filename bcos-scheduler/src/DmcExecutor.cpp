@@ -103,6 +103,23 @@ bool DmcExecutor::hasRequiredSchedulerStamp(protocol::ExecutionMessage const& me
     return !requiresSchedulerStamp(message) || message.schedulerSeq() >= 0;
 }
 
+bool DmcExecutor::checkSchedulerStamp(protocol::ExecutionMessage const& message)
+{
+    if (hasRequiredSchedulerStamp(message))
+    {
+        return true;
+    }
+    DMC_LOG(ERROR) << LOG_BADGE("DmcExecutor") << LOG_DESC("resume message lost the hand-back")
+                   << LOG_KV("contract", m_contractAddress) << LOG_KV("seq", message.seq())
+                   << LOG_KV("type", static_cast<int>(message.type()));
+    if (m_dmcRecorder)
+    {
+        m_dmcRecorder->recordSchedulerStampViolation(
+            m_contractAddress, message.seq(), static_cast<int>(message.type()));
+    }
+    return false;
+}
+
 void DmcExecutor::setEnablePreFinishType(bool enable)
 {
     m_enablePreFinishType = enable;
@@ -328,9 +345,9 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
             }
             // Structural guard for the schedulerSeq sentinel: every response sent to
             // an executor resumes an existing frame, so a missing stamp is a producer
-            // bug. Debug builds fail here on the arm that forgot it; the predicate
-            // itself is unit-tested so the rule stays visible in release test runs.
-            assert(hasRequiredSchedulerStamp(*message));
+            // bug. The check is always compiled (ERROR log + recorder counter), and a
+            // debug build still stops at the assert.
+            assert(checkSchedulerStamp(*message));
 
             auto keyLocks = m_keyLocks->getKeyLocksNotHoldingByContext(message->to(), contextID);
             message->setKeyLocks(std::move(keyLocks));
