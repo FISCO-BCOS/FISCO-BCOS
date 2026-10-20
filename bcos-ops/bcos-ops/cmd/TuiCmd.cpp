@@ -587,8 +587,8 @@ void registerTuiCommand()
             "[--snapshot-dir <dir> [--filter <text>]]\n\n"
             "PBFT state is read only in mode none (getConsensusStatus makes el / opstack-el "
             "nodes exit): with a bare --rpc pass --mode none to see view / leader / quorum. "
-            "`attach getConsensusStatus` is not gated; op_engine_rpc and single-node non-PBFT "
-            "setups are not recognised as EL",
+            "`attach getConsensusStatus` is not gated; a v1 node on the [debug] block driver is "
+            "not recognised as non-PBFT",
             {"version-check"}, runTui,
             {"account", "key", "filter", "snapshot-dir", "stall-factor", "max-lag",
                 "viewchange-window-ms"}});

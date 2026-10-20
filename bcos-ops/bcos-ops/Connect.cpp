@@ -100,7 +100,7 @@ std::string connectionMode(ConnectOptions const& _options, NodeDir const* _node)
     }
     if (_node != nullptr)
     {
-        return checkedMode(_node->ethereumMode, "config.ini [ethereum] mode");
+        return _node->mode;
     }
     return std::string(c_modeUnknown);
 }

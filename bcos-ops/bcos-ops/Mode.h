@@ -49,7 +49,7 @@ inline std::string noPbftReason(std::string_view _mode)
 }
 
 /// throws OpsError{1} on anything but none / el / opstack-el (NodeConfig rejects the rest too);
-/// _source names where the value came from ("--mode", "config.ini [ethereum] mode")
+/// _source names where the value came from ("--mode")
 inline std::string checkedMode(std::string _mode, std::string_view _source = "--mode")
 {
     if (_mode != "none" && !isElMode(_mode))

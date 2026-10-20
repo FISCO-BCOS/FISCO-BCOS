@@ -42,8 +42,9 @@ struct NodeDir
     size_t txpoolLimit = 15000;
     bool authCheck = false;
     std::optional<int64_t> consensusTimeoutMs;  // max(3000, [consensus] min_seal_time + 1)
-    // config.ini [ethereum] mode (NodeConfig::loadEthereumConfig): none / el / opstack-el
-    std::string ethereumMode = "none";
+    // from config.genesis [executor] version, the node's own lane signal
+    // (bcos::tool::laneForExecutorVersion): 2 -> el, the OP lane -> opstack-el, else none
+    std::string mode = "none";
     // config.ini [web3_rpc] (NodeConfig::loadWeb3RpcConfig defaults)
     bool web3Enable = false;
     std::string web3ListenIp = "127.0.0.1";

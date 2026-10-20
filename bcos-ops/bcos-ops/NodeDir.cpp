@@ -17,6 +17,7 @@
  */
 #include "NodeDir.h"
 #include "OpsError.h"
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <algorithm>
@@ -104,7 +105,10 @@ NodeDir NodeDir::load(std::string const& _dir)
     node.logPath = ini.get<std::string>("log.log_path", "log");
     node.logFormat = ini.get<std::string>("log.format", "");
     node.txpoolLimit = ini.get<size_t>("txpool.limit", 15000);
-    node.ethereumMode = ini.get<std::string>("ethereum.mode", "none");
+    auto const executorVersion = genesis.get<int>("executor.version", 0);
+    node.mode = ledger::isOpLaneVersion(executorVersion)             ? "opstack-el" :
+                executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION ? "el" :
+                                                                       "none";
     node.web3Enable = ini.get<bool>("web3_rpc.enable", false);
     node.web3ListenIp = ini.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     node.web3ListenPort = listenPort("web3_rpc.listen_port", 8545);

@@ -217,8 +217,8 @@ void registerStatusCommand()
                       "PBFT state (getConsensusStatus) is read only in mode none: the call makes "
                       "el / opstack-el nodes exit, so a bare --rpc (mode unknown) skips "
                       "consensus_stable and quorum_connected until --mode none is given. "
-                      "`attach getConsensusStatus` is not gated; op_engine_rpc and single-node "
-                      "non-PBFT setups are not recognised as EL",
+                      "`attach getConsensusStatus` is not gated; a v1 node on the [debug] block "
+                      "driver is not recognised as non-PBFT",
                       {}, runStatus, {"stall-factor", "max-lag"}});
 }
 }  // namespace bcos::ops

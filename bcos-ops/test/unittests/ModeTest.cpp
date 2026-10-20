@@ -181,20 +181,28 @@ Json::Value ethReceipt(std::string const& _status)
 
 BOOST_AUTO_TEST_SUITE(ModeTest)
 
-BOOST_AUTO_TEST_CASE(nodeDirReadsEthereumModeAndWeb3Listener)
+BOOST_AUTO_TEST_CASE(nodeDirReadsModeFromExecutorVersionAndWeb3Listener)
 {
     auto dir = std::filesystem::temp_directory_path() / "ops-mode-nodedir";
+    std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir);
+    // [ethereum] mode is a dead key since the lane follows executor.version: it is not read
     std::ofstream(dir / "config.ini")
-        << "[rpc]\nlisten_port=20200\n[ethereum]\nmode=opstack-el\n"
+        << "[rpc]\nlisten_port=20200\n[ethereum]\nmode=el\n"
            "[web3_rpc]\nenable=true\nlisten_ip=0.0.0.0\nlisten_port=8755\n";
+    std::ofstream(dir / "config.genesis") << "[executor]\nversion=3\n";
     auto node = NodeDir::load(dir.string());
-    BOOST_CHECK_EQUAL(node.ethereumMode, "opstack-el");
+    BOOST_CHECK_EQUAL(node.mode, "opstack-el");
     BOOST_CHECK(node.web3Enable);
     BOOST_CHECK_EQUAL(node.web3Endpoint(), "127.0.0.1:8755");
+    std::ofstream(dir / "config.genesis") << "[executor]\nversion=2\n";
+    BOOST_CHECK_EQUAL(NodeDir::load(dir.string()).mode, "el");
+    std::ofstream(dir / "config.genesis") << "[executor]\nversion=1\n";
+    BOOST_CHECK_EQUAL(NodeDir::load(dir.string()).mode, "none");
+    std::filesystem::remove(dir / "config.genesis");
     std::ofstream(dir / "config.ini") << "[rpc]\nlisten_port=20200\n";
     auto plain = NodeDir::load(dir.string());
-    BOOST_CHECK_EQUAL(plain.ethereumMode, "none");
+    BOOST_CHECK_EQUAL(plain.mode, "none");
     BOOST_CHECK(!plain.web3Enable);
     BOOST_CHECK_EQUAL(plain.web3Endpoint(), "127.0.0.1:8545");
     BOOST_CHECK(isElMode("el") && isElMode("opstack-el") && !isElMode("none"));
@@ -497,17 +505,13 @@ BOOST_AUTO_TEST_CASE(modeFlagWinsThenNodeDirThenUnknown)
 {
     ConnectOptions options;
     NodeDir node;
-    node.ethereumMode = "opstack-el";
+    node.mode = "opstack-el";
     BOOST_CHECK_EQUAL(connectionMode(options, &node), "opstack-el");
     options.mode = "none";
     BOOST_CHECK_EQUAL(connectionMode(options, &node), "none");  // --mode wins
     BOOST_CHECK_EQUAL(connectionMode(options, nullptr), "none");
     options.mode.reset();
     BOOST_CHECK_EQUAL(connectionMode(options, nullptr), "unknown");  // bare --rpc
-    node.ethereumMode = "pbft";
-    BOOST_CHECK_EXCEPTION(connectionMode(options, &node), OpsError, [](OpsError const& e) {
-        return std::string(e.what()).find("config.ini [ethereum] mode") != std::string::npos;
-    });
     options.mode = "pbft";
     BOOST_CHECK_EXCEPTION(connectionMode(options, nullptr), OpsError, [](OpsError const& e) {
         return std::string(e.what()).find("--mode expects") != std::string::npos;
