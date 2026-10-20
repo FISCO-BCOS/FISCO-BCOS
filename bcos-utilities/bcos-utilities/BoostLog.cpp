@@ -83,7 +83,7 @@ static_assert(static_cast<int>(LogLevel::WARNING) == boost::log::trivial::severi
 static_assert(static_cast<int>(LogLevel::ERROR) == boost::log::trivial::severity_level::error);
 static_assert(static_cast<int>(LogLevel::FATAL) == boost::log::trivial::severity_level::fatal);
 
-std::atomic<LogLevel> c_fileLogLevel{LogLevel::TRACE};
+LogLevel c_fileLogLevel = LogLevel::TRACE;
 
 namespace log
 {
@@ -231,7 +231,7 @@ void commitLine(LogLevel _level, std::string_view _message)
 
 void setFileLogLevel(LogLevel const& _level)
 {
-    c_fileLogLevel.store(_level, std::memory_order_relaxed);
+    c_fileLogLevel = _level;
 }
 
 LogStream::~LogStream() noexcept
