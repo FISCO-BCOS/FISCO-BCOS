@@ -33,6 +33,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/log/core.hpp>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -1434,6 +1435,14 @@ public:
                     expectedAddrs.insert(std::move(lower));
                 }
             }
+            // Partition the unnamed account tables: every one is a candidate, and
+            // one holding a nonzero storage slot already carries state. A
+            // balance-only account is a fee/deposit artifact the harness
+            // legitimately creates for the block's beneficiary; an empty table or
+            // a table whose only slots are zero is EIP-161-prunable. Neither must
+            // trip the gate.
+            std::set<std::string> surplusCandidates;
+            std::set<std::string> surplusAddrs;
             auto iterator = task::tbb::syncWait(storage2::range(storage));
             while (auto item = task::tbb::syncWait(iterator.next()))
             {
@@ -1448,12 +1457,34 @@ public:
                 {
                     continue;
                 }
-                // Only flag a surplus account that carries CODE: those are contracts
-                // the executor created (or failed to delete) that the expected map
-                // never names — the class the check exists to catch. A balance-only
-                // account is a fee/deposit artifact the harness legitimately creates
-                // for the block's beneficiary, and an empty one is an EIP-161-prunable
-                // table the memory harness keeps; neither must trip the gate.
+                surplusCandidates.insert(addrHex);
+
+                // Storage slots are exactly 32-byte keys; account metadata fields
+                // (nonce, balance, codeHash, ...) use shorter names. A zero-valued
+                // slot is indistinguishable from an absent one at the EVM level.
+                auto const slotKey = std::string_view(key.m_tableAndKey.data() + key.m_split + 1,
+                    key.m_tableAndKey.size() - key.m_split - 1);
+                auto const* entry = std::get_if<storage::Entry>(std::addressof(value));
+                if (entry != nullptr && slotKey.size() == sizeof(evmc_bytes32))
+                {
+                    auto const field = entry->get();
+                    if (std::any_of(
+                            field.begin(), field.end(), [](char byte) { return byte != 0; }))
+                    {
+                        surplusAddrs.insert(std::move(addrHex));
+                    }
+                }
+            }
+
+            // Code-bearing surplus accounts: the expected map cannot name them
+            // either, and a legacy row may keep the code in the table's code field
+            // rather than a code-hash row, so inspect the account itself.
+            for (auto const& addrHex : surplusCandidates)
+            {
+                if (surplusAddrs.count(addrHex) != 0)
+                {
+                    continue;
+                }
                 auto addrBytes = test::hexToBytes(addrHex);
                 evmc_address addr{};
                 std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
@@ -1464,10 +1495,15 @@ public:
                 }());
                 if (carriesState)
                 {
-                    errors << "    SURPLUS " << addrHex
-                           << ": present in storage (code/storage) but not in the expected "
-                              "post-state\n";
+                    surplusAddrs.insert(addrHex);
                 }
+            }
+
+            for (auto const& addrHex : surplusAddrs)
+            {
+                errors << "    SURPLUS " << addrHex
+                       << ": present in storage (code/storage) but not in the expected "
+                          "post-state\n";
             }
         }
 
