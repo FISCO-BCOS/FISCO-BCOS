@@ -27,17 +27,5 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 find_package(Boost REQUIRED unit_test_framework)
 target_link_libraries(${TEST_BINARY_NAME} ${BCOS_CPP_SDK_TARGET} table bcos-utilities protocol-tars Boost::unit_test_framework)
 set_source_files_properties("unittests/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/JsonRpcRequestTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/KeyPairBuilderTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/EventSubParamsTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/ConfigTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/BlockNumberInfoTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/abi/ContractABITypeCodecLiquidTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-# ContractEventTopicTest pulls in bcos::cppsdk::abi; batched with the EventSub tests
-# (using namespace bcos::cppsdk) it makes boost type_index's abi::__cxa_demangle ambiguous
-# with GCC 16's ::abi alias.
-set_source_files_properties("unittests/abi/ContractEventTopicTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/multigroup/JsonGroupInfoCodecTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME ${TEST_BINARY_NAME} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")

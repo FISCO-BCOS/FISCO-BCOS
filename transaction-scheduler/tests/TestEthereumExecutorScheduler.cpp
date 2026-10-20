@@ -72,7 +72,9 @@ namespace
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::executor_v1;
-using namespace bcos::executor_v1::eth;
+using bcos::executor_v1::eth::EthereumExecutor;
+using bcos::executor_v1::eth::EthereumHost;
+using bcos::executor_v1::eth::EthereumState;
 using namespace bcos::scheduler_v1;
 
 using EEMutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,

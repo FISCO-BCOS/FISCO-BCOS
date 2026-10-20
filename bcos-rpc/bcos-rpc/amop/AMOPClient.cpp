@@ -32,7 +32,7 @@
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::boostssl::ws;
-using namespace bcostars;
+
 using namespace tars;
 using namespace bcos::gateway;
 using namespace bcos::protocol;
@@ -467,10 +467,10 @@ void AMOPClient::subscribeTopicToAllNodes()
             m_gatewayServiceName, endPoint.getEndpoint());
 
         auto serviceClient =
-            std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
+            std::make_shared<bcostars::GatewayServiceClient>(servicePrx, m_gatewayServiceName);
         bcos::task::wait([](std::weak_ptr<AMOPClient> _self,
-                             std::shared_ptr<GatewayServiceClient> _client, std::string _clientID,
-                             std::string _topicInfo,
+                             std::shared_ptr<bcostars::GatewayServiceClient> _client,
+                             std::string _clientID, std::string _topicInfo,
                              tars::EndpointInfo _endPoint) -> bcos::task::Task<void> {
             auto error = co_await _client->subscribeTopic(_clientID, _topicInfo);
             auto self = _self.lock();
@@ -498,13 +498,13 @@ void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsT
     auto activeEndPoints = getActiveGatewayEndPoints();
     for (auto const& endPoint : activeEndPoints)
     {
-        auto servicePrx = bcostars::createServantProxy<GatewayServicePrx>(
+        auto servicePrx = bcostars::createServantProxy<bcostars::GatewayServicePrx>(
             m_gatewayServiceName, endPoint.getEndpoint());
 
         auto serviceClient =
-            std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
-        bcos::task::wait([](std::shared_ptr<GatewayServiceClient> _client, std::string _clientID,
-                             std::vector<std::string> _topicsToRemove,
+            std::make_shared<bcostars::GatewayServiceClient>(servicePrx, m_gatewayServiceName);
+        bcos::task::wait([](std::shared_ptr<bcostars::GatewayServiceClient> _client,
+                             std::string _clientID, std::vector<std::string> _topicsToRemove,
                              tars::EndpointInfo _endPoint) -> bcos::task::Task<void> {
             auto error = co_await _client->removeTopic(_clientID, _topicsToRemove);
             AMOP_CLIENT_LOG(INFO) << LOG_DESC("removeTopic")

@@ -52,7 +52,8 @@ template <class C>
 concept ValueInitValidBlockContext =
     std::same_as<C, EmptyBlockContext> || requires { C::kValueInitializedValid; };
 
-#define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
+#define SERIAL_SCHEDULER_LOG(LEVEL) \
+    BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
 
 class SchedulerSerialImpl
 {

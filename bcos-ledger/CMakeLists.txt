@@ -30,7 +30,6 @@ target_link_libraries(ledger PUBLIC tool protocol-tars codec table bcos-concepts
 # directory is added (build tree only, not exported). PUBLIC because the public header
 # bcos-ledger/mpt/ViewNodeStorage.h includes it.
 target_include_directories(ledger PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../bcos-storage>)
-set_target_properties(ledger PROPERTIES UNITY_BUILD "ON")
 
 # test related
 if (TESTS)

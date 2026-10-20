@@ -3,6 +3,10 @@ if(WITH_TIKV)
     set(TEST_BINARY_NAME test-legacy-tikv-storage)
 
     add_executable(${TEST_BINARY_NAME} TestTiKVStorage.cpp main.cpp)
+    # main.cpp defines BOOST_TEST_MODULE; merged into a unity batch the boost.test
+    # entry macro is disabled (TestTiKVStorage.cpp includes the header first),
+    # breaking the link with undefined init_unit_test_suite.
+    set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
     target_include_directories(${TEST_BINARY_NAME} PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/bcos-storage

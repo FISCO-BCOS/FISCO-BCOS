@@ -41,7 +41,10 @@
 #include <intx/intx.hpp>
 #include <span>
 
-using namespace std;
+using std::max;
+using std::min;
+using std::numeric_limits;
+using std::pair;
 using namespace bcos;
 using namespace bcos::crypto;
 

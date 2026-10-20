@@ -33,7 +33,6 @@
 #include <utility>
 
 using namespace bcos;
-using namespace bcos::cppsdk;
 using namespace bcos::cppsdk::abi;
 using namespace bcos::test;
 

@@ -14,6 +14,7 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/MPTDeltaLayer.h"
+#include <bcos-utilities/BlockStat.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
@@ -50,7 +51,8 @@ class Hash;
 
 namespace bcos::scheduler_v1
 {
-#define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
+#define BASELINE_SCHEDULER_LOG(LEVEL) \
+    BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
 
 DERIVE_BCOS_EXCEPTION(NotFoundTransactionError);
 
@@ -141,6 +143,8 @@ private:
         /// header row, not from here (buildMPTStateRoot), so this field is not a channel any
         /// consensus-path data flows through.
         std::optional<ledger::mpt::MPTDeltaLayer> m_mptDelta;
+        /// elapsed ms of this block's execution; the commit-time BlockStat prints it
+        int64_t m_executeMs{-1};
     };
     std::deque<std::shared_ptr<ExecuteResult>> m_results;
     std::mutex m_resultsMutex;

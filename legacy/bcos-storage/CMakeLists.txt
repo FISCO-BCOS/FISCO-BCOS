@@ -7,7 +7,6 @@ if(WITH_TIKV)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/bcos-storage)
     target_link_libraries(storage-tikv PUBLIC bcos-framework bcos-utilities kv_client bcos-legacy ittapi)
-    set_target_properties(storage-tikv PROPERTIES UNITY_BUILD "ON")
 endif()
 
 if(TESTS)

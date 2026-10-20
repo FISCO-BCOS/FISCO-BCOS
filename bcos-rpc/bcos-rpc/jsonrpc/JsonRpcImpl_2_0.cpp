@@ -47,7 +47,7 @@
 
 #include "bcos-protocol/TransactionStatus.h"
 
-using namespace std;
+using std::string;
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::group;

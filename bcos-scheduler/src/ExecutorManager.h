@@ -20,7 +20,7 @@ namespace bcos::scheduler
 #define EXECUTOR_MANAGER_CHECK_PERIOD (5000)
 
 #define EXECUTOR_MANAGER_LOG(LEVEL) \
-    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR_MANAGER") << LOG_BADGE("Switch")
+    BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("EXECUTOR_MANAGER") << LOG_BADGE("Switch")
 
 class ExecutorManager
 {

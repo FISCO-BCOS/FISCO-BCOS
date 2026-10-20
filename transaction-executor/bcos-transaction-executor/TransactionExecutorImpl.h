@@ -8,8 +8,8 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/EVMCResult.h"
-#include "bcos-utilities/LogStream.h"
 #include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/LogStream.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include <evmc/evmc.h>
@@ -22,7 +22,8 @@
 
 namespace bcos::executor_v1
 {
-#define TRANSACTION_EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
+#define TRANSACTION_EXECUTOR_LOG(LEVEL) \
+    BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("TRANSACTION_EXECUTOR")
 
 DERIVE_BCOS_EXCEPTION(InvalidReceiptVersion);
 

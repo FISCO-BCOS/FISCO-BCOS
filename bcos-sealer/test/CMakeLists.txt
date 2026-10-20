@@ -20,7 +20,6 @@ file(GLOB_RECURSE SOURCES "./*.cpp")
 set(TEST_BINARY_NAME test-sealer)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 # main.cpp defines BOOST_TEST_MODULE (the test runner entry point); keep it out of the
 # unity batch per project convention (bcos-ledger/test/CMakeLists.txt).
 set_source_files_properties(main.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)

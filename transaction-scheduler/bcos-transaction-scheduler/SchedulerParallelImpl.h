@@ -28,7 +28,8 @@
 namespace bcos::scheduler_v1
 {
 
-#define PARALLEL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
+#define PARALLEL_SCHEDULER_LOG(LEVEL) \
+    BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("PARALLEL_SCHEDULER")
 
 template <class MutableStorage, class Storage>
 struct StorageTrait

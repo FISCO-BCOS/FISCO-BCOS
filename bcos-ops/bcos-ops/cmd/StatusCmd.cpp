@@ -22,6 +22,7 @@
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/Output.h"
 #include "bcos-ops/collect/RpcCollector.h"
+#include <algorithm>
 #include <chrono>
 #include <ostream>
 #include <type_traits>
@@ -64,11 +65,9 @@ std::string ago(std::optional<int64_t> const& _timestampMs)
     {
         return "-";
     }
-    auto delta = nowMs() - *_timestampMs;
-    if (delta < 0)
-    {
-        delta = 0;
-    }
+    // the timestamp comes from the RPC peer: clamp it so the subtraction cannot overflow
+    auto now = nowMs();
+    auto delta = now - std::clamp<int64_t>(*_timestampMs, 0, now);
     if (delta < 60000)
     {
         return std::to_string(delta / 1000) + "s ago";
@@ -113,10 +112,11 @@ void renderStatus(
             show(_status.consensusNodesNum) + "  connected " + show(_status.connectedGroupNodes) +
             "  quorum " + show(_status.minRequiredQuorum) +
             (_status.inTimeout && *_status.inTimeout ? "  TIMEOUT" : ""));
-    rows.emplace_back(
-        "sync", std::string(_status.isSyncing && *_status.isSyncing ? "syncing" : "idle") +
-                    "  highest " + show(_status.knownHighestNumber) + "  lag " + show(_status.lag) +
-                    "  peers " + show(_status.peerCount));
+    rows.emplace_back("sync", std::string(!_status.isSyncing ? "-" :
+                                          *_status.isSyncing ? "syncing" :
+                                                               "idle") +
+                                  "  highest " + show(_status.knownHighestNumber) + "  lag " +
+                                  show(_status.lag) + "  peers " + show(_status.peerCount));
     rows.emplace_back(
         "txpool", "pending " + show(_status.pendingTxSize) +
                       (_status.txpoolLimit ? "  limit " + show(_status.txpoolLimit) : ""));

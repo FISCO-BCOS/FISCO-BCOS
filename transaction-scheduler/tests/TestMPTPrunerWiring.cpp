@@ -282,7 +282,7 @@ BOOST_AUTO_TEST_CASE(batchedRebuildWithSharedStorageTrie)
     BOOST_CHECK_EQUAL(pruner->trackedCount(), fixture.backendNodeCount());
     // ...while the shared storage root carries the full K-fold tally — the in-batch dedup
     // must not collapse the per-encounter counting.
-    std::map<h256, bytes> oracleSlots;
+    std::map<h256, bcos::bytes> oracleSlots;
     for (auto const& [slot, value] : slots)
     {
         oracleSlots.emplace(slot, value.ref().toBytes());

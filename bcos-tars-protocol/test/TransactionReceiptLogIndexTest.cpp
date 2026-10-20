@@ -27,7 +27,7 @@ BOOST_AUTO_TEST_SUITE(TransactionReceiptLogIndexTest)
 
 namespace
 {
-bcos::crypto::CryptoSuite::Ptr makeSuite()
+bcos::crypto::CryptoSuite::Ptr makeReceiptLogIndexSuite()
 {
     return std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
         std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
@@ -36,7 +36,7 @@ bcos::crypto::CryptoSuite::Ptr makeSuite()
 
 BOOST_AUTO_TEST_CASE(logIndexRoundTripsAndDoesNotAffectHash)
 {
-    auto suite = makeSuite();
+    auto suite = makeReceiptLogIndexSuite();
     TransactionReceiptFactoryImpl factory(suite);
     std::vector<bcos::protocol::LogEntry> logs;
     logs.emplace_back(bcos::bytes{0x01}, std::vector<bcos::h256>{bcos::h256(1U)}, bcos::bytes{});

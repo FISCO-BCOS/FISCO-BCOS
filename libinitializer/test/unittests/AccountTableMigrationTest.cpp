@@ -27,7 +27,7 @@
 
 using namespace bcos;
 using namespace bcos::initializer;
-using namespace bcos::ledger;
+namespace account = bcos::ledger::account;
 
 namespace
 {
