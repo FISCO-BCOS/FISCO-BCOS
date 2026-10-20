@@ -211,7 +211,21 @@ BOOST_AUTO_TEST_CASE(panicWithHighBitsIsReportedAsUnknown)
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), 3);
     BOOST_CHECK_EQUAL(resp["error"]["message"].asString(),
-        "execution reverted: unknown panic code: 0x" + panicCode);
+        "execution reverted: unknown panic code: 0x" + panicCode.substr(1));
+}
+
+// Geth formats an unknown panic code as a number, without a fixed-width leading-zero word.
+BOOST_AUTO_TEST_CASE(panicUnknownCodeMatchesGethNumberFormat)
+{
+    m_scheduler->m_status = protocol::TransactionStatus::RevertInstruction;
+    m_scheduler->m_output =
+        fromHex("4e487b710000000000000000000000000000000000000000000000000000000000000013");
+
+    auto resp = request("eth_call");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), 3);
+    BOOST_CHECK_EQUAL(
+        resp["error"]["message"].asString(), "execution reverted: unknown panic code: 0x13");
 }
 
 // Non-revert execution faults are -32000 with a description, never the internal status value.

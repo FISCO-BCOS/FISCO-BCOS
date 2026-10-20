@@ -15,8 +15,8 @@
  *
  * @file HashEmptyHashTest.cpp
  * @brief Issue #5578: Hash::emptyHash() is const (usable through the `const Hash&` HostContext
- *        holds) and answers hash("") for every implementation, including under concurrent first
- *        use (the former lazily-written member raced; the function-local static does not).
+ *        holds) and answers hash("") for every implementation; concurrent readers observe the
+ *        same value (the former lazily-written member raced; the function-local static does not).
  */
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -43,7 +43,7 @@ void checkEmptyHash(const Hash& hashImpl, std::string_view expectedHex)
     BOOST_CHECK_EQUAL(hashImpl.emptyHash(), hashImpl.hash(bytesConstRef{}));
     BOOST_CHECK_EQUAL(hashImpl.emptyHash().hex(), expectedHex);
 
-    // Concurrent first use from a fresh instance returns one value everywhere.
+    // Concurrent readers all observe the one value.
     std::vector<std::thread> threads;
     std::vector<HashType> seen(8);
     for (size_t i = 0; i < seen.size(); ++i)

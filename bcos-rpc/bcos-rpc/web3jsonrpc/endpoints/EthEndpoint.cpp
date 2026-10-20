@@ -97,10 +97,20 @@ std::optional<std::string> decodeRevertReason(bytesConstRef output)
     if (std::equal(selector.begin(), selector.end(), c_panicSelector.begin()))
     {
         auto const code = fromBigEndian<u256>(output.getCroppedData(c_selectorSize, c_wordSize));
+        auto panicCode = [](u256 value) {
+            static constexpr std::string_view c_hexDigits = "0123456789abcdef";
+            std::string digits;
+            do
+            {
+                digits.push_back(c_hexDigits[static_cast<size_t>(value & 0xf)]);
+                value >>= 4;
+            } while (value != 0);
+            std::reverse(digits.begin(), digits.end());
+            return "0x" + digits;
+        };
         if (code > 0xff)
         {
-            return "unknown panic code: 0x" +
-                   toHex(output.getCroppedData(c_selectorSize, c_wordSize));
+            return "unknown panic code: " + panicCode(code);
         }
         switch (static_cast<uint64_t>(code))
         {
@@ -125,8 +135,7 @@ std::optional<std::string> decodeRevertReason(bytesConstRef output)
         case 0x51:
             return "uninitialized function";
         default:
-            return "unknown panic code: 0x" +
-                   toHex(output.getCroppedData(c_selectorSize, c_wordSize));
+            return "unknown panic code: " + panicCode(code);
         }
     }
     if (!std::equal(selector.begin(), selector.end(), c_errorSelector.begin()))
