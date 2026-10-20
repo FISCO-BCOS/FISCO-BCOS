@@ -599,7 +599,7 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
                    // evmc ABI 19: Result lost the created-address ctor; the caller reads
                    // msg.recipient (set by prepare_message / evmone for nested creates).
                    evmc::Result{
-                       EVMC_SUCCESS, result.gas_left, result.gas_refund, {.left = msg.state_gas}} :
+                       EVMC_SUCCESS, result.gas_left, result.gas_refund, result.state_gas} :
                    evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
     }
 

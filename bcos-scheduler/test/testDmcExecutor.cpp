@@ -449,6 +449,45 @@ BOOST_AUTO_TEST_CASE(finishedResumeHandsBackSchedulerSeq)
     BOOST_CHECK_EQUAL(stateMessage->schedulerSeq(), 6);  // derivation: currentSeq - 1
 }
 
+// [R6 F1] The V2 getCode resume arm stamps the schedulerSeq hand-back: a getCode
+// response resumes a live frame, and the frame's next nested-CREATE derives from the
+// stamped last-consumed seq — an unstamped reply would poison the sentinel and halt
+// the node. Pinned at the arm (the same shape the delegate-no-code arm shares).
+BOOST_AUTO_TEST_CASE(getCodeResumeArmStampsSchedulerSeq)
+{
+    auto block = blockFactory->createBlock();
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(3);
+    header->calculateHash(*cryptoSuite->hashImpl());
+    block->setBlockHeader(header);
+
+    struct GetCodeProbeExecutor : public DmcExecutor
+    {
+        using DmcExecutor::DmcExecutor;
+        using DmcExecutor::handleExecutiveMessageV2;
+    };
+    GetCodeProbeExecutor dmc("DmcExecutor-getcode", "0xaabbccdd", block, executor1, keyLocks,
+        std::make_shared<Keccak256>(), dmcRecorder, false, ledger::Features{});
+    dmc.setOnGetCodeHandler([](std::string_view) { return bcos::bytes{0x60, 0x00}; });
+
+    auto message = std::make_unique<executor::NativeExecutionMessage>();
+    message->setType(protocol::ExecutionMessage::MESSAGE);
+    message->setContextID(9);
+    message->setSeq(12);
+    message->setFrom("0x1111111111111111111111111111111111111111");
+    message->setTo("0xaabbccdd");  // == m_contractAddress: reach the handler
+    message->setData(bcos::protocol::GET_CODE_INPUT_BYTES);
+    message->setDelegateCallAddress("0x2222222222222222222222222222222222222222");
+
+    auto state = std::make_shared<scheduler::ExecutiveState>(9, std::move(message), false);
+    state->currentSeq = 7;
+
+    auto hint = dmc.handleExecutiveMessageV2(state);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(hint), static_cast<int>(DmcExecutor::MessageHint::NEED_PREPARE));
+    BOOST_CHECK_EQUAL(state->message->schedulerSeq(), 6);  // currentSeq - 1
+}
+
 // Empty-to create addresses follow the version-gated lane rule (review F2):
 // with bugfix_dmc_create_address_rule AND feature_evm_address on, the DMC lane derives
 // the same keccak(rlp(sender, nonce)) address as SerialBlockExecutive; with the flag off

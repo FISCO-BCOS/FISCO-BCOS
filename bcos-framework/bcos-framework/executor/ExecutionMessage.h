@@ -129,8 +129,10 @@ public:
     /// DMC scheduler -> executor: the tx-context's last-consumed seq at the moment the
     /// parent frame this message resumes (ExecutiveState::currentSeq - 1). The DMC
     /// coroutine lane's CREATE hook derives the nested-create address from this counter
-    /// so it reproduces the scheduler-side f(currentSeq) the pre-upgrade binary produced;
-    /// producers that never set it leave the default 0 (serial lane, EL lanes, old peers).
+    /// so it reproduces the scheduler-side f(currentSeq) the pre-upgrade binary produced.
+    /// Implementations default to -1, meaning "producer never set it" (serial lane, EL
+    /// lanes, old peers): on the DMC lane an unset value is NOT benign — it marks the
+    /// resumed frame and makes the next createDerivationSeq() fail loudly.
     virtual int64_t schedulerSeq() const = 0;
     virtual void setSchedulerSeq(int64_t schedulerSeq) = 0;
 

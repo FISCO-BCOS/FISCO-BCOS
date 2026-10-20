@@ -1480,9 +1480,14 @@ BOOST_AUTO_TEST_CASE(dmcNestedCreateFollowsSchedulerSeqHandback)
     BOOST_CHECK(!stamped.second);
 
     // The negative control (an unstamped resume failing loudly on the second CREATE)
-    // is the seam-level test's job: the throw crosses evmone's noexcept VM frames and
-    // becomes std::terminate in-process, so it cannot be exercised here. See
+    // is the seam-level test's job: the hook's catch records the fault and
+    // throwIfHostFault() raises it into go()'s std::exception arm (a process halt,
+    // not a recoverable in-process failure), so it cannot be exercised here. See
     // createDerivationSeqAdoptsStampAndFailsLoudWithout for the throw pin.
+    //
+    // This test hand-stamps the resume (the test plays the scheduler); the scheduler's
+    // own stamping arms are pinned by testDmcExecutor's finishedResumeHandsBackSchedulerSeq
+    // and getCodeResumeArmStampsSchedulerSeq.
 }
 
 // The call() host callback's deterministic negative-gas arm (review F1 keeps it): a gas

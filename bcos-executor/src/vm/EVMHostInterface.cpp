@@ -203,6 +203,12 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
 uint64_t getNonce(evmc_host_context* _context, const evmc_address* _addr)
 {
     auto& hostContext = *reinterpret_cast<HostContext*>(_context);
+    // A frame that already recorded a host fault is about to fail — stop the storage
+    // read, mirroring translateHostFault's pre-check.
+    if (hostContext.hasHostFault())
+    {
+        return std::numeric_limits<uint64_t>::max();
+    }
     try
     {
         return hostContext.getNonce(_addr);

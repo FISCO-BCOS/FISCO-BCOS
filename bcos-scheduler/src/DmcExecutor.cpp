@@ -608,6 +608,10 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
                            << LOG_KV("codeSize", code.size());
             executiveState->message->setData(code);
             executiveState->message->setType(protocol::ExecutionMessage::PRE_FINISH);
+            // R6 F1: this response resumes a live frame, so it must carry the
+            // tx-context's last-consumed seq like the five resume arms below — an
+            // unstamped reply would poison the frame's schedulerSeq sentinel.
+            executiveState->message->setSchedulerSeq(executiveState->currentSeq - 1);
 
             executiveState->isRevertStackMessage = true;
 
@@ -640,6 +644,10 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
                 message->setStatus((int32_t)protocol::TransactionStatus::CallAddressError);
                 message->setCreate(false);
                 message->setKeyLocks({});
+                // R6 F1: this REVERT is handed back to a live frame, so it must carry
+                // the tx-context's last-consumed seq like the five resume arms below —
+                // an unstamped reply would poison the frame's schedulerSeq sentinel.
+                message->setSchedulerSeq(executiveState->currentSeq - 1);
 
                 executiveState->isRevertStackMessage = true;
 
