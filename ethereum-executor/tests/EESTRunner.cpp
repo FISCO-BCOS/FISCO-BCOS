@@ -16,10 +16,15 @@
 
 #include "EESTRunner.h"
 #include "TestMemoryStorage.h"
+#include "bcos-codec/rlp/RLPEncode.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-ledger/GenesisStateRoot.h"
+#include "bcos-ledger/mpt/Constants.h"
+#include "bcos-ledger/mpt/HashBuilder.h"
+#include "bcos-ledger/mpt/StorageValueCodec.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
@@ -1297,9 +1302,131 @@ public:
             [tarsTx = std::move(tarsTx)]() mutable { return tarsTx.get(); });
     }
 
+    /// Ethereum MPT state root over the flat post-state: secure trie keyed by
+    /// keccak256(address), account leaf [nonce, balance, storageRoot, codeHash], and a
+    /// per-account secure storage trie. Reuses the stateless trie cores the genesis
+    /// state-root path uses, so there is one implementation of the Ethereum rule.
+    h256 computePostStateRoot(MutableStorage& storage, evmc_revision revision)
+    {
+        struct AccountState
+        {
+            std::optional<std::string> nonce;
+            std::optional<std::string> balance;
+            std::optional<h256> codeHash;
+            std::optional<bytes> code;
+            std::map<h256, bytes> storageEntries;
+        };
+        std::map<std::string, AccountState> accounts;
+
+        auto iterator = task::tbb::syncWait(storage2::range(storage));
+        while (auto item = task::tbb::syncWait(iterator.next()))
+        {
+            auto const& [key, value] = *item;
+            auto const* entry = std::get_if<storage::Entry>(std::addressof(value));
+            if (entry == nullptr)
+            {
+                continue;
+            }
+            std::string_view table(key.m_tableAndKey.data(), key.m_split);
+            if (!ledger::account::isHexAccountTableName(table))
+            {
+                continue;
+            }
+            std::string_view fieldKey(key.m_tableAndKey.data() + key.m_split + 1,
+                key.m_tableAndKey.size() - key.m_split - 1);
+            auto const field = entry->get();
+            auto& account = accounts[std::string(table)];
+            if (fieldKey == ledger::ACCOUNT_TABLE_FIELDS::NONCE)
+            {
+                account.nonce = std::string(field);
+            }
+            else if (fieldKey == ledger::ACCOUNT_TABLE_FIELDS::BALANCE)
+            {
+                account.balance = std::string(field);
+            }
+            else if (fieldKey == ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH)
+            {
+                account.codeHash =
+                    h256(bytesConstRef(reinterpret_cast<const byte*>(field.data()), field.size()));
+            }
+            else if (fieldKey == ledger::ACCOUNT_TABLE_FIELDS::CODE)
+            {
+                account.code = bytes(field.begin(), field.end());
+            }
+            else if (fieldKey.size() == sizeof(evmc_bytes32))
+            {
+                auto encoded = ledger::mpt::encodeStorageValue(
+                    bytesConstRef(reinterpret_cast<const byte*>(field.data()), field.size()));
+                if (!encoded.empty())
+                {
+                    auto slotHash = crypto::keccak256Hash(bytesConstRef(
+                        reinterpret_cast<const byte*>(fieldKey.data()), fieldKey.size()));
+                    account.storageEntries[slotHash] = std::move(encoded);
+                }
+            }
+        }
+
+        std::map<h256, bytes> stateEntries;
+        for (auto const& [table, account] : accounts)
+        {
+            auto addressHex = std::string_view(table).substr(ledger::account::APPS_PREFIX.size());
+            auto addressBytes = test::hexToBytes("0x" + std::string(addressHex));
+            if (addressBytes.size() != sizeof(evmc_address))
+            {
+                continue;
+            }
+            evmc_address address{};
+            std::copy(addressBytes.begin(), addressBytes.end(), address.bytes);
+
+            uint64_t nonce = 0;
+            if (account.nonce && !account.nonce->empty())
+            {
+                nonce = boost::lexical_cast<uint64_t>(*account.nonce);
+            }
+            u256 balance = 0;
+            if (account.balance && !account.balance->empty())
+            {
+                balance = u256(*account.balance);
+            }
+            h256 codeHash = ledger::mpt::emptyCodeHash();
+            if (account.codeHash && *account.codeHash != h256{})
+            {
+                codeHash = *account.codeHash;
+            }
+            else if (account.code)
+            {
+                codeHash = crypto::keccak256Hash(
+                    bytesConstRef(account.code->data(), account.code->size()));
+            }
+            // EIP-161 (Spurious Dragon+): a zero nonce, zero balance, code-less account
+            // is not part of the trie. Before that fork a touched empty account IS part
+            // of state, so pruning it changes the root.
+            if (revision >= EVMC_SPURIOUS_DRAGON && nonce == 0 && balance == 0 &&
+                codeHash == ledger::mpt::emptyCodeHash())
+            {
+                continue;
+            }
+            h256 storageRoot = ledger::mpt::emptyRootHash();
+            if (!account.storageEntries.empty())
+            {
+                storageRoot = ledger::mpt::computeTrieRoot(account.storageEntries).root;
+            }
+            bytes accountRlp;
+            codec::rlp::encode(accountRlp, nonce, balance, storageRoot, codeHash);
+            stateEntries[crypto::keccak256Hash(
+                bytesConstRef(address.bytes, sizeof(address.bytes)))] = std::move(accountRlp);
+        }
+        if (stateEntries.empty())
+        {
+            return ledger::mpt::emptyRootHash();
+        }
+        return ledger::mpt::computeTrieRoot(stateEntries).root;
+    }
+
     /// Verify post-state. Returns a string with mismatch details (empty = all good).
-    std::string verifyPostState(
-        MutableStorage& storage, std::map<std::string, test::EESTAccount> const& expected)
+    std::string verifyPostState(MutableStorage& storage,
+        std::map<std::string, test::EESTAccount> const& expected,
+        std::string_view expectedStateRoot = {})
     {
         std::ostringstream errors;
         int passed = 0, failed = 0;
@@ -1507,6 +1634,26 @@ public:
             }
         }
 
+        if (!expectedStateRoot.empty())
+        {
+            auto rootBytes = test::hexToBytes(std::string(expectedStateRoot));
+            if (rootBytes.size() != sizeof(h256))
+            {
+                errors << "    STATE_ROOT malformed: expected " << expectedStateRoot << "\n";
+                ++g_storageMismatch;
+            }
+            else
+            {
+                h256 expectedHash(bytesConstRef(rootBytes.data(), rootBytes.size()));
+                auto actual = computePostStateRoot(storage, m_currentRevision);
+                if (actual != expectedHash)
+                {
+                    errors << "    STATE_ROOT expected 0x" << expectedHash.hex() << ", got 0x"
+                           << actual.hex() << "\n";
+                    ++g_storageMismatch;
+                }
+            }
+        }
         return errors.str();
     }
 
@@ -1615,7 +1762,7 @@ public:
         // expectException for expected-failure tests.
         if (expectsSuccess && !gotSuccess)
         {
-            auto errStr = verifyPostState(storage, post.state);
+            auto errStr = verifyPostState(storage, post.state, post.stateRoot);
             if (errStr.empty())
             {
                 return true;  // State matches → test passes (tx reverted correctly)
@@ -1650,7 +1797,7 @@ public:
         // silently scored as "failed as expected".
         if (!expectsSuccess && !gotSuccess)
         {
-            auto errStr = verifyPostState(storage, post.state);
+            auto errStr = verifyPostState(storage, post.state, post.stateRoot);
             if (!errStr.empty())
             {
                 std::ostringstream oss;
@@ -1667,7 +1814,7 @@ public:
         }
 
         // Success: verify post-state
-        auto errStr = verifyPostState(storage, post.state);
+        auto errStr = verifyPostState(storage, post.state, post.stateRoot);
         if (!errStr.empty())
         {
             std::ostringstream oss;

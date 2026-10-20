@@ -24,6 +24,8 @@
 #include "EESTRunner.cpp"
 #undef main
 
+#include "bcos-framework/ledger/GenesisConfig.h"
+#include "bcos-ledger/GenesisStateRoot.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -153,6 +155,67 @@ BOOST_AUTO_TEST_CASE(nonAccountRowsAreIgnored)
     task::tbb::syncWait(
         storage2::writeOne(storage, StateKey{"/tables/non-account", slot}, storage::Entry{value}));
     BOOST_CHECK(verify().empty());
+}
+
+// The flat-storage root calculator must agree with the genesis state-root path, which
+// is the independent implementation of the same Ethereum secure-trie rule. The two
+// paths take different inputs (allocs vs account rows), so agreement pins the mapping:
+// nonce/balance/codeHash/storage -> account leaf and storage trie.
+BOOST_AUTO_TEST_CASE(postStateRootMatchesGenesisOracle)
+{
+    MutableStorage storage;
+    EESTRunner runner;
+
+    evmc_address eoa{};
+    eoa.bytes[19] = 0x55;
+    evmc_address contract{};
+    contract.bytes[19] = 0x66;
+    auto eoaAccount = executor_v1::eth::ethViewAccount(storage, eoa);
+    auto contractAccount = executor_v1::eth::ethViewAccount(storage, contract);
+    bcos::bytes code{0x60, 0x00};
+    evmc_bytes32 slot{}, slotValue{};
+    slot.bytes[31] = 1;
+    slotValue.bytes[31] = 42;
+    task::tbb::syncWait([&]() -> task::Task<void> {
+        co_await eoaAccount.create();
+        co_await eoaAccount.setNonce("7");
+        co_await eoaAccount.setBalance(100);
+        co_await contractAccount.create();
+        co_await contractAccount.setNonce("0");
+        co_await contractAccount.setBalance(5);
+        co_await contractAccount.setStorage(slot, slotValue);
+        co_await contractAccount.setCode(code, "",
+            runner.cryptoSuite->hashImpl()->hash(bytesConstRef{code.data(), code.size()}));
+    }());
+
+    auto makeAlloc = [](std::string address, std::string nonce, u256 balance, std::string codeHex) {
+        bcos::ledger::Alloc alloc;
+        alloc.address = std::move(address);
+        alloc.nonce = std::move(nonce);
+        alloc.balance = balance;
+        alloc.code = std::move(codeHex);
+        return alloc;
+    };
+    bcos::ledger::GenesisConfig genesis;
+    genesis.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
+    auto eoaAlloc = makeAlloc("0x0000000000000000000000000000000000000055", "7", 100, "0x");
+    auto contractAlloc = makeAlloc("0x0000000000000000000000000000000000000066", "0", 5, "0x6000");
+    contractAlloc.storage.emplace_back(
+        "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "0x000000000000000000000000000000000000000000000000000000000000002a");
+    genesis.m_allocs = {std::move(eoaAlloc), std::move(contractAlloc)};
+
+    auto expected = task::tbb::syncWait(bcos::ledger::computeGenesisStateTrie(genesis)).root;
+    auto actual = runner.computePostStateRoot(storage, EVMC_CANCUN);
+    BOOST_CHECK_EQUAL(actual.hex(), expected.hex());
+}
+
+BOOST_AUTO_TEST_CASE(wrongPostStateRootIsRejected)
+{
+    // The fixture already holds the known account; a mismatching root must fail even
+    // when every per-account field matches.
+    auto errors = runner.verifyPostState(storage, expected, std::string(66, '0'));
+    BOOST_CHECK(errors.find("STATE_ROOT") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
