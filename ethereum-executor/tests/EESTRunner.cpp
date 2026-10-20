@@ -44,6 +44,7 @@
 #include <memory>
 #include <mutex>
 #include <range/v3/algorithm/equal.hpp>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -916,6 +917,17 @@ public:
                 return false;
             }
         }
+        else if (toPos != std::string::npos && atPos != std::string::npos)
+        {
+            // Both markers present but in the wrong order (AtTime before To): the gate
+            // admitted the name, and the transition parser cannot resolve it, so running
+            // it whole-case at the default revision would be the wrong-schedule execution
+            // the refusal exists to prevent. Skip it like every other unresolvable shape.
+            std::cerr << "Info: fork name '" << forkName
+                      << "' has its AtTime marker before To; skipping its fixtures" << std::endl;
+            m_forkTransition.reset();
+            return false;
+        }
         return true;
     }
 
@@ -1405,6 +1417,59 @@ public:
             }());
 
         }  // end for loop over expected accounts
+
+        // Surplus/undeleted detection: enumerate every account table this storage
+        // holds and flag any that the expected post-state does not name — the
+        // expected-only loop above cannot see an account the executor created (or
+        // failed to delete).
+        {
+            std::set<std::string> expectedAddrs;
+            for (auto const& [addrHex, unused] : expected)
+            {
+                auto b = test::hexToBytes(addrHex);
+                if (b.size() == sizeof(evmc_address))
+                {
+                    std::string lower;
+                    boost::algorithm::hex_lower(b, std::back_inserter(lower));
+                    expectedAddrs.insert(std::move(lower));
+                }
+            }
+            auto iterator = task::tbb::syncWait(storage2::range(storage));
+            while (auto item = task::tbb::syncWait(iterator.next()))
+            {
+                auto const& [key, value] = *item;
+                std::string_view table(key.m_tableAndKey.data(), key.m_split);
+                if (!ledger::account::isHexAccountTableName(table))
+                {
+                    continue;
+                }
+                auto addrHex = std::string(table.substr(ledger::account::APPS_PREFIX.size()));
+                if (expectedAddrs.count(addrHex))
+                {
+                    continue;
+                }
+                // Only flag a surplus account that carries CODE: those are contracts
+                // the executor created (or failed to delete) that the expected map
+                // never names — the class the check exists to catch. A balance-only
+                // account is a fee/deposit artifact the harness legitimately creates
+                // for the block's beneficiary, and an empty one is an EIP-161-prunable
+                // table the memory harness keeps; neither must trip the gate.
+                auto addrBytes = test::hexToBytes(addrHex);
+                evmc_address addr{};
+                std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
+                auto surplusAcct = bcos::executor_v1::eth::ethViewAccount(storage, addr);
+                auto const carriesState = task::tbb::syncWait([&]() -> task::Task<bool> {
+                    auto codeEntry = co_await surplusAcct.code();
+                    co_return codeEntry.has_value() && !codeEntry->get().empty();
+                }());
+                if (carriesState)
+                {
+                    errors << "    SURPLUS " << addrHex
+                           << ": present in storage (code/storage) but not in the expected "
+                              "post-state\n";
+                }
+            }
+        }
 
         return errors.str();
     }

@@ -354,14 +354,19 @@ jobs:
           # (fixture load failures silently counted as skips before).
           TOTAL_TESTS=$(sed -nE 's/.*Total tests:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
           SKIPPED_TESTS=$(sed -nE 's/.*Skipped tests:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
+          SKIPPED_FILES=$(sed -nE 's/.*Skipped files:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
           LOAD_FAILURES=$(sed -nE 's/.*Load failures:[[:space:]]+([0-9]+).*/\1/p' eest_output.txt)
-          echo "EEST totals: ${TOTAL_TESTS:-unknown} tests, ${SKIPPED_TESTS:-unknown} skipped, ${LOAD_FAILURES:-unknown} load failures"
+          echo "EEST totals: ${TOTAL_TESTS:-unknown} tests, ${SKIPPED_TESTS:-unknown} skipped tests, ${SKIPPED_FILES:-unknown} skipped files, ${LOAD_FAILURES:-unknown} load failures"
           if [ -z "${TOTAL_TESTS}" ] || [ "${TOTAL_TESTS}" -ne 90650 ]; then
             echo "::error::EEST total tests ${TOTAL_TESTS:-unknown} != 90650 (corpus changed? re-pin the tripwire)"
             exit 1
           fi
           if [ -z "${SKIPPED_TESTS}" ] || [ "${SKIPPED_TESTS}" -ne 978 ]; then
             echo "::error::EEST skipped tests ${SKIPPED_TESTS:-unknown} != 978 (skip matcher drift? re-pin the tripwire)"
+            exit 1
+          fi
+          if [ -z "${SKIPPED_FILES}" ] || [ "${SKIPPED_FILES}" -ne 29671 ]; then
+            echo "::error::EEST skipped files ${SKIPPED_FILES:-unknown} != 29671 (corpus changed? re-pin the tripwire)"
             exit 1
           fi
           if [ -z "${LOAD_FAILURES}" ] || [ "${LOAD_FAILURES}" -ne 0 ]; then
