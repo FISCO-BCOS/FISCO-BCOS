@@ -939,8 +939,11 @@ evmc_address HostContext::create2AddressForOpcode(
         // R6 F7: 0.24's patched create_impl still calls access_account on the
         // rejected CREATE2's pushed recipient (the zero address) for rev >= Berlin;
         // 0.21 never warmed it. Mark it so the creation-time query answers cold
-        // without inserting, exactly like the other three derivation sites.
-        if (m_eip2929Access)
+        // without inserting, exactly like the other three derivation sites. The mark
+        // is gated on the warm flag like everywhere else: flag-ON chains warm it
+        // normally and never consume a marker.
+        if (m_eip2929Access && !m_executive->blockContext().features().get(
+                                   ledger::Features::Flag::bugfix_evm2929_created_address_warm))
         {
             evmc_address zero{};
             m_eip2929Access->markAddressCreatedByHook(zero);

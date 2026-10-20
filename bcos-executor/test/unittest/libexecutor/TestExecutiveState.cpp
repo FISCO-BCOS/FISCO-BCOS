@@ -298,6 +298,26 @@ BOOST_AUTO_TEST_CASE(appendKeyLocksTest)
     }
 }
 
+// [R6 F2/F1] The DMC nested-CREATE derivation's scheduler hand-back contract:
+// a stamped seq is adopted as the hook's derivation base, and an unstamped resume
+// (-1 sentinel) must fail loudly instead of falling back to a frozen seq — the
+// colliding-address shape the fix replaced. This pins the executor half of the fix
+// (the seam in CoroutineTransactionExecutive) without the DMC through-flow harness.
+BOOST_AUTO_TEST_CASE(createDerivationSeqAdoptsStampAndFailsLoudWithout)
+{
+    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    bcos::executor::BlockContext localContext(
+        nullptr, ledgerCache, hashImpl, 0, h256(), 0, 0, false);
+
+    auto stamped = std::make_shared<MockTransactionExecutive>(localContext, "0x00", 0, 41);
+    stamped->adoptSchedulerSeqHandback(41);
+    BOOST_CHECK_EQUAL(stamped->createDerivationSeq(), 41);
+
+    auto unstamped = std::make_shared<MockTransactionExecutive>(localContext, "0x00", 1, 41);
+    unstamped->adoptSchedulerSeqHandback(-1);
+    BOOST_CHECK_THROW(unstamped->createDerivationSeq(), bcos::Error);
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

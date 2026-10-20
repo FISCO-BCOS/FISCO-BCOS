@@ -399,6 +399,15 @@ struct EVMHostInterface
         }
 
         auto& hostContext = *reinterpret_cast<HostContextType*>(context);
+        // R6 F3: a frame that already recorded a host fault is about to fail — stop
+        // driving the host (and the scheduler via externalCall) at the first fault.
+        // Mirrors the v1 translateHostFault pre-check.
+        if (hostContext.hasHostFault())
+        {
+            evmc_result rejected{};
+            rejected.status_code = EVMC_INTERNAL_ERROR;
+            return rejected;
+        }
         try
         {
             auto result = syncWait(hostContext.externalCall(*message));

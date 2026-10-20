@@ -41,10 +41,9 @@ class Features;
 namespace executor
 {
 class BlockContext;
-// The executor receives the block's feature flags so consensus-relevant parses can be
-// gated. No registered v1 executor reads the parameter today — the only consumer is
-// the v2 dispatch (transaction-executor/.../PrecompiledImpl.h) — and the parameter is
-// threaded here so a v1 executor can gate a parse without an interface change.
+// No registered v1 executor needs a consensus-relevant flag today; when one does,
+// thread the features it needs at the call site that owns them instead of widening
+// this signature (the previous Features& parameter had zero readers).
 using PrecompiledExecutor = std::function<std::pair<bool, bytes>(bytesConstRef)>;
 using PrecompiledPricer = std::function<bigint(bytesConstRef)>;
 

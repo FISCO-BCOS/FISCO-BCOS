@@ -232,8 +232,6 @@ void Features::setUpgradeFeatures(
                     Flag::bugfix_dmc_create_address_rule,
                     Flag::bugfix_baseline_status_mapper_ordinary_failures,
                     Flag::bugfix_internal_create_seq, Flag::bugfix_precompiled_node_fault_rethrow,
-                    // rides the same F0 split decision as the four above if the
-                    // maintainers take them out of this PR
                     Flag::bugfix_evm2929_created_address_warm}}});
     for (const auto& upgradeFeatures : upgradeRoadmap)
     {

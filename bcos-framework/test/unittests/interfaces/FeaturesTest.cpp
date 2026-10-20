@@ -673,10 +673,12 @@ BOOST_AUTO_TEST_CASE(newestVersionSetActivatesDmcCreateAddressRule)
         features.get(Features::Flag::bugfix_baseline_status_mapper_ordinary_failures), true);
     BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_internal_create_seq), true);
     BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_precompiled_node_fault_rethrow), true);
+    BOOST_CHECK_EQUAL(features.get(Features::Flag::bugfix_evm2929_created_address_warm), true);
 
     Features older;
     older.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);
     BOOST_CHECK_EQUAL(older.get(Features::Flag::bugfix_dmc_create_address_rule), false);
+    BOOST_CHECK_EQUAL(older.get(Features::Flag::bugfix_evm2929_created_address_warm), false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
