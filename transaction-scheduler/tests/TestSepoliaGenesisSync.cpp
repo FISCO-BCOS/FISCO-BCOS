@@ -64,8 +64,8 @@ namespace
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::executor_v1;
-using namespace bcos::executor_v1::eth;
 using namespace bcos::scheduler_v1;
+using bcos::executor_v1::eth::EthereumExecutor;
 
 using ESMutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;

@@ -46,7 +46,7 @@
 #include <string_view>
 #include <utility>
 
-using namespace std;
+using std::string;
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::group;

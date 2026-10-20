@@ -77,7 +77,7 @@ namespace
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::executor_v1;
-using namespace bcos::executor_v1::eth;
+using bcos::executor_v1::eth::EthereumExecutor;
 using namespace bcos::scheduler_v1;
 
 using RBMutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,

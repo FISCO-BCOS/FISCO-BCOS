@@ -83,7 +83,8 @@ namespace
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::executor_v1;
-using namespace bcos::executor_v1::eth;
+using bcos::executor_v1::eth::EthereumExecutor;
+using bcos::executor_v1::eth::EthereumHost;
 using namespace bcos::scheduler_v1;
 namespace mpt = bcos::ledger::mpt;
 
@@ -102,7 +103,7 @@ using MPSBackend =
     std::remove_cvref_t<decltype(std::declval<MPSMultiLayerStorage&>().latestBackend())>;
 using MPSPruner = mpt::MPTPruner<MPSBackend>;
 
-constexpr int64_t c_pruneWindow = 1;
+constexpr int64_t c_syncPruneWindow = 1;
 
 static const u256 MPSFunding = u256(1000000000000000000ULL);  // 1 ETH
 static const u256 MPSBaseFee = u256(1000000000);              // 1 gwei
@@ -346,7 +347,7 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
         //      not read from the local ledger, so the boot lookup is backed by the roots this
         //      test commits.
         auto& backend = multiLayerStorage.latestBackend();
-        auto pruner = std::make_shared<MPSPruner>(backend, c_pruneWindow);
+        auto pruner = std::make_shared<MPSPruner>(backend, c_syncPruneWindow);
         std::map<protocol::BlockNumber, h256> committedRoots;
         committedRoots[0] = genesisHeader.stateRoot;
         MPSPruner::StateRootLookup stateRootAt =

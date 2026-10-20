@@ -57,31 +57,31 @@ using namespace bcos::engine::eth_test;
 namespace
 {
 // Whole-second milliseconds: finalizeEthBlockHeader requires whole-second timestamps.
-constexpr std::uint64_t c_timestamp = c_defaultPayloadTimestamp;
-constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
-constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
-constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;
-constexpr bcos::protocol::BlockNumber c_validationBlockNumber = 20;
-constexpr bcos::protocol::BlockNumber c_reorgStartBlockNumber = 30;
-constexpr bcos::protocol::BlockNumber c_reorgTargetBlockNumber = 32;
-constexpr bcos::protocol::BlockNumber c_headOrderingBlockNumber = 40;
-constexpr bcos::protocol::BlockNumber c_safeOrderingBlockNumber = 41;
-constexpr bcos::protocol::BlockNumber c_finalizedOrderingBlockNumber = 42;
-constexpr bcos::protocol::BlockNumber c_staleInitialBlockNumber = 50;
-constexpr bcos::protocol::BlockNumber c_staleNextBlockNumber = 51;
-constexpr bcos::protocol::BlockNumber c_staleThirdBlockNumber = 52;
+constexpr std::uint64_t c_svcTimestamp = c_defaultPayloadTimestamp;
+constexpr bcos::protocol::BlockNumber c_svcInitialBlockNumber = 5;
+constexpr bcos::protocol::BlockNumber c_svcTrackedInitialBlockNumber = 10;
+constexpr bcos::protocol::BlockNumber c_svcTrackedNextBlockNumber = 11;
+constexpr bcos::protocol::BlockNumber c_svcValidationBlockNumber = 20;
+constexpr bcos::protocol::BlockNumber c_svcReorgStartBlockNumber = 30;
+constexpr bcos::protocol::BlockNumber c_svcReorgTargetBlockNumber = 32;
+constexpr bcos::protocol::BlockNumber c_svcHeadOrderingBlockNumber = 40;
+constexpr bcos::protocol::BlockNumber c_svcSafeOrderingBlockNumber = 41;
+constexpr bcos::protocol::BlockNumber c_svcFinalizedOrderingBlockNumber = 42;
+constexpr bcos::protocol::BlockNumber c_svcStaleInitialBlockNumber = 50;
+constexpr bcos::protocol::BlockNumber c_svcStaleNextBlockNumber = 51;
+constexpr bcos::protocol::BlockNumber c_svcStaleThirdBlockNumber = 52;
 
 using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
-static bytes toBytes(std::string_view input)
+static bytes svcToBytes(std::string_view input)
 {
     return {reinterpret_cast<const byte*>(input.data()),
         reinterpret_cast<const byte*>(input.data()) + input.size()};
 }
 
-void checkForkchoiceComment(auto&& action, char const* expected)
+void svcCheckForkchoiceComment(auto&& action, char const* expected)
 {
     BOOST_CHECK_EXCEPTION(action(), InvalidForkchoiceState, [&](InvalidForkchoiceState const& e) {
         auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
@@ -89,18 +89,18 @@ void checkForkchoiceComment(auto&& action, char const* expected)
     });
 }
 
-class TestTransactionImpl : public bcostars::protocol::TransactionImpl
+class SvcTestTransactionImpl : public bcostars::protocol::TransactionImpl
 {
 public:
     void markClean() { setTainted(false); }
 };
 
-static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t nonce)
+static protocol::Transaction::Ptr makeSvcTx(std::string_view senderBytes, int64_t nonce)
 {
-    auto tx = std::make_shared<TestTransactionImpl>();
+    auto tx = std::make_shared<SvcTestTransactionImpl>();
     tx->mutableInner().data.to.assign(senderBytes.begin(), senderBytes.end());
     tx->setNonce(std::to_string(nonce));
-    tx->forceSender(toBytes(senderBytes));
+    tx->forceSender(svcToBytes(senderBytes));
     Keccak256 hasher;
     tx->calculateHash(hasher);
     tx->markClean();
@@ -113,7 +113,7 @@ static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t n
 /// type=Web3Transaction, extraTransactionBytes = 0x02 || rlp(unsigned fields),
 /// signature = r(32) || s(32) || yParity(1). calculateHash() runs the same raw-bytes
 /// splice buildPayload uses, so constructing one also validates the payload shape.
-static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint64_t nonce)
+static protocol::Transaction::Ptr makeSvcWeb3Tx(std::string_view senderBytes, uint64_t nonce)
 {
     bytes body;
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));  // chainId
@@ -131,7 +131,7 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
         payload, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
     payload.insert(payload.end(), body.begin(), body.end());
 
-    auto tx = std::make_shared<TestTransactionImpl>();
+    auto tx = std::make_shared<SvcTestTransactionImpl>();
     tx->mutableInner().type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
     tx->mutableInner().extraTransactionBytes.assign(payload.begin(), payload.end());
     bytes signature(65, 0);
@@ -140,7 +140,7 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
     signature[64] = 0x01;  // yParity
     tx->mutableInner().signature.assign(signature.begin(), signature.end());
     tx->setNonce("0x" + std::to_string(nonce));
-    tx->forceSender(toBytes(senderBytes));
+    tx->forceSender(svcToBytes(senderBytes));
     Keccak256 hasher;
     tx->calculateHash(hasher);
     tx->markClean();
@@ -148,7 +148,7 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
     return tx;
 }
 
-struct BloomScheduler
+struct SvcBloomScheduler
 {
     /// Last receipts handed to the engine, so a test can rebuild their commitments through an
     /// independent root builder.
@@ -183,7 +183,7 @@ struct BloomScheduler
         co_return std::vector<protocol::TransactionReceipt::Ptr>{receipt1, receipt2};
     }
 };
-bcos::protocol::BlockFactory::Ptr testBlockFactory()
+bcos::protocol::BlockFactory::Ptr svcTestBlockFactory()
 {
     static auto blockFactory =
         bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
@@ -206,23 +206,24 @@ StubScheduler& sharedStubScheduler()
     return scheduler;
 }
 
-using BloomEngineServiceImpl =
-    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, BloomScheduler>;
+using SvcBloomEngineServiceImpl =
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, SvcBloomScheduler>;
 
-BloomEngineServiceImpl makeBloomEngineServiceImpl(
-    MemPoolImpl& memPool, RealGlobalStateStorage& storage, BloomScheduler& scheduler)
+SvcBloomEngineServiceImpl makeBloomEngineServiceImpl(
+    MemPoolImpl& memPool, RealGlobalStateStorage& storage, SvcBloomScheduler& scheduler)
 {
-    return BloomEngineServiceImpl(
-        memPool, storage, sharedStubExecutor(), scheduler, testBlockFactory());
+    return SvcBloomEngineServiceImpl(
+        memPool, storage, sharedStubExecutor(), scheduler, svcTestBlockFactory());
 }
 
-using TestEngineServiceImpl =
+using SvcTestEngineServiceImpl =
     EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
 
-TestEngineServiceImpl makeEngineServiceImpl(MemPoolImpl& memPool, RealGlobalStateStorage& storage)
+SvcTestEngineServiceImpl makeEngineServiceImpl(
+    MemPoolImpl& memPool, RealGlobalStateStorage& storage)
 {
-    return TestEngineServiceImpl(
-        memPool, storage, sharedStubExecutor(), sharedStubScheduler(), testBlockFactory());
+    return SvcTestEngineServiceImpl(
+        memPool, storage, sharedStubExecutor(), sharedStubScheduler(), svcTestBlockFactory());
 }
 
 /// The production ledger with its one state-storage dependency short-circuited:
@@ -231,7 +232,7 @@ TestEngineServiceImpl makeEngineServiceImpl(MemPoolImpl& memPool, RealGlobalStat
 /// (Ledger.cpp:396 -> :1051). Everything asserted below — the
 /// SYS_NUMBER_2_BLOCK_HEADER row — is written by the real header encode path above
 /// that call, so this keeps the commit exercising production code rather than a fake.
-class CommitLedger : public bcos::ledger::Ledger
+class SvcCommitLedger : public bcos::ledger::Ledger
 {
 public:
     using bcos::ledger::Ledger::Ledger;
@@ -243,14 +244,14 @@ public:
     }
 };
 
-/// CommitLedger whose first asyncPrewriteBlock fails with an injected error, then
+/// SvcCommitLedger whose first asyncPrewriteBlock fails with an injected error, then
 /// delegates to the real path. Models the transient storage fault behind the
 /// commit-masking scenario: the first newPayload must THROW (never answer VALID for a
 /// block whose rows were not written), and the retry must complete the commit for real.
-class FlakyLedger : public CommitLedger
+class SvcFlakyLedger : public SvcCommitLedger
 {
 public:
-    using CommitLedger::CommitLedger;
+    using SvcCommitLedger::SvcCommitLedger;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool writeTxsAndReceipts,
@@ -263,21 +264,21 @@ public:
                                      "injected prewrite failure"));
             return;
         }
-        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs), std::move(block),
-            std::move(callback), writeTxsAndReceipts, std::move(features),
+        SvcCommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_failNext{true};
 };
 
-/// CommitLedger that parks the FIRST asyncPrewriteBlock until the test releases it,
+/// SvcCommitLedger that parks the FIRST asyncPrewriteBlock until the test releases it,
 /// then passes everything through. Models the window where the first newPayload's
 /// commit I/O is "in flight" — parked inside the commit section, holding
 /// EngineServiceImpl::m_commitMutex — while a concurrent duplicate arrives.
-class GatedLedger : public CommitLedger
+class SvcGatedLedger : public SvcCommitLedger
 {
 public:
-    using CommitLedger::CommitLedger;
+    using SvcCommitLedger::SvcCommitLedger;
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool writeTxsAndReceipts,
@@ -292,27 +293,27 @@ public:
                 std::this_thread::yield();
             }
         }
-        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs), std::move(block),
-            std::move(callback), writeTxsAndReceipts, std::move(features),
+        SvcCommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
+            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_firstEntered{false};
     std::atomic_bool m_release{false};
 };
 
-TestEngineServiceImpl makeCommittingEngineServiceImpl(MemPoolImpl& memPool,
+SvcTestEngineServiceImpl makeCommittingEngineServiceImpl(MemPoolImpl& memPool,
     RealGlobalStateStorage& storage, bcos::ledger::LedgerInterface::Ptr ledger,
     bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
 {
-    return TestEngineServiceImpl(memPool, storage, sharedStubExecutor(), sharedStubScheduler(),
-        testBlockFactory(), std::move(ledger), bcos::engine::c_defaultBlockTxCountLimit,
+    return SvcTestEngineServiceImpl(memPool, storage, sharedStubExecutor(), sharedStubScheduler(),
+        svcTestBlockFactory(), std::move(ledger), bcos::engine::c_defaultBlockTxCountLimit,
         std::move(ledgerConfigState));
 }
 
 /// Reads the block header the commit persisted, the way eth_getBlockByNumber reaches it
 /// (SYS_NUMBER_2_BLOCK_HEADER keyed by the decimal block number; decode pattern from
 /// bcos-ledger/bcos-ledger/LedgerMethods.h:204-215).
-bcos::protocol::BlockHeader::Ptr readPersistedHeader(
+bcos::protocol::BlockHeader::Ptr svcReadPersistedHeader(
     RealGlobalStateBackendStorage& backendStorage, bcos::protocol::BlockNumber blockNumber)
 {
     auto entry = task::syncWait(bcos::storage2::readOne(
@@ -323,7 +324,7 @@ bcos::protocol::BlockHeader::Ptr readPersistedHeader(
         return nullptr;
     }
     auto field = entry->get();
-    return testBlockFactory()->blockHeaderFactory()->createBlockHeader(
+    return svcTestBlockFactory()->blockHeaderFactory()->createBlockHeader(
         bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(field.data()), field.size()));
 }
 
@@ -381,10 +382,10 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
     // rejected for lacking parentBeaconBlockRoot.
     RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     std::string sender("aaaaaaaaaaaaaaaaaaaa", 20);
-    auto tx = makeTx(sender, 0);
+    auto tx = makeSvcTx(sender, 0);
     memPool.add(std::vector{tx});
     globalStateStorageFixture.setNonce(sender, "1");
     auto payloadAttributes = makePayloadAttributesV2();
@@ -400,11 +401,11 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
 
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
     BOOST_CHECK_EQUAL(payload->executionPayload.parentHash, forkchoiceState.headBlockHash);
-    BOOST_CHECK_EQUAL(payload->executionPayload.blockNumber, c_initialBlockNumber + 1);
+    BOOST_CHECK_EQUAL(payload->executionPayload.blockNumber, c_svcInitialBlockNumber + 1);
     BOOST_CHECK_EQUAL(payload->executionPayload.timestamp, c_defaultPayloadTimestamp);
     BOOST_CHECK(payload->executionPayload.withdrawals.has_value());
     BOOST_CHECK(!payload->executionPayload.blobGasUsed.has_value());
-    // makeTx is a native Tars tx (no EIP-2718 wire form). Sealing it into the
+    // makeSvcTx is a native Tars tx (no EIP-2718 wire form). Sealing it into the
     // payload would livelock FCU→getPayload→newPayload; the empty list is the
     // exclusion, not "the sealer dropped everything".
     BOOST_CHECK(payload->executionPayload.transactions.empty());
@@ -422,8 +423,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_v2_rejected_on_cancun_chain)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;  // default CANCUN
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV2();
@@ -446,8 +447,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_v3_rejected_on_shanghai_chain)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV3();
@@ -469,8 +470,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejected_when_evm_revision_missing)
     RealGlobalStateStorageFixture globalStateStorageFixture(
         EVMC_CANCUN, /*writeEvmcRevision=*/false);
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV3();
@@ -490,8 +491,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_empty_withdrawals)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV3();
@@ -514,14 +515,15 @@ BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
 
     auto initialForkchoice = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, initialForkchoice,
-        c_trackedInitialBlockNumber, c_trackedInitialBlockNumber, c_trackedInitialBlockNumber);
+        c_svcTrackedInitialBlockNumber, c_svcTrackedInitialBlockNumber,
+        c_svcTrackedInitialBlockNumber);
     auto payloadAttributes = makePayloadAttributesV3();
     auto initialResult =
         task::syncWait(engineService.updateForkchoice(initialForkchoice, &payloadAttributes, 3));
     BOOST_REQUIRE(initialResult.payloadId.has_value());
     auto builtPayload = task::syncWait(engineService.getPayload(*initialResult.payloadId, 3));
     globalStateStorageFixture.setBlockNumber(
-        builtPayload->executionPayload.blockHash, c_trackedNextBlockNumber);
+        builtPayload->executionPayload.blockHash, c_svcTrackedNextBlockNumber);
 
     auto request = makeNewPayloadRequestV3(builtPayload->executionPayload);
     auto newPayloadStatus = task::syncWait(engineService.newPayload(request, 3));
@@ -539,8 +541,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
     auto finalizedBlockNumber = engineService.getFinalizedBlockNumber();
     BOOST_REQUIRE(safeBlockNumber.has_value());
     BOOST_REQUIRE(finalizedBlockNumber.has_value());
-    BOOST_CHECK_EQUAL(*safeBlockNumber, c_trackedNextBlockNumber);
-    BOOST_CHECK_EQUAL(*finalizedBlockNumber, c_trackedNextBlockNumber);
+    BOOST_CHECK_EQUAL(*safeBlockNumber, c_svcTrackedNextBlockNumber);
+    BOOST_CHECK_EQUAL(*finalizedBlockNumber, c_svcTrackedNextBlockNumber);
 }
 
 BOOST_AUTO_TEST_CASE(new_payload_rejects_missing_required_v3_fields)
@@ -548,8 +550,8 @@ BOOST_AUTO_TEST_CASE(new_payload_rejects_missing_required_v3_fields)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_validationBlockNumber,
-        c_validationBlockNumber, c_validationBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState,
+        c_svcValidationBlockNumber, c_svcValidationBlockNumber, c_svcValidationBlockNumber);
     auto payloadAttributes = makePayloadAttributesV3();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
@@ -575,11 +577,11 @@ BOOST_AUTO_TEST_CASE(forkchoice_returns_syncing_when_head_block_number_missing)
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.safeBlockHash, c_validationBlockNumber);
+        forkchoiceState.safeBlockHash, c_svcValidationBlockNumber);
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.finalizedBlockHash, c_validationBlockNumber);
+        forkchoiceState.finalizedBlockHash, c_svcValidationBlockNumber);
     std::string sender("bbbbbbbbbbbbbbbbbbbb", 20);
-    auto tx = makeTx(sender, 0);
+    auto tx = makeSvcTx(sender, 0);
     memPool.add(std::vector{tx});
     globalStateStorageFixture.setNonce(sender, "1");
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
@@ -600,9 +602,9 @@ BOOST_AUTO_TEST_CASE(forkchoice_returns_syncing_when_safe_block_number_missing)
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.headBlockHash, c_validationBlockNumber);
+        forkchoiceState.headBlockHash, c_svcValidationBlockNumber);
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.finalizedBlockHash, c_validationBlockNumber);
+        forkchoiceState.finalizedBlockHash, c_svcValidationBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3));
@@ -619,8 +621,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_sequential_head_block_number)
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto initialForkchoice = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, initialForkchoice, c_reorgStartBlockNumber,
-        c_reorgStartBlockNumber, c_reorgStartBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, initialForkchoice,
+        c_svcReorgStartBlockNumber, c_svcReorgStartBlockNumber, c_svcReorgStartBlockNumber);
     auto initialResult =
         task::syncWait(engineService.updateForkchoice(initialForkchoice, nullptr, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(initialResult.payloadStatus.status),
@@ -630,10 +632,10 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_sequential_head_block_number)
         h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
         h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
         h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")};
-    setForkchoiceBlockNumbers(globalStateStorageFixture, reorgForkchoice, c_reorgTargetBlockNumber,
-        c_reorgTargetBlockNumber, c_reorgTargetBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, reorgForkchoice,
+        c_svcReorgTargetBlockNumber, c_svcReorgTargetBlockNumber, c_svcReorgTargetBlockNumber);
 
-    checkForkchoiceComment(
+    svcCheckForkchoiceComment(
         [&]() { task::syncWait(engineService.updateForkchoice(reorgForkchoice, nullptr, 3)); },
         "Forkchoice head block number must increase by exactly 1");
 }
@@ -649,13 +651,13 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_safe_block_number_above_head)
         h256("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
         h256("0000000000000000000000000000000000000000000000000000000000000011")};
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.headBlockHash, c_headOrderingBlockNumber);
+        forkchoiceState.headBlockHash, c_svcHeadOrderingBlockNumber);
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.safeBlockHash, c_safeOrderingBlockNumber);
+        forkchoiceState.safeBlockHash, c_svcSafeOrderingBlockNumber);
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.finalizedBlockHash, c_headOrderingBlockNumber);
+        forkchoiceState.finalizedBlockHash, c_svcHeadOrderingBlockNumber);
 
-    checkForkchoiceComment(
+    svcCheckForkchoiceComment(
         [&]() { task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)); },
         "Forkchoice safe block number must not exceed head block number");
 }
@@ -671,13 +673,13 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_finalized_block_number_above_safe)
         h256("1313131313131313131313131313131313131313131313131313131313131313"),
         h256("1414141414141414141414141414141414141414141414141414141414141414")};
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.headBlockHash, c_finalizedOrderingBlockNumber);
+        forkchoiceState.headBlockHash, c_svcFinalizedOrderingBlockNumber);
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.safeBlockHash, c_headOrderingBlockNumber);
+        forkchoiceState.safeBlockHash, c_svcHeadOrderingBlockNumber);
     globalStateStorageFixture.setBlockNumber(
-        forkchoiceState.finalizedBlockHash, c_safeOrderingBlockNumber);
+        forkchoiceState.finalizedBlockHash, c_svcSafeOrderingBlockNumber);
 
-    checkForkchoiceComment(
+    svcCheckForkchoiceComment(
         [&]() { task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3)); },
         "Forkchoice finalized block number must not exceed safe block number");
 }
@@ -702,11 +704,11 @@ BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
         h256("1717171717171717171717171717171717171717171717171717171717171717")};
 
     globalStateStorageFixture.setBlockNumber(
-        firstForkchoice.headBlockHash, c_staleInitialBlockNumber);
+        firstForkchoice.headBlockHash, c_svcStaleInitialBlockNumber);
     globalStateStorageFixture.setBlockNumber(
-        secondForkchoice.headBlockHash, c_staleNextBlockNumber);
+        secondForkchoice.headBlockHash, c_svcStaleNextBlockNumber);
     globalStateStorageFixture.setBlockNumber(
-        thirdForkchoice.headBlockHash, c_staleThirdBlockNumber);
+        thirdForkchoice.headBlockHash, c_svcStaleThirdBlockNumber);
 
     auto firstResult = task::syncWait(engineService.updateForkchoice(firstForkchoice, nullptr, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(firstResult.payloadStatus.status),
@@ -737,8 +739,8 @@ BOOST_AUTO_TEST_CASE(new_payload_v3_with_transactions_is_validated_not_accepted)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV3();
@@ -748,7 +750,7 @@ BOOST_AUTO_TEST_CASE(new_payload_v3_with_transactions_is_validated_not_accepted)
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
 
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto request = makeNewPayloadRequestV3(payload->executionPayload);
     request.executionPayload.transactions.push_back(
         {.raw = bytes{0x7e, 0x01, 0x02}, .decoded = nullptr});
@@ -776,8 +778,8 @@ BOOST_AUTO_TEST_CASE(new_payload_v3_rejects_blob_versioned_hashes)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV3();
@@ -806,8 +808,8 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_keeps_built_withdrawals_root_after_v3_commit
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV3();
@@ -818,7 +820,7 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_keeps_built_withdrawals_root_after_v3_commit
     BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
 
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto request = makeNewPayloadRequestV3(payload->executionPayload);
     request.executionPayload.withdrawalsRoot = std::nullopt;
     auto status = task::syncWait(engineService.newPayload(request, 3));
@@ -839,8 +841,8 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto payloadAttributes = makePayloadAttributesV3();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
@@ -862,7 +864,7 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
     // A CL that changes withdrawalsRoot under the built blockHash is rejected; the
     // cached body stays the FCU build (no request rewrite).
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto altered = makeNewPayloadRequestV3(payload->executionPayload);
     auto const withdrawalsRoot =
         h256("4444444444444444444444444444444444444444444444444444444444444444");
@@ -893,10 +895,10 @@ BOOST_AUTO_TEST_CASE(build_payload_reassembles_web3_raw_bytes)
     // A SHANGHAI chain, matching the V2 forkchoiceUpdated attribute shape used below.
     RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     std::string sender("dddddddddddddddddddd", 20);
-    auto tx = makeWeb3Tx(sender, 0);
+    auto tx = makeSvcWeb3Tx(sender, 0);
     memPool.add(std::vector{tx});
     globalStateStorageFixture.setNonce(sender, "0");
     auto payloadAttributes = makePayloadAttributesV2();
@@ -922,7 +924,7 @@ BOOST_AUTO_TEST_CASE(build_payload_reassembles_web3_raw_bytes)
     // buildPayload excludes native transactions instead of emitting their Tars bytes
     // (such a wire form could never pass newPayload validation).
     bytes tarsEncoded;
-    makeTx(sender, 1)->encode(tarsEncoded);
+    makeSvcTx(sender, 1)->encode(tarsEncoded);
     BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(tarsEncoded)) ==
                 bcos::engine::RawTransactionKind::Unsupported);
 }
@@ -932,13 +934,13 @@ BOOST_AUTO_TEST_CASE(build_payload_excludes_native_transactions_full_loop)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     // One native Tars transaction and one Web3 transaction, both sealable.
     std::string nativeSender("eeeeeeeeeeeeeeeeeeee", 20);
     std::string web3Sender("ffffffffffffffffffff", 20);
-    auto nativeTx = makeTx(nativeSender, 0);
-    auto web3Tx = makeWeb3Tx(web3Sender, 0);
+    auto nativeTx = makeSvcTx(nativeSender, 0);
+    auto web3Tx = makeSvcWeb3Tx(web3Sender, 0);
     memPool.add(std::vector{nativeTx, web3Tx});
     globalStateStorageFixture.setNonce(nativeSender, "0");
     globalStateStorageFixture.setNonce(web3Sender, "0");
@@ -961,7 +963,7 @@ BOOST_AUTO_TEST_CASE(build_payload_excludes_native_transactions_full_loop)
     // The full loop closes: the payload this service built passes its own newPayload
     // validation (the seal/validate asymmetry the exclusion removes).
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto request = makeNewPayloadRequestV3(payload->executionPayload);
     auto status = task::syncWait(engineService.newPayload(request, 3));
     BOOST_CHECK_EQUAL(
@@ -973,8 +975,8 @@ BOOST_AUTO_TEST_CASE(new_payload_round_trips_deposit_raw_bytes)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto payloadAttributes = makePayloadAttributesV3();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
@@ -990,7 +992,7 @@ BOOST_AUTO_TEST_CASE(new_payload_round_trips_deposit_raw_bytes)
     bytes const typedRaw{0x02, 0xf8, 0x01, 0x02};
 
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto request = makeNewPayloadRequestV3(payload->executionPayload);
     request.executionPayload.transactions.push_back({.raw = depositRaw, .decoded = nullptr});
     request.executionPayload.transactions.push_back({.raw = legacyRaw, .decoded = nullptr});
@@ -1013,8 +1015,8 @@ BOOST_AUTO_TEST_CASE(new_payload_cache_miss_wrong_hash_is_invalid)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV3();
@@ -1043,8 +1045,8 @@ BOOST_AUTO_TEST_CASE(new_payload_hit_rejects_altered_state_root_and_keeps_built_
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV3();
@@ -1054,7 +1056,7 @@ BOOST_AUTO_TEST_CASE(new_payload_hit_rejects_altered_state_root_and_keeps_built_
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
 
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto altered = makeNewPayloadRequestV3(payload->executionPayload);
     altered.executionPayload.stateRoot = h256(1);
     auto alteredStatus = task::syncWait(engineService.newPayload(altered, 3));
@@ -1084,8 +1086,8 @@ BOOST_AUTO_TEST_CASE(new_payload_honest_retry_does_not_recommit)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV3();
@@ -1095,7 +1097,7 @@ BOOST_AUTO_TEST_CASE(new_payload_honest_retry_does_not_recommit)
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
 
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto honest = makeNewPayloadRequestV3(payload->executionPayload);
     auto first = task::syncWait(engineService.newPayload(honest, 3));
     BOOST_CHECK_EQUAL(
@@ -1117,10 +1119,10 @@ BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto flakyLedger =
-        std::make_shared<FlakyLedger>(testBlockFactory(), nullptr, /*blockLimit=*/100);
+        std::make_shared<SvcFlakyLedger>(svcTestBlockFactory(), nullptr, /*blockLimit=*/100);
     auto engineService =
         makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, flakyLedger);
 
@@ -1131,22 +1133,22 @@ BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
 
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto honest = makeNewPayloadRequestV3(payload->executionPayload);
 
     // First attempt: the injected prewrite error must propagate, never become VALID,
     // and no header row may exist yet.
     BOOST_CHECK_THROW(task::syncWait(engineService.newPayload(honest, 3)), bcos::Error);
-    BOOST_REQUIRE(readPersistedHeader(globalStateStorageFixture.backendStorage,
-                      c_initialBlockNumber + 1) == nullptr);
+    BOOST_REQUIRE(svcReadPersistedHeader(globalStateStorageFixture.backendStorage,
+                      c_svcInitialBlockNumber + 1) == nullptr);
 
     // Retry: the entry survived the failed attempt, so the commit completes for real —
     // the header row lands with the same extraData the payload carries.
     auto retryStatus = task::syncWait(engineService.newPayload(honest, 3));
     BOOST_CHECK_EQUAL(
         static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
-    auto persisted =
-        readPersistedHeader(globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1);
+    auto persisted = svcReadPersistedHeader(
+        globalStateStorageFixture.backendStorage, c_svcInitialBlockNumber + 1);
     BOOST_REQUIRE(persisted);
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
         toHexStringWithPrefix(payload->executionPayload.extraData));
@@ -1162,10 +1164,10 @@ BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto gatedLedger =
-        std::make_shared<GatedLedger>(testBlockFactory(), nullptr, /*blockLimit=*/100);
+        std::make_shared<SvcGatedLedger>(svcTestBlockFactory(), nullptr, /*blockLimit=*/100);
     auto engineService =
         makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, gatedLedger);
 
@@ -1176,7 +1178,7 @@ BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
 
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto honest = makeNewPayloadRequestV3(payload->executionPayload);
 
     std::promise<PayloadStatus> firstDone;
@@ -1211,8 +1213,8 @@ BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
 
     // The block's ledger rows landed — the header row is readable with the payload's
     // extraData.
-    auto persisted =
-        readPersistedHeader(globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1);
+    auto persisted = svcReadPersistedHeader(
+        globalStateStorageFixture.backendStorage, c_svcInitialBlockNumber + 1);
     BOOST_REQUIRE(persisted);
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
         toHexStringWithPrefix(payload->executionPayload.extraData));
@@ -1267,8 +1269,8 @@ BOOST_AUTO_TEST_CASE(forkchoice_attributes_reject_blob_forced_transactions)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     // A blob transaction in the forced transaction list invalidates the whole FCU.
@@ -1310,10 +1312,10 @@ BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     std::string sender("abababababababababab", 20);
-    auto poolTx = makeWeb3Tx(sender, 0);
+    auto poolTx = makeSvcWeb3Tx(sender, 0);
     memPool.add(std::vector{poolTx});
     globalStateStorageFixture.setNonce(sender, "0");
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
@@ -1351,19 +1353,19 @@ BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
 BOOST_AUTO_TEST_CASE(collectExecutableTransactionsRejectsBlobEnvelope)
 {
     std::vector<bcos::engine::EngineTransaction> blob{bcos::engine::EngineTransaction{
-        .raw = bytes{0x03, 0xaa, 0xbb}, .decoded = makeWeb3Tx("aaaaaaaaaaaaaaaaaaaa", 0)}};
+        .raw = bytes{0x03, 0xaa, 0xbb}, .decoded = makeSvcWeb3Tx("aaaaaaaaaaaaaaaaaaaa", 0)}};
     BOOST_CHECK_THROW(bcos::engine::engine_common::collectExecutableTransactions(blob),
         bcos::engine::OpExecutionInternalError);
 
     // An unsupported envelope (0x00) still fails closed.
     std::vector<bcos::engine::EngineTransaction> unsupported{bcos::engine::EngineTransaction{
-        .raw = bytes{0x00, 0x01}, .decoded = makeWeb3Tx("bbbbbbbbbbbbbbbbbbbb", 1)}};
+        .raw = bytes{0x00, 0x01}, .decoded = makeSvcWeb3Tx("bbbbbbbbbbbbbbbbbbbb", 1)}};
     BOOST_CHECK_THROW(bcos::engine::engine_common::collectExecutableTransactions(unsupported),
         bcos::engine::OpExecutionInternalError);
 
     // A supported (non-blob) envelope still passes.
     std::vector<bcos::engine::EngineTransaction> ok{bcos::engine::EngineTransaction{
-        .raw = bytes{0x02, 0xf8, 0xaa}, .decoded = makeWeb3Tx("cccccccccccccccccccc", 2)}};
+        .raw = bytes{0x02, 0xf8, 0xaa}, .decoded = makeSvcWeb3Tx("cccccccccccccccccccc", 2)}};
     auto const executable = bcos::engine::engine_common::collectExecutableTransactions(ok);
     BOOST_CHECK_EQUAL(executable.transactions.size(), 1);
     BOOST_CHECK_EQUAL(executable.types.size(), 1);
@@ -1375,10 +1377,10 @@ BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     std::string sender("cdcdcdcdcdcdcdcdcdcd", 20);
-    auto poolTx = makeWeb3Tx(sender, 0);
+    auto poolTx = makeSvcWeb3Tx(sender, 0);
     memPool.add(std::vector{poolTx});
     globalStateStorageFixture.setNonce(sender, "0");
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
@@ -1414,21 +1416,21 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     // A SHANGHAI chain, matching the V2 forkchoiceUpdated attribute shape used below.
     RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     std::string sender("cccccccccccccccccccc", 20);
     // Web3-shaped: only transactions with an EIP-2718 wire form enter OP payloads.
-    // BloomScheduler always returns TWO receipts, so the payload must execute two
+    // SvcBloomScheduler always returns TWO receipts, so the payload must execute two
     // transactions — the receipts-root assembly types each receipt by the executed
     // transaction at the same index, and a shorter transaction list is out-of-bounds.
     // Same sender, nonces 0 and 1: seal picks the gapless prefix.
-    auto tx = makeWeb3Tx(sender, 0);
-    auto tx2 = makeWeb3Tx(sender, 1);
+    auto tx = makeSvcWeb3Tx(sender, 0);
+    auto tx2 = makeSvcWeb3Tx(sender, 1);
     memPool.add(std::vector{tx, tx2});
     globalStateStorageFixture.setNonce(sender, "0");
     auto payloadAttributes = makePayloadAttributesV2();
 
-    BloomScheduler bloomScheduler;
+    SvcBloomScheduler bloomScheduler;
     auto engineService =
         makeBloomEngineServiceImpl(memPool, globalStateStorageFixture.storage, bloomScheduler);
 
@@ -1501,8 +1503,8 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto payloadAttributes = makeKarstPayloadAttributes();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
@@ -1545,8 +1547,8 @@ BOOST_AUTO_TEST_CASE(build_payload_stamps_jovian_extra_data_on_payload)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto payloadAttributes = makeKarstPayloadAttributes();
     // What op-node actually sent in round 5: all-zero params (SystemConfig defaults),
     // minBaseFee 0. The EL must translate 0,0 to the Canyon constants (250, 6).
@@ -1587,13 +1589,14 @@ BOOST_AUTO_TEST_CASE(committed_header_carries_the_same_jovian_extra_data_as_the_
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto payloadAttributes = makeKarstPayloadAttributes();
     payloadAttributes.eip1559Params = bytes(8, 0);
     payloadAttributes.minBaseFee = 0;
 
-    auto ledger = std::make_shared<CommitLedger>(testBlockFactory(), nullptr, /*blockLimit=*/100);
+    auto ledger =
+        std::make_shared<SvcCommitLedger>(svcTestBlockFactory(), nullptr, /*blockLimit=*/100);
     auto engineService =
         makeCommittingEngineServiceImpl(memPool, globalStateStorageFixture.storage, ledger);
 
@@ -1604,14 +1607,14 @@ BOOST_AUTO_TEST_CASE(committed_header_carries_the_same_jovian_extra_data_as_the_
     BOOST_REQUIRE(payload);
 
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto request = makeNewPayloadRequestV3(payload->executionPayload);
     auto status = task::syncWait(engineService.newPayload(request, 3));
     BOOST_REQUIRE_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 
-    auto persisted =
-        readPersistedHeader(globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1);
+    auto persisted = svcReadPersistedHeader(
+        globalStateStorageFixture.backendStorage, c_svcInitialBlockNumber + 1);
     BOOST_REQUIRE(persisted);
     // Byte-for-byte with the payload the CL was handed, and equal to the Jovian vector.
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(persisted->extraData()),
@@ -1634,8 +1637,8 @@ BOOST_AUTO_TEST_CASE(buildingAPayloadRepublishesTheLedgerConfiguration)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto payloadAttributes = makeKarstPayloadAttributes();
     payloadAttributes.eip1559Params = bytes(8, 0);
     payloadAttributes.minBaseFee = 0;
@@ -1656,7 +1659,7 @@ BOOST_AUTO_TEST_CASE(buildingAPayloadRepublishesTheLedgerConfiguration)
     BOOST_CHECK(after != before);
     // The parent's number: admission asks for the revision of blockNumber + 1, which is the
     // block just built.
-    BOOST_CHECK_EQUAL(after->blockNumber(), c_initialBlockNumber);
+    BOOST_CHECK_EQUAL(after->blockNumber(), c_svcInitialBlockNumber);
 }
 
 // A CL that alters the extraData of a payload this node built, while keeping the
@@ -1667,8 +1670,8 @@ BOOST_AUTO_TEST_CASE(new_payload_rejects_altered_extra_data_under_a_built_block_
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto payloadAttributes = makeKarstPayloadAttributes();
     payloadAttributes.eip1559Params = bytes(8, 0);
     payloadAttributes.minBaseFee = 0;
@@ -1681,7 +1684,7 @@ BOOST_AUTO_TEST_CASE(new_payload_rejects_altered_extra_data_under_a_built_block_
     BOOST_REQUIRE(payload);
 
     globalStateStorageFixture.setBlockNumber(
-        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+        payload->executionPayload.blockHash, c_svcInitialBlockNumber + 1);
     auto request = makeNewPayloadRequestV3(payload->executionPayload);
     // Same blockHash, different extraData: a well-formed Jovian shape, so this is the
     // local-build comparison talking, not the shape gate.
@@ -1704,8 +1707,8 @@ BOOST_AUTO_TEST_CASE(new_payload_rejects_malformed_extra_data_shape)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto payloadAttributes = makeKarstPayloadAttributes();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
@@ -1730,8 +1733,8 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
     // CANCUN default fixture would reject the request for lacking parentBeaconBlockRoot).
     RealGlobalStateStorageFixture globalStateStorageFixture(EVMC_SHANGHAI);
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto payloadAttributes = makePayloadAttributesV2();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
@@ -1765,8 +1768,8 @@ BOOST_AUTO_TEST_CASE(new_payload_v4_rejects_nonempty_lists_and_missing_fields)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_validationBlockNumber,
-        c_validationBlockNumber, c_validationBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState,
+        c_svcValidationBlockNumber, c_svcValidationBlockNumber, c_svcValidationBlockNumber);
     auto payloadAttributes = makeKarstPayloadAttributes();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
     auto result =
@@ -1964,20 +1967,20 @@ BOOST_AUTO_TEST_CASE(matchReconstructedEthBlockHashThrowsOnNodeLocalFault)
 /// Reverting the narrowing turns this red.
 namespace
 {
-struct ThrowingUncleHashHeader : bcostars::protocol::BlockHeaderImpl
+struct SvcThrowingUncleHashHeader : bcostars::protocol::BlockHeaderImpl
 {
     void setUncleHash(bcos::crypto::HashType) override
     {
         throw std::runtime_error("header setUncleHash fault");
     }
 };
-struct ThrowingUncleHashHeaderFactory : bcostars::protocol::BlockHeaderFactoryImpl
+struct SvcThrowingUncleHashHeaderFactory : bcostars::protocol::BlockHeaderFactoryImpl
 {
     // Inherit the (CryptoSuite::Ptr) constructor.
     using bcostars::protocol::BlockHeaderFactoryImpl::BlockHeaderFactoryImpl;
     bcos::protocol::BlockHeader::Ptr createBlockHeader() override
     {
-        return std::make_shared<ThrowingUncleHashHeader>();
+        return std::make_shared<SvcThrowingUncleHashHeader>();
     }
 };
 }  // namespace
@@ -1985,7 +1988,7 @@ struct ThrowingUncleHashHeaderFactory : bcostars::protocol::BlockHeaderFactoryIm
 BOOST_AUTO_TEST_CASE(matchReconstructedEthBlockHashNarrowedCatchPropagatesNodeLocalFault)
 {
     auto factory =
-        std::make_shared<ThrowingUncleHashHeaderFactory>(bcos::test::createNormalCryptoSuite());
+        std::make_shared<SvcThrowingUncleHashHeaderFactory>(bcos::test::createNormalCryptoSuite());
     bcos::engine::ExecutionPayload payload;
     payload.blockNumber = 1;
     BOOST_CHECK_THROW(bcos::engine::detail::matchReconstructedEthBlockHash(
@@ -2109,8 +2112,8 @@ BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     // Empty block: no transactions, no mempool seeding.
@@ -2179,10 +2182,10 @@ BOOST_AUTO_TEST_CASE(cache_miss_with_transactions_reconstructs_and_answers_synci
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     std::string sender("abababababababababab", 20);
-    auto poolTx = makeWeb3Tx(sender, 0);
+    auto poolTx = makeSvcWeb3Tx(sender, 0);
     memPool.add(std::vector{poolTx});
     globalStateStorageFixture.setNonce(sender, "0");
     auto builder = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
@@ -2222,10 +2225,10 @@ BOOST_AUTO_TEST_CASE(cache_miss_new_payload_v4_on_cancun_chain_answers_syncing)
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     std::string sender("abababababababababab", 20);
-    auto poolTx = makeWeb3Tx(sender, 0);
+    auto poolTx = makeSvcWeb3Tx(sender, 0);
     memPool.add(std::vector{poolTx});
     globalStateStorageFixture.setNonce(sender, "0");
     auto builder = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
@@ -2254,10 +2257,10 @@ BOOST_AUTO_TEST_CASE(cache_miss_new_payload_v4_before_prague_fork_answers_syncin
     writeEthExecutorConfig(globalStateStorageFixture.backendStorage, EVMC_CANCUN, true,
         {{0, EVMC_CANCUN}, {100, EVMC_PRAGUE}});
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     std::string sender("abababababababababab", 20);
-    auto poolTx = makeWeb3Tx(sender, 0);
+    auto poolTx = makeSvcWeb3Tx(sender, 0);
     memPool.add(std::vector{poolTx});
     globalStateStorageFixture.setNonce(sender, "0");
     auto builder = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
@@ -2302,10 +2305,10 @@ BOOST_AUTO_TEST_CASE(cache_miss_corrupt_evmc_revision_config_surfaces_not_syncin
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_svcInitialBlockNumber,
+        c_svcInitialBlockNumber, c_svcInitialBlockNumber);
     std::string sender("abababababababababab", 20);
-    auto poolTx = makeWeb3Tx(sender, 0);
+    auto poolTx = makeSvcWeb3Tx(sender, 0);
     memPool.add(std::vector{poolTx});
     globalStateStorageFixture.setNonce(sender, "0");
     auto builder = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);

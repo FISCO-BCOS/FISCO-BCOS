@@ -84,7 +84,13 @@ NodeDir NodeDir::load(std::string const& _dir)
         std::max<int64_t>(3000, ini.get<int64_t>("consensus.min_seal_time", 500) + 1);
 
     node.rpcListenIp = ini.get<std::string>("rpc.listen_ip", "0.0.0.0");
-    node.rpcListenPort = static_cast<uint16_t>(ini.get<int>("rpc.listen_port", 20200));
+    auto port = ini.get<int>("rpc.listen_port", 20200);
+    if (port <= 0 || port > 65535)
+    {
+        throw OpsError(
+            c_exitUsage, "config.ini [rpc] listen_port out of range: " + std::to_string(port));
+    }
+    node.rpcListenPort = static_cast<uint16_t>(port);
     // NodeConfig::loadRpcConfig: disable_ssl is the legacy key, enable_ssl overrides it
     node.rpcDisableSsl = ini.get<bool>("rpc.disable_ssl", false);
     if (auto enableSsl = ini.get_optional<bool>("rpc.enable_ssl"))

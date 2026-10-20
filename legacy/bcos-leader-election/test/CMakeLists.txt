@@ -41,8 +41,9 @@ find_package(etcd-cpp-api CONFIG REQUIRED)
 target_link_libraries(${TEST_BINARY_NAME} PUBLIC bcos-utilities bcos-framework etcd-cpp-api
     Boost::unit_test_framework)
 
-# FIB-168/169: the test target is new; UNITY_BUILD is intentionally NOT enabled
+# FIB-168/169: UNITY_BUILD stays OFF for this target (the repo-wide default is ON)
 # so per-FIB test files do not need FIB-suffixed helpers.
+set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD OFF)
 
 include(SearchTestCases)
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" "")

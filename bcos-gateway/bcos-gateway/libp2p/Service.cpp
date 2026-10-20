@@ -6,6 +6,7 @@
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
+#include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"  // for SocketFace
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"  // for SocketFace
@@ -209,9 +210,9 @@ void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, P2pID con
     // modify m_staticNodes(including accept cases, namely the client endpoint)
     if (it != m_staticNodes.end())
     {
-        SERVICE_LOG(INFO) << LOG_DESC("updateStaticNodes")
-                          << LOG_KV("nodeid", printShortP2pID(nodeID))
-                          << LOG_KV("endpoint", endpoint);
+        SERVICE_LOG(DEBUG) << LOG_DESC("updateStaticNodes")
+                           << LOG_KV("nodeid", printShortP2pID(nodeID))
+                           << LOG_KV("endpoint", endpoint);
         it->second = nodeID;
     }
     else
@@ -234,16 +235,20 @@ void Service::onConnect(
     }
     if (e.errorCode())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
-                             << LOG_KV("p2pid", printShortP2pID(p2pID))
-                             << LOG_KV("nodeName", p2pInfo.nodeName) << LOG_KV("endpoint", peer)
-                             << LOG_KV("message", e.what());
+        // DEBUG: every error path in Host::connect has already logged its cause
+        // (PeerConnectFailed, rate limited per endpoint; HandshakeFailed; the session-cap
+        // WARNING; the client-connect exception ERROR), and the heartbeat retries a down static
+        // peer every few seconds
+        SERVICE_LOG(DEBUG) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
+                           << LOG_KV("p2pid", printShortP2pID(p2pID))
+                           << LOG_KV("nodeName", p2pInfo.nodeName) << LOG_KV("endpoint", peer)
+                           << LOG_KV("message", e.what());
 
         return;
     }
 
-    SERVICE_LOG(INFO) << LOG_DESC("onConnect") << LOG_KV("p2pid", printShortP2pID(p2pID))
-                      << LOG_KV("endpoint", peer);
+    SERVICE_LOG(DEBUG) << LOG_DESC("onConnect") << LOG_KV("p2pid", printShortP2pID(p2pID))
+                       << LOG_KV("endpoint", peer);
 
     if (p2pID == id())
     {
@@ -278,8 +283,8 @@ void Service::onConnect(
     auto existedSession = getP2PSessionByNodeIdWithoutLock(p2pID);
     if (existedSession && existedSession->active())
     {
-        SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortP2pID(p2pID))
-                          << LOG_KV("endpoint", peer);
+        SERVICE_LOG(DEBUG) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortP2pID(p2pID))
+                           << LOG_KV("endpoint", peer);
         updateStaticNodes(session->socket(), p2pID);
         session->disconnect(DuplicatePeer);
         return;
@@ -299,10 +304,12 @@ void Service::onConnect(
         lock.unlock();
         callNewSessionHandlers(p2pSession);
     }
-    SERVICE_LOG(INFO) << LOG_DESC("Connection established")
-                      << LOG_KV("p2pid", printShortP2pID(p2pID))
-                      << LOG_KV("shortP2pid", printShortP2pID(p2pInfo.p2pID))
-                      << LOG_KV("endpoint", session->nodeIPEndpoint());
+    // accepted sockets are bound to the listen port, dialled ones to an ephemeral port
+    bool inbound = session->socket()->localEndpoint().port() == m_host->listenPort();
+    SERVICE_LOG(INFO) << LOG_DESC("PeerConnected") << LOG_KV("peer", printShortP2pID(p2pID))
+                      << LOG_KV("endpoint", session->nodeIPEndpoint())
+                      << LOG_KV("direction", inbound ? "in" : "out")
+                      << LOG_KV("shortP2pid", printShortP2pID(p2pInfo.p2pID));
 }
 
 void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
@@ -328,8 +335,21 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
         {
             return;
         }
-        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
-                          << LOG_KV("what", boost::diagnostic_information(e));
+        // Session::drop() puts the disconnectReasonTag into the exception message
+        std::string_view reason = "error";
+        if (e.errorCode() == P2PExceptionType::NetworkTimeout)
+        {
+            reason = "timeout";
+        }
+        else if (e.errorCode() == P2PExceptionType::Disconnect)
+        {
+            reason = e.what();
+        }
+        SERVICE_LOG(INFO) << LOG_DESC("PeerDisconnected")
+                          << LOG_KV("peer", p2pSession->printP2pID())
+                          << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint())
+                          << LOG_KV("reason", reason) << LOG_KV("code", e.errorCode())
+                          << LOG_KV("detail", e.what());
         std::unique_lock nodeLock(x_nodes);
         for (auto& it : m_staticNodes)
         {
@@ -413,10 +433,10 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message me
 
         if (e.errorCode())
         {
-            SERVICE_LOG(INFO) << LOG_DESC("disconnect failed in P2PSession")
-                              << LOG_KV("p2pid", printShortP2pID(p2pID))
-                              << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", e.errorCode())
-                              << LOG_KV("message", e.what());
+            SERVICE_LOG(DEBUG) << LOG_DESC("disconnect failed in P2PSession")
+                               << LOG_KV("p2pid", printShortP2pID(p2pID))
+                               << LOG_KV("endpoint", nodeIPEndpoint)
+                               << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
 
             if (p2pSession)
             {
@@ -681,26 +701,26 @@ void Service::onReceiveProtocol(
         if (protocolInfo->minVersion() > m_localProtocol->maxVersion() ||
             protocolInfo->maxVersion() < m_localProtocol->minVersion())
         {
-            SERVICE_LOG(WARNING)
-                << LOG_DESC("onReceiveProtocol: protocolNegotiate failed, disconnect the session")
-                << LOG_KV("peer", _session->printP2pID())
-                << LOG_KV("minVersion", protocolInfo->minVersion())
-                << LOG_KV("maxVersion", protocolInfo->maxVersion())
-                << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
-                << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion());
+            logHandshakeFailed(bcos::LogLevel::WARNING, _session->session()->nodeIPEndpoint(),
+                "protocol_mismatch",
+                "peer=" + _session->printP2pID() + " peerVersion=[" +
+                    std::to_string(protocolInfo->minVersion()) + "," +
+                    std::to_string(protocolInfo->maxVersion()) + "] local=[" +
+                    std::to_string(m_localProtocol->minVersion()) + "," +
+                    std::to_string(m_localProtocol->maxVersion()) + "]");
             _session->session()->disconnect(DisconnectReason::NegotiateFailed);
             return;
         }
         auto version = std::min(m_localProtocol->maxVersion(), protocolInfo->maxVersion());
         protocolInfo->setVersion(version);
         _session->setProtocolInfo(protocolInfo);
-        SERVICE_LOG(INFO) << LOG_DESC("onReceiveProtocol: protocolNegotiate success")
-                          << LOG_KV("peer", _session->printP2pID())
-                          << LOG_KV("minVersion", protocolInfo->minVersion())
-                          << LOG_KV("maxVersion", protocolInfo->maxVersion())
-                          << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
-                          << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion())
-                          << LOG_KV("negotiatedVersion", version);
+        SERVICE_LOG(DEBUG) << LOG_DESC("onReceiveProtocol: protocolNegotiate success")
+                           << LOG_KV("peer", _session->printP2pID())
+                           << LOG_KV("minVersion", protocolInfo->minVersion())
+                           << LOG_KV("maxVersion", protocolInfo->maxVersion())
+                           << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
+                           << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion())
+                           << LOG_KV("negotiatedVersion", version);
     }
     catch (std::exception const& e)
     {

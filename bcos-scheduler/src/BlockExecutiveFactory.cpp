@@ -26,7 +26,6 @@
 #include "ShardingBlockExecutive.h"
 #include "bcos-framework/ledger/Features.h"
 
-using namespace std;
 using namespace bcos::protocol;
 using namespace bcos::scheduler;
 using namespace bcos::ledger;
