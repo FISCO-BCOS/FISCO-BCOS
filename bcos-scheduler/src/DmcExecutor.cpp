@@ -120,6 +120,18 @@ bool DmcExecutor::checkSchedulerStamp(protocol::ExecutionMessage const& message)
     return false;
 }
 
+void DmcExecutor::recordScheduleOut(scheduler::ExecutiveState::Ptr const& executiveState)
+{
+    if (!m_dmcRecorder || !executiveState || !executiveState->message)
+    {
+        return;
+    }
+    auto const& message = *executiveState->message;
+    m_dmcRecorder->recordScheduleOut(m_contractAddress, executiveState->contextID, message.seq(),
+        message.schedulerSeq(), executiveState->currentSeq, std::string(message.to()),
+        message.create(), message.type());
+}
+
 void DmcExecutor::setEnablePreFinishType(bool enable)
 {
     m_enablePreFinishType = enable;
@@ -519,6 +531,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
 
     if (f_getAddr(message->to()) != m_contractAddress)
     {
+        recordScheduleOut(executiveState);
         return MessageHint::NEED_SCHEDULE_OUT;
     }
 
@@ -628,6 +641,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessageV2(ExecutiveState::P
 
     if (f_getAddr(message->to()) != m_contractAddress)
     {
+        recordScheduleOut(executiveState);
         return MessageHint::NEED_SCHEDULE_OUT;
     }
 
@@ -851,6 +865,7 @@ void DmcExecutor::handleExecutiveOutputs(
         else
         {
             m_executivePool.markAs(contextID, MessageHint::NEED_SCHEDULE_OUT);
+            recordScheduleOut(executiveState);
             scheduleOut(executiveState);
         }
     }

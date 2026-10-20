@@ -5,9 +5,11 @@
 #pragma once
 #include <bcos-framework/executor/ExecutionMessage.h>
 #include <atomic>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace bcos::scheduler
 {
@@ -37,6 +39,26 @@ public:
     void recordSchedulerStampViolation(std::string_view address, int64_t seq, int type);
     uint32_t schedulerStampViolations() const { return m_schedulerStampViolations.load(); }
 
+    /// A message handed to another DmcExecutor. `currentSeq` is the tx-context counter
+    /// at the moment of the hand-off — the value the executor's create derivation must
+    /// reproduce as f(currentSeq). Recorded for tests; the scheduler protocol itself is
+    /// unchanged.
+    struct ScheduleOutRecord
+    {
+        std::string contract;
+        int64_t contextID = 0;
+        int64_t seq = 0;
+        int64_t schedulerSeq = -1;
+        int64_t currentSeq = 0;
+        std::string target;
+        bool create = false;
+        protocol::ExecutionMessage::Type type{};
+    };
+    void recordScheduleOut(std::string_view contract, int64_t contextID, int64_t seq,
+        int64_t schedulerSeq, int64_t currentSeq, std::string target, bool create,
+        protocol::ExecutionMessage::Type type);
+    std::vector<ScheduleOutRecord> scheduleOuts() const;
+
     void nextDmcRound();
 
     uint32_t getRound();
@@ -60,6 +82,8 @@ private:
     std::atomic<uint32_t> m_sendChecksum = 0;
     std::atomic<uint32_t> m_receiveChecksum = 0;
     std::atomic<uint32_t> m_schedulerStampViolations = 0;
+    mutable std::mutex m_scheduleOutMutex;
+    std::vector<ScheduleOutRecord> m_scheduleOuts;
     uint32_t m_round = 0;
     uint32_t m_checksum = 0;
 

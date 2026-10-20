@@ -133,6 +133,7 @@ public:
     /// message reaches the executor without the hand-back. Always compiled, so release
     /// builds log and count the defect instead of silently resuming.
     bool checkSchedulerStamp(protocol::ExecutionMessage const& message);
+    void recordScheduleOut(scheduler::ExecutiveState::Ptr const& executiveState);
 
 protected:
     std::string m_name;
