@@ -40,7 +40,8 @@ consensus_role()
     jq -r --arg id "${2}" '[.[] | select(.nodeId == $id) | .role] | first // "none"' <<<"${list}"
 }
 
-# wait_status_ok <node_dir> <seconds>: poll `status` until it exits 0 with every check ok;
+# wait_status_ok <node_dir> <seconds>: poll `status` until it exits 0 with every check ok (the
+# informational quorum_connected reports "info", never "ok");
 # a fresh chain stays in timeout until its first block, and until #5643 every block is followed
 # by one consensus-timeout view change about one timeout later, so one failing snapshot is not a
 # verdict
@@ -51,7 +52,7 @@ wait_status_ok()
     local waited=0 status
     while (( waited < limit )); do
         if status=$("${fisco_bcos_path}" status --node-dir "${node_dir}" --json 2>/dev/null) &&
-            jq -e '[.checks[] | .ok] | all' >/dev/null <<<"${status}"; then
+            jq -e 'all(.checks[]; .state == "ok" or .state == "info")' >/dev/null <<<"${status}"; then
             echo "${status}"
             return 0
         fi
