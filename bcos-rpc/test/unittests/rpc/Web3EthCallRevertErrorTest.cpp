@@ -155,6 +155,37 @@ BOOST_AUTO_TEST_CASE(revertWithCustomErrorKeepsRawData)
         resp["error"]["data"].asString(), toHexStringWithPrefix(m_scheduler->m_output));
 }
 
+// A FISCO-native revert may use the chain hasher for Error(string), so its data does not decode
+// with the keccak selector. Keep the receipt's human-readable message as the fallback.
+BOOST_AUTO_TEST_CASE(revertReceiptMessageIsUsedWhenDataDoesNotDecode)
+{
+    m_scheduler->m_status = protocol::TransactionStatus::RevertInstruction;
+    m_scheduler->m_output =
+        fromHex("deadbeef0000000000000000000000000000000000000000000000000000000000000001");
+    m_scheduler->m_message = "Call address error.";
+
+    auto resp = request("eth_call");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), 3);
+    BOOST_CHECK_EQUAL(
+        resp["error"]["message"].asString(), "execution reverted: Call address error.");
+    BOOST_CHECK_EQUAL(
+        resp["error"]["data"].asString(), toHexStringWithPrefix(m_scheduler->m_output));
+}
+
+// The decoded ABI reason is more specific than the receipt text, so it takes precedence.
+BOOST_AUTO_TEST_CASE(decodedRevertReasonTakesPrecedenceOverReceiptMessage)
+{
+    m_scheduler->m_status = protocol::TransactionStatus::RevertInstruction;
+    m_scheduler->m_output = abiEncodeErrorString("boom");
+    m_scheduler->m_message = "receipt fallback";
+
+    auto resp = request("eth_call");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), 3);
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "execution reverted: boom");
+}
+
 // Solidity Panic(uint256) 0x11 → geth's text for the panic code.
 BOOST_AUTO_TEST_CASE(panicIsCode3WithPanicDescription)
 {
@@ -167,6 +198,20 @@ BOOST_AUTO_TEST_CASE(panicIsCode3WithPanicDescription)
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), 3);
     BOOST_CHECK_EQUAL(resp["error"]["message"].asString(),
         "execution reverted: arithmetic underflow or overflow");
+}
+
+// Panic codes are uint256 values. High bits must not be truncated to a known low-word value.
+BOOST_AUTO_TEST_CASE(panicWithHighBitsIsReportedAsUnknown)
+{
+    m_scheduler->m_status = protocol::TransactionStatus::RevertInstruction;
+    auto const panicCode = "01" + std::string(60, '0') + "11";
+    m_scheduler->m_output = fromHex("4e487b71" + panicCode);
+
+    auto resp = request("eth_call");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), 3);
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(),
+        "execution reverted: unknown panic code: 0x" + panicCode);
 }
 
 // Non-revert execution faults are -32000 with a description, never the internal status value.

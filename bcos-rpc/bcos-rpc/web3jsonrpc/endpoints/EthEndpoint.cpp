@@ -97,6 +97,11 @@ std::optional<std::string> decodeRevertReason(bytesConstRef output)
     if (std::equal(selector.begin(), selector.end(), c_panicSelector.begin()))
     {
         auto const code = fromBigEndian<u256>(output.getCroppedData(c_selectorSize, c_wordSize));
+        if (code > 0xff)
+        {
+            return "unknown panic code: 0x" +
+                   toHex(output.getCroppedData(c_selectorSize, c_wordSize));
+        }
         switch (static_cast<uint64_t>(code))
         {
         case 0x00:
@@ -151,22 +156,24 @@ std::optional<std::string> decodeRevertReason(bytesConstRef output)
 /// other execution fault -32000 with geth's words or the status name. viem and ethers.js key on
 /// exactly these codes to recognise a revert and decode `data` — the internal TransactionStatus
 /// value (16, 19, ...) with an empty message left them showing an empty error with no reason.
-/// Like geth, only a REVERT gets its decoded reason appended; a non-revert fault keeps the
-/// receipt's own message when it has one (precompiled errors carry text there). @p output is
-/// the raw return data, @p outputHex its 0x-prefixed form for `data`.
+/// Like geth, a REVERT gets its decoded reason appended. When no reason decodes, the receipt's
+/// own message is the fallback for any status (precompiled and FISCO-native reverts carry text
+/// there). @p output is the raw return data, @p outputHex its 0x-prefixed form for `data`.
 Json::Value callFailureError(protocol::TransactionStatus status, std::string_view receiptMessage,
     bytesConstRef output, std::string outputHex)
 {
     auto const base = admissionError(status);
     auto message = base.msg();
+    auto hasDecodedReason = false;
     if (status == protocol::TransactionStatus::RevertInstruction)
     {
         if (auto reason = decodeRevertReason(output); reason && !reason->empty())
         {
             message += ": " + *reason;
+            hasDecodedReason = true;
         }
     }
-    else if (!receiptMessage.empty())
+    if (!hasDecodedReason && !receiptMessage.empty())
     {
         message += ": ";
         message += receiptMessage;
