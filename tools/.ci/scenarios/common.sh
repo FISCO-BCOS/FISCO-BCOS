@@ -73,9 +73,9 @@ assert_jq()
 # consensus_stable: a fresh chain stays in timeout until its first block, and until #5643 every
 # block is followed by one consensus-timeout view change about one timeout later; a snapshot can
 # land inside either. Passes when the exit code is 0 or 2 and every check is in one of
-# <allowed-states> ("ok" for the RPC snapshot, "ok skipped" for the log one), consensus_stable
-# also being allowed "fail" when the exit code is 2. Exit 2 without that failure (e.g. no check
-# could be evaluated) fails.
+# <allowed-states> ("ok info" for the RPC snapshot, whose quorum_connected is informational;
+# "ok skipped" for the log one), consensus_stable also being allowed "fail" when the exit code
+# is 2. Exit 2 without that failure (e.g. no check could be evaluated) fails.
 assert_checks_but_view_change()
 {
     local json="${1}" rc="${2}" what="${3}" allowed="${4}"

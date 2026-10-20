@@ -16,7 +16,7 @@ scenario_20_ops_status()
     smoke=$(ops "${node_dir}" tx smoke --timeout 60000) || return 1
     assert_jq "${smoke}" '.ok == true' "tx smoke ok" || return 1
     status=$(ops "${node_dir}" status) && rc=0 || rc=$?
-    assert_checks_but_view_change "${status}" "${rc}" "status: every check ok but a view-change consensus_stable" "ok" || return 1
+    assert_checks_but_view_change "${status}" "${rc}" "status: every check ok (quorum_connected info) but a view-change consensus_stable" "ok info" || return 1
     # the log snapshot leaves the checks it cannot judge from the log files "skipped"
     logStatus=$(ops "${node_dir}" log status) && rc=0 || rc=$?
     assert_jq "${logStatus}" '.source == "log"' "log status reads the log files" || return 1

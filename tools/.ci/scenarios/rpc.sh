@@ -18,7 +18,7 @@ scenario_1_rpc_shape()
     local status rc
     status=$(ops "${node_dir}" status) && rc=0 || rc=$?
     assert_jq "${status}" '.checks | length == 5' "status has five checks" || return 1
-    assert_checks_but_view_change "${status}" "${rc}" "status: every check ok but a view-change consensus_stable" "ok" || return 1
+    assert_checks_but_view_change "${status}" "${rc}" "status: every check ok (quorum_connected info) but a view-change consensus_stable" "ok info" || return 1
     assert_jq "${status}" '.chain.blockNumber | type == "number"' "status chain.blockNumber" || return 1
     assert_jq "${status}" '.identity.nodeID | length > 0' "status identity.nodeID" || return 1
     local group
