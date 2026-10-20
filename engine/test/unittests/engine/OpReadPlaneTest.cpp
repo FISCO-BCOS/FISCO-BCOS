@@ -235,7 +235,7 @@ struct ReadPlaneFixture
     void expectHead(bcos::h256 const& head, bcos::protocol::BlockNumber number,
         std::string const& balanceHex, bcos::h256 const& mintTx)
     {
-        auto const numberTag = toQuantity(number);
+        auto const numberTag = bcos::toQuantity(number);
         BOOST_CHECK_EQUAL(blockNumber(), numberTag);
         for (auto const& tag : {std::string("latest"), numberTag})
         {
@@ -448,11 +448,11 @@ BOOST_AUTO_TEST_CASE(scheduler_reads_and_seal_view_follow_the_head)
         t.f.fcu(t.f.fc(c.h1, c.h1, c.h1)).payloadStatus.status == PayloadValidationStatus::Valid);
     auto const finalizedNonce = pendingNonce();
     BOOST_CHECK_NE(headNonce, finalizedNonce);
-    BOOST_CHECK_EQUAL(t.nonce("latest"), toQuantity(bcos::u256(finalizedNonce)));
+    BOOST_CHECK_EQUAL(t.nonce("latest"), bcos::toQuantity(bcos::u256(finalizedNonce)));
     BOOST_REQUIRE(
         t.f.fcu(t.f.fc(s.h2b, c.h1, c.h1)).payloadStatus.status == PayloadValidationStatus::Valid);
     BOOST_CHECK_EQUAL(pendingNonce(), headNonce);
-    BOOST_CHECK_EQUAL(t.nonce("latest"), toQuantity(bcos::u256(headNonce)));
+    BOOST_CHECK_EQUAL(t.nonce("latest"), bcos::toQuantity(bcos::u256(headNonce)));
 
     // A build on B2b (sequencer lane, noTxPool=false) seals against B2b's chain: the view's
     // current number is 2, not the finalized 1.

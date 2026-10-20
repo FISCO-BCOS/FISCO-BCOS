@@ -1973,8 +1973,8 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtServesTheOpLaneBalanceFromTheFlatPlane)
     BOOST_REQUIRE_MESSAGE(committed.has_value(), "the committed balance row must be visible");
     BOOST_CHECK_EQUAL(std::string(committed->get()), (bcos::u256(1) << 200).str({}, {}));
 
-    // The pending plane is the most recently executed block's chain: stage the corpus eip1559
-    // transfer from kSender (it pays value + gas), then admit it, and read the balance back.
+    // Stage the corpus eip1559 transfer from kSender (it pays value + gas), admit it, make it
+    // the canonical head, and read the balance back.
     auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
     auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
@@ -1982,6 +1982,9 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtServesTheOpLaneBalanceFromTheFlatPlane)
     BOOST_REQUIRE_MESSAGE(
         staged.err == nullptr, "stage block 1: " << (staged.err ? staged.err->errorMessage() : ""));
     commitOpBlock(f, staged.header);
+    // The pending plane is the canonical head's chain (setCanonicalHeadProvider).
+    auto const headHash = bcos::protocol::canonicalBlockHash(*staged.header);
+    f.scheduler->setCanonicalHeadProvider([headHash] { return std::optional(headHash); });
 
     auto pending = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
         kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
