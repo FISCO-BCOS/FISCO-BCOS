@@ -25,16 +25,15 @@ BOOST_AUTO_TEST_CASE(DeprecatedRawAddressAcceptedWithWarning)
     BOOST_CHECK_NO_THROW(features.validate(ledger::Features::Flag::feature_raw_address));
     BOOST_CHECK_NO_THROW(features.validate("feature_raw_address"));
 
-    // The name still resolves (the enum value is permanent).
+    // The name still resolves, so existing config.genesis files keep loading.
     BOOST_CHECK(ledger::Features::contains("feature_raw_address"));
     BOOST_CHECK(ledger::Features::string2Flag("feature_raw_address") ==
                 ledger::Features::Flag::feature_raw_address);
 
     // isDeprecated is how the entry points know to warn. (The old genesis-only L2 flag
-    // feature_l2_ethereum_compat is NOT deprecated but REMOVED — its enum value is the
-    // tombstone reserved_removed_l2_ethereum_compat and its name no longer resolves — so
-    // isDeprecated does not apply to it and there is nothing to assert here; the Ethereum
-    // lane is expressed by executor_version >= 2 now.)
+    // feature_l2_ethereum_compat is NOT deprecated but REMOVED — its name no longer
+    // resolves — so isDeprecated does not apply to it; the Ethereum lane is expressed by
+    // executor_version >= 2 now.)
     BOOST_CHECK(ledger::Features::isDeprecated(ledger::Features::Flag::feature_raw_address));
     BOOST_CHECK(!ledger::Features::isDeprecated(ledger::Features::Flag::feature_balance));
 }

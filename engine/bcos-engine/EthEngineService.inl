@@ -647,7 +647,12 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         // instead. An era this node merely cannot resolve is the nullopt branch below, and
         // that is the case that answers SYNCING.
         co_await ledger::getLedgerConfig(view, missLedgerConfig, parentNumber, *m_blockFactory);
-        auto const forkVersion = detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
+        // The L1 dialect has no evmc_revision row: its era comes from the fork schedule at
+        // the payload's timestamp (internal milliseconds).
+        auto const forkVersion = m_externalPayloadVerifier ?
+                                     m_externalPayloadVerifier->forkVersionAt(static_cast<int64_t>(
+                                         request.executionPayload.timestamp / 1000)) :
+                                     detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
         if (!forkVersion.has_value())
         {
             co_return engine_common::makeStatus(
@@ -1266,6 +1271,16 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     auto blockVersion = ledgerConfig.compatibilityVersion();
 
     auto chainRevision = ledgerConfig.evmcRevisionForBlock(nextBlockNumber);
+    // An executor_version 0/1 chain (built over the v1 TransactionExecutorImpl, driven only by
+    // [debug] enable) has no Ethereum fork schedule and no evmc_revision row (getLedgerConfig
+    // reads it on executor_version >= 2 only). Its EVM semantics come from its own features,
+    // so the era only shapes the Eth header this service hashes: the Cancun era that the V3
+    // payload attributes it is driven with carry.
+    if (!chainRevision.has_value() &&
+        ledgerConfig.executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        chainRevision = EVMC_CANCUN;
+    }
     if (!chainRevision.has_value())
     {
         BOOST_THROW_EXCEPTION(

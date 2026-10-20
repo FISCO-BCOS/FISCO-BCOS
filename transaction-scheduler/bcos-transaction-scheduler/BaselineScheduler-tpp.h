@@ -787,6 +787,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCallLat
     auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber, m_blockFactory.get());
     auto block =
         co_await ledger::getBlockData(view, blockNumber, ledger::HEADER, m_blockFactory.get());
+    stampCallRevision(*ledgerConfig, *block->blockHeader());
     co_return co_await m_executor.get().executeTransaction(
         view, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
 }
@@ -843,6 +844,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
                 co_return;
             }
 
+            self->stampCallRevision(*ledgerConfig, *block->blockHeader());
             HistoricalStateBackend<typename MultiLayerStorage::ViewType> historicalBackend(
                 latestView, stateRoot, ledger::account::nodeAddressTableMode());
             storage2::View<typename MultiLayerStorage::MutableStorage, void,
@@ -997,6 +999,24 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setM
         // Wiring-time only, before block flow starts — no mutex needed here.
         m_trackRefCounts.store(observer->needsRefCountDeltas(), std::memory_order_relaxed);
         m_mptCommitObserver = std::move(observer);
+    }
+}
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setEvmcRevisionSchedule(
+    ledger::EvmcRevisionSchedule schedule)
+{
+    m_evmcRevisionSchedule = std::move(schedule);
+}
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stampCallRevision(
+    ledger::LedgerConfig& ledgerConfig, protocol::BlockHeader const& blockHeader) const
+{
+    if (m_evmcRevisionSchedule)
+    {
+        ledgerConfig.setEVMCRevision(
+            m_evmcRevisionSchedule(blockHeader.timestamp() / 1000, blockHeader.difficulty()));
     }
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>

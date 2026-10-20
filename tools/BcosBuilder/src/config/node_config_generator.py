@@ -193,7 +193,6 @@ class NodeConfigGenerator:
         ini_config[section]["hsm_lib_path"] = node_config.hsm_lib_path
         ini_config[section]["key_index"] = str(node_config.hsm_key_index)
         ini_config[section]["password"] = node_config.hsm_password
-        ini_config[section]["hsm_public_key_file_path"] = node_config.hsm_public_key_file_path
 
     def __generate_pem_file(self, outputdir, node_config):
         """

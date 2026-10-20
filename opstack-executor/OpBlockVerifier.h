@@ -45,7 +45,7 @@
 #include <opstack-executor/OpForkSpec.h>     // opForkSpecAt
 
 #include <bcos-devp2p/sync/Block.h>  // devp2p::sync::Block
-#include <bcos-framework/ledger/FeaturesStorage.h>
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/Block.h>
@@ -444,17 +444,15 @@ public:
                 "differs from the announced block hash)");
         }
 
-        //    Feature set + the execution LedgerConfig (revision from the fork config;
-        //    executor_version pinned to the OP lane — this verifier only runs on
-        //    executor_version >= OPSTACK_EXECUTOR_VERSION chains, and computeMptStateDelta's
-        //    l2Mode plus the parent-root rule branch on it).
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, view, number);
+        //    The execution LedgerConfig (revision from the fork config; executor_version
+        //    pinned to the OP lane — this verifier only runs on executor_version >=
+        //    OPSTACK_EXECUTOR_VERSION chains, and computeMptStateDelta's l2Mode plus the
+        //    parent-root rule branch on it). No Features: the OP lane forks on its timestamp
+        //    schedule only.
         bcos::ledger::LedgerConfig execLedgerConfig;
         execLedgerConfig.setBlockNumber(number);
         execLedgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
         execLedgerConfig.setEVMCRevision(spec.rev);
-        execLedgerConfig.setFeatures(features);
 
         // 4. Wrap every raw envelope into the executable tars carrier (0x03/0x7d and
         //    malformed envelopes are deterministic OpConsensusError here), and split the
@@ -568,8 +566,9 @@ public:
         //    the next block's incremental build resolves its parent nodes. Missing parent
         //    nodes are a storage fault (MPTInvariantViolation), never a silent empty-trie
         //    rebuild.
-        auto const parentStateRoot = co_await ledger::mpt::parentStateRootFor(
-            view, bcos::ledger::OPSTACK_EXECUTOR_VERSION, features, number, *m_blockFactory);
+        auto const parentStateRoot =
+            co_await ledger::mpt::parentStateRootFor(view, bcos::ledger::OPSTACK_EXECUTOR_VERSION,
+                bcos::ledger::Features{}, number, *m_blockFactory);
         ledger::mpt::MPTDeltaLayer mptDelta;
         try
         {

@@ -3,10 +3,10 @@
 #
 # Scenario: SystemConfig <-> RPC chainId consistency. Decode chainId from
 # SystemConfig.getValueByKey("chain_id") word 0 (value uint192) and compare it
-# against the eth_chainId RPC result. They MUST agree: PR-4's L2ConfigLoader
-# reads the same SystemConfig._config slot directly (no EVM) onto
-# LedgerConfig.chainId, and PR-6 wired eth_chainId to read that same
-# LedgerConfig field. A mismatch means the two read paths diverged.
+# against the eth_chainId RPC result. They MUST agree: eth_chainId answers
+# config.genesis [chain] chain_id, and the genesis allocs seed the SystemConfig
+# chain_id slot from the chain config the operator built them with. A mismatch
+# means the allocs and config.genesis were built for different chains.
 set -euo pipefail
 # shellcheck source=tools/.ci/l2-integration/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

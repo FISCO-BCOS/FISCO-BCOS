@@ -62,13 +62,6 @@
     ; time window for rate limiter, default: 3s
     ; time_window_sec=3
 
-    ; enable distributed rate limiter, redis required, default: false
-    ; enable_distributed_ratelimit=false
-    ; enable local cache for distributed rate limiter, work with enable_distributed_ratelimit, default: true
-    ; enable_distributed_ratelimit_cache=true
-    ; distributed rate limiter local cache percent, work with enable_distributed_ratelimit_cache, default: 20
-    ; distributed_ratelimit_cache_percent=20
-
     ; the module that does not limit bandwidth
     ; list of all modules: raft,pbft,amop,block_sync,txs_sync,light_node,cons_txs_sync
     ; modules_without_bw_limit=raft,pbft

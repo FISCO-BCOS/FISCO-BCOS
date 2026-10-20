@@ -73,16 +73,10 @@ struct OpForkScheduleMetadataFixture
         return param;
     }
 
-    static GenesisConfig scheduleGenesis(std::string_view schedule)
+    /// [op_fork_timestamps] jovian_time=1764691201: folds to c_isthmusJovianSchedule.
+    static GenesisConfig isthmusJovianGenesis()
     {
-        GenesisConfig genesisConfig;
-        genesisConfig.m_txGasLimit = 3000000000;
-        genesisConfig.m_compatibilityVersion =
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_18_0_VERSION);
-        genesisConfig.m_chainID = "1";
-        genesisConfig.m_groupID = "group0";
-        genesisConfig.m_opstackForkSchedule = std::string(schedule);
-        return genesisConfig;
+        return shorthandGenesis(1764691201, c_opForkTimeUnset);
     }
 
     static GenesisConfig shorthandGenesis(std::uint64_t jovianTime, std::uint64_t karstTime)
@@ -134,7 +128,7 @@ BOOST_AUTO_TEST_CASE(genesisPersistsScheduleMetadataTriple)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
         BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-            *ledger, scheduleGenesis(c_isthmusJovianSchedule), emptyLedgerConfig()));
+            *ledger, isthmusJovianGenesis(), emptyLedgerConfig()));
 
         auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
         BOOST_REQUIRE(block);
@@ -181,7 +175,7 @@ BOOST_AUTO_TEST_CASE(hashMismatchFailClosed)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
         BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-            *ledger, scheduleGenesis(c_isthmusJovianSchedule), emptyLedgerConfig()));
+            *ledger, isthmusJovianGenesis(), emptyLedgerConfig()));
         auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
         BOOST_REQUIRE(block);
         const auto ledgerGenesisHash = block->blockHeader()->hash();
@@ -253,33 +247,22 @@ BOOST_AUTO_TEST_CASE(storedScheduleDivergesFromGenesis)
     BOOST_CHECK(storedOpForkScheduleDivergesFromGenesis("0:isthmus", std::string{"0:jovian"}));
 }
 
-BOOST_AUTO_TEST_CASE(resolvedLocalScheduleComesFromWhicheverChannelIsDeclared)
+BOOST_AUTO_TEST_CASE(resolvedLocalScheduleFoldsTheShorthand)
 {
-    // The canonical channel ([op_fork_schedule], Optional) — canonicalized.
-    auto const fromCanonical =
-        resolvedLocalOpForkScheduleCanonical(std::nullopt, std::string{"0:Isthmus,1000:Karst"});
-    BOOST_REQUIRE(fromCanonical.has_value());
-    BOOST_CHECK_EQUAL(*fromCanonical, "0:isthmus,1000:karst");
-    // The shorthand channel ([op_fork_timestamps], Required) — folded by the one rule.
+    // [op_fork_timestamps] folded by the one rule.
     OpForkSchedule shorthand;
     shorthand.m_jovianTime = 0;
-    auto const fromShorthand = resolvedLocalOpForkScheduleCanonical(shorthand, std::nullopt);
+    auto const fromShorthand = resolvedLocalOpForkScheduleCanonical(shorthand);
     BOOST_REQUIRE(fromShorthand.has_value());
     BOOST_CHECK_EQUAL(*fromShorthand, "0:jovian");
-    // Both declared (the loader has already refused divergence): the canonical wins and
-    // resolves to the same records as the shorthand.
-    auto const fromBoth = resolvedLocalOpForkScheduleCanonical(shorthand, std::string{"0:jovian"});
-    BOOST_REQUIRE(fromBoth.has_value());
-    BOOST_CHECK_EQUAL(*fromBoth, *fromShorthand);
-    // Neither channel: nothing to compare.
-    BOOST_CHECK(!resolvedLocalOpForkScheduleCanonical(std::nullopt, std::nullopt).has_value());
+    // Not declared: nothing to compare.
+    BOOST_CHECK(!resolvedLocalOpForkScheduleCanonical(std::nullopt).has_value());
     // The all-unset shorthand is the legacy all-Isthmus chain: it resolves to exactly the
     // canonical text such a chain recorded, so the boot comparison below cannot refuse it.
-    BOOST_REQUIRE(resolvedLocalOpForkScheduleCanonical(OpForkSchedule{}, std::nullopt).has_value());
-    BOOST_CHECK_EQUAL(
-        *resolvedLocalOpForkScheduleCanonical(OpForkSchedule{}, std::nullopt), "0:isthmus");
+    BOOST_REQUIRE(resolvedLocalOpForkScheduleCanonical(OpForkSchedule{}).has_value());
+    BOOST_CHECK_EQUAL(*resolvedLocalOpForkScheduleCanonical(OpForkSchedule{}), "0:isthmus");
     BOOST_CHECK(!opForkScheduleBootProbeProblem(std::string{"0:isthmus"}, std::string{"0:isthmus"},
-        resolvedLocalOpForkScheduleCanonical(OpForkSchedule{}, std::nullopt))
+        resolvedLocalOpForkScheduleCanonical(OpForkSchedule{}))
             .has_value());
 }
 
@@ -290,7 +273,7 @@ BOOST_AUTO_TEST_CASE(bootProbeComparesTheShorthandOnlyNodeAgainstTheRecordedRow)
     // schedule the node does not run.
     OpForkSchedule shorthand;
     shorthand.m_jovianTime = 0;
-    auto const local = resolvedLocalOpForkScheduleCanonical(shorthand, std::nullopt);
+    auto const local = resolvedLocalOpForkScheduleCanonical(shorthand);
     auto const problem =
         opForkScheduleBootProbeProblem(std::string{"0:isthmus,1000:jovian"}, std::nullopt, local);
     BOOST_REQUIRE(problem.has_value());
@@ -328,24 +311,6 @@ BOOST_AUTO_TEST_CASE(bootProbeTiesTheRecordedRowToTheIntegrityTriple)
     BOOST_CHECK(
         !opForkScheduleBootProbeProblem(std::nullopt, std::nullopt, std::string{"0:isthmus"})
             .has_value());
-}
-
-BOOST_AUTO_TEST_CASE(dualDeclarationProblemNamesBothPairs)
-{
-    OpForkSchedule shorthand;
-    shorthand.m_jovianTime = 0;
-    // One channel only: nothing to compare (the loader's shape check, not a divergence).
-    BOOST_CHECK(
-        !opForkScheduleDualDeclarationProblem(std::string{"0:jovian"}, std::nullopt).has_value());
-    BOOST_CHECK(!opForkScheduleDualDeclarationProblem(std::nullopt, shorthand).has_value());
-    // Agreeing pair: resolves to the same records.
-    BOOST_CHECK(
-        !opForkScheduleDualDeclarationProblem(std::string{"0:jovian"}, shorthand).has_value());
-    // Diverging pair: both sides named.
-    auto const problem =
-        opForkScheduleDualDeclarationProblem(std::string{"0:isthmus,1000:jovian"}, shorthand);
-    BOOST_REQUIRE(problem.has_value());
-    BOOST_CHECK(problem->find("declare different schedules") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(eip1559BootProbeComparesTheRecordedTripleWithTheNodeTriple)
@@ -437,34 +402,6 @@ BOOST_AUTO_TEST_CASE(applyLedgerConfigPopulatesAndFailClosesTheOpRows)
     BOOST_CHECK(!untouched.opForkSchedule().has_value());
 }
 
-// The guard compares WHOLE normalized schedules, not just the (jovian, karst) pair (review
-// F4): a canonical channel describing a replay ladder while the shorthand declares the
-// isthmus baseline is refused even when the two rungs every current consumer keys on agree
-// — the executor runs the shorthand struct while the canonical side feeds the stored row.
-BOOST_AUTO_TEST_CASE(dualDeclarationComparesTheWholeLadder)
-{
-    // Same jovian/karst pair (jovian@1000, karst unset), different lower rungs: refuse.
-    OpForkSchedule shorthand;  // isthmus zero-start baseline
-    shorthand.m_jovianTime = 1000;
-    auto const problem = opForkScheduleDualDeclarationProblem(
-        std::string{"0:regolith,5:canyon,20:ecotone,30:fjord,40:granite,50:holocene,"
-                    "60:isthmus,1000:jovian"},
-        shorthand);
-    BOOST_REQUIRE(problem.has_value());
-    BOOST_CHECK(problem->find("declare different schedules") != std::string::npos);
-    // Whole-ladder agreement (the baseline ladder spelled as canonical text): pass.
-    BOOST_CHECK(
-        !opForkScheduleDualDeclarationProblem(std::string{"0:isthmus,1000:jovian"}, shorthand)
-            .has_value());
-    // The historical pair-only false-positive shape stays legal when the FULL ladders
-    // agree: karst-without-jovian folds to the same text the canonical spells.
-    OpForkSchedule karstOnly;
-    karstOnly.m_karstTime = 2000;
-    BOOST_CHECK(
-        !opForkScheduleDualDeclarationProblem(std::string{"0:isthmus,2000:karst"}, karstOnly)
-            .has_value());
-}
-
 // The boot-probe triple validation resolves the binding target (review F5): the config's
 // [eth_genesis_header] hash when the node declares one, else the chain's OWN block-0
 // header — so a schedule-carrying genesis built by a direct-API caller (no config
@@ -475,7 +412,7 @@ BOOST_AUTO_TEST_CASE(bootTripleValidationFallsBackToTheChainGenesisHash)
         auto storage = makeL2GenesisTestStorage();
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
         BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-            *ledger, scheduleGenesis(c_isthmusJovianSchedule), emptyLedgerConfig()));
+            *ledger, isthmusJovianGenesis(), emptyLedgerConfig()));
         auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
         BOOST_REQUIRE(block);
 
@@ -510,8 +447,8 @@ BOOST_AUTO_TEST_CASE(bootTripleValidationFallsBackToTheChainGenesisHash)
 
 BOOST_AUTO_TEST_CASE(configUint64WindowIsSharedByTheLoadersAndTheCodec)
 {
-    // One acceptance window behind [op_fork_timestamps], [op_eip1559] and the canonical
-    // [op_fork_schedule] codec: the three copies had already diverged (one gained the sentinel
+    // One acceptance window behind [op_fork_timestamps], [op_eip1559] and the
+    // op_fork_schedule row codec: the three copies had already diverged (one gained the sentinel
     // refusal, another a uint32 bound, the third accepted hex).
     using bcos::ledger::ConfigUint64Error;
     using bcos::ledger::ConfigUint64Options;
@@ -607,7 +544,7 @@ BOOST_AUTO_TEST_CASE(genesisBindingMismatchFailClosed)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
         BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-            *ledger, scheduleGenesis(c_isthmusJovianSchedule), emptyLedgerConfig()));
+            *ledger, isthmusJovianGenesis(), emptyLedgerConfig()));
         auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
         BOOST_REQUIRE(block);
         const auto ledgerGenesisHash = block->blockHeader()->hash();
@@ -673,78 +610,6 @@ BOOST_AUTO_TEST_CASE(persistNormalizesCanonicalText)
     const auto metadata = buildOpForkScheduleMetadata("0:Isthmus", genesisHash);
     BOOST_CHECK_EQUAL(metadata.schedule, "0:isthmus");
     BOOST_CHECK_EQUAL(metadata.scheduleHash, keccakOpForkScheduleHash("0:isthmus"));
-
-    task::syncWait([this]() -> task::Task<void> {
-        auto storage = makeL2GenesisTestStorage();
-        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
-        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-            *ledger, scheduleGenesis("0:Isthmus"), emptyLedgerConfig()));
-        auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
-        BOOST_REQUIRE(block);
-        const auto stored =
-            co_await readOpForkScheduleMetadata(*storage, block->blockHeader()->hash());
-        BOOST_REQUIRE(stored.has_value());
-        BOOST_CHECK_EQUAL(stored->schedule, "0:isthmus");
-        co_return;
-    }());
-}
-
-// Baseline may be any EL fork, so `0:karst` now writes; a gap is still rejected,
-// by the general contiguity rule rather than the Karst/Jovian special case — with
-// the fold's one exception: isthmus -> karst (jovian skipped) is the merged
-// simultaneous-activation shape and writes.
-BOOST_AUTO_TEST_CASE(genesisWriteAcceptsKarstBaselineButRejectsSkippedFork)
-{
-    task::syncWait([this]() -> task::Task<void> {
-        {
-            constexpr auto* karstBaseline = "0:karst";
-            auto storage = makeL2GenesisTestStorage();
-            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
-            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-                *ledger, scheduleGenesis(karstBaseline), emptyLedgerConfig()));
-            auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
-            BOOST_REQUIRE(block);
-            const auto stored =
-                co_await readOpForkScheduleMetadata(*storage, block->blockHeader()->hash());
-            BOOST_REQUIRE(stored.has_value());
-            BOOST_CHECK_EQUAL(stored->schedule, karstBaseline);
-        }
-
-        // The folded simultaneous-activation shape (jovian_time == karst_time == 1)
-        // skips jovian and is legal.
-        {
-            constexpr auto* foldedShape = "0:isthmus,1:karst";
-            auto storage = makeL2GenesisTestStorage();
-            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
-            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-                *ledger, scheduleGenesis(foldedShape), emptyLedgerConfig()));
-            auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
-            BOOST_REQUIRE(block);
-            const auto stored =
-                co_await readOpForkScheduleMetadata(*storage, block->blockHeader()->hash());
-            BOOST_REQUIRE(stored.has_value());
-            BOOST_CHECK_EQUAL(stored->schedule, foldedShape);
-        }
-
-        for (auto const* schedule : {"0:regolith,1:ecotone", "0:holocene,1:jovian"})
-        {
-            auto storage = makeL2GenesisTestStorage();
-            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
-            bool threw = false;
-            try
-            {
-                (void)co_await ledger::buildGenesisBlock(
-                    *ledger, scheduleGenesis(schedule), emptyLedgerConfig());
-            }
-            catch (InvalidOpForkSchedule const& e)
-            {
-                threw = true;
-                BOOST_CHECK(messageContains(e, "forks out of protocol order"));
-            }
-            BOOST_CHECK(threw);
-        }
-        co_return;
-    }());
 }
 
 BOOST_AUTO_TEST_CASE(officialHistoryScheduleRoundTrips)
@@ -790,11 +655,15 @@ BOOST_AUTO_TEST_CASE(nineForkScheduleSurvivesAReopen)
             auto storage = std::make_shared<L2GenesisTestStorage>(backing);
             storage->setEnableTraverse(true);
             auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
-            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-                *ledger, scheduleGenesis(c_officialHistorySchedule), emptyLedgerConfig()));
+            // The genesis writer folds [op_fork_timestamps] and so never produces a nine-fork
+            // ladder; write the triple for this chain's block 0 directly.
+            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger,
+                shorthandGenesis(c_opForkTimeUnset, c_opForkTimeUnset), emptyLedgerConfig()));
             auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
             BOOST_REQUIRE(block);
             ledgerGenesisHash = block->blockHeader()->hash();
+            co_await writeOpForkScheduleMetadata(*storage,
+                buildOpForkScheduleMetadata(c_officialHistorySchedule, ledgerGenesisHash));
 
             backing->merge(false, *storage);
 
@@ -854,7 +723,7 @@ BOOST_AUTO_TEST_CASE(genesisWriteAcceptsKarstAfterJovian)
         auto storage = makeL2GenesisTestStorage();
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
         BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-            *ledger, scheduleGenesis(schedule), emptyLedgerConfig()));
+            *ledger, shorthandGenesis(0, 1), emptyLedgerConfig()));
         auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
         BOOST_REQUIRE(block);
         const auto stored =
@@ -867,8 +736,8 @@ BOOST_AUTO_TEST_CASE(genesisWriteAcceptsKarstAfterJovian)
 
 // The resolved schedule also rides SYS_CONFIG (key op_fork_schedule) so every
 // getLedgerConfig snapshot — the RPC estimate gas-cap gate (M1) among them —
-// keys fork activation on the chain's own times. The canonical declaration is
-// mirrored verbatim; the [op_fork_timestamps] shorthand lands folded.
+// keys fork activation on the chain's own times: the [op_fork_timestamps] shorthand lands
+// folded.
 BOOST_AUTO_TEST_CASE(genesisWritesScheduleToSysConfig)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -876,7 +745,7 @@ BOOST_AUTO_TEST_CASE(genesisWritesScheduleToSysConfig)
             auto storage = makeL2GenesisTestStorage();
             auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
             BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
-                *ledger, scheduleGenesis(c_isthmusJovianSchedule), emptyLedgerConfig()));
+                *ledger, isthmusJovianGenesis(), emptyLedgerConfig()));
             const auto row = co_await readOpForkScheduleSysConfigRow(*storage);
             BOOST_REQUIRE(row.has_value());
             BOOST_CHECK_EQUAL(*row, c_isthmusJovianSchedule);
@@ -907,7 +776,7 @@ BOOST_AUTO_TEST_CASE(genesisWritesScheduleToSysConfig)
         // (UNSET, T) — the implied jump: karst scheduled with jovian unscheduled folds
         // jovian INTO karst's second. The arm NodeConfig's old comment claimed was
         // rejected; it is legal (op-node skips intermediates) and this row is exactly
-        // what a canonical dual declaration must carry to agree.
+        // what the row carries.
         {
             auto storage = makeL2GenesisTestStorage();
             auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);

@@ -8,7 +8,7 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 // [executor] eest_replay_mode: the switch that selects the EESTReplay admission column, and the
-// startup gate that keeps it off a chain producing blocks through consensus.
+// loader. The startup gate (executor.version=2 only) is NodeConfigBlockDriverTest.
 
 #include "NodeConfigLoaderProbe.h"
 #include <boost/exception/diagnostic_information.hpp>
@@ -28,39 +28,12 @@ BOOST_AUTO_TEST_CASE(offByDefault)
     BOOST_CHECK(!probe.eestReplayMode());
 }
 
-// The gate. On a consensus chain a node that stopped checking balances would fill its pool with
-// transactions no leader can execute, so this is a startup failure rather than a silently
-// ignored key -- found once, at the node that set it.
-BOOST_AUTO_TEST_CASE(refusedWithoutEngineDrivenBlockProduction)
+// The loader only parses the key: the lane gate (executor.version=2 only) needs
+// config.genesis and runs in validateELModeInvariants (NodeConfigBlockDriverTest).
+BOOST_AUTO_TEST_CASE(parsedByTheLoader)
 {
     LoaderProbe probe;
-    auto pt = fromIni("[executor]\neest_replay_mode=true\n");
-    BOOST_CHECK_EXCEPTION(probe.loadOthersConfig(pt), InvalidConfig, [](InvalidConfig const& e) {
-        return boost::diagnostic_information(e).find("requires engine-driven block production") !=
-               std::string::npos;
-    });
-}
-
-BOOST_AUTO_TEST_CASE(acceptedUnderSingleNodeConsensus)
-{
-    LoaderProbe probe;
-    auto pt = fromIni(
-        "[consensus]\nenable_single_node_consensus=true\n[executor]\neest_replay_mode=true\n");
-    // Same order as NodeConfig::loadConfig: the driver flags are parsed before loadOthersConfig
-    // reads this one, which is what lets the gate see them.
-    probe.loadOpEngineRpcConfig(pt);
-    probe.loadSingleNodeConsensusConfig(pt);
-    BOOST_CHECK_NO_THROW(probe.loadOthersConfig(pt));
-    BOOST_CHECK(probe.eestReplayMode());
-}
-
-BOOST_AUTO_TEST_CASE(acceptedUnderOpEngineRpc)
-{
-    LoaderProbe probe;
-    auto pt = fromIni("[op_engine_rpc]\nenable=true\n[executor]\neest_replay_mode=true\n");
-    probe.loadOpEngineRpcConfig(pt);
-    probe.loadSingleNodeConsensusConfig(pt);
-    BOOST_CHECK_NO_THROW(probe.loadOthersConfig(pt));
+    BOOST_CHECK_NO_THROW(probe.loadOthersConfig(fromIni("[executor]\neest_replay_mode=true\n")));
     BOOST_CHECK(probe.eestReplayMode());
 }
 
