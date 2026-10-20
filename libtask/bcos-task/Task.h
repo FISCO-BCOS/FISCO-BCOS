@@ -78,6 +78,24 @@ inline void reclaimEscapedFrames() noexcept
         }
     }
 }
+
+// The ONE resume boundary for resumers of possibly-detached chains (task::wait pumps,
+// GetResultAwaitable::publish, timer handlers): an escaping unhandled_exception() registers the
+// stranded top frame above (see AsyncTask), and the resumer that catches the escape is
+// responsible for reclaiming it. Resuming through anything else leaks the chain until this
+// thread exits — on a long-lived io thread, effectively until process exit.
+inline void resumeDetached(std::coroutine_handle<> handle)
+{
+    try
+    {
+        handle.resume();
+    }
+    catch (...)
+    {
+        reclaimEscapedFrames();
+        throw;
+    }
+}
 }  // namespace detail
 
 template <class Promise>
@@ -300,15 +318,7 @@ struct GetResultAwaitable
         if (result.state.compare_exchange_strong(expected, Result::State::WOKEN,
                 std::memory_order_acq_rel, std::memory_order_acquire))
         {
-            try
-            {
-                result.handle.resume();
-            }
-            catch (...)
-            {
-                detail::reclaimEscapedFrames();
-                throw;
-            }
+            detail::resumeDetached(result.handle);
             return;
         }
         // The parked waiter deregistered mid-publish: record the settle, resume no one.

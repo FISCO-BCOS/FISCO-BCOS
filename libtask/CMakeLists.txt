@@ -7,8 +7,8 @@ add_library(bcos-task INTERFACE)
 target_include_directories(bcos-task INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-task>)
-# Boost::atomic was only needed by the removed pmr allocation path; the plain Task/Channel/Deadline
-# headers use std::atomic only.
+# Boost::atomic was only needed by the removed pmr allocation path; the remaining headers
+# (including TBBWait.h) use std::atomic only.
 
 
 include(GNUInstallDirs)

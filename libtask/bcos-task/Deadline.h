@@ -66,7 +66,9 @@ struct SleepAwaitable
 
     // The awaitable lives in the awaiting coroutine's frame, so this runs when the frame is
     // destroyed mid-wait: cancel the timer (the handler still runs once, with operation_aborted)
-    // and close the handler's only path back into the frame.
+    // and close the handler's only path back into the frame. Must be serialized with the timer's
+    // executor — cancel() from another thread races the handler (see the threading contract on
+    // awaitableSleep below).
     ~SleepAwaitable()
     {
         m_state->alive.store(false, std::memory_order_release);
@@ -88,7 +90,11 @@ struct SleepAwaitable
                     return;
                 }
                 state->error = error;
-                state->handle.resume();
+                // resumeDetached, not a bare resume: an escaping unhandled_exception() from the
+                // resumed chain strands its top frame in the escaped-frame registry (Task.h), and
+                // this handler — the resumer — is responsible for reclaiming it. A bare resume
+                // would leak the chain until this (typically long-lived io) thread exits.
+                detail::resumeDetached(state->handle);
             });
     }
 
@@ -104,9 +110,16 @@ struct SleepAwaitable
 // safe: the cancellation handler observes the dead frame and no-ops instead of resuming it — no
 // cancel/re-arm bookkeeping.
 //
+// THREADING CONTRACT: destroying the awaiting frame mid-wait must be serialized with the timer's
+// executor — its io_context. Asio timers are "shared objects: unsafe", so ~SleepAwaitable's
+// cancel() from another thread races the handler; and a handler that has already passed the
+// `alive` gate could resume a frame the other thread is destroying. A caller that destroys the
+// frame on a different context must post() the destruction back to this executor (the same rule
+// Deadline states below and Host::clientConnect follows).
+//
 // This replaces the hand-built `task::makeFireAwaitable<error_code>([&timer](auto handler) {
-// timer.async_wait(std::move(handler)); }, operation_aborted)` idiom, which every backoff /
-// heartbeat-style loop in the tree was spelling out separately.
+// timer.async_wait(std::move(handler)); }, operation_aborted)` idiom, spelled out today by the
+// accept-loop retry backoff in bcos-gateway's Host.cpp (migration tracked in issue #5711).
 inline task::Task<boost::system::error_code> awaitableSleep(
     boost::asio::io_context& ioContext, uint32_t durationMs)
 {

@@ -15,7 +15,7 @@
  *
  * @file OneShot.h
  * @brief One-shot, allocation-free value delivery to a coroutine: the asynchronous counterpart of
- *        Immediate (the "single-slot Channel").
+ *        Immediate.
  */
 
 #pragma once
@@ -64,8 +64,9 @@ namespace bcos::task
 //  - TOTAL COMPLETION: every path that can end the wait must settle the slot — complete() with a
 //    value, or cancel() when there is no value to deliver (socket torn down, host stopped, request
 //    dropped). A cancelled wait throws in await_resume() instead of returning default-constructed
-//    values, so a teardown can never be mistaken for a real result. Like Channel::cancel(), this
-//    exists as its own name because the tree has repeatedly hand-rolled that wake-up.
+//    values, so a teardown can never be mistaken for a real result. cancel() exists as its own
+//    name — not just as an error-flavoured complete() — because the tree has repeatedly
+//    hand-rolled that wake-up.
 //  - NO ALLOCATION: the single mutable slot lives inside this object (hence inside the coroutine
 //    frame when declared as a local), not on the heap. Heap-own it only when the completion sink
 //    outlives the frame — every path that can settle it must then go through the shared_ptr, which
