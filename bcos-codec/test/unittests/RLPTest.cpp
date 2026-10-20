@@ -86,11 +86,8 @@ static T decodeRlp(std::string_view hex, int32_t expectedErrorCode = -1)
         }
         catch (bcos::codec::rlp::RlpDecodeException const& e)
         {
-            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
-            // A thrown exception without the code info would abort obscurely below — REQUIRE
-            // first so the failure is readable, not a null deref.
-            BOOST_REQUIRE(code != nullptr);
-            BOOST_CHECK_EQUAL(*code, expectedErrorCode);
+            // -1 is no DecodingError value: an exception without the code info fails the check.
+            BOOST_CHECK_EQUAL(bcos::codec::rlp::rlpErrorCode(e, -1), expectedErrorCode);
         }
     }
     return result;
@@ -117,9 +114,7 @@ static std::tuple<T, T2> decodeRlp(std::string_view hex, int32_t expectedErrorCo
         }
         catch (bcos::codec::rlp::RlpDecodeException const& e)
         {
-            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
-            BOOST_REQUIRE(code != nullptr);
-            BOOST_CHECK_EQUAL(*code, expectedErrorCode);
+            BOOST_CHECK_EQUAL(bcos::codec::rlp::rlpErrorCode(e, -1), expectedErrorCode);
         }
     }
     return {std::move(r1), std::move(r2)};
@@ -378,12 +373,9 @@ BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
         }
         catch (bcos::codec::rlp::RlpDecodeException const& e)
         {
-            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
-            if (code == nullptr)
-            {
-                throw;  // exception without the code info: fail loudly, don't mask it
-            }
-            return *code;
+            // -1 is no DecodingError value: an exception without the code info fails the
+            // caller's equality check instead of being masked.
+            return bcos::codec::rlp::rlpErrorCode(e, -1);
         }
     };
 
@@ -525,9 +517,7 @@ BOOST_AUTO_TEST_CASE(nonThrowingCoresRejectSameMalformedInputs)
         }
         catch (RlpDecodeException const& e)
         {
-            auto const* code = boost::get_error_info<errinfo_rlpErrorCode>(e);
-            BOOST_REQUIRE(code != nullptr);
-            BOOST_CHECK_EQUAL(*code, static_cast<int32_t>(UnexpectedListElements));
+            BOOST_CHECK_EQUAL(rlpErrorCode(e, -1), static_cast<int32_t>(UnexpectedListElements));
         }
     }
 }
@@ -551,12 +541,9 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         }
         catch (bcos::codec::rlp::RlpDecodeException const& e)
         {
-            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
-            if (code == nullptr)
-            {
-                throw;  // exception without the code info: fail loudly, don't mask it
-            }
-            return *code;
+            // -1 is no DecodingError value: an exception without the code info fails the
+            // caller's equality check instead of being masked.
+            return bcos::codec::rlp::rlpErrorCode(e, -1);
         }
     };
     // 60 bytes of 0xaa as a hex payload, and 60 canonical single-byte list items (each 0x01).

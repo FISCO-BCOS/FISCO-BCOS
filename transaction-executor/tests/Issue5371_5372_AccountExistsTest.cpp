@@ -13,6 +13,7 @@
 #include "../bcos-transaction-executor/EVMCResult.h"
 #include "../bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
+#include "Eip2929TestHelpers.h"
 #include "TestMemoryStorage.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -96,42 +97,39 @@ struct AccountExistsFixture
         return {rollbackableStorage, a, bcos::ledger::account::AddressTableMode::Hex};
     }
 
-    h256 emptyCodeHash() const { return hashImpl->hash(bytesConstRef{}); }
+    h256 emptyCodeHash() const { return hashImpl->emptyHash(); }
+
+    /// The fixture contract eip2929::detail::measureProbeGasTask drives: the first eight
+    /// parameters of CompatTEHostFixture::makeHost (no EIP-2929 access-state override here), so
+    /// both suites build their host the same way.
+    HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> makeHost(
+        ledger::Features const& features, uint32_t blockHeaderVersion, evmc_address originIn,
+        evmc_address recipientIn, evmc_call_kind kindIn,
+        std::shared_ptr<const bcos::executor::Eip2930AccessList> /*eip2930AccessList*/,
+        uint8_t /*web3TypedTxKindForAccessList*/, int64_t gas)
+    {
+        ledgerConfig.setFeatures(features);
+        blockHeader.setVersion(blockHeaderVersion);
+        blockHeader.calculateHash(*hashImpl);
+        evmc_message msg{};
+        msg.kind = kindIn;
+        msg.gas = gas;
+        msg.recipient = recipientIn;
+        msg.code_address = recipientIn;
+        msg.sender = originIn;
+        return HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, msg, originIn, "", 0,
+            seq, precompiledManager, ledgerConfig, *hashImpl, false, 0, bcos::task::syncWait);
+    }
 
     /// Run @p code as the body of a funded runner contract at @p runnerTag under @p features;
-    /// returns the raw EVMC result (gas_left, output). Same shape as
-    /// eip2929::detail::measureProbeGasTask, without that helper's fixture contract.
+    /// returns the raw EVMC result (gas_left, output). The runner is funded because the
+    /// bytecode under test makes value-carrying CALLs.
     task::Task<EVMCResult> runBytecode(
         ledger::Features features, bytes const& code, uint8_t runnerTag, int64_t startGas)
     {
-        ledgerConfig.setFeatures(features);
-        auto originAddr = addr(0x70);
-        auto runner = runnerAddr(runnerTag);
-        auto originAcc = account(originAddr);
-        if (!co_await originAcc.exists())
-        {
-            co_await originAcc.create();
-        }
-        co_await originAcc.setBalance(u256(1) << 96);
-        auto runnerAcc = account(runner);
-        if (!co_await runnerAcc.exists())
-        {
-            co_await runnerAcc.create();
-        }
-        co_await runnerAcc.setBalance(u256(1) << 96);
-        co_await runnerAcc.setCode(code, "", hashImpl->hash(ref(code)));
-
-        evmc_message msg{};
-        msg.kind = EVMC_CALL;
-        msg.gas = startGas;
-        msg.recipient = runner;
-        msg.code_address = runner;
-        msg.sender = originAddr;
-        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> host(
-            rollbackableStorage, rollbackableTransientStorage, blockHeader, msg, originAddr, "", 0,
-            seq, precompiledManager, ledgerConfig, *hashImpl, false, 0, bcos::task::syncWait);
-        co_await host.prepare();
-        co_return co_await host.execute();
+        co_return co_await eip2929::detail::measureProbeGasTask(
+            *this, features, code, runnerAddr(runnerTag), startGas, u256(1) << 96);
     }
 
     static ledger::Features featuresWithFix(bool on)

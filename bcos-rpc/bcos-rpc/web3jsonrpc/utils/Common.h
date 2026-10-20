@@ -29,6 +29,9 @@ constexpr const uint64_t LowestGasUsed{21000};
 enum Web3JsonRpcError : int32_t
 {
     Web3DefaultError = -32000,
+    /// geth's code for a REVERT in eth_call / eth_estimateGas (rpc/errors.go revertError); viem
+    /// and ethers.js recognise a revert by it and decode the error's `data` (issue #5709).
+    Web3ExecutionReverted = 3,
 };
 enum EngineError : int32_t
 {

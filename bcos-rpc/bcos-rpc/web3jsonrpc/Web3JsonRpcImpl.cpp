@@ -270,14 +270,12 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
                                         std::to_string(m_batchRequestSizeLimit)));
             }
 
-            if (request.size() > 1)
-            {
-                handleBatchRequest(std::move(request), std::move(_session), _sender);
-                return;
-            }
-
-            // single request in array
-            request = std::move(request[0]);
+            // JSON-RPC 2.0 §6: a batch (an Array) is answered with an Array of Response
+            // objects even when it holds a single call. Unwrapping a one-element array into a
+            // plain request answered with a bare object, which ethers.js v6 (whose default
+            // network detection is a one-element batch) cannot match (issue #5706).
+            handleBatchRequest(std::move(request), std::move(_session), _sender);
+            return;
         }
 
         task::wait([](Web3JsonRpcImpl* self, Json::Value req, auto session,
