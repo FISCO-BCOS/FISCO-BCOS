@@ -13,6 +13,13 @@
 ///
 /// The implementation (EVMPrecompiles.cpp) is a verbatim port of the upstream
 /// evmone dispatch over the evmone_precompiles primitives.
+///
+/// This is the canonical EVM-precompile implementation for the whole repo: the
+/// ethereum-executor dispatches through call_precompile/is_precompile, and the
+/// v1 transaction-executor reuses the *_execute functions through
+/// transaction-executor's EvmPrecompiledAdapter.h (which keeps BCOS pricing and
+/// BCOS failure semantics on its own side). It builds as the standalone
+/// `evm-precompiles` library (see CMakeLists.txt).
 
 #pragma once
 

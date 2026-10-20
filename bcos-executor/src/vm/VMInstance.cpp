@@ -24,7 +24,6 @@
 #include <evmone/vm.hpp>
 #include <utility>
 
-using namespace std;
 namespace bcos::executor
 {
 

@@ -99,7 +99,14 @@
 #endif
 
 using namespace bcos;
-using namespace std;
+using std::exception;
+using std::make_shared;
+using std::mutex;
+using std::set;
+using std::shared_ptr;
+using std::string;
+using std::string_view;
+using std::vector;
 using namespace bcos::executor;
 using namespace bcos::executor::critical;
 using namespace bcos::protocol;

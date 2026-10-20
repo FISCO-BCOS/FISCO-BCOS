@@ -38,7 +38,7 @@
 namespace bcos::executor_v1
 {
 
-#define PRECOMPILE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PRECOMPILE")
+#define PRECOMPILE_LOG(LEVEL) BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("PRECOMPILE")
 
 struct Precompiled
 {

@@ -44,7 +44,7 @@
 #include <vector>
 
 
-using namespace std;
+using std::string;
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;

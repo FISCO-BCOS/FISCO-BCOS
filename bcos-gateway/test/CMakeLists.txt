@@ -37,11 +37,9 @@ find_package(Boost REQUIRED unit_test_framework)
 find_package(FakeIt CONFIG REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} gateway tool protocol-tars front bcos-crypto FakeIt::FakeIt-boost Boost::unit_test_framework)
+# GatewayMessageTest.cpp is the boost.test entry TU (defines BOOST_TEST_MAIN).
+# In a unity batch another file includes <boost/test/unit_test.hpp> first and
+# consumes the include guard, so the init_unit_test_suite emission triggered by
+# BOOST_TEST_MAIN never happens (undefined symbol at link). Keep it out of unity.
 set_source_files_properties("unittests/GatewayMessageTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/PeerBlackWhitelistTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/RateLimiterStatTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/RouterTableTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/amop/TopicManagerExtraTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_source_files_properties("unittests/GatewayConfigSettersTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" ${CMAKE_SOURCE_DIR}/bcos-gateway/test/unittests)

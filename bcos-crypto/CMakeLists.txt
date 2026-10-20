@@ -27,7 +27,6 @@ if(FULLNODE)
     find_package(c-kzg-4844 CONFIG REQUIRED)
     target_link_libraries(bcos-crypto PUBLIC ckzg)
 endif()
-set_target_properties(bcos-crypto PROPERTIES UNITY_BUILD "ON")
 
 # Build-time regression guard against the bundled-secp256k1 link hijack: runs on every
 # default build, including the -DTESTS=OFF release configuration that ships the affected

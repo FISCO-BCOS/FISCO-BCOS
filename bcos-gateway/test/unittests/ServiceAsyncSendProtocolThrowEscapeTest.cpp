@@ -103,8 +103,8 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(std::make_shared<RejectingSession>());
     p2pSession->setService(service);
-    p2pSession->setProtocolInfo(
-        g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService));
+    p2pSession->setProtocolInfo(bcos::protocol::g_BCOSConfig.protocolInfo(
+        bcos::protocol::ProtocolModuleID::GatewayService));
 
     // Pre-fix: the handshake rejection escapes task::wait and propagates out of sendProtocol
     // (synchronously aborting onConnect's registration tail). Post-fix: caught inside the

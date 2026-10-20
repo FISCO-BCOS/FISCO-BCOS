@@ -24,6 +24,10 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 find_package(Boost REQUIRED unit_test_framework)
 target_link_libraries(${TEST_BINARY_NAME} PUBLIC front protocol-tars Boost::unit_test_framework)
+# FrontServiceTest.cpp is the boost.test entry TU (defines BOOST_TEST_MAIN).
+# In a unity batch, FakeGateway.cpp/FrontMessageTest.cpp include
+# <boost/test/unit_test.hpp> first and consume the include guard, so the
+# init_unit_test_suite emission triggered by BOOST_TEST_MAIN never happens
+# (undefined symbol: init_unit_test_suite at link). Keep it out of unity.
 set_source_files_properties("unittests/FrontServiceTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" "")

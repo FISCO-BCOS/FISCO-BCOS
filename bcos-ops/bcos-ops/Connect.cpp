@@ -51,6 +51,10 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     {
         value = value.substr(7);
     }
+    if (value.ends_with('/'))
+    {
+        value.pop_back();  // http://host:8545/
+    }
     auto colon = value.rfind(':');
     if (colon == std::string::npos || colon + 1 >= value.size())
     {
@@ -64,7 +68,13 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     int port = 0;
     try
     {
-        port = std::stoi(value.substr(colon + 1));
+        auto portText = value.substr(colon + 1);
+        size_t used = 0;
+        port = std::stoi(portText, &used);
+        if (used != portText.size())
+        {
+            throw std::invalid_argument(portText);  // "20200abc" is not a port
+        }
     }
     catch (std::exception const&)
     {

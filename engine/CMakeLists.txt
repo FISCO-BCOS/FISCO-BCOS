@@ -31,7 +31,6 @@ target_include_directories(engine PRIVATE
 # the templates.
 target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec
     rlp-protocol)
-set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

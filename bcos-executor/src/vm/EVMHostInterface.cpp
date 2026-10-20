@@ -37,8 +37,6 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <limits>
 
-using namespace std;
-
 namespace bcos
 {
 namespace executor
