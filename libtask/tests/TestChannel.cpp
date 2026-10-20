@@ -2,6 +2,7 @@
 #include "bcos-task/Wait.h"
 #include <boost/test/unit_test.hpp>
 #include <future>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -211,6 +212,164 @@ BOOST_AUTO_TEST_CASE(closeWakesParkedProducerWithFalse)
 
     // A closed channel answers immediately.
     BOOST_CHECK(!syncWait(channel.waitWritable()));
+}
+
+BOOST_AUTO_TEST_CASE(byteBudgetIsReleasedOnPopWithoutSizeOf)
+{
+    // sizeOf defaults to 1-per-item: with a byte budget but no sizeOf, every item counts as one
+    // byte, and popping must release it again.
+    Channel<int> channel(inlinePoster(), 100, /*maxBytes=*/50);
+    for (int i = 0; i < 200; ++i)
+    {
+        BOOST_CHECK(channel.push(i));
+        BOOST_CHECK_EQUAL(syncWait(channel.recv()), i);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(waitWritableFailsFastWhenCountCapIsZero)
+{
+    Channel<int> channel(inlinePoster(), 0);
+    BOOST_CHECK(!channel.push(1));
+    // A zero maxCount rejects every push: parking would wait for a pop that can never help.
+    BOOST_CHECK(!syncWait(channel.waitWritable()));
+}
+
+BOOST_AUTO_TEST_CASE(waitWritableFailsFastWhenPushExceedsWholeBudget)
+{
+    Channel<std::string> channel(inlinePoster(), 16, /*maxBytes=*/10,
+        [](const std::string& value) { return value.size(); });
+    // An item bigger than the whole byte budget can never fit, however much is drained.
+    BOOST_CHECK(!syncWait(channel.waitWritable(11)));
+    // The channel stays usable for pushes that do fit.
+    BOOST_CHECK(channel.push("12345"));
+    BOOST_CHECK(syncWait(channel.waitWritable(5)));
+}
+
+BOOST_AUTO_TEST_CASE(secondRecvDisplacesAndFailsFirstWaiter)
+{
+    Channel<int> channel(inlinePoster(), 16);
+    std::promise<std::string> first;
+    std::promise<int> second;
+
+    bcos::task::wait([](Channel<int>& ch, std::promise<std::string>& out) -> Task<void> {
+        try
+        {
+            co_await ch.recv();
+            out.set_value("no exception");
+        }
+        catch (const std::exception& e)
+        {
+            out.set_value(e.what());
+        }
+    }(channel, first));
+
+    // A second parked recv() displaces the first: it is woken with an exception through the
+    // (inline) poster instead of being stranded.
+    bcos::task::wait([](Channel<int>& ch, std::promise<int>& out) -> Task<void> {
+        out.set_value(co_await ch.recv());
+    }(channel, second));
+
+    BOOST_CHECK_EQUAL(first.get_future().get(), "channel waiter displaced by a second recv()");
+    BOOST_CHECK(channel.push(7));
+    BOOST_CHECK_EQUAL(second.get_future().get(), 7);
+}
+
+BOOST_AUTO_TEST_CASE(secondWaitWritableDisplacesAndFailsFirstWaiter)
+{
+    Channel<int> channel(inlinePoster(), 1);
+    BOOST_CHECK(channel.push(1));  // full
+
+    std::promise<bool> first;
+    std::promise<bool> second;
+
+    bcos::task::wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
+        out.set_value(co_await ch.waitWritable());
+    }(channel, first));
+
+    // A second parked waitWritable() displaces the first, which is woken with false.
+    bcos::task::wait([](Channel<int>& ch, std::promise<bool>& out) -> Task<void> {
+        out.set_value(co_await ch.waitWritable());
+    }(channel, second));
+
+    BOOST_CHECK(!first.get_future().get());
+    // The surviving waiter is still woken by a drain.
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 1);
+    BOOST_CHECK(second.get_future().get());
+}
+
+BOOST_AUTO_TEST_CASE(destroyedParkedConsumerUnregistersBeforePush)
+{
+    Channel<int> channel(inlinePoster(), 16);
+    {
+        // A consumer frame destroyed while parked in recv() (a dropped pump task is teardown,
+        // not misuse): the awaitable's destructor must unregister the waiter slot, so the
+        // push below ENQUEUES instead of writing into or resuming the dead frame.
+        auto pump = [](Channel<int>& ch) -> Task<void> { (void)co_await ch.recv(); }(channel);
+        pump.start();  // runs synchronously up to the park in recv()
+    }  // ~Task destroys the parked frame, awaitable included
+    BOOST_CHECK(channel.push(42));
+    // The value went to the queue rather than to the destroyed consumer.
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 42);
+}
+
+BOOST_AUTO_TEST_CASE(destroyedParkedProducerUnregistersBeforePop)
+{
+    Channel<int> channel(inlinePoster(), 1);
+    BOOST_CHECK(channel.push(1));  // full
+    {
+        auto producer = [](Channel<int>& ch) -> Task<void> {
+            (void)co_await ch.waitWritable();
+        }(channel);
+        producer.start();  // parks: no space
+    }  // frame destroyed while parked in waitWritable()
+    // Draining must not write into or resume the dead producer frame.
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 1);
+    BOOST_CHECK(channel.push(2));
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 2);
+}
+
+BOOST_AUTO_TEST_CASE(channelCanBeDestroyedWhileConsumerParked)
+{
+    auto channel = std::make_unique<Channel<int>>(inlinePoster(), 16);
+    auto pump = [](Channel<int>& ch) -> Task<void> { (void)co_await ch.recv(); }(*channel);
+    pump.start();  // parked in recv()
+    BOOST_CHECK_EQUAL(channel->size(), 0);  // nothing queued: the consumer is parked
+    // The channel goes away first: the shared state is kept alive by the parked awaitable,
+    // and destroying the parked frame afterwards unregisters without touching the channel.
+    channel.reset();
+}  // ~Task destroys the parked frame after the channel is gone — must not crash
+
+BOOST_AUTO_TEST_CASE(displacedWaiterThrowingInlineLeavesNoDanglingSlot)
+{
+    Channel<int> channel(inlinePoster(), 16);
+    std::promise<std::string> observed;
+
+    // The displaced consumer does NOT catch: the displacement error escapes its await_resume,
+    // its promise has no continuation and rethrows out of resume() — straight through the
+    // inline poster and out of the SECOND recv's await_suspend, which per [expr.await]
+    // rethrows the exception in the suspending coroutine. The second consumer therefore
+    // observes the displaced waiter's exception at its own co_await.
+    auto first = [](Channel<int>& ch) -> Task<void> { (void)co_await ch.recv(); }(channel);
+    first.start();  // parked in recv()
+
+    auto second = [](Channel<int>& ch, std::promise<std::string>& out) -> Task<void> {
+        try
+        {
+            (void)co_await ch.recv();
+            out.set_value("no exception");
+        }
+        catch (const std::exception& e)
+        {
+            out.set_value(e.what());
+        }
+    }(channel, observed);
+    second.start();  // displaces the first; the inline wake throws back into this coroutine
+
+    BOOST_CHECK_EQUAL(observed.get_future().get(), "channel waiter displaced by a second recv()");
+    // Crucially the second recv() never completed its registration, so the channel stayed
+    // consistent: a push lands in the queue and a fresh recv() picks it up.
+    BOOST_CHECK(channel.push(7));
+    BOOST_CHECK_EQUAL(syncWait(channel.recv()), 7);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
