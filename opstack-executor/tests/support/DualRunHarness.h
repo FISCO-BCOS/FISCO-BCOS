@@ -15,11 +15,11 @@
 //     stateRoot-mismatch bring-up.
 // Suite-level plumbing (t8n corpus loading, golden headers) stays in support/GoldenSample.h.
 
-#include <opstack-executor/OpEthBlockSteps.h>    // preBlockOpEthSteps / finalizeOpEthBlockResult
-#include <opstack-executor/OpEthCommitments.h>   // OpEthExecuteBlockResult
-#include <opstack-executor/OpEthDeposit.h>       // decodeOpDepositEnvelope
-#include <opstack-executor/OpEthExecutor.h>      // OpEthExecutor / OpEthBlockContext
-#include <opstack-executor/OpForkSpec.h>         // OpForkSpec
+#include <opstack-executor/OpEthBlockSteps.h>   // preBlockOpEthSteps / finalizeOpEthBlockResult
+#include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult
+#include <opstack-executor/OpEthDeposit.h>      // decodeOpDepositEnvelope
+#include <opstack-executor/OpEthExecutor.h>     // OpEthExecutor / OpEthBlockContext
+#include <opstack-executor/OpForkSpec.h>        // OpForkSpec
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -27,10 +27,10 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-ledger/mpt/Constants.h>   // emptyRootHash
-#include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateRoot
-#include <bcos-rlp-protocol/Web3Transaction.h>  // decodeWeb3RawTransaction
-#include <bcos-storage/KeyPrefixes.h>          // kMPTTable (row-diff filter)
+#include <bcos-ledger/mpt/Constants.h>                    // emptyRootHash
+#include <bcos-ledger/mpt/StateRoots.h>                   // computeMptStateRoot
+#include <bcos-rlp-protocol/Web3Transaction.h>            // decodeWeb3RawTransaction
+#include <bcos-storage/KeyPrefixes.h>                     // kMPTTable (row-diff filter)
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>  // mutableInner (buildFiscoTx)
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
@@ -121,8 +121,8 @@ struct DualRunFixture
 inline bcos::protocol::Transaction::Ptr buildFiscoTx(
     bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
 {
-    auto tx = bcos::rpc::decodeWeb3RawTransaction(
-        bcos::bytesConstRef{env.data(), env.size()}, *hashImpl);
+    auto tx =
+        bcos::rpc::decodeWeb3RawTransaction(bcos::bytesConstRef{env.data(), env.size()}, *hashImpl);
     if (tx == nullptr)
     {
         throw std::runtime_error("buildFiscoTx: envelope decode failed");
@@ -177,10 +177,9 @@ opeth::OpEthExecuteBlockResult runExecutorPath(DualRunFixture& f, ViewType& view
                                        -> bcos::protocol::Transaction const& { return *ptr; });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         view, executor, header, transactionsRefs, execLedgerConfig, ctx));
-    return bcos::task::syncWait(
-        opeth::finalizeOpEthBlockResult(view, header, execLedgerConfig, spec, sharedError,
-            std::move(receipts), rawTxBytes, ctx.cumulativeGasUsed, hashErr,
-            /*skipStateRootBuild=*/false));
+    return bcos::task::syncWait(opeth::finalizeOpEthBlockResult(view, header, execLedgerConfig,
+        spec, sharedError, std::move(receipts), rawTxBytes, ctx.cumulativeGasUsed, hashErr,
+        /*skipStateRootBuild=*/false));
 }
 
 // ---- stateRoot-mismatch diagnostics: flat-row diff of two executed views ──────────────────
@@ -204,8 +203,7 @@ bcos::task::Task<RowMap> collectRows(ViewType& view)
             value = bcos::toHex(entry->get());
         else
             value = "<deleted>";
-        rows.emplace(
-            std::pair{std::string(table), std::string(key)}, std::move(value));
+        rows.emplace(std::pair{std::string(table), std::string(key)}, std::move(value));
     }
     co_return rows;
 }
@@ -213,7 +211,8 @@ bcos::task::Task<RowMap> collectRows(ViewType& view)
 template <class ViewType>
 bcos::task::Task<void> dumpDeltaRows(ViewType& view, char const* tag)
 {
-    auto it = co_await bcos::storage2::range(mutableStorage(view));  // ADL: MultiLayerStorage View friend
+    auto it =
+        co_await bcos::storage2::range(mutableStorage(view));  // ADL: MultiLayerStorage View friend
     while (auto kv = co_await it.next())
     {
         auto const& [k, v] = *kv;
@@ -240,12 +239,12 @@ void dumpRowDiff(ViewType& viewA, ViewType& viewB)
     auto rowsA = bcos::task::syncWait(collectRows(viewA));
     auto rowsB = bcos::task::syncWait(collectRows(viewB));
     int shown = 0;
-    auto show = [&](char side, std::pair<std::string, std::string> const& key,
-                    std::string const& a, std::string const& b) {
+    auto show = [&](char side, std::pair<std::string, std::string> const& key, std::string const& a,
+                    std::string const& b) {
         if (shown++ >= 60)
             return;
-        BOOST_TEST_MESSAGE("[" << side << "] table=" << key.first << " key=" << bcos::toHex(key.second)
-                               << " old=" << a << " new=" << b);
+        BOOST_TEST_MESSAGE("[" << side << "] table=" << key.first << " key="
+                               << bcos::toHex(key.second) << " old=" << a << " new=" << b);
     };
     for (auto const& [key, va] : rowsA)
     {
@@ -262,9 +261,9 @@ void dumpRowDiff(ViewType& viewA, ViewType& viewB)
     for (auto const& [key, va] : rowsA)
     {
         auto it = rowsB.find(key);
-        BOOST_TEST_MESSAGE("[old] table=" << key.first << " key=" << bcos::toHex(key.second)
-                                          << " old=" << va
-                                          << " new=" << (it == rowsB.end() ? "<absent>" : it->second));
+        BOOST_TEST_MESSAGE(
+            "[old] table=" << key.first << " key=" << bcos::toHex(key.second) << " old=" << va
+                           << " new=" << (it == rowsB.end() ? "<absent>" : it->second));
     }
 }
 

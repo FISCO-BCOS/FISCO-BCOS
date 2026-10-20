@@ -4,9 +4,9 @@
 mock_cl_el_acceptance.py — Phase 7 Layer-3 acceptance: drive the EL-mode (Sepolia)
 fisco-bcos node through the Engine API like a consensus client would.
 
-Unlike mock_consensus_client.py (which targets the L2/Karst lane with deposits and
-getPayloadV5), this script exercises the L1 EL dialect on a node whose chain head is
-the real Sepolia genesis:
+Unlike mock_consensus_client.py (which drives a single-alloc executor_version=2 harness
+chain), this script exercises the L1 EL dialect on a node whose chain head is the real
+Sepolia genesis:
 
   1. capabilities + client version exchange shapes
   2. FCU to the known head (genesis)               -> VALID

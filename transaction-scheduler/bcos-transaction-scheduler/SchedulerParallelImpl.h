@@ -8,10 +8,13 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-utilities/ITTAPI.h"
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
+#include <boost/atomic.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
 #include <cstddef>
@@ -21,8 +24,6 @@
 #include <range/v3/view/drop.hpp>
 #include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/zip.hpp>
-#include <bcos-utilities/LogStream.h>
-#include <boost/atomic.hpp>
 
 namespace bcos::scheduler_v1
 {

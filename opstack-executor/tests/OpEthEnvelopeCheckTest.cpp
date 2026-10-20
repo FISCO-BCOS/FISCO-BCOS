@@ -194,9 +194,8 @@ bcos::bytes legacyEnvelope(uint64_t nonce, uint64_t gasLimit, std::string_view t
     bool valueIsList = false)
 {
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(nonceIsList ? shortListItem() : rlpInt(nonce));
     append(rlpInt(kLegacyGasPrice));
     append(gasIsList ? shortListItem() : rlpInt(gasLimit));
@@ -216,9 +215,8 @@ bcos::bytes accessListEnvelope(uint64_t chainId, uint64_t nonce, uint64_t gasLim
     bool gasIsList = false, bool valueIsList = false)
 {
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(chainId));
     append(nonceIsList ? shortListItem() : rlpInt(nonce));
     append(rlpInt(kLegacyGasPrice));
@@ -238,9 +236,8 @@ bcos::bytes eip1559Envelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
     bool valueIsList = false)
 {
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(chainId));
     append(nonceIsList ? shortListItem() : rlpInt(nonce));
     append(rlpInt(k1559Fee));
@@ -266,9 +263,8 @@ bcos::bytes eip1559BlobExtEnvelope(uint64_t chainId, uint64_t nonce, uint64_t ga
     std::string_view toHex, bcos::u256 value, bcos::bytes const& data)
 {
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(chainId));
     append(rlpInt(nonce));
     append(rlpInt(k1559Fee));
@@ -338,9 +334,8 @@ bcos::bytes blobEnvelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
     std::vector<bcos::h256> const& blobHashes)
 {
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(chainId));
     append(rlpInt(nonce));
     append(rlpInt(k1559Fee));
@@ -366,9 +361,8 @@ bcos::bytes rlpAuthorizationList(bcos::protocol::AuthorizationList const& list)
     for (auto const& auth : list)
     {
         bcos::bytes tuple;
-        auto append = [&tuple](bcos::bytes const& b) {
-            tuple.insert(tuple.end(), b.begin(), b.end());
-        };
+        auto append = [&tuple](
+                          bcos::bytes const& b) { tuple.insert(tuple.end(), b.begin(), b.end()); };
         append(rlpInt(auth.chainId));
         append(rlpString(bcos::bytes(auth.address.data(), auth.address.data() + 20)));
         append(rlpInt(auth.nonce));
@@ -393,9 +387,8 @@ bcos::bytes setCodeEnvelope(uint64_t chainId, uint64_t nonce, uint64_t gasLimit,
     bcos::protocol::AuthorizationList const& authList)
 {
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(chainId));
     append(rlpInt(nonce));
     append(rlpInt(k1559Fee));
@@ -519,8 +512,7 @@ BOOST_AUTO_TEST_CASE(MirrorValueDivergenceRejected)
     // Same bind on the legacy shape.
     FakeTx legacy;
     legacy.m_kind = 0;
-    legacy.m_extraBytes =
-        legacyEnvelope(7, legacy.m_gasLimit, kToHex, legacy.m_value, {});
+    legacy.m_extraBytes = legacyEnvelope(7, legacy.m_gasLimit, kToHex, legacy.m_value, {});
     legacy.fillFeeDefaults();
     legacy.m_value += 1;
     BOOST_REQUIRE(opEthEnvelopeExecutionFieldsMismatch(legacy).has_value());
@@ -630,9 +622,8 @@ BOOST_AUTO_TEST_CASE(NonCanonicalEnvelopeIntegerRejected)
     // 0x00 as a bare byte is not a canonical integer zero (must be 0x80).
     FakeTx tx;
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(kNodeChainId));
     payload.push_back(0x00);  // nonce, non-canonical
     append(rlpInt(k1559Fee));
@@ -658,7 +649,8 @@ BOOST_AUTO_TEST_CASE(ContractCreationEnvelopePasses)
 
     // ...but a creation envelope with a non-empty mirror `to` is a divergence.
     FakeTx forged;
-    forged.m_extraBytes = eip1559Envelope(kNodeChainId, 7, forged.m_gasLimit, "", forged.m_value, {});
+    forged.m_extraBytes =
+        eip1559Envelope(kNodeChainId, 7, forged.m_gasLimit, "", forged.m_value, {});
     forged.fillFeeDefaults();
     auto const err = opEthEnvelopeExecutionFieldsMismatch(forged);
     BOOST_REQUIRE(err.has_value());
@@ -679,9 +671,8 @@ BOOST_AUTO_TEST_CASE(EnvelopeAccessListFullBindPassesAndMismatchRejected)
     FakeTx tx;
     tx.m_accessList = accessList;
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(kNodeChainId));
     append(rlpInt(7));
     append(rlpInt(k1559Fee));
@@ -768,8 +759,8 @@ BOOST_AUTO_TEST_CASE(AuthorizationListContentMismatchRejected)
     FakeTx tx;
     tx.m_kind = 4;
     tx.m_authorizationList = {makeAuth(1)};
-    tx.m_extraBytes = setCodeEnvelope(
-        kNodeChainId, 7, tx.m_gasLimit, kToHex, tx.m_value, {}, {makeAuth(9)});
+    tx.m_extraBytes =
+        setCodeEnvelope(kNodeChainId, 7, tx.m_gasLimit, kToHex, tx.m_value, {}, {makeAuth(9)});
     tx.fillFeeDefaults();
     auto const err = opEthEnvelopeExecutionFieldsMismatch(tx);
     BOOST_REQUIRE(err.has_value());
@@ -880,11 +871,10 @@ BOOST_AUTO_TEST_CASE(LegacyChainIdForms)
         append(rlpInt(1));
         append(rlpInt(2));
         auto env = rlpWrapList(0, payload, false);
-        BOOST_CHECK(!opEthEnvelopeChainIdMismatch(
-                        bcos::bytesConstRef{env.data(), env.size()}, 1)
-                         .has_value());
+        BOOST_CHECK(!opEthEnvelopeChainIdMismatch(bcos::bytesConstRef{env.data(), env.size()}, 1)
+                .has_value());
         BOOST_CHECK(opEthEnvelopeChainIdMismatch(bcos::bytesConstRef{env.data(), env.size()}, 10)
-                        .has_value());
+                .has_value());
     }
     // Malformed v (0/1, 29-34) fails closed, never folded into the unprotected exemption.
     for (uint64_t badV : {0u, 1u, 29u, 30u, 34u})
@@ -923,9 +913,9 @@ BOOST_AUTO_TEST_CASE(DepositEnvelopeSkipsChainIdGate)
     auto const env = bcos::executor_v1::opstack::encodeOpEthDepositEnvelope(dep);
     BOOST_REQUIRE(!env.empty());
     BOOST_CHECK_EQUAL(env.front(), 0x7e);
-    BOOST_CHECK(!opEthEnvelopeChainIdMismatch(
-                    bcos::bytesConstRef{env.data(), env.size()}, kNodeChainId)
-                     .has_value());
+    BOOST_CHECK(
+        !opEthEnvelopeChainIdMismatch(bcos::bytesConstRef{env.data(), env.size()}, kNodeChainId)
+            .has_value());
 }
 
 // The remaining unprotected legacy forms stay exempt: the 6-field EIP-155 preimage
@@ -945,9 +935,9 @@ BOOST_AUTO_TEST_CASE(LegacyUnprotectedPreimageAndV28PassChainIdGate)
         append(rlpInt(5));
         append(rlpString({}));
         auto const env = rlpWrapList(0, payload, false);
-        BOOST_CHECK(!opEthEnvelopeChainIdMismatch(
-                        bcos::bytesConstRef{env.data(), env.size()}, kNodeChainId)
-                         .has_value());
+        BOOST_CHECK(
+            !opEthEnvelopeChainIdMismatch(bcos::bytesConstRef{env.data(), env.size()}, kNodeChainId)
+                .has_value());
     }
     // Full envelope with v=28 → unprotected exemption.
     {
@@ -965,9 +955,9 @@ BOOST_AUTO_TEST_CASE(LegacyUnprotectedPreimageAndV28PassChainIdGate)
         append(rlpInt(1));   // r
         append(rlpInt(2));   // s
         auto const env = rlpWrapList(0, payload, false);
-        BOOST_CHECK(!opEthEnvelopeChainIdMismatch(
-                        bcos::bytesConstRef{env.data(), env.size()}, kNodeChainId)
-                         .has_value());
+        BOOST_CHECK(
+            !opEthEnvelopeChainIdMismatch(bcos::bytesConstRef{env.data(), env.size()}, kNodeChainId)
+                .has_value());
     }
 }
 
@@ -1098,8 +1088,8 @@ BOOST_AUTO_TEST_CASE(ListShapedIntegerFieldsAreRejected)
                              char const* needle) {
         FakeTx tx;
         tx.m_kind = 1;
-        tx.m_extraBytes = accessListEnvelope(kNodeChainId, 7, tx.m_gasLimit, kToHex, tx.m_value,
-            {}, nonceIsList, gasIsList, valueIsList);
+        tx.m_extraBytes = accessListEnvelope(kNodeChainId, 7, tx.m_gasLimit, kToHex, tx.m_value, {},
+            nonceIsList, gasIsList, valueIsList);
         tx.fillFeeDefaults();
         auto const err = opEthEnvelopeExecutionFieldsMismatch(tx);
         BOOST_REQUIRE(err.has_value());
@@ -1145,9 +1135,8 @@ BOOST_AUTO_TEST_CASE(EnvelopeBlobHashesCountMismatchRejected)
 BOOST_AUTO_TEST_CASE(ShortType03EnvelopeFewerFieldsRejected)
 {
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(kNodeChainId));
     append(rlpInt(7));
     append(rlpInt(k1559Fee));
@@ -1188,9 +1177,8 @@ BOOST_AUTO_TEST_CASE(TruncatedAccessListAddressRejected)
     accessListItem.insert(accessListItem.end(), entry.begin(), entry.end());
 
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(kNodeChainId));
     append(rlpInt(7));
     append(rlpInt(kLegacyGasPrice));
@@ -1224,9 +1212,8 @@ BOOST_AUTO_TEST_CASE(TruncatedBlobHashRejected)
     blobListItem.insert(blobListItem.end(), hashItem.begin(), hashItem.end());
 
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(rlpInt(kNodeChainId));
     append(rlpInt(7));
     append(rlpInt(k1559Fee));

@@ -2,18 +2,22 @@
 # Copyright (c) FISCO-BCOS, Apache-2.0
 """
 eest_rpc_runner.py — run EEST (execution-spec-tests v5.4.0) state-test fixtures
-against a live FISCO-BCOS single-node-consensus node via RPC.
+against a live FISCO-BCOS node under the single-node driver ([debug] enable) via RPC.
 
 For each fixture (per fork, per post vector) it:
   1. generates a fresh single-node chain whose genesis reproduces the fixture:
-       - [alloc.*]  = fixture `pre`   (exact world state, L2 mode / op-geth MPT)
+       - [alloc.*]  = fixture `pre`   (exact world state, L2 mode / op-geth MPT), plus the
+         EIP-7002/7251 request contracts from Prague on (PRAGUE_SYSTEM_CONTRACTS)
        - [tx] gas_limit / gas_price   = fixture env.currentGasLimit / currentBaseFee
-       - [executor] version=2 evm_revision=<fork>
-       - [consensus] enable_single_node_consensus=true, produce_empty_blocks=false,
+       - [executor] version=2
+       - [fork_timestamps] = every fork up to <fork> at 0, the rest in the future: the
+         chain's only EVM revision source (block building, the RPC dry run); pre-Paris
+         forks are skipped (no PoW blocks)
+       - config.ini [debug] enable=true, produce_empty_blocks=false,
          prev_randao=<env.currentRandom>, fixed_timestamp=<env.currentTimestamp>,
          fee_recipient=<env.currentCoinbase>
   2. starts the node and submits the fixture transaction(s) via eth_sendRawTransaction
-     (mempool -> single-node driver -> BaselineScheduler commit);
+     (mempool -> single-node driver -> EngineService commit);
   3. compares the resulting post state (accounts) via eth_getBalance / eth_getCode /
      eth_getTransactionCount / eth_getStorageAt against the fixture's expected `post`.
 
@@ -42,7 +46,7 @@ import requests
 from eth_account import Account
 
 # ----------------------------------------------------------------------------- forks
-# EEST state-test fork names -> evmc revision (v2 executor evm_revision).
+# EEST state-test fork names -> evmc revision names (the [fork_timestamps] ladder rung).
 # NB: EEST "ConstantinopleFix" is Petersburg: the original Constantinople's
 # EIP-1283 (net gas metering) was reverted, so it must map to EVMC_PETERSBURG.
 # Mapping it to "constantinople" makes SSTORE billing diverge (observed: the
@@ -149,18 +153,63 @@ def rev_at_least(rev, name):
     return ERA_ORDER.index(rev) >= ERA_ORDER.index(name)
 
 
+# [fork_timestamps] keys in ladder order. The v2 block drivers build PoS blocks only, so the
+# ladder starts at london+paris (both required); forks after <fork> are scheduled in the
+# future (2100-01-01) or, for the optional osaka, left out.
+FORK_TIMESTAMP_KEYS = [("london", "london_time"), ("paris", "paris_time"),
+                       ("shanghai", "shanghai_time"), ("cancun", "cancun_time"),
+                       ("prague", "prague_time"), ("osaka", "osaka_time")]
+FUTURE_FORK_TIME = 4102444800
+
+
+def fork_timestamps_section(fork_rev):
+    lines = ["[fork_timestamps]"]
+    for rev, key in FORK_TIMESTAMP_KEYS:
+        if rev_at_least(fork_rev, rev):
+            lines.append(f"    {key}=0")
+        elif rev != "osaka":
+            lines.append(f"    {key}={FUTURE_FORK_TIME}")
+    lines.append("    merge_block=0")
+    return "\n".join(lines) + "\n"
+
+
+# EIP-7002 / EIP-7251 request contracts. A state test's `pre` omits them (state tests run no
+# system calls), but a Prague block cannot be built without them: the block-end system calls
+# fail on missing code (EIP-7002/7251). Their runtime code and nonce are the ones EEST's own
+# blockchain-test `pre` carries (v5.4.0, e.g. prague/eip7702_set_code_tx).
+PRAGUE_SYSTEM_CONTRACTS = {
+    "0x00000961ef480eb55e80d19ad83579a64c007002": {
+        "nonce": "0x01", "balance": "0x00",
+        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460cb5760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff146101f457600182026001905f5b5f82111560685781019083028483029004916001019190604d565b909390049250505036603814608857366101f457346101f4575f5260205ff35b34106101f457600154600101600155600354806003026004013381556001015f35815560010160203590553360601b5f5260385f601437604c5fa0600101600355005b6003546002548082038060101160df575060105b5f5b8181146101835782810160030260040181604c02815460601b8152601401816001015481526020019060020154807fffffffffffffffffffffffffffffffff00000000000000000000000000000000168252906010019060401c908160381c81600701538160301c81600601538160281c81600501538160201c81600401538160181c81600301538160101c81600201538160081c81600101535360010160e1565b910180921461019557906002556101a0565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14156101cd57505f5b6001546002828201116101e25750505f6101e8565b01600290035b5f555f600155604c025ff35b5f5ffd"},
+    "0x0000bbddc7ce488642fb579f8b00f3a590007251": {
+        "nonce": "0x01", "balance": "0x00",
+        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004916001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57600154600101600155600354806004026004013381556001015f358155600101602035815560010160403590553360601b5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101295782810160040260040181607402815460601b815260140181600101548152602001816002015481526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd"},
+}
+
+
+def chain_pre(fixture, fork_rev):
+    """The fixture `pre` plus, from Prague on, the request contracts it does not carry."""
+    pre = dict(fixture.pre)
+    if rev_at_least(fork_rev, "prague"):
+        known = {a.lower() for a in pre}
+        for addr, acc in PRAGUE_SYSTEM_CONTRACTS.items():
+            if addr not in known:
+                pre[addr] = acc
+    return pre
+
+
 def _hx(value):
     """Fixture hex quantity -> int."""
     return int(value, 16) if isinstance(value, str) else int(value)
 
 
-def genesis_state_root(workdir, fixture, sync_check_binary):
+def genesis_state_root(workdir, fixture, fork_rev, sync_check_binary):
     """Derive the alloc MPT root with the node's own trie builder. The --genesis JSON
     path is used (NOT --genesis-ini): the INI path goes through NodeConfig, whose
     validateL2Invariants already refuses a header-less genesis — chicken-and-egg.
     eth-sync-check --genesis prints 'genesis stateRoot: <hex> ...'."""
     alloc = {}
-    for addr, acc in fixture.pre.items():
+    for addr, acc in chain_pre(fixture, fork_rev).items():
         entry = {"balance": acc.get("balance", "0x0"), "nonce": acc.get("nonce", "0x0"),
                  "code": acc.get("code", "0x")}
         storage = acc.get("storage", {})
@@ -216,9 +265,12 @@ def eth_genesis_header_section(fixture, fork_rev, state_root):
     add_quantity("difficulty", 0)
     add_quantity("number", 0)
     add_quantity("gas_limit", env.get("currentGasLimit", "0x0"))
-    add_quantity("gas_used", 0)
-    # B0 predates the test block; the exact delta is irrelevant (the executor's
-    # revision comes from [executor] evm_revision, not the header timestamp).
+    # The block driver derives the next base fee from this header by the EIP-1559 rule;
+    # B0 at exactly the gas target keeps it at currentBaseFee for the test block.
+    add_quantity("gas_used", _hx(env.get("currentGasLimit", "0x0")) // 2
+                 if rev_at_least(fork_rev, "london") else 0)
+    # B0 predates the test block; the exact delta is irrelevant (every fork up to the
+    # fixture's is scheduled at 0 in [fork_timestamps]).
     add_quantity("timestamp", max(0, _hx(env.get("currentTimestamp", "0x0")) - 12))
     add_bytes("extra_data", "0x")
     add_bytes("mix_hash", "0x" + "00" * 32)
@@ -267,7 +319,7 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     # ----- config.genesis -----
     allocs = []
     idx = 0
-    for addr, acc in fixture.pre.items():
+    for addr, acc in chain_pre(fixture, fork_rev).items():
         # balance / nonce must be decimal in config.genesis (requireDecimalField); the
         # fixture carries them as hex.
         allocs.append(f"[alloc.{idx}]\n    address={addr}\n")
@@ -286,32 +338,26 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
         idx += 1
 
     # EEST fixtures sign authorizations / EIP-155 payloads with their own
-    # configured chain id (config.chainid, usually 0x01). The node's [web3]
-    # chain_id MUST match: processAuthorizationList (EIP-7702) compares each
-    # authorization's chain_id against the node's chain id, and a mismatch
-    # silently skips the authorization (observed: 7702 delegation code never
-    # written for chainid=0x01 fixtures against the old hardcoded 20200).
+    # configured chain id (config.chainid, usually 0x01). The node's [chain]
+    # chain_id (the v2 lane's only chain id) MUST match: processAuthorizationList
+    # (EIP-7702) compares each authorization's chain_id against the node's chain
+    # id, and a mismatch silently skips the authorization (observed: 7702
+    # delegation code never written for chainid=0x01 fixtures against the old
+    # hardcoded 20200).
     web3_chain_id = int(fixture.config.get("chainid"), 16) if fixture.config.get("chainid") else 20200
 
     genesis = f"""[chain]
     sm_crypto=false
     group_id=group0
-    chain_id=chain0
-
-[web3]
     chain_id={web3_chain_id}
 
 [consensus]
     consensus_type=pbft
     block_tx_count_limit=1000
-    consensus_timeout=3000
     leader_period=1
     epoch_sealer_num=4
     epoch_block_num=1000
     node.0=179895f679d850ae7e60e245ecee2ad89c625017666368e5b226bc0a894074520dc9c7be1a14e05b77482da1792c54a14f1d4c0581676e4e0081209db53093da: 1
-
-[version]
-    compatibility_version=3.18.0
 
 [tx]
     gas_limit={gas_limit}
@@ -323,22 +369,21 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     auth_admin_account=0x0000000000000000000000000000000000000000
     is_serial_execute=true
     version=2
-    evm_revision={fork_rev}
 
-""" + "\n".join(allocs)
+""" + fork_timestamps_section(fork_rev) + "\n" + "\n".join(allocs)
     (workdir / "config.genesis").write_text(genesis)
 
     # [eth_genesis_header] is mandatory on the Ethereum lane (executor_version >= 2,
     # upstream #5420): derive the alloc state root with the node's own trie builder and
     # append a self-consistent B0 header section.
-    state_root = genesis_state_root(workdir, fixture, SYNC_CHECK_BINARY)
+    state_root = genesis_state_root(workdir, fixture, fork_rev, SYNC_CHECK_BINARY)
     with open(workdir / "config.genesis", "a") as fh:
         fh.write(eth_genesis_header_section(fixture, fork_rev, state_root))
 
     # ----- config.ini -----
     # Use the full single-node template (the smoke node's config.ini) as the base —
     # a hand-written minimal config.ini broke L2 alloc import (balance/nonce/storage
-    # read back as 0). Patch only ports + single-node consensus keys.
+    # read back as 0). Patch only ports + the [debug] keys.
     tmpl_ini = (Path(__file__).resolve().parent.parent / "tools/nodes/127.0.0.1/node0"
                 / "config.ini")
     if not tmpl_ini.exists():
@@ -370,39 +415,26 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     ini = patch_section(ini, "p2p", "listen_port", p2p_port)
     ini = patch_section(ini, "rpc", "listen_port", legacy_port)
 
-    # Single-node consensus keys. patch_section() above only rewrites keys that
-    # ALREADY exist; the template is regenerated by build_chain.sh (the smoke CI
-    # scripts) and may not carry the single-node mode at all, so the enable flag
-    # itself can be absent. Ensure every key the harness needs is present, inserting
-    # any missing ones into [consensus] right after `min_seal_time` (the first key
-    # of a freshly-built template), or at the end of the [consensus] block as a
-    # fallback. Without this the node runs in plain pbft mode and never produces a
-    # block (EEST "no receipt" failures).
-    sn_keys = [("enable_single_node_consensus", "true"),
-               ("block_interval", "1000"),
-               ("produce_empty_blocks", "false"),
-               ("prev_randao", prev_randao),
-               ("fixed_timestamp", fixed_ts),
-               ("fee_recipient", coinbase)]
-    ini = patch_section(ini, "consensus", "block_interval", "1000")
-    ini = patch_section(ini, "consensus", "produce_empty_blocks", "false")
-    ini = patch_section(ini, "consensus", "prev_randao", prev_randao)
-    ini = patch_section(ini, "consensus", "fixed_timestamp", fixed_ts)
-    missing = [(k, v) for k, v in sn_keys if f"{k}=" not in ini]
-    if missing:
-        lines = ini.splitlines()
-        out, in_sec, inserted = [], False, False
-        for line in lines:
-            s = line.strip()
-            if s.startswith("[") and s.endswith("]"):
-                in_sec = (s[1:-1].strip() == "consensus")
+    # The single-node driver: the hidden [debug] section, which no template carries
+    # (a template that already has one, e.g. a smoke CI node, gets it replaced).
+    # Without it a v2 node waits for a consensus client and never produces a block
+    # (EEST "no receipt" failures).
+    debug_keys = [("enable", "true"),
+                  ("block_interval", "1000"),
+                  ("produce_empty_blocks", "false"),
+                  ("prev_randao", prev_randao),
+                  ("fixed_timestamp", fixed_ts),
+                  ("fee_recipient", coinbase)]
+    out, in_debug = [], False
+    for line in ini.splitlines():
+        s = line.strip()
+        if s.startswith("[") and s.endswith("]"):
+            in_debug = (s[1:-1].strip() == "debug")
+        if not in_debug:
             out.append(line)
-            # Insert the missing keys right after the first [consensus] line.
-            if in_sec and not inserted and s.startswith("[consensus]"):
-                for k, v in missing:
-                    out.append(f"    {k}={v}")
-                inserted = True
-        ini = "\n".join(out)
+    out.append("[debug]")
+    out.extend(f"    {k}={v}" for k, v in debug_keys)
+    ini = "\n".join(out) + "\n"
     (workdir / "config.ini").write_text(ini)
 
 
@@ -827,6 +859,11 @@ def run_one_fixture(args, fixture, fork_key, post_entry, workdir, idx):
     fork_rev = fork_key_to_rev(fork_key)
     if not fork_rev:
         return None  # unsupported fork, skip
+    if not rev_at_least(fork_rev, "paris"):
+        # The v2 block drivers build PoS blocks under [fork_timestamps], whose ladder
+        # starts at the merge: a pre-Paris environment cannot be reproduced.
+        return ("SKIP", f"pre-Paris fork {fork_rev}: the v2 block drivers build PoS blocks "
+                "only", workdir.name)
     try:
         gen_config(workdir, fixture, fork_rev, idx, port_offset=args.port_offset)
     except RuntimeError as exc:

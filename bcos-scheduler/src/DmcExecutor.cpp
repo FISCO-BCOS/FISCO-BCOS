@@ -29,8 +29,7 @@ bool DmcExecutor::hasFinished()
     return m_executivePool.empty();
 }
 
-void DmcExecutor::setSchedulerOutHandler(
-    std::function<void(ExecutiveState::Ptr)> onSchedulerOut)
+void DmcExecutor::setSchedulerOutHandler(std::function<void(ExecutiveState::Ptr)> onSchedulerOut)
 {
     f_onSchedulerOut = std::move(onSchedulerOut);
 }
@@ -46,14 +45,12 @@ void DmcExecutor::setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitch
     f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
 }
 
-void DmcExecutor::setOnGetCodeHandler(
-    std::function<bcos::bytes(std::string_view)> onGetCodeEvent)
+void DmcExecutor::setOnGetCodeHandler(std::function<bcos::bytes(std::string_view)> onGetCodeEvent)
 {
     f_onGetCodeEvent = std::move(onGetCodeEvent);
 }
 
-void DmcExecutor::setGetAddrHandler(
-    std::function<std::string(const std::string_view&)> getFromFunc)
+void DmcExecutor::setGetAddrHandler(std::function<std::string(const std::string_view&)> getFromFunc)
 {
     f_getAddr = std::move(getFromFunc);
 }
@@ -66,8 +63,7 @@ void DmcExecutor::triggerSwitch()
     }
 }
 
-void DmcExecutor::forEachExecutive(
-    std::function<void(ContextID, ExecutiveState::Ptr)> handler)
+void DmcExecutor::forEachExecutive(std::function<void(ContextID, ExecutiveState::Ptr)> handler)
 {
     m_executivePool.forEach(ExecutivePool::MessageHint::ALL,
         [handler = std::move(handler)](ContextID contextID, ExecutiveState::Ptr executiveState) {
@@ -76,8 +72,7 @@ void DmcExecutor::forEachExecutive(
         });
 }
 
-void DmcExecutor::preExecute()
-{}
+void DmcExecutor::preExecute() {}
 
 bool DmcExecutor::hasContractTableChanged()
 {
@@ -438,14 +433,13 @@ void DmcExecutor::handleCreateMessage(
             auto newSeq = currentSeq;
             if (message->createSalt())
             {
-                message->setTo(
-                    newCreate2EVMAddress(message->from(), message->data(), *(message->createSalt())));
+                message->setTo(newCreate2EVMAddress(
+                    message->from(), message->data(), *(message->createSalt())));
             }
             else
             {
                 // Note: no need to compatible with EIP-86, because dmc not compatible to eth
-                message->setTo(
-                    newEVMAddress(m_block->blockHeader()->number(), contextID, newSeq));
+                message->setTo(newEVMAddress(m_block->blockHeader()->number(), contextID, newSeq));
             }
         }
         break;

@@ -25,16 +25,16 @@
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
-#include "bcos-framework/executor/ExecutionMessage.h"
-#include "bcos-table/src/StateStorageFactory.h"
-#include "executor/TransactionExecutor.h"
-#include "executor/TransactionExecutorFactory.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
+#include "bcos-table/src/StateStorageFactory.h"
+#include "executor/TransactionExecutor.h"
+#include "executor/TransactionExecutorFactory.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -73,15 +73,11 @@ struct DagExecutorFixture
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         auto secretKeyBytes =
             fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
-        memcpy(keyPair->secretKey()->mutableData(),
-            secretKeyBytes.data(),
-            32);
+        memcpy(keyPair->secretKey()->mutableData(), secretKeyBytes.data(), 32);
         auto publicKeyBytes = fromHex(
             "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
             "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae");
-        memcpy(keyPair->publicKey()->mutableData(),
-            publicKeyBytes.data(),
-            64);
+        memcpy(keyPair->publicKey()->mutableData(), publicKeyBytes.data(), 64);
         createSysTable();
     }
     ~DagExecutorFixture() { boost::log::core::get()->set_logging_enabled(true); }

@@ -25,13 +25,14 @@
 #pragma once
 #include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
-#include <rocksdb/statistics.h>
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
 #include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-framework/storage/StorageInterface.h>
-#include <boost/filesystem.hpp>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/LogStream.h>
+#include <rocksdb/statistics.h>
+#include <boost/filesystem.hpp>
 
 namespace bcos::initializer
 {
@@ -106,8 +107,7 @@ public:
         }
 
         // open DB
-        bcos::storage2::rocksdb::detail::warnIfMaxOpenFilesUnbounded(
-            options.max_open_files, _path);
+        bcos::storage2::rocksdb::detail::warnIfMaxOpenFilesUnbounded(options.max_open_files, _path);
         rocksdb::Status status = rocksdb::DB::Open(options, _path, &db);
         if (!status.ok())
         {
@@ -120,9 +120,7 @@ public:
                     "; max_open_files=-1 keeps every touched SST open — if this is 'Too many "
                     "open files', raise the nofile ulimit or bound the table cache with "
                     "[storage].rocksdb_max_open_files (soft rlimit_nofile=" +
-                    std::to_string(
-                        bcos::storage2::rocksdb::detail::softOpenFileLimit()) +
-                    ")";
+                    std::to_string(bcos::storage2::rocksdb::detail::softOpenFileLimit()) + ")";
             }
             throw std::runtime_error(message);
         }

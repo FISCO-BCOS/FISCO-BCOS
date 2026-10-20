@@ -21,8 +21,9 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyPairFactory.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
-#include <memory>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/LogStream.h>
+#include <memory>
 namespace bcos
 {
 namespace crypto

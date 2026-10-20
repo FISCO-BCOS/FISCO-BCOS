@@ -23,9 +23,9 @@
 #include "bcos-devp2p/rlpx/Client.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
+#include <json/json.h>
 #include <boost/throw_exception.hpp>
 #include <fstream>
-#include <json/json.h>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -49,9 +49,8 @@ inline bcos::devp2p::rlpx::PeerConfig parseEnode(std::string const& enode)
     auto at = rest.find('@');
     if (at == std::string_view::npos)
     {
-        BOOST_THROW_EXCEPTION(
-            std::invalid_argument("parseEnode: missing '@' (expected enode://<pubkey>@<host>:<port>): " +
-                                  enode));
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            "parseEnode: missing '@' (expected enode://<pubkey>@<host>:<port>): " + enode));
     }
     auto pubHex = rest.substr(0, at);
     // geth enodes carry the 64-byte uncompressed secp256k1 public key
@@ -113,8 +112,7 @@ inline std::vector<bcos::devp2p::rlpx::PeerConfig> loadBootnodes(std::string con
     Json::Reader reader;
     if (!reader.parse(ss.str(), root))
     {
-        BOOST_THROW_EXCEPTION(
-            std::invalid_argument("loadBootnodes: invalid JSON in " + path));
+        BOOST_THROW_EXCEPTION(std::invalid_argument("loadBootnodes: invalid JSON in " + path));
     }
     Json::Value arr;
     if (root.isArray())

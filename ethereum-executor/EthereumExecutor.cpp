@@ -36,8 +36,8 @@ EthBlockInfo buildBlockInfo(
         auto const headerRandao = header.prevRandao();
         if (headerRandao != bcos::h256{})
         {
-            std::copy_n(headerRandao.data(), sizeof(info.prev_randao.bytes),
-                info.prev_randao.bytes);
+            std::copy_n(
+                headerRandao.data(), sizeof(info.prev_randao.bytes), info.prev_randao.bytes);
         }
         else
         {

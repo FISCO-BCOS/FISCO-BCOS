@@ -13,6 +13,7 @@
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"  // for SessionCallbackFunc...
 #include "bcos-gateway/libp2p/P2PSession.h"    // for P2PSession
+#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/LogStream.h"
 #include <bcos-task/Wait.h>
@@ -144,23 +145,23 @@ void Service::heartBeat()
         // detached: each reconnect runs in its own coroutine so a stalled connect cannot block the
         // heartBeat pass; the connection result is fed to onConnect exactly like the old callback
         // (error-only on failure; success carries the established session)
-        task::wait([](std::shared_ptr<Service> _service,
-                       NodeIPEndpoint _endpoint) -> task::Task<void> {
-            try
-            {
-                auto [error, p2pInfo, session] = co_await _service->m_host->connect(_endpoint);
-                if (session || error.errorCode() != 0)
+        task::wait(
+            [](std::shared_ptr<Service> _service, NodeIPEndpoint _endpoint) -> task::Task<void> {
+                try
                 {
-                    _service->onConnect(std::move(error), p2pInfo, std::move(session));
+                    auto [error, p2pInfo, session] = co_await _service->m_host->connect(_endpoint);
+                    if (session || error.errorCode() != 0)
+                    {
+                        _service->onConnect(std::move(error), p2pInfo, std::move(session));
+                    }
                 }
-            }
-            catch (std::exception const& e)
-            {
-                SERVICE_LOG(WARNING) << LOG_DESC("heartBeat reconnect exception")
-                                     << LOG_KV("endpoint", _endpoint)
-                                     << LOG_KV("what", boost::diagnostic_information(e));
-            }
-        }(shared_from_this(), it.first));
+                catch (std::exception const& e)
+                {
+                    SERVICE_LOG(WARNING) << LOG_DESC("heartBeat reconnect exception")
+                                         << LOG_KV("endpoint", _endpoint)
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                }
+            }(shared_from_this(), it.first));
     }
 
     std::shared_lock sessionLock(x_sessions);
@@ -352,8 +353,8 @@ void Service::sendRespMessageBySession(bytesConstRef _payload, uint32_t _request
     // value message in frame; the (borrowed) response payload is copied into the frame because the
     // receive callback that passed it does not outlive the deferred send. The session/service are
     // passed as coroutine parameters so they are copied into the frame.
-    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
-                   bcos::bytes _payload, uint32_t _seq, P2pID _p2pid) -> task::Task<void> {
+    task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession, bcos::bytes _payload,
+                   uint32_t _seq, P2pID _p2pid) -> task::Task<void> {
         try
         {
             Message respMessage;
@@ -434,8 +435,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message me
             // TODO:  For p2p basic message type, direct discard request ???
             SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message")
                                << LOG_DESC(error.errorMessage())
-                               << LOG_KV("endpoint", nodeIPEndpoint)
-                               << LOG_KV("seq", message.seq())
+                               << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("seq", message.seq())
                                << LOG_KV("version", message.version())
                                << LOG_KV("packetType", message.packetType());
             return;
@@ -445,8 +445,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message me
         {
             SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message")
                                << LOG_KV("p2pid", printShortP2pID(p2pID))
-                               << LOG_KV("endpoint", nodeIPEndpoint)
-                               << LOG_KV("seq", message.seq())
+                               << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("seq", message.seq())
                                << LOG_KV("version", message.version())
                                << LOG_KV("packetType", message.packetType());
         }
@@ -575,8 +574,8 @@ bool Service::isConnected(P2pID const& nodeID) const
     return session && session->active();
 }
 
-bcos::task::Task<void> Service::sendMessageByNodeIDs(uint16_t _type,
-    const std::vector<P2pID>& _nodeIDs, bcos::bytes _payload, Options _options)
+bcos::task::Task<void> Service::sendMessageByNodeIDs(
+    uint16_t _type, const std::vector<P2pID>& _nodeIDs, bcos::bytes _payload, Options _options)
 {
     // value message held by shared_ptr: fan out one independent coroutine per node, so a stalled
     // peer's socket write cannot delay delivery to the peers behind it (same head-of-line-blocking
@@ -595,8 +594,7 @@ bcos::task::Task<void> Service::sendMessageByNodeIDs(uint16_t _type,
             try
             {
                 co_await _self->sendMessageByNodeID(_nodeID, *_message,
-                    ::ranges::views::single(_message->payload()),
-                    Options{_options.timeout, false});
+                    ::ranges::views::single(_message->payload()), Options{_options.timeout, false});
             }
             catch (NetworkException const& e)
             {
@@ -879,8 +877,8 @@ void bcos::gateway::Service::eraseHandlerByMsgType(uint16_t _type)
 {
     m_msgHandlers.at(_type) = nullptr;
 }
-void bcos::gateway::Service::setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-    SessionFace&, const Message&, uint32_t)> _handler)
+void bcos::gateway::Service::setBeforeMessageHandler(
+    std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)> _handler)
 {
     m_beforeMessageHandler = std::move(_handler);
 }

@@ -47,7 +47,7 @@ public:
         bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory,
         bcos::protocol::TransactionFactory::Ptr transactionFactory,
         bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory)
-      : BlockFactoryImpl(cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory){};
+      : BlockFactoryImpl(cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory) {};
 
     ~MockBlockFactory() override = default;
 

@@ -60,8 +60,8 @@ BOOST_AUTO_TEST_CASE(parseEnodeBadPrefix)
 BOOST_AUTO_TEST_CASE(parseEnodeMissingAt)
 {
     std::string pubkey(128, 'd');
-    BOOST_CHECK_THROW(sync::parseEnode("enode://" + pubkey + "1.2.3.4:30303"),
-        std::invalid_argument);
+    BOOST_CHECK_THROW(
+        sync::parseEnode("enode://" + pubkey + "1.2.3.4:30303"), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_CASE(parseEnodeBadPort)
@@ -76,11 +76,11 @@ BOOST_AUTO_TEST_CASE(parseEnodeBadPort)
 BOOST_AUTO_TEST_CASE(parseEnodeBadPubkeyLength)
 {
     std::string shortPubkey(126, 'a');  // 63 bytes
-    BOOST_CHECK_THROW(sync::parseEnode("enode://" + shortPubkey + "@1.2.3.4:30303"),
-        std::invalid_argument);
+    BOOST_CHECK_THROW(
+        sync::parseEnode("enode://" + shortPubkey + "@1.2.3.4:30303"), std::invalid_argument);
     std::string longPubkey(130, 'a');  // 65 bytes
-    BOOST_CHECK_THROW(sync::parseEnode("enode://" + longPubkey + "@1.2.3.4:30303"),
-        std::invalid_argument);
+    BOOST_CHECK_THROW(
+        sync::parseEnode("enode://" + longPubkey + "@1.2.3.4:30303"), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_CASE(loadBootnodesArray)

@@ -239,6 +239,9 @@ struct AdmitHarness
     /// Default {} is allow=false: blob envelopes stay refused unless a case opts in, matching
     /// the chains most tests describe.
     BlobPolicy blobPolicy{};
+    /// The L1 EL lane's revision source; empty = the snapshot's own revision decides, as on
+    /// every other lane.
+    ledger::EvmcRevisionSchedule revisionSchedule;
     AccountState account{};
     bool accountExists = true;
     /// The OP rollup cost the bound RollupCostFn answers; nullopt = bind nothing, as on the
@@ -306,9 +309,9 @@ struct AdmitHarness
         auto cryptoSuite =
             std::make_shared<crypto::CryptoSuite>(std::make_shared<crypto::Keccak256>(),
                 std::make_shared<crypto::Secp256k1Crypto>(), nullptr);
-        auto validator =
-            std::make_unique<CodeInjectingValidator>(cryptoSuite, ledger, ledgerConfigState,
-                txPoolNonceChecker, web3NonceChecker, isSystemTx, "group0", "chain0", blobPolicy);
+        auto validator = std::make_unique<CodeInjectingValidator>(cryptoSuite, ledger,
+            ledgerConfigState, txPoolNonceChecker, web3NonceChecker, isSystemTx, "group0", "chain0",
+            blobPolicy, revisionSchedule);
         validator->code = account.code;
         validator->setScheduler(scheduler);
         if (rollupCost)

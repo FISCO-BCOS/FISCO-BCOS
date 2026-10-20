@@ -23,9 +23,10 @@
 #include "bcos-tars-protocol/tars/GatewayService.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <range/v3/view/any_view.hpp>
 #include <string>
-#include <bcos-utilities/LogStream.h>
 
 #define GATEWAYCLIENT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYCLIENT][INITIALIZER]"
 #define GATEWAYCLIENT_BADGE "[GATEWAYCLIENT]"
@@ -69,8 +70,8 @@ public:
     bcos::task::Task<bcos::Error::Ptr> subscribeTopic(
         std::string const& _clientID, std::string const& _topicInfo) override;
 
-    bcos::task::Task<bcos::Error::Ptr> removeTopic(std::string const& _clientID,
-        std::vector<std::string> const& _topicList) override;
+    bcos::task::Task<bcos::Error::Ptr> removeTopic(
+        std::string const& _clientID, std::vector<std::string> const& _topicList) override;
 
     bcostars::GatewayServicePrx prx();
 

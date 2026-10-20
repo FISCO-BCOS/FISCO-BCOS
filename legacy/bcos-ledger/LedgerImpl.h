@@ -15,8 +15,8 @@
 #include <bcos-ledger/Ledger.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/VersionConverter.h>
-#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>
@@ -193,7 +193,8 @@ protected:
         co_return abiStr;
     }
 
-    task::Task<void> impl_getTransactions(::ranges::range auto const& hashes, ::ranges::range auto& out)
+    task::Task<void> impl_getTransactions(
+        ::ranges::range auto const& hashes, ::ranges::range auto& out)
     {
         bcos::concepts::resizeTo(out, ::ranges::size(hashes));
         using DataType = ::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>;

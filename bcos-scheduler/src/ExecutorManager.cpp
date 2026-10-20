@@ -233,12 +233,13 @@ bool ExecutorManager::removeExecutor(const std::string_view& name)
         auto& executorInfo = it->second;
 
         for (auto contractIt = executorInfo->contracts.begin();
-             contractIt != executorInfo->contracts.end(); ++contractIt)
+            contractIt != executorInfo->contracts.end(); ++contractIt)
         {
             auto count = m_contract2ExecutorInfo.unsafe_erase(*contractIt);
             if (count < 1)
             {
-                BOOST_THROW_EXCEPTION(bcos::Exception{} << errinfo_comment("Can't find contract in container"));
+                BOOST_THROW_EXCEPTION(
+                    bcos::Exception{} << errinfo_comment("Can't find contract in container"));
             }
         }
 

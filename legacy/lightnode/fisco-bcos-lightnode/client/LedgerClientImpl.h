@@ -2,26 +2,27 @@
 
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 
+#include "../../../concepts/bcos-concepts/ledger/Ledger.h"
+#include "../../bcos-lightnode/Log.h"
 #include "P2PClientImpl.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Serialize.h>
-#include "../../../concepts/bcos-concepts/ledger/Ledger.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/Gateway.h>
-#include "../../bcos-lightnode/Log.h"
 #include <bcos-tars-protocol/tars/LightNode.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <iterator>
+#include <random>
 #include <range/v3/algorithm/move.hpp>
 #include <range/v3/range/access.hpp>
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/range/traits.hpp>
-#include <random>
 #include <stdexcept>
 #include <type_traits>
-#include <bcos-utilities/LogStream.h>
 
 namespace bcos::ledger
 {
@@ -177,8 +178,8 @@ private:
         if constexpr (bcos::concepts::transaction::Transaction<DataType>)
         {
             bcos::concepts::resizeTo(out, response.transactions.size());
-            ::ranges::move(::ranges::begin(response.transactions), ::ranges::end(response.transactions),
-                ::ranges::begin(out));
+            ::ranges::move(::ranges::begin(response.transactions),
+                ::ranges::end(response.transactions), ::ranges::begin(out));
         }
         else
         {

@@ -39,7 +39,7 @@ public:
     using UniquePtr = std::unique_ptr<const GatewayRateLimiter>;
 
     GatewayRateLimiter(ratelimiter::RateLimiterManager::Ptr& _rateLimiterManager,
-                ratelimiter::RateLimiterStat::Ptr& _rateLimiterStat);
+        ratelimiter::RateLimiterStat::Ptr& _rateLimiterStat);
 
     GatewayRateLimiter(GatewayRateLimiter&&) = delete;
     GatewayRateLimiter(const GatewayRateLimiter&) = delete;

@@ -31,8 +31,7 @@ log "calling SystemConfig.getValueByKey(\"chain_id\")"
 ret="$(eth_call "${SYSTEM_CONFIG_ADDR}" "${CALLDATA_GET_CHAIN_ID}")"
 ret_len="$(hex_byte_len "${ret}")"
 # getValueByKey returns (value uint192, enableNumber uint64) = 2 ABI words =
-# 64 bytes. chain_id == 0 is rejected by the C++ L2ConfigLoader (breaks
-# EIP-155), so a zero word 0 here means the genesis allocs never seeded the
+# 64 bytes. A zero word 0 here means the genesis allocs never seeded the
 # chain_id slot.
 if [[ "${ret_len}" -ne 64 ]]; then
     fail "getValueByKey(\"chain_id\") returned ${ret_len} bytes, expected 64"

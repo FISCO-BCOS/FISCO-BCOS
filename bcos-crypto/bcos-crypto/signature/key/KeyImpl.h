@@ -47,7 +47,7 @@ public:
         m_keyData = data.toBytes();
     }
     KeyImpl(size_t _keySize, const std::shared_ptr<const bytes>& data)
-      : KeyImpl(_keySize, ref(*data)){};
+      : KeyImpl(_keySize, ref(*data)) {};
 
     ~KeyImpl() noexcept override = default;
 

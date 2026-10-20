@@ -349,8 +349,7 @@ bcos::protocol::EthBlockHeaderData makeEthHeaderBase(
 /// Fill the announced commitment fields from a probe result, preserving the fork's field
 /// PRESENCE (an optional stays unset when the probe reports it absent). Both the probe and
 /// verifyAndCommit report the new-layer OpEthBlockCommitments.
-void fillCommitments(
-    bcos::protocol::EthBlockHeaderData& d, opeth::OpEthBlockCommitments const& c)
+void fillCommitments(bcos::protocol::EthBlockHeaderData& d, opeth::OpEthBlockCommitments const& c)
 {
     d.stateRoot = c.stateRoot;
     d.txsRoot = c.txRoot;
@@ -382,18 +381,16 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
     auto const number = ethHeader.number;
     // The p2p header timestamp is SECONDS (EthBlockHeaderData keeps the Ethereum RLP domain) —
     // the same conversion-free fork resolution OpBlockVerifier::verifyAndCommit step 2 runs.
-    const auto spec = opeth::opForkSpecAt(f.forkSchedule, static_cast<uint64_t>(ethHeader.timestamp));
+    const auto spec =
+        opeth::opForkSpecAt(f.forkSchedule, static_cast<uint64_t>(ethHeader.timestamp));
     auto header = vdetail::projectOpP2pHeader(ethHeader, *f.blockFactory);
 
-    bcos::ledger::Features features;
-    bcos::task::syncWait(bcos::ledger::readFromStorage(features, view, number));
     bcos::ledger::LedgerConfig execLedgerConfig;
     execLedgerConfig.setBlockNumber(number);
     // Mirror OpBlockVerifier::verifyAndCommit: the executor_version is pinned to the OP lane
     // (computeMptStateDelta's l2Mode and the parent-root rule branch on it).
     execLedgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
     execLedgerConfig.setEVMCRevision(spec.rev);
-    execLedgerConfig.setFeatures(features);
 
     std::vector<bcos::protocol::Transaction::Ptr> transactions;
     std::vector<bcos::bytesConstRef> rawRefs;
@@ -426,16 +423,19 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
     bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);
     auto transactionsRefs =
-        transactions | ::ranges::views::transform([](bcos::protocol::Transaction::Ptr const& ptr)
-                           -> bcos::protocol::Transaction const& { return *ptr; });
+        transactions |
+        ::ranges::views::transform(
+            [](bcos::protocol::Transaction::Ptr const& ptr) -> bcos::protocol::Transaction const& {
+                return *ptr;
+            });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         view, executor, *header, transactionsRefs, execLedgerConfig, ctx));
     auto opResult = bcos::task::syncWait(
         opeth::finalizeOpEthBlockResult(view, *header, execLedgerConfig, spec, sharedError,
             receipts, rawRefs, ctx.cumulativeGasUsed, hashErr, /*skipStateRootBuild=*/true));
 
-    auto const parentRoot = bcos::task::syncWait(bcos::ledger::mpt::parentStateRootFor(
-        view, bcos::ledger::OPSTACK_EXECUTOR_VERSION, features, number, *f.blockFactory));
+    auto const parentRoot = bcos::task::syncWait(bcos::ledger::mpt::parentStateRootFor(view,
+        bcos::ledger::OPSTACK_EXECUTOR_VERSION, bcos::ledger::Features{}, number, *f.blockFactory));
     auto delta = bcos::task::syncWait(
         bcos::ledger::mpt::computeMptStateDelta(view, parentRoot, execLedgerConfig, false));
     return opeth::opEthCommitmentsOf(
@@ -456,8 +456,7 @@ bcos::devp2p::sync::Block makeSyncBlock(
 
 /// Probe → announced header → verifyAndCommit success path. Returns the verifier result.
 bcos::executor_v1::opstack::OpBlockVerificationResult verifyOk(VerifierFixture& f,
-    std::vector<bcos::bytes> const& rawTxs, int64_t number, int64_t timestampSec,
-    bool isthmusShape)
+    std::vector<bcos::bytes> const& rawTxs, int64_t number, int64_t timestampSec, bool isthmusShape)
 {
     auto data = makeEthHeaderBase(number, timestampSec, isthmusShape);
     auto commitments = probeCommitments(f, data, rawTxs);
@@ -499,9 +498,9 @@ void checkCommitted(VerifierFixture& f, bcos::protocol::BlockNumber number,
             StateKey{bcos::ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)}));
         BOOST_REQUIRE_MESSAGE(
             txEntry.has_value(), "SYS_HASH_2_TX must be written for tx " << txHash.hex());
-        auto receiptEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
-            StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
-                bcos::concepts::bytebuffer::toView(txHash)}));
+        auto receiptEntry = bcos::task::syncWait(
+            bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
+                                              bcos::concepts::bytebuffer::toView(txHash)}));
         BOOST_REQUIRE_MESSAGE(
             receiptEntry.has_value(), "SYS_HASH_2_RECEIPT must be written for tx " << txHash.hex());
     }
@@ -565,11 +564,9 @@ BOOST_AUTO_TEST_CASE(StateRootMismatchRejected)
     auto const block = makeSyncBlock(data, rawTxs);
 
     using bcos::executor_v1::opstack::OpBlockVerificationFailed;
-    BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(f.verifier->verifyAndCommit(block)), OpBlockVerificationFailed,
-        [](OpBlockVerificationFailed const& e) {
-            return e.field == "stateRoot" && !e.computedValue.empty() &&
-                   !e.announcedValue.empty();
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
+        OpBlockVerificationFailed, [](OpBlockVerificationFailed const& e) {
+            return e.field == "stateRoot" && !e.computedValue.empty() && !e.announcedValue.empty();
         });
     // A mismatch is a consensus-level rejection (INVALID), catchable as OpConsensusError.
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
@@ -595,8 +592,8 @@ BOOST_AUTO_TEST_CASE(GasUsedMismatchRejected)
     auto const block = makeSyncBlock(data, rawTxs);
 
     using bcos::executor_v1::opstack::OpBlockVerificationFailed;
-    BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(f.verifier->verifyAndCommit(block)), OpBlockVerificationFailed,
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(block)),
+        OpBlockVerificationFailed,
         [](OpBlockVerificationFailed const& e) { return e.field == "gasUsed"; });
 }
 
@@ -637,15 +634,13 @@ BOOST_AUTO_TEST_CASE(BlobAnd0x7dTypeBytesRejected)
 
     auto const blobBlock = makeSyncBlock(data, {depEnv, bcos::bytes{0x03}});
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(blobBlock)),
-        bcos::evm::OpConsensusError,
-        [](bcos::evm::OpConsensusError const& e) {
+        bcos::evm::OpConsensusError, [](bcos::evm::OpConsensusError const& e) {
             return std::string(e.what()).find("0x03") != std::string::npos;
         });
 
     auto const depositRevertBlock = makeSyncBlock(data, {depEnv, bcos::bytes{0x7d}});
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(f.verifier->verifyAndCommit(depositRevertBlock)),
-        bcos::evm::OpConsensusError,
-        [](bcos::evm::OpConsensusError const& e) {
+        bcos::evm::OpConsensusError, [](bcos::evm::OpConsensusError const& e) {
             return std::string(e.what()).find("0x7d") != std::string::npos;
         });
 }

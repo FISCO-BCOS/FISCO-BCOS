@@ -146,8 +146,8 @@ protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
         std::string_view(stripHexPrefix(j["stateRoot"].asString())), crypto::HashType::FromHex);
     h.txsRoot = crypto::HashType(std::string_view(stripHexPrefix(j["transactionsRoot"].asString())),
         crypto::HashType::FromHex);
-    h.receiptsRoot = crypto::HashType(std::string_view(stripHexPrefix(j["receiptsRoot"].asString())),
-        crypto::HashType::FromHex);
+    h.receiptsRoot = crypto::HashType(
+        std::string_view(stripHexPrefix(j["receiptsRoot"].asString())), crypto::HashType::FromHex);
     auto bloomBytes = hexToBytes(j["logsBloom"].asString());
     std::copy(bloomBytes.begin(), bloomBytes.end(), h.logsBloom.begin());
     h.difficulty = u256(j["difficulty"].asString());
@@ -174,9 +174,9 @@ protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
     }
     if (j.isMember("withdrawalsRoot"))
     {
-        h.withdrawalsHash = crypto::HashType(
-            std::string_view(stripHexPrefix(j["withdrawalsRoot"].asString())),
-            crypto::HashType::FromHex);
+        h.withdrawalsHash =
+            crypto::HashType(std::string_view(stripHexPrefix(j["withdrawalsRoot"].asString())),
+                crypto::HashType::FromHex);
     }
     if (j.isMember("blobGasUsed"))
     {
@@ -194,8 +194,9 @@ protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
     }
     if (j.isMember("requestsHash"))
     {
-        h.requestsHash = crypto::HashType(std::string_view(stripHexPrefix(j["requestsHash"].asString())),
-            crypto::HashType::FromHex);
+        h.requestsHash =
+            crypto::HashType(std::string_view(stripHexPrefix(j["requestsHash"].asString())),
+                crypto::HashType::FromHex);
     }
     return h;
 }
@@ -208,7 +209,7 @@ ChainConfig sepoliaConfig()
 {
     ChainConfig config;
     config.chainId = 11155111;
-    config.londonTime = 0;          // active from genesis
+    config.londonTime = 0;  // active from genesis
     config.shanghaiTime = 1677557088;
     config.cancunTime = 1706655072;
     config.pragueTime = 1741159776;
@@ -250,17 +251,50 @@ OpChainConfig opSepoliaConfig()
 /// --op-fork <name> <timestamp>: override one OP fork activation time.
 bool setOpForkTime(OpChainConfig& config, std::string const& name, uint64_t ts)
 {
-    if (name == "regolith") { config.forkSchedule.m_regolithTime = ts; }
-    else if (name == "canyon") { config.forkSchedule.m_canyonTime = ts; }
-    else if (name == "delta") { config.forkSchedule.m_deltaTime = ts; }
-    else if (name == "ecotone") { config.forkSchedule.m_ecotoneTime = ts; }
-    else if (name == "fjord") { config.forkSchedule.m_fjordTime = ts; }
-    else if (name == "granite") { config.forkSchedule.m_graniteTime = ts; }
-    else if (name == "holocene") { config.forkSchedule.m_holoceneTime = ts; }
-    else if (name == "isthmus") { config.forkSchedule.m_isthmusTime = ts; }
-    else if (name == "jovian") { config.forkSchedule.m_jovianTime = ts; }
-    else if (name == "karst") { config.forkSchedule.m_karstTime = ts; }
-    else { return false; }
+    if (name == "regolith")
+    {
+        config.forkSchedule.m_regolithTime = ts;
+    }
+    else if (name == "canyon")
+    {
+        config.forkSchedule.m_canyonTime = ts;
+    }
+    else if (name == "delta")
+    {
+        config.forkSchedule.m_deltaTime = ts;
+    }
+    else if (name == "ecotone")
+    {
+        config.forkSchedule.m_ecotoneTime = ts;
+    }
+    else if (name == "fjord")
+    {
+        config.forkSchedule.m_fjordTime = ts;
+    }
+    else if (name == "granite")
+    {
+        config.forkSchedule.m_graniteTime = ts;
+    }
+    else if (name == "holocene")
+    {
+        config.forkSchedule.m_holoceneTime = ts;
+    }
+    else if (name == "isthmus")
+    {
+        config.forkSchedule.m_isthmusTime = ts;
+    }
+    else if (name == "jovian")
+    {
+        config.forkSchedule.m_jovianTime = ts;
+    }
+    else if (name == "karst")
+    {
+        config.forkSchedule.m_karstTime = ts;
+    }
+    else
+    {
+        return false;
+    }
     return true;
 }
 
@@ -284,8 +318,8 @@ void report(std::string const& what, bool ok, std::string const& detail = {})
 /// executorVersion selects the executor lane the genesis is judged for: the system-address
 /// alloc guard only applies to the legacy lane (< ETHEREUM_EXECUTOR_VERSION); the v2/v3
 /// executors keep every alloc under /apps/, so a 0x1000-range alloc is ordinary there.
-void runGenesisCheck(std::string const& path, std::optional<std::string> const& expect,
-    int executorVersion)
+void runGenesisCheck(
+    std::string const& path, std::optional<std::string> const& expect, int executorVersion)
 {
     Json::Value root;
     Json::Reader reader;
@@ -322,8 +356,8 @@ void runGenesisCheck(std::string const& path, std::optional<std::string> const& 
         {
             for (auto const& slot : av["storage"].getMemberNames())
             {
-                a.storage.emplace_back(stripHexPrefix(slot),
-                    stripHexPrefix(av["storage"][slot].asString()));
+                a.storage.emplace_back(
+                    stripHexPrefix(slot), stripHexPrefix(av["storage"][slot].asString()));
             }
         }
         genesis.m_allocs.push_back(std::move(a));
@@ -331,12 +365,12 @@ void runGenesisCheck(std::string const& path, std::optional<std::string> const& 
     std::cout << "alloc count: " << genesis.m_allocs.size() << std::endl;
 
     auto trie = task::syncWait(ledger::computeGenesisStateTrie(genesis));
-    std::cout << "genesis stateRoot: " << trie.root.hex()
-              << " trie-nodes: " << trie.nodes.size() << std::endl;
+    std::cout << "genesis stateRoot: " << trie.root.hex() << " trie-nodes: " << trie.nodes.size()
+              << std::endl;
     if (expect)
     {
-        auto expected = crypto::HashType(
-            std::string_view(stripHexPrefix(*expect)), crypto::HashType::FromHex);
+        auto expected =
+            crypto::HashType(std::string_view(stripHexPrefix(*expect)), crypto::HashType::FromHex);
         report("genesis stateRoot match", trie.root == expected, trie.root.hex());
     }
 }
@@ -372,8 +406,7 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
     for (auto const& txJson : txs)
     {
         auto const txHashHex = txJson["hash"].asString();
-        auto raw = rpcCall(rpcs, "eth_getRawTransactionByHash",
-            "[\"" + txHashHex + "\"]");
+        auto raw = rpcCall(rpcs, "eth_getRawTransactionByHash", "[\"" + txHashHex + "\"]");
         if (!raw)
         {
             report("tx[" + std::to_string(idx) + "] raw fetch", false, "RPC unavailable");
@@ -404,8 +437,8 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
             decoded->hash().hex().substr(0, 18));
 
         // 2. Recovered sender must equal the on-chain from.
-        auto senderHex =
-            bcos::toHexStringWithPrefix(bcos::bytes(decoded->sender().begin(), decoded->sender().end()));
+        auto senderHex = bcos::toHexStringWithPrefix(
+            bcos::bytes(decoded->sender().begin(), decoded->sender().end()));
         report("tx[" + std::to_string(idx) + "] sender", senderHex == txJson["from"].asString(),
             senderHex.substr(0, 18));
 
@@ -417,8 +450,7 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
             decoded->value() == u256(txJson["value"].asString()),
             decoded->value().str(0, std::ios_base::hex));
         report("tx[" + std::to_string(idx) + "] nonce",
-            decoded->nonce() == txJson["nonce"].asString(),
-            std::string(decoded->nonce()));
+            decoded->nonce() == txJson["nonce"].asString(), std::string(decoded->nonce()));
         report("tx[" + std::to_string(idx) + "] gasLimit",
             static_cast<uint64_t>(decoded->gasLimit()) == hexToU64(txJson["gas"].asString()),
             std::to_string(decoded->gasLimit()));
@@ -438,9 +470,9 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
         // EIP-4844 blob fields (type 3): maxFeePerBlobGas + blob versioned hashes.
         if (txJson.isMember("maxFeePerBlobGas"))
         {
-            auto blobGasMatches = decoded->maxFeePerBlobGas().has_value() &&
-                                  *decoded->maxFeePerBlobGas() ==
-                                      u256(txJson["maxFeePerBlobGas"].asString());
+            auto blobGasMatches =
+                decoded->maxFeePerBlobGas().has_value() &&
+                *decoded->maxFeePerBlobGas() == u256(txJson["maxFeePerBlobGas"].asString());
             report("tx[" + std::to_string(idx) + "] maxFeePerBlobGas", blobGasMatches,
                 std::string(decoded->maxFeePerBlobGas().has_value() ?
                                 decoded->maxFeePerBlobGas()->str(0, std::ios_base::hex) :
@@ -455,8 +487,7 @@ void runTxVerification(std::vector<std::string> const& rpcs, int64_t blockNumber
             {
                 for (Json::ArrayIndex i = 0; i < onChainBlobs.size(); ++i)
                 {
-                    if (bcos::toHexStringWithPrefix(decodedBlobs[i]) !=
-                        onChainBlobs[i].asString())
+                    if (bcos::toHexStringWithPrefix(decodedBlobs[i]) != onChainBlobs[i].asString())
                     {
                         blobsMatch = false;
                         break;
@@ -530,13 +561,12 @@ void runGenesisIniCheck(std::string const& path, std::optional<std::string> cons
     bcos::tool::NodeConfig cfg(keyFactory);
     cfg.loadGenesisConfig(path);
     auto trie = task::syncWait(ledger::computeGenesisStateTrie(cfg.genesisConfig()));
-    std::cout << "genesis stateRoot: " << trie.root.hex()
-              << " trie-nodes: " << trie.nodes.size() << " allocs: "
-              << cfg.genesisConfig().m_allocs.size() << std::endl;
+    std::cout << "genesis stateRoot: " << trie.root.hex() << " trie-nodes: " << trie.nodes.size()
+              << " allocs: " << cfg.genesisConfig().m_allocs.size() << std::endl;
     if (expect)
     {
-        auto expected = crypto::HashType(
-            std::string_view(stripHexPrefix(*expect)), crypto::HashType::FromHex);
+        auto expected =
+            crypto::HashType(std::string_view(stripHexPrefix(*expect)), crypto::HashType::FromHex);
         report("genesis stateRoot match", trie.root == expected, trie.root.hex());
     }
     // Genesis header hash: re-encode the [eth_genesis_header] fields via the shared
@@ -583,20 +613,19 @@ std::string padHex(std::string const& hex, size_t len, std::string const& what)
     auto body = stripHexPrefix(hex);
     if (body.size() > len)
     {
-        throw std::runtime_error(
-            what + " exceeds " + std::to_string(len) + " hex chars: " + hex);
+        throw std::runtime_error(what + " exceeds " + std::to_string(len) + " hex chars: " + hex);
     }
     body.insert(0, len - body.size(), '0');
-    std::transform(body.begin(), body.end(), body.begin(),
-        [](unsigned char c) { return std::tolower(c); });
+    std::transform(
+        body.begin(), body.end(), body.begin(), [](unsigned char c) { return std::tolower(c); });
     return body;
 }
 
 /// --genesis2ini: convert a standard geth genesis.json into the EL-mode
 /// config.genesis (INI) the node parses via NodeConfig::loadGenesisConfig. The
 /// output contract is the node's parser, not geth: [fork_timestamps] requires the
-/// full london..prague ladder (a fork the JSON leaves unscheduled inherits the
-/// previous fork's time, with a warning comment), storage slots/values are
+/// full london..prague ladder (a required fork the JSON leaves unscheduled is refused
+/// with the reason; an unscheduled optional fork is left out), storage slots/values are
 /// 0x-prefixed 64-hex, balances/nonces are decimal, and the fork-gated
 /// [eth_genesis_header] keys are emitted only when the JSON carries the field
 /// (absent key = omitted RLP field). state_root and hash are computed here with
@@ -612,14 +641,14 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         ss << in.rdbuf();
         if (!reader.parse(ss.str(), root))
         {
-            throw std::runtime_error("cannot parse genesis.json: " +
-                                     reader.getFormattedErrorMessages());
+            throw std::runtime_error(
+                "cannot parse genesis.json: " + reader.getFormattedErrorMessages());
         }
         // An empty (or absent) alloc is a valid EL-mode genesis: the alloc loop
         // below emits no [alloc.*] sections and computeGenesisStateTrie returns
         // the canonical empty-trie root, matching geth's empty-alloc stateRoot.
-        // (NodeConfig::validateL2Invariants exempts [ethereum] mode=el from the
-        // non-empty-alloc invariant; the L2/OP lanes still require allocs.)
+        // (NodeConfig::validateL2Invariants exempts executor.version=2 from the
+        // non-empty-alloc invariant; the OP lane still requires allocs.)
         if (!root.isMember("config") || !root["config"].isObject())
         {
             throw std::runtime_error("genesis.json is missing the config object");
@@ -646,9 +675,18 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // ladder activates everything from genesis. Flag any configured at a
         // non-zero height so the operator knows the semantics shifted.
         static constexpr char const* kBlockForks[] = {
-            "homesteadBlock", "daoForkBlock", "eip150Block", "eip155Block",
-            "byzantiumBlock", "constantinopleBlock", "petersburgBlock", "istanbulBlock",
-            "muirGlacierBlock", "berlinBlock", "arrowGlacierBlock", "grayGlacierBlock",
+            "homesteadBlock",
+            "daoForkBlock",
+            "eip150Block",
+            "eip155Block",
+            "byzantiumBlock",
+            "constantinopleBlock",
+            "petersburgBlock",
+            "istanbulBlock",
+            "muirGlacierBlock",
+            "berlinBlock",
+            "arrowGlacierBlock",
+            "grayGlacierBlock",
             "londonBlock",
         };
         for (auto const* key : kBlockForks)
@@ -662,85 +700,56 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             }
         }
 
-        // [fork_timestamps] requires the london..prague ladder (readForkTimestamp
-        // throws on an absent key), and UINT64_MAX is the ladder's terminal
-        // "never activates" value (NodeConfig's ladder check treats it as such),
-        // so an unscheduled fork is emitted as UINT64_MAX — NOT inherited from
-        // the previous fork: inheriting 0 would ACTIVATE the fork from genesis
-        // (e.g. Prague on a Cancun chain makes the verifier demand requestsHash
-        // that Cancun-era blocks do not carry).
-        uint64_t const kNever = std::numeric_limits<uint64_t>::max();
-        // The emitted ladder activates London from genesis (london_time=0) unless
-        // the chain is pre-London forever (below), but geth activates London
-        // BLOCK-based: Genesis.ToBlock consults g.Config.IsLondon(0), i.e.
-        // config.londonBlock must be present and 0. A genesis whose config lacks
-        // londonBlock (the smoke/genesis fixtures carry an empty config) mints a
-        // header WITHOUT baseFee in geth, so the baseFee default below must key
-        // off the JSON, not off the emitted ladder.
+        // [fork_timestamps] requires the london..prague ladder (readForkTimestamp throws on an
+        // absent key) and refuses the UINT64_MAX not-scheduled sentinel (parseForkTimestamp),
+        // so a required fork the JSON leaves unscheduled has no representation: refuse it
+        // here with the reason. It is NOT inherited from the previous fork: inheriting 0 would
+        // ACTIVATE it from genesis (e.g. Prague on a Cancun chain makes the verifier demand a
+        // requestsHash Cancun-era blocks do not carry). The optional post-Prague tail is
+        // emitted only when scheduled.
+        uint64_t const kMaxTime = std::numeric_limits<uint64_t>::max();
+        // The emitted ladder activates London from genesis (london_time=0), but geth
+        // activates London BLOCK-based: Genesis.ToBlock consults g.Config.IsLondon(0), i.e.
+        // config.londonBlock must be present and 0. A genesis whose config lacks londonBlock
+        // (the smoke/genesis fixtures carry an empty config) mints a header WITHOUT baseFee in
+        // geth, so the baseFee default below must key off the JSON, not off the ladder.
         auto const londonBlock = jsonQuantity(config, "londonBlock");
         bool const londonAtGenesis = londonBlock && *londonBlock == 0;
-        // geth reads an ABSENT config.londonBlock as "London never activates": a
-        // genesis without baseFeePerGas then stays pre-London forever. The faithful
-        // representation is a pre-London-shaped header (baseFee left unset below)
-        // plus a ladder in which no fork ever activates — NOT the self-contradictory
-        // london_time=0 + baseFee-less header, whose block 1 import would be
-        // rejected either way. The EL lane still cannot EXECUTE pre-London blocks
-        // (the EVM revision floor is London), but the genesis is served
-        // byte-exactly, which is what the hive smoke/genesis suite checks.
-        bool const preLondonForever =
-            !jsonQuantity(root, "baseFeePerGas") && !londonAtGenesis && !londonBlock;
-        uint64_t const parisTime = preLondonForever ? kNever : 0;  // 0: TTD == 0, PoS from genesis
-        bool forkNeverSeen = false;
-        auto forkTime = [&](char const* jsonKey) -> uint64_t {
+        // geth reads an ABSENT config.londonBlock as "London never activates": a genesis
+        // without baseFeePerGas then stays pre-London forever, which needs london_time and
+        // paris_time unscheduled -- not representable.
+        if (!jsonQuantity(root, "baseFeePerGas") && !londonAtGenesis && !londonBlock)
+        {
+            throw std::runtime_error(
+                "no baseFeePerGas and no config.londonBlock: the chain is pre-London forever, "
+                "but [fork_timestamps] requires london_time and paris_time to be scheduled "
+                "(the EL lane is London+ only)");
+        }
+        uint64_t const parisTime = 0;  // TTD == 0: PoS from genesis
+        auto requiredForkTime = [&](char const* jsonKey, char const* iniKey) -> uint64_t {
             auto value = jsonQuantity(config, jsonKey);
             if (!value)
             {
-                forkNeverSeen = true;
-                return kNever;
-            }
-            if (*value > u256(kNever))
-            {
                 throw std::runtime_error(std::string("config.") + jsonKey +
-                                         " exceeds uint64: " + value->str());
+                                         " is not scheduled, but [fork_timestamps]." + iniKey +
+                                         " is required (london..prague must all be scheduled)");
             }
-            // A scheduled fork after an unscheduled one breaks the parser's
-            // non-decreasing ladder check — reject here with a clearer message.
-            if (forkNeverSeen)
+            if (*value >= u256(kMaxTime))
             {
                 throw std::runtime_error(
                     std::string("config.") + jsonKey +
-                    " is scheduled while an earlier fork is absent (fork times must "
-                    "form a prefix: once a fork is unscheduled, all later forks must "
-                    "be unscheduled too)");
+                    " does not fit a scheduled uint64 timestamp: " + value->str());
             }
             return static_cast<uint64_t>(*value);
         };
-        auto shanghaiTime = forkTime("shanghaiTime");
-        auto cancunTime = forkTime("cancunTime");
-        auto pragueTime = forkTime("pragueTime");
-        // The post-Prague tail is optional in the parser (absent = not scheduled),
-        // so these keys are emitted only when the JSON carries them.
+        auto shanghaiTime = requiredForkTime("shanghaiTime", "shanghai_time");
+        auto cancunTime = requiredForkTime("cancunTime", "cancun_time");
+        auto pragueTime = requiredForkTime("pragueTime", "prague_time");
+        // The post-Prague tail is optional in the parser (absent = not scheduled), so these
+        // keys are emitted only when the JSON carries them.
         auto osakaTime = jsonQuantity(config, "osakaTime");
         auto bpo1Time = jsonQuantity(config, "bpo1Time");
         auto bpo2Time = jsonQuantity(config, "bpo2Time");
-        if (preLondonForever &&
-            (shanghaiTime != kNever || cancunTime != kNever || pragueTime != kNever ||
-                osakaTime || bpo1Time || bpo2Time))
-        {
-            // geth's checkConfigForkOrder rejects a timestamp fork without London;
-            // mirror that instead of emitting a chain that is pre-London and
-            // post-Shanghai at the same time.
-            throw std::runtime_error(
-                "config schedules a post-London fork time while config.londonBlock is "
-                "absent (geth rejects a timestamp fork without London)");
-        }
-        if (preLondonForever)
-        {
-            warnings.push_back(
-                "no baseFeePerGas and no config.londonBlock: emitting a pre-London "
-                "schedule (no fork ever activates); the EL lane serves the genesis "
-                "byte-exactly but cannot execute pre-London blocks");
-        }
 
         // --- allocs: normalized once, used for both the trie and the INI ---
         ledger::GenesisConfig genesis;
@@ -810,16 +819,17 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         h.gasLimit = headerQuantity("gasLimit");
         h.gasUsed = headerQuantity("gasUsed");
         h.prevRandao = crypto::HashType(
-            "0x" + padHex(
-                root.isMember("mixHash") ? root["mixHash"].asString() : "0x0", 64, "mixHash"));
+            "0x" +
+            padHex(root.isMember("mixHash") ? root["mixHash"].asString() : "0x0", 64, "mixHash"));
         if (root.isMember("extraData"))
         {
             h.extraData = hexToBytes(root["extraData"].asString());
         }
-        h.coinbase = Address("0x" + padHex(
-            root.isMember("coinbase") ? root["coinbase"].asString() : "0x0", 40, "coinbase"));
-        h.nonce = h64("0x" + padHex(
-            root.isMember("nonce") ? root["nonce"].asString() : "0x0", 16, "nonce"));
+        h.coinbase =
+            Address("0x" + padHex(root.isMember("coinbase") ? root["coinbase"].asString() : "0x0",
+                               40, "coinbase"));
+        h.nonce = h64(
+            "0x" + padHex(root.isMember("nonce") ? root["nonce"].asString() : "0x0", 16, "nonce"));
         h.number = 0;
         auto timestamp = headerQuantity("timestamp");
         if (timestamp > u256(std::numeric_limits<int64_t>::max() / 1000))
@@ -836,9 +846,8 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // in either direction, so an active fork's fields must be emitted
         // consistently.
         auto forkActiveAtGenesis = [&](uint64_t forkTime) {
-            // timestamp is range-checked above (<= int64 max / 1000), and the
-            // shared predicate maps forkTime 0 -> active and UINT64_MAX (kNever)
-            // -> inactive, exactly the two cases this call site distinguishes.
+            // timestamp is range-checked above (<= int64 max / 1000); the shared
+            // predicate maps forkTime 0 -> active.
             return bcos::protocol::isForkActive(forkTime, static_cast<int64_t>(timestamp));
         };
         std::optional<u256> baseFee, blobGasUsed, excessBlobGas;
@@ -856,7 +865,7 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             // pre-London" (the same constant the validator uses).
             baseFee = h.baseFee = protocol::kInitialBaseFee;
         }
-        else if (!preLondonForever)
+        else
         {
             // londonBlock present and non-zero: London activates mid-chain, which
             // the timestamp ladder cannot express — and geth leaves baseFee nil
@@ -869,12 +878,10 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
                 "is timestamp-based and activates London at genesis, so the header "
                 "must carry a base fee)");
         }
-        // else preLondonForever: geth leaves baseFee nil, and the ladder below
-        // keeps every fork inactive, so the header shape and the schedule agree.
         // consume-generated genesis files name it "withdrawalsRoot" (the fixture
         // header field); accept the geth-config-style "withdrawalsHash" too.
-        auto const* withdrawalsKey = root.isMember("withdrawalsRoot") ? "withdrawalsRoot" :
-                                                                          "withdrawalsHash";
+        auto const* withdrawalsKey =
+            root.isMember("withdrawalsRoot") ? "withdrawalsRoot" : "withdrawalsHash";
         if (root.isMember(withdrawalsKey) && !root[withdrawalsKey].isNull())
         {
             withdrawalsHash = h.withdrawalsHash = crypto::HashType(
@@ -906,9 +913,9 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         }
         if (root.isMember("parentBeaconBlockRoot") && !root["parentBeaconBlockRoot"].isNull())
         {
-            beaconRoot = h.parentBeaconRoot = crypto::HashType(
-                "0x" + padHex(root["parentBeaconBlockRoot"].asString(), 64,
-                    "parentBeaconBlockRoot"));
+            beaconRoot = h.parentBeaconRoot =
+                crypto::HashType("0x" + padHex(root["parentBeaconBlockRoot"].asString(), 64,
+                                            "parentBeaconBlockRoot"));
         }
         else if (forkActiveAtGenesis(cancunTime))
         {
@@ -939,10 +946,6 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             << "    sm_crypto=false\n"
             << "    group_id=group0\n"
             << "    chain_id=" << chainId->str() << "\n\n"
-            << "[web3]\n"
-            << "    chain_id=" << chainId->str() << "\n\n"
-            << "[version]\n"
-            << "    compatibility_version=3.18.0\n\n"
             << "[consensus]\n"
             << "    consensus_type=pbft\n"
             << "    block_tx_count_limit=1000\n"
@@ -955,14 +958,12 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             << "    is_auth_check=false\n"
             << "    auth_admin_account=0x0000000000000000000000000000000000000000\n"
             << "    is_serial_execute=true\n\n"
-            << "[ethereum]\n"
-            << "    mode=el\n\n"
             << "[fork_timestamps]\n";
         for (auto const& warning : warnings)
         {
             ini << "    ; WARNING: " << warning << "\n";
         }
-        ini << "    london_time=" << (preLondonForever ? kNever : 0) << "\n"
+        ini << "    london_time=" << 0 << "\n"
             << "    paris_time=" << parisTime << "\n"
             << "    merge_block=0\n"
             << "    shanghai_time=" << shanghaiTime << "\n"
@@ -1005,7 +1006,8 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         ini << "[eth_genesis_header]\n"
             << "    parent_hash=" << h.parentInfo.blockHash.hexPrefixed() << "\n"
             << "    sha3_uncles=" << h.uncleHash.hexPrefixed() << "\n"
-            << "    miner=0x" << padHex(
+            << "    miner=0x"
+            << padHex(
                    root.isMember("coinbase") ? root["coinbase"].asString() : "0x0", 40, "coinbase")
             << "\n"
             << "    state_root=" << h.stateRoot.hexPrefixed() << "\n"
@@ -1023,7 +1025,7 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             << "    timestamp=" << quantityHex(timestamp) << "\n"
             << "    extra_data="
             << (root.isMember("extraData") ? "0x" + stripHexPrefix(root["extraData"].asString()) :
-                                           std::string("0x"))
+                                             std::string("0x"))
             << "\n"
             << "    mix_hash=" << h.prevRandao.hexPrefixed() << "\n"
             << "    nonce=" << h.nonce.hexPrefixed() << "\n";
@@ -1079,12 +1081,10 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         if (root.isMember("stateRoot") &&
             stripHexPrefix(root["stateRoot"].asString()) != trie.root.hex())
         {
-            std::cerr << "WARNING: genesis.json stateRoot "
-                      << root["stateRoot"].asString() << " differs from the computed "
-                      << h.stateRoot.hexPrefixed() << std::endl;
+            std::cerr << "WARNING: genesis.json stateRoot " << root["stateRoot"].asString()
+                      << " differs from the computed " << h.stateRoot.hexPrefixed() << std::endl;
         }
-        if (root.isMember("hash") &&
-            stripHexPrefix(root["hash"].asString()) != hash.hex())
+        if (root.isMember("hash") && stripHexPrefix(root["hash"].asString()) != hash.hex())
         {
             std::cerr << "WARNING: genesis.json hash " << root["hash"].asString()
                       << " differs from the computed " << hash.hexPrefixed() << std::endl;
@@ -1131,8 +1131,8 @@ int runEnodeFromKey(std::string const& path, std::string const& ip, uint16_t por
         bcos::crypto::KeyFactoryImpl keyFactory;
         auto secret = keyFactory.createKey(bcos::fromHex(hex));
         auto pub = bcos::crypto::secp256k1PriToPub(secret);
-        std::cout << "enode://" << bcos::toHexStringWithPrefix(pub->data()).substr(2) << "@"
-                  << ip << ":" << port << std::endl;
+        std::cout << "enode://" << bcos::toHexStringWithPrefix(pub->data()).substr(2) << "@" << ip
+                  << ":" << port << std::endl;
         return 0;
     }
     catch (std::exception const& e)
@@ -1337,8 +1337,9 @@ int main(int argc, char** argv)
                   << " hash=" << (*block)["hash"].asString().substr(0, 18) << "..." << std::endl;
 
         // 1. Header RLP re-encoding: keccak(rlp(header)) must equal the canonical hash.
-        auto canonical = crypto::HashType(std::string_view(stripHexPrefix((*block)["hash"].asString())),
-            crypto::HashType::FromHex);
+        auto canonical =
+            crypto::HashType(std::string_view(stripHexPrefix((*block)["hash"].asString())),
+                crypto::HashType::FromHex);
         report("header hash", bcos::protocol::ethHeaderHash(h) == canonical);
 
         // 2. Header field rules against the parent: OP Stack rules in --op mode

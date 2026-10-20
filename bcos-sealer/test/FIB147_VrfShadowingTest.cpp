@@ -45,12 +45,11 @@
 #include "bcos-txpool/TxPoolFactory.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <wedpr-crypto/WedprUtilities.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
-
-#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-utilities/IOServicePool.h>
 
 using namespace bcos::storage;
 
@@ -83,8 +82,7 @@ struct Fib147SealerFixture
     ~Fib147SealerFixture() = default;
     // ioServicePool MUST be declared before txpool to ensure it outlives
     // Timer objects created by txpool that reference its io_context.
-    bcos::IOServicePool::Ptr ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "fibTest");
+    bcos::IOServicePool::Ptr ioServicePool = std::make_shared<bcos::IOServicePool>(1, "fibTest");
     crypto::Hash::Ptr hashImpl;
     txpool::TxPool::Ptr txpool;
     protocol::BlockFactory::Ptr blockFactory;

@@ -8,6 +8,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-security/bcos-security/BcosKms.h"
+#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/FileUtility.h"
 #include "bcos-utilities/FixedBytes.h"

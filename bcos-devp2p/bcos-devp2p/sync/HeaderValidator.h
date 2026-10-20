@@ -32,9 +32,9 @@
 
 namespace bcos::devp2p::sync
 {
+using protocol::kBaseFeeMaxChangeDenominator;
 using protocol::kBlobBaseCost;
 using protocol::kElasticityMultiplier;
-using protocol::kBaseFeeMaxChangeDenominator;
 using protocol::kGasLimitBoundDivisor;
 using protocol::kGasPerBlob;
 using protocol::kInitialBaseFee;
@@ -42,21 +42,21 @@ using protocol::kMaxExtraDataSize;
 using protocol::kMinGasLimit;
 
 using BlobSchedule = protocol::BlobGasSchedule;
-using protocol::toGasSchedule;
 using protocol::kBpo1BlobSchedule;
 using protocol::kBpo2BlobSchedule;
 using protocol::kCancunBlobSchedule;
 using protocol::kOsakaBlobSchedule;
 using protocol::kPragueBlobSchedule;
+using protocol::toGasSchedule;
 
 using ChainConfig = protocol::PoSChainConfig;
 using protocol::HeaderValidationResult;
 
-using protocol::isForkActive;
-using protocol::isForkBlock;
 using protocol::blobScheduleFor;
 using protocol::computeNextBaseFee;
-using protocol::fakeExponential;
 using protocol::computeNextExcessBlobGas;
+using protocol::fakeExponential;
+using protocol::isForkActive;
+using protocol::isForkBlock;
 using protocol::validateHeaderPoS;
 }  // namespace bcos::devp2p::sync

@@ -661,14 +661,12 @@ BOOST_AUTO_TEST_CASE(variadicTagForwarding)
         std::string_view tableID = "table1";
         storage::Entry entry;
         entry.set("hello");
-        co_await storage2::writeOne(
-            rollbackableStorage, StateKey{tableID, "Key1"sv}, entry);
+        co_await storage2::writeOne(rollbackableStorage, StateKey{tableID, "Key1"sv}, entry);
 
         // Pass multiple tags; MemoryStorage ignores them, but this
         // verifies the variadic interface compiles and forwards correctly.
         auto rawValue = co_await rollbackableStorage.readOneRaw(
-            StateKey{tableID, "Key1"sv}, storage2::BYPASS_READ_SET,
-            storage2::BYPASS_MULTILAYER);
+            StateKey{tableID, "Key1"sv}, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER);
         BOOST_CHECK(std::holds_alternative<storage::Entry>(rawValue));
         BOOST_CHECK_EQUAL(std::get<storage::Entry>(rawValue).get(), "hello"sv);
 

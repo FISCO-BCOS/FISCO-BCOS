@@ -38,8 +38,8 @@ transactions in the following functions
 constexpr inline struct SyncWait
 {
     template <class Task>
-    auto operator()(
-        Task&& task, auto&&... args) const -> AwaitableReturnType<std::remove_cvref_t<Task>>
+    auto operator()(Task&& task, auto&&... args) const
+        -> AwaitableReturnType<std::remove_cvref_t<Task>>
         requires IsAwaitable<Task>
     {
         using ReturnType = AwaitableReturnType<std::remove_cvref_t<Task>>;

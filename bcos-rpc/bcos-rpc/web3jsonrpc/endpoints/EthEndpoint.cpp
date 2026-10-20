@@ -201,8 +201,8 @@ task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value& response
 }
 task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
 {
-    // Reads via LedgerConfig (not a raw SYS_CONFIG single-key read) so L2-mode governance
-    // (SystemConfig.sol via L2ConfigLoader) flows through one path. getLedgerConfig
+    // Reads via LedgerConfig (not a raw SYS_CONFIG single-key read) so every lane's chain id
+    // flows through one path (getLedgerConfig -> fetchAllSystemConfigs). getLedgerConfig
     // over-fetches (~5 storage reads) per call; a per-request cache is a follow-up.
     auto const ledger = m_nodeService->ledger();
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);

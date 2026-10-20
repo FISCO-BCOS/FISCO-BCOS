@@ -58,7 +58,6 @@ public:
     bcos::cppsdk::Sdk::UniquePtr buildSdk(const std::string& _configFile);
 
 private:
-    bcos::IOServicePool::Ptr m_ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "sdk");
+    bcos::IOServicePool::Ptr m_ioServicePool = std::make_shared<bcos::IOServicePool>(1, "sdk");
 };
 }  // namespace bcos::cppsdk

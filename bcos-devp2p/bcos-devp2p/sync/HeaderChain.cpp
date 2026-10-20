@@ -29,16 +29,15 @@
 namespace bcos::devp2p::sync
 {
 using bcos::codec::rlp::unwrapOrThrow;
-HeaderChain::HeaderChain(uint64_t _nextNumber, bcos::h256 _anchorHash,
-    uint64_t _maxHeadersPerRequest)
+HeaderChain::HeaderChain(
+    uint64_t _nextNumber, bcos::h256 _anchorHash, uint64_t _maxHeadersPerRequest)
   : m_nextNumber(_nextNumber),
     m_anchorHash(_anchorHash),
     m_maxHeadersPerRequest(_maxHeadersPerRequest)
 {}
 
-HeaderChain::HeaderChain(uint64_t _nextNumber,
-    bcos::protocol::EthBlockHeaderData _anchorHeader, ChainConfig const& _config,
-    uint64_t _maxHeadersPerRequest)
+HeaderChain::HeaderChain(uint64_t _nextNumber, bcos::protocol::EthBlockHeaderData _anchorHeader,
+    ChainConfig const& _config, uint64_t _maxHeadersPerRequest)
   : m_nextNumber(_nextNumber),
     m_anchorHash(bcos::protocol::ethHeaderHash(_anchorHeader)),
     m_anchorHeader(std::move(_anchorHeader)),
@@ -65,13 +64,13 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
     int ignoredBroadcasts = 0;
     while (true)
     {
-        auto response = unwrapOrThrow(
-            _session.recvMessage(), "HeaderChain: failed to decode a frame: ");
+        auto response =
+            unwrapOrThrow(_session.recvMessage(), "HeaderChain: failed to decode a frame: ");
         BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain")
                         << "recv msg id=" << static_cast<int>(response.id)
                         << " size=" << response.data.size() << " data="
-                        << bcos::toHexStringWithPrefix(bytesConstRef(response.data.data(),
-                               std::min<size_t>(response.data.size(), 100)));
+                        << bcos::toHexStringWithPrefix(bytesConstRef(
+                               response.data.data(), std::min<size_t>(response.data.size(), 100)));
         if (response.id == rlpx::baseMsg::Ping)
         {
             // RLPx base protocol: Ping (id 0x02) is answered with Pong (id 0x03).
@@ -129,8 +128,7 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
 }
 }  // namespace
 
-std::vector<HeaderWithHash> HeaderChain::requestHeaders(
-    rlpx::Session& _session, uint64_t _amount)
+std::vector<HeaderWithHash> HeaderChain::requestHeaders(rlpx::Session& _session, uint64_t _amount)
 {
     if (_amount == 0)
     {
@@ -145,12 +143,10 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
     request.skip = 0;
     request.reverse = false;
     auto requestRlp = eth::encodeGetBlockHeaders(request);
-    BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain")
-                    << "sent GetBlockHeaders id=" << request.requestId
+    BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain") << "sent GetBlockHeaders id=" << request.requestId
                     << " origin=" << request.originNumber << " amount=" << _amount;
-    _session.sendMessage(
-        rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
-            std::move(requestRlp)});
+    _session.sendMessage(rlpx::Message{
+        static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)), std::move(requestRlp)});
 
     auto wireHeaders = recvBlockHeadersReply(_session, request.requestId, _amount);
 
@@ -172,8 +168,8 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
         }
         header.header = ethHeader.data();
         // The header hash is keccak of the received wire encoding.
-        header.hash = bcos::crypto::keccak256Hash(
-            bytesConstRef(header.rlp.data(), header.rlp.size()));
+        header.hash =
+            bcos::crypto::keccak256Hash(bytesConstRef(header.rlp.data(), header.rlp.size()));
 
         // Strictly ascending, contiguous block numbers.
         if (header.number() != m_nextNumber + i)
@@ -188,8 +184,7 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
         {
             if (header.parentHash() != m_anchorHash)
             {
-                throw ParentHashMismatch(
-                    "HeaderChain: parent hash mismatch (fork or reorg)");
+                throw ParentHashMismatch("HeaderChain: parent hash mismatch (fork or reorg)");
             }
         }
         else if (header.parentHash() != out[i - 1].hash)
@@ -202,15 +197,13 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
         // policy — e.g. the OP Stack rules).
         if (m_anchorHeader.has_value())
         {
-            auto const& parentHeader =
-                i == 0 ? *m_anchorHeader : out[i - 1].header;
+            auto const& parentHeader = i == 0 ? *m_anchorHeader : out[i - 1].header;
             auto result = m_validator ? m_validator(header.header, parentHeader) :
                                         validateHeaderPoS(header.header, parentHeader, m_config);
             if (!result.valid)
             {
-                throw HeaderRuleViolation(
-                    "HeaderChain: header validation failed at block " +
-                    std::to_string(header.number()) + ": " + result.error);
+                throw HeaderRuleViolation("HeaderChain: header validation failed at block " +
+                                          std::to_string(header.number()) + ": " + result.error);
             }
         }
         out.push_back(std::move(header));
@@ -228,12 +221,10 @@ std::optional<HeaderWithHash> HeaderChain::requestHeaderByHash(
     request.skip = 0;
     request.reverse = false;
     auto requestRlp = eth::encodeGetBlockHeaders(request);
-    BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain")
-                    << "sent GetBlockHeaders(id=" << request.requestId
+    BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain") << "sent GetBlockHeaders(id=" << request.requestId
                     << ") by hash origin=" << _hash.hex().substr(0, 18) << " amount=1";
-    _session.sendMessage(
-        rlpx::Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
-            std::move(requestRlp)});
+    _session.sendMessage(rlpx::Message{
+        static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)), std::move(requestRlp)});
 
     auto wireHeaders = recvBlockHeadersReply(_session, request.requestId, 1);
     if (wireHeaders.empty())
@@ -254,8 +245,7 @@ std::optional<HeaderWithHash> HeaderChain::requestHeaderByHash(
                                  bcos::codec::rlp::rlpErrorMessage(e, "malformed header"));
     }
     header.header = ethHeader.data();
-    header.hash = bcos::crypto::keccak256Hash(
-        bytesConstRef(header.rlp.data(), header.rlp.size()));
+    header.hash = bcos::crypto::keccak256Hash(bytesConstRef(header.rlp.data(), header.rlp.size()));
     if (header.hash != _hash)
     {
         throw std::runtime_error(

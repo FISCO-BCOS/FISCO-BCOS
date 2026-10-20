@@ -468,8 +468,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_allows_canonical_head_jump_when_permitted)
     // A non-canonical jump stays rejected even with the relaxation armed.
     ResolvedForkchoice nonCanonical = resolved(h256(18), 18, false, false);
     nonCanonical.allowCanonicalHeadJump = true;
-    checkExceptionMessage<InvalidForkchoiceState>(
-        [&]() { tracker.applyForkchoice(nonCanonical); },
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(nonCanonical); },
         "Forkchoice head block number must increase by exactly 1");
     BOOST_REQUIRE(tracker.trackedHead().has_value());
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 15);
@@ -1028,8 +1027,8 @@ BOOST_AUTO_TEST_CASE(engine_common_capabilities_gold)
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
         "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
         "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4",
-        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
-        "engine_getBlobsV1", "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
+        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1", "engine_getBlobsV1",
+        "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
     BOOST_CHECK(caps == gold);
 }
 

@@ -42,8 +42,7 @@ public:
     void start() override {}
     void stop() override {}
 
-    void callOnReceiveP2PMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
+    void callOnReceiveP2PMessage(NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
     {
         onReceiveP2PMessage(_e, _session, std::move(_msg));
     }

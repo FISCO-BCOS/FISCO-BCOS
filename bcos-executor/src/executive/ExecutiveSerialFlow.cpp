@@ -7,22 +7,22 @@ using namespace bcos;
 using namespace bcos::executor;
 
 ExecutiveSerialFlow::ExecutiveSerialFlow(ExecutiveFactory::Ptr executiveFactory)
-    : m_executiveFactory(std::move(executiveFactory))
+  : m_executiveFactory(std::move(executiveFactory))
 {}
 
 ExecutiveSerialFlow::~ExecutiveSerialFlow() = default;
 
 void ExecutiveSerialFlow::stop()
 {
-        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveSerialFlow";
-        if (!m_isRunning)
-        {
-                EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
-                return;
-        }
+    EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveSerialFlow";
+    if (!m_isRunning)
+    {
+        EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
+        return;
+    }
 
-        m_isRunning = false;
-        ExecutiveFlowInterface::stop();
+    m_isRunning = false;
+    ExecutiveFlowInterface::stop();
 }
 
 void ExecutiveSerialFlow::submit(CallParameters::UniquePtr txInput)
@@ -87,10 +87,10 @@ void ExecutiveSerialFlow::asyncRun(std::function<void(CallParameters::UniquePtr)
 std::shared_ptr<TransactionExecutive> ExecutiveSerialFlow::buildExecutive(
     CallParameters::UniquePtr& input)
 {
-    bool isFeatureBalancePolicy1 =
-        m_executiveFactory->getBlockContext().features().get(ledger::Features::Flag::feature_balance_policy1);
+    bool isFeatureBalancePolicy1 = m_executiveFactory->getBlockContext().features().get(
+        ledger::Features::Flag::feature_balance_policy1);
     return m_executiveFactory->build(input->codeAddress, input->contextID, input->seq,
-                isFeatureBalancePolicy1 ? ExecutiveType::billing : ExecutiveType::common);
+        isFeatureBalancePolicy1 ? ExecutiveType::billing : ExecutiveType::common);
 }
 
 void ExecutiveSerialFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,

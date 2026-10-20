@@ -5,8 +5,8 @@
 using namespace bcos::storage;
 
 CacheStorageFactory::CacheStorageFactory(
-        bcos::storage::TransactionalStorageInterface::Ptr backendStorage, ssize_t cacheSize)
-    : m_cacheSize(cacheSize), m_backendStorage(std::move(backendStorage))
+    bcos::storage::TransactionalStorageInterface::Ptr backendStorage, ssize_t cacheSize)
+  : m_cacheSize(cacheSize), m_backendStorage(std::move(backendStorage))
 {}
 
 MergeableStorageInterface::Ptr CacheStorageFactory::build()

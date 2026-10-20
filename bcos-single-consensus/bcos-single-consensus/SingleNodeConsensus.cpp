@@ -64,22 +64,30 @@ private:
 
 namespace
 {
-/// Karst Engine dialect: the built-in CL speaks the same method versions op-node uses
-/// against a Karst chain (rollup/types.go version selection) — forkchoiceUpdated V3 to
-/// build, getPayload V5 to fetch, newPayload V4 to commit. The produced blocks' execution
-/// semantics are still governed by the ledger's executor version, not by these versions.
+/// forkchoiceUpdated V3 builds on either EngineService.
 constexpr std::uint32_t c_forkchoiceVersion =
     static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3);
-constexpr std::uint32_t c_getPayloadVersion =
+/// Karst Engine dialect (the executor_version 1 EngineService): the method versions op-node
+/// uses against a Karst chain (rollup/types.go version selection) — getPayload V5 to fetch,
+/// newPayload V4 to commit.
+constexpr std::uint32_t c_karstGetPayloadVersion =
     static_cast<std::uint32_t>(bcos::engine::ApiVersion::V5);
-constexpr std::uint32_t c_newPayloadVersion =
+constexpr std::uint32_t c_karstNewPayloadVersion =
     static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4);
+/// L1 dialect (the executor_version 2 EngineService): getPayload V3 and newPayload V3, the
+/// Cancun pair. getPayload V4/V5 require the OP Isthmus withdrawalsRoot that an L1 payload
+/// never carries (requireGetPayloadShape). The produced blocks' execution semantics are
+/// governed by the chain's fork schedule, not by these versions.
+constexpr std::uint32_t c_l1GetPayloadVersion =
+    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3);
+constexpr std::uint32_t c_l1NewPayloadVersion =
+    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3);
 }  // namespace
 
 SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engineService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::uint64_t _blockIntervalMs,
     bool _produceEmptyBlocks, bcos::crypto::HashType _prevRandao, std::string _feeRecipient,
-    std::uint64_t _fixedTimestamp)
+    std::uint64_t _fixedTimestamp, bool _l1Dialect)
   : m_engineService(_engineService),
     m_ledger(std::move(_ledger)),
     m_blockIntervalMs(_blockIntervalMs > 0 ? _blockIntervalMs : 1000),
@@ -88,7 +96,9 @@ SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engine
     // Parse the coinbase exactly once here: a malformed fee_recipient must fail the node at
     // startup, not fail on the first block tick.
     m_feeRecipient(toAddress(_feeRecipient)),
-    m_fixedTimestamp(_fixedTimestamp)
+    m_fixedTimestamp(_fixedTimestamp),
+    m_getPayloadVersion(_l1Dialect ? c_l1GetPayloadVersion : c_karstGetPayloadVersion),
+    m_newPayloadVersion(_l1Dialect ? c_l1NewPayloadVersion : c_karstNewPayloadVersion)
 {}
 
 SingleNodeConsensus::~SingleNodeConsensus()
@@ -141,8 +151,7 @@ void SingleNodeConsensus::loop()
         {
             SINGLE_CONSENSUS_LOG(ERROR)
                 << LOG_DESC("produceBlock iteration threw (unknown)")
-                << LOG_KV("diagnostic",
-                    boost::current_exception_diagnostic_information());
+                << LOG_KV("diagnostic", boost::current_exception_diagnostic_information());
         }
         // Drain the mempool as fast as possible when transactions are available (a tx is
         // sealed immediately after submission instead of waiting for the next interval
@@ -193,8 +202,7 @@ void SingleNodeConsensus::resolveInitialHead()
     auto [headHeaderError, headBlock] = headerPromise->wait(m_running);
     if (!headHeaderError && headBlock && headBlock->blockHeader())
     {
-        m_lastTimestamp =
-            static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
+        m_lastTimestamp = static_cast<std::uint64_t>(headBlock->blockHeader()->timestamp());
     }
 
     m_headInitialized = true;
@@ -281,7 +289,7 @@ bool SingleNodeConsensus::produceBlock()
 
     // getPayload: fetch the built block proposal (sealed transactions + header).
     auto payload =
-        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, c_getPayloadVersion));
+        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, m_getPayloadVersion));
     if (!payload)
     {
         SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("getPayload returned null");
@@ -304,12 +312,23 @@ bool SingleNodeConsensus::produceBlock()
     // and the eth_* RPC reads.
     bcos::engine::NewPayloadRequest request;
     request.executionPayload = std::move(executionPayload);
-    // newPayloadV4: echo the beacon root the payload was built with (as op-node does)
-    // and pass the required-empty blob-hash / executionRequests lists.
+    // newPayload V3/V4: echo what the payload was built with, as a consensus client does —
+    // the beacon root, the execution requests (V4 reads them; the Karst lane's are empty),
+    // and the blob versioned hashes of its blob transactions in block order (none except on
+    // executor_version 2).
     request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
-    request.executionRequests = std::vector<bcos::bytes>{};
+    request.executionRequests = payload->executionRequests.value_or(std::vector<bcos::bytes>{});
+    for (auto const& tx : request.executionPayload.transactions)
+    {
+        if (tx.decoded != nullptr)
+        {
+            auto const& hashes = tx.decoded->blobVersionedHashes();
+            request.expectedBlobVersionedHashes.insert(
+                request.expectedBlobVersionedHashes.end(), hashes.begin(), hashes.end());
+        }
+    }
     auto newPayloadStatus =
-        task::syncWait(m_engineService.newPayload(request, c_newPayloadVersion));
+        task::syncWait(m_engineService.newPayload(request, m_newPayloadVersion));
     if (newPayloadStatus.status != bcos::engine::PayloadValidationStatus::Valid)
     {
         SINGLE_CONSENSUS_LOG(ERROR)

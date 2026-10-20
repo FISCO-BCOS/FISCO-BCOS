@@ -42,7 +42,7 @@ public:
     using Ptr = std::shared_ptr<ExecutiveDagFlow>;
 
     ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory,
-                std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache);
+        std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache);
     virtual ~ExecutiveDagFlow() = default;
 
     void submit(CallParameters::UniquePtr txInput) override;

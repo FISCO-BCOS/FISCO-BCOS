@@ -40,9 +40,9 @@ public:
 
     BlockSyncStatusInterface::Ptr createBlockSyncStatusMsg(int32_t version = 0) override
     {
-        BlockSyncStatusInterface::Ptr status =  std::make_shared<BlockSyncStatusImpl>();
+        BlockSyncStatusInterface::Ptr status = std::make_shared<BlockSyncStatusImpl>();
         status->setVersion(version);
-        
+
         return status;
     }
 

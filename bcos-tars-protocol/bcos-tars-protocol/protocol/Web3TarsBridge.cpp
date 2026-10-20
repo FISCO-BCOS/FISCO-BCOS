@@ -195,8 +195,8 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> decodeWeb3RawTransaction(
     // Restore the sender from the signature so the executor can validate the nonce /
     // balance without a separate recovery pass.
     auto senderHex = web3Tx.sender();
-    bcos::bytes senderBytes = bcos::fromHex(
-        senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
+    bcos::bytes senderBytes =
+        bcos::fromHex(senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
     tx->forceSender(senderBytes);
     tx->calculateHash(hashImpl);
     return tx;

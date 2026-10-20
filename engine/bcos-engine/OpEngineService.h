@@ -43,9 +43,9 @@
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Bloom.h>
-#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/lexical_cast.hpp>
 
 #include <algorithm>
@@ -78,7 +78,7 @@ std::optional<std::string> validateOpPayloadAttributes(
     const PayloadAttributes& payloadAttributes, bool jovianActive);
 /// op-geth miner.BuildPayload uses attrs.Transactions as-is and never synthesizes
 /// an L1-attributes deposit. Synthesis is test-only (`allowSynthesizedL1Attributes`);
-/// production op_engine_rpc must receive the real deposit from op-node.
+/// in production the OP lane's [engine_rpc] must receive the real deposit from op-node.
 inline std::optional<std::string> requireL1AttributesDeposit(
     const PayloadAttributes& payloadAttributes, bool allowSynthesized)
 {

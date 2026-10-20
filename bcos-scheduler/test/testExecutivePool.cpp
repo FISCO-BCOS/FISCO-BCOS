@@ -1,10 +1,11 @@
 #include "Executive.h"
 #include "ExecutivePool.h"
 #include <bcos-framework/executor/NativeExecutionMessage.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <stdlib.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
-#include <bcos-utilities/LogStream.h>
 
 
 using namespace bcos::scheduler;
@@ -13,7 +14,7 @@ namespace bcos::test
 {
 struct ExecutivePoolFixture
 {
-    ExecutivePoolFixture(){};
+    ExecutivePoolFixture() {};
 
     scheduler::ExecutivePool m_executivePool;
     scheduler::ExecutivePool::MessageHint m_messageHint;

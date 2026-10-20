@@ -24,10 +24,10 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/Common.h>
 #include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
 
-#include <bcos-utilities/Common.h>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -89,14 +89,14 @@ opeth::DepositTx plainDeposit(evmc::address to, int64_t gasLimit = 100'000)
     return dep;
 }
 
-bcos::protocol::TransactionReceipt::Ptr runIsthmusDeposit(MutableStorage& storage,
-    opeth::DepositTx const& dep, eth::EthBlockInfo const& block)
+bcos::protocol::TransactionReceipt::Ptr runIsthmusDeposit(
+    MutableStorage& storage, opeth::DepositTx const& dep, eth::EthBlockInfo const& block)
 {
     eth::EthereumState<MutableStorage> state{storage};
     evmc::VM vm{evmc_create_evmone()};
-    return bcos::task::syncWait(opeth::opRunDeposit(state, block, /*blockHashLookup=*/{}, dep,
-        opeth::OP_ISTHMUS_SPEC, vm, kChainId, block.gas_limit, *makeReceiptFactory(),
-        block.number));
+    return bcos::task::syncWait(
+        opeth::opRunDeposit(state, block, /*blockHashLookup=*/{}, dep, opeth::OP_ISTHMUS_SPEC, vm,
+            kChainId, block.gas_limit, *makeReceiptFactory(), block.number));
 }
 
 int64_t receiptGasUsed(bcos::protocol::TransactionReceipt const& r)
@@ -153,8 +153,8 @@ BOOST_AUTO_TEST_CASE(RefundIsCappedAtOneFifthOfGasUsed)
     MutableStorage storage{1};
     seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
     seedAccount(storage, kClear4, 1, bcos::u256{0},
-        {0x60, 0x00, 0x60, 0x00, 0x55, 0x60, 0x00, 0x60, 0x01, 0x55, 0x60, 0x00, 0x60, 0x02,
-            0x55, 0x60, 0x00, 0x60, 0x03, 0x55, 0x00},
+        {0x60, 0x00, 0x60, 0x00, 0x55, 0x60, 0x00, 0x60, 0x01, 0x55, 0x60, 0x00, 0x60, 0x02, 0x55,
+            0x60, 0x00, 0x60, 0x03, 0x55, 0x00},
         {{word(0), word(1)}, {word(1), word(1)}, {word(2), word(1)}, {word(3), word(1)}});
 
     auto const r = runIsthmusDeposit(storage, plainDeposit(kClear4), depositBlock());
@@ -251,8 +251,8 @@ BOOST_AUTO_TEST_CASE(ContractCreationDerivesAddressFromPreExecutionNonce)
     // keccak256(rlp([0x00..00cc, 5]))[12:] — independently derived, the same derivation
     // op-geth's crypto.CreateAddress performs over the pre-execution nonce. The receipt's
     // contractAddress is unprefixed hex (evmc::hex convention, as the original pinned it).
-    BOOST_CHECK_EQUAL(std::string{r->contractAddress()},
-        "3877807392e15d8472ad508195a5541f0f9950c2");
+    BOOST_CHECK_EQUAL(
+        std::string{r->contractAddress()}, "3877807392e15d8472ad508195a5541f0f9950c2");
     auto const& meta = r->opStackMeta();
     BOOST_REQUIRE(meta.has_value());
     BOOST_REQUIRE(meta->deposit_nonce.has_value());
@@ -348,7 +348,8 @@ BOOST_AUTO_TEST_CASE(SystemTxIsBlockErrorSinceRegolith)
 // Deposit gasLimit over the remaining block gas is a block-level error (op-geth
 // ErrGasLimitReached — one of exactly two deposit preCheck block errors); exactly equal is
 // accepted (a ">=" comparison cheat fails this boundary).
-BOOST_AUTO_TEST_CASE(BlockBudgetBoundary){
+BOOST_AUTO_TEST_CASE(BlockBudgetBoundary)
+{
     {
         MutableStorage storage{1};
         seedAccount(storage, kFrom, 0, bcos::u256{0}, {});

@@ -23,10 +23,11 @@
 #include "bcos-executor/src/Common.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage/Table.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
 #include <future>
-#include <bcos-utilities/LogStream.h>
 
 using namespace bcos::tool;
 using namespace bcos::storage;
@@ -74,7 +75,8 @@ void BfsFileFactory::buildDirEntry(
             }
         },
         fileType);
-    _mutableEntry.set(bcos::storage::serialize::encode<std::vector<std::string>>({type.data(), "0", "0", "", "", ""}));
+    _mutableEntry.set(bcos::storage::serialize::encode<std::vector<std::string>>(
+        {type.data(), "0", "0", "", "", ""}));
 }
 
 bool BfsFileFactory::buildLink(Table& _table, const std::string& _address, const std::string& _abi,

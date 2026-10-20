@@ -19,12 +19,12 @@
  */
 
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include <boost/log/core/core.hpp>
 #include "bcos-framework/protocol/Protocol.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/log/core/core.hpp>
+#include <boost/test/unit_test.hpp>
 #include <range/v3/view/drop.hpp>
 #include <range/v3/view/take.hpp>
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

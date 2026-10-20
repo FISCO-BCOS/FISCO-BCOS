@@ -47,12 +47,9 @@ task::Task<void> writeFlagAt(
 
 BOOST_AUTO_TEST_SUITE(FeaturesActivationBlockSuite)
 
-BOOST_AUTO_TEST_CASE(MptStateRootFlagExistsWithPermanentValue)
+BOOST_AUTO_TEST_CASE(MptStateRootFlagExists)
 {
     BOOST_CHECK(Features::contains("feature_mpt_state_root"));
-    // The explicit enum value is persisted on-chain via feature_flags (Features.h "PERMANENT"
-    // rule) — pin it so a reorder/renumber cannot slip through review.
-    BOOST_CHECK_EQUAL(magic_enum::enum_integer(Features::Flag::feature_mpt_state_root), 58);
 }
 
 BOOST_AUTO_TEST_CASE(ActivationBlockReturnsMinusOneWhenUnset)

@@ -428,7 +428,8 @@ BOOST_AUTO_TEST_CASE(EncodeDepositEnvelopeGolden)
         "2222222222222222222222222222222222222222808080830186a08080");
 
     // Round-trip: the decoder must reproduce every field.
-    auto const decoded = decodeOpDepositEnvelope(bcos::bytesConstRef{encoded.data(), encoded.size()});
+    auto const decoded =
+        decodeOpDepositEnvelope(bcos::bytesConstRef{encoded.data(), encoded.size()});
     BOOST_REQUIRE(!decoded.to.has_value());
     BOOST_REQUIRE(!decoded.mint.has_value());
     BOOST_CHECK(decoded.value == bcos::u256{0});

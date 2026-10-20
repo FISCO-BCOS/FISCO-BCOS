@@ -22,6 +22,7 @@
 #include <bcos-crypto/hash/Sha256.h>
 #include <bcos-crypto/hash/Sha3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -92,8 +93,7 @@ BOOST_AUTO_TEST_CASE(testSM3)
     BOOST_CHECK_EQUAL(
         ts, std::string("afe4ccac5ab7d52bcae36373676215368baf52d3905e1fecbe369cc120e97628"));
 
-    h256 emptySM3(
-        fromHex("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
+    h256 emptySM3(fromHex("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
     BOOST_REQUIRE_EQUAL(emptySM3, sm3->emptyHash());
 
     BOOST_REQUIRE_EQUAL(cryptoSuite->hash(""sv),
@@ -115,8 +115,7 @@ BOOST_AUTO_TEST_CASE(testSha3)
     BOOST_CHECK_EQUAL(
         ts, std::string("d716ec61e18904a8f58679b71cb065d4d5db72e0e0c3f155a4feff7add0e58eb"));
 
-    h256 emptySha3(
-        fromHex("a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"));
+    h256 emptySha3(fromHex("a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"));
     BOOST_REQUIRE_EQUAL(emptySha3, sha3->emptyHash());
 
     BOOST_REQUIRE_EQUAL(cryptoSuite->hash(""sv),

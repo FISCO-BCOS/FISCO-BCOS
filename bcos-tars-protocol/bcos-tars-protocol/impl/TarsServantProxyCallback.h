@@ -20,8 +20,8 @@
  */
 #pragma once
 
-#include "bcos-utilities/LogStream.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/LogStream.h"
 #include "servant/ServantProxy.h"
 #include <util/tc_autoptr.h>
 #include <boost/exception/detail/type_info.hpp>
@@ -142,9 +142,7 @@ public:
         // heartbeat timer removed: no longer needed
     }
 
-    void stop()
-    {
-    }
+    void stop() {}
 
 public:
     const std::string& serviceName() const { return m_serviceName; }

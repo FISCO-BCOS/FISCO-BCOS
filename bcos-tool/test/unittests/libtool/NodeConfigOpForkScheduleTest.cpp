@@ -14,14 +14,15 @@
  *  limitations under the License.
  *
  * @file NodeConfigOpForkScheduleTest.cpp
- * @brief NodeConfig [op_fork_schedule] canonical loader tests, joining the
- *        generator output to the node loader.
+ * @brief config.genesis [op_fork_schedule] is no longer read: the OP lane's schedule comes
+ *        from [op_fork_timestamps] alone.
  */
 
-#include "ExceptionCheck.h"
 #include "EthLaneGenesisFixture.h"
-#include "NodeConfigLoaderProbe.h"
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
+#include <string>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -30,161 +31,63 @@ namespace bcos::test
 {
 BOOST_AUTO_TEST_SUITE(NodeConfigOpForkScheduleTest)
 
-BOOST_AUTO_TEST_CASE(parsesNormalizedCanonical)
+namespace
 {
-    LoaderProbe probe;
-    probe.loadOpForkSchedule(
-        fromIni("[op_fork_schedule]\n"
-                "canonical=0:isthmus,1764691201:jovian\n"));
-    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
-    BOOST_CHECK_EQUAL(*probe.genesisConfig().m_opstackForkSchedule, "0:isthmus,1764691201:jovian");
+std::string genesisFor(int version, std::string const& sections)
+{
+    return std::string(
+               "[version]\ncompatibility_version=3.18.0\n"
+               "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+               "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
+               "leader_period=1\nnode.0=") +
+           std::string(128, '1') +
+           ":1:1\n"
+           "[tx]\ngas_limit=3000000000\n"
+           "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+           "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+           "version=" +
+           std::to_string(version) + "\n" + sections + ethLaneGenesisSections();
 }
 
-BOOST_AUTO_TEST_CASE(acceptsKarstAfterJovian)
+std::string pinOf(std::string const& genesis)
 {
-    LoaderProbe probe;
-    probe.loadOpForkSchedule(
-        fromIni("[op_fork_schedule]\n"
-                "canonical=0:jovian,1:karst\n"));
-    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
-    BOOST_CHECK_EQUAL(*probe.genesisConfig().m_opstackForkSchedule, "0:jovian,1:karst");
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    cfg.loadGenesisConfigFromString(genesis);
+    return generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
+}
+}  // namespace
+
+// A v3 genesis that also carries [op_fork_schedule] loads as if the section were absent: a
+// canonical that disagrees with [op_fork_timestamps], one the old loader refused as malformed,
+// and one with an unknown key all leave the schedule and the genesis pin to
+// [op_fork_timestamps].
+BOOST_AUTO_TEST_CASE(opLaneIgnoresTheSection)
+{
+    const std::string timestamps = "[op_fork_timestamps]\njovian_time=0\nkarst_time=500\n";
+    auto const expectedPin = pinOf(genesisFor(3, timestamps));
+    for (auto const* section : {"[op_fork_schedule]\ncanonical=0:isthmus,100:jovian\n",
+             "[op_fork_schedule]\ncanonical=0:holocene,1:jovian\n",
+             "[op_fork_schedule]\ncanonica=0:isthmus\n"})
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(genesisFor(3, timestamps + section)));
+        BOOST_REQUIRE(cfg.opForkSchedule().has_value());
+        BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, 0U);
+        BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, 500U);
+        BOOST_CHECK_EQUAL(
+            generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig()), expectedPin);
+    }
 }
 
-// A simultaneous jovian/karst activation folds into the later fork
-// ("0:isthmus,T:karst"), so skipping jovian is legal.
-BOOST_AUTO_TEST_CASE(acceptsKarstAfterIsthmus)
+// Off the OP lane the section is not read either (it used to refuse to start there).
+BOOST_AUTO_TEST_CASE(v2IgnoresTheSection)
 {
-    LoaderProbe probe;
-    probe.loadOpForkSchedule(
-        fromIni("[op_fork_schedule]\n"
-                "canonical=0:isthmus,1:karst\n"));
-    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
-    BOOST_CHECK_EQUAL(*probe.genesisConfig().m_opstackForkSchedule, "0:isthmus,1:karst");
-}
-
-// Skipping any other fork is still rejected.
-BOOST_AUTO_TEST_CASE(rejectsSkippedFork)
-{
-    LoaderProbe probe;
-    BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
-                                                           "canonical=0:holocene,1:jovian\n")),
-        InvalidConfig, [](auto const& e) { return errinfoContains(e, "protocol order"); });
-}
-
-BOOST_AUTO_TEST_CASE(acceptsFullOfficialChain)
-{
-    LoaderProbe probe;
-    probe.loadOpForkSchedule(
-        fromIni("[op_fork_schedule]\n"
-                "canonical=0:regolith,1000:canyon,2000:ecotone,3000:fjord,4000:granite,"
-                "5000:holocene,6000:isthmus,7000:jovian,8000:karst\n"));
-    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
-    BOOST_CHECK_EQUAL(*probe.genesisConfig().m_opstackForkSchedule,
-        "0:regolith,1000:canyon,2000:ecotone,3000:fjord,4000:granite,"
-        "5000:holocene,6000:isthmus,7000:jovian,8000:karst");
-}
-
-BOOST_AUTO_TEST_CASE(acceptsRegolithBaseline)
-{
-    LoaderProbe probe;
-    probe.loadOpForkSchedule(
-        fromIni("[op_fork_schedule]\n"
-                "canonical=0:regolith\n"));
-    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
-    BOOST_CHECK_EQUAL(*probe.genesisConfig().m_opstackForkSchedule, "0:regolith");
-}
-
-BOOST_AUTO_TEST_CASE(emptyCanonicalFailsClosed)
-{
-    LoaderProbe probe;
-    BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
-                                                           "canonical=\n")),
-        InvalidConfig, [](auto const& e) { return errinfoContains(e, "op_fork_schedule"); });
-}
-
-BOOST_AUTO_TEST_CASE(whitespaceCanonicalFailsClosed)
-{
-    LoaderProbe probe;
-    BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
-                                                           "canonical=   \n")),
-        InvalidConfig, [](auto const& e) { return errinfoContains(e, "op_fork_schedule"); });
-}
-
-BOOST_AUTO_TEST_CASE(sectionWithoutCanonicalFailsClosed)
-{
-    // boost::read_ini drops empty sections, so "[op_fork_schedule]\\n" never
-    // reaches the loader. Build the child explicitly: section present, no key.
-    boost::property_tree::ptree pt;
-    pt.put_child("op_fork_schedule", boost::property_tree::ptree{});
-    LoaderProbe probe;
-    BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(pt), InvalidConfig,
-        [](auto const& e) { return errinfoContains(e, "canonical"); });
-}
-
-// The loader's unknown-key policy matches its two siblings ([op_fork_timestamps] and
-// [op_eip1559] both reject unrecognised keys): a stray key — schedule syntax pasted from
-// another section, or a misspelling — is refused instead of silently ignored, because the
-// canonical text is genesis-frozen into the SYS_CONFIG row (review F3).
-BOOST_AUTO_TEST_CASE(unknownKeyIsRejectedLikeTheSiblingLoaders)
-{
-    LoaderProbe probe;
-    BOOST_CHECK_EXCEPTION(
-        probe.loadOpForkSchedule(
-            fromIni("[op_fork_schedule]\n"
-                    "canonical=0:isthmus\n"
-                    "jovian_time=1000\n")),
-        InvalidConfig, [](auto const& e) { return errinfoContains(e, "unrecognised key"); });
-    BOOST_CHECK_EXCEPTION(
-        probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
-                                         "canonica=0:isthmus\n")),
-        InvalidConfig, [](auto const& e) { return errinfoContains(e, "unrecognised key"); });
-    // The recognised key alone still loads (the whitelist does not over-reject).
-    probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
-                                     "canonical=0:isthmus\n"));
-    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
-}
-
-BOOST_AUTO_TEST_CASE(missingSectionLeavesScheduleUnset)
-{
-    LoaderProbe probe;
-    BOOST_CHECK_NO_THROW(probe.loadOpForkSchedule(fromIni("[chain]\nchain_id=1\n")));
-    BOOST_CHECK(!probe.genesisConfig().m_opstackForkSchedule.has_value());
-}
-
-BOOST_AUTO_TEST_CASE(reloadWithoutSectionClearsPreviousSchedule)
-{
-    LoaderProbe probe;
-    probe.loadOpForkSchedule(
-        fromIni("[op_fork_schedule]\n"
-                "canonical=0:isthmus,1764691201:jovian\n"));
-    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
-
-    BOOST_CHECK_NO_THROW(probe.loadOpForkSchedule(fromIni("[chain]\nchain_id=1\n")));
-    BOOST_CHECK(!probe.genesisConfig().m_opstackForkSchedule.has_value());
-}
-
-// The canonical gen_official_genesis.py emits for mainnet/base (registry pin
-// 9cf0456a…, produced by the tool's own run): a regolith baseline plus the eight
-// pinned EL activations, with delta skipped. This joins the generator to the loader —
-// each side is pinned alone elsewhere, so only this case proves the seam.
-BOOST_AUTO_TEST_CASE(acceptsGeneratedBaseSchedule)
-{
-    constexpr auto* generated =
-        "0:regolith,1704992401:canyon,1710374401:ecotone,1720627201:fjord,"
-        "1726070401:granite,1736445601:holocene,1746806401:isthmus,1764691201:jovian";
-    LoaderProbe probe;
-    probe.loadOpForkSchedule(
-        fromIni(std::string("[op_fork_schedule]\ncanonical=") + generated + "\n"));
-    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
-    BOOST_CHECK_EQUAL(*probe.genesisConfig().m_opstackForkSchedule, generated);
-
-    // Negative control: dropping one activation from the same schedule is exactly what
-    // the generator's contiguity rule exists to prevent, and the loader must reject it
-    // (otherwise the case above would pass for a loader that ignores order entirely).
-    constexpr auto* gap = "0:regolith,1704992401:canyon,1720627201:fjord";
-    BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(
-                              fromIni(std::string("[op_fork_schedule]\ncanonical=") + gap + "\n")),
-        InvalidConfig, [](auto const& e) { return errinfoContains(e, "protocol order"); });
+    const std::string timestamps =
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=0\ncancun_time=0\n"
+        "prague_time=0\nmerge_block=0\n";
+    BOOST_CHECK_EQUAL(pinOf(genesisFor(2, timestamps + "[op_fork_schedule]\ncanonical=0:jovian\n")),
+        pinOf(genesisFor(2, timestamps)));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

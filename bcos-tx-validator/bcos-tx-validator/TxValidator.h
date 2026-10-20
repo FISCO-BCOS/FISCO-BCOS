@@ -123,7 +123,7 @@ public:
         ledger::LedgerConfigState::Ptr ledgerConfigState,
         NonceCheckerInterface::Ptr txPoolNonceChecker, Web3NonceChecker::Ptr web3NonceChecker,
         SystemTxPredicate isSystemTx, std::string groupId, std::string chainId,
-        BlobPolicy blobPolicy = {});
+        BlobPolicy blobPolicy = {}, ledger::EvmcRevisionSchedule evmcRevisionSchedule = {});
 
     /// Bound after construction: the ledger nonce checker cannot be built until the pool has read
     /// the chain's block limit. Until it is bound there is nothing to check a BCOS nonce against,
@@ -187,6 +187,10 @@ private:
     /// Blob (EIP-4844) admission for normalize(): refused on L2, admitted with the
     /// per-transaction blob bound on L1.
     BlobPolicy m_blobPolicy;
+    /// Bound on the L1 EL lane (executor_version=2), which records no evmc_revision row: the
+    /// revision-dependent checks judge against the revision this schedule assigns to the head
+    /// block's timestamp. Empty elsewhere, where the snapshot's evmcRevisionForBlock decides.
+    ledger::EvmcRevisionSchedule m_evmcRevisionSchedule;
     /// The two late-bound dependencies, both written once from an init path that runs while
     /// transactions may already be arriving, hence the lock. Readers copy the handle out and
     /// release, so nothing is held across a co_await.

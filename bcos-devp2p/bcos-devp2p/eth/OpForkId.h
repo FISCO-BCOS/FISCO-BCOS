@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file OpForkId.h
- * @brief EIP-2124 fork-id for OP-Stack chains (the opstack-el sync handshake).
+ * @brief EIP-2124 fork-id for OP-Stack chains (the [debug] follow_devp2p sync handshake).
  *
  * Sourced from op-geth (optimism branch):
  *  - core/forkid/forkid.go gatherForks collects fork points by REFLECTION over
@@ -69,8 +69,7 @@ using OpForkIdLadder = std::array<uint64_t, c_opForkIdLadderSize>;  // canyon..k
 inline ForkId computeOpForkId(bcos::h256 const& _genesisHash, uint64_t _genesisTime,
     uint64_t _localHeadTime, OpForkIdLadder const& _ladder)
 {
-    uint32_t const checksum =
-        crc32(bcos::bytesConstRef(_genesisHash.data(), _genesisHash.size()));
+    uint32_t const checksum = crc32(bcos::bytesConstRef(_genesisHash.data(), _genesisHash.size()));
     // Compact out the unscheduled (UINT64_MAX) rungs before handing the ladder to the
     // generic walker: its UINT64_MAX-is-terminal rule exists for the L1 tail, where an
     // unscheduled fork can only ever be the LAST known one. The OP schedule allows
@@ -84,7 +83,7 @@ inline ForkId computeOpForkId(bcos::h256 const& _genesisHash, uint64_t _genesisT
             scheduled[count++] = fork;
         }
     }
-    return forkIdFromTimeLadder(checksum, _genesisTime, _localHeadTime,
-        std::span<const uint64_t>(scheduled.data(), count));
+    return forkIdFromTimeLadder(
+        checksum, _genesisTime, _localHeadTime, std::span<const uint64_t>(scheduled.data(), count));
 }
 }  // namespace bcos::devp2p::eth

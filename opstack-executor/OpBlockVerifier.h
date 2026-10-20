@@ -37,16 +37,15 @@
  * mergeBackStorage), reusing the helpers rather than copying their logic.
  */
 
+#include <opstack-executor/OpCommon.h>         // OpConsensusError / OpStorageError
 #include <opstack-executor/OpEthBlockSteps.h>  // preBlockOpEthSteps / finalizeOpEthBlockResult
 #include <opstack-executor/OpEthCommitments.h>  // OpEthBlockCommitments / opEthCommitmentsOf / opEthMismatchedFieldOf
-#include <opstack-executor/OpEthDeposit.h>      // decodeOpDepositEnvelope / DepositTx
-#include <opstack-executor/OpEthExecutor.h>     // OpEthExecutor / OpEthBlockContext
-#include <opstack-executor/OpForkSpec.h>        // opForkSpecAt
-#include <opstack-executor/OpCommon.h>          // OpConsensusError / OpStorageError
+#include <opstack-executor/OpEthDeposit.h>   // decodeOpDepositEnvelope / DepositTx
+#include <opstack-executor/OpEthExecutor.h>  // OpEthExecutor / OpEthBlockContext
+#include <opstack-executor/OpForkSpec.h>     // opForkSpecAt
 
 #include <bcos-devp2p/sync/Block.h>  // devp2p::sync::Block
-#include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source
-#include <bcos-framework/ledger/FeaturesStorage.h>
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/Block.h>
@@ -71,6 +70,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <fmt/format.h>
+#include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source
 #include <boost/throw_exception.hpp>
 
 #include <cstdint>
@@ -109,11 +109,10 @@ struct OpBlockVerificationFailed : public bcos::evm::OpConsensusError
     std::string computedValue;
     std::string announcedValue;
 
-    OpBlockVerificationFailed(
-        std::string field_, std::string computed_, std::string announced_)
+    OpBlockVerificationFailed(std::string field_, std::string computed_, std::string announced_)
       : bcos::evm::OpConsensusError(fmt::format(
-            "OpBlockVerifier: commitment mismatch on field {} (computed={}, announced={})",
-            field_, computed_, announced_)),
+            "OpBlockVerifier: commitment mismatch on field {} (computed={}, announced={})", field_,
+            computed_, announced_)),
         field(std::move(field_)),
         computedValue(std::move(computed_)),
         announcedValue(std::move(announced_))
@@ -230,12 +229,12 @@ inline protocol::Transaction::Ptr wrapOpP2pEnvelope(
     auto const txHash = hashImpl.hash(bcos::bytesConstRef(raw.data(), raw.size()));
     if (raw.empty())
     {
-        BOOST_THROW_EXCEPTION(bcos::evm::OpConsensusError(
-            "OpBlockVerifier: empty transaction envelope", txHash));
+        BOOST_THROW_EXCEPTION(
+            bcos::evm::OpConsensusError("OpBlockVerifier: empty transaction envelope", txHash));
     }
     auto const typeByte = static_cast<uint8_t>(raw[0]);
-    constexpr uint8_t kRlpListBase = 0xc0;     // legacy RLP list prefix
-    constexpr uint8_t kDepositTypeByte = 0x7e; // kDepositTxType (OpTransition.h)
+    constexpr uint8_t kRlpListBase = 0xc0;      // legacy RLP list prefix
+    constexpr uint8_t kDepositTypeByte = 0x7e;  // kDepositTxType (OpTransition.h)
     if (typeByte < kRlpListBase && typeByte != 0x01 && typeByte != 0x02 && typeByte != 0x04 &&
         typeByte != kDepositTypeByte)
     {
@@ -280,8 +279,8 @@ inline protocol::Transaction::Ptr wrapOpP2pEnvelope(
         try
         {
             auto senderHex = web3Tx.sender();
-            auto sender = bcos::fromHex(
-                senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
+            auto sender =
+                bcos::fromHex(senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
             tarsTx.sender.assign(sender.begin(), sender.end());
         }
         catch (std::exception const& e)
@@ -297,8 +296,7 @@ inline protocol::Transaction::Ptr wrapOpP2pEnvelope(
 /// The announced side of the six-way comparison, projected straight from the p2p header
 /// (presence AND value for the fork-gated fields — opEthMismatchedFieldOf treats presence
 /// asymmetry as a first-class mismatch).
-inline OpEthBlockCommitments announcedCommitmentsOf(
-    protocol::EthBlockHeaderData const& ethHeader)
+inline OpEthBlockCommitments announcedCommitmentsOf(protocol::EthBlockHeaderData const& ethHeader)
 {
     std::optional<uint64_t> blobGasUsed;
     if (ethHeader.blobGasUsed.has_value())
@@ -323,8 +321,7 @@ inline OpEthBlockCommitments announcedCommitmentsOf(
 }
 
 /// Render one commitment field for the OpBlockVerificationFailed diagnostic.
-inline std::string renderCommitmentField(
-    std::string_view field, OpEthBlockCommitments const& c)
+inline std::string renderCommitmentField(std::string_view field, OpEthBlockCommitments const& c)
 {
     auto optHash = [](std::optional<bcos::h256> const& v) {
         return v ? v->hexPrefixed() : std::string("<absent>");
@@ -366,9 +363,9 @@ public:
 
     OpBlockVerifier(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
-        bcos::ledger::OpForkSchedule forkSchedule,
-        bcos::protocol::BlockFactory::Ptr blockFactory, MultiLayerStorage& multiLayerStorage,
-        bcos::ledger::LedgerInterface::Ptr ledger, bcos::IOServicePool::Ptr ioServicePool,
+        bcos::ledger::OpForkSchedule forkSchedule, bcos::protocol::BlockFactory::Ptr blockFactory,
+        MultiLayerStorage& multiLayerStorage, bcos::ledger::LedgerInterface::Ptr ledger,
+        bcos::IOServicePool::Ptr ioServicePool,
         std::shared_ptr<bcos::ledger::mpt::CommitObserver> commitObserver = nullptr)
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
@@ -447,17 +444,15 @@ public:
                 "differs from the announced block hash)");
         }
 
-        //    Feature set + the execution LedgerConfig (revision from the fork config;
-        //    executor_version pinned to the OP lane — this verifier only runs on
-        //    executor_version >= OPSTACK_EXECUTOR_VERSION chains, and computeMptStateDelta's
-        //    l2Mode plus the parent-root rule branch on it).
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, view, number);
+        //    The execution LedgerConfig (revision from the fork config; executor_version
+        //    pinned to the OP lane — this verifier only runs on executor_version >=
+        //    OPSTACK_EXECUTOR_VERSION chains, and computeMptStateDelta's l2Mode plus the
+        //    parent-root rule branch on it). No Features: the OP lane forks on its timestamp
+        //    schedule only.
         bcos::ledger::LedgerConfig execLedgerConfig;
         execLedgerConfig.setBlockNumber(number);
         execLedgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
         execLedgerConfig.setEVMCRevision(spec.rev);
-        execLedgerConfig.setFeatures(features);
 
         // 4. Wrap every raw envelope into the executable tars carrier (0x03/0x7d and
         //    malformed envelopes are deterministic OpConsensusError here), and split the
@@ -475,8 +470,8 @@ public:
             {
                 try
                 {
-                    deposits.push_back(decodeOpDepositEnvelope(
-                        bcos::bytesConstRef(raw.data(), raw.size())));
+                    deposits.push_back(
+                        decodeOpDepositEnvelope(bcos::bytesConstRef(raw.data(), raw.size())));
                 }
                 catch (const OpEthDepositValidationFailed& e)
                 {
@@ -571,8 +566,9 @@ public:
         //    the next block's incremental build resolves its parent nodes. Missing parent
         //    nodes are a storage fault (MPTInvariantViolation), never a silent empty-trie
         //    rebuild.
-        auto const parentStateRoot = co_await ledger::mpt::parentStateRootFor(
-            view, bcos::ledger::OPSTACK_EXECUTOR_VERSION, features, number, *m_blockFactory);
+        auto const parentStateRoot =
+            co_await ledger::mpt::parentStateRootFor(view, bcos::ledger::OPSTACK_EXECUTOR_VERSION,
+                bcos::ledger::Features{}, number, *m_blockFactory);
         ledger::mpt::MPTDeltaLayer mptDelta;
         try
         {
@@ -639,15 +635,14 @@ public:
                 outBlock->appendReceipt(receipt);
             }
             auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-                result.transactions |
-                ::ranges::views::transform([](auto const& tx) {
+                result.transactions | ::ranges::views::transform([](auto const& tx) {
                     return protocol::Transaction::ConstPtr(tx);
                 }) |
                 ::ranges::to<std::vector>());
             // blockHashOverride keys the hash rows by the p2p identity; writeNonces=false
             // matches the OP commit path (OpScheduler::commitPersist).
-            co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, outBlock,
-                prewriteStorage, blockHash, /*writeNonces=*/false);
+            co_await ledger::prewriteBlockToBuffer(
+                *m_ledger, blockTxs, outBlock, prewriteStorage, blockHash, /*writeNonces=*/false);
             // The deletions of expired "/mpt/" node rows land in the SAME WriteBatch as the
             // block data (crash-atomicity contract, CommitObserver.h); a Noop observer
             // returns an empty batch.

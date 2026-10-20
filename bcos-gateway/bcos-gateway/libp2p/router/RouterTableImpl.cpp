@@ -135,7 +135,8 @@ RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable()
     return std::make_shared<RouterTable>();
 }
 
-RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable(bcos::bytesConstRef _decodedData)
+RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable(
+    bcos::bytesConstRef _decodedData)
 {
     return std::make_shared<RouterTable>(_decodedData);
 }

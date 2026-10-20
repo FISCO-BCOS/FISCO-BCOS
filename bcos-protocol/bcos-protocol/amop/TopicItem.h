@@ -19,13 +19,14 @@
  */
 #pragma once
 #include <bcos-framework/Common.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/json.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
-#include <bcos-utilities/LogStream.h>
 namespace bcos
 {
 namespace protocol

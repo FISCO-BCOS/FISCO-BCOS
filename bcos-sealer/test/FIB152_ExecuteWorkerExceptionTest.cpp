@@ -137,8 +137,7 @@ struct ThrowingHookSealer : public bcos::sealer::Sealer
 {
     std::atomic<int> hookInvocations{0};
 
-    explicit ThrowingHookSealer(bcos::sealer::SealerConfig::Ptr cfg,
-        boost::asio::io_context& io)
+    explicit ThrowingHookSealer(bcos::sealer::SealerConfig::Ptr cfg, boost::asio::io_context& io)
       : bcos::sealer::Sealer(std::move(cfg), io)
     {}
 

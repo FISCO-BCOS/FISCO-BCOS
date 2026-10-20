@@ -2998,7 +2998,8 @@ BOOST_AUTO_TEST_CASE(TableMeta_read_write_mutex)
         meta->insertPageInfoNoLock(
             storage::KeyPageStorage::PageInfo(std::to_string(i), i % 2 == 0 ? 0 : i, i, nullptr));
     }
-    std::shared_ptr<bcos::IOServicePool> threadPool = std::make_shared<bcos::IOServicePool>(2, "test");
+    std::shared_ptr<bcos::IOServicePool> threadPool =
+        std::make_shared<bcos::IOServicePool>(2, "test");
     auto promise = std::make_shared<std::promise<void>>();
     threadPool->post([&]() {
         std::cout << "==================== parallelTraverse" << std::endl;
