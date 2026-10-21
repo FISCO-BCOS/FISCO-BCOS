@@ -956,6 +956,95 @@ BOOST_AUTO_TEST_CASE(storageFaultDuringSubcallFailsWholeFrame)
 // zero coverage in either lane. Pin the exact address: deleting the hook
 // leaves evmone's nonce-derived compute_create_address in charge, which produces a
 // different value and turns this red.
+// Round-8 review F1: a host fault recorded strictly inside a CHILD frame must reach the
+// parent's record. The child's bcos::Error arm marks its response
+// (evmStatus=EVMC_INTERNAL_ERROR, status=RevertInstruction); externalRequest copies
+// that pair onto the calling frame, whose own throwIfHostFault() then fails it too — up
+// to the top frame, so no SUCCESS receipt can seal over a node-local fault. The
+// end-to-end sibling above arms its fault on the PARENT's own nonce row and only
+// reaches the top frame; a child-frame end-to-end arm cannot be built in this fixture
+// because the child contract is created inside the same transaction, so its rows are
+// served from the in-memory StateStorage and never reach the injectable backend. This
+// pins the copy seam itself, with the deterministic-failure negative control.
+namespace
+{
+class ChildResponseExecutive : public TransactionExecutive
+{
+public:
+    using TransactionExecutive::TransactionExecutive;
+    bool hostFault = false;
+
+    CallParameters::UniquePtr externalCall(CallParameters::UniquePtr) override
+    {
+        auto response = std::make_unique<CallParameters>(CallParameters::REVERT);
+        response->status = (int32_t)bcos::protocol::TransactionStatus::RevertInstruction;
+        response->message = "injected child-frame fault";
+        response->evmStatus = hostFault ? (int32_t)EVMC_INTERNAL_ERROR : 0;
+        return response;
+    }
+};
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(childHostFaultIsCopiedToTheParentRecord)
+{
+    auto backendStorage = std::make_shared<StateStorage>(nullptr, false);
+    auto stateStorage = std::make_shared<StateStorage>(backendStorage, false);
+    auto ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
+    auto blockContext = std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0,
+        h256(), bcos::utcTime(), static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION),
+        false, backendStorage);
+
+    auto makeHost = [&](bool hostFault) {
+        auto executive =
+            std::make_shared<ChildResponseExecutive>(*blockContext, "aabbccddee", 100, 0);
+        executive->hostFault = hostFault;
+        auto callParameters = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+        callParameters->receiveAddress = "aabbccddee";
+        callParameters->codeAddress = "aabbccddee";
+        callParameters->senderAddress = "1122334455";
+        callParameters->origin = "1122334455";
+        callParameters->gas = 100000;
+        return std::make_unique<HostContext>(
+            std::move(callParameters), executive, "/apps/aabbccddee");
+    };
+
+    evmc_message message = {.kind = EVMC_CALL,
+        .flags = 0,
+        .depth = 0,
+        .gas = 100000,
+        .recipient = {},
+        .sender = {},
+        .input_data = nullptr,
+        .input_size = 0,
+        .value = {},
+        .code_address = {},
+        .code = nullptr,
+        .code_size = 0};
+    // A non-precompiled target: the zero address starts with SYS_ADDRESS_PREFIX and the
+    // precompiled probes would need registries this seam test does not build.
+    std::uninitialized_fill_n(
+        message.code_address.bytes, sizeof(message.code_address.bytes), (uint8_t)0xaa);
+
+    // Host-fault marker: the parent records it and hands the failing status to the EVM.
+    {
+        auto host = makeHost(true);
+        BOOST_CHECK(!host->hasHostFault());
+        auto result = host->externalRequest(&message);
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
+        BOOST_CHECK(host->hasHostFault());
+        BOOST_CHECK_EQUAL(host->hostFault(), "injected child-frame fault");
+    }
+
+    // Negative control: the same REVERT/revert-status shape with evmStatus 0 is a
+    // deterministic child failure and must NOT become a parent host fault.
+    {
+        auto host = makeHost(false);
+        auto result = host->externalRequest(&message);
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);  // evmStatus 0 == SUCCESS
+        BOOST_CHECK(!host->hasHostFault());
+    }
+}
+
 BOOST_AUTO_TEST_CASE(externalCallLegacyCreateFormula)
 {
     std::string ABin =

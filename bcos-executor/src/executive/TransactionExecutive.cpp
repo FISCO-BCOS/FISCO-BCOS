@@ -1296,6 +1296,15 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
+        // A recorded host fault must reach the parent frame as a failing status (review
+        // F1): the caller's externalRequest copies the record from the pair
+        // (EVMC_INTERNAL_ERROR, RevertInstruction). No deterministic arm produces that
+        // pair — a VM-level INTERNAL_ERROR halts the node in parseEVMCResult instead of
+        // becoming a receipt — so the marker needs no replay flag.
+        if (hostContext.hasHostFault())
+        {
+            callResults->evmStatus = (int32_t)EVMC_INTERNAL_ERROR;
+        }
         if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             writeErrInfoToOutput(e.errorMessage(), *callResults);

@@ -238,6 +238,17 @@ inline constexpr struct
             {
                 throw;
             }
+            // A node-fault bcos::Error must not be sealed here (review F2): the inner
+            // bcos::Error catch already decided to rethrow it under
+            // bugfix_precompiled_node_fault_rethrow, and swallowing it as an
+            // INTERNAL_ERROR receipt is exactly the receipt that flag exists to
+            // prevent. Let it escape to the dispatch site, which records the fault on
+            // the owning frame and lets the frame fail whole.
+            if (features.get(ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow) &&
+                dynamic_cast<bcos::Error*>(&e) != nullptr)
+            {
+                throw;
+            }
             return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
                 protocol::TransactionStatus::PrecompiledError, EVMC_INTERNAL_ERROR, 0,
                 "InternalPrecompiledError",

@@ -1172,10 +1172,22 @@ private:
 
         if (m_preparedPrecompiled != nullptr)
         {
-            co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
-                m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
-                buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+            try
+            {
+                co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
+                    m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                    buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
+                    m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+            }
+            catch (bcos::Error&)
+            {
+                // A node-fault bcos::Error escapes callPrecompiled's own catch under
+                // bugfix_precompiled_node_fault_rethrow (review F2). Record it on THIS
+                // frame so the child boundary's hasHostFault() copy fails the parent
+                // chain too, then let the FIB-88/92 arm shape the failing result.
+                recordHostFault(boost::current_exception_diagnostic_information());
+                throw;
+            }
         }
 
         if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
@@ -1200,10 +1212,22 @@ private:
 
         if (m_preparedPrecompiled != nullptr)
         {
-            co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
-                m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
-                buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+            try
+            {
+                co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
+                    m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                    buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
+                    m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+            }
+            catch (bcos::Error&)
+            {
+                // A node-fault bcos::Error escapes callPrecompiled's own catch under
+                // bugfix_precompiled_node_fault_rethrow (review F2). Record it on THIS
+                // frame so the child boundary's hasHostFault() copy fails the parent
+                // chain too, then let the FIB-88/92 arm shape the failing result.
+                recordHostFault(boost::current_exception_diagnostic_information());
+                throw;
+            }
         }
 
         auto result = m_executable->m_vmInstance.execute(m_hostInterface,

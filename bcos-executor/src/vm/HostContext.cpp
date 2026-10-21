@@ -356,6 +356,20 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     auto response = m_executive->externalCall(std::move(request));
 
+    // A host fault recorded in a child frame (review F1; the v1 mirror of the v2
+    // propagation at transaction-executor/.../vm/HostContext.h:881): the child's
+    // bcos::Error arm marks a recorded fault as INTERNAL_ERROR + RevertInstruction.
+    // EVMC_INTERNAL_ERROR is never produced by a deterministic arm (a VM-level
+    // INTERNAL_ERROR halts the node in parseEVMCResult instead of becoming a receipt),
+    // so the pair identifies the record without a wire field — and it survives the DMC
+    // hop, which carries evmStatus and status verbatim. Recording it here makes this
+    // frame's own throwIfHostFault() fail it too, up to the top frame.
+    if (response->evmStatus == (int32_t)EVMC_INTERNAL_ERROR &&
+        response->status == (int32_t)bcos::protocol::TransactionStatus::RevertInstruction)
+    {
+        recordHostFault(response->message, /*halting=*/false);
+    }
+
     // Convert CallParameters to evmc_resultx
     evmc_result result{.status_code = toEVMStatus(response, blockContext),
         .gas_left = response->gas,

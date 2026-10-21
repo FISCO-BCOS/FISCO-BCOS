@@ -502,4 +502,79 @@ BOOST_AUTO_TEST_CASE(FIB88_92_InjectedHostFaultFlagOffOutOfGasPreservesGas)
     }());
 }
 
+// ---------------------------------------------------------------------------
+// Round-8 review F2: bugfix_precompiled_node_fault_rethrow must reach the ladder it
+// documents. Under bugfix_v1_error_handling (on for every 3.18 chain) the generic
+// catch(std::exception&) in callPrecompiled used to swallow the rethrown node-fault
+// bcos::Error as an "InternalPrecompiledError" INTERNAL_ERROR receipt — i.e. the
+// node-local receipt the flag exists to prevent. With the fix the bcos::Error escapes
+// to the dispatch site, which records it on the owning frame (executeCall) so the
+// child boundary's hasHostFault() copy fails the parent chain too.
+namespace
+{
+class ThrowingNodeFaultPrecompiled : public bcos::precompiled::Precompiled
+{
+public:
+    explicit ThrowingNodeFaultPrecompiled(bcos::crypto::Hash::Ptr hashImpl)
+      : bcos::precompiled::Precompiled(std::move(hashImpl))
+    {}
+
+    std::shared_ptr<bcos::precompiled::PrecompiledExecResult> call(
+        std::shared_ptr<executor::TransactionExecutive>,
+        bcos::precompiled::PrecompiledExecResult::Ptr) override
+    {
+        // The shape callBcosPrecompiled's catch(bcos::Error&) classifies as a node/
+        // infra fault (the rethrow flag's trigger).
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "injected precompiled node fault"));
+    }
+};
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(precompiledNodeFaultEscapesUnderTheFlag)
+{
+    bcos::ledger::Features offFeatures{};
+    offFeatures.set(bcos::ledger::Features::Flag::bugfix_v1_error_handling);
+    auto onFeatures = offFeatures;
+    onFeatures.set(bcos::ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow);
+
+    auto precompiled = std::make_shared<ThrowingNodeFaultPrecompiled>(hashImpl);
+    Precompiled entry{precompiled};
+
+    evmc_message message = {.kind = EVMC_CALL,
+        .flags = 0,
+        .depth = 0,
+        .gas = 100000,
+        .state_gas = {},
+        .recipient = {},
+        .sender = {},
+        .input_data = nullptr,
+        .input_size = 0,
+        .value = {},
+        .code_address = {},
+        .code = nullptr,
+        .code_size = 0};
+    evmc_address origin{};
+    auto externalCaller = [](evmc_message const&) {
+        return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
+                              .gas_left = 0,
+                              .gas_refund = 0,
+                              .state_gas = {},
+                              .output_data = nullptr,
+                              .output_size = 0,
+                              .release = nullptr},
+            bcos::protocol::TransactionStatus::None};
+    };
+
+    // Flag off: the historical REVERT receipt stands, byte-identical to the base.
+    auto receipt = executor_v1::callPrecompiled(entry, rollbackableStorage, blockHeader, message,
+        origin, externalCaller, *precompiledManager, 0, seq, false, offFeatures);
+    BOOST_CHECK_EQUAL(receipt.status_code, EVMC_REVERT);
+    BOOST_CHECK_EQUAL(receipt.status, bcos::protocol::TransactionStatus::PrecompiledError);
+
+    // Flag on: the fault must escape to the owning frame, never become a receipt.
+    BOOST_CHECK_THROW(executor_v1::callPrecompiled(entry, rollbackableStorage, blockHeader, message,
+                          origin, externalCaller, *precompiledManager, 0, seq, false, onFeatures),
+        bcos::Error);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
