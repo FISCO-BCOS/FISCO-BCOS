@@ -67,6 +67,22 @@ EthBlockInfo buildBlockInfo(
 protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& error,
     protocol::TransactionReceiptFactory const& rf, int64_t blockNumber);
 
+/// The evmone VM for the calling thread.
+///
+/// An evmone VM must not be shared: it pools ExecutionState objects in an unsynchronised
+/// vector indexed by EVM call depth (VM::get_execution_state resize()s it on demand), and
+/// each pooled slot remembers the host context of the frame that last reset it. Two threads
+/// through one VM race on that vector and one thread's EVM can end up calling into the
+/// other's host, corrupting its EthereumState journal. One VM per thread keeps the pool
+/// alive across calls (no per-transaction evmc_create_evmone) while only ever indexing it
+/// with the current thread's own frames; execution never overlaps itself on one thread
+/// because host reads complete inline or block and the EVM never yields mid-frame.
+inline evmc::VM& threadLocalEvmoneVm()
+{
+    thread_local evmc::VM vm{evmc_create_evmone()};
+    return vm;
+}
+
 class EthereumExecutor
 {
 public:
@@ -112,13 +128,12 @@ public:
     /// committed hashes, which are never modified by the block being executed.
     EthereumExecutor(protocol::TransactionReceiptFactory const& receiptFactory,
         BlockHashLookup blockHashLookup = {})
-      : m_receiptFactory(receiptFactory),
-        m_vm(evmc_create_evmone()),
-        m_blockHashLookup(std::move(blockHashLookup))
+      : m_receiptFactory(receiptFactory), m_blockHashLookup(std::move(blockHashLookup))
     {}
 
     /// Access the EVM instance (needed for system_call functions).
-    evmc::VM& vm() { return m_vm; }
+    /// Per-thread; see threadLocalEvmoneVm(). Valid only during a call on this thread.
+    evmc::VM& vm() { return threadLocalEvmoneVm(); }
 
     /// Execute a single Ethereum transaction.
     ///
@@ -200,8 +215,10 @@ public:
     // context (never shared between contexts), so the three phases of
     // different transactions may run in parallel. The only state shared
     // through the executor is:
-    //   - m_vm              : evmone VM execution is thread-safe (a fresh
-    //                         execution state is created per call).
+    //   - the EVM           : per-THREAD, neither owned nor shared here. evmone pools
+    //                         ExecutionState by call depth and each slot recalls the
+    //                         host context of the frame that reset it, so one VM cannot
+    //                         serve two threads (threadLocalEvmoneVm()).
     //   - m_receiptFactory  : createReceipt allocates a fresh receipt per call.
     //   - m_blockHashLookup : invoked for BLOCKHASH. The production provider
     //                         reads a read-only committed table straight
@@ -446,7 +463,7 @@ public:
                     }
                     m_receipt = co_await runTransaction(state, m_blockInfo,
                         executor.get().m_blockHashLookup, transaction.get(), m_rev,
-                        executor.get().m_vm, *props, nodeChainId(), m_callParams,
+                        executor.get().vm(), *props, nodeChainId(), m_callParams,
                         executor.get().m_receiptFactory, blockHeader.get().number());
                 }
                 else
@@ -546,7 +563,6 @@ public:
 
 private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
-    evmc::VM m_vm;
     BlockHashLookup m_blockHashLookup;
 };
 
