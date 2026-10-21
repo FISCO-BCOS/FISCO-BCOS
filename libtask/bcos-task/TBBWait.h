@@ -19,9 +19,10 @@
 #include "Task.h"
 #include "Trait.h"
 #include <oneapi/tbb/task.h>
-#include <oneapi/tbb/task_group.h>
+#include <oneapi/tbb/task_arena.h>
 #include <boost/atomic/atomic.hpp>
 #include <boost/atomic/atomic_flag.hpp>
+#include <utility>
 
 namespace bcos::task::tbb
 {
@@ -121,5 +122,34 @@ constexpr inline struct SyncWait
         }
     }
 } syncWait{};
+
+/// The arena the read-only call round trips run in.
+///
+/// Shared, so wrapping a call does not put arena construction on the hot path. Default
+/// concurrency: this is a context, not a throttle.
+inline oneapi::tbb::task_arena& callArena()
+{
+    static oneapi::tbb::task_arena arena;
+    return arena;
+}
+
+/// Run @p body inside callArena().
+///
+/// For code that reaches syncWait from a plain thread (an RPC IO thread driving eth_call,
+/// say) and should not: moving it into the arena means a suspended wait parks an arena
+/// worker rather than an IO thread, and keeps call traffic on the same pool as block
+/// execution.
+///
+/// The body is a plain callable, not a TBB task (current_task_ptr() is null inside it), and
+/// that is sufficient: an arena body releases its worker slot while suspended, so work
+/// enqueued into the same arena still runs. Measured with a single-slot arena — a waiter
+/// suspended in the body, a completer enqueued afterwards from another thread — the
+/// completer ran and the waiter resumed. A task_group wrapper buys nothing, so there is
+/// none.
+template <class Body>
+void runInCallArena(Body&& body)
+{
+    callArena().execute(std::forward<Body>(body));
+}
 
 }  // namespace bcos::task::tbb

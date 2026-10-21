@@ -791,10 +791,19 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
     protocol::Transaction::Ptr transaction,
     std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
 {
-    task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
-                   decltype(callback) callback) -> task::Task<void> {
-        callback(nullptr, co_await self->coCallLatest(std::move(transaction)));
-    }(this, std::move(transaction), std::move(callback)));
+    // The EVM host resolves account/code/storage reads and BLOCKHASH through
+    // task::tbb::syncWait, which needs a TBB task to park. Block execution always has one
+    // (the serial scheduler runs it in a parallel_pipeline filter) but call()/callAtBlock()
+    // reach the executor straight from an RPC IO thread, so run the round trip in a task.
+    task::tbb::runInCallArena([self = this, transaction = std::move(transaction),
+                                  callback = std::move(callback)]() mutable {
+        task::syncWait(
+            [](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
+                std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
+                -> task::Task<void> {
+                callback(nullptr, co_await scheduler->coCallLatest(std::move(transaction)));
+            }(self, std::move(transaction), std::move(callback)));
+    });
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
@@ -818,87 +827,93 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
     protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
     std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
 {
-    task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
-                   protocol::BlockNumber blockNumber,
-                   decltype(callback) callback) -> task::Task<void> {
-        try
-        {
-            auto latestView = self->m_multiLayerStorage.get().fork();
-            auto latestNumber =
-                co_await ledger::getCurrentBlockNumber(latestView, ledger::fromStorage);
-            if (blockNumber > latestNumber)
+    // Same TBB-task requirement as call(): the historical path also runs the EVM.
+    task::tbb::runInCallArena([self = this, transaction = std::move(transaction), blockNumber,
+                                  callback = std::move(callback)]() mutable {
+        task::syncWait([](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
+                           protocol::BlockNumber blockNumber,
+                           std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)>
+                               callback) -> task::Task<void> {
+            try
             {
-                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
-                             fmt::format("eth_call: block {} does not exist (latest: {})",
-                                 blockNumber, latestNumber)),
-                    nullptr);
-                co_return;
-            }
-            if (blockNumber == latestNumber)
-            {
-                callback(nullptr, co_await self->coCallLatest(std::move(transaction)));
-                co_return;
-            }
-            auto ledgerConfig = co_await ledger::getLedgerConfig(
-                latestView, blockNumber, self->m_blockFactory.get());
-            if (ledgerConfig->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                             fmt::format("eth_call: historical call at block {} requires the "
-                                         "full-fidelity MPT of an Ethereum-lane chain "
-                                         "(executor_version >= 2, scenario B); this chain's state "
-                                         "at that block is not completely committed to an MPT",
-                                 blockNumber)),
-                    nullptr);
-                co_return;
-            }
-            auto block = co_await ledger::getBlockData(
-                latestView, blockNumber, ledger::HEADER, self->m_blockFactory.get());
-            auto stateRoot = block->blockHeader()->stateRoot();
-            if (stateRoot == crypto::HashType{})
-            {
-                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                             fmt::format("eth_call: no MPT state root recorded in block {}'s "
-                                         "header",
-                                 blockNumber)),
-                    nullptr);
-                co_return;
-            }
+                auto latestView = scheduler->m_multiLayerStorage.get().fork();
+                auto latestNumber =
+                    co_await ledger::getCurrentBlockNumber(latestView, ledger::fromStorage);
+                if (blockNumber > latestNumber)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
+                                 fmt::format("eth_call: block {} does not exist (latest: {})",
+                                     blockNumber, latestNumber)),
+                        nullptr);
+                    co_return;
+                }
+                if (blockNumber == latestNumber)
+                {
+                    callback(nullptr, co_await scheduler->coCallLatest(std::move(transaction)));
+                    co_return;
+                }
+                auto ledgerConfig = co_await ledger::getLedgerConfig(
+                    latestView, blockNumber, scheduler->m_blockFactory.get());
+                if (ledgerConfig->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
+                {
+                    callback(
+                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                            fmt::format("eth_call: historical call at block {} requires the "
+                                        "full-fidelity MPT of an Ethereum-lane chain "
+                                        "(executor_version >= 2, scenario B); this chain's state "
+                                        "at that block is not completely committed to an MPT",
+                                blockNumber)),
+                        nullptr);
+                    co_return;
+                }
+                auto block = co_await ledger::getBlockData(
+                    latestView, blockNumber, ledger::HEADER, scheduler->m_blockFactory.get());
+                auto stateRoot = block->blockHeader()->stateRoot();
+                if (stateRoot == crypto::HashType{})
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                                 fmt::format("eth_call: no MPT state root recorded in block {}'s "
+                                             "header",
+                                     blockNumber)),
+                        nullptr);
+                    co_return;
+                }
 
-            self->stampCallRevision(*ledgerConfig, *block->blockHeader());
-            HistoricalStateBackend<typename MultiLayerStorage::ViewType> historicalBackend(
-                latestView, stateRoot, ledger::account::nodeAddressTableMode());
-            storage2::View<typename MultiLayerStorage::MutableStorage, void,
-                HistoricalStateBackend<typename MultiLayerStorage::ViewType>>
-                historicalView(std::addressof(historicalBackend));
-            historicalView.newMutable();
-            auto receipt = co_await self->m_executor.get().executeTransaction(
-                historicalView, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
-            callback(nullptr, std::move(receipt));
-        }
-        catch (bcos::ledger::mpt::MPTInvariantViolation const& e)
-        {
-            // The historical walk lost its state-trie root (or an internal node): with
-            // pruning enabled that is the retention window, not corruption — and the
-            // window-boundary race (root resolves at request time, a concurrent commit
-            // deletes the rows before the walk) makes it reachable on a healthy node.
-            // Distinct error code so the RPC layer answers -32004, the same shape the five
-            // direct historical endpoints use, instead of a generic internal error leaking
-            // diagnostic_information to an unauthenticated caller.
-            callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::MPTStateUnavailable,
-                         fmt::format("eth_call at block {} failed: state trie node unavailable "
-                                     "(beyond the pruning retention window or missing): {}",
-                             blockNumber, boost::diagnostic_information(e))),
-                nullptr);
-        }
-        catch (std::exception const& e)
-        {
-            callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
-                         fmt::format("eth_call at block {} failed: {}", blockNumber,
-                             boost::diagnostic_information(e))),
-                nullptr);
-        }
-    }(this, std::move(transaction), blockNumber, std::move(callback)));
+                scheduler->stampCallRevision(*ledgerConfig, *block->blockHeader());
+                HistoricalStateBackend<typename MultiLayerStorage::ViewType> historicalBackend(
+                    latestView, stateRoot, ledger::account::nodeAddressTableMode());
+                storage2::View<typename MultiLayerStorage::MutableStorage, void,
+                    HistoricalStateBackend<typename MultiLayerStorage::ViewType>>
+                    historicalView(std::addressof(historicalBackend));
+                historicalView.newMutable();
+                auto receipt = co_await scheduler->m_executor.get().executeTransaction(
+                    historicalView, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
+                callback(nullptr, std::move(receipt));
+            }
+            catch (bcos::ledger::mpt::MPTInvariantViolation const& e)
+            {
+                // The historical walk lost its state-trie root (or an internal node): with
+                // pruning enabled that is the retention window, not corruption — and the
+                // window-boundary race (root resolves at request time, a concurrent commit
+                // deletes the rows before the walk) makes it reachable on a healthy node.
+                // Distinct error code so the RPC layer answers -32004, the same shape the five
+                // direct historical endpoints use, instead of a generic internal error leaking
+                // diagnostic_information to an unauthenticated caller.
+                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::MPTStateUnavailable,
+                             fmt::format("eth_call at block {} failed: state trie node unavailable "
+                                         "(beyond the pruning retention window or missing): {}",
+                                 blockNumber, boost::diagnostic_information(e))),
+                    nullptr);
+            }
+            catch (std::exception const& e)
+            {
+                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
+                             fmt::format("eth_call at block {} failed: {}", blockNumber,
+                                 boost::diagnostic_information(e))),
+                    nullptr);
+            }
+        }(self, std::move(transaction), blockNumber, std::move(callback)));
+    });
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
