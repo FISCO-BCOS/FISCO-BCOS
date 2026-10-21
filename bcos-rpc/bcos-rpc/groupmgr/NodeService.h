@@ -28,6 +28,7 @@
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
+#include <bcos-framework/protocol/BlobSchedule.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-framework/storage2/AnyStorage.h>
@@ -215,6 +216,18 @@ public:
     void setExecutorVersion(int _version) noexcept { m_executorVersion = _version; }
     int executorVersion() const noexcept { return m_executorVersion; }
 
+    /// The chain's EIP-7840 blob fork schedule (cancun/prague/bpo1/bpo2 activation times, in
+    /// seconds), wired by AirNodeInitializer from [fork_timestamps]. eth_blobBaseFee needs it to
+    /// pick the base-fee update fraction for the head block: the per-block schedule the block
+    /// verifier stamps into a LedgerConfig is not available on the RPC path, and a v2 genesis
+    /// records no evmc_revision row either, so this is the only schedule source the RPC has.
+    /// All entries default to "not scheduled", which yields no blob schedule (pre-Cancun).
+    void setBlobForkTimes(bcos::protocol::BlobForkTimes _forks) noexcept
+    {
+        m_blobForkTimes = _forks;
+    }
+    bcos::protocol::BlobForkTimes const& blobForkTimes() const noexcept { return m_blobForkTimes; }
+
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
     bool unreachable()
@@ -255,6 +268,7 @@ private:
     bool m_ethereumELMode = false;
     /// The chain's executor_version; see setExecutorVersion. 0 = unknown / pre-Ethereum.
     int m_executorVersion = 0;
+    bcos::protocol::BlobForkTimes m_blobForkTimes{};
 
     /// Shared, unlike the mempool above: the validator is built for this path alone and nothing
     /// else keeps it alive. Null until set, which is every mode that has no mempool.

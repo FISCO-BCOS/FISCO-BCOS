@@ -1876,8 +1876,17 @@ EthEndpoint::getBlockNumberAndHeadByTag(std::string_view blockTag)
     // shared getBlockNumberByTag below throws "Invalid Block Number" and the deploy hangs.
     if (blockTag.size() == 66 && blockTag.starts_with("0x"))
     {
+        // Validate before constructing the hash: HashType(FromHex) throws BadHexCharacter on a
+        // 66-character string that is not valid hex, and that would surface as -32603 (an
+        // internal error) for what is plainly bad client input. geth answers invalid argument
+        // (-32602) for the same input.
+        if (!bcos::isHexString(std::string(blockTag)))
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "invalid block hash: not hexadecimal"));
+        }
         auto const number = co_await ledger::getBlockNumber(
-            *ledger, crypto::HashType(blockTag, crypto::HashType::FromHex));
+            *ledger, crypto::HashType(std::string(blockTag), crypto::HashType::FromHex));
         co_return std::make_tuple(number, latest);
     }
     // On the engine lane (op-node drives forkchoice) the tracker values are preferred for
@@ -1946,39 +1955,68 @@ task::Task<void> EthEndpoint::blobBaseFee(const Json::Value&, Json::Value& respo
         BOOST_THROW_EXCEPTION(JsonRpcException(
             JsonRpcError::InternalError, "Ledger not available for eth_blobBaseFee"));
     }
+    // Lane gate, same as the rest of the Ethereum/OP-lane surface: on the legacy FISCO lane this
+    // must answer MethodNotFound, not a JSON null that a client would read as "no blob base fee
+    // right now". The pre-Cancun null below is a different thing: an Ethereum-lane chain that has
+    // not reached Cancun yet.
+    co_await requireEthereumLane(*ledger, "eth_blobBaseFee");
+
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
     Json::Value result = Json::nullValue;
-    // Resolve the blob schedule the executor uses (EIP-7840): the per-block schedule the
-    // verifier stamped into the ledger config when present, else the revision-keyed default
-    // (Prague+ -> Prague schedule, Cancun -> Cancun schedule). No schedule = pre-Cancun.
+
+    // Resolve the EIP-7840 blob schedule in effect at the head block. Three sources, in
+    // decreasing authority:
+    //   1. the schedule the block verifier stamped into this LedgerConfig (the OP lane's
+    //      getLedgerConfig path and any caller that already resolved it per block);
+    //   2. the node's [fork_timestamps] ladder, applied to the head header's timestamp — the
+    //      source an L1 EL node has, since getLedgerConfig rebuilds from storage and a v2
+    //      genesis records neither a blob schedule nor an evmc_revision row;
+    //   3. the head header's revision, when it carries one.
+    // Absent all three the chain is pre-Cancun, where geth answers null.
     uint64_t fraction = 0;
     if (auto const& schedule = ledgerConfig->blobSchedule(); schedule && schedule->maxBlobs != 0)
     {
         fraction = schedule->baseFeeUpdateFraction;
     }
-    else if (auto const rev = ledgerConfig->evmcRevision(); rev)
+
+    bcos::protocol::Block::Ptr head;
+    if (auto block =
+            co_await ledger::getBlockData(*ledger, ledgerConfig->blockNumber(), ledger::HEADER))
     {
-        if (*rev >= EVMC_PRAGUE)
+        head = std::move(block);
+    }
+    if (fraction == 0 && head != nullptr && head->blockHeader() != nullptr)
+    {
+        // blockHeader().timestamp() is milliseconds; the fork ladder is in seconds.
+        auto const timestampSeconds =
+            static_cast<uint64_t>(head->blockHeader()->timestamp() / 1000);
+        auto const resolved = bcos::protocol::blobScheduleForTimestamp(
+            m_nodeService->blobForkTimes(), timestampSeconds);
+        fraction = resolved.baseFeeUpdateFraction;
+    }
+    if (fraction == 0)
+    {
+        if (auto const rev = ledgerConfig->evmcRevision(); rev)
         {
-            fraction = protocol::PRAGUE_BLOB_SCHEDULE.baseFeeUpdateFraction;
-        }
-        else if (*rev == EVMC_CANCUN)
-        {
-            fraction = protocol::CANCUN_BLOB_SCHEDULE.baseFeeUpdateFraction;
+            if (*rev >= EVMC_PRAGUE)
+            {
+                fraction = protocol::PRAGUE_BLOB_SCHEDULE.baseFeeUpdateFraction;
+            }
+            else if (*rev == EVMC_CANCUN)
+            {
+                fraction = protocol::CANCUN_BLOB_SCHEDULE.baseFeeUpdateFraction;
+            }
         }
     }
-    if (fraction != 0)
+
+    if (fraction != 0 && head != nullptr && head->blockHeader() != nullptr)
     {
         // geth reads CurrentHeader().ExcessBlobGas; mirror that (the head's header, not the
         // next block's recomputed excess). fakeExponential(MinBlobGasPrice=1, excess, fraction)
         // is exactly geth's eip4844.CalcBlobFee.
-        if (auto block =
-                co_await ledger::getBlockData(*ledger, ledgerConfig->blockNumber(), ledger::HEADER))
+        if (auto const excess = head->blockHeader()->excessBlobGas(); excess)
         {
-            if (auto const excess = block->blockHeader()->excessBlobGas(); excess)
-            {
-                result = toQuantity(protocol::fakeExponential(u256{1}, *excess, u256{fraction}));
-            }
+            result = toQuantity(protocol::fakeExponential(u256{1}, *excess, u256{fraction}));
         }
     }
     buildJsonContent(result, response);
