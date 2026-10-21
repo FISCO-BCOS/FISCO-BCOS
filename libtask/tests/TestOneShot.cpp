@@ -199,6 +199,44 @@ BOOST_AUTO_TEST_CASE(CancelEscapesToCallerWhenWaitLaunchedConsumerDoesNotCatch)
     BOOST_CHECK(once->settled());
 }
 
+// Mirror of the cancel() regression above for the VALUE path: complete() resumes the parked
+// consumer inline through the same publish() boundary, so a consumer whose body throws after the
+// co_await lets the exception escape complete() — with the claim already taken. The caller sees
+// the throw instead of the return value, yet the settle has happened: settled() is true and the
+// recorded value is still delivered to a later co_await. Post-settle bookkeeping after complete()
+// must therefore be prepared to be skipped, exactly as documented on complete().
+BOOST_AUTO_TEST_CASE(CompleteEscapesToCallerWhenWaitLaunchedConsumerThrows)
+{
+    auto once = std::make_shared<OneShot<int>>();
+
+    bcos::task::wait([once]() -> Task<void> {
+        auto [value] = co_await *once;  // resumes inline inside complete() below
+        (void)value;
+        throw std::runtime_error("consumer failed after delivery");
+    }());
+
+    bool caught = false;
+    try
+    {
+        once->complete(42);
+    }
+    catch (const std::runtime_error& error)
+    {
+        caught = true;
+        BOOST_CHECK_EQUAL(error.what(), std::string("consumer failed after delivery"));
+    }
+
+    BOOST_CHECK(caught);
+    BOOST_CHECK(once->settled());
+
+    // The settle is not lost to the throw: a later co_await still takes the fast path.
+    auto value = syncWait([once]() -> Task<int> {
+        auto [delivered] = co_await *once;
+        co_return delivered;
+    }());
+    BOOST_CHECK_EQUAL(value, 42);
+}
+
 // Abandoning a parked wait: destroying the waiting frame deregisters its awaitable, so a later
 // cancel() only records the outcome instead of resuming a dead frame — the heap-owned slot's
 // teardown order "drop the consumer, then flush the sink".

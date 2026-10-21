@@ -98,7 +98,10 @@ public:
 
     // Settle the slot with a value. Returns false when it had already been settled (by a peer
     // producer, by an earlier completion, or by cancel()) — the caller may use that to tell "I was
-    // the one who settled it" from "somebody beat me to it".
+    // the one who settled it" from "somebody beat me to it". There is a THIRD outcome: publish()
+    // resumes the parked awaiter inline, so an awaiter that does not catch lets its exception
+    // propagate out of complete() — the settle HAS happened (settled() is true, the value is
+    // recorded) even though the caller never saw the return (see cancel(), same boundary).
     bool complete(Values... values)
     {
         if (!claim())
