@@ -319,6 +319,41 @@ BOOST_AUTO_TEST_CASE(createDerivationSeqAdoptsStampAndFailsLoudWithout)
 }
 
 
+BOOST_AUTO_TEST_CASE(dmcNormalizationPreservesHostFaultAndHistoricalDelegateReverts)
+{
+    struct Normalizer : CoroutineTransactionExecutive
+    {
+        using CoroutineTransactionExecutive::CoroutineTransactionExecutive;
+        using CoroutineTransactionExecutive::normalizeExternalCallResult;
+    };
+    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    BlockContext localContext(nullptr, ledgerCache, hashImpl, 0, h256(), 0,
+        (uint32_t)protocol::BlockVersion::V3_18_0_VERSION, false);
+    Normalizer executive(localContext, "0x00", 0, 0);
+    for (bool fixNoAddress : {false, true})
+    {
+        ledger::Features features;
+        if (fixNoAddress)
+        {
+            features.set(ledger::Features::Flag::bugfix_call_noaddr_return);
+        }
+        localContext.setFeatures(features);
+        CallParameters fault(CallParameters::REVERT);
+        fault.delegateCall = true;
+        fault.evmStatus = EVMC_INTERNAL_ERROR;
+        fault.status = (int32_t)protocol::TransactionStatus::RevertInstruction;
+        executive.normalizeExternalCallResult(fault);
+        BOOST_CHECK_EQUAL(fault.evmStatus, EVMC_INTERNAL_ERROR);
+        BOOST_CHECK(fault.type == CallParameters::REVERT);
+        CallParameters missingAddress(CallParameters::REVERT);
+        missingAddress.delegateCall = true;
+        missingAddress.evmStatus = EVMC_REVERT;
+        missingAddress.status = (int32_t)protocol::TransactionStatus::CallAddressError;
+        executive.normalizeExternalCallResult(missingAddress);
+        BOOST_CHECK_EQUAL(missingAddress.evmStatus, fixNoAddress ? EVMC_SUCCESS : EVMC_REVERT);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

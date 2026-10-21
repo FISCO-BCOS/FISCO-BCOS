@@ -1893,11 +1893,94 @@ BOOST_AUTO_TEST_CASE(bcosPrecompiledNodeFaultRethrowsWhileLogicErrorReverts)
             return std::string(e.errorMessage()).find("F7 pin") != std::string::npos;
         });
 
+
+    // The outer dispatcher must preserve typed faults under BOTH FIB flags.
+    onFeatures.set(ledger::Features::Flag::bugfix_v1_error_handling);
+    bcos::executor_v1::Precompiled wrapped{
+        std::shared_ptr<bcos::precompiled::Precompiled>(nodeFault)};
+    BOOST_CHECK_THROW(bcos::executor_v1::callPrecompiled(wrapped, storage, blockHeader, message, {},
+                          caller, *precompiledManager, 1, 1, false, onFeatures),
+        bcos::Error);
+    auto historicalOuter = bcos::executor_v1::callPrecompiled(wrapped, storage, blockHeader,
+        message, {}, caller, *precompiledManager, 1, 1, false, offFeatures);
+    BOOST_CHECK_EQUAL(historicalOuter.status_code, EVMC_REVERT);
+
+    // Test-only substitution: the manager owns a mutable Precompiled object.
+    auto const* registered = precompiledManager->getPrecompiled(0x100eUL);
+    BOOST_REQUIRE(registered);
+    const_cast<bcos::executor_v1::Precompiled*>(registered)->m_precompiled =
+        std::shared_ptr<bcos::precompiled::Precompiled>(nodeFault);
+    ledgerConfig.setFeatures(onFeatures);
+    evmc_address parentAddress{};
+    parentAddress.bytes[19] = 0xC3;
+    evmc_message parentMessage{};
+    parentMessage.kind = EVMC_CALL;
+    parentMessage.gas = 1'000'000;
+    parentMessage.recipient = parentAddress;
+    parentMessage.sender = parentAddress;
+    parentMessage.code_address = parentAddress;
+    HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> parent(
+        rollbackableStorage, rollbackableTransientStorage, blockHeader, parentMessage,
+        parentAddress, "", 100, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+        bcos::task::syncWait);
+    auto nested = message;
+    nested.depth = 1;
+    nested.sender = parentAddress;
+    nested.recipient = {};
+    nested.recipient.bytes[18] = 0x10;
+    nested.recipient.bytes[19] = 0x0e;
+    nested.code_address = nested.recipient;
+    auto nestedResult = syncWait(parent.externalCall(nested));
+    BOOST_CHECK_EQUAL(nestedResult.status_code, EVMC_INTERNAL_ERROR);
+    BOOST_CHECK(parent.hasHostFault());
+    BOOST_CHECK_THROW(parent.throwIfHostFault(), bcos::Error);
+
+    // Run bytecode which ignores the failed CALL and returns its success bit.
+    // A node fault still fails the whole frame; a contract-domain revert stays catchable.
+    bytes parentCode;
+    boost::algorithm::unhex(
+        "6000600060006000600061100e620186a0f160005260206000f3", std::back_inserter(parentCode));
+    syncWait([&]() -> Task<void> {
+        ledger::account::EVMAccount account(
+            storage, parentAddress, ledger::account::nodeAddressTableMode());
+        co_await account.create();
+        co_await account.setCode(parentCode, "", hashImpl->hash(ref(parentCode)));
+    }());
+    auto executeParent = [&](bool expectFault) {
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> host(
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, parentMessage,
+            parentAddress, "", 102, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+            bcos::task::syncWait);
+        syncWait(host.prepare());
+        auto result = syncWait(host.execute());
+        BOOST_CHECK_EQUAL(result.status_code, expectFault ? EVMC_INTERNAL_ERROR : EVMC_SUCCESS);
+        BOOST_CHECK_EQUAL(host.hasHostFault(), expectFault);
+        if (!expectFault)
+        {
+            BOOST_REQUIRE_EQUAL(result.output_size, 32);
+            BOOST_CHECK_EQUAL(result.output_data[31], 0);
+        }
+    };
+    executeParent(true);
+    ledgerConfig.setFeatures(offFeatures);
+    executeParent(false);
+    ledgerConfig.setFeatures(onFeatures);
+
     auto logicError = std::make_shared<StubPrecompiled>(hashImpl, /*nodeFault=*/false);
     auto reverted = bcos::executor_v1::callBcosPrecompiled(logicError, storage, blockHeader,
         message, {}, caller, *precompiledManager, 1, 1, false, features);
     BOOST_CHECK_EQUAL(reverted.status_code, EVMC_REVERT);
     BOOST_CHECK_EQUAL(reverted.status, bcos::protocol::TransactionStatus::PrecompiledError);
+    const_cast<bcos::executor_v1::Precompiled*>(registered)->m_precompiled =
+        std::shared_ptr<bcos::precompiled::Precompiled>(logicError);
+    HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> logicParent(
+        rollbackableStorage, rollbackableTransientStorage, blockHeader, parentMessage,
+        parentAddress, "", 101, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+        bcos::task::syncWait);
+    auto logicResult = syncWait(logicParent.externalCall(nested));
+    BOOST_CHECK_EQUAL(logicResult.status_code, EVMC_REVERT);
+    BOOST_CHECK(!logicParent.hasHostFault());
+    executeParent(false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

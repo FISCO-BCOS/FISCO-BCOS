@@ -362,7 +362,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     // EVMC_INTERNAL_ERROR is never produced by a deterministic arm (a VM-level
     // INTERNAL_ERROR halts the node in parseEVMCResult instead of becoming a receipt),
     // so the pair identifies the record without a wire field — and it survives the DMC
-    // hop, which carries evmStatus and status verbatim. Recording it here makes this
+    // hop; the coroutine/Promise normalizer preserves this pair. Recording it makes this
     // frame's own throwIfHostFault() fail it too, up to the top frame.
     if (response->evmStatus == (int32_t)EVMC_INTERNAL_ERROR &&
         response->status == (int32_t)bcos::protocol::TransactionStatus::RevertInstruction)

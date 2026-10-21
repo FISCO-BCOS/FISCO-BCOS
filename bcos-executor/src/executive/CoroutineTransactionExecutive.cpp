@@ -122,7 +122,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
     try
     {
         for (auto it = ::ranges::begin(*getPullMessage()); it != ::ranges::end(*getPullMessage());
-            ++it)
+             ++it)
         {
             if (*it)
             {
@@ -170,47 +170,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     // nested-create addresses against an un-upgraded scheduler.
     adoptSchedulerSeqHandback(output->schedulerSeq);
 
-    if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
-    {
-        if (output->delegateCall &&
-            output->status == (int32_t)bcos::protocol::TransactionStatus::CallAddressError)
-        {
-            // This is eth's bug, but we still need to compat with it :)
-            // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
-            output->data = bytes();
-            output->type = CallParameters::FINISHED;
-            output->status = (int32_t)bcos::protocol::TransactionStatus::None;
-            output->evmStatus = EVMC_SUCCESS;
-
-            EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall, but return success"
-                                 << LOG_KV("codeAddress", output->codeAddress)
-                                 << LOG_KV("status", output->status)
-                                 << LOG_KV("evmStatus", output->evmStatus);
-        }
-    }
-    else
-    {
-        if (output->delegateCall && output->type != CallParameters::FINISHED)
-        {
-            output->data = bytes();
-            output->status = (int32_t)bcos::protocol::TransactionStatus::RevertInstruction;
-            output->evmStatus = EVMC_REVERT;
-
-            EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall"
-                                 << LOG_KV("codeAddress", output->codeAddress)
-                                 << LOG_KV("status", output->status)
-                                 << LOG_KV("evmStatus", output->evmStatus);
-        }
-    }
-
-    if (versionCompareTo(m_blockContext.blockVersion(), protocol::BlockVersion::V3_3_VERSION) >= 0)
-    {
-        if (output->type == CallParameters::REVERT)
-        {
-            // fix the bug here
-            output->evmStatus = EVMC_REVERT;
-        }
-    }
+    normalizeExternalCallResult(*output);
 
     // After coroutine switch, set the recoder
     m_syncStorageWrapper->setRecoder(m_recoder);
@@ -219,6 +179,58 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     m_syncStorageWrapper->importExistsKeyLocks(output->keyLocks);
 
     return output;
+}
+
+void CoroutineTransactionExecutive::normalizeExternalCallResult(CallParameters& output) const
+{
+    // PR #5689 F1: preserve the child host-fault signal through legacy revert
+    // normalization (including DELEGATECALL), so the parent can fail the whole frame.
+    if (output.evmStatus == EVMC_INTERNAL_ERROR &&
+        output.status == (int32_t)bcos::protocol::TransactionStatus::RevertInstruction)
+    {
+        return;
+    }
+    if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
+    {
+        if (output.delegateCall &&
+            output.status == (int32_t)bcos::protocol::TransactionStatus::CallAddressError)
+        {
+            // This is eth's bug, but we still need to compat with it :)
+            // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
+            output.data = bytes();
+            output.type = CallParameters::FINISHED;
+            output.status = (int32_t)bcos::protocol::TransactionStatus::None;
+            output.evmStatus = EVMC_SUCCESS;
+
+            EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall, but return success"
+                                 << LOG_KV("codeAddress", output.codeAddress)
+                                 << LOG_KV("status", output.status)
+                                 << LOG_KV("evmStatus", output.evmStatus);
+        }
+    }
+    else
+    {
+        if (output.delegateCall && output.type != CallParameters::FINISHED)
+        {
+            output.data = bytes();
+            output.status = (int32_t)bcos::protocol::TransactionStatus::RevertInstruction;
+            output.evmStatus = EVMC_REVERT;
+
+            EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall"
+                                 << LOG_KV("codeAddress", output.codeAddress)
+                                 << LOG_KV("status", output.status)
+                                 << LOG_KV("evmStatus", output.evmStatus);
+        }
+    }
+
+    if (versionCompareTo(m_blockContext.blockVersion(), protocol::BlockVersion::V3_3_VERSION) >= 0)
+    {
+        if (output.type == CallParameters::REVERT)
+        {
+            // fix the bug here
+            output.evmStatus = EVMC_REVERT;
+        }
+    }
 }
 
 CallParameters::UniquePtr CoroutineTransactionExecutive::waitingFinish(

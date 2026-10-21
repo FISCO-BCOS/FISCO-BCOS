@@ -87,6 +87,8 @@ public:
     std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper();
 
 protected:
+    void normalizeExternalCallResult(CallParameters& output) const;
+
     /// R5 F1: the DMC scheduler's last-consumed seq for this tx context, handed back
     /// on every resumed message (ExecutionMessage::schedulerSeq). Only
     /// createDerivationSeq() reads it — m_seq stays the scheduler's routing identity.

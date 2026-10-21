@@ -217,6 +217,18 @@ inline constexpr struct
         const bool bugfixPrecompiled =
             features.get(ledger::Features::Flag::bugfix_v1_error_handling);
 
+        auto handleException = [&](std::exception& e) -> EVMCResult {
+            PRECOMPILE_LOG(ERROR) << "Unexpected precompiled exception: " << e.what();
+            // FIB-79: preserve old exception behavior when the flag is off.
+            if (!bugfixPrecompiled)
+            {
+                throw;
+            }
+            return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
+                protocol::TransactionStatus::PrecompiledError, EVMC_INTERNAL_ERROR, 0,
+                "InternalPrecompiledError", bugfixPrecompiled);
+        };
+
         try
         {
             return std::visit(
@@ -230,29 +242,19 @@ inline constexpr struct
                     }},
                 precompiled.m_precompiled);
         }
+        catch (bcos::Error& e)
+        {
+            // PR #5689 F2: the outer wrapper must preserve the typed node fault
+            // which callBcosPrecompiled deliberately rethrows under this flag.
+            if (features.get(ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow))
+            {
+                throw;
+            }
+            return handleException(e);
+        }
         catch (std::exception& e)
         {
-            PRECOMPILE_LOG(ERROR) << "Unexpected precompiled exception: " << e.what();
-            // FIB-79: preserve old std::terminate behavior when flag off; return receipt when on.
-            if (!bugfixPrecompiled)
-            {
-                throw;
-            }
-            // A node-fault bcos::Error must not be sealed here (review F2): the inner
-            // bcos::Error catch already decided to rethrow it under
-            // bugfix_precompiled_node_fault_rethrow, and swallowing it as an
-            // INTERNAL_ERROR receipt is exactly the receipt that flag exists to
-            // prevent. Let it escape to the dispatch site, which records the fault on
-            // the owning frame and lets the frame fail whole.
-            if (features.get(ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow) &&
-                dynamic_cast<bcos::Error*>(&e) != nullptr)
-            {
-                throw;
-            }
-            return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
-                protocol::TransactionStatus::PrecompiledError, EVMC_INTERNAL_ERROR, 0,
-                "InternalPrecompiledError",
-                features.get(ledger::Features::Flag::bugfix_v1_error_handling));
+            return handleException(e);
         }
     }
 } callPrecompiled{};

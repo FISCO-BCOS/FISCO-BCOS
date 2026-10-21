@@ -39,6 +39,7 @@
 #include "bcos-table/src/StateStorageFactory.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "evmc/evmc.h"
+#include "executive/PromiseTransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
 #include "vm/EVMHostInterface.h"
 #include "vm/HostContext.h"
@@ -3616,6 +3617,106 @@ contract HelloFactory {
     auto const expectNewHelloAddress =
         newLegacyEVMAddressString(bcos::ref(helloFactoryAddress), u256(0));
     BOOST_CHECK_EQUAL(newHello.hex(), expectNewHelloAddress);
+}
+
+
+BOOST_AUTO_TEST_CASE(childSloadFaultFailsParentInSerialAndDmc)
+{
+    std::string const parentAddress(40, 'a');
+    std::string const childAddress(40, 'b');
+    auto seed = [&](std::string const& address, std::string const& hex) {
+        bytes code;
+        boost::algorithm::unhex(hex, std::back_inserter(code));
+        auto hash = hashImpl->hash(ref(code));
+        storage::Entry hashEntry;
+        hashEntry.set(hash.asBytes());
+        backend->setRow("/apps/" + address, ACCOUNT_CODE_HASH, hashEntry);
+        storage::Entry codeEntry;
+        codeEntry.set(code);
+        backend->setRow(ledger::SYS_CODE_BINARY, hash.toRawString(), codeEntry);
+    };
+    seed(parentAddress, "6000600060006000600073" + childAddress + "620186a0f160005260206000f3");
+    // The parent returns CALL's success bit, so an ordinary child revert is catchable.
+    for (int lane : {0, 1, 2})
+    {
+        for (int scenario : {0, 1, 2})
+        {
+            BOOST_TEST_CONTEXT("lane=" << lane << " scenario=" << scenario)
+            {
+                seed(childAddress, scenario == 1 ? "60006000fd" : "60005400");
+                if (scenario == 2)
+                {
+                    backend->armRowFault("/apps/" + childAddress, std::string(32, '\0'));
+                }
+                auto lru = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+                auto cache = std::make_shared<LedgerCache>(ledger);
+                BlockContext ctx(lru, cache, hashImpl, 1, h256(1), 0,
+                    (uint32_t)BlockVersion::V3_18_0_VERSION, false, backend);
+                ctx.setVMFactory(std::make_shared<VMFactory>());
+                auto configure = [](auto const& executive) {
+                    executive->setPrecompiled(std::make_shared<PrecompiledMap>());
+                    executive->setStaticPrecompiled(
+                        std::make_shared<const std::set<std::string>>());
+                };
+                std::shared_ptr<TransactionExecutive> executive;
+                if (lane == 2)
+                {
+                    executive = std::make_shared<PromiseTransactionExecutive>(
+                        nullptr, ctx, parentAddress, 99, 0);
+                }
+                else if (lane == 1)
+                {
+                    executive =
+                        std::make_shared<CoroutineTransactionExecutive>(ctx, parentAddress, 99, 0);
+                }
+                else
+                {
+                    executive = std::make_shared<TransactionExecutive>(ctx, parentAddress, 99, 0);
+                }
+                configure(executive);
+                auto input = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+                input->origin = std::string(40, 'c');
+                input->senderAddress = input->origin;
+                input->receiveAddress = parentAddress;
+                input->codeAddress = parentAddress;
+                input->gas = 1'000'000;
+                auto result = executive->start(std::move(input));
+                BOOST_REQUIRE(result);
+                if (lane != 0)
+                {
+                    BOOST_REQUIRE(result->type == CallParameters::MESSAGE);
+                    BOOST_CHECK_EQUAL(result->codeAddress, childAddress);
+                    auto child =
+                        std::make_shared<TransactionExecutive>(ctx, childAddress, 99, result->seq);
+                    configure(child);
+                    auto childResult = child->start(std::move(result));
+                    BOOST_REQUIRE(childResult);
+                    childResult->schedulerSeq = 1;
+                    auto coroutine =
+                        std::static_pointer_cast<CoroutineTransactionExecutive>(executive);
+                    coroutine->setExchangeMessage(std::move(childResult));
+                    result = coroutine->resume();
+                    BOOST_REQUIRE(result);
+                }
+                if (scenario == 2)
+                {
+                    BOOST_REQUIRE_GT(backend->rowFaultHits.load(), 0);
+                    BOOST_CHECK(result->type == CallParameters::REVERT);
+                    BOOST_CHECK_EQUAL(result->status, (int)TransactionStatus::RevertInstruction);
+                    BOOST_CHECK_EQUAL(result->evmStatus, EVMC_INTERNAL_ERROR);
+                }
+                else
+                {
+                    BOOST_CHECK(result->type == CallParameters::FINISHED);
+                    BOOST_CHECK_EQUAL(result->status, 0);
+                    BOOST_CHECK_EQUAL(result->evmStatus, EVMC_SUCCESS);
+                    BOOST_REQUIRE_EQUAL(result->data.size(), 32);
+                    BOOST_CHECK_EQUAL(result->data.back(), scenario == 0 ? 1 : 0);
+                }
+                backend->disarmRowFault();
+            }
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

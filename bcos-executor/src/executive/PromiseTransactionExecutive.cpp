@@ -147,45 +147,7 @@ CallParameters::UniquePtr PromiseTransactionExecutive::externalCall(CallParamete
             output = std::move(message);
         });
 
-    if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
-    {
-        if (output->delegateCall &&
-            output->status == (int32_t)bcos::protocol::TransactionStatus::CallAddressError)
-        {
-            // This is eth's bug, but we still need to compat with it :)
-            // https://docs.soliditylang.org/en/v0.8.17/control-structures.html#error-handling-assert-require-revert-and-exceptions
-            output->data = bytes();
-            output->type = CallParameters::FINISHED;
-            output->status = (int32_t)bcos::protocol::TransactionStatus::None;
-            output->evmStatus = EVMC_SUCCESS;
-
-            EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall, but return success"
-                                 << LOG_KV("codeAddress", output->codeAddress)
-                                 << LOG_KV("status", output->status)
-                                 << LOG_KV("evmStatus", output->evmStatus);
-        }
-    }
-    else
-    {
-        if (output->delegateCall && output->type != CallParameters::FINISHED)
-        {
-            EXECUTIVE_LOG(DEBUG) << "Could not getCode during DMC externalCall"
-                                 << LOG_KV("codeAddress", output->codeAddress);
-            output->data = bytes();
-            output->status = (int32_t)bcos::protocol::TransactionStatus::RevertInstruction;
-            output->evmStatus = EVMC_REVERT;
-        }
-    }
-
-    if (versionCompareTo(m_blockContext.blockVersion(), protocol::BlockVersion::V3_3_VERSION) >= 0)
-    {
-        if (output->type == CallParameters::REVERT)
-        {
-            // fix the bug here
-            output->evmStatus = EVMC_REVERT;
-        }
-    }
-
+    normalizeExternalCallResult(*output);
 
     // After coroutine switch, set the recoder
     m_syncStorageWrapper->setRecoder(m_recoder);
