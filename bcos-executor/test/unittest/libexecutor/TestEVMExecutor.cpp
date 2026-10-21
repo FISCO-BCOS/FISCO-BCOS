@@ -1012,6 +1012,7 @@ BOOST_AUTO_TEST_CASE(childHostFaultIsCopiedToTheParentRecord)
         .flags = 0,
         .depth = 0,
         .gas = 100000,
+        .state_gas = {},  // evmc ABI 19 (EIP-8037); gcc -Wmissing-field-initializers
         .recipient = {},
         .sender = {},
         .input_data = nullptr,
