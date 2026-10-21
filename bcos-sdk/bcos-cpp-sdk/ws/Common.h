@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/LogStream.h>
 
 #define RPC_WS_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPCWS][SERVICE]"
 #define RPC_BLOCKNUM_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPC][BLOCK][NUMBER]"

@@ -22,9 +22,9 @@
 #include "bcos-framework/multigroup/GroupInfo.h"
 #include "bcos-utilities/Error.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/json.h>
 #include <exception>
-#include <bcos-utilities/LogStream.h>
 
 #define RPC_IMPL_LOG(LEVEL) BCOS_MODULE_LOG(RPC, LEVEL) << "[RPC][JSONRPC]"
 #define WEB3_LOG(LEVEL) BCOS_MODULE_LOG(RPC, LEVEL) << "[RPC][WEB3]"

@@ -34,8 +34,8 @@
 #include <bcos-ledger/mpt/Constants.h>   // emptyRootHash
 #include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateRoot
 #include <bcos-task/Task.h>
-#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/LogStream.h>
 #include <ethereum-executor/EthSystemCalls.h>      // eth::systemCallBlockStart
 #include <ethereum-executor/EthereumTransition.h>  // eth::finalizeState
 #include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError / detail conversions

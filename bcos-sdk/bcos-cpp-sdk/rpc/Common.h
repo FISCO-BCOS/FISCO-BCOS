@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/json.h>
 #include <json/value.h>
 

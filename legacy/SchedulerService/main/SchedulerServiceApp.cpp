@@ -19,7 +19,6 @@
  * @date 2022-5-10
  */
 #include "SchedulerServiceApp.h"
-#include <boost/property_tree/ini_parser.hpp>
 #include "Common/TarsUtils.h"
 #include "SchedulerService/SchedulerServiceServer.h"
 #include "bcos-utilities/LogStream.h"
@@ -36,6 +35,7 @@
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <util/tc_clientsocket.h>
+#include <boost/property_tree/ini_parser.hpp>
 #include <vector>
 
 using namespace bcostars;

@@ -23,8 +23,8 @@
 // #if !defined(__aarch64__) && !defined(__linux__)
 
 #include "bcos-codec/scale/Scale.h"
-#include <boost/log/core/core.hpp>
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include <boost/log/core/core.hpp>
 #ifdef WITH_WASM
 
 #include "../liquid/hello_world.h"

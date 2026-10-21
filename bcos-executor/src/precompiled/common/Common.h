@@ -21,8 +21,8 @@
 #pragma once
 
 #include "bcos-executor/src/Common.h"
-#include <string>
 #include <bcos-utilities/LogStream.h>
+#include <string>
 
 namespace bcos::precompiled
 {

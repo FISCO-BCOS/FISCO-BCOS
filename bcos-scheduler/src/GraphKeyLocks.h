@@ -2,12 +2,12 @@
 
 #include "Common.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/graph/adjacency_list.hpp>
 #include <functional>
 #include <gsl/span>
 #include <string_view>
 #include <variant>
-#include <bcos-utilities/LogStream.h>
 
 #define KEY_LOCK_LOG(LEVEL) \
     BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("SCHEDULER") << LOG_BADGE("KEY_LOCK")

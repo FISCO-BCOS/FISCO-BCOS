@@ -20,8 +20,8 @@
  */
 #pragma once
 #include <bcos-tool/TreeTopology.h>
-#include <utility>
 #include <bcos-utilities/LogStream.h>
+#include <utility>
 
 #define SYNCTREE_LOG(LEVEL)                                                                   \
     BCOS_MODULE_LOG(SYNC, LEVEL) << LOG_BADGE("SYNCTREE") << LOG_KV("nodeIndex", m_nodeIndex) \

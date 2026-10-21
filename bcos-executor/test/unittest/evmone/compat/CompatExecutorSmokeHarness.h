@@ -7,7 +7,6 @@
 #pragma once
 
 #include "../../mock/MockLedger.h"
-#include <boost/log/core/core.hpp>
 #include "../../mock/MockTransactionalStorage.h"
 #include "../../mock/MockTxPool.h"
 #include "CompatTestFixture.h"
@@ -24,6 +23,7 @@
 #include "executor/TransactionExecutorFactory.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/log/core/core.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <memory>

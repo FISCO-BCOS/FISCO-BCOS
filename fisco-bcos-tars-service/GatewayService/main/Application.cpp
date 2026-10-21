@@ -1,5 +1,4 @@
 #include "../../Common/TarsUtils.h"
-#include <boost/property_tree/ini_parser.hpp>
 #include "../GatewayInitializer.h"
 #include "../GatewayServiceServer.h"
 #include "bcos-tool/NodeConfig.h"
@@ -7,6 +6,7 @@
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <servant/Application.h>
+#include <boost/property_tree/ini_parser.hpp>
 
 using namespace bcostars;
 

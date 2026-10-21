@@ -20,7 +20,6 @@
 
 #pragma once
 #include "bcos-codec/scale/Scale.h"
-#include <boost/log/core/core.hpp>
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
@@ -56,6 +55,7 @@
 #include <libinitializer/AuthInitializer.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/log/core/core.hpp>
 #include <string>
 
 using namespace bcos;

@@ -22,8 +22,8 @@
 #include "./CriticalFields.h"
 #include "./TxDAGInterface.h"
 #include "tbb/flow_graph.h"
-#include <vector>
 #include <bcos-utilities/LogStream.h>
+#include <vector>
 
 #define DAGFLOW_LOG(LEVEL) \
     BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("EXECUTOR") << LOG_BADGE("DAGFlow")

@@ -239,8 +239,8 @@ std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::ini
     if (!m_archivePath.empty())
     {
         boost::filesystem::path targetDir(m_archivePath);
-        sink->locked_backend()->set_file_collector(bcos::log::make_collector(targetDir,
-            m_maxArchiveSize, m_minFreeSpace, m_maxArchiveFiles, m_compressArchive));
+        sink->locked_backend()->set_file_collector(bcos::log::make_collector(
+            targetDir, m_maxArchiveSize, m_minFreeSpace, m_maxArchiveFiles, m_compressArchive));
     }
     sink->locked_backend()->scan_for_files();
     if (m_enableLog)
