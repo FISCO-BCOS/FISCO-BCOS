@@ -43,6 +43,7 @@
 #include "executor/TransactionExecutorFactory.h"
 #include "vm/EVMHostInterface.h"
 #include "vm/HostContext.h"
+#include "vm/Precompiled.h"  // PrecompiledMap: complete type for make_shared (line ~3657)
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
