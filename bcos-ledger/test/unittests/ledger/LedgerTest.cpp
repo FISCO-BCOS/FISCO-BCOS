@@ -1908,7 +1908,7 @@ BOOST_AUTO_TEST_CASE(genesisWritesNoEVMCRevisionRow)
 BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
 {
     for (int rev = static_cast<int>(EVMC_FRONTIER); rev <= static_cast<int>(EVMC_MAX_REVISION);
-         ++rev)
+        ++rev)
     {
         auto r = static_cast<evmc_revision>(rev);
         auto name = ledger::evmcRevisionName(r);
