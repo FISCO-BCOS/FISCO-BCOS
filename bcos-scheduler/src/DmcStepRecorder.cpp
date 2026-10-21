@@ -2,6 +2,7 @@
 // Created by Jimmy Shi on 2022/6/6.
 //
 
+#include "DmcExecutor.h"
 #include "DmcStepRecorder.h"
 
 using namespace bcos::scheduler;
