@@ -29,6 +29,7 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/web3jsonrpc/utils/FeeHistory.h"
 #include "bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h"
+#include "ethereum-executor/EthereumHost.h"  // g_ethCallDepth / observeCallDepth
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/kzg/Kzg4844.h>
@@ -1557,18 +1558,44 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     }
 
     u256 gasUsed;
+    int32_t callDepth = 0;
     Json::Value callResponse;
+
+    // Arm the EVM depth probe for exactly the span of the probe run below. `callDepth` lives
+    // in this coroutine frame, and the frame of a coroutine is stable once it has started
+    // running (it has already suspended at the awaits above), so the address the EVM host
+    // writes through stays valid while this coroutine is suspended in call(). The guard
+    // clears the pointer on every exit — including the early `co_return` below — so a later
+    // execution on this thread can never write into a dead frame.
+    struct DepthScope
+    {
+        explicit DepthScope(int32_t& depth) noexcept { executor_v1::eth::g_ethCallDepth = &depth; }
+        ~DepthScope() noexcept { executor_v1::eth::g_ethCallDepth = nullptr; }
+        DepthScope(const DepthScope&) = delete;
+        DepthScope& operator=(const DepthScope&) = delete;
+    } depthScope(callDepth);
+
+    // The probe run already uses the block gas limit (call() sizes an omitted gas against
+    // it), so gasUsed is the measurement at maximum nesting and callDepth says how deep the
+    // EVM actually went.
     co_await call(request, callResponse, std::addressof(gasUsed), true);
 
-    if (!callResponse.isMember("error"))
-    {
-        Json::Value result = toQuantity(gasUsed);
-        buildJsonContent(result, response);
-    }
-    else
+    if (callResponse.isMember("error"))
     {
         response = std::move(callResponse);
+        co_return;
     }
+
+    // EIP-150 keeps 1/64 of the remaining gas at every CALL/CREATE, so a frame at depth d
+    // never receives more than (63/64)^d of the outer frame's budget. Scale the measured
+    // consumption back up accordingly, rounding up so the answer never falls short.
+    for (int32_t level = 0; level < callDepth; ++level)
+    {
+        gasUsed = (gasUsed * 64 + 62) / 63;
+    }
+
+    Json::Value result = toQuantity(gasUsed);
+    buildJsonContent(result, response);
 }
 task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::Value& response)
 {

@@ -87,6 +87,24 @@ struct EthCallParams
     std::optional<uint256> maxGasPriceFloor;
 };
 
+/// Deepest EVM frame reached by the call the current thread is executing, or null.
+///
+/// eth_estimateGas needs the depth because EIP-150 forwards only 63/64 of the remaining
+/// gas per level, so the gasLimit a transaction requires grows as (64/63)^depth — the raw
+/// gasUsed of a max-gas run is only right for a depth-0 call. The RPC layer owns the
+/// variable and arms this pointer for the duration of the call; the host only maintains
+/// the maximum. A thread_local pointer is enough because eth_call / eth_estimateGas drive
+/// the whole round trip inline on the calling thread.
+inline thread_local int32_t* g_ethCallDepth = nullptr;
+
+inline void observeCallDepth(int32_t depth) noexcept
+{
+    if (g_ethCallDepth != nullptr && depth > *g_ethCallDepth)
+    {
+        *g_ethCallDepth = depth;
+    }
+}
+
 /// The sender of a bcos Transaction (raw 20 bytes).
 inline address ethSender(protocol::Transaction const& tx)
 {
@@ -647,6 +665,10 @@ evmc::Result EthereumHost<Storage, Policy>::execute_message(const evmc_message& 
 template <class Storage, class Policy>
 evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) noexcept
 {
+    // Every frame enters here: depth 0 is the transaction's own call, each nested
+    // CALL/CREATE arrives with depth + 1 (evmone sets it).
+    observeCallDepth(orig_msg.depth);
+
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
         return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
