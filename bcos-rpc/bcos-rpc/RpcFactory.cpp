@@ -20,6 +20,8 @@
  */
 
 #include "bcos-rpc/amop/AirAMOPClient.h"
+#include "bcos-rpc/ipc/IpcServer.h"
+#include "bcos-rpc/jsonrpc/AdminMethods.h"
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -661,6 +663,23 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
                     }
                 }
             });
+    }
+    if (m_nodeConfig->rpcIpcEnable() && m_ioServicePool)
+    {
+        // the attach channel: the public method table plus admin_* on a unix socket under the
+        // data directory, serialized on one io thread of the pool
+        auto jsonRpc = rpc->jsonRpcImpl();
+        registerAdminMethods(*jsonRpc);
+        std::weak_ptr<JsonRpcImpl_2_0> weakJsonRpc = jsonRpc;
+        auto ipcServer = std::make_shared<IpcServer>(*m_ioServicePool->getIOService(),
+            m_nodeConfig->storagePath() + "/fisco-bcos.ipc",
+            [weakJsonRpc](std::string_view _body, auto&& _sender) {
+                if (auto jsonRpc = weakJsonRpc.lock())
+                {
+                    jsonRpc->onIpcRequest(_body, std::forward<decltype(_sender)>(_sender));
+                }
+            });
+        rpc->setIpcServer(std::move(ipcServer));
     }
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();
