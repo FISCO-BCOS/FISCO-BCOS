@@ -128,8 +128,8 @@ void DmcExecutor::recordScheduleOut(scheduler::ExecutiveState::Ptr const& execut
     }
     auto const& message = *executiveState->message;
     m_dmcRecorder->recordScheduleOut(m_contractAddress, executiveState->contextID, message.seq(),
-        message.schedulerSeq(), executiveState->currentSeq, std::string(message.to()),
-        message.create(), message.type());
+        message.schedulerSeq(), executiveState->currentSeq, message.to(), message.create(),
+        message.type());
 }
 
 void DmcExecutor::setEnablePreFinishType(bool enable)
@@ -357,11 +357,9 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
             }
             // Structural guard for the schedulerSeq sentinel: every response sent to
             // an executor resumes an existing frame, so a missing stamp is a producer
-            // bug. The call must stay outside assert: NDEBUG removes the assertion's
-            // operand, which would also remove the ERROR log and recorder counter.
-            auto const stamped = checkSchedulerStamp(*message);
-            assert(stamped);
-            (void)stamped;
+            // bug. Record it in every build; the executor rejects the missing stamp
+            // when deriving an address. Debug tests must be able to inspect the record.
+            (void)checkSchedulerStamp(*message);
 
             auto keyLocks = m_keyLocks->getKeyLocksNotHoldingByContext(message->to(), contextID);
             message->setKeyLocks(std::move(keyLocks));

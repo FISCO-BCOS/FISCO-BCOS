@@ -201,6 +201,7 @@ BOOST_AUTO_TEST_CASE(nestedCreateAddressMatchesSchedulerCurrentSeq)
 
     BlockExecutive blockExecutive(
         block, scheduler.get(), 0, submitResultFactory, false, blockFactory, txPool);
+    blockExecutive.dmcRecorder()->enableScheduleOutRecording();
     std::promise<Error::UniquePtr> resultPromise;
     blockExecutive.asyncExecute([&](Error::UniquePtr error, BlockHeader::Ptr executed, bool) {
         BOOST_CHECK(!error);

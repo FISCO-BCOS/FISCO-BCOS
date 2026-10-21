@@ -54,8 +54,13 @@ public:
         bool create = false;
         protocol::ExecutionMessage::Type type{};
     };
+    /// Test diagnostics are opt-in; normal scheduling does not allocate or lock.
+    void enableScheduleOutRecording(bool enabled = true)
+    {
+        m_recordScheduleOuts.store(enabled, std::memory_order_relaxed);
+    }
     void recordScheduleOut(std::string_view contract, int64_t contextID, int64_t seq,
-        int64_t schedulerSeq, int64_t currentSeq, std::string target, bool create,
+        int64_t schedulerSeq, int64_t currentSeq, std::string_view target, bool create,
         protocol::ExecutionMessage::Type type);
     std::vector<ScheduleOutRecord> scheduleOuts() const;
 
@@ -82,11 +87,13 @@ private:
     std::atomic<uint32_t> m_sendChecksum = 0;
     std::atomic<uint32_t> m_receiveChecksum = 0;
     std::atomic<uint32_t> m_schedulerStampViolations = 0;
+    std::atomic<bool> m_recordScheduleOuts = false;
     mutable std::mutex m_scheduleOutMutex;
     std::vector<ScheduleOutRecord> m_scheduleOuts;
     uint32_t m_round = 0;
     uint32_t m_checksum = 0;
 
+    void clearChecksums();
     uint32_t getMessageChecksum(const protocol::ExecutionMessage::UniquePtr& message);
     uint32_t getAddressChecksum(std::string_view address);
     uint32_t getRecordSum(std::string_view address, uint32_t id,
