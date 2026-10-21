@@ -30,7 +30,8 @@ namespace bcos::executor_v1
 class EVMCResult : public evmc_result
 {
 public:
-    explicit EVMCResult(evmc_result from);
+    // The status is always explicit: the bit-65 mapper policy is a caller decision,
+    // so a constructor that silently applied the default one would hide the flag.
     EVMCResult(evmc_result from, protocol::TransactionStatus statusCode);
     EVMCResult(const EVMCResult&) = delete;
     EVMCResult(EVMCResult&& from) noexcept;
@@ -46,7 +47,12 @@ bytes writeErrInfoToOutput(const crypto::Hash& hashImpl, std::string const& errI
 std::tuple<gsl::owner<uint8_t*>, size_t, decltype(evmc_result::release)> fillErrorOutputInPlace(
     const crypto::Hash& hashImpl, evmc_status_code status, const std::string& errorInfo = "");
 
-protocol::TransactionStatus evmcStatusToTransactionStatus(evmc_status_code status);
+// Mapper with the optional ordinary-failure arm (review F3, gate bit 65). Off (default):
+// the historical behaviour — the three ordinary EVM failure statuses fall into default:
+// throw, and execute()'s catch arm relabels the receipt (Unknown/OutOfGas per the
+// error-handling flag). On: they map to their own statuses like the twin message table.
+protocol::TransactionStatus evmcStatusToTransactionStatus(
+    evmc_status_code status, bool mapOrdinaryFailures = false);
 std::tuple<bcos::protocol::TransactionStatus, bcos::bytes> evmcStatusToErrorMessage(
     const bcos::crypto::Hash& hashImpl, evmc_status_code status);
 

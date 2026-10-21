@@ -25,6 +25,7 @@
 #include "vm/Precompiled.h"
 #include "vm/VMInstance.h"
 #include <Common.h>
+#include <bcos-framework/ledger/Features.h>
 #include <boost/test/unit_test.hpp>
 #include <string_view>
 
@@ -32,7 +33,9 @@ namespace bcos::test
 {
 
 // ---------------------------------------------------------------------------
-// Helper: call a named precompile and return the result pair
+// Helper: call a named precompile and return the result pair.
+// The precompiles covered here take no consensus feature flag, so the call shape
+// always passes the historical feature set (all bugfix flags off).
 // ---------------------------------------------------------------------------
 static std::pair<bool, bytes> exec(std::string_view name, bytesConstRef input)
 {
@@ -753,6 +756,60 @@ BOOST_AUTO_TEST_CASE(alt_bn128_pairing_result_zero)
     BOOST_REQUIRE_EQUAL(out.size(), 32u);
     for (size_t i = 0; i < 32; ++i)
         BOOST_CHECK_EQUAL(out[i], 0);
+}
+
+BOOST_AUTO_TEST_CASE(alt_bn128_pairing_rejects_noncanonical_g2_encoding)
+{
+    // A G2 coordinate >= the base field prime is a non-canonical encoding and must be
+    // rejected (EIP-197). This is also what the pre-upgrade evmone 0.21 dependency did:
+    // its pairing_check gated every coordinate through is_field_element and returned
+    // nullopt, which the caller maps to a precompile failure — so no feature flag gates
+    // this, and pre-upgrade blocks replay byte for byte.
+    //
+    //   a1_x = 0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2
+    //   P    = 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47
+    //          (base field prime)
+    //   sum  = 0x49f2e206733ee8642ab1056db37cb583892bb3c49e1bb19fd40511ce87701009 (>= P)
+    bytes input = bcos::fromHex(
+        // G1: (1, 2)
+        "0000000000000000000000000000000000000000000000000000000000000001"
+        "0000000000000000000000000000000000000000000000000000000000000002"
+        // G2: the generator with a1_x + P (non-canonical encoding of the same point)
+        "49f2e206733ee8642ab1056db37cb583892bb3c49e1bb19fd40511ce87701009"  // a1_x + P
+        "1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed"  // a0_x
+        "090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"  // a1_y
+        "12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"  // a0_y
+    );
+    BOOST_REQUIRE_EQUAL(input.size(), 192u);
+
+    // The non-canonical encoding fails closed, with no feature row set.
+    {
+        auto [ok, out] = exec("alt_bn128_pairing_product", input);
+        BOOST_CHECK(!ok);
+        BOOST_REQUIRE_EQUAL(out.size(), 32u);
+        for (size_t i = 0; i < 32; ++i)
+            BOOST_CHECK_EQUAL(out[i], 0);
+    }
+
+    // The canonical twin (a1_x without +P) is accepted and yields the same verdict as
+    // alt_bn128_pairing_result_zero, proving the rejection above fires on the encoding
+    // and not on the point.
+    bytes canonical = bcos::fromHex(
+        "0000000000000000000000000000000000000000000000000000000000000001"
+        "0000000000000000000000000000000000000000000000000000000000000002"
+        "198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2"  // a1_x
+        "1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed"  // a0_x
+        "090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"  // a1_y
+        "12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa"  // a0_y
+    );
+    BOOST_REQUIRE_EQUAL(canonical.size(), 192u);
+    {
+        auto [ok, out] = exec("alt_bn128_pairing_product", canonical);
+        BOOST_CHECK(ok);
+        BOOST_REQUIRE_EQUAL(out.size(), 32u);
+        for (size_t i = 0; i < 32; ++i)
+            BOOST_CHECK_EQUAL(out[i], 0);
+    }
 }
 
 // ===== point_evaluation ============================================================

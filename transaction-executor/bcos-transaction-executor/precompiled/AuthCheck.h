@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file AuthCheck.h
+ */
+
 #pragma once
 
 #include "ExecutiveWrapper.h"
@@ -23,7 +41,7 @@ inline task::Task<void> createAuthTable(auto& storage, protocol::BlockHeader con
     auto senderAddress = address2HexString(message.sender);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
-        true);
+        true, ledgerConfig.features());
 
     executive->creatAuthTable(tableName, originAddress, senderAddress, blockHeader.version());
     co_return;
@@ -37,7 +55,7 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     auto contractAddress = address2HexString(message.code_address);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
-        true);
+        true, features);
 
     auto params = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
     params->senderAddress = address2HexString(message.sender);
@@ -78,11 +96,10 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
             evmc_result{.status_code = static_cast<evmc_status_code>(params->evmStatus),
                 .gas_left = params->gas,
                 .gas_refund = 0,
+                .state_gas = {},
                 .output_data = buffer.release(),
                 .output_size = errorOutput.size(),
-                .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-                .create_address = {},
-                .padding = {}},
+                .release = [](const struct evmc_result* result) { delete[] result->output_data; }},
             static_cast<protocol::TransactionStatus>(params->status)});
     }
     return {};

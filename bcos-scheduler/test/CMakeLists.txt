@@ -1,4 +1,4 @@
-file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp testDmcStepRecorder.cpp testExecutivePool.cpp testDmcExecutor.cpp testSchedulerImpl.cpp testBlockExecutive.cpp testShardingBlockExecutive.cpp testShardingKeyLocks.cpp )
+file(GLOB_RECURSE SOURCES main.cpp testExecutorManager.cpp testKeyLocks.cpp testScheduler.cpp testChecksumAddress.cpp testDmcStepRecorder.cpp testExecutivePool.cpp testDmcExecutor.cpp testSchedulerImpl.cpp testBlockExecutive.cpp testShardingBlockExecutive.cpp testShardingKeyLocks.cpp testDmcRealExecutorE2E.cpp )
 
 # cmake settings
 set(TEST_BINARY_NAME test-scheduler)
@@ -9,9 +9,14 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
 find_package(Boost REQUIRED unit_test_framework serialization)
 
-target_link_libraries(${TEST_BINARY_NAME} scheduler ledger bcos-crypto
+target_include_directories(${TEST_BINARY_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/bcos-executor/src
+    ${CMAKE_SOURCE_DIR}/bcos-executor/include
+    ${CMAKE_SOURCE_DIR}/bcos-executor/test/unittest)
+target_link_libraries(${TEST_BINARY_NAME} scheduler executor ledger bcos-crypto
 Boost::unit_test_framework protocol-tars Boost::serialization storage security)
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("testDmcRealExecutorE2E.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 add_test(NAME test-scheduler WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 # include(SearchTestCases)

@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EthereumTransition.h
+ */
+
 /// @file EthereumTransition.h
 /// @brief Ported evmone transaction lifecycle (eth/state/state.cpp
 ///        validate_transaction / transition / finalize) adapted to read/write
@@ -150,12 +168,12 @@ inline evmc_message build_message(
         .flags = 0,
         .depth = 0,
         .gas = execution_gas_limit,
+        .state_gas = {},
         .recipient = recipient,
         .sender = ethSender(tx),
         .input_data = input.data(),
         .input_size = input.size(),
         .value = evm::toEvmcBE<evmc::uint256be>(tx.value()),
-        .create2_salt = {},
         .code_address = recipient,
         .code = nullptr,
         .code_size = 0,
@@ -283,13 +301,13 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     assert(maxPriorityGasPrice <= maxGasPrice);
 
     if (rev >= EVMC_OSAKA && gasLimit > evm::MAX_TX_GAS_LIMIT)
-        return make_error_code(ErrorCode::MAX_GAS_LIMIT_EXCEEDED);
+        return make_error_code(ErrorCode::GAS_LIMIT_EXCEEDS_MAXIMUM);
 
     if (gasLimit > blockGasLeft)
-        return make_error_code(ErrorCode::GAS_LIMIT_REACHED);
+        return make_error_code(ErrorCode::GAS_ALLOWANCE_EXCEEDED);
 
     if (maxGasPrice < block.base_fee)
-        return make_error_code(ErrorCode::FEE_CAP_LESS_THAN_BLOCKS);
+        return make_error_code(ErrorCode::INSUFFICIENT_MAX_FEE_PER_GAS);
 
     // We need some information about the sender so lookup the account in the state.
     const auto* const senderPtr = state.find(ethSender(tx));
@@ -301,7 +319,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
                                                             // (EIP-3607).
 
     if (senderNonce == EthAccount::NonceMax)  // Nonce value limit (EIP-2681).
-        return make_error_code(ErrorCode::NONCE_HAS_MAX_VALUE);
+        return make_error_code(ErrorCode::NONCE_IS_MAX);
 
     if (senderNonce < nonce)
         return make_error_code(ErrorCode::NONCE_TOO_HIGH);
@@ -311,7 +329,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
 
     // initcode size is limited by EIP-3860.
     if (rev >= EVMC_SHANGHAI && !hasTo && tx.input().size() > evmone::MAX_INITCODE_SIZE)
-        return make_error_code(ErrorCode::INIT_CODE_SIZE_LIMIT_EXCEEDED);
+        return make_error_code(ErrorCode::INITCODE_SIZE_EXCEEDED);
 
     // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
     // Widened to u512 so gasLimit * gasPrice + value cannot wrap, as the original intx::umul did.
@@ -322,7 +340,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     max_total_fee += policy.additionalMaxCost(tx, block, rev, callParams);
     const auto senderBalance = senderPtr != nullptr ? senderPtr->balance : uint256{};
     if (bcos::u512(senderBalance) < max_total_fee)
-        return make_error_code(ErrorCode::INSUFFICIENT_FUNDS);
+        return make_error_code(ErrorCode::INSUFFICIENT_ACCOUNT_FUNDS);
 
     const auto [intrinsic_cost, min_cost] = policy.intrinsicCost(rev, tx);
     if (gasLimit < std::max(intrinsic_cost, min_cost))

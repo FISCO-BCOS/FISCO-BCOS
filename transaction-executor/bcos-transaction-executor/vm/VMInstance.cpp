@@ -1,6 +1,27 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file VMInstance.cpp
+ */
+
 #include "VMInstance.h"
+#include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
 #include <evmone/vm.hpp>
+
+DERIVE_BCOS_EXCEPTION(MissingCreateAddressHook);
 
 namespace bcos::executor_v1::hostcontext
 {
@@ -16,16 +37,43 @@ bcos::executor_v1::VMInstance::VMInstance(
 
 bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
-    const evmc_message* msg, const uint8_t* code, size_t codeSize)
+    const evmc_message* msg, const uint8_t* code, size_t codeSize,
+    evmc_address (*createAddressFn)(struct evmc_host_context*, const evmc_address*, uint64_t),
+    evmc_address (*create2AddressFn)(struct evmc_host_context*, const evmc_address*,
+        const evmc_bytes32*, const uint8_t*, size_t),
+    bool mapOrdinaryFailures)
 {
+    // The no-defaults signature makes an omitted hook a compile error; an explicit
+    // nullptr must fail loudly too (an assert would vanish under NDEBUG and silently
+    // install nothing — evmone would then derive addresses with the upstream formulas
+    // and fork every chain this lane executes).
+    if (createAddressFn == nullptr || create2AddressFn == nullptr)
+    {
+        BOOST_THROW_EXCEPTION(MissingCreateAddressHook{} << bcos::errinfo_comment(
+                                  "VMInstance::execute requires both create-address hooks"));
+    }
     (void)code;  // execute uses pre-analyzed m_analysis
     (void)codeSize;
-    // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
-    // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION).
+    // Fresh VM per execute: evmone pools one ExecutionState per depth inside the VM
+    // (0.24: `std::vector<ExecutionState> m_execution_states`, `get_execution_state(depth)`)
+    // and its `reset()` clears memory/return-data/gas-refund but NOT the stack
+    // (execution_state.hpp), so reusing a VM across executions can start the next one on
+    // the previous stack's content. The 0.21-era observation (EVMC_BAD_JUMP_DESTINATION
+    // after reset-and-reuse) is consistent with that; the workaround is carried forward
+    // as-is (review F5).
     evmc::VM evm{evmc_create_evmone()};
     auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
     evmoneVm->hash_fn = hostcontext::evm_hash_fn;
-    return EVMCResult(evmone::baseline::execute(*evmoneVm, *host, context, rev, *msg, *m_analysis));
+    // Without these, evmone derives nested CREATE/CREATE2 addresses
+    // with keccak(rlp(sender,nonce)) / keccak256 — a different address than this lane stores
+    // (and, on SM-crypto chains, a different hasher).
+    evmoneVm->create_address_fn = createAddressFn;
+    evmoneVm->create2_address_fn = create2AddressFn;
+    auto result = evmone::baseline::execute(*evmoneVm, *host, context, rev, *msg, *m_analysis);
+    // Bit 65 decides the receipt mapping for ordinary EVM failures; off keeps the
+    // historical throw-and-relabel path (prepare() must see the same flag).
+    return EVMCResult(
+        result, evmcStatusToTransactionStatus(result.status_code, mapOrdinaryFailures));
 }
 
 void bcos::executor_v1::VMInstance::enableDebugOutput() {}

@@ -9,6 +9,13 @@ add_dependencies(eest-runner executor)
 set_target_properties(eest-runner PROPERTIES UNITY_BUILD OFF)
 set_target_properties(eest-runner PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
+add_executable(test-eest-post-state TestMain.cpp TestEESTPostState.cpp)
+target_link_libraries(test-eest-post-state PRIVATE
+    ethereum-executor executor ledger protocol-tars bcos-framework rpc
+    evmone::evmone jsoncpp_static TBB::tbb Boost::unit_test_framework)
+set_target_properties(test-eest-post-state PROPERTIES UNITY_BUILD OFF)
+add_test(NAME test-eest-post-state COMMAND test-eest-post-state)
+
 # Compile/instantiation smoke coverage for the split-2/4 orphan headers
 # (EVMSupport.h / EthereumState.h): nothing else includes them yet, so this
 # target is the first place a syntax, template-instantiation or ODR error in

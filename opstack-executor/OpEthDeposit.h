@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpEthDeposit.h
+ */
+
 /// @file OpEthDeposit.h
 /// @brief The OP 0x7E deposit transaction on the ethereum-executor stack —
 ///        the bcos-evm-free counterpart of OpTransition.cpp's runDeposit and
@@ -68,6 +86,22 @@ struct DepositTx
 /// Deposit gas_limit exceeds remaining block gas (op-geth ErrGasLimitReached). Distinct
 /// from OpBlockGasPoolFull (prepare-time normal-tx pool full).
 struct OpEthDepositGasLimitReached : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
+/// Regolith+ rejects system deposits outright (op-geth ErrSystemTxNotSupported,
+/// block-level error). Named for diagnostics; the std::runtime_error base keeps the
+/// deposit path's existing catches working (no caller catches this type today).
+struct OpEthDepositSystemTxUnsupported : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
+/// A receipt gasUsed below zero is an internal invariant violation, never a contract
+/// outcome. Named for diagnostics; the std::runtime_error base keeps existing catches
+/// working (no caller catches this type today).
+struct OpEthDepositNegativeGasUsed : std::runtime_error
 {
     using std::runtime_error::runtime_error;
 };
@@ -196,7 +230,7 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
     // op-geth state_transition.go preCheck: "Don't touch the gas pool for system transactions"
     // pre-Regolith; Regolith rejects them outright (ErrSystemTxNotSupported, block-level error).
     if (dep.isSystemTx && spec.regolith_deposit_fixes)
-        throw std::runtime_error(
+        throw OpEthDepositSystemTxUnsupported(
             "op deposit: is_system_tx not supported since Regolith (block error)");
     const bool preRegolith = !spec.regolith_deposit_fixes;
     const bool unmeteredSystemTx = dep.isSystemTx && preRegolith;
@@ -282,12 +316,12 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
             .flags = 0,
             .depth = 0,
             .gas = dep.gasLimit - intrinsicCost,
+            .state_gas = {},
             .recipient = recipient,
             .sender = dep.from,
             .input_data = dep.data.data(),
             .input_size = dep.data.size(),
             .value = eth::evm::toEvmcBE<evmc::uint256be>(dep.value),
-            .create2_salt = {},
             .code_address = recipient,
             .code = nullptr,
             .code_size = 0,
@@ -321,7 +355,7 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
     }
 
     if (receiptGasUsed < 0)
-        throw std::runtime_error("opRunDeposit: negative gas_used");
+        throw OpEthDepositNegativeGasUsed("opRunDeposit: negative gas_used");
     auto out = rf.createReceipt(bcos::u256{static_cast<uint64_t>(receiptGasUsed)},
         !dep.to.has_value() ? toFiscoContractAddress(dep.from, preNonce) : std::string{},
         std::move(logs), toFiscoOpStatus(receiptStatus),

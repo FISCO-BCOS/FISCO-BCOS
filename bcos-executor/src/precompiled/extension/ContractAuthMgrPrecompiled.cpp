@@ -63,68 +63,68 @@ ContractAuthMgrPrecompiled::ContractAuthMgrPrecompiled(crypto::Hash::Ptr _hashIm
   : bcos::precompiled::Precompiled(std::move(_hashImpl))
 {
     const auto* getAdminStr = CONTRACT_AUTH_METHOD_GET_ADMIN_ADD;
-    registerFunc(
-        getFuncSelector(getAdminStr, _hashImpl), [this](auto&& _executive, auto&& _callParameters) {
+    registerFunc(getFuncSelector(getAdminStr, m_hashImpl),
+        [this](auto&& _executive, auto&& _callParameters) {
             getAdmin(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* resetAdminStr = CONTRACT_AUTH_METHOD_SET_ADMIN_ADD;
-    registerFunc(getFuncSelector(resetAdminStr, _hashImpl),
+    registerFunc(getFuncSelector(resetAdminStr, m_hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             resetAdmin(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* setMethodAuthTypeStr = CONTRACT_AUTH_METHOD_SET_AUTH_TYPE_ADD;
-    registerFunc(getFuncSelector(setMethodAuthTypeStr, _hashImpl),
+    registerFunc(getFuncSelector(setMethodAuthTypeStr, m_hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             setMethodAuthType(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* openMethodAuthStr = CONTRACT_AUTH_METHOD_OPEN_AUTH_ADD;
-    registerFunc(getFuncSelector(openMethodAuthStr, _hashImpl),
+    registerFunc(getFuncSelector(openMethodAuthStr, m_hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             openMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* closeMethodAuthStr = CONTRACT_AUTH_METHOD_CLOSE_AUTH_ADD;
-    registerFunc(getFuncSelector(closeMethodAuthStr, _hashImpl),
+    registerFunc(getFuncSelector(closeMethodAuthStr, m_hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             closeMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* checkMethodAuthStr = CONTRACT_AUTH_METHOD_CHECK_AUTH_ADD;
-    registerFunc(getFuncSelector(checkMethodAuthStr, _hashImpl),
+    registerFunc(getFuncSelector(checkMethodAuthStr, m_hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             checkMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     const auto* getMethodAuthStr = CONTRACT_AUTH_METHOD_GET_AUTH_ADD;
-    registerFunc(getFuncSelector(getMethodAuthStr, _hashImpl),
+    registerFunc(getFuncSelector(getMethodAuthStr, m_hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             getMethodAuth(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
 
     registerFunc(
-        getFuncSelector(CONTRACT_AUTH_METHOD_SET_CONTRACT_32, _hashImpl),
+        getFuncSelector(CONTRACT_AUTH_METHOD_SET_CONTRACT_32, m_hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             setContractStatus32(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         },
         protocol::BlockVersion::V3_2_VERSION);
 
-    registerFunc(getFuncSelector(CONTRACT_AUTH_METHOD_SET_CONTRACT, _hashImpl),
+    registerFunc(getFuncSelector(CONTRACT_AUTH_METHOD_SET_CONTRACT, m_hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             setContractStatus(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
         });
-    registerFunc(getFuncSelector(CONTRACT_AUTH_METHOD_GET_CONTRACT, _hashImpl),
+    registerFunc(getFuncSelector(CONTRACT_AUTH_METHOD_GET_CONTRACT, m_hashImpl),
         [this](auto&& _executive, auto&& _callParameters) {
             contractAvailable(std::forward<decltype(_executive)>(_executive),
                 std::forward<decltype(_callParameters)>(_callParameters));
@@ -147,9 +147,25 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
 
     if (_callParameters->m_sender != authAddress)
     {
+        // A caller other than the AuthManager is an ordinary user mistake, not a node
+        // fault: any contract can reach this line. The exception type follows the lane
+        // flag so historical blocks replay byte-identically:
+        //  - flag OFF (historical): the bcos::Error the base threw, which the ladder
+        //    classifies as a non-contract fault (TransactionStatus::Unknown);
+        //  - flag ON: with bugfix_precompiled_node_fault_rethrow, a bcos::Error here
+        //    would burn the whole frame as INTERNAL_ERROR for a deterministic
+        //    authorization failure, so answer in the contract domain instead
+        //    (PrecompiledError -> REVERT on both dispatch lanes).
         PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled")
                               << LOG_DESC("sender is not from AuthManager")
                               << LOG_KV("sender", _callParameters->m_sender);
+        if (blockContext.features().get(
+                bcos::ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow))
+        {
+            BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{} << errinfo_comment(
+                                      "ContractAuthMgrPrecompiled: sender is not from "
+                                      "AuthManager"));
+        }
         BOOST_THROW_EXCEPTION(BCOS_ERROR(
             CODE_NO_AUTHORIZED, "ContractAuthMgrPrecompiled: sender is not from AuthManager"));
     }

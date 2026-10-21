@@ -38,8 +38,8 @@ BOOST_AUTO_TEST_CASE(moveAssign_updatesCachedStatus)
     srcResult.status_code = EVMC_REVERT;
     srcResult.release = nullptr;
 
-    EVMCResult dst(dstResult);
-    EVMCResult src(srcResult);
+    EVMCResult dst(dstResult, TransactionStatus::None);
+    EVMCResult src(srcResult, TransactionStatus::RevertInstruction);
     dst = std::move(src);
     BOOST_CHECK_EQUAL(dst.status_code, EVMC_REVERT);
     BOOST_CHECK_EQUAL(dst.status, TransactionStatus::RevertInstruction);

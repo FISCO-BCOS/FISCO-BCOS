@@ -1,3 +1,22 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EESTRunner.h
+ * @brief Shared helpers of the EEST fixture runner
+ */
+
 #pragma once
 
 #include "bcos-utilities/Common.h"
@@ -70,10 +89,13 @@ struct EESTForkPost
     int dataIndex = 0;
     int gasIndex = 0;
     int valueIndex = 0;
-    std::string stateRoot;                     // "hash" — expected state root
-    std::string logsHash;                      // "logs"
-    std::string txBytes;                       // "txbytes" — RLP-encoded transaction
-    std::string expectException;               // exception name (empty = success expected)
+    std::string stateRoot;        // "hash" — expected state root; the state-test verdict
+                                  // refuses to score a root-only post (vacuity guard) and
+                                  // reports this root on mismatch; full root comparison is
+                                  // deferred until the corpus is provisioned locally
+    std::string logsHash;         // "logs"
+    std::string txBytes;          // "txbytes" — RLP-encoded transaction
+    std::string expectException;  // exception name (empty = success expected)
     std::map<std::string, EESTAccount> state;  // expected post-state accounts
 };
 
@@ -209,7 +231,10 @@ EESTBlockchainFixture parseBlockchainFixture(
 std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const& filePath);
 
 /// Map an EEST fork name to an EVMC revision.
-/// Returns EVMC_OSAKA (latest handled) as a default for unknown forks.
-evmc_revision forkNameToRevision(std::string const& forkName);
+/// std::nullopt = the fork has no executable revision in this binary (Constantinople /
+/// ConstantinopleFix), or its name cannot be resolved, and its fixtures must be skipped —
+/// there is no default revision: executing an unresolvable fork under a guessed schedule
+/// is the divergence this gate exists to prevent.
+std::optional<evmc_revision> forkNameToRevision(std::string const& forkName);
 
 }  // namespace bcos::test

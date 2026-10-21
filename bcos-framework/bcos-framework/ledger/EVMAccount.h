@@ -301,15 +301,28 @@ public:
             storage::Entry{std::string_view{"value"}});
     }
 
-    task::Task<std::optional<storage::Entry>> code()
+    task::Task<std::optional<storage::Entry>> code(
+        std::optional<crypto::HashType> knownCodeHash = std::nullopt)
     {
         // 先通过code hash从s_code_binary找代码
-        // Start by using the code hash to find the code from the s_code_binary
-        if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+        // Start by using the code hash to find the code from the s_code_binary. A caller
+        // that already read the CODE_HASH row (getExecutable's cache probe) passes it as
+        // knownCodeHash to skip the second row read.
+        auto codeHash = knownCodeHash;
+        if (!codeHash)
+        {
+            if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
+                    executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+            {
+                codeHash = crypto::HashType(
+                    (const bcos::byte*)codeHashEntry->get().data(), codeHashEntry->get().size());
+            }
+        }
+        if (codeHash && *codeHash != crypto::HashType{})
         {
             if (auto codeEntry = co_await storage2::readOne(m_storage.get(),
-                    executor_v1::StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry->get()}))
+                    executor_v1::StateKeyView{ledger::SYS_CODE_BINARY,
+                        std::string_view{(const char*)codeHash->data(), crypto::HashType::SIZE}}))
             {
                 co_return codeEntry;
             }

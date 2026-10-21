@@ -18,9 +18,12 @@
  * @date 2021-11-15
  */
 
+#include "../mock/MockLedger.h"
+#include "../mock/MockTransactionExecutive.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
+#include "bcos-table/src/StateStorage.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include <boost/test/unit_test.hpp>
@@ -293,6 +296,9 @@ public:
 
         /// callback to create context
         result2->setSeq(1000);
+        // R6 F2: the scheduler stamps every parent-resume with the tx-context's
+        // last-consumed seq; the test-as-scheduler mirrors it (1001 consumed).
+        result2->setSchedulerSeq(1001);
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(
@@ -2083,6 +2089,42 @@ BOOST_AUTO_TEST_CASE(resetAdminBinaryModeContractProbe)
         BOOST_CHECK(result->data().toBytes() ==
                     codec->encode(Address("0x1234567890123456789012345678901234567890")));
     }
+}
+
+// The ContractAuthMgr denial is a deterministic, user-triggerable rejection: any caller
+// other than the AuthManager reaches it. Its exception type follows
+// bugfix_precompiled_node_fault_rethrow so historical blocks keep the base's bcos::Error
+// (ladder: Unknown verdict) while flag-on chains answer the contract-domain
+// PrecompiledError (ladder: REVERT, no INTERNAL_ERROR frame burn).
+BOOST_AUTO_TEST_CASE(contractAuthMgrDenialReceiptFollowsNodeFaultFlag)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto ledgerCache = std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
+    auto backendStorage = std::make_shared<StateStorage>(nullptr, false);
+    auto stateStorage = std::make_shared<StateStorage>(backendStorage, false);
+    auto blockContext =
+        std::make_shared<BlockContext>(stateStorage, ledgerCache, hashImpl, 0, h256(), utcTime(),
+            static_cast<uint32_t>(protocol::BlockVersion::V3_6_VERSION), false, backendStorage);
+    auto executive =
+        std::make_shared<bcos::test::MockTransactionExecutive>(*blockContext, "", 100, 0);
+
+    ContractAuthMgrPrecompiled authMgr(hashImpl);
+    auto params = std::make_shared<PrecompiledExecResult>();
+    bytes input(4, 0);  // selector zero
+    params->m_input = bcos::ref(input);
+    params->m_sender = "1234567890123456789012345678901234567890";  // not the AuthManager
+
+    // Flag OFF (historical): the base's bcos::Error with CODE_NO_AUTHORIZED.
+    ledger::Features offFeatures;
+    blockContext->setFeatures(offFeatures);
+    BOOST_CHECK_EXCEPTION(authMgr.call(executive, params), bcos::Error,
+        [](auto const& e) { return e.errorCode() == CODE_NO_AUTHORIZED; });
+
+    // Flag ON: the contract-domain PrecompiledError (no INTERNAL_ERROR frame burn).
+    ledger::Features onFeatures;
+    onFeatures.set(ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow);
+    blockContext->setFeatures(onFeatures);
+    BOOST_CHECK_THROW(authMgr.call(executive, params), bcos::protocol::PrecompiledError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

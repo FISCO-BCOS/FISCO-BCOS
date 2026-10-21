@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file ExecutiveWrapper.h
+ */
+
 #pragma once
 #include "../EVMCResult.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
@@ -19,12 +37,6 @@ inline std::shared_ptr<precompiled::Precompiled> getInnerPrecompiled(auto const&
     return std::get<std::shared_ptr<precompiled::Precompiled>>(precompiled.m_precompiled);
 }
 
-struct ErrorMessage
-{
-    uint8_t* buffer{};
-    size_t size{};
-};
-
 template <class T>
 concept ExternalCaller = std::is_invocable_r_v<EVMCResult, T, const evmc_message&>;
 
@@ -35,15 +47,17 @@ private:
     std::unique_ptr<executor::BlockContext> m_blockContext;
     Caller m_externalCaller;
     PrecompiledManager const& m_precompiledManager;
+    ledger::Features m_features;
 
 public:
     ExecutiveWrapper(std::unique_ptr<executor::BlockContext> blockContext,
         std::string contractAddress, int64_t contextID, int64_t seq, Caller externalCaller,
-        PrecompiledManager const& precompiledManager)
+        PrecompiledManager const& precompiledManager, ledger::Features features)
       : executor::TransactionExecutive(*blockContext, std::move(contractAddress), contextID, seq),
         m_blockContext(std::move(blockContext)),
         m_externalCaller(std::move(externalCaller)),
-        m_precompiledManager(precompiledManager)
+        m_precompiledManager(precompiledManager),
+        m_features(std::move(features))
     {}
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(std::string_view _address,
@@ -77,6 +91,18 @@ public:
                 input->codeAddress = bcos::newEVMAddress(
                     m_hashImpl, m_blockContext->number(), m_contextID, seq() + 1);
                 input->receiveAddress = input->codeAddress;
+                // Publish the consumed base (review F6), gated on bit 66: a second
+                // internalCreate through this wrapper must derive from the NEXT value.
+                // Nothing else advances this counter on the wrapper path — the EVM lane's
+                // ++m_seq lives in the v2 HostContext, and each dispatch receives this
+                // executive's seq by value — so two creates through one wrapper used to
+                // derive f(seq+1) twice and land both stubs on one address. Off, the
+                // historical snapshot semantics is kept so historical blocks replay
+                // byte-identically.
+                if (m_features.get(ledger::Features::Flag::bugfix_internal_create_seq))
+                {
+                    m_seq = seq() + 1;
+                }
             }
             EXECUTIVE_WRAPPER(TRACE) << "codeAddress:" << input->codeAddress;
             auto [hostContext, callResults] = create(std::move(input));
@@ -87,12 +113,12 @@ public:
             .flags = input->staticCall ? static_cast<uint32_t>(EVMC_STATIC) : 0,
             .depth = 0,
             .gas = input->gas,
+            .state_gas = {},
             .recipient = unhexAddress(input->receiveAddress),
             .sender = unhexAddress(input->senderAddress),
             .input_data = input->data.data(),
             .input_size = input->data.size(),
             .value = toEvmC(0x0_cppui256),
-            .create2_salt = toEvmC(0x0_cppui256),
             .code_address = unhexAddress(input->codeAddress),
             .code = nullptr,
             .code_size = 0};
@@ -135,15 +161,11 @@ public:
         else
         {
             callResult->status = result.status_code;
-            if (result.status_code != 0)
-            {
-                if (auto* errorMessage = (ErrorMessage*)result.create_address.bytes;
-                    errorMessage->buffer != nullptr && errorMessage->size > 0)
-                {
-                    callResult->message.assign(
-                        errorMessage->buffer, errorMessage->buffer + errorMessage->size);
-                }
-            }
+            // Legacy (pre-bugfix_v1_error_handling) branch: error text used to ride
+            // back through evmc_result::create_address reinterpreted as ErrorMessage*.
+            // That field is gone in evmc ABI 19 and no producer of the pointer exists
+            // in-tree, so this branch never obtained a message anyway (buffer was
+            // always null) — keep the equivalent no-message behavior.
         }
 
         return callResult;
@@ -152,7 +174,7 @@ public:
 
 inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blockHeader,
     std::string contractAddress, ExternalCaller auto externalCaller, auto const& precompiledManager,
-    int64_t contextID, int64_t seq, bool authCheck)
+    int64_t contextID, int64_t seq, bool authCheck, ledger::Features features)
 {
     auto storageWrapper =
         std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
@@ -163,6 +185,6 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
         std::move(blockContext), std::move(contractAddress), contextID, seq,
-        std::move(externalCaller), precompiledManager);
+        std::move(externalCaller), precompiledManager, std::move(features));
 }
 }  // namespace bcos::executor_v1

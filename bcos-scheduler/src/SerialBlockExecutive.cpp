@@ -195,31 +195,36 @@ void SerialBlockExecutive::serialExecute(
         if (tx->to().empty())
         {
             auto newSeq = tx->seq();
+            std::string address;
+            // Review F2 (both halves): a salted create keeps the EIP-1014 address (the
+            // pre-0.24 wire shape); the unsalted empty-to address follows the
+            // version-gated lane rule — DmcExecutor's arm now matches this one when
+            // bugfix_dmc_create_address_rule is on, and keeps the historical formula when
+            // it is off, so existing chains replay identically.
             if (tx->createSalt())
             {
-                // TODO: Add sender in this process(consider compat with ethereum)
-                tx->setTo(bcos::newCreate2EVMAddress(
-                    m_scheduler->getHashImpl(), tx->from(), tx->data(), *(tx->createSalt())));
+                // A producer still speaking the pre-0.24 protocol hands the salt down
+                // and expects the EIP-1014 address: derive it with the shared helper
+                // (the same formula the host-side create2 hook uses) instead of
+                // silently re-addressing the create with the legacy formula.
+                address = bcos::newCreate2EVMAddress(
+                    m_scheduler->getHashImpl(), tx->from(), tx->data(), *(tx->createSalt()));
+            }
+            else if (m_scheduler->ledgerConfig().features().get(
+                         ledger::Features::Flag::feature_evm_address))
+            {
+                // EOA create contract
+                auto const sender = tx->origin();
+                Address senderAddress(sender, Address::FromHex);
+                address = bcos::newLegacyEVMAddressString(senderAddress.ref(), tx->nonce());
             }
             else
             {
-                std::string address;
-                if (m_scheduler->ledgerConfig().features().get(
-                        ledger::Features::Flag::feature_evm_address))
-                {
-                    // EOA create contract
-                    auto const sender = tx->origin();
-                    Address senderAddress(sender, Address::FromHex);
-                    address = bcos::newLegacyEVMAddressString(senderAddress.ref(), tx->nonce());
-                }
-                else
-                {
-                    address = bcos::newEVMAddress(m_scheduler->getHashImpl(),
-                        m_block->blockHeader()->number(), tx->contextID(), newSeq);
-                }
-
-                tx->setTo(std::move(address));
+                address = bcos::newEVMAddress(m_scheduler->getHashImpl(),
+                    m_block->blockHeader()->number(), tx->contextID(), newSeq);
             }
+
+            tx->setTo(std::move(address));
         }
 
         updateWeb3NonceMap(tx);

@@ -34,9 +34,16 @@
 
 namespace bcos
 {
+namespace ledger
+{
+class Features;
+}
 namespace executor
 {
 class BlockContext;
+// No registered v1 executor needs a consensus-relevant flag today; when one does,
+// thread the features it needs at the call site that owns them instead of widening
+// this signature (the previous Features& parameter had zero readers).
 using PrecompiledExecutor = std::function<std::pair<bool, bytes>(bytesConstRef)>;
 using PrecompiledPricer = std::function<bigint(bytesConstRef)>;
 

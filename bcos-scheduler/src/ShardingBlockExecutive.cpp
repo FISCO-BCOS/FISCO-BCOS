@@ -264,7 +264,8 @@ DmcExecutor::Ptr ShardingBlockExecutive::buildDmcExecutor(const std::string& nam
     bcos::executor::ParallelTransactionExecutorInterface::Ptr executor)
 {
     auto dmcExecutor = std::make_shared<ShardingDmcExecutor>(name, contractAddress, m_block,
-        executor, m_keyLocks, m_hashImpl, m_dmcRecorder, m_schedulerTermId, isCall());
+        executor, m_keyLocks, m_hashImpl, m_dmcRecorder, m_schedulerTermId, isCall(),
+        m_scheduler->ledgerConfig().features());
     return dmcExecutor;
 }
 

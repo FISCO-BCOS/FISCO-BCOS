@@ -1,3 +1,22 @@
+/*
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @brief call parameters passed between the host context and the executor
+ * @file CallParameters.h
+ */
+
 #pragma once
 
 #include "bcos-framework/protocol/LogEntry.h"
@@ -36,6 +55,10 @@ struct CallParameters
 
     int64_t contextID = 0;
     int64_t seq = 0;
+    /// Copied from the resumed ExecutionMessage::schedulerSeq (R5 F1): the DMC
+    /// scheduler's last-consumed seq for this tx context. Executor-local — never
+    /// serialized back out; consumed by CoroutineTransactionExecutive::externalCall.
+    int64_t schedulerSeq = -1;
 
     std::string senderAddress;   // common field, readable format
     std::string codeAddress;     // common field, readable format
@@ -67,7 +90,6 @@ struct CallParameters
 
     std::string message;                               // by response, readable format
     std::vector<bcos::protocol::LogEntry> logEntries;  // by response
-    std::optional<u256> createSalt;                    // by response
     std::string newEVMContractAddress;                 // by response, readable format
 
     int32_t status = 0;  // by response

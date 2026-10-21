@@ -88,6 +88,20 @@ public:
     int64_t contextID() const { return m_contextID; }
     int64_t seq() const { return m_seq; }
 
+    /// Whether this executive runs under the serial scheduler. The CREATE hook's
+    /// EIP-style branch matches SerialBlockExecutive's gate on the serial lane
+    /// (feature_evm_address alone) and additionally requires
+    /// bugfix_dmc_create_address_rule on the DMC lane, matching DmcExecutor's arm.
+    virtual bool isSerialSchedulerLane() const noexcept { return true; }
+
+    /// Seq base for the CREATE hook's legacy-formula derivation (f(seq + 1)). The
+    /// serial lane keeps m_seq current after every child call, so m_seq IS the base;
+    /// the DMC coroutine lane never advances m_seq (it is the scheduler's routing
+    /// identity and key-lock scope), so it tracks the scheduler-handed-back counter
+    /// instead (R5 F1) — f(createDerivationSeq() + 1) then equals the base's
+    /// scheduler-side f(currentSeq).
+    virtual int64_t createDerivationSeq() const { return m_seq; }
+
     // in delegatecall this is codeAddress
     std::string_view contractAddress() const { return m_contractAddress; }
 

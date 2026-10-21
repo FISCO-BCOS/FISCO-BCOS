@@ -32,8 +32,6 @@ using namespace bcos::precompiled;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 
-static tbb::concurrent_unordered_map<std::string, uint32_t> s_name2SelectCache;
-
 void bcos::precompiled::checkNameValidate(std::string_view tableName, std::string_view _keyField,
     std::vector<std::string>& valueFieldList)
 {
@@ -205,21 +203,13 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
 uint32_t bcos::precompiled::getFuncSelector(
     std::string_view functionName, const crypto::Hash::Ptr& _hashImpl)
 {
-    // global function selector cache
-    auto it = s_name2SelectCache.find(std::string(functionName));
-    if (it != s_name2SelectCache.end())
-    {
-        return it->second;
-    }
-    auto selector = getFuncSelectorByFunctionName(functionName, _hashImpl);
-    s_name2SelectCache.insert(std::make_pair(functionName, selector));
-    return selector;
-}
-
-// for ut
-void bcos::precompiled::clearName2SelectCache()
-{
-    s_name2SelectCache.clear();
+    // No process-global cache here: a selector derives from the function name AND the
+    // hash algorithm, and the old name-keyed cache mixed the two inputs — the first
+    // computation (whichever hashImpl got there first) won for the whole process, so a
+    // keccak chain sharing a process with an SM3 one dispatched against the wrong
+    // selectors ("undefined method"). Hashing a short function name is cheaper than
+    // getting this wrong.
+    return getFuncSelectorByFunctionName(functionName, _hashImpl);
 }
 
 uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)

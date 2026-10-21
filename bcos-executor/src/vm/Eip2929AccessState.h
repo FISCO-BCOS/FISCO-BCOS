@@ -165,6 +165,33 @@ struct Eip2929AccessState
         return warmUpAddressImpl(address, /*recordJournal=*/false);
     }
 
+    /// R5 F2 replay gate, flag off: evmone 0.24's create_impl warms the address the
+    /// create hook derived (access_account on msg.recipient) — 0.21 never called it.
+    /// The hooks mark every address they derive; with
+    /// bugfix_evm2929_created_address_warm OFF, accessAccount answers the FIRST query
+    /// on a marked address cold WITHOUT inserting (that query is the creation
+    /// warm-up), and every later query behaves normally — so the first genuine touch
+    /// pays the cold fee and turns the address warm, exactly like the base.
+    void markAddressCreatedByHook(const evmc_address& address)
+    {
+        m_hookCreatedAddresses.push_back(address);
+    }
+
+    /// true when this query is the creation warm-up of a hook-derived address and the
+    /// caller must answer it cold WITHOUT warming (consumed: only the first query).
+    bool consumeCreationWarmupQuery(const evmc_address& address)
+    {
+        for (auto it = m_hookCreatedAddresses.begin(); it != m_hookCreatedAddresses.end(); ++it)
+        {
+            if (addressesEqual(*it, address))
+            {
+                m_hookCreatedAddresses.erase(it);
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool warmUpStorage(const evmc_address& address, const evmc_bytes32& key)
     {
         return warmUpStorageImpl(address, key, /*recordJournal=*/true);
@@ -220,6 +247,7 @@ struct Eip2929AccessState
     }
 
 private:
+    std::vector<evmc_address> m_hookCreatedAddresses;
     static bool addressesEqual(evmc_address const& a, evmc_address const& b) noexcept
     {
         return std::memcmp(a.bytes, b.bytes, sizeof(a.bytes)) == 0;

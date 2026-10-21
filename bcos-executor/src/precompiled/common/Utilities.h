@@ -127,8 +127,6 @@ std::string checkCreateTableParam(const std::string_view& _tableName, std::strin
     std::optional<uint8_t> keyOrder = std::nullopt);
 
 uint32_t getFuncSelector(std::string_view functionName, const crypto::Hash::Ptr& _hashImpl);
-// for ut
-void clearName2SelectCache();
 uint32_t getParamFunc(bytesConstRef _param);
 uint32_t getFuncSelectorByFunctionName(
     std::string_view _functionName, const crypto::Hash::Ptr& _hashImpl);

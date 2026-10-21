@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file PrecompiledImpl.h
+ */
+
 #pragma once
 #include "../EVMCResult.h"
 #include "ExecutiveWrapper.h"
@@ -47,11 +65,10 @@ inline EVMCResult buildBuiltinPrecompiledResult(bool success, auto const& output
             .status_code = success ? EVMC_SUCCESS : EVMC_REVERT,
             .gas_left = gasLeft,
             .gas_refund = 0,
+            .state_gas = {},
             .output_data = buffer.release(),
             .output_size = output.size(),
             .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-            .create_address = {},
-            .padding = {},
         },
         success ? protocol::TransactionStatus::None :
                   protocol::TransactionStatus::RevertInstruction};
@@ -104,7 +121,7 @@ inline EVMCResult callBcosPrecompiled(
     auto contractAddress = address2HexString(message.code_address);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
         std::forward<decltype(externalCaller)>(externalCaller), precompiledManager, contextID, seq,
-        authCheck);
+        authCheck, features);
 
     auto params = std::make_shared<precompiled::PrecompiledExecResult>();
     params->m_sender = address2HexString(message.sender);
@@ -136,11 +153,10 @@ inline EVMCResult callBcosPrecompiled(
                 .status_code = EVMC_SUCCESS,
                 .gas_left = response->m_gasLeft,
                 .gas_refund = 0,
+                .state_gas = {},
                 .output_data = buffer.release(),
                 .output_size = params->m_execResult.size(),
                 .release = [](const struct evmc_result* result) { delete[] result->output_data; },
-                .create_address = {},
-                .padding = {},
             },
             protocol::TransactionStatus::None};
     }
@@ -153,8 +169,32 @@ inline EVMCResult callBcosPrecompiled(
             protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, errorGas(), e.what(),
             features.get(ledger::Features::Flag::bugfix_v1_error_handling));
     }
+    catch (bcos::Error& e)
+    {
+        // A node/infra fault (storage I/O, row decode) is NOT a contract decision
+        // (review F7). Gated on bit 67:
+        //  - ON: rethrow to executeCall()'s FIB-88/92 arm — the identical fault through
+        //    an EVMC callback already fails the whole frame; a receipt sealed from a
+        //    node fault is one the rest of the network cannot reproduce.
+        //  - OFF (the pre-existing behaviour, kept for replay): the fault is sealed as
+        //    the PrecompiledError REVERT below — byte-identical to historical receipts.
+        if (features.get(ledger::Features::Flag::bugfix_precompiled_node_fault_rethrow))
+        {
+            PRECOMPILE_LOG(WARNING) << "Precompiled node fault (rethrowing to the ladder): "
+                                    << boost::diagnostic_information(e);
+            throw;
+        }
+        PRECOMPILE_LOG(WARNING) << "Precompiled node fault (historical REVERT receipt): "
+                                << boost::diagnostic_information(e);
+        return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
+            protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, errorGas(),
+            "InternalPrecompiledFailed"s,
+            features.get(ledger::Features::Flag::bugfix_v1_error_handling));
+    }
     catch (std::exception& e)
     {
+        // Contract-domain failure from the precompiled's own logic (bcos::Exception
+        // derivatives): the REVERT receipt stands.
         PRECOMPILE_LOG(WARNING) << "Precompiled execute error: "
                                 << boost::diagnostic_information(e);
         return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,

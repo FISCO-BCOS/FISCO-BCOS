@@ -1,7 +1,24 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file HostContext.cpp
+ */
+
 #include "HostContext.h"
 #include "VMFactory.h"
 #include "bcos-crypto/ChecksumAddress.h"
-#include <fmt/format.h>
 
 evmc_bytes32 bcos::executor_v1::hostcontext::evm_hash_fn(
     evmc_host_context* /*context*/, const uint8_t* data, size_t size)
@@ -18,15 +35,36 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
     {
     case EVMC_CREATE:
     {
+        // evmc ABI 19: nested creates (depth != 0) arrive with recipient already
+        // computed — evmone derives it through this lane's create_address_fn hook
+        // (HostContext::createAddressForOpcode: the FISCO
+        // hash("<block>_<ctx>_<seq>") formula, or keccak(rlp(sender, nonce)) on
+        // web3Tx chains) — and the CREATE instruction pushes THAT address onto the
+        // EVM stack. Overwriting it with a different derivation
+        // would split the account address from the stack address — the constructor's
+        // stored address then points at nothing and every later call misses (observed as
+        // contractDeploy revert). Depth-0 (transaction-level) creates keep the legacy
+        // FISCO formula unconditionally: their executor-built messages may carry a
+        // decorative recipient (e.g. precompile wrappers, eip2929 probes) that 0.21
+        // always overwrote.
+        if (message.depth != 0 && !concepts::bytebuffer::equalTo(
+                                      message.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+        {
+            message.code_address = message.recipient;
+            break;
+        }
         if (concepts::bytebuffer::equalTo(
                 message.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
         {
             if (!web3Tx)
             {
-                auto address = fmt::format("{}_{}_{}", blockNumber, contextID, seq);
-                auto hash = hashImpl.hash(address);
-                std::copy_n(
-                    hash.data(), sizeof(message.code_address.bytes), message.code_address.bytes);
+                // Same helper the CREATE hook resolves nested creates with: the chain hasher
+                // over "<block>_<ctx>_<seq>", first 20 bytes — one implementation of the
+                // formula, not two (bcos::newEVMAddress formats the same decimal key).
+                auto addressHex = bcos::newEVMAddress(hashImpl, blockNumber, contextID, seq);
+                auto addressBytes = bcos::fromHex(addressHex);
+                std::copy_n(addressBytes.begin(), sizeof(message.code_address.bytes),
+                    message.code_address.bytes);
             }
             else
             {
@@ -39,20 +77,34 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
     }
     case EVMC_CREATE2:
     {
-        std::array<bcos::byte, 1 + sizeof(message.sender.bytes) + sizeof(message.create2_salt) +
-                                   crypto::HashType::SIZE>
-            buffer;
-        uint8_t* ptr = buffer.data();
-        *ptr++ = 0xff;
-        ptr = std::uninitialized_copy_n(message.sender.bytes, sizeof(message.sender.bytes), ptr);
-        auto salt = toBigEndian(fromEvmC(message.create2_salt));
-        ptr = std::uninitialized_copy(salt.begin(), salt.end(), ptr);
-        auto inputHash = hashImpl.hash(bytesConstRef(message.input_data, message.input_size));
-        ptr = std::uninitialized_copy(inputHash.begin(), inputHash.end(), ptr);
-        auto addressHash = hashImpl.hash(bytesConstRef(buffer.data(), buffer.size()));
-
-        std::copy_n(addressHash.begin() + 12, sizeof(message.code_address.bytes),
-            message.code_address.bytes);
+        // evmc ABI 19: evmc_message no longer carries create2_salt. Nested CREATE2
+        // messages arrive with recipient already computed — evmone derives it through
+        // this lane's create2_address_fn hook (HostContext::create2AddressForOpcode:
+        // the chain hasher over 0xff||sender||salt||chainHasher(initcode)) — only
+        // transaction-level messages (recipient empty, salt historically always zero)
+        // take this branch. The
+        // depth != 0 guard mirrors the CREATE arm: a depth-0 message may carry a
+        // decorative recipient (precompile wrappers, eip2929 probes) that this
+        // branch must overwrite, not honour.
+        if (message.depth != 0 && !concepts::bytebuffer::equalTo(
+                                      message.recipient.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
+        {
+            message.code_address = message.recipient;
+            break;
+        }
+        // Same helper the CREATE2 hook uses: the chain hasher over
+        // 0xff || sender || salt || chainHasher(initcode), via bcos::newCreate2EVMAddress.
+        // Production nested CREATE2 always arrives recipient-set (the opcode's hook
+        // fills it before the host sees the message); only transaction-level messages
+        // and hand-built test/probe messages take this arm, and ABI 19 removed
+        // create2_salt so no salt survives to here — hence the historical zero salt.
+        constexpr evmc_bytes32 zero_salt{};
+        auto addressHex = bcos::newCreate2EVMAddress(hashImpl,
+            bcos::toHex(bytesConstRef(message.sender.bytes, sizeof(message.sender.bytes))),
+            bytesConstRef(message.input_data, message.input_size), fromEvmC(zero_salt));
+        auto addressBytes = bcos::fromHex(addressHex);
+        std::copy_n(
+            addressBytes.begin(), sizeof(message.code_address.bytes), message.code_address.bytes);
         message.recipient = message.code_address;
         break;
     }

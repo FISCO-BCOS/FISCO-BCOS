@@ -33,7 +33,8 @@ public:
         bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
-        DmcStepRecorder::Ptr dmcRecorder, int64_t schedulerTermId, bool isCall);
+        DmcStepRecorder::Ptr dmcRecorder, int64_t schedulerTermId, bool isCall,
+        ledger::Features features);
 
     ~ShardingDmcExecutor() override;
 

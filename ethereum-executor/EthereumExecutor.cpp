@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EthereumExecutor.cpp
+ */
+
 /// @file EthereumExecutor.cpp
 /// @brief Out-of-line definitions of the non-template helpers of the
 ///        pure-Ethereum executor (block-info builder, validation-error receipt).
@@ -89,17 +107,17 @@ protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& 
         {
         case evm::INTRINSIC_GAS_TOO_LOW:
             return static_cast<int32_t>(TransactionStatus::OutOfGasLimit);
-        case evm::INSUFFICIENT_FUNDS:
+        case evm::INSUFFICIENT_ACCOUNT_FUNDS:
             return static_cast<int32_t>(TransactionStatus::NotEnoughCash);
-        case evm::NONCE_HAS_MAX_VALUE:
+        case evm::NONCE_IS_MAX:
         case evm::NONCE_TOO_HIGH:
         case evm::NONCE_TOO_LOW:
             return static_cast<int32_t>(TransactionStatus::NonceCheckFail);
         case evm::SENDER_NOT_EOA:
             return static_cast<int32_t>(TransactionStatus::SenderNoEOA);
-        case evm::INIT_CODE_SIZE_LIMIT_EXCEEDED:
+        case evm::INITCODE_SIZE_EXCEEDED:
             return static_cast<int32_t>(TransactionStatus::MaxInitCodeSizeExceeded);
-        case evm::GAS_LIMIT_REACHED:
+        case evm::GAS_ALLOWANCE_EXCEEDED:
             return static_cast<int32_t>(TransactionStatus::BlockLimitCheckFail);
         default:
             return static_cast<int32_t>(TransactionStatus::Unknown);

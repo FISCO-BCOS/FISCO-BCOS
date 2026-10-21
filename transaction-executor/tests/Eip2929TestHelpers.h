@@ -1,7 +1,20 @@
 /*
  *  Copyright (C) 2024 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
- *  @brief Shared bytecode and fixture helpers for EIP-2929 transaction-executor tests.
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file Eip2929TestHelpers.h
+ * @brief Shared bytecode and fixture helpers for EIP-2929 transaction-executor tests.
  */
 
 #pragma once
@@ -263,9 +276,13 @@ inline bcos::executor::Eip2930AccessList makeAccessListMultiAccount(
 }
 
 // --- CREATE2 message builder (caller must keep @p initcode storage alive) ---
+// evmc ABI 19: evmc_message no longer carries create2_salt. The message is built
+// with an empty recipient; the host-side getMessage() (transaction-level path)
+// derives the address from the zero salt, while nested creates get their
+// recipient precomputed by evmone.
 
 inline evmc_message makeCreate2Message(
-    evmc_address sender, evmc_bytes32 salt, bcos::bytesConstRef initcode, int64_t gas)
+    evmc_address sender, bcos::bytesConstRef initcode, int64_t gas)
 {
     evmc_message message{};
     message.kind = EVMC_CREATE2;
@@ -277,7 +294,6 @@ inline evmc_message makeCreate2Message(
     message.input_data = initcode.data();
     message.input_size = initcode.size();
     message.value = {};
-    message.create2_salt = salt;
     message.code_address = {};
     message.code = nullptr;
     message.code_size = 0;

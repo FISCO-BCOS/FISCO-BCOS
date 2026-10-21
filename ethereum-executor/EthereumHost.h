@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EthereumHost.h
+ */
+
 /// @file EthereumHost.h
 /// @brief Ported evmone Host (eth/state/host.{hpp,cpp}) adapted to operate on
 ///        EthereumState over BCOS storage, using protocol::Transaction and
@@ -273,6 +291,8 @@ private:
 
     [[nodiscard]] evmc::uint256be get_balance(const address& addr) const noexcept override;
 
+    [[nodiscard]] uint64_t get_nonce(const address& addr) const noexcept override;
+
     [[nodiscard]] size_t get_code_size(const address& addr) const noexcept override;
 
     [[nodiscard]] bytes32 get_code_hash(const address& addr) const noexcept override;
@@ -392,6 +412,16 @@ evmc::uint256be EthereumHost<Storage, Policy>::get_balance(const address& addr) 
     return (acc != nullptr) ? evm::toEvmcBE<evmc::uint256be>(acc->balance) : evmc::uint256be{};
 }
 
+// evmc ABI 18: the VM reads the sender's nonce itself to compute CREATE addresses
+// (and to enforce EIP-2681); return the stored pre-bump value so the address the
+// VM derives matches the one prepare_message assigns for transaction-level creates.
+template <class Storage, class Policy>
+uint64_t EthereumHost<Storage, Policy>::get_nonce(const address& addr) const noexcept
+{
+    const auto* const acc = m_state.find(addr);
+    return (acc != nullptr) ? acc->nonce : 0;
+}
+
 namespace eth_host_detail
 {
 /// Check if an existing account is the "create collision"
@@ -484,7 +514,6 @@ template <class Storage, class Policy>
 std::optional<evmc_message> EthereumHost<Storage, Policy>::prepare_message(
     evmc_message msg) noexcept
 {
-    assert(msg.kind != EVMC_EOFCREATE);
     if (msg.depth == 0 || msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
     {
         auto& sender_acc = m_state.get(msg.sender);
@@ -501,19 +530,15 @@ std::optional<evmc_message> EthereumHost<Storage, Policy>::prepare_message(
 
         if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
         {
-            // Compute and set the address of the account being created.
-            assert(evmc::address{msg.recipient} == address{});
-            assert(evmc::address{msg.code_address} == address{});
-            // Nonce was already incremented, but creation calculation needs non-incremented value
-            assert(sender_acc.nonce != 0);
-            const auto creation_sender_nonce = sender_acc.nonce - 1;
-            if (msg.kind == EVMC_CREATE)
-                msg.recipient = evm::compute_create_address(msg.sender, creation_sender_nonce);
-            else
+            if (evmc::address{msg.recipient} == address{})
             {
-                assert(msg.kind == EVMC_CREATE2);
-                msg.recipient = evm::compute_create2_address(
-                    msg.sender, msg.create2_salt, {msg.input_data, msg.input_size});
+                // Transaction-level creation (depth 0): the executor-built message
+                // carries no recipient; derive it from the pre-bump nonce. Nested
+                // creates arrive with msg.recipient already set by evmone
+                // (compute_create_address(sender, get_nonce(sender)) / CREATE2 hash).
+                assert(msg.depth == 0);
+                assert(sender_acc.nonce != 0);
+                msg.recipient = evm::compute_create_address(msg.sender, sender_acc.nonce - 1);
             }
 
             // By EIP-2929, the access to new created address is never reverted.
@@ -534,7 +559,7 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     if (!new_acc_exists)
         new_acc = &m_state.insert(msg.recipient);
     else if (eth_host_detail::is_create_collision(*new_acc))
-        return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+        return evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
     m_state.journal_create(msg.recipient, new_acc_exists);
 
     assert(new_acc != nullptr);
@@ -559,10 +584,7 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     const bytes_view initcode{msg.input_data, msg.input_size};
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
-    {
-        result.create_address = msg.recipient;
-        return result;
-    }
+        return result;  // Created address, if any, is msg.recipient (evmc ABI 19).
 
     auto gas_left = result.gas_left;
     assert(gas_left >= 0);
@@ -570,7 +592,7 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     const bytes_view code{result.output_data, result.output_size};
 
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > evmone::MAX_CODE_SIZE)
-        return evmc::Result{EVMC_FAILURE};
+        return evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
 
     // Code deployment cost.
     const auto cost = std::ssize(code) * 200;
@@ -578,28 +600,33 @@ evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noex
     if (gas_left < 0)
     {
         return (m_rev == EVMC_FRONTIER) ?
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient} :
-                   evmc::Result{EVMC_FAILURE};
+                   // evmc ABI 19: Result lost the created-address ctor; the caller reads
+                   // msg.recipient (set by prepare_message / evmone for nested creates).
+                   evmc::Result{
+                       EVMC_SUCCESS, result.gas_left, result.gas_refund, result.state_gas} :
+                   evmc::Result{EVMC_FAILURE, 0, 0, {.left = msg.state_gas}};
     }
 
     if (!code.empty())
     {
         // EIP-3541: Reject new contract code starting with the 0xEF byte.
         if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
-            return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+            return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE, 0, 0, {.left = msg.state_gas}};
 
         new_acc->code_hash = evm::keccak256(code);
         new_acc->code = code;
         new_acc->code_changed = true;
     }
 
-    return evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    // evmc ABI 19: evmc::Result no longer carries the created address; the caller
+    // reads it off the message's recipient (set by evmone for nested creates, by
+    // prepare_message for transaction-level ones).
+    return evmc::Result{result.status_code, gas_left, result.gas_refund, result.state_gas};
 }
 
 template <class Storage, class Policy>
 evmc::Result EthereumHost<Storage, Policy>::execute_message(const evmc_message& msg) noexcept
 {
-    assert(msg.kind != EVMC_EOFCREATE);
     if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
         return create(msg);
 
@@ -639,7 +666,7 @@ evmc::Result EthereumHost<Storage, Policy>::execute_message(const evmc_message& 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
     if (code.empty())
-        return evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+        return evmc::Result{EVMC_SUCCESS, msg.gas, 0, {.left = msg.state_gas}};
 
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
@@ -649,7 +676,7 @@ evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) n
 {
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
-        return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+        return evmc::Result{EVMC_FAILURE, orig_msg.gas, 0, {.left = orig_msg.state_gas}};
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();
@@ -701,20 +728,24 @@ evmc_tx_context EthereumHost<Storage, Policy>::get_tx_context() const noexcept
     const auto blob_hashes_count = m_txContext.has_value() ? m_txContext->blobHashes.size() : 0;
 
     return evmc_tx_context{
-        evm::toEvmcBE<evmc::uint256be>(effective_gas_price),  // By EIP-1559.
-        sender,
-        m_block.coinbase,
-        m_block.number,
-        m_block.timestamp,
-        m_block.gas_limit,
-        m_block.prev_randao,
-        evmc::uint256be{static_cast<uint64_t>(m_chainId)},  // Chain ID (EIP-155).
-        evmc::uint256be{base_fee},
-        evm::toEvmcBE<evmc::uint256be>(m_policy.blobBaseFee(m_block)),
-        blob_hashes,
-        blob_hashes_count,
-        nullptr,  // initcodes (TXCREATE) — not used by this executor.
-        0,        // initcodes_count
+        .tx_gas_price = evm::toEvmcBE<evmc::uint256be>(effective_gas_price),  // By EIP-1559.
+        .tx_origin = sender,
+        .block_coinbase = m_block.coinbase,
+        .block_number = m_block.number,
+        .block_timestamp = m_block.timestamp,
+        .block_gas_limit = m_block.gas_limit,
+        .block_prev_randao = m_block.prev_randao,
+        .chain_id = evmc::uint256be{static_cast<uint64_t>(m_chainId)},  // Chain ID (EIP-155).
+        .block_base_fee = evmc::uint256be{base_fee},
+        .blob_base_fee = evm::toEvmcBE<evmc::uint256be>(m_policy.blobBaseFee(m_block)),
+        .blob_hashes = blob_hashes,
+        .blob_hashes_count = blob_hashes_count,
+        // Designators like the sibling producer (transaction-executor EVMHostInterface.h):
+        // many fields share a shape (uint256be / address / int64_t), so a future
+        // insertion inside a positional list could silently misalign instead of failing
+        // to compile — bind by designator.
+        .block_slot_number = 0,  // block_slot_number (EIP-7843, evmc ABI 19): no beacon slot on
+                                 // this chain.
     };
 }
 

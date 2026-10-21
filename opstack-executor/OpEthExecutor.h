@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpEthExecutor.h
+ */
+
 /// @file OpEthExecutor.h
 /// @brief OP Stack transaction executor on the bcos-evm-free ethereum-executor
 ///        stack — the drop-in successor of OpstackExecutor.
@@ -399,7 +417,7 @@ public:
             // fee — the EIP-1559 priority term is capped at max-baseFee, so the
             // effective price becomes exactly baseFee, never above. A caller
             // that explicitly requested a lower cap keeps it and validation
-            // rejects with FEE_CAP_LESS_THAN_BLOCKS, exactly like op-geth's
+            // rejects with INSUFFICIENT_MAX_FEE_PER_GAS, exactly like op-geth's
             // ErrFeeCapTooLow.
             if (call && !transaction.gasPrice().has_value() &&
                 !transaction.maxFeePerGas().has_value())
@@ -462,8 +480,8 @@ public:
             {
                 // On the block path a full gas pool is a capacity fault (keep the
                 // transaction), not a poisoned-tx reject; eth_call / estimateGas
-                // keep GAS_LIMIT_REACHED as ordinary validation.
-                if (*err == make_error_code(eth::evm::ErrorCode::GAS_LIMIT_REACHED) && !call)
+                // keep GAS_ALLOWANCE_EXCEEDED as ordinary validation.
+                if (*err == make_error_code(eth::evm::ErrorCode::GAS_ALLOWANCE_EXCEEDED) && !call)
                 {
                     throw bcos::evm::OpConsensusError(
                         std::string("OpScheduler: block gas pool full: ") + err->message(),

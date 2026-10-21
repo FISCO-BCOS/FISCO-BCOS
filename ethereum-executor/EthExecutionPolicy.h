@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2024 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EthExecutionPolicy.h
+ */
+
 /// @file EthExecutionPolicy.h
 /// @brief Chain-level execution policy for the ethereum-executor: the points
 ///        where an L2 (OP Stack) diverges from L1 Ethereum — transaction-type
@@ -116,7 +134,7 @@ inline std::optional<std::error_code> validateSetCodeTxType(
     protocol::Transaction const& tx, evmc_revision rev)
 {
     if (rev < EVMC_PRAGUE)
-        return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+        return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
     if (!protocol::ethToAddress(tx).has_value())
         return make_error_code(evm::ErrorCode::CREATE_SET_CODE_TX);
     if (tx.authorizationList().empty())
@@ -137,16 +155,17 @@ inline std::optional<std::error_code> validateRegularTypeHierarchy(
     case 3:  // blob
     case 2:  // eip1559
         if (rev < EVMC_LONDON)
-            return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
 
         if (maxPriorityGasPrice > maxGasPrice)
-            return make_error_code(evm::ErrorCode::TIP_GT_FEE_CAP);  // Priority gas price is too
-                                                                     // high.
+            return make_error_code(
+                evm::ErrorCode::PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS);  // Priority gas price is
+                                                                         // too high.
         [[fallthrough]];
 
     case 1:  // access_list
         if (rev < EVMC_BERLIN)
-            return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
         [[fallthrough]];
 
     case 0:;  // legacy
@@ -172,7 +191,7 @@ struct EthL1Policy
         // trip the maxPriorityGasPrice assert (debug) or silently run as legacy
         // (release), diverging from geth.
         if (txKind > 4)
-            return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
         const auto maxGasPrice = ethMaxGasPrice(tx, callParams);
         const auto maxPriorityGasPrice = ethMaxPriorityGasPrice(tx, callParams);
         const auto hasTo = protocol::ethToAddress(tx).has_value();
@@ -182,7 +201,7 @@ struct EthL1Policy
         {
         case 3:  // blob
             if (rev < EVMC_CANCUN)
-                return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+                return make_error_code(evm::ErrorCode::TYPE_NOT_SUPPORTED);
             if (!hasTo)
                 return make_error_code(evm::ErrorCode::CREATE_BLOB_TX);
             if (blobHashes.empty())
@@ -192,7 +211,7 @@ struct EthL1Policy
 
             assert(block.blob_base_fee.has_value());
             if (ethMaxBlobGasPrice(tx) < *block.blob_base_fee)
-                return make_error_code(evm::ErrorCode::BLOB_FEE_CAP_LESS_THAN_BLOCKS);
+                return make_error_code(evm::ErrorCode::INSUFFICIENT_MAX_FEE_PER_BLOB_GAS);
 
             if (std::ranges::any_of(blobHashes, [](const auto& h) { return h[0] != 0x01; }))
                 return make_error_code(evm::ErrorCode::INVALID_BLOB_HASH_VERSION);

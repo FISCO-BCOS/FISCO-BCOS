@@ -54,6 +54,9 @@ public:
     CoroutineTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
         int64_t contextID, int64_t seq);
 
+    bool isSerialSchedulerLane() const noexcept override { return false; }
+    int64_t createDerivationSeq() const override;
+
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;  // start a new
     // coroutine to
     // execute
@@ -82,6 +85,31 @@ public:
     virtual CallParameters::UniquePtr& getExchangeMessageRef();
 
     std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper();
+
+protected:
+    /// R5 F1: the DMC scheduler's last-consumed seq for this tx context, handed back
+    /// on every resumed message (ExecutionMessage::schedulerSeq). Only
+    /// createDerivationSeq() reads it — m_seq stays the scheduler's routing identity.
+    int64_t m_schedulerLastSeq = 0;
+    /// R6 F2: set when a resumed message carried no scheduler hand-back (the -1
+    /// sentinel). createDerivationSeq() then throws: the frame cannot reproduce the
+    /// base's nested-create derivation and must stop rather than guess.
+    bool m_resumedWithoutSchedulerHandback = false;
+
+public:
+    /// Test/adopt seam for the scheduler hand-back (R6 F2): called by externalCall
+    /// on resume; v < 0 marks the frame as hand-back-missing.
+    void adoptSchedulerSeqHandback(int64_t v)
+    {
+        if (v >= 0)
+        {
+            m_schedulerLastSeq = v;
+        }
+        else
+        {
+            m_resumedWithoutSchedulerHandback = true;
+        }
+    }
 
 protected:
     CallParameters::UniquePtr m_exchangeMessage = nullptr;

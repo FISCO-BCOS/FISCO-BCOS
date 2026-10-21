@@ -23,6 +23,10 @@ CoroutineTransactionExecutive::CoroutineTransactionExecutive(
         [this](auto&& PH1) { externalAcquireKeyLocks(std::forward<decltype(PH1)>(PH1)); },
         m_recoder))
 {
+    // R5 F1: before the first scheduler hand-back, the derivation base is the entry
+    // seq — the same value the scheduler's empty-to arm derived with on the base.
+    m_schedulerLastSeq = seq;
+    m_resumedWithoutSchedulerHandback = false;
     m_storageWrapper = m_syncStorageWrapper.get();
 }
 
@@ -158,6 +162,14 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     // When resume, exchangeMessage set to output
     auto output = std::move(getExchangeMessageRef());
 
+    // R6 F2: the hand-back uses a -1 sentinel for "producer never set it" (an
+    // optional tars long cannot otherwise encode unset vs a real 0): a resumed
+    // frame that got no hand-back cannot reproduce the base's derivation, and a
+    // node that cannot reproduce it must stop rather than guess — mark the frame
+    // and fail loudly at the next derivation instead of deriving colliding
+    // nested-create addresses against an un-upgraded scheduler.
+    adoptSchedulerSeqHandback(output->schedulerSeq);
+
     if (m_blockContext.features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
     {
         if (output->delegateCall &&
@@ -271,4 +283,19 @@ void CoroutineTransactionExecutive::externalAcquireKeyLocks(std::string acquireK
 void CoroutineTransactionExecutive::spawnAndCall(std::function<void(ResumeHandler)> function)
 {
     (*getPushMessage())(std::move(function));
+}
+
+int64_t CoroutineTransactionExecutive::createDerivationSeq() const
+{
+    if (m_resumedWithoutSchedulerHandback)
+    {
+        // R6 F2: an un-upgraded scheduler paired with this executor cannot provide
+        // the seq the base derived from; refuse loudly (the create hook translates
+        // the throw into a halting host fault — the node stops, it does not guess).
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1,
+            "DMC resumed frame carries no schedulerSeq hand-back: the paired scheduler "
+            "is older than this executor and the base's nested-create derivation "
+            "cannot be reproduced"));
+    }
+    return m_schedulerLastSeq;
 }
