@@ -155,4 +155,17 @@ BOOST_AUTO_TEST_CASE(nonAccountRowsAreIgnored)
     BOOST_CHECK(verify().empty());
 }
 
+BOOST_AUTO_TEST_CASE(constantinopleFixIsPetersburgWhileConstantinopleIsSkipped)
+{
+    for (auto const* name :
+        {"ConstantinopleFix", "constantinoplefix", "CONSTANTINOPLEFIX", "Petersburg"})
+    {
+        auto revision = bcos::test::forkNameToRevision(name);
+        BOOST_REQUIRE(revision);
+        BOOST_CHECK_EQUAL(*revision, EVMC_PETERSBURG);
+    }
+    BOOST_CHECK(!bcos::test::forkNameToRevision("Constantinople"));
+    BOOST_CHECK(!bcos::test::forkNameToRevision("Amsterdam"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -232,7 +232,7 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
 /// Map an EEST fork name to an EVMC revision.
 /// std::nullopt = the fork has no executable revision in this binary (Constantinople /
-/// ConstantinopleFix), or its name cannot be resolved, and its fixtures must be skipped —
+/// Amsterdam), or its name cannot be resolved, and its fixtures must be skipped —
 /// there is no default revision: executing an unresolvable fork under a guessed schedule
 /// is the divergence this gate exists to prevent.
 std::optional<evmc_revision> forkNameToRevision(std::string const& forkName);

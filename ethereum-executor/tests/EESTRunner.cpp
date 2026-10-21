@@ -601,6 +601,7 @@ std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
         {"eip158", EVMC_SPURIOUS_DRAGON},
         {"byzantium", EVMC_BYZANTIUM},
         {"petersburg", EVMC_PETERSBURG},
+        {"constantinoplefix", EVMC_PETERSBURG},
         {"istanbul", EVMC_ISTANBUL},
         // Muir Glacier (EIP-2384) only delays the difficulty bomb; it changes no
         // EVM semantics over Istanbul. Mapping it to Berlin would wrongly activate
@@ -629,8 +630,7 @@ std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
     // have. nullopt is the skip signal (an exception here aborted the whole runner,
     // exit 134, wherever the call was not wrapped in a try/catch); the caller counts and
     // reports the skip.
-    static constexpr std::string_view c_refusedForks[] = {
-        "constantinople", "constantinoplefix", "amsterdam"};
+    static constexpr std::string_view c_refusedForks[] = {"constantinople", "amsterdam"};
     for (auto const& refused : c_refusedForks)
     {
         if (lower == refused)
