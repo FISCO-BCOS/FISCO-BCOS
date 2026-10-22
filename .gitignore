@@ -101,3 +101,7 @@ CLAUDE.local.md
 
 # Gradle
 .gradle/
+
+# Local artifacts
+review-notes/
+tools/nodes/
