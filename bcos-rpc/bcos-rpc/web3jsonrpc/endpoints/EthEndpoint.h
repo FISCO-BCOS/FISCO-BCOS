@@ -98,16 +98,65 @@ private:
     /// The OP mempool split by sealability (empty when this node has no mempool).
     task::Task<std::vector<txpool::PooledTransaction>> pooledTransactions();
 
-    // The engine lane's forkchoice safe/finalized heads, plus whether the engine is wired
-    // (which switches safe/finalized to fail-closed rather than the static-depth fallback).
-    // Shared by getBlockNumberByTag and the filter endpoints so one tag has one resolver.
-    struct ForkchoiceContext
+    /// Everything one block-tag resolution needs, gathered once so eth_getBlockByNumber,
+    /// eth_getLogs / eth_newFilter and the state endpoints cannot diverge: `latest`, the
+    /// static [web3_rpc] depths, the engine lane's forkchoice safe/finalized and whether an
+    /// unset forkchoice value fails closed. On the OP lane (NodeService::opCanonicalReader,
+    /// D1 §10.2) latest is the tracker head, safe/finalized are the tracker's with the
+    /// finalized (backend) tip as their fallback and the depths are ignored; on the Eth
+    /// engine lane an unset value fails closed (-32000 header not found); off the engine
+    /// lanes the static depths apply.
+    struct TagContext
     {
+        protocol::BlockNumber latest = 0;
+        protocol::BlockNumber safeDepth = 0;
+        protocol::BlockNumber finalizedDepth = 0;
         std::optional<protocol::BlockNumber> safe;
         std::optional<protocol::BlockNumber> finalized;
-        bool engineLane = false;
+        bool failClosedOnMissingForkchoice = false;
     };
-    ForkchoiceContext forkchoiceContext() const;
+    task::Task<TagContext> tagContext();
+
+    /// A transaction with its receipt and block hash: the ledger first (finalized blocks, as
+    /// before), then the OP head chain's unfinalized part. nullopt when neither carries it —
+    /// including a transaction that exists only on a side branch, which is null like geth's
+    /// answer for a non-canonical inclusion.
+    task::Task<std::optional<bcos::engine::OpCanonicalReader::ChainTransaction>> lookupTransaction(
+        crypto::HashType const& hash);
+
+    /// The (header block, MPT node reader) pair a state read at @p blockNumber resolves its
+    /// root and trie from: the ledger row and the committed-plane reader at or below the
+    /// finalized tip (or off the OP lane), the head chain's window block and a reader over
+    /// its chain view above it. @p chainHash names a specific chain (eth_getProof by block
+    /// hash, which may be a replaced sibling) instead of the head chain.
+    struct StateReadContext
+    {
+        protocol::Block::Ptr block;
+        std::shared_ptr<NodeService::MPTNodeReader> mptReader;
+    };
+    task::Task<StateReadContext> stateReadContext(protocol::BlockNumber blockNumber,
+        std::optional<crypto::HashType> chainHash = std::nullopt);
+
+    /// The flat state plane behind `latest`: the OP head chain's view, else the node's
+    /// committed-plane provider (NodeService::stateStorageProvider); null when neither is
+    /// wired (tars-built NodeService).
+    task::Task<std::shared_ptr<NodeService::StateStorage>> latestStateStorage();
+
+    /// True when @p blockNumber is above the OP facade's finalized tip (an unfinalized height
+    /// served from the window); false off the OP lane.
+    task::Task<bool> isUnfinalizedHeight(protocol::BlockNumber blockNumber);
+
+    /// An OP window block by hash (any branch) / the head chain's block at an unfinalized
+    /// height, with @p blockFlag rows; null off the OP lane, for a finalized block or a height
+    /// the head chain does not reach — the caller then takes its ledger path unchanged.
+    task::Task<protocol::Block::Ptr> unfinalizedBlockByHash(
+        crypto::HashType const& blockHash, int32_t blockFlag);
+    task::Task<protocol::Block::Ptr> unfinalizedBlockByNumber(
+        protocol::BlockNumber blockNumber, int32_t blockFlag);
+    /// eth_getTransactionByBlock*AndIndex's result from a block's own transaction and
+    /// receipt rows; null for an index out of range.
+    static Json::Value transactionAtIndex(
+        protocol::Block& block, uint64_t transactionIndex, crypto::HashType const& blockHash);
 
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
 };

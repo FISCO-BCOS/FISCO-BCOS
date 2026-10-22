@@ -19,12 +19,13 @@
 
 #pragma once
 
-#include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-task/Task.h>
 #include <json/json.h>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -60,10 +61,16 @@ std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
 /// Canyon activation block itself is predicted with the Bedrock denominator.
 u256 nextOpBaseFee(protocol::BlockHeader const& parent);
 
-/// eth_feeHistory for blocks [newest - blockCount + 1, newest] of an OP-lane ledger whose head
+/// Where eth_feeHistory reads its blocks: (number, ledger::getBlockData flags) → block. The
+/// endpoint passes rpc::canonicalBlockByNumber so an unfinalized head-chain block (OP Engine
+/// lane, D1 §10.2) is read from the window like every other block read.
+using FeeHistoryBlockSource =
+    std::function<task::Task<protocol::Block::Ptr>(protocol::BlockNumber, int32_t)>;
+
+/// eth_feeHistory for blocks [newest - blockCount + 1, newest] of an OP-lane chain whose head
 /// is @p head. blockCount 0 answers {"oldestBlock": "0x0"}; above c_maxFeeHistoryBlocks it is
 /// clamped; newest > head is InvalidParams. Deposits enter the rewards with tip 0.
-task::Task<Json::Value> buildOpFeeHistory(ledger::LedgerInterface& ledger,
+task::Task<Json::Value> buildOpFeeHistory(FeeHistoryBlockSource const& blockSource,
     protocol::BlockNumber newest, protocol::BlockNumber head, std::uint64_t blockCount,
     std::vector<double> const& percentiles);
 }  // namespace bcos::rpc
