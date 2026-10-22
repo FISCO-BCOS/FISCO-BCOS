@@ -60,6 +60,9 @@ std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
 /// Canyon activation block itself is predicted with the Bedrock denominator.
 u256 nextOpBaseFee(protocol::BlockHeader const& parent);
 
+/// geth's params.InitialBaseFee (1 gwei): the base fee of a block whose parent carried none.
+inline constexpr uint64_t c_initialBaseFee = 1'000'000'000;
+
 /// The next block's base fee after @p parent under the standard EIP-1559 rule (geth
 /// consensus/misc/eip1559/eip1559.go CalcBaseFee with the London parameters): the pure-Ethereum
 /// lane (executor_version == ETHEREUM_EXECUTOR_VERSION) has no OP extraData, so the parameters
@@ -67,12 +70,27 @@ u256 nextOpBaseFee(protocol::BlockHeader const& parent);
 /// (EIP-4844 prices blobs through excessBlobGas, not the base fee).
 u256 nextEthBaseFee(protocol::BlockHeader const& parent);
 
+/// The EIP-7840 blob base-fee update fraction in effect for the block at @p timestampSeconds.
+///
+/// One definition for the two producers that need it -- eth_blobBaseFee and eth_feeHistory's
+/// baseFeePerBlobGas series -- so the two answers cannot drift. Sources, in decreasing
+/// authority: @p stamped is a schedule a caller already resolved for that block (the block
+/// verifier stamps one into its LedgerConfig); otherwise the node's [fork_timestamps] ladder is
+/// applied to the block's timestamp; otherwise @p rev, when the caller has a revision for it.
+/// Returns 0 when the block predates Cancun.
+uint64_t blobBaseFeeUpdateFraction(std::optional<protocol::BlobScheduleConfig> const& stamped,
+    protocol::BlobForkTimes const& forks, std::optional<evmc_revision> rev,
+    uint64_t timestampSeconds);
+
 /// eth_feeHistory for blocks [newest - blockCount + 1, newest] of a ledger whose head
 /// is @p head. blockCount 0 answers {"oldestBlock": "0x0"}; above c_maxFeeHistoryBlocks it is
 /// clamped; newest > head is InvalidParams. Deposits enter the rewards with tip 0.
 /// @p isOpStackLane selects the next-block base-fee projection: the OP extraData rule for the OP
-/// lane, the standard EIP-1559 rule for the Ethereum lane.
+/// lane, the standard EIP-1559 rule for the Ethereum lane. It also selects the blob series: the
+/// OP lane carries no blobs at all (constant 1 / 0.0, matching MaxBlobGasPerBlock = 0), while
+/// the Ethereum lane prices them through excessBlobGas exactly like eth_blobBaseFee does.
 task::Task<Json::Value> buildOpFeeHistory(ledger::LedgerInterface& ledger,
     protocol::BlockNumber newest, protocol::BlockNumber head, std::uint64_t blockCount,
-    std::vector<double> const& percentiles, bool isOpStackLane);
+    std::vector<double> const& percentiles, bool isOpStackLane,
+    protocol::BlobForkTimes const& blobForks);
 }  // namespace bcos::rpc

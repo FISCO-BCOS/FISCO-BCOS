@@ -134,7 +134,11 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // this schedule into each block's LedgerConfig, but that config is not what the RPC layer
     // rebuilds from storage, and a v2 genesis records no evmc_revision row — so the fork times
     // are wired here, from the same NodeConfig the verifier derives them from.
-    if (nodeConfig->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+    // Same source as the setExecutorVersion call above (the ledger-resolved value, not the
+    // local config): the consumer's lane gate reads the chain's executor_version, so gating the
+    // wiring on a different source would let a node answer eth_blobBaseFee on a chain whose
+    // schedule was never installed.
+    if (m_nodeInitializer->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         auto const forks =
             bcos::initializer::EthereumSyncInitializer::evmcForkSchedule(*nodeConfig);

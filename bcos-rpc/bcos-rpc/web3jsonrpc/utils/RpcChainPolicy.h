@@ -97,7 +97,10 @@ inline task::Task<void> requireOpStackLane(
 /// lane (v3) but not on the legacy FISCO lane (0/1), which has no Ethereum fee/receipt
 /// semantics. Off both lanes they answer exactly what the dispatcher answers an unregistered
 /// method.
-inline task::Task<void> requireEthereumLane(
+/// @return the executor version the gate read, so a caller that also needs it (to pick a lane
+///         projection, say) does not read SYS_CONFIG a second time and cannot disagree with the
+///         gate about which lane it is on.
+inline task::Task<int> requireEthereumLane(
     bcos::ledger::LedgerInterface& ledger, std::string_view method)
 {
     auto const executorVersion = co_await readExecutorVersion(ledger);
@@ -107,5 +110,6 @@ inline task::Task<void> requireEthereumLane(
                         << LOG_KV("method", method) << LOG_KV("executorVersion", executorVersion);
         BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
     }
+    co_return executorVersion;
 }
 }  // namespace bcos::rpc
