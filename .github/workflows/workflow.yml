@@ -441,7 +441,7 @@ jobs:
         if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
         run: |
           cd tools
-          bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
+          bash .ci/ci_check_air.sh "true"
       - name: Ethereum executor integration test (executor_version=2)
         # Runs a single-node L2 chain with executor_version=2 (ethereum-executor),
         # pre-funds an EOA via genesis alloc, and drives a simple value transfer

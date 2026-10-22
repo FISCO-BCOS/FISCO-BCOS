@@ -23,7 +23,7 @@
 mkdir -p /private/tmp/ci-run && cd /private/tmp/ci-run          # 路径要短：socket 路径上限 104 字节
 FISCO_BCOS_BIN=/path/to/build/fisco-bcos-air/fisco-bcos \
 CI_PORT_BASE=31300,21200,9545 \
-bash /path/to/FISCO-BCOS/tools/.ci/ci_check_air.sh release-3.18.0 false   # 第二个参数 true 才跑 web3
+bash /path/to/FISCO-BCOS/tools/.ci/ci_check_air.sh false   # 参数为 true 才跑 web3
 ```
 
 | 变量 | 作用 |
@@ -38,7 +38,7 @@ SM 链需要 `~/.fisco/tassl`；`jq` 必装；bash ≥ 4（`declare -A`、`${x,,
 
 ## 合约产物 `contracts/`
 
-`contracts/<Name>/` 放 `<Name>.sol`（及其 import 的全部源文件，每个文件头注明来源仓库、路径、commit、许可）、`<Name>.bin`（keccak256 solc）、`<Name>.sm.bin`（sm3 solc）、`<Name>.abi`。`regenerate.sh` 用钉死的 solc 0.8.11（`SOLC_DIR` 默认 `~/.fisco/solc/<版本>/{keccak256,sm3}/solc`，console 的 `tools/download_solc.sh -v 0.8.11` 可取；脚本核对 `solc --version` 为 `0.8.11+commit.41567353`）以 `--metadata-hash none` 重编：默认附加的 IPFS 元数据哈希换一个同样报 0.8.11 的 solc 就复现不出来，带着它 `--check` 在没改过的源码上也报漂移；`regenerate.sh --check` 编到临时目录与仓库里的产物逐字节比对，改了 `.sol` 或 `.bin` 的 PR 由 reviewer 跑一次。
+`contracts/<Name>/` 放 `<Name>.sol`（及其 import 的全部源文件，每个文件头注明来源仓库、路径、commit、许可）、`<Name>.bin`（keccak256 solc）、`<Name>.sm.bin`（sm3 solc）、`<Name>.abi`。`regenerate.sh` 用钉死的 solc 0.8.11（`SOLC_DIR` 默认 `~/.fisco/solc/<版本>/{keccak256,sm3}/solc`，console 的 `tools/download_solc.sh -v 0.8.11` 可取；脚本只核对 `solc --version` 报 0.8.11，不钉 build commit：国密 solc 是 fork，commit 和上游本来就不同）以 `--metadata-hash none` 重编：默认附加的 IPFS 元数据哈希在不同的 0.8.11 build 之间不一样，去掉它以后，目前试过的几个 0.8.11 build 编出的产物逐字节一致；`regenerate.sh --check` 编到临时目录与仓库里的产物逐字节比对，改了 `.sol` 或 `.bin` 的 PR 由 reviewer 跑一次。
 
 | 合约 | 来源 | 用途 |
 |---|---|---|

@@ -7,18 +7,24 @@
 #             the first failure prints that chain's log tail and node error/warn lines. The
 #             Java suites (console, java-sdk, java-sdk-demo) are replaced by these scenarios
 #             (tools/.ci/README.md maps every Java test to its native function); the web3
-#             Hardhat suite (web3_test.sh) still runs on the executor-v1 chain when the second
+#             Hardhat suite (web3_test.sh) still runs on the executor-v1 chain when the
 #             argument is "true", before that chain's last scenario.
 #             Local run: FISCO_BCOS_BIN=<binary> CI_PORT_BASE=31300,21200,9545 \
-#                        bash tools/.ci/ci_check_air.sh <branch> <web3:true|false>
+#                        bash tools/.ci/ci_check_air.sh <web3:true|false>
 #             from an empty working directory; see tools/.ci/README.md.
 # @ file    : ci_check_air.sh
 
 ci_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 tools_dir=$(dirname "${ci_dir}")
-# the first argument was the console/java-sdk branch; the workflow still passes it, nothing
-# reads it any more
-check_web3_test="${2:-false}"
+# the only argument: "true" runs the web3 suite. It used to be the second, after the
+# console/java-sdk branch, which the workflow passed as ${{ github.base_ref }}: empty on push and
+# release events, so the shifted arguments turned the web3 suite off there
+check_web3_test="${1:-false}"
+if [[ "${check_web3_test}" != "true" && "${check_web3_test}" != "false" ]]; then
+    # an old two-argument call ("<branch> true") would otherwise skip the web3 suite silently
+    echo "usage: ci_check_air.sh [true|false] (run the web3 suite), got: $*" >&2
+    exit 1
+fi
 # the binary under test; CI builds it at ../build relative to tools/
 fisco_bcos_path="${FISCO_BCOS_BIN:-${tools_dir}/../build/fisco-bcos-air/fisco-bcos}"
 fisco_bcos_path=$(cd "$(dirname "${fisco_bcos_path}")" && pwd)/$(basename "${fisco_bcos_path}")
