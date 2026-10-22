@@ -19,6 +19,7 @@
  * @author yujiechen
  */
 
+#include <bcos-crypto/random/CryptoRandom.h>
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithV.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -26,8 +27,8 @@
 #include <bcos-utilities/BoostLog.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
-#include <wedpr-crypto/WedprCrypto.h>
 #include <array>
+#include <cstring>
 #include <memory>
 
 using namespace bcos;
@@ -101,16 +102,26 @@ bool bcos::crypto::secp256k1Verify(
 KeyPairInterface::UniquePtr bcos::crypto::secp256k1GenerateKeyPair()
 {
     auto keyPair = std::make_unique<Secp256k1KeyPair>();
-    COutputBuffer publicKey{
-        .data = keyPair->publicKey()->mutableData(), .len = keyPair->publicKey()->size()};
-    COutputBuffer privateKey{
-        .data = keyPair->secretKey()->mutableData(), .len = keyPair->secretKey()->size()};
-    auto retCode = wedpr_secp256k1_gen_key_pair(&publicKey, &privateKey);
-    if (retCode != WEDPR_SUCCESS)
+    auto* secretData = (unsigned char*)keyPair->secretKey()->mutableData();
+    do
+    {
+        auto randomSecret = cryptoRandomBytes(SECP256K1_PRIVATE_LEN);
+        memcpy(secretData, randomSecret.data(), SECP256K1_PRIVATE_LEN);
+    } while (secp256k1_ec_seckey_verify(g_SECP256K1_CTX.get(), secretData) == 0);
+
+    secp256k1_pubkey pubkey;
+    if (secp256k1_ec_pubkey_create(g_SECP256K1_CTX.get(), &pubkey, secretData) == 0)
     {
         BOOST_THROW_EXCEPTION(
             GenerateKeyPairException() << errinfo_comment("secp256k1GenerateKeyPair exception"));
     }
+    std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> serializedPubKey{};
+    size_t serializedPubKeySize = serializedPubKey.size();
+    secp256k1_ec_pubkey_serialize(g_SECP256K1_CTX.get(), serializedPubKey.data(),
+        &serializedPubKeySize, &pubkey, SECP256K1_EC_UNCOMPRESSED);
+    // drop the 0x04 uncompressed prefix, keep the 64-byte X||Y form
+    memcpy(
+        keyPair->publicKey()->mutableData(), serializedPubKey.data() + 1, SECP256K1_PUBLICKEY_LEN);
     return keyPair;
 }
 

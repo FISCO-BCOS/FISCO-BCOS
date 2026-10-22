@@ -1,18 +1,27 @@
 project(bcos-crypto VERSION ${VERSION})
 
 file(GLOB_RECURSE ALL_SRCS bcos-crypto/*.cpp)
-set(LIB_LIST wedprcrypto::crypto wedprcrypto::zkp bcos-utilities TBB::tbb HSM-CRYPTO::sdf-crypto libsecp256k1::secp256k1 OpenSSL::SSL OpenSSL::Crypto)
+set(LIB_LIST bcos-utilities TBB::tbb HSM-CRYPTO::sdf-crypto libsecp256k1::secp256k1 OpenSSL::SSL OpenSSL::Crypto)
+# anonymous-namespace helpers in the VRF sources collide with the zkp module's when merged
+# into a unity blob
+file(GLOB VRF_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/bcos-crypto/vrf/*.cpp)
+set_source_files_properties(${VRF_SRCS} PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 if(ONLY_CPP_SDK)
     list(REMOVE_ITEM ALL_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.cpp)
-    list(REMOVE_ITEM LIB_LIST wedprcrypto::zkp)
+    # the VRF and ZKP modules need libsodium, which is fullnode-only; nothing in the SDK
+    # build consumes VRF or ZKP
+    list(FILTER ALL_SRCS EXCLUDE REGEX ".*/bcos-crypto/vrf/.*\\.cpp$")
 endif ()
 
 find_package(fmt CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(TBB REQUIRED)
-find_package(wedprcrypto REQUIRED)
 find_package(libsecp256k1 REQUIRED)
 find_package(HSM-CRYPTO REQUIRED)
+if(NOT ONLY_CPP_SDK)
+    find_package(unofficial-sodium CONFIG REQUIRED)
+    list(APPEND LIB_LIST unofficial-sodium::sodium)
+endif()
 
 add_library(bcos-crypto STATIC ${ALL_SRCS})
 target_include_directories(bcos-crypto PUBLIC
@@ -26,28 +35,6 @@ target_link_libraries(bcos-crypto PUBLIC bcos-concepts)
 if(FULLNODE)
     find_package(c-kzg-4844 CONFIG REQUIRED)
     target_link_libraries(bcos-crypto PUBLIC ckzg)
-endif()
-
-# Build-time regression guard against the bundled-secp256k1 link hijack: runs on every
-# default build, including the -DTESTS=OFF release configuration that ships the affected
-# binaries (the ctest of the same name only exists when TESTS is on). Registered here
-# rather than at the top level because wedprcrypto's imported targets are
-# directory-scoped and invisible from the root scope. The inspection is Unix/GNU-only
-# (libffi_c_*.a naming + nm): the windows-2025 CI job builds with -DTESTS=OFF on the
-# x64-windows-static-release triplet, where the glob matches nothing and nm is absent,
-# so an unconditional ALL target would abort that build — register only where the
-# toolchain can actually be inspected.
-find_program(NM_EXECUTABLE nm)
-if(UNIX AND NM_EXECUTABLE)
-    # The archive directory is resolved per configuration at build time through the
-    # generator expression — a plain IMPORTED_LOCATION lookup at configure time misses
-    # imported targets that only carry per-config IMPORTED_LOCATION_<CONFIG>.
-    add_custom_target(check-wedpr-secp256k1 ALL
-        COMMAND ${CMAKE_COMMAND} -DBINARY_DIR=${CMAKE_BINARY_DIR}
-            "-DGENERATOR=${CMAKE_GENERATOR}"
-            "-DWEDPR_LIB_DIR=$<TARGET_FILE_DIR:wedprcrypto::crypto>"
-            -P ${CMAKE_SOURCE_DIR}/cmake/CheckWedprSecp256k1.cmake
-        COMMENT "Checking the wedprcrypto link surface for bundled secp256k1")
 endif()
 
 if(NOT WIN32)

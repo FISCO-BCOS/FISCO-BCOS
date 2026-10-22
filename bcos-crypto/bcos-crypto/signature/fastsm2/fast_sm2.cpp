@@ -28,13 +28,13 @@
 #include <openssl/obj_mac.h>
 #include <openssl/sm2.h>
 
-#ifdef WITH_SM2_OPTIMIZE
 using namespace bcos;
 using namespace bcos::crypto;
 
 const char* c_userId = "1234567812345678";
 const int c_R_FIELD_LEN = 32;
 const int c_S_FIELD_LEN = 32;
+const int c_PRIVATEKEY_LEN = 32;
 const int c_PUBLICKEY_LEN = 64;
 // Note: EC_GROUP_new_by_curve_name cost performance, So only one copy is created globally to
 // improve performance
@@ -234,6 +234,7 @@ done:
     {
         EC_POINT_free(point);
     }
+    BN_free(bn);
     if (signData == NULL)
     {
         BN_free(r);
@@ -255,11 +256,19 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
     EC_POINT* pubPoint = NULL;
     BN_CTX* ctx = NULL;
     char* publicKey = NULL;
+    size_t publicKeyLen = 0;
     BIGNUM* privateKey =
         BN_bin2bn((const unsigned char*)raw_private_key->data, raw_private_key->len, NULL);
     if (!privateKey)
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of BN_bin2bn for privateKey";
+        goto done;
+    }
+    // reject invalid private keys (e.g. all-zero), which would otherwise multiply
+    // into the point at infinity and produce a 1-byte "public key"
+    if (BN_is_zero(privateKey))
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of zero privateKey";
         goto done;
     }
     ctx = BN_CTX_new();
@@ -290,8 +299,9 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of EC_POINT_mul";
         goto done;
     }
-    if (!EC_POINT_point2buf(
-            sm2Group, pubPoint, POINT_CONVERSION_UNCOMPRESSED, (unsigned char**)&publicKey, ctx))
+    publicKeyLen = EC_POINT_point2buf(
+        sm2Group, pubPoint, POINT_CONVERSION_UNCOMPRESSED, (unsigned char**)&publicKey, ctx);
+    if (publicKeyLen != c_PUBLICKEY_LEN + 1)
     {
         CRYPTO_LOG(WARNING)
             << "sm2: fast_sm2_derive_public_key: error of EC_POINT_point2bin for publicKey";
@@ -324,4 +334,36 @@ done:
     return ret;
 }
 
-#endif
+// C interface for 'fast_sm2_gen_key_pair'.
+int8_t bcos::crypto::fast_sm2_gen_key_pair(
+    COutputBuffer* output_public_key, COutputBuffer* output_private_key)
+{
+    int8_t ret = WEDPR_ERROR;
+    EC_KEY* sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
+    if (sm2Key == NULL)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: error of EC_KEY_new_by_curve_name";
+        goto done;
+    }
+    if (!EC_KEY_generate_key(sm2Key))
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: error of EC_KEY_generate_key";
+        goto done;
+    }
+    if (BN_bn2binpad(EC_KEY_get0_private_key(sm2Key), (unsigned char*)output_private_key->data,
+            c_PRIVATEKEY_LEN) != c_PRIVATEKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: error of BN_bn2binpad for privateKey";
+        goto done;
+    }
+    {
+        CInputBuffer privateKey{output_private_key->data, c_PRIVATEKEY_LEN};
+        ret = fast_sm2_derive_public_key(&privateKey, output_public_key);
+    }
+done:
+    if (sm2Key)
+    {
+        EC_KEY_free(sm2Key);
+    }
+    return ret;
+}

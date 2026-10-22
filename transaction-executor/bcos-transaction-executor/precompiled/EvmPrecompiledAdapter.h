@@ -16,7 +16,7 @@
 ///    contracts, empty for BLS/blake2) — reproduced here via failureOutputSize.
 ///
 /// Two precompiles are deliberately NOT routed through this adapter:
-///  - ecrecover: bcos::crypto::ecRecover (wedpr keccak + secp256k1Recover) accepts
+///  - ecrecover: bcos::crypto::ecRecover (keccak256Hash + secp256k1Recover) accepts
 ///    recovery ids 0-3 taken from the low byte of v and right-pads short input,
 ///    while eth::evm::ecrecover_execute requires the full 256-bit v ∈ {27,28};
 ///    the edge behaviour differs, so the legacy executor stays.

@@ -21,7 +21,8 @@
 
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/ed25519/Ed25519KeyPair.h>
-#include <wedpr-crypto/WedprCrypto.h>
+#include <openssl/evp.h>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -44,11 +45,15 @@ PublicPtr Ed25519KeyPair::priToPub(SecretPtr _secretKey)
 
 PublicPtr bcos::crypto::ed25519PriToPub(SecretPtr _secretKey)
 {
-    CInputBuffer privateKey{_secretKey->constData(), _secretKey->size()};
+    // 32-byte seed private key, public key is derived via Ed25519 scalar multiplication
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> key(
+        EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr,
+            (const unsigned char*)_secretKey->constData(), _secretKey->size()),
+        &EVP_PKEY_free);
     auto pub = std::make_shared<KeyImpl>(ED25519_PUBLIC_LEN);
-    COutputBuffer publicKey{pub->mutableData(), pub->size()};
-    // get public key
-    if (wedpr_ed25519_derive_public_key(&privateKey, &publicKey) != WEDPR_SUCCESS)
+    size_t publicKeyLen = pub->size();
+    if (!key || EVP_PKEY_get_raw_public_key(
+                    key.get(), (unsigned char*)pub->mutableData(), &publicKeyLen) != 1)
     {
         BOOST_THROW_EXCEPTION(
             PriToPublicKeyException() << errinfo_comment("ed25519PriToPub exception"));

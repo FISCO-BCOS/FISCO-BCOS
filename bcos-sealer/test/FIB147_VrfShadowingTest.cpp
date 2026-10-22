@@ -25,13 +25,13 @@
  *        checked. We verify the success path still returns SUCCESS to
  *        guard against regressions in the curve25519 branch.
  *
- *        The failure path (vrf_prove returns -1) cannot be triggered
- *        portably from a UT: wedpr_curve25519_vrf_prove_utf8 succeeds for
- *        any non-empty private key, and using a too-small proof buffer
- *        causes a Rust panic in the underlying library rather than a
- *        clean error return. The bug fix is therefore verified by code
- *        review (the shadowing 'auto vrfProve = ...' is removed) plus
- *        this regression test on the success path.
+ *        The failure path (an unprovable input) cannot be triggered
+ *        portably from a UT: the VRF prove succeeds for any well-formed
+ *        private key. The bug fix is therefore verified by code review
+ *        (the shadowing 'auto vrfProve = ...' is removed; the native VRF
+ *        API reports failure via an empty proof/public key, which
+ *        generateTransactionForRotating checks) plus this regression test
+ *        on the success path.
  *
  * @file FIB147_VrfShadowingTest.cpp
  * @date 2026-05-08
@@ -44,10 +44,10 @@
 #include "bcos-sealer/VRFBasedSealer.h"
 #include "bcos-txpool/TxPoolFactory.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/vrf/Curve25519Vrf.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <wedpr-crypto/WedprUtilities.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
@@ -125,25 +125,24 @@ BOOST_AUTO_TEST_CASE(curve25519_default_path_returns_success_after_shadow_fix)
     BOOST_CHECK_EQUAL(block->transactionMetaDatas()[0]->to(), precompiled::CONSENSUS_ADDRESS);
 }
 
-// Direct check at the wedpr layer: confirm the success indicator the outer
-// vrfProve compares against (WEDPR_SUCCESS = 0). If wedpr ever changes this
-// contract, the FIB-147 fix's check predicate (vrfProve != WEDPR_SUCCESS)
-// would become stale and this test would catch it.
-BOOST_AUTO_TEST_CASE(wedpr_curve25519_success_constant_is_zero)
+// Direct check at the VRF layer: a well-formed curve25519 prove succeeds and produces a
+// proof that verifies — the success signal generateTransactionForRotating relies on (a
+// non-empty public key and proof; the FIB-147 fix's check predicate).
+BOOST_AUTO_TEST_CASE(curve25519_prove_success_path)
 {
-    BOOST_CHECK_EQUAL(WEDPR_SUCCESS, 0);
-    BOOST_CHECK_EQUAL(WEDPR_ERROR, -1);
-
-    // Sanity: a well-formed direct call returns 0.
     bcos::crypto::KeyPairInterface::Ptr kp =
         std::make_shared<crypto::Secp256k1Crypto>()->generateKeyPair();
-    CInputBuffer privateKey{
-        reinterpret_cast<const char*>(kp->secretKey()->data().data()), kp->secretKey()->size()};
-    CInputBuffer inputMsg{"hello", 5};
-    bcos::bytes proofData(96, 0);
-    COutputBuffer proof{reinterpret_cast<char*>(proofData.data()), proofData.size()};
-    int8_t result = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
-    BOOST_CHECK_EQUAL(result, WEDPR_SUCCESS);
+    auto secretRef = bytesConstRef(
+        reinterpret_cast<const byte*>(kp->secretKey()->data().data()), kp->secretKey()->size());
+    bytes inputBytes{'h', 'e', 'l', 'l', 'o'};
+    auto inputRef = bytesConstRef(inputBytes.data(), inputBytes.size());
+
+    auto publicKey = crypto::curve25519VrfDerivePublicKey(secretRef);
+    BOOST_REQUIRE_EQUAL(publicKey.size(), crypto::CURVE25519_VRF_PUBLIC_KEY_SIZE);
+    auto proof = crypto::curve25519VrfProve(secretRef, inputRef);
+    BOOST_REQUIRE_EQUAL(proof.size(), crypto::CURVE25519_VRF_PROOF_SIZE);
+    BOOST_CHECK(crypto::curve25519VrfVerify(bytesConstRef(publicKey.data(), publicKey.size()),
+        inputRef, bytesConstRef(proof.data(), proof.size())));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

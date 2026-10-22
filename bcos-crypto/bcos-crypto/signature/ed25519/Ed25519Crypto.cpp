@@ -23,23 +23,35 @@
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/ed25519/Ed25519KeyPair.h>
 #include <bcos-utilities/BoostLog.h>
-#include <wedpr-crypto/WedprCrypto.h>
+#include <openssl/evp.h>
 #include <memory>
 
 using namespace bcos;
 using namespace bcos::crypto;
+
+namespace
+{
+using EvpPkeyPtr = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
+using EvpMdCtxPtr = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+}  // namespace
+
 std::shared_ptr<bytes> bcos::crypto::ed25519Sign(
     const KeyPairInterface& _keyPair, const HashType& _messageHash, bool _signatureWithPub)
 {
-    CInputBuffer privateKey{_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()};
-    CInputBuffer messagHash{(const char*)_messageHash.data(), HashType::SIZE};
+    EvpPkeyPtr key(
+        EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr,
+            (const unsigned char*)_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()),
+        &EVP_PKEY_free);
+    EvpMdCtxPtr ctx(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
     FixedBytes<ED25519_SIGNATURE_LEN> signatureArray;
-    COutputBuffer signatureResult{(char*)signatureArray.data(), ED25519_SIGNATURE_LEN};
-    auto retCode = wedpr_ed25519_sign(&privateKey, &messagHash, &signatureResult);
-    if (retCode != WEDPR_SUCCESS)
+    size_t signatureLen = ED25519_SIGNATURE_LEN;
+    // one-shot Ed25519 (NULL digest, PureEdDSA)
+    if (!key || !ctx || EVP_DigestSignInit(ctx.get(), nullptr, nullptr, nullptr, key.get()) != 1 ||
+        EVP_DigestSign(ctx.get(), signatureArray.data(), &signatureLen, _messageHash.data(),
+            HashType::SIZE) != 1)
     {
         BOOST_THROW_EXCEPTION(SignException() << errinfo_comment(
-                                  "secp256k1Sign exception, messageHash: " + _messageHash.hex()));
+                                  "ed25519Sign exception, messageHash: " + _messageHash.hex()));
     }
     auto signatureData = std::make_shared<bytes>();
     *signatureData = signatureArray.asBytes();
@@ -53,12 +65,23 @@ std::shared_ptr<bytes> bcos::crypto::ed25519Sign(
 
 KeyPairInterface::UniquePtr bcos::crypto::ed25519GenerateKeyPair()
 {
+    std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)> keyGenCtx(
+        EVP_PKEY_CTX_new_id(EVP_PKEY_ED25519, nullptr), &EVP_PKEY_CTX_free);
+    EVP_PKEY* rawKey = nullptr;
+    if (!keyGenCtx || EVP_PKEY_keygen_init(keyGenCtx.get()) != 1 ||
+        EVP_PKEY_keygen(keyGenCtx.get(), &rawKey) != 1)
+    {
+        BOOST_THROW_EXCEPTION(
+            GenerateKeyPairException() << errinfo_comment("ed25519GenerateKeyPair exception"));
+    }
+    EvpPkeyPtr key(rawKey, &EVP_PKEY_free);
     auto ed25519KeyPair = std::make_unique<Ed25519KeyPair>();
-    COutputBuffer publicKey{
-        ed25519KeyPair->publicKey()->mutableData(), ed25519KeyPair->publicKey()->size()};
-    COutputBuffer privateKey{
-        ed25519KeyPair->secretKey()->mutableData(), ed25519KeyPair->secretKey()->size()};
-    if (wedpr_ed25519_gen_key_pair(&publicKey, &privateKey) != WEDPR_SUCCESS)
+    size_t publicKeyLen = ed25519KeyPair->publicKey()->size();
+    size_t privateKeyLen = ed25519KeyPair->secretKey()->size();
+    if (EVP_PKEY_get_raw_public_key(key.get(),
+            (unsigned char*)ed25519KeyPair->publicKey()->mutableData(), &publicKeyLen) != 1 ||
+        EVP_PKEY_get_raw_private_key(key.get(),
+            (unsigned char*)ed25519KeyPair->secretKey()->mutableData(), &privateKeyLen) != 1)
     {
         BOOST_THROW_EXCEPTION(
             GenerateKeyPairException() << errinfo_comment("ed25519GenerateKeyPair exception"));
@@ -69,12 +92,17 @@ KeyPairInterface::UniquePtr bcos::crypto::ed25519GenerateKeyPair()
 bool bcos::crypto::ed25519Verify(
     PublicPtr _pubKey, const HashType& _messageHash, bytesConstRef _signatureData)
 {
-    CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
-    CInputBuffer msgHash{(const char*)_messageHash.data(), HashType::SIZE};
-
+    EvpPkeyPtr key(EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, nullptr,
+                       (const unsigned char*)_pubKey->constData(), _pubKey->size()),
+        &EVP_PKEY_free);
+    EvpMdCtxPtr ctx(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
+    if (!key || !ctx || EVP_DigestVerifyInit(ctx.get(), nullptr, nullptr, nullptr, key.get()) != 1)
+    {
+        return false;
+    }
     auto signatureWithoutPub = bytesConstRef(_signatureData.data(), ED25519_SIGNATURE_LEN);
-    CInputBuffer signatureData{(const char*)signatureWithoutPub.data(), signatureWithoutPub.size()};
-    return wedpr_ed25519_verify(&publicKey, &msgHash, &signatureData) == WEDPR_SUCCESS;
+    return EVP_DigestVerify(ctx.get(), signatureWithoutPub.data(), signatureWithoutPub.size(),
+               _messageHash.data(), HashType::SIZE) == 1;
 }
 
 PublicPtr bcos::crypto::ed25519Recover(const HashType& _messageHash, bytesConstRef _signatureData)

@@ -20,9 +20,7 @@
  */
 #pragma once
 
-#ifdef WITH_SM2_OPTIMIZE
-#include <wedpr-crypto/WedprUtilities.h>
-
+#include <bcos-crypto/utilities/Buffers.h>
 
 namespace bcos::crypto
 {
@@ -34,9 +32,10 @@ int8_t fast_sm2_sign(const CInputBuffer* raw_private_key, const CInputBuffer* ra
 int8_t fast_sm2_verify(const CInputBuffer* raw_public_key, const CInputBuffer* raw_message_hash,
     const CInputBuffer* raw_signature);
 
-// C interface for 'fast_sm2_verify'.
+// C interface for 'fast_sm2_derive_public_key'.
 int8_t fast_sm2_derive_public_key(
     const CInputBuffer* raw_private_key, COutputBuffer* output_public_key);
-}  // namespace bcos::crypto
 
-#endif
+// C interface for 'fast_sm2_gen_key_pair'.
+int8_t fast_sm2_gen_key_pair(COutputBuffer* output_public_key, COutputBuffer* output_private_key);
+}  // namespace bcos::crypto

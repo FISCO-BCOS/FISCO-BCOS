@@ -7,7 +7,6 @@
       "packages": [
         "ethash",
         "fiscobcos",
-        "wedprcrypto",
         "hsm-crypto"
       ]
     }

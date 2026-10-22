@@ -20,6 +20,7 @@
  */
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
+#include <bcos-crypto/signature/fastsm2/fast_sm2.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
 #include <bcos-utilities/BoostLog.h>
@@ -29,8 +30,8 @@ using namespace bcos::crypto;
 
 SM2Crypto::SM2Crypto()
 {
-    m_signer = wedpr_sm2_sign_fast;
-    m_verifier = wedpr_sm2_verify;
+    m_signer = fast_sm2_sign;
+    m_verifier = fast_sm2_verify;
     m_keyPairFactory = std::make_shared<SM2KeyPairFactory>();
 }
 

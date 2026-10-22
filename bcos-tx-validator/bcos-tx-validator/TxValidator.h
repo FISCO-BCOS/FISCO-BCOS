@@ -64,8 +64,7 @@ struct AccountState
 
 /// Whether a transaction targets a system contract, injected rather than computed here: the
 /// answer needs precompiled::c_systemTxsAddress, and linking bcos-executor for one address list
-/// would drag evmone -- and wedprcrypto's bundled runtime, which breaks libc++ exception
-/// catching binary-wide -- into every module that admits a transaction.
+/// would drag evmone into every module that admits a transaction.
 using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 
 /// The OP rollup cost of one signed envelope -- L1 data fee plus operator fee at @p gasLimit.

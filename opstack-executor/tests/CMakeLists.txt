@@ -6,8 +6,8 @@ find_package(CURL REQUIRED)
 # Lightweight suite: FakeTransaction / header-only surfaces.
 # This binary links ledger via opstack-executor's PUBLIC closure (OpScheduler.h's cross-check
 # and OpEthBlockSteps.h call the trie builders). The older "do not link ledger — wedprcrypto
-# breaks libc++ typed catch binary-wide" instruction is false on this preset:
-# BOOST_CHECK_THROW(..., OpConsensusError) is what CI runs.
+# breaks libc++ typed catch binary-wide" instruction is moot: wedprcrypto is no longer a
+# dependency. BOOST_CHECK_THROW(..., OpConsensusError) is what CI runs.
 #
 # BOOST_TEST_MODULE lives in TestMain.cpp (the single main for this suite).
 add_executable(opstack-executor-tests
@@ -50,7 +50,8 @@ add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 # needed went with it.
 
 # Scheduler suite: real executeBlock / commitBlock / call / callAtBlock against OpScheduler<MLS>.
-# Isolated from the lightweight binary (ledger / protocol-tars / wedprcrypto typed-catch).
+# Isolated from the lightweight binary (ledger / protocol-tars closure; historically also
+# wedprcrypto's binary-wide typed-catch corruption, now gone with the dependency).
 # Call fixtures use a FakeCallTx (no Web3Transaction.cpp — that RLP bind is #5496).
 # ReorgUndo codec cases return with the tip-reorg follow-up.
 add_executable(opstack-executor-scheduler-tests
