@@ -102,6 +102,5 @@ CLAUDE.local.md
 # Gradle
 .gradle/
 
-# Local artifacts
-review-notes/
+# Local build_chain.sh output
 tools/nodes/

@@ -31,6 +31,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <cstdio>
 #include <iostream>
 #include <mutex>
 
@@ -150,10 +151,18 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
 
     // Custom log.format strings are no longer supported: the pipeline formats
     // the built-in line layout on the producer thread and never builds a
-    // boost record. Warn instead of silently ignoring the key; emitted after
-    // the sinks are registered so it lands in the log file, at ERROR so a
-    // quiet log.level cannot filter the notice out.
+    // boost record. The deprecation notice goes to stderr unconditionally —
+    // it announces a removed configuration key, so it must not be subject to
+    // log.level or log.enable — and is repeated at ERROR below so it also
+    // lands in the log file when a sink is registered.
     auto logFormat = _pt.get<std::string>("log.format", "");
+    if (!logFormat.empty())
+    {
+        std::fprintf(stderr,
+            "[log] log.format is no longer supported, the built-in log line format is always "
+            "used, configured format = %s\n",
+            logFormat.c_str());
+    }
 
     if (m_consoleLog)
     {

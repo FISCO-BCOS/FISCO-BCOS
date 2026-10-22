@@ -90,6 +90,9 @@ public:
     // never block the caller on backend IO.
     virtual void writeLine(
         LogLevel _level, std::string_view _prefix, std::string_view _message) = 0;
+    // Cumulative lines dropped on overflow since construction (0 for sinks
+    // that never drop); summed by droppedLogLines() for the admin RPC.
+    virtual std::uint64_t droppedTotal() const noexcept { return 0; }
 };
 
 // Process-wide registry (implemented in BoostLog.cpp). The initializer
@@ -98,6 +101,9 @@ void registerLineSink(std::shared_ptr<LineSinkWriter> _sink);
 void unregisterLineSink(LineSinkWriter const* _sink);
 bool hasLineSinks() noexcept;
 void commitLine(LogLevel _level, std::string_view _message);
+// Sum of droppedTotal() over every registered sink; read by the
+// admin_getLogLevel RPC so log loss is pollable.
+std::uint64_t droppedLogLines() noexcept;
 // "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|" — shared with the sink so the
 // dropped-lines marker keeps the same line layout as producer-formatted lines.
 void appendLinePrefix(std::string& _out, LogLevel _level);
@@ -105,8 +111,11 @@ void appendLinePrefix(std::string& _out, LogLevel _level);
 // Process-wide feeding worker shared by every LineAsyncSink instantiation —
 // file, console and test sinks all feed on this one thread instead of
 // spawning a thread per sink. A sink registers itself at construction and
-// wakes the worker after enqueueing; the worker round-robins over the
-// registered sinks and drains each backlog to its backend. Blocking backend
+// wakes the worker after enqueueing; the worker walks the registered sinks
+// in order and runs each sink's feedOnWorker(), which drains that sink's
+// backlog to empty before the worker advances (run-to-completion, not
+// round-robin: safe because production registers at most one line sink —
+// file XOR console — and MaxLineSinks is 4). Blocking backend
 // IO (file writes, rotation, collector scans) stays confined to this thread,
 // keeping it off producer threads and off shared IO pools whose threads also
 // log.
@@ -261,7 +270,7 @@ public:
 
     // Every line dropped on slot-pool overflow since construction; never
     // reset, suitable for an operator-facing metric.
-    std::uint64_t droppedTotal() const noexcept
+    std::uint64_t droppedTotal() const noexcept override
     {
         return m_droppedTotal.load(std::memory_order_relaxed);
     }
@@ -547,12 +556,14 @@ private:
     void feedOnWorker() override
     {
         std::uint64_t linesSinceFlushCheck = 0;
+        bool fedAnything = false;
         for (;;)
         {
             std::uint32_t slot = 0;
             bool haveSlot = false;
             std::uint64_t dropped = 0;
             std::uint64_t flushReqGen = 0;
+            bool needFlush = false;
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
                 if (!m_queue.empty())
@@ -567,14 +578,21 @@ private:
                     // mutex: writeLine() wakes the worker per line, so this
                     // branch runs once per line at any rate the worker keeps
                     // up with, and the backend IO below must not stand in
-                    // front of the producers.
+                    // front of the producers. An empty pass (the worker was
+                    // woken mid-drain and the same pass fed the line) skips
+                    // the backend flush: nothing new reached the backend.
                     dropped = m_droppedLines.exchange(0, std::memory_order_relaxed);
-                    m_lastFlush = std::chrono::steady_clock::now();
                     flushReqGen = m_flushRequestGen;
+                    needFlush = fedAnything || m_flushDoneGen < flushReqGen;
+                    if (needFlush)
+                    {
+                        m_lastFlush = std::chrono::steady_clock::now();
+                    }
                 }
             }
             if (haveSlot)
             {
+                fedAnything = true;
                 feedOne(slot);
                 // Under a continuous flood the queue never drains; keep the
                 // flush staleness bounded. One clock read per FlushCheckEvery
@@ -587,14 +605,17 @@ private:
                 continue;
             }
             // Drained branch, queue mutex released: surface dropped lines,
-            // then flush unconditionally so the tail of a burst reaches the
-            // file right away. Under a flood this branch never runs; that
-            // case stays rate-limited by maybeFlush() above.
+            // then flush so the tail of a burst reaches the file right away.
+            // Under a flood this branch never runs; that case stays
+            // rate-limited by maybeFlush() above.
             if (dropped != 0)
             {
                 reportDropped(dropped);
             }
-            flushBackend();
+            if (needFlush)
+            {
+                flushBackend();
+            }
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
                 // Acknowledge only the requests seen at the snapshot: a

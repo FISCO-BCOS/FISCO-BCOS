@@ -97,9 +97,23 @@ namespace
 // producers before a sink can be destroyed. Register/unregister are rare
 // (initLog/stopLogging), so the lock is never contended in practice.
 constexpr std::size_t MaxLineSinks = 4;
-std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> g_lineSinks;
-std::shared_mutex g_lineSinksMutex;
-std::atomic<int> g_lineSinkCount{0};
+struct LineSinkRegistry
+{
+    std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> sinks;
+    std::shared_mutex mutex;
+    std::atomic<int> count{0};
+};
+
+// Leaked deliberately, the same lifetime contract as LineFeeder: when
+// stopLogging() has not run, a log statement from another TU's static
+// destructor can reach commitLine after this TU's statics are destroyed —
+// with a leaked registry that degrades to a no-op instead of taking a
+// shared lock on a destroyed std::shared_mutex.
+LineSinkRegistry& registry()
+{
+    static auto* s_registry = new LineSinkRegistry();
+    return *s_registry;
+}
 
 constexpr std::string_view c_severityNames[] = {
     "trace", "debug", "info", "warning", "error", "fatal"};
@@ -137,7 +151,11 @@ std::string_view threadPart()
 }  // namespace
 
 // "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|", byte-identical to the
-// default formatter in BoostLogInitializer::setLogFormatter.
+// release-3.18.0 default formatter expression (attr<severity_level>
+// ("Severity") << "|" << format_date_time<ptime>("TimeStamp",
+// "%Y-%m-%d %H:%M:%S.%f") << "|" << attr<std::string>("ThreadName") << "-"
+// << attr<current_thread_id>("ThreadID") << "|" << smessage), which this
+// pipeline reimplements without boost::log.
 // localtime_r takes glibc's internal timezone lock, so the broken-down time
 // is cached per thread and recomputed only when the second ticks over.
 void appendLinePrefix(std::string& _out, LogLevel _level)
@@ -170,13 +188,14 @@ void appendLinePrefix(std::string& _out, LogLevel _level)
 
 void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
 {
-    std::unique_lock lock(g_lineSinksMutex);
-    for (auto& slot : g_lineSinks)
+    auto& reg = registry();
+    std::unique_lock lock(reg.mutex);
+    for (auto& slot : reg.sinks)
     {
         if (!slot)
         {
             slot = std::move(_sink);
-            g_lineSinkCount.fetch_add(1, std::memory_order_release);
+            reg.count.fetch_add(1, std::memory_order_release);
             return;
         }
     }
@@ -188,13 +207,14 @@ void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
 
 void unregisterLineSink(LineSinkWriter const* _sink)
 {
-    std::unique_lock lock(g_lineSinksMutex);
-    for (auto& slot : g_lineSinks)
+    auto& reg = registry();
+    std::unique_lock lock(reg.mutex);
+    for (auto& slot : reg.sinks)
     {
         if (slot.get() == _sink)
         {
             slot.reset();
-            g_lineSinkCount.fetch_sub(1, std::memory_order_release);
+            reg.count.fetch_sub(1, std::memory_order_release);
             return;
         }
     }
@@ -202,7 +222,22 @@ void unregisterLineSink(LineSinkWriter const* _sink)
 
 bool hasLineSinks() noexcept
 {
-    return g_lineSinkCount.load(std::memory_order_acquire) > 0;
+    return registry().count.load(std::memory_order_acquire) > 0;
+}
+
+std::uint64_t droppedLogLines() noexcept
+{
+    auto& reg = registry();
+    std::shared_lock lock(reg.mutex);
+    std::uint64_t total = 0;
+    for (auto const& sink : reg.sinks)
+    {
+        if (sink)
+        {
+            total += sink->droppedTotal();
+        }
+    }
+    return total;
 }
 
 // Fans the line out to every registered whole-line sink. The shared lock is
@@ -218,8 +253,9 @@ void commitLine(LogLevel _level, std::string_view _message)
     thread_local std::string prefix;
     prefix.clear();
     appendLinePrefix(prefix, _level);
-    std::shared_lock lock(g_lineSinksMutex);
-    for (auto const& sink : g_lineSinks)
+    auto& reg = registry();
+    std::shared_lock lock(reg.mutex);
+    for (auto const& sink : reg.sinks)
     {
         if (sink)
         {
