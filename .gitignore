@@ -98,3 +98,6 @@ CLAUDE.local.md
 .worktrees/
 .claude/worktrees
 .claude/agents
+
+# Gradle
+.gradle/
