@@ -390,6 +390,18 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
 
     dmcExecutor->prepare();
     auto locked = dmcExecutor->unlockPrepare();
+    // [R11 F2] In production a KEY_LOCK exists only for a live frame, and every
+    // path that makes a frame live increments currentSeq first (scheduler entry
+    // arms, sharding first-message, DAG adoption). This fixture submits KEY_LOCKs
+    // directly as first messages, so restore the live-frame invariant before the
+    // deadlock is detected: the reverted frame then stamps currentSeq - 1 like
+    // every other resume arm.
+    dmcExecutor->forEachExecutive([](int64_t, scheduler::ExecutiveState::Ptr state) {
+        if (state->currentSeq == 0)
+        {
+            state->currentSeq = 1;
+        }
+    });
     auto found = dmcExecutor->detectLockAndRevert();
     BOOST_CHECK(found && locked);
     SCHEDULER_LOG(DEBUG) << "no need_prepare, found deadlock and revert";

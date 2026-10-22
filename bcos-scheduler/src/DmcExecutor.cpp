@@ -258,12 +258,15 @@ bool DmcExecutor::detectLockAndRevert()
                 message->setType(protocol::ExecutionMessage::REVERT);
                 message->setCreate(false);
                 message->setKeyLocks({});
-                // This REVERT resumes a key-lock wait, whose receiver never adopts
-                // schedulerSeq for CREATE derivation. Stamp the paused frame's seq
-                // so the send-path diagnostic accepts this legitimate resume.
-                // currentSeq may still be zero at the first lock, making
-                // currentSeq - 1 indistinguishable from the missing-stamp sentinel.
-                message->setSchedulerSeq(message->seq());
+                // [R11 F2] This REVERT resumes a live frame, so it carries the same
+                // hand-back value as the seven handleExecutiveMessage arms: the
+                // tx-context's last-consumed seq (currentSeq - 1) — the documented
+                // meaning of the field, kept uniform across writers. Inert here by
+                // design (the key-lock resume point, externalAcquireKeyLocks, never
+                // adopts it). currentSeq >= 1 holds in production: a KEY_LOCK exists
+                // only for a live frame, and every path that makes a frame live
+                // increments currentSeq first.
+                message->setSchedulerSeq(executiveState->currentSeq - 1);
 
                 m_executivePool.markAs(contextID, MessageHint::NEED_SEND);
                 DMC_LOG(TRACE) << " 3.AfterPrepare: \t [..] " << executiveState->toString()
