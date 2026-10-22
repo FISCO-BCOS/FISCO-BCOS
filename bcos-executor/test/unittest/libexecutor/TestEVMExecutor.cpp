@@ -3719,6 +3719,100 @@ BOOST_AUTO_TEST_CASE(childSloadFaultFailsParentInSerialAndDmc)
         }
     }
 }
+BOOST_AUTO_TEST_CASE(schedulerHandbackIsConsumedAfterActualResume)
+{
+    std::string const parentAddress(40, 'a');
+    std::string const childAddress(40, 'b');
+    auto seed = [&](std::string const& address, std::string const& hex) {
+        bytes code;
+        boost::algorithm::unhex(hex, std::back_inserter(code));
+        auto hash = hashImpl->hash(ref(code));
+        storage::Entry hashEntry;
+        hashEntry.set(hash.asBytes());
+        backend->setRow("/apps/" + address, ACCOUNT_CODE_HASH, hashEntry);
+        storage::Entry codeEntry;
+        codeEntry.set(code);
+        backend->setRow(ledger::SYS_CODE_BINARY, hash.toRawString(), codeEntry);
+    };
+    seed(parentAddress, "6000600060006000600073" + childAddress + "620186a0f160005260206000f3");
+    // Drive the real VM CALL and each executive's suspension/resume receiver.
+    // Zero is a valid stamp, 17 differs from entry seq, and -1 is the wire default.
+    for (int lane : {0, 1, 2})
+    {
+        for (int64_t stamp : {int64_t{0}, int64_t{17}, int64_t{-1}})
+        {
+            BOOST_TEST_CONTEXT("lane=" << lane << " stamp=" << stamp)
+            {
+                seed(childAddress, "00");
+                auto lru = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+                auto cache = std::make_shared<LedgerCache>(ledger);
+                BlockContext ctx(lru, cache, hashImpl, 1, h256(1), 0,
+                    (uint32_t)BlockVersion::V3_18_0_VERSION, false, backend);
+                ctx.setVMFactory(std::make_shared<VMFactory>());
+                auto configure = [](auto const& executive) {
+                    executive->setPrecompiled(std::make_shared<PrecompiledMap>());
+                    executive->setStaticPrecompiled(
+                        std::make_shared<const std::set<std::string>>());
+                };
+                std::shared_ptr<TransactionExecutive> executive;
+                if (lane == 2)
+                {
+                    executive = std::make_shared<PromiseTransactionExecutive>(
+                        nullptr, ctx, parentAddress, 99, 0);
+                }
+                else if (lane == 1)
+                {
+                    executive =
+                        std::make_shared<CoroutineTransactionExecutive>(ctx, parentAddress, 99, 0);
+                }
+                else
+                {
+                    executive = std::make_shared<TransactionExecutive>(ctx, parentAddress, 99, 0);
+                }
+                configure(executive);
+                auto input = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+                input->origin = std::string(40, 'c');
+                input->senderAddress = input->origin;
+                input->receiveAddress = parentAddress;
+                input->codeAddress = parentAddress;
+                input->gas = 1'000'000;
+                auto result = executive->start(std::move(input));
+                BOOST_REQUIRE(result);
+                if (lane != 0)
+                {
+                    BOOST_REQUIRE(result->type == CallParameters::MESSAGE);
+                    BOOST_CHECK_EQUAL(result->codeAddress, childAddress);
+                    auto child =
+                        std::make_shared<TransactionExecutive>(ctx, childAddress, 99, result->seq);
+                    configure(child);
+                    auto childResult = child->start(std::move(result));
+                    BOOST_REQUIRE(childResult);
+                    childResult->schedulerSeq = stamp;
+                    auto coroutine =
+                        std::static_pointer_cast<CoroutineTransactionExecutive>(executive);
+                    coroutine->setExchangeMessage(std::move(childResult));
+                    result = coroutine->resume();
+                    BOOST_REQUIRE(result);
+                }
+                BOOST_REQUIRE(result->type == CallParameters::FINISHED);
+                BOOST_CHECK_EQUAL(result->evmStatus, EVMC_SUCCESS);
+                if (lane != 0 && stamp < 0)
+                {
+                    BOOST_CHECK_EXCEPTION(executive->createDerivationSeq(), bcos::Error,
+                        [](bcos::Error const& error) {
+                            return error.errorMessage().find("no schedulerSeq hand-back") !=
+                                   std::string::npos;
+                        });
+                }
+                else
+                {
+                    // Serial execution advances to the child seq without a scheduler hand-back.
+                    BOOST_CHECK_EQUAL(executive->createDerivationSeq(), lane == 0 ? 1 : stamp);
+                }
+            }
+        }
+    }
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

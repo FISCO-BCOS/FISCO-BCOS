@@ -162,15 +162,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     // When resume, exchangeMessage set to output
     auto output = std::move(getExchangeMessageRef());
 
-    // R6 F2: the hand-back uses a -1 sentinel for "producer never set it" (an
-    // optional tars long cannot otherwise encode unset vs a real 0): a resumed
-    // frame that got no hand-back cannot reproduce the base's derivation, and a
-    // node that cannot reproduce it must stop rather than guess — mark the frame
-    // and fail loudly at the next derivation instead of deriving colliding
-    // nested-create addresses against an un-upgraded scheduler.
-    adoptSchedulerSeqHandback(output->schedulerSeq);
-
-    normalizeExternalCallResult(*output);
+    onExternalCallResume(*output);
 
     // After coroutine switch, set the recoder
     m_syncStorageWrapper->setRecoder(m_recoder);
@@ -179,6 +171,15 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
     m_syncStorageWrapper->importExistsKeyLocks(output->keyLocks);
 
     return output;
+}
+
+void CoroutineTransactionExecutive::onExternalCallResume(CallParameters& output)
+{
+    // Both coroutine and Promise receivers must adopt the scheduler hand-back.
+    // A missing (-1) stamp marks the frame so the next CREATE derivation refuses
+    // to guess; zero is a valid last-consumed seq.
+    adoptSchedulerSeqHandback(output.schedulerSeq);
+    normalizeExternalCallResult(output);
 }
 
 void CoroutineTransactionExecutive::normalizeExternalCallResult(CallParameters& output) const

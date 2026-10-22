@@ -147,7 +147,7 @@ CallParameters::UniquePtr PromiseTransactionExecutive::externalCall(CallParamete
             output = std::move(message);
         });
 
-    normalizeExternalCallResult(*output);
+    onExternalCallResume(*output);
 
     // After coroutine switch, set the recoder
     m_syncStorageWrapper->setRecoder(m_recoder);

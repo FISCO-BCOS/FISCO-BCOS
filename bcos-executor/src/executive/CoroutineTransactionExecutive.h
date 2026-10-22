@@ -87,6 +87,7 @@ public:
     std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper();
 
 protected:
+    void onExternalCallResume(CallParameters& output);
     void normalizeExternalCallResult(CallParameters& output) const;
 
     /// R5 F1: the DMC scheduler's last-consumed seq for this tx context, handed back
