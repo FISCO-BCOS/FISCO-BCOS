@@ -3722,19 +3722,15 @@ BOOST_AUTO_TEST_CASE(childSloadFaultFailsParentInSerialAndDmc)
 }
 BOOST_AUTO_TEST_CASE(schedulerHandbackIsConsumedAfterActualResume)
 {
-    struct ShardingResumeProbe : ShardingTransactionExecutive
-    {
-        using ShardingTransactionExecutive::ShardingTransactionExecutive;
-        CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override
-        {
-            // Isolate the sharding suspension selector from shard-table routing.
-            // Both cross-shard branches enter this shared body in production.
-            return CoroutineTransactionExecutive::externalCall(std::move(input));
-        }
-    };
     std::string const parentAddress(40, 'a');
     std::string const childAddress(40, 'b');
     auto seed = [&](std::string const& address, std::string const& hex) {
+        auto table = "/apps/" + address;
+        if (!backend->m_inner->openTable(table))
+            backend->m_inner->createTable(table, std::string(STORAGE_VALUE));
+        storage::Entry shard;
+        shard.set(address == parentAddress ? "shard:A" : "shard:B");
+        backend->setRow(table, "shard", shard);
         bytes code;
         boost::algorithm::unhex(hex, std::back_inserter(code));
         auto hash = hashImpl->hash(ref(code));
@@ -3768,7 +3764,7 @@ BOOST_AUTO_TEST_CASE(schedulerHandbackIsConsumedAfterActualResume)
                 std::shared_ptr<TransactionExecutive> executive;
                 if (lane >= 3)
                 {
-                    executive = std::make_shared<ShardingResumeProbe>(
+                    executive = std::make_shared<ShardingTransactionExecutive>(
                         ctx, parentAddress, 99, 0, nullptr, lane == 4);
                 }
                 else if (lane == 2)
@@ -3812,7 +3808,7 @@ BOOST_AUTO_TEST_CASE(schedulerHandbackIsConsumedAfterActualResume)
                 }
                 BOOST_REQUIRE(result->type == CallParameters::FINISHED);
                 BOOST_CHECK_EQUAL(result->evmStatus, EVMC_SUCCESS);
-                if (lane != 0 && stamp < 0)
+                if ((lane == 1 || lane == 2) && stamp < 0)
                 {
                     BOOST_CHECK_EXCEPTION(executive->createDerivationSeq(), bcos::Error,
                         [](bcos::Error const& error) {
@@ -3822,9 +3818,160 @@ BOOST_AUTO_TEST_CASE(schedulerHandbackIsConsumedAfterActualResume)
                 }
                 else
                 {
-                    // Serial execution advances to the child seq without a scheduler hand-back.
-                    BOOST_CHECK_EQUAL(executive->createDerivationSeq(), lane == 0 ? 1 : stamp);
+                    // Sharding's cross-shard resume leaves its local sequence unchanged;
+                    // serial CALL advances it; pure DMC adopts the scheduler stamp.
+                    BOOST_CHECK_EQUAL(
+                        executive->createDerivationSeq(), lane >= 3 ? 0 : (lane == 0 ? 1 : stamp));
                 }
+            }
+        }
+    }
+}
+
+// Exercise the actual shard lookup and local child execution, without overriding
+// externalCall. Pin the base's synchronous CREATE results after a local CALL,
+// including a scheduler round-trip whose stamp deliberately differs from m_seq.
+BOOST_AUTO_TEST_CASE(shardingCreatePreservesLocalSequenceAndRouting)
+{
+    std::string const parentAddress(40, 'a');
+    std::string const localAddress(40, 'b');
+    std::string const remoteAddress(40, 'd');
+    auto seed = [&](std::string const& address, std::string const& hex, std::string const& shard) {
+        auto table = "/apps/" + address;
+        if (!backend->m_inner->openTable(table))
+        {
+            backend->m_inner->createTable(table, std::string(STORAGE_VALUE));
+        }
+        bytes code;
+        boost::algorithm::unhex(hex, std::back_inserter(code));
+        auto hash = hashImpl->hash(ref(code));
+        storage::Entry hashEntry;
+        hashEntry.set(hash.asBytes());
+        backend->setRow(table, ACCOUNT_CODE_HASH, hashEntry);
+        storage::Entry codeEntry;
+        codeEntry.set(code);
+        backend->setRow(ledger::SYS_CODE_BINARY, hash.toRawString(), codeEntry);
+        storage::Entry shardEntry;
+        shardEntry.set("shard:" + shard);
+        backend->setRow(table, "shard", shardEntry);
+    };
+    auto configure = [](auto const& executive) {
+        executive->setPrecompiled(std::make_shared<PrecompiledMap>());
+        executive->setStaticPrecompiled(std::make_shared<const std::set<std::string>>());
+    };
+    auto call = [](std::string const& address) {
+        return "6000600060006000600073" + address + "620186a0f150";
+    };
+    // All combinations of the two sharding selectors, both address flags, and
+    // local-only / cross-shard CALL before the two CREATE opcodes.
+    for (unsigned flags = 0; flags < 128; ++flags)
+    {
+        bool const usePromise = flags & 1;
+        bool const shardingChild = flags & 2;
+        bool const eipAddress = flags & 4;
+        bool const dmcAddress = flags & 8;
+        bool const crossShard = flags & 16;
+        bool const namedShard = flags & 32;
+        bool const create2 = flags & 64;
+        BOOST_TEST_CONTEXT("flags=" << flags)
+        {
+            std::string const shard = namedShard ? "A" : "";
+            seed(localAddress, "00", shard);
+            seed(remoteAddress, "00", "B");
+            auto prefix = call(localAddress) + (crossShard ? call(remoteAddress) : "");
+            // CODECOPY child init to memory 128, create twice and return both addresses.
+            auto creates = create2 ? "6001600c60806000f56000526002600c60806000f5602052" :
+                                     "600c60806000f0600052600c60806000f0602052";
+            auto suffix = std::string("600c60") +
+                          toHex(bytes{static_cast<byte>(
+                              prefix.size() / 2 + std::string_view(creates).size() / 2 + 12)}) +
+                          "608039" + creates + "60406000f3";
+            seed(parentAddress, prefix + suffix + "60006000526001601ff30000", shard);
+            auto lru = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
+            auto cache = std::make_shared<LedgerCache>(ledger);
+            BlockContext ctx(lru, cache, hashImpl, 1, h256(1), 0,
+                (uint32_t)BlockVersion::V3_18_0_VERSION, false, backend);
+            ledger::Features features;
+            if (shardingChild)
+                features.set(ledger::Features::Flag::bugfix_sharding_call_in_child_executive);
+            if (eipAddress)
+                features.set(ledger::Features::Flag::feature_evm_address);
+            if (dmcAddress)
+                features.set(ledger::Features::Flag::bugfix_dmc_create_address_rule);
+            if (create2)
+                features.set(
+                    ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy);
+            ctx.setFeatures(std::move(features));
+            ctx.setVMFactory(std::make_shared<VMFactory>());
+            auto executive = std::make_shared<ShardingTransactionExecutive>(
+                ctx, parentAddress, 99, 0, nullptr, usePromise);
+            configure(executive);
+            auto input = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+            input->origin = std::string(40, 'c');
+            input->senderAddress = input->origin;
+            input->receiveAddress = parentAddress;
+            input->codeAddress = parentAddress;
+            input->gas = 1'000'000;
+            auto result = executive->start(std::move(input));
+            BOOST_REQUIRE(result);
+            if (crossShard)
+            {
+                BOOST_REQUIRE(result->type == CallParameters::MESSAGE);
+                BOOST_CHECK_EQUAL(result->codeAddress, remoteAddress);
+                result->seq = 18;
+                auto child = std::make_shared<TransactionExecutive>(ctx, remoteAddress, 99, 18);
+                configure(child);
+                auto response = child->start(std::move(result));
+                BOOST_REQUIRE(response);
+                response->schedulerSeq = 18;
+                executive->setExchangeMessage(std::move(response));
+                result = executive->resume();
+            }
+            // The remote STOP and newly deployed STOP share a code hash. With
+            // sharding children enabled, that real storage access can suspend the
+            // child on a lock exported by the remote call; model a successful grant.
+            unsigned lockResumes = 0;
+            while (result && result->type == CallParameters::KEY_LOCK && lockResumes < 16)
+            {
+                ++lockResumes;
+                BOOST_CHECK(!result->acquireKeyLock.empty());
+                result->keyLocks.clear();
+                result->schedulerSeq = 77;  // a lock grant must not change CREATE derivation
+                executive->setExchangeMessage(std::move(result));
+                result = executive->resume();
+            }
+            if (shardingChild && crossShard)
+                BOOST_CHECK_GT(lockResumes, 0u);
+            // CREATE was local on the base even for a named parent shard. A newly
+            // pre-derived recipient must not turn it into another scheduler hop.
+            BOOST_REQUIRE(result);
+            BOOST_REQUIRE(result->type == CallParameters::FINISHED);
+            BOOST_CHECK_EQUAL(result->evmStatus, EVMC_SUCCESS);
+            BOOST_REQUIRE_EQUAL(result->data.size(), 64u);
+            auto first = toHex(bytesConstRef(result->data.data() + 12, 20));
+            auto second = toHex(bytesConstRef(result->data.data() + 44, 20));
+            // Golden values computed independently from keccak("1_99_2/3")[:20]
+            // and keccak(RLP(0xaaaa...aaaa, 0/1))[-20:], respectively.
+            // CREATE2 pins keccak(0xff || sender || salt(1/2) || keccak(init))[-20:].
+            auto expectedFirst = create2 ?
+                                     "0d09c895a6d21ace795f6b2c05f257c1be009e08" :
+                                     (eipAddress ? "3c952d36207c0d52743a646e7ac2649009bd358e" :
+                                                   "0ad9380a80524275da31fb13c38e465ab41fd0cd");
+            auto expectedSecond = create2 ?
+                                      "b6449a336006465ec8182b88f1753f902d61867d" :
+                                      (eipAddress ? "4501f8fa1e67827ebfb1f6d5510c606871c5a599" :
+                                                    "bc4ca20c2f2ec48a2aa1a2c455a4dea2a2755b3d");
+            BOOST_CHECK_EQUAL(first, expectedFirst);
+            BOOST_CHECK_EQUAL(second, expectedSecond);
+            BOOST_CHECK_NE(first, second);
+            BOOST_CHECK_EQUAL(executive->seq(), 3);
+            storage::StorageWrapper stored(lru, nullptr);
+            for (auto const& address : {first, second})
+            {
+                auto codeHash = stored.getRow("/apps/" + address, ACCOUNT_CODE_HASH);
+                BOOST_REQUIRE(codeHash);
+                BOOST_CHECK_EQUAL(toHex(codeHash->get()),
+                    "bc36789e7a1e281436464229828f817d6612f7b477d66591ff96a9e064bcc98a");
             }
         }
     }

@@ -95,8 +95,12 @@ struct CallParameters
     int32_t status = 0;  // by response
     int32_t evmStatus = 0;
     Type type;
-    bool staticCall = false;      // common field
-    bool create = false;          // by request, is creation
+    bool staticCall = false;  // common field
+    bool create = false;      // by request, is creation
+    // Local host-to-executive hint: opcode CREATE/CREATE2 used to have no recipient.
+    // Sharding must keep them local after ABI 18 pre-derives the address. Native
+    // precompiled creates with explicit recipients retain their shard routing.
+    bool createFromOpcode = false;
     bool internalCreate = false;  // by internal precompiled request, is creation
     /**
      * Internal precompiled contract request, this option is used to

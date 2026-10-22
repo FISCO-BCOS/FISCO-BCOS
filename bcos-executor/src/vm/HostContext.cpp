@@ -256,6 +256,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         }
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
         request->create = true;
+        request->createFromOpcode = true;
         break;
     }
     case EVMC_CALL:
@@ -895,13 +896,12 @@ evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uin
 {
     evmc_address out{};
     auto& exec = *m_executive;
-    // EIP-style branch gate: SerialBlockExecutive honours keccak under
-    // feature_evm_address alone; DmcExecutor's arm additionally requires
-    // bugfix_dmc_create_address_rule, so the hook follows the same lane split
-    // (R5 F1) — otherwise the pushed address and the scheduler's derivation disagree.
+    // Synchronous CREATE (serial and sharding) historically used
+    // feature_evm_address alone; scheduler-owned DMC CREATE additionally required
+    // bugfix_dmc_create_address_rule. Follow address ownership, not inheritance.
     const bool eipStyle =
         exec.blockContext().features().get(ledger::Features::Flag::feature_evm_address) &&
-        (exec.isSerialSchedulerLane() ||
+        (exec.usesLocalCreateAddress() ||
             exec.blockContext().features().get(
                 ledger::Features::Flag::bugfix_dmc_create_address_rule));
     if (eipStyle)
@@ -919,14 +919,9 @@ evmc_address HostContext::createAddressForOpcode(const evmc_address& sender, uin
         }
         return out;
     }
-    // Legacy formula: same inputs as TransactionExecutive::externalCall's nested-create
-    // assignment (hash(blockNumber, contextID, seq+1) via the block's hash handler),
-    // so the address the CREATE opcode pushes is exactly where externalCall — which
-    // honors a non-empty receiveAddress — stores the contract. Replay-stable under
-    // the DMC per-hop frame replay (a nonce-derived address is not). The seq base is
-    // createDerivationSeq(): m_seq on the serial lane, the scheduler-handed-back
-    // counter on the DMC lane (R5 F1) — under both lanes the hook then derives the
-    // same f(...) the scheduler-side empty-to arm produced on the base.
+    // Mirror the historical owner: synchronous execution uses m_seq + 1, while
+    // DMC uses the last scheduler hand-back + 1. Sharding's local child calls
+    // advance m_seq even though cross-shard calls suspend through a coroutine.
     const auto addrStr = bcos::newEVMAddress(exec.blockContext().hashHandler(),
         exec.blockContext().number(), exec.contextID(), exec.createDerivationSeq() + 1);
     boost::algorithm::unhex(addrStr, out.bytes);

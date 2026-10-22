@@ -85,7 +85,9 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
                              << input->toFullString() << LOG_KV("usePromise", m_usePromise);
     }
 
-    if (!std::empty(input->receiveAddress))
+    // Before ABI 18, nested CREATE/CREATE2 had an empty recipient and ran locally.
+    // The hook now pre-derives that recipient; it must not change shard routing.
+    if (!input->createFromOpcode && !std::empty(input->receiveAddress))
     {
         if (!m_shardName.has_value())
         {

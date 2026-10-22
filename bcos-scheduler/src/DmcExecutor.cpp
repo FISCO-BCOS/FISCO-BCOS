@@ -600,6 +600,8 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     case protocol::ExecutionMessage::FINISHED:
     case protocol::ExecutionMessage::REVERT:
     {
+        // V1 getCode / empty delegate-code replies return NEED_PREPARE first;
+        // this second prepare pass stamps them before they can be sent to a parent.
         executiveState->callStack.pop();
         if (executiveState->callStack.empty())
         {

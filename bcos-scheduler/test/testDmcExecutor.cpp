@@ -390,20 +390,25 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
 
     dmcExecutor->prepare();
     auto locked = dmcExecutor->unlockPrepare();
-    // [R11 F2] In production a KEY_LOCK exists only for a live frame, and every
-    // path that makes a frame live increments currentSeq first (scheduler entry
-    // arms, sharding first-message, DAG adoption). This fixture submits KEY_LOCKs
-    // directly as first messages, so restore the live-frame invariant before the
-    // deadlock is detected: the reverted frame then stamps currentSeq - 1 like
-    // every other resume arm.
+    // Model a live seq-0 parent after its seq-1 child has returned: the routing
+    // identity remains zero, but the transaction has consumed two frame numbers.
+    // This distinguishes last-consumed seq from the paused frame's own seq.
     dmcExecutor->forEachExecutive([](int64_t, scheduler::ExecutiveState::Ptr state) {
-        if (state->currentSeq == 0)
-        {
-            state->currentSeq = 1;
-        }
+        BOOST_CHECK_EQUAL(state->message->seq(), 0);
+        state->currentSeq = 2;
     });
     auto found = dmcExecutor->detectLockAndRevert();
     BOOST_CHECK(found && locked);
+    size_t reverted = 0;
+    dmcExecutor->forEachExecutive([&](int64_t, scheduler::ExecutiveState::Ptr state) {
+        if (state->message->type() == ExecutionMessage::REVERT)
+        {
+            ++reverted;
+            BOOST_CHECK_EQUAL(state->message->seq(), 0);
+            BOOST_CHECK_EQUAL(state->message->schedulerSeq(), 1);
+        }
+    });
+    BOOST_CHECK_GT(reverted, 0u);
     SCHEDULER_LOG(DEBUG) << "no need_prepare, found deadlock and revert";
     dmcExecutor->releaseOutdatedLock();
     dmcExecutor->go(executorCallback);

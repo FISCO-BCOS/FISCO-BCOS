@@ -54,7 +54,7 @@ public:
     CoroutineTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
         int64_t contextID, int64_t seq);
 
-    bool isSerialSchedulerLane() const noexcept override { return false; }
+    bool usesLocalCreateAddress() const noexcept override { return false; }
     int64_t createDerivationSeq() const override;
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;  // start a new
