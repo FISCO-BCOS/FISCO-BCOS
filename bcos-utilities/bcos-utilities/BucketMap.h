@@ -21,7 +21,6 @@
  */
 #pragma once
 
-#include "bcos-task/Generator.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_for.h>
@@ -29,6 +28,7 @@
 #include <oneapi/tbb/rw_mutex.h>
 #include <rapidhash.h>
 #include <concepts>
+#include <generator>
 #include <optional>
 #include <random>
 #include <range/v3/iterator/operations.hpp>
@@ -410,7 +410,7 @@ public:
 #pragma GCC diagnostic ignored "-Wmismatched-new-delete"
 #endif
     template <class AccessorType>
-    task::Generator<AccessorType&> range(size_t startIndex) const
+    std::generator<AccessorType&> range(size_t startIndex) const
     {
         for (auto& bucket : ::ranges::views::iota(startIndex, startIndex + m_buckets.size()) |
                                 ::ranges::views::transform([&](auto index) -> auto& {
@@ -432,7 +432,7 @@ public:
 #endif
 
     template <class AccessorType>
-    task::Generator<AccessorType&> range()
+    std::generator<AccessorType&> range()
     {
         static thread_local std::mt19937 random(std::random_device{}());
         auto startIndex = random() % m_buckets.size();
@@ -440,7 +440,7 @@ public:
     }
 
     template <class AccessorType>
-    task::Generator<AccessorType&> rangeByKey(const KeyType& startKey)
+    std::generator<AccessorType&> rangeByKey(const KeyType& startKey)
     {
         auto startIndex = getBucketIndex(startKey);
         return range<AccessorType>(startIndex);
