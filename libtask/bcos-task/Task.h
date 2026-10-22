@@ -194,7 +194,13 @@ template <typename... Resp>
 struct GetResultAwaitable
 {
     // Shared state, single-shot: one Result backs exactly one complete(). There is no reset — a
-    // later co_await observes the original completion rather than arming a new operation.
+    // later co_await observes the original completion rather than arming a new operation. At most
+    // one waiter may be parked at a time; concurrent co_awaits are outside the contract.
+    //
+    // The Result must outlive every co_await and every complete()/cancel()/publish() call. It may
+    // live in the awaiting frame only when no settle can remain in flight or be invoked after that
+    // frame is destroyed; in particular, an abandoned frame must not own a Result that a completion
+    // sink can still access.
     struct Result
     {
         enum class State : uint8_t

@@ -35,7 +35,6 @@
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <chrono>
-#include <functional>
 #include <stdexcept>
 #include <thread>
 
@@ -69,22 +68,6 @@ public:
     IORunner& operator=(const IORunner&) = delete;
 
     boost::asio::io_context& io() noexcept { return m_io; }
-
-    // Wait until `predicate` holds, so a negative assertion (nothing fired) is only taken after the
-    // handler had a real chance to run.
-    static bool waitFor(const std::function<bool()>& predicate, std::chrono::milliseconds limit)
-    {
-        const auto deadline = std::chrono::steady_clock::now() + limit;
-        while (std::chrono::steady_clock::now() < deadline)
-        {
-            if (predicate())
-            {
-                return true;
-            }
-            std::this_thread::sleep_for(1ms);
-        }
-        return predicate();
-    }
 
 private:
     boost::asio::io_context m_io;

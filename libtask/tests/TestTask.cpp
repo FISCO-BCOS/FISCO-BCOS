@@ -11,7 +11,6 @@
 #include <chrono>
 #include <future>
 #include <iostream>
-#include <memory_resource>
 #include <stdexcept>
 #include <thread>
 #include <vector>

@@ -185,8 +185,8 @@ public:
     Deadline& operator=(Deadline&&) = delete;
 
     // Destroying an armed Deadline cancels the timer; a later expiry sees a stale generation and
-    // no-ops. Note this only CANCELS; it does not release the owner's reference to the state. A
-    // queued expiry still holds a reference, so the timer outlives this owner for at most one
+    // no-ops. The owner's m_state reference is released when the destructor finishes, but a queued
+    // expiry still holds its own reference, so the timer outlives this owner for at most one
     // handler turn — which matters when the handler captured a socket (see arm()).
     ~Deadline()
     {
