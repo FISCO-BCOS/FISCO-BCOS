@@ -403,6 +403,9 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     // BOOST_CHECK(dmcFlagStruct.DmcFlag && dmcFlagStruct.finishFlag);
     BOOST_CHECK_EQUAL(dmcFlagStruct.paused, 1);
     BOOST_CHECK_EQUAL(dmcFlagStruct.round, 1);
+    // [R10 F1] The deadlock revert this test drives is a legitimate resume message:
+    // the always-on stamp guard must not count it as a producer bug.
+    BOOST_CHECK_EQUAL(dmcRecorder->schedulerStampViolations(), 0);
     // dmcExecutor->go(executorCallback);
 }
 
