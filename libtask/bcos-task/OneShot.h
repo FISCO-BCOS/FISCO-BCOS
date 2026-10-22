@@ -138,7 +138,9 @@ public:
     bool settled() const noexcept { return m_result.completed.load(std::memory_order_acquire); }
 
     // Await the slot. `co_await once` and `co_await *oncePtr` both work. The returned
-    // awaitable holds a reference into this object, which must outlive the co_await.
+    // awaitable holds a reference into this object, which must outlive the co_await. A successful
+    // await_resume() moves the value tuple out; a later co_await only observes an intact value
+    // when the payload's moved-from state remains meaningful.
     GetResultAwaitable<Values...> operator co_await()
     {
         return GetResultAwaitable<Values...>(m_result);

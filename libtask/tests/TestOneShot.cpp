@@ -203,8 +203,8 @@ BOOST_AUTO_TEST_CASE(CancelEscapesToCallerWhenWaitLaunchedConsumerDoesNotCatch)
 // consumer inline through the same publish() boundary, so a consumer whose body throws after the
 // co_await lets the exception escape complete() — with the claim already taken. The caller sees
 // the throw instead of the return value, yet the settle has happened: settled() is true and the
-// recorded value is still delivered to a later co_await. Post-settle bookkeeping after complete()
-// must therefore be prepared to be skipped, exactly as documented on complete().
+// outcome remains recorded. Post-settle bookkeeping after complete() must therefore be prepared
+// to be skipped, exactly as documented on complete().
 BOOST_AUTO_TEST_CASE(CompleteEscapesToCallerWhenWaitLaunchedConsumerThrows)
 {
     auto once = std::make_shared<OneShot<int>>();
@@ -229,7 +229,8 @@ BOOST_AUTO_TEST_CASE(CompleteEscapesToCallerWhenWaitLaunchedConsumerThrows)
     BOOST_CHECK(caught);
     BOOST_CHECK(once->settled());
 
-    // The settle is not lost to the throw: a later co_await still takes the fast path.
+    // This copyable int payload remains readable after the first await moved the tuple. After a
+    // parked delivery the state is WOKEN, so this exits through await_suspend, not await_ready.
     auto value = syncWait([once]() -> Task<int> {
         auto [delivered] = co_await *once;
         co_return delivered;

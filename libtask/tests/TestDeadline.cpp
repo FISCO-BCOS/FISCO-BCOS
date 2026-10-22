@@ -36,6 +36,7 @@
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <stdexcept>
 #include <thread>
 
 using namespace bcos::task;
@@ -366,6 +367,42 @@ BOOST_AUTO_TEST_CASE(AwaitableSleepFrameDestroyedMidWaitDoesNotResume)
 
     // The cancelled wait's handler is still delivered; it must observe the dead state and no-op.
     BOOST_CHECK_EQUAL(poll(io), 1);
+}
+
+BOOST_AUTO_TEST_CASE(TimeoutHandlerExceptionDoesNotEscapeIoContext)
+{
+    boost::asio::io_context io;
+    Deadline deadline(io, 5);
+    int calls = 0;
+    deadline.arm([&calls](boost::system::error_code) {
+        ++calls;
+        throw std::runtime_error("timeout handler failed");
+    });
+
+    advanceClock(200ms);
+    std::size_t handlers = 0;
+    BOOST_CHECK_NO_THROW(handlers = poll(io));
+    BOOST_CHECK_EQUAL(handlers, 1);
+    BOOST_CHECK_EQUAL(calls, 1);
+    BOOST_CHECK(deadline.expired());
+    deadline.disarm();
+}
+
+BOOST_AUTO_TEST_CASE(AwaitableSleepResumeExceptionDoesNotEscapeIoContext)
+{
+    boost::asio::io_context io;
+    bool resumed = false;
+    bcos::task::wait([](boost::asio::io_context& io, bool& resumed) -> Task<void> {
+        co_await awaitableSleep(io, 5);
+        resumed = true;
+        throw std::runtime_error("sleep consumer failed");
+    }(io, resumed));
+
+    advanceClock(200ms);
+    std::size_t handlers = 0;
+    BOOST_CHECK_NO_THROW(handlers = poll(io));
+    BOOST_CHECK_EQUAL(handlers, 1);
+    BOOST_CHECK(resumed);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

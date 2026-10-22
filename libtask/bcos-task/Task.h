@@ -79,11 +79,11 @@ inline void reclaimEscapedFrames() noexcept
     }
 }
 
-// The ONE resume boundary for resumers of possibly-detached chains (task::wait pumps,
-// GetResultAwaitable::publish, timer handlers): an escaping unhandled_exception() registers the
-// stranded top frame above (see AsyncTask), and the resumer that catches the escape is
-// responsible for reclaiming it. Resuming through anything else leaks the chain until this
-// thread exits — on a long-lived io thread, effectively until process exit.
+// A resume boundary for possibly-detached chains: an escaping unhandled_exception() registers the
+// stranded top frame above (see AsyncTask), and the resumer that catches the escape is responsible
+// for reclaiming it. This helper combines resume, reclamation and rethrow. A resumer that catches
+// without reclaiming leaks the chain until this thread exits — on a long-lived io thread,
+// effectively until process exit.
 inline void resumeDetached(std::coroutine_handle<> handle)
 {
     try
@@ -193,8 +193,8 @@ private:
 template <typename... Resp>
 struct GetResultAwaitable
 {
-    // Shared state, single-shot: one Result backs exactly one co_await and exactly one
-    // complete(). There is no reset — reuse would silently redeliver the first completion.
+    // Shared state, single-shot: one Result backs exactly one complete(). There is no reset — a
+    // later co_await observes the original completion rather than arming a new operation.
     struct Result
     {
         enum class State : uint8_t
@@ -305,24 +305,27 @@ struct GetResultAwaitable
     // stranded at its final suspend point; reclaim it before propagating.
     static void publish(Result& result)
     {
-        auto expected = Result::State::INIT;
-        if (result.state.compare_exchange_strong(expected, Result::State::DONE,
-                std::memory_order_acq_rel, std::memory_order_acquire))
+        for (;;)
         {
-            return;
+            auto expected = Result::State::INIT;
+            if (result.state.compare_exchange_strong(expected, Result::State::DONE,
+                    std::memory_order_acq_rel, std::memory_order_acquire))
+            {
+                return;
+            }
+            // A waiter is parked (only this settler can observe WOKEN or DONE here). Claim the
+            // resume; a waiter deregistering concurrently flips SUSPENDED back to INIT, and only
+            // the claim's winner may touch the handle.
+            if (expected == Result::State::SUSPENDED &&
+                result.state.compare_exchange_strong(expected, Result::State::WOKEN,
+                    std::memory_order_acq_rel, std::memory_order_acquire))
+            {
+                detail::resumeDetached(result.handle);
+                return;
+            }
+            // The waiter deregistered between the two CAS attempts. Retry instead of storing DONE
+            // unconditionally: a replacement waiter may already have parked in the INIT window.
         }
-        // A waiter is parked (only this settler can observe WOKEN here, and DONE is its own
-        // store above, so expected == SUSPENDED). Claim the resume; a waiter deregistering
-        // concurrently flips SUSPENDED back to INIT, and only the claim's winner may touch the
-        // handle.
-        if (result.state.compare_exchange_strong(expected, Result::State::WOKEN,
-                std::memory_order_acq_rel, std::memory_order_acquire))
-        {
-            detail::resumeDetached(result.handle);
-            return;
-        }
-        // The parked waiter deregistered mid-publish: record the settle, resume no one.
-        result.state.store(Result::State::DONE, std::memory_order_release);
     }
 
 private:

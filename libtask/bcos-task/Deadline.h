@@ -23,10 +23,12 @@
 #include <boost/asio/error.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <atomic>
 #include <chrono>
 #include <coroutine>
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <utility>
 
@@ -34,6 +36,19 @@ namespace bcos::task
 {
 namespace detail
 {
+inline void logTimerException(const char* context) noexcept
+{
+    try
+    {
+        std::fprintf(stderr, "[libtask-timer] %s: %s\n", context,
+            boost::current_exception_diagnostic_information().c_str());
+    }
+    catch (...)
+    {
+        // the diagnostic itself failed; nothing more to do
+    }
+}
+
 // Shared wait state for SleepAwaitable. It must NOT live in the coroutine frame: destroying a
 // steady_timer cancels its wait, but asio still delivers the pending handler (with
 // operation_aborted) afterwards, so a handler that captured frame members would write into freed
@@ -92,7 +107,14 @@ struct SleepAwaitable
             // resumed chain strands its top frame in the escaped-frame registry (Task.h), and
             // this handler — the resumer — is responsible for reclaiming it. A bare resume
             // would leak the chain until this (typically long-lived io) thread exits.
-            detail::resumeDetached(state->handle);
+            try
+            {
+                detail::resumeDetached(state->handle);
+            }
+            catch (...)
+            {
+                logTimerException("awaitableSleep resumed a coroutine that threw");
+            }
         });
     }
 
@@ -114,6 +136,9 @@ struct SleepAwaitable
 // `alive` gate could resume a frame the other thread is destroying. A caller that destroys the
 // frame on a different context must post() the destruction back to this executor (the same rule
 // Deadline states below and Host::clientConnect follows).
+//
+// The timer handler is an exception boundary: it logs and absorbs any exception escaping the
+// resumed chain, so it never throws into io_context::run().
 //
 // This replaces the hand-built `task::makeFireAwaitable<error_code>([&timer](auto handler) {
 // timer.async_wait(std::move(handler)); }, operation_aborted)` idiom, spelled out today by the
@@ -144,6 +169,9 @@ inline task::Task<boost::system::error_code> awaitableSleep(
 // different context must post() back to this executor first — Host::clientConnect does exactly
 // that, posting cancel() onto the socket's io_context because resolveConnect can resume it on the
 // resolver's context.
+//
+// The expiry handler is an exception boundary: it logs and absorbs any exception thrown by
+// timeoutHandler, so it never throws into io_context::run().
 class Deadline
 {
 public:
@@ -224,7 +252,14 @@ public:
                     return;
                 }
                 releaseState->expired.store(true, std::memory_order_release);
-                timeoutHandler(boost::system::error_code{});
+                try
+                {
+                    timeoutHandler(boost::system::error_code{});
+                }
+                catch (...)
+                {
+                    detail::logTimerException("Deadline timeout handler threw");
+                }
             });
     }
 
