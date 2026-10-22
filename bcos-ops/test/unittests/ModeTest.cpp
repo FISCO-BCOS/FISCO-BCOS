@@ -13,9 +13,9 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief EL modes (spec §5.2.4): the node dir's [ethereum] / [web3_rpc], PBFT checks skipped,
- *        page 2 as the txpool with its three titles, the EL status band, the raw-only send
- *        page, raw transactions through eth_sendRawTransaction with receipt polling, the web3
+ * @brief EL modes (spec §5.2.4): the node dir's [executor] version / [web3_rpc], PBFT checks
+ *        skipped, page 2 as the txpool with its three titles, the EL status band, the raw-only
+ *        send page, raw transactions through eth_sendRawTransaction with receipt polling, the web3
  *        HTTP call, and the explorer dropping rows when a new block's parent does not match
  * @file ModeTest.cpp
  */
@@ -37,6 +37,7 @@
 #include "fixtures/Blocks.h"
 #include "fixtures/FakeRpc.h"
 #include "fixtures/Render.h"
+#include <unistd.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/read_until.hpp>
 #include <boost/asio/streambuf.hpp>
@@ -183,7 +184,8 @@ BOOST_AUTO_TEST_SUITE(ModeTest)
 
 BOOST_AUTO_TEST_CASE(nodeDirReadsModeFromExecutorVersionAndWeb3Listener)
 {
-    auto dir = std::filesystem::temp_directory_path() / "ops-mode-nodedir";
+    auto dir =
+        std::filesystem::temp_directory_path() / ("ops-mode-nodedir-" + std::to_string(::getpid()));
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir);
     // [ethereum] mode is a dead key since the lane follows executor.version: it is not read

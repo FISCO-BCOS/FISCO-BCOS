@@ -45,8 +45,10 @@ ConnectOptions connectOptionsFrom(Args const& _args)
     return options;
 }
 
-std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
+std::pair<std::string, uint16_t> parseHostPort(
+    std::string const& _endpoint, std::string_view _source)
 {
+    auto const source = std::string(_source);
     auto value = _endpoint;
     if (value.starts_with("ws://"))
     {
@@ -63,7 +65,7 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     auto colon = value.rfind(':');
     if (colon == std::string::npos || colon + 1 >= value.size())
     {
-        throw OpsError(c_exitUsage, "--rpc expects host:port, got: " + _endpoint);
+        throw OpsError(c_exitUsage, source + " expects host:port, got: " + _endpoint);
     }
     auto host = value.substr(0, colon);
     if (host.size() > 2 && host.front() == '[' && host.back() == ']')
@@ -83,11 +85,11 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     }
     catch (std::exception const&)
     {
-        throw OpsError(c_exitUsage, "--rpc expects host:port, got: " + _endpoint);
+        throw OpsError(c_exitUsage, source + " expects host:port, got: " + _endpoint);
     }
     if (port <= 0 || port > 65535)
     {
-        throw OpsError(c_exitUsage, "--rpc port out of range: " + _endpoint);
+        throw OpsError(c_exitUsage, source + " port out of range: " + _endpoint);
     }
     return {host, static_cast<uint16_t>(port)};
 }
@@ -114,7 +116,7 @@ Connection withMode(Connection _connection, ConnectOptions const& _options, Node
     _connection.mode = connectionMode(_options, _node);
     if (_options.web3)
     {
-        auto [host, port] = parseHostPort(*_options.web3);
+        auto [host, port] = parseHostPort(*_options.web3, "--web3");
         _connection.web3Endpoint = host + ":" + std::to_string(port);
     }
     else if (_node != nullptr && _node->web3Enable)

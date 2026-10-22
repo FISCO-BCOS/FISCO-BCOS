@@ -79,7 +79,7 @@ struct Model
     ExplorerState explorer;
     GovernanceState governance;  // auth chains: the gov page (ticket 16)
     bool authChain = false;      // getGroupInfo isAuthCheck: the gov page exists
-    std::string mode = "none";   // [ethereum].mode: none / el / opstack-el (ticket 17)
+    std::string mode = "none";   // Connection::mode: none / el / opstack-el (ticket 17)
     TxpoolState txpool;          // EL modes: page 2
     std::string keyAddress;      // loaded signing key, shown in the top bar (ticket 15)
     // txHash → the preset it was sent with, so the tx detail can decode its input (ticket 15

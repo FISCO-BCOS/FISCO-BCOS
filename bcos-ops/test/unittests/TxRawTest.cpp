@@ -22,6 +22,7 @@
 #include "bcos-ops/tx/TxSender.h"
 #include "fixtures/FakeRpc.h"
 #include <bcos-protocol/bcos-protocol/TransactionStatus.h>
+#include <unistd.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <fstream>
@@ -80,7 +81,9 @@ BOOST_AUTO_TEST_CASE(rawHexGoesToSendTransactionVerbatim)
 
 BOOST_AUTO_TEST_CASE(rawFromFileIsTrimmed)
 {
-    auto path = (std::filesystem::temp_directory_path() / "txraw-signed.hex").string();
+    auto path = (std::filesystem::temp_directory_path() /
+                 ("txraw-signed-" + std::to_string(::getpid()) + ".hex"))
+                    .string();
     std::ofstream(path) << "  0xabcd\n\n";
     FakeRpc rpc;
     rpc.set("sendTransaction", rawReceipt());
@@ -155,7 +158,9 @@ BOOST_AUTO_TEST_CASE(rawHexIsNormalizedTheSameWayEverywhere)
     BOOST_CHECK_THROW(normalizeRawTxHex("0xabc"), OpsError);  // odd length
     BOOST_CHECK_THROW(normalizeRawTxHex("zz"), OpsError);     // not hex
     BOOST_CHECK_THROW(normalizeRawTxHex("  \n "), OpsError);  // nothing left
-    auto path = (std::filesystem::temp_directory_path() / "txraw-multiline.hex").string();
+    auto path = (std::filesystem::temp_directory_path() /
+                 ("txraw-multiline-" + std::to_string(::getpid()) + ".hex"))
+                    .string();
     std::ofstream(path) << "0xab\ncd\n";
     FakeRpc rpc;
     rpc.set("sendTransaction", rawReceipt());

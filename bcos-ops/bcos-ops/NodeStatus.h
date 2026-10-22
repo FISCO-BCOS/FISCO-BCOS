@@ -61,7 +61,7 @@ struct NodeStatus
     std::optional<int64_t> txpoolLimit;
     // meta
     std::string source;
-    std::string mode = "none";  // [ethereum].mode (Connection::mode): EL modes run no PBFT
+    std::string mode = "none";  // Connection::mode: EL modes run no PBFT
     int64_t collectedAt = 0;    // ms since epoch
     std::map<std::string, std::string> reasons;
 

@@ -44,8 +44,8 @@ struct Connection
     std::string group;
     std::string endpoint;
     std::optional<NodeDir> nodeDir;
-    // [ethereum].mode of the node (or --mode): none / el / opstack-el, or unknown for a bare
-    // --rpc; see Mode.h
+    // the node's mode (NodeDir::mode, or --mode): none / el / opstack-el, or unknown for a
+    // bare --rpc; see Mode.h
     std::string mode = "none";
     int requestTimeoutMs = 15000;  // --timeout: every RPC of the command, web3 included
     // host:port of the plaintext web3 HTTP listener when it is enabled (or --web3)

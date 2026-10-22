@@ -23,6 +23,7 @@
 #include "bcos-ops/tx/HelloWorld.h"
 #include "fixtures/FakeRpc.h"
 #include <bcos-utilities/DataConvertUtility.h>
+#include <unistd.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <filesystem>
@@ -59,7 +60,8 @@ BOOST_AUTO_TEST_CASE(abiWithoutConstructorDeploysTheBytecodeAlone)
 
 BOOST_AUTO_TEST_CASE(txDeployWithSuchAnAbiSendsTheBytecode)
 {
-    auto dir = std::filesystem::temp_directory_path() / "ops-deploy-abi-test";
+    auto dir = std::filesystem::temp_directory_path() /
+               ("ops-deploy-abi-test-" + std::to_string(::getpid()));
     std::filesystem::create_directories(dir);
     auto abiPath = (dir / "noctor.abi").string();
     std::ofstream(abiPath) << c_abiNoCtor;

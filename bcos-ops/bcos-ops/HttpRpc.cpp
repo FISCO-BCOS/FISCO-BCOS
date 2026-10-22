@@ -133,7 +133,7 @@ RpcCall makeHttpRpcCall(std::string _host, uint16_t _port, int _timeoutMs)
 
 RpcCall makeHttpRpcCall(std::string const& _endpoint, int _timeoutMs)
 {
-    auto [host, port] = parseHostPort(_endpoint);
+    auto [host, port] = parseHostPort(_endpoint, "web3 endpoint");
     return makeHttpRpcCall(host, port, _timeoutMs);
 }
 }  // namespace bcos::ops

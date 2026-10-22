@@ -80,6 +80,19 @@ BOOST_AUTO_TEST_CASE(parseHostPortForms)
     BOOST_CHECK_EQUAL(port2, 20200);
     BOOST_CHECK_THROW(parseHostPort("127.0.0.1"), OpsError);
     BOOST_CHECK_THROW(parseHostPort("127.0.0.1:99999"), OpsError);
+    // the message names the option the value came from (--web3 reuses this parser)
+    for (auto const* bad : {"127.0.0.1", "127.0.0.1:x", "127.0.0.1:0"})
+    {
+        try
+        {
+            parseHostPort(bad, "--web3");
+            BOOST_FAIL("must throw");
+        }
+        catch (OpsError const& e)
+        {
+            BOOST_CHECK(std::string(e.what()).starts_with("--web3 "));
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

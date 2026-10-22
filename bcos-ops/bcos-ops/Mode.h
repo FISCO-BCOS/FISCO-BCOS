@@ -13,9 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the node's [ethereum].mode as the ops commands see it: none (FISCO consortium chain,
- *        PBFT) or one of the EL modes (el, opstack-el), in which PBFT does not run and the
- *        web3 listener is the transaction entry (spec §5.2.4)
+ * @brief the node's mode as the ops commands see it (NodeDir::mode, from config.genesis
+ *        [executor] version): none (FISCO consortium chain, PBFT) or one of the EL modes (el,
+ *        opstack-el), in which PBFT does not run and the web3 listener is the transaction
+ *        entry (spec §5.2.4)
  * @file Mode.h
  */
 #pragma once
