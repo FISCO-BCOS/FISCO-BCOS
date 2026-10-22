@@ -17,6 +17,7 @@
  */
 #include "Connect.h"
 #include "IpcClient.h"
+#include "Mode.h"
 #include "NodeDir.h"
 #include "OpsError.h"
 #include "RpcClient.h"
@@ -39,11 +40,15 @@ ConnectOptions connectOptionsFrom(Args const& _args)
     options.rpc = _args.option("rpc");
     options.connectTimeoutMs = _args.numberOr<int>("connect-timeout", 3000);
     options.requestTimeoutMs = _args.numberOr<int>("timeout", 15000);
+    options.mode = _args.option("mode");
+    options.web3 = _args.option("web3");
     return options;
 }
 
-std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
+std::pair<std::string, uint16_t> parseHostPort(
+    std::string const& _endpoint, std::string_view _source)
 {
+    auto const source = std::string(_source);
     auto value = _endpoint;
     if (value.starts_with("ws://"))
     {
@@ -60,7 +65,7 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     auto colon = value.rfind(':');
     if (colon == std::string::npos || colon + 1 >= value.size())
     {
-        throw OpsError(c_exitUsage, "--rpc expects host:port, got: " + _endpoint);
+        throw OpsError(c_exitUsage, source + " expects host:port, got: " + _endpoint);
     }
     auto host = value.substr(0, colon);
     if (host.size() > 2 && host.front() == '[' && host.back() == ']')
@@ -80,14 +85,47 @@ std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint)
     }
     catch (std::exception const&)
     {
-        throw OpsError(c_exitUsage, "--rpc expects host:port, got: " + _endpoint);
+        throw OpsError(c_exitUsage, source + " expects host:port, got: " + _endpoint);
     }
     if (port <= 0 || port > 65535)
     {
-        throw OpsError(c_exitUsage, "--rpc port out of range: " + _endpoint);
+        throw OpsError(c_exitUsage, source + " port out of range: " + _endpoint);
     }
     return {host, static_cast<uint16_t>(port)};
 }
+
+std::string connectionMode(ConnectOptions const& _options, NodeDir const* _node)
+{
+    if (_options.mode)
+    {
+        return checkedMode(*_options.mode, "--mode");
+    }
+    if (_node != nullptr)
+    {
+        return _node->mode;
+    }
+    return std::string(c_modeUnknown);
+}
+
+namespace
+{
+/// mode and web3 endpoint (connectionMode), and the request timeout every later call honours
+Connection withMode(Connection _connection, ConnectOptions const& _options, NodeDir const* _node)
+{
+    _connection.requestTimeoutMs = _options.requestTimeoutMs;
+    _connection.mode = connectionMode(_options, _node);
+    if (_options.web3)
+    {
+        auto [host, port] = parseHostPort(*_options.web3, "--web3");
+        _connection.web3Endpoint = host + ":" + std::to_string(port);
+    }
+    else if (_node != nullptr && _node->web3Enable)
+    {
+        _connection.web3Endpoint = _node->web3Endpoint();
+    }
+    return _connection;
+}
+}  // namespace
 
 Connection connect(ConnectOptions const& _options)
 {
@@ -98,7 +136,7 @@ Connection connect(ConnectOptions const& _options)
             makeWsRpcCall(host, port, _options.connectTimeoutMs, _options.requestTimeoutMs);
         retainTransport(connection.keepAlive);
         connection.group = discoverGroup(connection.call);
-        return connection;
+        return withMode(std::move(connection), _options, nullptr);
     }
     auto node = NodeDir::load(_options.nodeDir);
     // the local socket first: zero configuration and it carries admin_*; fall back to the
@@ -113,7 +151,7 @@ Connection connect(ConnectOptions const& _options)
                 node.ipcPath(), _options.connectTimeoutMs, _options.requestTimeoutMs);
             connection.group = node.groupId;
             connection.nodeDir = node;
-            return connection;
+            return withMode(std::move(connection), _options, &node);
         }
         catch (OpsError const&)
         {
@@ -137,6 +175,6 @@ Connection connect(ConnectOptions const& _options)
     retainTransport(connection.keepAlive);
     connection.group = node.groupId;
     connection.nodeDir = node;
-    return connection;
+    return withMode(std::move(connection), _options, &node);
 }
 }  // namespace bcos::ops

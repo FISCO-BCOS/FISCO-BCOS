@@ -210,7 +210,7 @@ grep -h 'BlockStat,number=129,' log/log_*.log
 | `tools/BcosAirBuilder/build_chain.sh` `generate_mtail_scripts`（随每条链发布的 Prometheus 采集规则） | `[CONSENSUS][PBFT]ProposalExecuted,…,execMs=`（块执行耗时）；`[CONSENSUS][PBFT][STORAGE][METRIC]BlockCommitted,…,commitMs=`（块提交耗时）；`[LEDGER][METRIC]asyncPrewriteBlock,number=`（块高）；`[TXPOOL][METRIC]TxsFetched,…,pendingTxs=`（交易池待处理数）；`p2p_session_actived` 等网关行未改 |
 | `tools/summary.sh` | `PrePrepareReceived,index=N,`（起始行）；`Report.*committedIndex=N,`（结束行）；`TxsRemoved,…,timecost=`；`ProposalExecuted,…,execMs=`；`Report,sealer=[0-9]`（只统计本节点共识出的块，`sealer=-1` 是同步来的）、其 `txs=`/`committedIndex=`/`consNum=`/`view=` 列序；`Generate proposal`；`ExecuteBlock request.*waitT`、`CommitBlock success`、`GetTableHashes success`（旧调度器行，baseline 通道下为空） |
 | `tools/log_extract.sh` | `[blk-N]ExecuteBlock request`、`ExecuteBlock success`（旧调度器行，未改名） |
-| `tools/.ci/ci_check_air.sh`、`ci_check_pro.sh`、`ci_check_baseline.sh` `check_consensus` | `NewViewReached`（进入新 view；启动恢复路径仍是 `checkAndTryToRecoverView: reachNewView`，脚本两者都认） |
+| `tools/.ci/ci_check_air.sh` `check_consensus` | `NewViewReached`（进入新 view；启动恢复路径仍是 `checkAndTryToRecoverView: reachNewView`，脚本两者都认） |
 | 保留原文、未改名的行 | `ExecuteBlock request`、`ExecuteBlock success`、`CommitBlock success`、`Notify block result success`（`[SCHEDULER]`）、`++++++++++++++++ Generate proposal`（`[CONSENSUS][SEALER]`）、`^^^^^^^^Report`、`Execute block` / `Execute block finished` / `Commit block finished`（`[BASELINE_SCHEDULER]`） |
 
 ## 旧文本 → 新事件名

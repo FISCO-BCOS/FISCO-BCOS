@@ -17,6 +17,7 @@
  */
 #include "NodeDir.h"
 #include "OpsError.h"
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <algorithm>
@@ -84,13 +85,16 @@ NodeDir NodeDir::load(std::string const& _dir)
         std::max<int64_t>(3000, ini.get<int64_t>("consensus.min_seal_time", 500) + 1);
 
     node.rpcListenIp = ini.get<std::string>("rpc.listen_ip", "0.0.0.0");
-    auto port = ini.get<int>("rpc.listen_port", 20200);
-    if (port <= 0 || port > 65535)
-    {
-        throw OpsError(
-            c_exitUsage, "config.ini [rpc] listen_port out of range: " + std::to_string(port));
-    }
-    node.rpcListenPort = static_cast<uint16_t>(port);
+    auto listenPort = [&ini](std::string const& _key, int _default) {
+        auto port = ini.get<int>(_key, _default);
+        if (port <= 0 || port > 65535)
+        {
+            throw OpsError(
+                c_exitUsage, "config.ini " + _key + " out of range: " + std::to_string(port));
+        }
+        return static_cast<uint16_t>(port);
+    };
+    node.rpcListenPort = listenPort("rpc.listen_port", 20200);
     // NodeConfig::loadRpcConfig: disable_ssl is the legacy key, enable_ssl overrides it
     node.rpcDisableSsl = ini.get<bool>("rpc.disable_ssl", false);
     if (auto enableSsl = ini.get_optional<bool>("rpc.enable_ssl"))
@@ -101,6 +105,13 @@ NodeDir NodeDir::load(std::string const& _dir)
     node.logPath = ini.get<std::string>("log.log_path", "log");
     node.logFormat = ini.get<std::string>("log.format", "");
     node.txpoolLimit = ini.get<size_t>("txpool.limit", 15000);
+    auto const executorVersion = genesis.get<int>("executor.version", 0);
+    node.mode = ledger::isOpLaneVersion(executorVersion)             ? "opstack-el" :
+                executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION ? "el" :
+                                                                       "none";
+    node.web3Enable = ini.get<bool>("web3_rpc.enable", false);
+    node.web3ListenIp = ini.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
+    node.web3ListenPort = listenPort("web3_rpc.listen_port", 8545);
     return node;
 }
 
@@ -116,6 +127,16 @@ std::string NodeDir::rpcHost() const
 std::string NodeDir::rpcEndpoint() const
 {
     return rpcHost() + ":" + std::to_string(rpcListenPort);
+}
+
+std::string NodeDir::web3Endpoint() const
+{
+    auto host = web3ListenIp;
+    if (host == "0.0.0.0" || host == "::" || host.empty())
+    {
+        host = "127.0.0.1";
+    }
+    return host + ":" + std::to_string(web3ListenPort);
 }
 
 std::string NodeDir::ipcPath() const

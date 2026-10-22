@@ -51,6 +51,7 @@ Json::Value NodeStatus::toJson() const
     identity["isConsensusNode"] = opt(isConsensusNode);
     identity["smCrypto"] = opt(smCrypto);
     identity["authCheck"] = opt(authCheck);
+    identity["mode"] = mode;
 
     Json::Value& chain = root["chain"];
     chain["blockNumber"] = opt(blockNumber);

@@ -21,6 +21,7 @@
 #include <bcos-ops/OpsError.h>
 #include <bcos-ops/RpcCall.h>
 #include <json/json.h>
+#include <deque>
 #include <map>
 #include <string>
 
@@ -74,13 +75,43 @@ public:
         groupList["groupList"] = Json::Value(Json::arrayValue);
         groupList["groupList"].append("group0");
         m_results["getGroupList"] = groupList;
+        // a key that was never stored (feature flags; auth_check_status only on a chain whose
+        // genesis predates 3.3, Ledger.cpp:2220-2226 writes it since) answers
+        // getSystemConfigByKey with LedgerError::GetStorageError 3008
+        m_failures["getSystemConfigByKey"] = {3008, "getSystemConfig failed for empty entry"};
     }
 
     void set(std::string const& _method, Json::Value _result)
     {
+        m_failures.erase(_method);
         m_results[_method] = std::move(_result);
     }
     void remove(std::string const& _method) { m_results.erase(_method); }
+    /// one-shot results consumed before the table (several sendTransaction in one command)
+    void queue(std::string const& _method, Json::Value _result)
+    {
+        m_queues[_method].push_back(std::move(_result));
+    }
+    /// result of `call` whose data (params[3], no 0x) starts with _dataPrefix (a selector)
+    void setCall(std::string const& _dataPrefix, Json::Value _result)
+    {
+        auto prefix = _dataPrefix.starts_with("0x") ? _dataPrefix.substr(2) : _dataPrefix;
+        m_callResults[prefix] = std::move(_result);
+    }
+    /// result of _method when params[_index] (int or string) equals _key, e.g. getBlockByNumber
+    /// per height or getTransactionReceipt per hash
+    void setFor(
+        std::string const& _method, size_t _index, std::string const& _key, Json::Value _result)
+    {
+        m_byArg[_method][_index][_key] = std::move(_result);
+    }
+    /// the node answers _method with a JSON-RPC error (a txpool refusal carries the
+    /// TransactionStatus value as code)
+    void fail(std::string const& _method, int _code, std::string _message)
+    {
+        m_results.erase(_method);
+        m_failures[_method] = {_code, std::move(_message)};
+    }
     /// replaces one key inside the string-encoded consensus status
     void setConsensus(std::string const& _key, Json::Value _value)
     {
@@ -103,6 +134,51 @@ public:
     {
         return [this](std::string_view _method, Json::Value const& _params) -> Json::Value {
             m_calls.emplace_back(std::string(_method), _params);
+            if (auto queued = m_queues.find(std::string(_method));
+                queued != m_queues.end() && !queued->second.empty())
+            {
+                auto result = queued->second.front();
+                queued->second.pop_front();
+                return result;
+            }
+            if (auto byArg = m_byArg.find(std::string(_method)); byArg != m_byArg.end())
+            {
+                for (auto const& [index, table] : byArg->second)
+                {
+                    if (_params.size() <= index)
+                    {
+                        continue;
+                    }
+                    auto key =
+                        _params[static_cast<Json::ArrayIndex>(index)].isString() ?
+                            _params[static_cast<Json::ArrayIndex>(index)].asString() :
+                            std::to_string(_params[static_cast<Json::ArrayIndex>(index)].asInt64());
+                    if (auto hit = table.find(key); hit != table.end())
+                    {
+                        return hit->second;
+                    }
+                }
+            }
+            if (_method == "call" && _params.size() >= 4 && _params[3].isString())
+            {
+                auto data = _params[3].asString();
+                if (data.starts_with("0x"))
+                {
+                    data = data.substr(2);
+                }
+                for (auto const& [prefix, result] : m_callResults)
+                {
+                    if (data.starts_with(prefix))
+                    {
+                        return result;
+                    }
+                }
+            }
+            if (auto failure = m_failures.find(std::string(_method)); failure != m_failures.end())
+            {
+                throw OpsRpcError(
+                    std::string(_method), failure->second.first, failure->second.second);
+            }
             auto it = m_results.find(std::string(_method));
             if (it == m_results.end())
             {
@@ -115,6 +191,10 @@ public:
 
 private:
     std::map<std::string, Json::Value> m_results;
+    std::map<std::string, std::pair<int, std::string>> m_failures;
+    std::map<std::string, std::deque<Json::Value>> m_queues;
+    std::map<std::string, Json::Value> m_callResults;
+    std::map<std::string, std::map<size_t, std::map<std::string, Json::Value>>> m_byArg;
     std::vector<std::pair<std::string, Json::Value>> m_calls;
 };
 }  // namespace bcos::ops::test

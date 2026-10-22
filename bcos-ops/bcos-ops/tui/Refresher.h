@@ -1,0 +1,89 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @brief worker thread: every interval collect status + checks + raw consensus/sync/peers
+ * @file Refresher.h
+ */
+#pragma once
+
+#include "Model.h"
+#include "bcos-ops/Checks.h"
+#include "bcos-ops/RpcCall.h"
+#include "bcos-ops/collect/RpcCollector.h"
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <thread>
+
+namespace bcos::ops
+{
+struct CommitteeReader;
+}
+
+namespace bcos::ops::tui
+{
+class Refresher
+{
+public:
+    Refresher(Connection _connection, LocalFallbacks _fallbacks, Thresholds _thresholds,
+        Model& _model, std::function<void()> _onUpdate, int _intervalMs = 2000);
+    ~Refresher();
+    void start();
+    void stop();
+    void refreshNow();
+    /// one collection pass (what the thread does each tick); public for tests
+    void runOnce();
+    /// how many explorer rows to keep (terminal height); default 20
+    void setRowCapacity(std::function<size_t()> _capacity) { m_capacity = std::move(_capacity); }
+    /// which tx rows are on screen, so only their receipts are fetched; default the first 20
+    void setVisibleTxRange(std::function<std::pair<size_t, size_t>()> _range)
+    {
+        m_visibleTxs = std::move(_range);
+    }
+    /// which block / tx details the open detail pages need (fetched when not cached)
+    void setDetailWants(std::function<std::vector<DetailWant>()> _wants)
+    {
+        m_detailWants = std::move(_wants);
+    }
+    /// the gov page's list size and open proposal ids (auth chains; fetched every round)
+    void setGovernanceWants(std::function<GovernanceWants()> _wants)
+    {
+        m_governanceWants = std::move(_wants);
+    }
+
+private:
+    void loop();
+
+    Connection m_connection;
+    LocalFallbacks m_fallbacks;
+    Thresholds m_thresholds;
+    Model& m_model;
+    std::function<void()> m_onUpdate;
+    std::function<size_t()> m_capacity;
+    std::function<std::pair<size_t, size_t>()> m_visibleTxs;
+    std::function<std::vector<DetailWant>()> m_detailWants;
+    std::function<GovernanceWants()> m_governanceWants;
+    std::unique_ptr<CommitteeReader> m_committee;  // built on the worker when first needed
+    std::optional<RpcCall> m_web3;  // EL modes with the web3 listener on: txpool_content
+    int m_intervalMs;
+    std::thread m_thread;
+    std::mutex m_wakeMutex;
+    std::condition_variable m_wake;
+    std::atomic<bool> m_stop{false};
+    bool m_kick = false;
+};
+}  // namespace bcos::ops::tui
