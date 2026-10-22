@@ -12,6 +12,7 @@
 #include "bcos-utilities/LogStream.h"
 #include <boost/smart_ptr/make_shared_object.hpp>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <mutex>
@@ -38,6 +39,9 @@ struct FakeBackend
     std::atomic<int> throwOnFlush{0};
     // while false, consumeLine blocks the feeding thread (pool exhaustion)
     std::atomic<bool> gate{true};
+    // flush() entry count and a gate to hold the worker inside flushBackend
+    std::atomic<int> flushEntered{0};
+    std::atomic<bool> flushGate{true};
 
     static bool shouldThrow(std::atomic<int>& counter)
     {
@@ -64,6 +68,11 @@ struct FakeBackend
 
     void flush()
     {
+        flushEntered.fetch_add(1, std::memory_order_release);
+        while (!flushGate.load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        }
         if (shouldThrow(throwOnFlush))
         {
             throw std::runtime_error("simulated flush failure");
@@ -228,7 +237,8 @@ BOOST_AUTO_TEST_CASE(overflowDropsAreCountedReportedAndFatalSurvives)
     BOOST_CHECK_EQUAL(normal, Capacity);
     BOOST_CHECK_EQUAL(fatal, 1u);
     BOOST_CHECK_EQUAL(marker, 1u);
-    BOOST_CHECK_EQUAL(sink.droppedLines(), 0u);  // reset by the marker
+    BOOST_CHECK_EQUAL(sink.droppedLines(), 0u);              // reset by the marker
+    BOOST_CHECK_EQUAL(sink.droppedTotal(), 12u - Capacity);  // cumulative, never reset
     sink.stop();
 }
 
@@ -300,6 +310,51 @@ BOOST_AUTO_TEST_CASE(queueDrainFlushesWithoutExplicitFlush)
     auto lines = backend->snapshot();
     BOOST_REQUIRE_EQUAL(lines.size(), 2u);
     BOOST_CHECK(lines.back().find("second") != std::string::npos);
+}
+
+// Regression for the flush handshake: a flush() raised while the worker is
+// inside flushBackend() must not be satisfied by that in-flight pass — its
+// own lines may still be queued. The worker acknowledges only the request
+// generation it snapshotted; a later request waits for the next pass (which
+// its own wake() guarantees).
+BOOST_AUTO_TEST_CASE(flushRaisedMidPassIsNotSatisfiedByTheInflightFlush)
+{
+    auto backend = boost::make_shared<FakeBackend>();
+    auto sinkPtr = std::make_shared<FakeSink>(backend);
+    auto& sink = *sinkPtr;
+
+    sink.writeLine(LogLevel::INFO, "p|", "warmup");
+    sink.flush();  // returns once the worker is idle
+
+    backend->flushGate = false;
+    auto const flushesBefore = backend->flushEntered.load(std::memory_order_acquire);
+
+    // First request: the worker snapshots its generation, then blocks inside
+    // the gated backend flush.
+    std::thread first([&] { sink.flush(); });
+    for (int i = 0;
+        i < 500 && backend->flushEntered.load(std::memory_order_acquire) == flushesBefore; ++i)
+    {
+        std::this_thread::sleep_for(1ms);
+    }
+    BOOST_REQUIRE_GT(backend->flushEntered.load(std::memory_order_acquire), flushesBefore);
+
+    // Raised while the in-flight flush is still blocked: must not return
+    // until a later pass has fed lateLine to the backend.
+    sink.writeLine(LogLevel::INFO, "p|", "lateLine");
+    bool lateLineFedBeforeReturn = false;
+    std::thread second([&] {
+        sink.flush();
+        auto const lines = backend->snapshot();
+        lateLineFedBeforeReturn = std::any_of(lines.begin(), lines.end(),
+            [](auto const& line) { return line.find("lateLine") != std::string::npos; });
+    });
+    std::this_thread::sleep_for(50ms);  // let the second request register
+    backend->flushGate = true;
+    first.join();
+    second.join();
+    BOOST_CHECK(lateLineFedBeforeReturn);
+    sink.stop();
 }
 
 // A FATAL first drains the queued backlog, so the lines logged before it keep

@@ -259,6 +259,13 @@ public:
         return m_droppedLines.load(std::memory_order_relaxed);
     }
 
+    // Every line dropped on slot-pool overflow since construction; never
+    // reset, suitable for an operator-facing metric.
+    std::uint64_t droppedTotal() const noexcept
+    {
+        return m_droppedTotal.load(std::memory_order_relaxed);
+    }
+
     void writeLine(LogLevel _level, std::string_view _prefix, std::string_view _message) override
     {
         // FATAL bypasses the queue: a queued FATAL could be dropped on
@@ -285,10 +292,10 @@ public:
                 }
                 else
                 {
-                    m_flushRequested = true;
+                    auto const gen = ++m_flushRequestGen;
                     LineFeeder::instance().wake();
                     m_flushDone.wait_for(
-                        lock, FatalDrainTimeout, [this] { return !m_flushRequested; });
+                        lock, FatalDrainTimeout, [this, gen] { return m_flushDoneGen >= gen; });
                 }
             }
             std::string line;
@@ -329,6 +336,7 @@ public:
             {
                 // out of slots: drop, and leave a marker once the backlog clears
                 m_droppedLines.fetch_add(1, std::memory_order_relaxed);
+                m_droppedTotal.fetch_add(1, std::memory_order_relaxed);
                 return;
             }
             std::uint32_t slot = m_freeSlots.front();
@@ -345,6 +353,9 @@ public:
     }
 
     // Waits until every buffered line is fed to the backend, then flushes it.
+    // Bounded: under a sustained flood the worker's drained branch never
+    // runs, so the acknowledgement can take arbitrarily long; on timeout the
+    // tail still reaches the file via the flood-path maybeFlush().
     void flush()
     {
         std::unique_lock<std::mutex> lock(m_queueMutex);
@@ -356,9 +367,9 @@ public:
             flushBackendLocked();
             return;
         }
-        m_flushRequested = true;
+        auto const gen = ++m_flushRequestGen;
         LineFeeder::instance().wake();
-        m_flushDone.wait(lock, [this] { return !m_flushRequested; });
+        m_flushDone.wait_for(lock, FlushWaitTimeout, [this, gen] { return m_flushDoneGen >= gen; });
     }
 
     // Detaches from the shared feeding worker; buffered lines are drained
@@ -380,10 +391,11 @@ public:
             drainQueueLocked(lock);
             reportDroppedLocked();
             flushBackendLocked();
-            if (m_flushRequested)
+            if (m_flushDoneGen < m_flushRequestGen)
             {
-                // a flush() that raced with stop() is still waiting
-                m_flushRequested = false;
+                // a flush() that raced with stop() is still waiting; the
+                // inline drain above satisfies every request so far
+                m_flushDoneGen = m_flushRequestGen;
                 m_flushDone.notify_all();
             }
         }
@@ -415,6 +427,10 @@ private:
     // Bounded wait for the pre-FATAL backlog drain: a wedged backend must not
     // turn the fail-stop into a hang.
     static constexpr auto FatalDrainTimeout = std::chrono::seconds(1);
+    // Bounded wait for flush(): under a sustained flood the worker's drained
+    // branch (the only place requests are acknowledged) never runs, so an
+    // unbounded wait could block the caller forever.
+    static constexpr auto FlushWaitTimeout = std::chrono::seconds(5);
 
     // FIB-184: a backend exception must never kill the shared feeding thread.
     // Hot-path backend IO (feedOne, the drained branch, the flood-path
@@ -536,7 +552,7 @@ private:
             std::uint32_t slot = 0;
             bool haveSlot = false;
             std::uint64_t dropped = 0;
-            bool flushRequested = false;
+            std::uint64_t flushReqGen = 0;
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
                 if (!m_queue.empty())
@@ -554,7 +570,7 @@ private:
                     // front of the producers.
                     dropped = m_droppedLines.exchange(0, std::memory_order_relaxed);
                     m_lastFlush = std::chrono::steady_clock::now();
-                    flushRequested = m_flushRequested;
+                    flushReqGen = m_flushRequestGen;
                 }
             }
             if (haveSlot)
@@ -579,14 +595,16 @@ private:
                 reportDropped(dropped);
             }
             flushBackend();
-            if (flushRequested)
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
-                // A flush() that set the flag after we read it stays pending
-                // for the next pass.
-                if (m_flushRequested)
+                // Acknowledge only the requests seen at the snapshot: a
+                // flush() or FATAL drain that raised m_flushRequestGen after
+                // the snapshot stays pending for the next pass (its wake()
+                // guarantees one), because its own lines may not have been
+                // fed by this pass's flushBackend() above.
+                if (m_flushDoneGen < flushReqGen)
                 {
-                    m_flushRequested = false;
+                    m_flushDoneGen = flushReqGen;
                     m_flushDone.notify_all();
                 }
             }
@@ -604,8 +622,18 @@ private:
     std::mutex m_queueMutex;
     std::condition_variable m_flushDone;
     std::atomic<std::uint64_t> m_droppedLines{0};
+    // Cumulative count of every line dropped on slot-pool overflow since
+    // construction; unlike m_droppedLines it is never reset by marker
+    // emission, so it can be exported as an operator-facing metric.
+    std::atomic<std::uint64_t> m_droppedTotal{0};
     std::chrono::steady_clock::time_point m_lastFlush{};
     bool m_stop = false;
-    bool m_flushRequested = false;
+    // Flush handshake, guarded by m_queueMutex: a requester (flush(), the
+    // FATAL drain) bumps m_flushRequestGen and waits for m_flushDoneGen to
+    // reach its own generation; the worker acknowledges only the generation
+    // it snapshotted before flushBackend(), so a request raised mid-pass is
+    // never satisfied early by a flush that predates it.
+    std::uint64_t m_flushRequestGen = 0;
+    std::uint64_t m_flushDoneGen = 0;
 };
 }  // namespace bcos::log
