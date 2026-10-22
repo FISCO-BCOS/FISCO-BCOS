@@ -141,4 +141,9 @@ std::vector<std::pair<std::string, std::string>> sendConfirmRows(
 /// keys → toNav
 SendAction govFormHandle(
     SendForm& _form, SendContext const& _context, int64_t _proposalId, ftxui::Event _event);
+/// after navHandle: leaving the page or closing a detail drops an open confirmation layer. A
+/// bottom-bar click switches pages without passing sendFormHandle / govFormHandle, and a layer
+/// left open would come back with the page, where Enter submits its pending request
+void dropConfirmOnLeave(
+    SendForm& _form, Nav const& _nav, Page _pageBefore, size_t _stackDepthBefore);
 }  // namespace bcos::ops::tui

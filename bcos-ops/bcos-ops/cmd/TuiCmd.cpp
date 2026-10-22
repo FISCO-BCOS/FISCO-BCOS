@@ -44,6 +44,7 @@
 #include <ftxui/screen/screen.hpp>
 #include <ostream>
 #include <thread>
+#include <utility>
 
 namespace bcos::ops
 {
@@ -313,6 +314,13 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
             tailThread.join();
         }
     };
+    // a throw from the component setup or Loop must not unwind past a joinable tailThread
+    // (std::terminate would hide the real error); stopWorkers is idempotent
+    struct WorkersGuard
+    {
+        decltype(stopWorkers)& stop;
+        ~WorkersGuard() { stop(); }
+    } workersGuard{stopWorkers};
 
     std::string filter;
     auto filterInput = Input(&filter, "event name or channel (e.g. ViewChange, TXPOOL)");
@@ -387,6 +395,10 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         }
     };
     uint64_t seenOutcome = 0;
+    // the gov page learns how many rows fit only when it is first drawn; the fetch kicked on the
+    // page switch used the default of 1, so a grown row count asks again (through a Custom
+    // event: the renderer holds model.mutex, which refreshNow must not be called under)
+    bool govRowsGrew = false;
     auto root = Renderer(inputs, [&]() {
         std::lock_guard<std::mutex> lock(model.mutex);
         terminalRows = screen.dimy();
@@ -415,7 +427,13 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         {
             std::lock_guard<std::mutex> wantsLock(wantsMutex);
             wants = tui::detailWants(nav);
+            auto rowsBefore = govWants.rows;
             govWants = tui::governanceWants(nav);
+            if (govWants.shown && govWants.rows > rowsBefore)
+            {
+                govRowsGrew = true;
+                screen.PostEvent(ftxui::Event::Custom);
+            }
         }
         return element;
     });
@@ -423,31 +441,42 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         if (event == ftxui::Event::Custom)
         {
             // a worker posted a redraw; a new send outcome with a hash opens that transaction
-            std::lock_guard<std::mutex> lock(model.mutex);
-            if (model.send.last.seq != seenOutcome)
+            bool kick = std::exchange(govRowsGrew, false);
             {
-                seenOutcome = model.send.last.seq;
-                if (!model.send.last.txHash.empty() && model.send.last.openTx && !nav.help)
+                std::lock_guard<std::mutex> lock(model.mutex);
+                if (model.send.last.seq != seenOutcome)
                 {
-                    nav.stack.push_back({.kind = tui::DetailKind::tx,
-                        .number = -1,
-                        .hash = model.send.last.txHash,
-                        .resolved = true});
-                    std::lock_guard<std::mutex> wantsLock(wantsMutex);
-                    wants = tui::detailWants(nav);
-                    refresher.refreshNow();
+                    seenOutcome = model.send.last.seq;
+                    if (!model.send.last.txHash.empty() && model.send.last.openTx && !nav.help)
+                    {
+                        nav.stack.push_back({.kind = tui::DetailKind::tx,
+                            .number = -1,
+                            .hash = model.send.last.txHash,
+                            .resolved = true});
+                        std::lock_guard<std::mutex> wantsLock(wantsMutex);
+                        wants = tui::detailWants(nav);
+                        kick = true;
+                    }
+                    else if (!model.send.last.openTx)
+                    {
+                        kick = true;  // a vote / revoke: show the proposal's new state
+                    }
                 }
-                else if (!model.send.last.openTx)
-                {
-                    refresher.refreshNow();  // a vote / revoke: show the proposal's new state
-                }
+            }
+            // outside model.mutex: the refresher takes m_wakeMutex then model.mutex
+            // (Refresher::loop), so kicking it under model.mutex inverts that order
+            if (kick)
+            {
+                refresher.refreshNow();
             }
             return false;
         }
         bool editingFilter = !nav.inDetail() && nav.page == tui::Page::log && nav.focus == 1;
-        if (editingFilter && event.is_character())
+        if (editingFilter && event.is_character() && !nav.help)
         {
-            return false;  // the filter box owns plain characters; Tab/Esc still reach Nav
+            // the filter box owns plain characters; Tab/Esc still reach Nav. With help open
+            // the key goes to navHandle, which closes the layer
+            return false;
         }
         if (nav.inDetail() && nav.stack.back().kind == tui::DetailKind::proposal &&
             nav.stack.back().resolved && !nav.help)
@@ -518,6 +547,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         auto depthBefore = nav.stack.size();
         auto pageBefore = nav.page;
         auto action = tui::navHandle(nav, event);
+        tui::dropConfirmOnLeave(form, nav, pageBefore, depthBefore);
         if (nav.page == tui::Page::gov && pageBefore != tui::Page::gov && nav.stack.empty())
         {
             // the gov page is fetched only while shown: ask for it now, not on the next tick
@@ -570,8 +600,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
 
     refresher.start();
     sender.start();
-    screen.Loop(root);
-    stopWorkers();  // no-op after a q exit; covers Loop ending for any other reason
+    screen.Loop(root);  // workersGuard stops the workers however Loop ends
     return c_exitOk;
 }
 }  // namespace

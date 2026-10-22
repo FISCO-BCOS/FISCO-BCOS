@@ -29,6 +29,7 @@ using namespace ftxui;
 namespace
 {
 constexpr int c_sendTreeWidth = 26;
+constexpr int c_narrowTreeHeight = 7;  // the preset tree above the pane, border included
 
 Element sendInputOrText(
     Frame const& _frame, std::string const& _id, std::string const& _value, bool _focused)
@@ -207,7 +208,11 @@ Element renderSend(Model const& _model, SendForm& _form, Frame const& _frame)
         title.replace(title.find("  "), 2, " ");
     }
     int bodyHeight = std::max(1, _frame.height - 3);
-    auto left = window(text(" presets "), sendTree(_form, bodyHeight - 2), LIGHT) |
+    // below 70 columns the tree sits above the pane, capped at c_narrowTreeHeight rows with its
+    // border: its pageRows must be that capped height, or j/k scroll the selection out of view
+    bool narrow = _frame.width < 70;
+    int treeRows = narrow ? std::min(bodyHeight, c_narrowTreeHeight) - 2 : bodyHeight - 2;
+    auto left = window(text(" presets "), sendTree(_form, treeRows), LIGHT) |
                 size(WIDTH, EQUAL, c_sendTreeWidth);
     auto right = window(text(title), sendRightPane(_model, _form, _frame), LIGHT) | flex;
     auto const& last = _model.send.last;
@@ -222,8 +227,8 @@ Element renderSend(Model const& _model, SendForm& _form, Frame const& _frame)
             hbox({text(last.ok ? " ok " : " FAIL ") | color(last.ok ? Color::Green : Color::Red),
                 text(sanitizeForTerminal(last.line))});
     }
-    Element body =
-        _frame.width >= 70 ? hbox({left, right}) : vbox({left | size(HEIGHT, LESS_THAN, 8), right});
+    Element body = narrow ? vbox({left | size(HEIGHT, LESS_THAN, c_narrowTreeHeight + 1), right}) :
+                            hbox({left, right});
     return vbox({body | flex, status});
 }
 

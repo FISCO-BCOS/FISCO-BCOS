@@ -729,4 +729,12 @@ bool sendEntryNeedsKey(SendEntry const& _entry)
     }
     return probe.needsKey();
 }
+void dropConfirmOnLeave(
+    SendForm& _form, Nav const& _nav, Page _pageBefore, size_t _stackDepthBefore)
+{
+    if (_nav.page != _pageBefore || _nav.stack.size() < _stackDepthBefore)
+    {
+        _form.confirm = false;
+    }
+}
 }  // namespace bcos::ops::tui

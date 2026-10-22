@@ -16,6 +16,7 @@
  * @file Consensus.cpp
  */
 #include "Pages.h"
+#include "bcos-ops/Output.h"
 #include <ftxui/dom/table.hpp>
 
 namespace bcos::ops::tui
@@ -37,9 +38,12 @@ Element renderConsensus(Model const& _model)
     for (auto const& node : c["consensusNodeList"])
     {
         auto index = node.get("index", -1).asInt64();
-        rows.push_back({std::to_string(index), shortNodeId(node.get("nodeID", "").asString()),
-            node.get("weight", 0).isString() ? node.get("weight", 0).asString() :
-                                               std::to_string(node.get("weight", 0).asInt64()),
+        // the node ids and a string weight come from the node, like Node.cpp's peer ids
+        rows.push_back({std::to_string(index),
+            sanitizeForTerminal(shortNodeId(node.get("nodeID", "").asString())),
+            node.get("weight", 0).isString() ?
+                sanitizeForTerminal(node.get("weight", 0).asString()) :
+                std::to_string(node.get("weight", 0).asInt64()),
             std::to_string(node.get("termWeight", 0).asInt64()), index == leader ? "*" : ""});
     }
     Table table(rows);

@@ -155,6 +155,25 @@ BOOST_AUTO_TEST_CASE(featuresEntryListsFlagsAndTinySizesDoNotThrow)
     BOOST_CHECK(text.find("consensus") == std::string::npos);
 }
 
+// below 70 columns the tree is capped to 7 rows with its border above the pane: its pageRows is
+// the 5 rows that show, so a selection further down scrolls into view instead of out of it
+BOOST_AUTO_TEST_CASE(narrowTerminalTreePageRowsMatchTheVisibleRows)
+{
+    tui::Model model;
+    auto form = tui::makeSendForm(false);
+    form.expanded = {"consensus"};
+    form.rebuild();
+    tui::Frame wide{.width = 120, .height = 40, .nowMs = 0};
+    renderText(tui::renderSend(model, form, wide), 120, 40);
+    BOOST_CHECK_EQUAL(form.tree.pageRows, 35U);
+    BOOST_REQUIRE(form.entries.size() > 7);
+    form.tree.selected = 7;
+    tui::Frame narrow{.width = 60, .height = 40, .nowMs = 0};
+    auto text = renderText(tui::renderSend(model, form, narrow), 60, 40);
+    BOOST_CHECK_EQUAL(form.tree.pageRows, 5U);
+    BOOST_CHECK(text.find(form.entries[7].label) != std::string::npos);
+}
+
 BOOST_AUTO_TEST_CASE(outcomeLinesNeverCarryControlBytes)
 {
     // a receipt message from the node is terminal input: an escape sequence in it must not

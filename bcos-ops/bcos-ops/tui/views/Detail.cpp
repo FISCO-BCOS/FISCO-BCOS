@@ -351,7 +351,7 @@ Element renderTxDetail(Model const& _model, Frame const& _frame, DetailRef const
     Element body = _frame.width >= 100 ?
                        hbox({vbox(left) | flex, separatorLight(), vbox(right) | flex}) :
                        vbox({vbox(left), separatorLight(), vbox(right)});
-    return window(text(" tx " + abridged(_ref.hash, 6) + " "), body, LIGHT);
+    return window(text(" tx " + sanitizeForTerminal(abridged(_ref.hash, 6)) + " "), body, LIGHT);
 }
 }  // namespace
 

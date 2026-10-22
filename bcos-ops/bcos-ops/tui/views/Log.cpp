@@ -64,6 +64,9 @@ Element renderLog(Model const& _model, std::string const& _filter)
             text(_filter.empty() ? "waiting for log lines" : "no line matches '" + _filter + "'") |
             dim);
     }
+    // yframe scrolls to the focused child and sits on the first screen without one: focus the
+    // newest line so the page tails the log
+    lines.back() = lines.back() | focus;
     return vbox(std::move(lines)) | vscroll_indicator | yframe | flex;
 }
 }  // namespace bcos::ops::tui

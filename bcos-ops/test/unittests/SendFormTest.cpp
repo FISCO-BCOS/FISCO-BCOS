@@ -332,5 +332,41 @@ BOOST_AUTO_TEST_CASE(featuresConfirmationShowsTheDependencyOrder)
     BOOST_CHECK_EQUAL(rows[4].second, "feature_balance");
 }
 
+// a bottom-bar click leaves the send page without passing sendFormHandle: the open
+// confirmation must not come back with the page, where Enter would submit it
+BOOST_AUTO_TEST_CASE(leavingThePageDropsTheConfirmationLayer)
+{
+    auto form = tui::makeSendForm(false);
+    form.confirm = true;
+    tui::Nav nav;
+    nav.page = tui::Page::send;
+    nav.barRow = 10;
+    nav.barHits = {{tui::Page::home, 0, 6}, {tui::Page::send, 6, 12}};
+    ftxui::Mouse mouse;
+    mouse.button = ftxui::Mouse::Left;
+    mouse.motion = ftxui::Mouse::Pressed;
+    mouse.x = 2;
+    mouse.y = 10;
+    auto pageBefore = nav.page;
+    auto depthBefore = nav.stack.size();
+    tui::navHandle(nav, ftxui::Event::Mouse("", mouse));
+    tui::dropConfirmOnLeave(form, nav, pageBefore, depthBefore);
+    BOOST_CHECK(nav.page == tui::Page::home);
+    BOOST_CHECK(!form.confirm);
+    // a key that keeps the page keeps the layer
+    form.confirm = true;
+    pageBefore = nav.page;
+    tui::navHandle(nav, ftxui::Event::Character('j'));
+    tui::dropConfirmOnLeave(form, nav, pageBefore, nav.stack.size());
+    BOOST_CHECK(form.confirm);
+    // closing a detail (the gov proposal's vote layer) drops it too
+    nav.stack.push_back({.kind = tui::DetailKind::proposal, .number = 1, .resolved = true});
+    depthBefore = nav.stack.size();
+    tui::navHandle(nav, ftxui::Event::Escape);
+    tui::dropConfirmOnLeave(form, nav, nav.page, depthBefore);
+    BOOST_CHECK(nav.stack.empty());
+    BOOST_CHECK(!form.confirm);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::ops::test

@@ -8,7 +8,10 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
+#include "fixtures/Render.h"
 #include <bcos-ops/tui/LogTail.h>
+#include <bcos-ops/tui/Model.h>
+#include <bcos-ops/tui/views/Pages.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <fstream>
@@ -93,6 +96,40 @@ BOOST_AUTO_TEST_CASE(filterMatchesNameOrChannel)
     BOOST_CHECK(tui::LogTail::matches(event, "viewchange"));
     BOOST_CHECK(tui::LogTail::matches(event, "PBFT"));
     BOOST_CHECK(!tui::LogTail::matches(event, "TXPOOL"));
+}
+
+// a first look at a file over 4 MB whose last 4 MB hold no newline: getline runs into EOF and
+// tellg() is -1, which used to become the offset and stop the tail for good
+BOOST_AUTO_TEST_CASE(bigFileWithoutANewlineInItsTailKeepsTailing)
+{
+    TempTailDir temp;
+    temp.append("log_2026101005.00.log", std::string(5 * 1024 * 1024, 'x'));
+    tui::LogTail tail(temp.dir.string());
+    BOOST_CHECK(tail.poll().empty());
+    temp.append("log_2026101005.00.log",
+        "\ninfo|2026-10-10 05:00:04.000000|x|[TXPOOL]TxsRemoved,number=2\n");
+    auto events = tail.poll();
+    BOOST_REQUIRE_EQUAL(events.size(), 1U);
+    BOOST_CHECK_EQUAL(events[0].name, "TxsRemoved");
+}
+
+// the log page tails: with more lines than fit, the newest is on screen (yframe follows the
+// focused last line; without a focus it sat on the oldest screen for good)
+BOOST_AUTO_TEST_CASE(logPageShowsTheNewestLineWhenTheBufferOverflowsTheScreen)
+{
+    tui::Model model;
+    for (int i = 0; i < 100; ++i)
+    {
+        Event event;
+        event.level = "info";
+        event.timestamp = "2026-10-10 05:00:01.000000";
+        event.name = "Event" + std::to_string(i);
+        event.raw = event.name + ",index=" + std::to_string(i);
+        model.logTail.push_back(event);
+    }
+    auto text = renderText(tui::renderLog(model, ""), 80, 10);
+    BOOST_CHECK(text.find("Event99") != std::string::npos);
+    BOOST_CHECK(text.find("Event0,") == std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

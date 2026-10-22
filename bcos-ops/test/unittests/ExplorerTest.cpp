@@ -21,6 +21,11 @@
 #include "fixtures/Blocks.h"
 #include "fixtures/FakeRpc.h"
 #include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <chrono>
+#include <future>
+#include <mutex>
+#include <thread>
 
 namespace bcos::ops::test
 {
@@ -383,6 +388,44 @@ BOOST_AUTO_TEST_CASE(refresherFillsTheExplorerAndAuthFlag)
     BOOST_CHECK_EQUAL(model.explorer.txs[0].status, 0);
     BOOST_CHECK_EQUAL(model.explorer.txs[2].status, -1);
     BOOST_CHECK(!model.authChain);
+}
+
+// the TUI kicks refreshNow() while it holds model.mutex; the worker's countdown wait must not
+// hold m_wakeMutex while it takes model.mutex, or the two threads wait on each other for good
+BOOST_AUTO_TEST_CASE(refreshNowUnderTheModelLockDoesNotWaitForTheWorker)
+{
+    FakeRpc rpc;
+    scriptChain(rpc, 40, 1);
+    tui::Model model;
+    Connection connection;
+    connection.source = "rpc";
+    connection.group = "group0";
+    connection.call = rpc.call();
+    std::promise<void> firstPass;
+    std::atomic<bool> passed{false};
+    tui::Refresher refresher(
+        connection, LocalFallbacks{}, Thresholds{}, model,
+        [&]() {
+            if (!passed.exchange(true))
+            {
+                firstPass.set_value();
+            }
+        },
+        100000);
+    refresher.start();
+    BOOST_REQUIRE(
+        firstPass.get_future().wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+    std::future<void> kicked;
+    {
+        std::lock_guard<std::mutex> lock(model.mutex);
+        // the countdown wakes at least every 500 ms: by now the worker wants model.mutex for
+        // refreshInSeconds
+        std::this_thread::sleep_for(std::chrono::milliseconds(700));
+        kicked = std::async(std::launch::async, [&]() { refresher.refreshNow(); });
+        BOOST_CHECK(kicked.wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+    }
+    kicked.wait();  // released either way, so a regression fails here instead of hanging
+    refresher.stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -74,6 +74,11 @@ std::vector<Event> LogTail::poll()
         std::string skipped;
         std::getline(in, skipped);  // drop the partial line we landed in
         m_offset = static_cast<std::streamoff>(in.tellg());
+        if (m_offset < 0)
+        {
+            m_offset = size;  // no newline in the last 4 MB: getline hit EOF, tail from the end
+        }
+        in.clear();
     }
     in.seekg(m_offset);
     std::string line;

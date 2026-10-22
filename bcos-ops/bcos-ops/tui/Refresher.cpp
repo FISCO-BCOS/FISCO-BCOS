@@ -243,21 +243,23 @@ void Refresher::loop()
         auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(m_intervalMs);
         while (!m_stop)
         {
-            std::unique_lock<std::mutex> lock(m_wakeMutex);
-            if (m_kick)
-            {
-                m_kick = false;
-                break;
-            }
             auto remaining = deadline - std::chrono::steady_clock::now();
             if (remaining <= std::chrono::milliseconds(0))
             {
                 break;
             }
+            // the countdown is written before m_wakeMutex is taken: holding both would order
+            // them wake → model while the UI thread holds model.mutex and kicks refreshNow()
             {
                 std::lock_guard<std::mutex> modelLock(m_model.mutex);
                 m_model.refreshInSeconds = static_cast<int>(
                     std::chrono::duration_cast<std::chrono::seconds>(remaining).count() + 1);
+            }
+            std::unique_lock<std::mutex> lock(m_wakeMutex);
+            if (m_kick)
+            {
+                m_kick = false;
+                break;
             }
             m_wake.wait_for(lock,
                 std::min(remaining, std::chrono::nanoseconds(std::chrono::milliseconds(500))));
