@@ -101,8 +101,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::start(CallParameters::U
 
         if (m_blockContext.features().get(ledger::Features::Flag::bugfix_dmc_revert))
         {
-            getExchangeMessageRef() =
-                CoroutineTransactionExecutive::waitingFinish(std::move(getExchangeMessageRef()));
+            getExchangeMessageRef() = waitingFinish(std::move(getExchangeMessageRef()));
         }
 
         // Execute is finished, erase the key locks
@@ -155,12 +154,7 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::externalCall(
 {
     input->keyLocks = m_syncStorageWrapper->exportKeyLocks();
 
-    spawnAndCall([this, inputPtr = input.release()](ResumeHandler) {
-        getExchangeMessageRef() = CallParameters::UniquePtr(inputPtr);
-    });
-
-    // When resume, exchangeMessage set to output
-    auto output = std::move(getExchangeMessageRef());
+    auto output = suspendAndWait(std::move(input));
 
     onExternalCallResume(*output);
 
@@ -245,18 +239,11 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::waitingFinish(
         return input;
     }
 
-    std::string returnAddress = input->senderAddress;
-
     input->type = CallParameters::PRE_FINISH;
     input->keyLocks = m_syncStorageWrapper->exportKeyLocks();
 
-    spawnAndCall([this, inputPtr = input.release()](ResumeHandler) {
-        getExchangeMessageRef() = CallParameters::UniquePtr(inputPtr);
-    });
-
-
-    // When resume, exchangeMessage set to output
-    auto output = std::move(getExchangeMessageRef());
+    // This frame has finished; no further CREATE derivation needs the resume stamp.
+    auto output = suspendAndWait(std::move(input));
     if (output->type == CallParameters::REVERT)
     {
         revert();
@@ -273,14 +260,11 @@ void CoroutineTransactionExecutive::externalAcquireKeyLocks(std::string acquireK
     callParameters->keyLocks = m_syncStorageWrapper->exportKeyLocks();
     callParameters->acquireKeyLock = std::move(acquireKeyLock);
 
-    spawnAndCall([this, inputPtr = callParameters.release()](ResumeHandler) {
-        getExchangeMessageRef() = CallParameters::UniquePtr(inputPtr);
-    });
+    auto output = suspendAndWait(std::move(callParameters));
 
     // After coroutine switch, set the recoder, before the exception throw
     m_syncStorageWrapper->setRecoder(m_recoder);
 
-    auto output = std::move(getExchangeMessageRef());
     if (output->type == CallParameters::REVERT)
     {
         // Deadlock, revert
@@ -291,6 +275,15 @@ void CoroutineTransactionExecutive::externalAcquireKeyLocks(std::string acquireK
 
     // Set the keyLocks
     m_syncStorageWrapper->importExistsKeyLocks(output->keyLocks);
+}
+
+CallParameters::UniquePtr CoroutineTransactionExecutive::suspendAndWait(
+    CallParameters::UniquePtr input)
+{
+    spawnAndCall([this, inputPtr = input.release()](ResumeHandler) {
+        getExchangeMessageRef() = CallParameters::UniquePtr(inputPtr);
+    });
+    return std::move(getExchangeMessageRef());
 }
 
 void CoroutineTransactionExecutive::spawnAndCall(std::function<void(ResumeHandler)> function)

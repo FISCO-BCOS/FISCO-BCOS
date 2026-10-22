@@ -258,16 +258,11 @@ bool DmcExecutor::detectLockAndRevert()
                 message->setType(protocol::ExecutionMessage::REVERT);
                 message->setCreate(false);
                 message->setKeyLocks({});
-                // [R10 F1] This REVERT resumes a live frame, so the same hand-back
-                // invariant as the seven handleExecutiveMessage arms applies; without
-                // a stamp the always-on send-path guard reports a violation on every
-                // deadlock revert. The value is the message's own seq — the frame's
-                // current position — because a frame deadlocked on its first lock has
-                // consumed nothing (currentSeq == 0, so currentSeq - 1 would be the
-                // -1 "unset" sentinel again). In the seven resume arms the stamped
-                // currentSeq - 1 is exactly the handed-back message's seq, so this
-                // matches their effective value; inert here by design, as the
-                // key-lock resume point (externalAcquireKeyLocks) never adopts it.
+                // This REVERT resumes a key-lock wait, whose receiver never adopts
+                // schedulerSeq for CREATE derivation. Stamp the paused frame's seq
+                // so the send-path diagnostic accepts this legitimate resume.
+                // currentSeq may still be zero at the first lock, making
+                // currentSeq - 1 indistinguishable from the missing-stamp sentinel.
                 message->setSchedulerSeq(message->seq());
 
                 m_executivePool.markAs(contextID, MessageHint::NEED_SEND);

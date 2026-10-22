@@ -23,8 +23,9 @@ using namespace bcos::executor;
 // still-blocked worker thread.
 //
 // Threads are created only when PromiseTransactionExecutive is actually
-// invoked (sharding path only) and exit after the task
-// completes, avoiding persistent resource consumption.
+// invoked and exit after the task completes. ShardingTransactionExecutive selects
+// this receiver only with usePromise=true; ShardingExecutiveFactory currently sets
+// needUsePromise=false, so its default sharding receiver uses coroutines.
 // ---------------------------------------------------------------------------
 
 MessagePromiseSwapper::MessagePromiseSwapper(IOServicePool::Ptr /*_pool*/) {}
@@ -114,8 +115,7 @@ CallParameters::UniquePtr PromiseTransactionExecutive::start(CallParameters::Uni
 
         if (m_blockContext.features().get(ledger::Features::Flag::bugfix_dmc_revert))
         {
-            exchangeMessage =
-                PromiseTransactionExecutive::waitingFinish(std::move(exchangeMessage));
+            exchangeMessage = waitingFinish(std::move(exchangeMessage));
         }
 
         if (exchangeMessage->type == CallParameters::Type::FINISHED)
@@ -136,85 +136,11 @@ CallParameters::UniquePtr PromiseTransactionExecutive::start(CallParameters::Uni
     return exchangeMessage;
 }
 
-CallParameters::UniquePtr PromiseTransactionExecutive::externalCall(CallParameters::UniquePtr input)
-{
-    input->keyLocks = m_syncStorageWrapper->exportKeyLocks();
-
-    CallParameters::UniquePtr output;
-    m_messageSwapper->spawnAndCall([&input]() { return std::move(input); },
-        [&output](CallParameters::UniquePtr message) {
-            // When resume, exchangeMessage set to output
-            output = std::move(message);
-        });
-
-    onExternalCallResume(*output);
-
-    // After coroutine switch, set the recoder
-    m_syncStorageWrapper->setRecoder(m_recoder);
-
-    // Set the keyLocks
-    m_syncStorageWrapper->importExistsKeyLocks(output->keyLocks);
-
-    return output;
-}
-
-CallParameters::UniquePtr PromiseTransactionExecutive::waitingFinish(
+CallParameters::UniquePtr PromiseTransactionExecutive::suspendAndWait(
     CallParameters::UniquePtr input)
 {
-    if (input->type != CallParameters::FINISHED
-        // seq == 0 no need to waiting, just return
-        || input->seq == 0)
-    {
-        // only finish need to waiting
-        return input;
-    }
-
-    std::string returnAddress = input->senderAddress;
-
-    input->type = CallParameters::PRE_FINISH;
-    input->keyLocks = m_syncStorageWrapper->exportKeyLocks();
-
     CallParameters::UniquePtr output;
     m_messageSwapper->spawnAndCall([&input]() { return std::move(input); },
-        [&output](CallParameters::UniquePtr message) {
-            // When resume, exchangeMessage set to output
-            output = std::move(message);
-        });
-
-    if (output->type == CallParameters::REVERT)
-    {
-        revert();
-    }
+        [&output](CallParameters::UniquePtr message) { output = std::move(message); });
     return output;
-}
-
-void PromiseTransactionExecutive::externalAcquireKeyLocks(std::string acquireKeyLock)
-{
-    EXECUTOR_LOG(TRACE) << "Executor acquire key lock: " << acquireKeyLock;
-
-    auto callParameters = std::make_unique<CallParameters>(CallParameters::KEY_LOCK);
-    callParameters->senderAddress = m_contractAddress;
-    callParameters->keyLocks = m_syncStorageWrapper->exportKeyLocks();
-    callParameters->acquireKeyLock = std::move(acquireKeyLock);
-
-    CallParameters::UniquePtr output;
-    m_messageSwapper->spawnAndCall([&callParameters]() { return std::move(callParameters); },
-        [&output](CallParameters::UniquePtr message) {
-            // When resume, exchangeMessage set to output
-            output = std::move(message);
-        });
-
-    // After coroutine switch, set the recoder, before the exception throw
-    m_syncStorageWrapper->setRecoder(m_recoder);
-
-    if (output->type == CallParameters::REVERT)
-    {
-        // Deadlock, revert
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(
-            ExecuteError::DEAD_LOCK, "Dead lock detected, revert transaction: " +
-                                         boost::lexical_cast<std::string>(output->type)));
-    }
-
-    // Set the keyLocks
-    m_syncStorageWrapper->importExistsKeyLocks(output->keyLocks);
 }

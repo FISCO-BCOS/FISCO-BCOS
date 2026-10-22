@@ -87,6 +87,7 @@ public:
     std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper();
 
 protected:
+    virtual CallParameters::UniquePtr suspendAndWait(CallParameters::UniquePtr input);
     void onExternalCallResume(CallParameters& output);
     void normalizeExternalCallResult(CallParameters& output) const;
 

@@ -40,6 +40,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "evmc/evmc.h"
 #include "executive/PromiseTransactionExecutive.h"
+#include "executive/ShardingTransactionExecutive.h"
 #include "executor/TransactionExecutorFactory.h"
 #include "vm/EVMHostInterface.h"
 #include "vm/HostContext.h"
@@ -3721,6 +3722,16 @@ BOOST_AUTO_TEST_CASE(childSloadFaultFailsParentInSerialAndDmc)
 }
 BOOST_AUTO_TEST_CASE(schedulerHandbackIsConsumedAfterActualResume)
 {
+    struct ShardingResumeProbe : ShardingTransactionExecutive
+    {
+        using ShardingTransactionExecutive::ShardingTransactionExecutive;
+        CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override
+        {
+            // Isolate the sharding suspension selector from shard-table routing.
+            // Both cross-shard branches enter this shared body in production.
+            return CoroutineTransactionExecutive::externalCall(std::move(input));
+        }
+    };
     std::string const parentAddress(40, 'a');
     std::string const childAddress(40, 'b');
     auto seed = [&](std::string const& address, std::string const& hex) {
@@ -3737,7 +3748,7 @@ BOOST_AUTO_TEST_CASE(schedulerHandbackIsConsumedAfterActualResume)
     seed(parentAddress, "6000600060006000600073" + childAddress + "620186a0f160005260206000f3");
     // Drive the real VM CALL and each executive's suspension/resume receiver.
     // Zero is a valid stamp, 17 differs from entry seq, and -1 is the wire default.
-    for (int lane : {0, 1, 2})
+    for (int lane : {0, 1, 2, 3, 4})
     {
         for (int64_t stamp : {int64_t{0}, int64_t{17}, int64_t{-1}})
         {
@@ -3755,7 +3766,12 @@ BOOST_AUTO_TEST_CASE(schedulerHandbackIsConsumedAfterActualResume)
                         std::make_shared<const std::set<std::string>>());
                 };
                 std::shared_ptr<TransactionExecutive> executive;
-                if (lane == 2)
+                if (lane >= 3)
+                {
+                    executive = std::make_shared<ShardingResumeProbe>(
+                        ctx, parentAddress, 99, 0, nullptr, lane == 4);
+                }
+                else if (lane == 2)
                 {
                     executive = std::make_shared<PromiseTransactionExecutive>(
                         nullptr, ctx, parentAddress, 99, 0);

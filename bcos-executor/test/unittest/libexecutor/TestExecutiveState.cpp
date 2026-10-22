@@ -1,10 +1,13 @@
 #include "../../../src/CallParameters.h"
 #include "../../../src/executive/BlockContext.h"
 #include "../../../src/executive/ExecutiveState.h"
+#include "../../../src/executive/PromiseTransactionExecutive.h"
 #include "../../../src/vm/HostContext.h"
 #include "../mock/MockExecutiveFactory.h"
 #include "../mock/MockLedger.h"
 #include <bcos-crypto/bcos-crypto/ChecksumAddress.h>
+#include <bcos-framework/executor/ExecuteError.h>
+#include <bcos-table/src/StateStorage.h>
 
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
@@ -352,6 +355,70 @@ BOOST_AUTO_TEST_CASE(dmcNormalizationPreservesHostFaultAndHistoricalDelegateReve
         executive.normalizeExternalCallResult(missingAddress);
         BOOST_CHECK_EQUAL(missingAddress.evmStatus, fixNoAddress ? EVMC_SUCCESS : EVMC_REVERT);
     }
+}
+
+// The Promise lane must inherit these operations so resume invariants cannot drift.
+static_assert(std::is_same_v<decltype(&PromiseTransactionExecutive::externalCall),
+    decltype(&CoroutineTransactionExecutive::externalCall)>);
+static_assert(std::is_same_v<decltype(&PromiseTransactionExecutive::waitingFinish),
+    decltype(&CoroutineTransactionExecutive::waitingFinish)>);
+static_assert(std::is_same_v<decltype(&PromiseTransactionExecutive::externalAcquireKeyLocks),
+    decltype(&CoroutineTransactionExecutive::externalAcquireKeyLocks)>);
+
+BOOST_AUTO_TEST_CASE(sharedResumeOperationsUseSuspensionHook)
+{
+    struct Probe : PromiseTransactionExecutive
+    {
+        using PromiseTransactionExecutive::PromiseTransactionExecutive;
+        int suspensions = 0;
+        CallParameters::Type sentType = CallParameters::MESSAGE;
+        CallParameters::Type replyType = CallParameters::FINISHED;
+        std::string requestedLock;
+
+        CallParameters::UniquePtr suspendAndWait(CallParameters::UniquePtr input) override
+        {
+            ++suspensions;
+            sentType = input->type;
+            requestedLock = input->acquireKeyLock;
+            input->type = replyType;
+            input->schedulerSeq = -1;
+            return input;
+        }
+    };
+    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    auto storage = std::make_shared<bcos::storage::StateStorage>(nullptr, false);
+    BlockContext localContext(storage, ledgerCache, hashImpl, 0, h256(), 0, 0, false);
+    Probe executive(nullptr, localContext, "0x00", 0, 41);
+
+    auto finished = std::make_unique<CallParameters>(CallParameters::FINISHED);
+    finished->seq = 1;
+    auto result = executive.waitingFinish(std::move(finished));
+    BOOST_CHECK(executive.sentType == CallParameters::PRE_FINISH);
+    BOOST_CHECK(result->type == CallParameters::FINISHED);
+    BOOST_CHECK_EQUAL(executive.suspensions, 1);
+    // Completion and key-lock resumes do not consume the external-call stamp.
+    BOOST_CHECK_EQUAL(executive.createDerivationSeq(), 41);
+
+    executive.externalAcquireKeyLocks("key");
+    BOOST_CHECK(executive.sentType == CallParameters::KEY_LOCK);
+    BOOST_CHECK_EQUAL(executive.requestedLock, "key");
+    BOOST_CHECK_EQUAL(executive.suspensions, 2);
+    BOOST_CHECK_EQUAL(executive.createDerivationSeq(), 41);
+
+    executive.replyType = CallParameters::REVERT;
+    BOOST_CHECK_EXCEPTION(
+        executive.externalAcquireKeyLocks("blocked"), bcos::Error, [](bcos::Error const& error) {
+            return error.errorCode() == ExecuteError::DEAD_LOCK &&
+                   error.errorMessage().find("Dead lock detected") != std::string::npos;
+        });
+    BOOST_CHECK_EQUAL(executive.suspensions, 3);
+
+    // A top-level completion and an unfinished message must not suspend.
+    auto top = std::make_unique<CallParameters>(CallParameters::FINISHED);
+    top->seq = 0;
+    executive.waitingFinish(std::move(top));
+    executive.waitingFinish(std::make_unique<CallParameters>(CallParameters::MESSAGE));
+    BOOST_CHECK_EQUAL(executive.suspensions, 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

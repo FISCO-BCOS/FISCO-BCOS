@@ -128,6 +128,16 @@ CallParameters::UniquePtr ShardingTransactionExecutive::externalCall(
     return TransactionExecutive::externalCall(std::move(input));
 }
 
+CallParameters::UniquePtr ShardingTransactionExecutive::suspendAndWait(
+    CallParameters::UniquePtr input)
+{
+    if (m_usePromise)
+    {
+        return PromiseTransactionExecutive::suspendAndWait(std::move(input));
+    }
+    return CoroutineTransactionExecutive::suspendAndWait(std::move(input));
+}
+
 CallParameters::UniquePtr ShardingTransactionExecutive::resume()
 {
     if (m_usePromise)
