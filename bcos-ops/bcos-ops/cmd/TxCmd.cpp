@@ -43,9 +43,6 @@ namespace bcos::ops
 {
 namespace
 {
-/// tx raw --wait upper bound (EL receipt polling)
-constexpr double c_maxRawWaitSeconds = 3600;
-
 int runTxDispatch(Connection const& _connection, Args const& _args, std::ostream& _out);
 
 std::string readFile(std::string const& _path, std::string_view _what)
@@ -328,13 +325,7 @@ int runRaw(Connection const& _connection, Args const& _args, std::ostream& _out)
                                             "[web3_rpc] or pass --web3 host:port");
         }
         auto web3 = makeHttpRpcCall(*_connection.web3Endpoint, _connection.requestTimeoutMs);
-        auto waitSeconds = _args.numberOr<double>("wait", 60);
-        if (!(waitSeconds > 0) || waitSeconds > c_maxRawWaitSeconds)
-        {
-            throw OpsError(c_exitUsage, "--wait expects seconds in (0, " +
-                                            std::to_string(static_cast<int>(c_maxRawWaitSeconds)) +
-                                            "]");
-        }
+        auto waitSeconds = _args.waitSecondsOr(60);
         auto receipt = sendRawEth(web3, hex, static_cast<int>(waitSeconds * 1000));
         printReceipt(_out, receipt, wantJson(_args.flag("json")));
         if (receipt.pending)

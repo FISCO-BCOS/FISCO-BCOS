@@ -35,6 +35,8 @@ namespace bcos::ops
 namespace
 {
 constexpr double c_amopDefaultWaitSeconds = 60;
+/// how long a returning `amop sub` waits for its replies to leave the process (#5722)
+constexpr std::chrono::milliseconds c_amopReplyDrainLimit{1000};
 
 std::atomic<bool> g_amopStop{false};
 
@@ -134,16 +136,6 @@ struct AmopSubState
     bool closed = false;
 };
 
-double amopWaitSeconds(Args const& _args, double _default)
-{
-    auto seconds = _args.numberOr<double>("wait", _default);
-    if (!(seconds > 0))
-    {
-        throw OpsError(c_exitUsage, "--wait must be a positive number of seconds");
-    }
-    return seconds;
-}
-
 int runAmopSub(AmopTransport& _transport, Args const& _args, std::ostream& _out, std::ostream& _err,
     std::atomic<bool> const& _stop)
 {
@@ -157,7 +149,7 @@ int runAmopSub(AmopTransport& _transport, Args const& _args, std::ostream& _out,
     {
         throw OpsError(c_exitUsage, "--count must be >= 0 (0 = until interrupted)");
     }
-    auto waitSeconds = amopWaitSeconds(_args, c_amopDefaultWaitSeconds);
+    auto waitSeconds = _args.waitSecondsOr(c_amopDefaultWaitSeconds);
     bool deadlineApplies = count > 0 || _args.option("wait").has_value();
     bool json = wantJson(_args.flag("json"));
 
@@ -179,8 +171,13 @@ int runAmopSub(AmopTransport& _transport, Args const& _args, std::ostream& _out,
     _err << "subscribed " << topic << '\n' << std::flush;
 
     auto finish = [&](int _code) {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        state->closed = true;
+        {
+            std::lock_guard<std::mutex> lock(state->mutex);
+            state->closed = true;  // no reply starts after this (the callback replies under it)
+        }
+        // the process exits right after this returns: a reply still queued behind another
+        // write on the session would die with the connection and the publisher time out
+        _transport.drainReplies(c_amopReplyDrainLimit);
         return _code;
     };
     auto deadline = std::chrono::steady_clock::now() +
@@ -228,7 +225,7 @@ int runAmopPub(AmopTransport& _transport, Args const& _args, std::ostream& _out,
     }
     auto const& topic = _args.positionals()[1];
     auto const& text = _args.positionals()[2];
-    auto waitMs = static_cast<int>(amopWaitSeconds(_args, 10) * 1000);
+    auto waitMs = static_cast<int>(_args.waitSecondsOr(10) * 1000);
     bool json = wantJson(_args.flag("json"));
     auto result = _transport.publish(
         topic, bytesConstRef(reinterpret_cast<uint8_t const*>(text.data()), text.size()), waitMs);

@@ -23,6 +23,7 @@
 
 #include "bcos-ops/RpcCall.h"
 #include <bcos-utilities/Common.h>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -57,6 +58,10 @@ public:
     /// blocks until the node answers or _timeoutMs elapses
     virtual AmopPublishResult publish(
         std::string const& _topic, bytesConstRef _data, int _timeoutMs) = 0;
+    /// waits, at most _limit, until every AmopMessage::reply made so far has left the process.
+    /// reply() only queues the response; one still queued when the process exits is lost with
+    /// the connection and its publisher times out (#5722)
+    virtual void drainReplies(std::chrono::milliseconds _limit) = 0;
 };
 
 /// the SDK AMOP client of a WebSocket Connection (connect() with allowIpc=false; the unix

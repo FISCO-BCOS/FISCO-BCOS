@@ -18,9 +18,16 @@
 #include "AmopClient.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/RpcClient.h"
+#include <bcos-boostssl/websocket/WsSession.h>
+#include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-cpp-sdk/Sdk.h>
+#include <boost/asio/post.hpp>
+#include <algorithm>
 #include <chrono>
 #include <future>
+#include <mutex>
+#include <thread>
+#include <vector>
 
 namespace bcos::ops
 {
@@ -34,29 +41,31 @@ public:
     void subscribe(std::string const& _topic, std::function<void(AmopMessage)> _onMessage) override
     {
         auto amop = m_sdk->amop();
-        amop->subscribe(_topic,
-            [_topic, _onMessage, amop](bcos::Error::Ptr _error, std::string const& _endpoint,
-                std::string const& _seq, bytesConstRef _data, auto /*session*/) {
-                if (_error && _error->errorCode() != 0)
-                {
-                    return;
-                }
-                AmopMessage message;
-                message.topic = _topic;
-                message.from = _endpoint;
-                message.data.assign(_data.begin(), _data.end());
-                // a broadcast arrives through the same callback with an empty seq; the node
-                // has no handler for a response to it (WsService warns on every one), so only
-                // request/response deliveries get a reply
-                if (!_seq.empty())
-                {
-                    message.reply = [amop, _endpoint, _seq](bytesConstRef _reply) {
-                        // asyncSendMessage only enqueues; safe from inside the io callback
-                        amop->sendResponse(_endpoint, _seq, _reply);
-                    };
-                }
-                _onMessage(std::move(message));
-            });
+        amop->subscribe(_topic, [_topic, _onMessage, amop, replied = m_replied](
+                                    bcos::Error::Ptr _error, std::string const& _endpoint,
+                                    std::string const& _seq, bytesConstRef _data, auto _session) {
+            if (_error && _error->errorCode() != 0)
+            {
+                return;
+            }
+            AmopMessage message;
+            message.topic = _topic;
+            message.from = _endpoint;
+            message.data.assign(_data.begin(), _data.end());
+            // a broadcast arrives through the same callback with an empty seq; the node
+            // has no handler for a response to it (WsService warns on every one), so only
+            // request/response deliveries get a reply
+            if (!_seq.empty())
+            {
+                message.reply = [amop, _endpoint, _seq, replied, session = std::weak_ptr(_session)](
+                                    bytesConstRef _reply) {
+                    // asyncSendMessage only enqueues; safe from inside the io callback
+                    amop->sendResponse(_endpoint, _seq, _reply);
+                    replied->add(session);
+                };
+            }
+            _onMessage(std::move(message));
+        });
     }
 
     AmopPublishResult publish(
@@ -100,8 +109,66 @@ public:
         return future.get();
     }
 
+    void drainReplies(std::chrono::milliseconds _limit) override
+    {
+        // reply() does not touch the write queue: WsSession::asyncSendMessage posts
+        // WsSession::send onto the session's executor. The SDK runs a single io thread
+        // (SdkFactory: IOServicePool(1, "sdk")), so a barrier posted now runs after every send
+        // posted before it. Past the barrier, WsSession::send has queued the reply and started
+        // the head write under x_writeQueue, and asio hands a starting write to the kernel at
+        // once (its speculative send), which std::_Exit does not discard. So an empty queue
+        // after the barrier means every reply left; one only waits there behind a write that
+        // was already in flight
+        std::vector<std::weak_ptr<bcos::boostssl::ws::WsSession>> sessions;
+        {
+            std::lock_guard<std::mutex> lock(m_replied->mutex);
+            sessions.swap(m_replied->sessions);
+        }
+        auto deadline = std::chrono::steady_clock::now() + _limit;
+        for (auto const& weak : sessions)
+        {
+            auto session = weak.lock();
+            if (!session || !session->isConnected())
+            {
+                continue;
+            }
+            auto barrier = std::make_shared<std::promise<void>>();
+            auto passed = barrier->get_future();
+            boost::asio::post(session->wsStreamDelegate()->tcpStream().get_executor(),
+                [barrier]() { barrier->set_value(); });
+            if (passed.wait_until(deadline) != std::future_status::ready)
+            {
+                return;
+            }
+            while (session->isConnected() && session->writeQueueSize() != 0 &&
+                   std::chrono::steady_clock::now() < deadline)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        }
+    }
+
 private:
+    /// the sessions replies were queued on, for drainReplies; shared with the io callbacks
+    struct RepliedSessions
+    {
+        std::mutex mutex;
+        std::vector<std::weak_ptr<bcos::boostssl::ws::WsSession>> sessions;
+        /// each session once: a long `sub --count 0` replies on one connection for ever
+        void add(std::weak_ptr<bcos::boostssl::ws::WsSession> const& _session)
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            auto same = [&](auto const& _known) {
+                return !_known.owner_before(_session) && !_session.owner_before(_known);
+            };
+            if (std::none_of(sessions.begin(), sessions.end(), same))
+            {
+                sessions.push_back(_session);
+            }
+        }
+    };
     std::shared_ptr<bcos::cppsdk::Sdk> m_sdk;
+    std::shared_ptr<RepliedSessions> m_replied = std::make_shared<RepliedSessions>();
 };
 }  // namespace
 

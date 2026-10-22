@@ -22,6 +22,7 @@
 #include "bcos-ops/RpcCall.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <sstream>
 #include <thread>
@@ -42,7 +43,10 @@ class FakeAmop : public AmopTransport
 {
 public:
     std::vector<std::string> deliver;  // data of the messages handed to the subscriber
-    std::vector<std::string> replies;  // what the subscriber echoed back
+    std::vector<std::string> queued;   // replies made but not drained, like the SDK's queue
+    std::vector<std::string> replies;  // what the subscriber echoed back, once drained
+    std::vector<std::string> events;   // "reply:<data>" / "drain", in order
+    std::chrono::milliseconds drainLimit{0};
     std::string subscribedTopic;
     std::atomic<bool>* stopAfterDelivery = nullptr;
     std::function<void(AmopMessage)> kept;  // the SDK keeps the callback for ever; so do we
@@ -62,7 +66,8 @@ public:
             message.from = "127.0.0.1:20200";
             message.data = bytesOf(text);
             message.reply = [this](bytesConstRef _reply) {
-                replies.emplace_back(_reply.begin(), _reply.end());
+                queued.emplace_back(_reply.begin(), _reply.end());
+                events.push_back("reply:" + queued.back());
             };
             _onMessage(std::move(message));
         }
@@ -78,6 +83,13 @@ public:
         publishedData.assign(_data.begin(), _data.end());
         publishedTimeoutMs = _timeoutMs;
         return publishResult;
+    }
+    void drainReplies(std::chrono::milliseconds _limit) override
+    {
+        drainLimit = _limit;
+        events.emplace_back("drain");
+        replies.insert(replies.end(), queued.begin(), queued.end());
+        queued.clear();
     }
 };
 
@@ -116,6 +128,29 @@ BOOST_AUTO_TEST_CASE(subExitsZeroAfterCountMessagesAndEchoesEach)
     BOOST_CHECK(err.str().find("subscribed t1") != std::string::npos);
     BOOST_REQUIRE_EQUAL(fake.replies.size(), 3U);  // every delivery is answered, printed or not
     BOOST_CHECK_EQUAL(fake.replies[0], "hello");
+}
+
+// #5722: reply() only queues the response and the process exits once sub returns, so the
+// replies are drained after the last one is made and before the command returns
+BOOST_AUTO_TEST_CASE(subDrainsItsRepliesBeforeReturning)
+{
+    FakeAmop fake;
+    fake.deliver = {"hello"};
+    std::atomic<bool> stop{false};
+    std::ostringstream out;
+    std::ostringstream err;
+    auto code = runAmopOn(fake, amopArgs({"sub", "t1", "--count", "1"}), out, err, stop);
+    BOOST_CHECK_EQUAL(code, c_exitOk);
+    BOOST_CHECK((fake.events == std::vector<std::string>{"reply:hello", "drain"}));
+    BOOST_CHECK(fake.queued.empty());
+    BOOST_CHECK(fake.drainLimit > std::chrono::milliseconds(0));
+    // a sub that times out drains what it answered too
+    FakeAmop late;
+    late.deliver = {"only"};
+    code =
+        runAmopOn(late, amopArgs({"sub", "t1", "--count", "2", "--wait", "0.2"}), out, err, stop);
+    BOOST_CHECK_EQUAL(code, c_exitChecksFailed);
+    BOOST_CHECK((late.events == std::vector<std::string>{"reply:only", "drain"}));
 }
 
 BOOST_AUTO_TEST_CASE(subJsonPrintsOneObjectPerMessage)
@@ -189,13 +224,13 @@ BOOST_AUTO_TEST_CASE(deliveryAfterTheLoopReturnedIsIgnored)
     BOOST_CHECK((dataLines(out.str()) == std::vector<std::string>{"first"}));
 }
 
-BOOST_AUTO_TEST_CASE(waitMustBePositive)
+BOOST_AUTO_TEST_CASE(waitMustBePositiveAndAtMostAnHour)
 {
     FakeAmop fake;
     std::atomic<bool> stop{false};
     std::ostringstream out;
     std::ostringstream err;
-    for (auto const& wait : {"0", "-1", "-0.5"})
+    for (auto const& wait : {"0", "-1", "-0.5", "3600.5", "1e12"})
     {
         BOOST_CHECK_THROW(
             runAmopOn(fake, amopArgs({"sub", "t1", "--wait", wait}), out, err, stop), OpsError);
