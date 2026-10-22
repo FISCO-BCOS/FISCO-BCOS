@@ -792,17 +792,45 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
     std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
 {
     // The EVM host resolves account/code/storage reads and BLOCKHASH through
-    // task::tbb::syncWait, which needs a TBB task to park. Block execution always has one
+    // task::tbb::syncWait, which suspends the calling TBB task. Block execution always has one
     // (the serial scheduler runs it in a parallel_pipeline filter) but call()/callAtBlock()
-    // reach the executor straight from an RPC IO thread, so run the round trip in a task.
+    // arrive straight from an RPC IO thread, which must neither suspend nor be blocked, so the
+    // round trip is *enqueued* into a shared arena: the IO thread returns immediately and the
+    // body runs as a real TBB task (see runInCallArena).
+    //
+    // The body runs on an arena worker, later (enqueue is a hand-off, not execute), so the
+    // completion callback never re-enters this caller's stack. task::wait there starts the
+    // coroutine on that worker and returns at its first suspension: a body that has to await
+    // releases the worker instead of parking it, and the callback fires from whichever thread
+    // completes the work.
     task::tbb::runInCallArena([self = this, transaction = std::move(transaction),
                                   callback = std::move(callback)]() mutable {
-        task::syncWait(
-            [](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
-                std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
-                -> task::Task<void> {
+        task::wait([](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
+                       std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
+                       -> task::Task<void> {
+            // The callback must run on every path: EthEndpoint's Awaitable resumes its
+            // coroutine from it, so an exception escaping here would strand the request.
+            try
+            {
                 callback(nullptr, co_await scheduler->coCallLatest(std::move(transaction)));
-            }(self, std::move(transaction), std::move(callback)));
+            }
+            catch (std::exception const& e)
+            {
+                BCOS_LOG(WARNING) << LOG_BADGE("BASELINE_SCHEDULER") << LOG_DESC("eth_call failed")
+                                  << LOG_KV("error", e.what());
+                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
+                             std::string("eth_call failed: ") + e.what()),
+                    nullptr);
+            }
+            catch (...)
+            {
+                BCOS_LOG(WARNING) << LOG_BADGE("BASELINE_SCHEDULER")
+                                  << LOG_DESC("eth_call failed with a non-std exception");
+                callback(BCOS_ERROR_UNIQUE_PTR(
+                             scheduler::SchedulerError::UnknownError, "eth_call failed"),
+                    nullptr);
+            }
+        }(self, std::move(transaction), std::move(callback)));
     });
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
@@ -827,13 +855,14 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
     protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
     std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
 {
-    // Same TBB-task requirement as call(): the historical path also runs the EVM.
+    // Same arena contract as call(): the historical path also runs the EVM, and it arrives on
+    // the same RPC IO thread.
     task::tbb::runInCallArena([self = this, transaction = std::move(transaction), blockNumber,
                                   callback = std::move(callback)]() mutable {
-        task::syncWait([](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
-                           protocol::BlockNumber blockNumber,
-                           std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)>
-                               callback) -> task::Task<void> {
+        task::wait([](BaselineScheduler* scheduler, protocol::Transaction::Ptr transaction,
+                       protocol::BlockNumber blockNumber,
+                       std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
+                       -> task::Task<void> {
             try
             {
                 auto latestView = scheduler->m_multiLayerStorage.get().fork();
@@ -907,9 +936,23 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             }
             catch (std::exception const& e)
             {
+                // Same rule as the MPT branch above: the diagnostic (throwing function, source
+                // file, line) is logged at the node and never put into a message an
+                // unauthenticated caller receives.
+                BCOS_LOG(WARNING) << LOG_BADGE("BASELINE_SCHEDULER") << LOG_DESC("eth_call failed")
+                                  << LOG_KV("blockNumber", blockNumber)
+                                  << LOG_KV("diagnostic", boost::diagnostic_information(e));
                 callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
-                             fmt::format("eth_call at block {} failed: {}", blockNumber,
-                                 boost::diagnostic_information(e))),
+                             fmt::format("eth_call at block {} failed: {}", blockNumber, e.what())),
+                    nullptr);
+            }
+            catch (...)
+            {
+                BCOS_LOG(WARNING) << LOG_BADGE("BASELINE_SCHEDULER")
+                                  << LOG_DESC("eth_call failed with a non-std exception")
+                                  << LOG_KV("blockNumber", blockNumber);
+                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
+                             fmt::format("eth_call at block {} failed", blockNumber)),
                     nullptr);
             }
         }(self, std::move(transaction), blockNumber, std::move(callback)));
