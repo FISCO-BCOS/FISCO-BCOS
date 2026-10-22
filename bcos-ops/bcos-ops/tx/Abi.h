@@ -46,6 +46,15 @@ private:
     bool m_sm;
 };
 
-/// positional CLI args → JSON array text; each arg that parses as JSON is kept, others are strings
+/// "007" → "7", "000" → "0"
+std::string withoutLeadingZeros(std::string const& _digits);
+
+/// "010", "-07": a decimal integer written with a leading zero. It is not JSON, so it would reach
+/// the codec as text, whose u256(str) / s256(str) read a leading 0 as octal ("010" is 8)
+bool isZeroPaddedInteger(std::string_view _arg);
+
+/// positional CLI args → JSON array text; each arg that parses as JSON is kept, others are
+/// strings. An integer beyond 64 bits stays decimal text (jsoncpp would make it a double); a
+/// zero-padded integer (isZeroPaddedInteger) is refused with OpsError{1}, quote it to pass text
 std::string argsToJsonArray(std::vector<std::string> const& _args);
 }  // namespace bcos::ops

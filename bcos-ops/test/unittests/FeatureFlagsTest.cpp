@@ -35,7 +35,9 @@ RpcCall featureKeyedRpc(std::map<std::string, std::string> const& _values)
         auto it = _values.find(_params[2].asString());
         if (it == _values.end())
         {
-            throw OpsError(c_exitUsage, "getSystemConfigByKey failed: code=3008 msg=empty entry");
+            // Ledger::asyncGetSystemConfigByKey: no row is GetStorageError
+            throw OpsRpcError(
+                "getSystemConfigByKey", 3008, "getSystemConfig failed for empty entry");
         }
         Json::Value result;
         result["value"] = it->second;
@@ -118,6 +120,27 @@ BOOST_AUTO_TEST_CASE(readStatesMarksOnOffAndDeprecated)
             BOOST_CHECK(!state.enabled);
         }
         BOOST_CHECK_EQUAL(state.deprecated, state.name == "feature_raw_address");
+    }
+}
+
+// only "no row" (3008) and "enabled from a later block" (3003) read as off; a timeout or a closed
+// socket must fail the read, or every flag shows off and enable re-sends what is already on
+BOOST_AUTO_TEST_CASE(readStatesFailsOnATransportError)
+{
+    RpcCall timedOut = [](std::string_view, Json::Value const&) -> Json::Value {
+        throw OpsError(c_exitUsage, "getSystemConfigByKey timed out after 15000 ms");
+    };
+    BOOST_CHECK_THROW(readFeatureStates(timedOut, "group0"), OpsError);
+    RpcCall otherCode = [](std::string_view, Json::Value const&) -> Json::Value {
+        throw OpsRpcError("getSystemConfigByKey", -32603, "internal error");
+    };
+    BOOST_CHECK_THROW(readFeatureStates(otherCode, "group0"), OpsRpcError);
+    RpcCall notYet = [](std::string_view, Json::Value const&) -> Json::Value {
+        throw OpsRpcError("getSystemConfigByKey", 3003, "Config not available");
+    };
+    for (auto const& state : readFeatureStates(notYet, "group0"))
+    {
+        BOOST_CHECK(!state.enabled);
     }
 }
 

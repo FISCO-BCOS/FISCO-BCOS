@@ -129,6 +129,19 @@ std::string Abi::decodeInputBySignature(std::string const& _signature, bytes con
         [&]() { return makeCodec(m_sm).decodeMethodInputByMethodSig(_signature, _input); });
 }
 
+std::string withoutLeadingZeros(std::string const& _digits)
+{
+    auto first = _digits.find_first_not_of('0');
+    return first == std::string::npos ? "0" : _digits.substr(first);
+}
+
+bool isZeroPaddedInteger(std::string_view _arg)
+{
+    auto digits = _arg.starts_with('-') ? _arg.substr(1) : _arg;
+    return digits.size() > 1 && digits[0] == '0' &&
+           digits.find_first_not_of("0123456789") == std::string_view::npos;
+}
+
 std::string argsToJsonArray(std::vector<std::string> const& _args)
 {
     Json::Value array(Json::arrayValue);
@@ -136,6 +149,13 @@ std::string argsToJsonArray(std::vector<std::string> const& _args)
     builder["failIfExtra"] = true;  // "0x1234" must stay a string, not parse as 0
     for (auto const& arg : _args)
     {
+        if (isZeroPaddedInteger(arg))
+        {
+            throw OpsError(c_exitUsage, "argument " + arg +
+                                            " has a leading zero: drop it for a number, or quote "
+                                            "it as JSON (\"" +
+                                            arg + "\") for text");
+        }
         Json::Value parsed;
         std::string errors;
         std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
@@ -144,6 +164,16 @@ std::string argsToJsonArray(std::vector<std::string> const& _args)
                 std::isdigit(static_cast<unsigned char>(arg[0])) || arg[0] == '-') &&
             reader->parse(arg.data(), arg.data() + arg.size(), &parsed, &errors))
         {
+            // past 64 bits jsoncpp gives a double ("1e+21"); the codec's string branch takes the
+            // decimal digits verbatim instead
+            auto digits = arg.starts_with('-') ? std::string_view(arg).substr(1) : arg;
+            bool integer =
+                !digits.empty() && digits.find_first_not_of("0123456789") == std::string_view::npos;
+            if (parsed.type() == Json::realValue && integer)
+            {
+                array.append(arg);
+                continue;
+            }
             array.append(parsed);
         }
         else

@@ -479,10 +479,18 @@ SendOutcome Sender::run(SendRequest const& _request)
         outcome.ok = failed.empty();
         outcome.line = std::to_string(enabled) + " enabled, " + std::to_string(skipped) +
                        " already on" + (failed.empty() ? "" : ", failed: " + failed);
-        auto states = readFeatureStates(m_connection.call, m_connection.group);
-        std::lock_guard<std::mutex> lock(m_model.mutex);
-        m_model.send.features = std::move(states);
-        m_model.send.featuresLoaded = true;
+        // the enables above are sent: a failing re-read must not replace their summary
+        try
+        {
+            auto states = readFeatureStates(m_connection.call, m_connection.group);
+            std::lock_guard<std::mutex> lock(m_model.mutex);
+            m_model.send.features = std::move(states);
+            m_model.send.featuresLoaded = true;
+        }
+        catch (std::exception const& e)
+        {
+            outcome.line += "; re-reading the flags failed: " + std::string(e.what());
+        }
         return outcome;
     }
     }

@@ -22,6 +22,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <boost/multiprecision/cpp_int.hpp>
 #include <map>
 
 namespace bcos::ops
@@ -121,17 +122,37 @@ Json::Value typedArg(ParamSpec const& _spec, std::string const& _arg)
         // the codec's string branch (ContractABICodec.cpp UINT/INT: u256(str) / s256(str)) takes
         // the digits verbatim, so integers always travel as decimal text. Hex is refused: the
         // codec's isUnsigned() would reject "0x…" with a less helpful message.
-        auto digits = _arg.starts_with("-") ? std::string_view(_arg).substr(1) : _arg;
+        auto label = std::string(_spec.name) + " (" + std::string(_spec.type) + ")";
+        bool negative = _arg.starts_with("-");
+        auto digits = negative ? _arg.substr(1) : _arg;
         if (digits.empty() || digits.find_first_not_of("0123456789") != std::string::npos)
         {
-            throw OpsError(c_exitUsage, std::string(_spec.name) + " (" + std::string(_spec.type) +
-                                            ") must be a decimal integer, got: " + _arg);
+            throw OpsError(c_exitUsage, label + " must be a decimal integer, got: " + _arg);
         }
-        if (_arg.starts_with("-") && _spec.type.starts_with("uint"))
+        bool isUnsigned = _spec.type.starts_with("uint");
+        if (negative && isUnsigned)
         {
-            throw OpsError(c_exitUsage, std::string(_spec.name) + " (" + std::string(_spec.type) +
-                                            ") cannot be negative, got: " + _arg);
+            throw OpsError(c_exitUsage, label + " cannot be negative, got: " + _arg);
         }
+        // the codec's u256(str) reads a leading 0 as octal ("010" would sign 8) and wraps past
+        // the type's width without a word (as does the ABI decoder on chain), so the text is
+        // normalised to plain decimal and bounded by uintN / intN here
+        auto magnitude = withoutLeadingZeros(digits);
+        auto widthText = _spec.type.substr(isUnsigned ? 4 : 3);
+        auto bits =
+            widthText.empty() ? 256U : static_cast<unsigned>(std::stoul(std::string(widthText)));
+        boost::multiprecision::cpp_int value(magnitude);
+        auto bound = boost::multiprecision::cpp_int(1) << (isUnsigned ? bits : bits - 1);
+        if (negative ? value > bound : value >= bound)
+        {
+            throw OpsError(c_exitUsage, label + " is out of range, got: " + _arg);
+        }
+        return negative && magnitude != "0" ? "-" + magnitude : magnitude;
+    }
+    // a zero-padded integer is text for a string / address parameter (argsToJsonArray refuses
+    // it because it cannot tell)
+    if ((_spec.type == "string" || _spec.type == "address") && isZeroPaddedInteger(_arg))
+    {
         return _arg;
     }
     // argsToJsonArray decides number / bool / array vs string per value

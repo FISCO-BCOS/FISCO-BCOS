@@ -16,6 +16,7 @@
  * @file TxSender.cpp
  */
 #include "TxSender.h"
+#include "Abi.h"
 #include "bcos-ops/OpsError.h"
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilderV1.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -35,13 +36,6 @@ namespace
 constexpr int64_t c_blockLimitRange = 500;  // same as the SDK's Service::getBlockLimit
 
 constexpr size_t c_maxValueHexDigits = 64;  // uint256
-
-/// "007" → "7", "000" → "0"
-std::string withoutLeadingZeros(std::string const& _digits)
-{
-    auto first = _digits.find_first_not_of('0');
-    return first == std::string::npos ? "0" : _digits.substr(first);
-}
 
 /// "" → ""; "0x1f"/"0X1f"/"0x001f" → "0x1f"; "31"/"031" → "0x1f"; more than 256 bits or anything
 /// else throws OpsError{1} (u256 is unchecked: 2^256 would wrap to 0 and the node's hex2u

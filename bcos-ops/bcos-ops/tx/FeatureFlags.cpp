@@ -67,9 +67,18 @@ bool readEnabled(RpcCall const& _call, std::string const& _group, std::string co
     {
         return _call("getSystemConfigByKey", params).get("value", "").asString() == "1";
     }
-    catch (OpsError const&)
+    catch (OpsRpcError const& e)
     {
-        return false;  // "getSystemConfig failed for empty entry": never set
+        // Ledger::asyncGetSystemConfigByKey: no row is GetStorageError (3008), a row whose
+        // enable number is past the next block is ErrorArgument (3003, "Config not available");
+        // both read as "not on yet" (3008 is also the ledger's catch-all for a storage
+        // exception, which reads as off too). A timeout or a closed socket is a failure, as in
+        // AuthMode.cpp: reading it as "off" would report every flag off and re-send enables
+        if (e.code != 3008 && e.code != 3003)
+        {
+            throw;
+        }
+        return false;
     }
 }
 }  // namespace

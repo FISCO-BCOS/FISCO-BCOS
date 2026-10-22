@@ -133,7 +133,8 @@ BOOST_AUTO_TEST_CASE(featuresListsEveryFlag)
     BOOST_REQUIRE(json.isArray());
     BOOST_CHECK(json.size() > 50);
     BOOST_CHECK(json[0]["enabled"].asBool());
-    rpc.remove("getSystemConfigByKey");  // never set → every flag reads off
+    // never set → every flag reads off (the node's "no row" error; a transport failure must not)
+    rpc.fail("getSystemConfigByKey", 3008, "getSystemConfig failed for empty entry");
     std::ostringstream off;
     runSysconfigOn(sysconfigConnection(rpc), sysArgs({"features", "--json"}), off);
     BOOST_CHECK(!parseJson(off.str(), "features")[0]["enabled"].asBool());

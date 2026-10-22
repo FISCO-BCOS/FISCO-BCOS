@@ -163,6 +163,34 @@ BOOST_AUTO_TEST_CASE(bytesArgumentsBecomeSdkHex)
         R"(["3a1f","2"])");  // integers travel as digit strings
 }
 
+// the codec's u256(str) reads a leading 0 as octal and wraps past the type's width, so integer
+// arguments are normalised to plain decimal and bounded by their uintN before they get there
+BOOST_AUTO_TEST_CASE(integerArgumentsAreDecimalAndBoundedByTheirWidth)
+{
+    auto const* weight = findPreset("consensus", "set-weight");  // (string, uint256)
+    BOOST_CHECK_EQUAL(encodePresetArgs(*weight, {"3a1f", "010"}), R"(["3a1f","10"])");
+    BOOST_CHECK_EQUAL(encodePresetArgs(*weight, {"3a1f", "000"}), R"(["3a1f","0"])");
+    BOOST_CHECK_THROW(encodePresetArgs(*weight, {"3a1f", "-1"}), OpsError);
+    auto const* governor = findPreset("committee", "propose-governor");  // (address, uint32, …)
+    auto const account = std::string("0x0000000000000000000000000000000000000001");
+    BOOST_CHECK(encodePresetArgs(*governor, {account, "4294967295", "0"}).find(R"("4294967295")") !=
+                std::string::npos);
+    BOOST_CHECK_THROW(encodePresetArgs(*governor, {account, "4294967296", "0"}), OpsError);
+    auto const* authType = findPreset("auth", "set-deploy-auth-type");  // (uint8)
+    BOOST_CHECK_EQUAL(encodePresetArgs(*authType, {"255"}), R"(["255"])");
+    BOOST_CHECK_THROW(encodePresetArgs(*authType, {"256"}), OpsError);
+    BOOST_CHECK_THROW(encodePresetArgs(*authType, {"0256"}), OpsError);  // 256, not octal 174
+    auto const* add = findPreset("balance", "add");                      // (address, uint256)
+    auto const max = std::string(
+        "115792089237316195423570985008687907853269984665640564039457584007913129639935");
+    BOOST_CHECK(encodePresetArgs(*add, {account, max}).find(max) != std::string::npos);
+    BOOST_CHECK_THROW(
+        encodePresetArgs(*add,
+            {account,
+                "115792089237316195423570985008687907853269984665640564039457584007913129639936"}),
+        OpsError);
+}
+
 BOOST_AUTO_TEST_CASE(negativeCodesMapToNames)
 {
     BOOST_CHECK_EQUAL(precompiledCodeName(-50000), "NO_AUTHORIZED");

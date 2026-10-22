@@ -8,6 +8,7 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
+#include <bcos-ops/OpsError.h>
 #include <bcos-ops/tx/Abi.h>
 #include <bcos-ops/tx/HelloWorld.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -54,6 +55,22 @@ BOOST_AUTO_TEST_CASE(argsToJsonArrayKeepsTypes)
     BOOST_CHECK_EQUAL(argsToJsonArray({"x", "12", "true", "[1,2]"}), R"(["x",12,true,[1,2]])");
     BOOST_CHECK_EQUAL(argsToJsonArray({}), "[]");
     BOOST_CHECK_EQUAL(argsToJsonArray({"0x1234"}), R"(["0x1234"])");
+}
+
+// "010" is not JSON, so it would travel as text that the codec's u256(str) reads as octal 8:
+// refused, a quoted "010" is the way to pass it as text. Past 64 bits a number stays digits
+// (jsoncpp would make it a double the codec rejects)
+BOOST_AUTO_TEST_CASE(argsToJsonArrayRefusesZeroPaddedIntegersAndKeepsBigOnesAsDigits)
+{
+    BOOST_CHECK_THROW(argsToJsonArray({"010"}), OpsError);
+    BOOST_CHECK_THROW(argsToJsonArray({"x", "-07"}), OpsError);
+    BOOST_CHECK_EQUAL(argsToJsonArray({R"("010")"}), R"(["010"])");
+    BOOST_CHECK_EQUAL(argsToJsonArray({"0", "-0", "10"}), R"([0,0,10])");
+    BOOST_CHECK_EQUAL(
+        argsToJsonArray({"100000000000000000000000"}), R"(["100000000000000000000000"])");
+    BOOST_CHECK_EQUAL(
+        argsToJsonArray({"-100000000000000000000000"}), R"(["-100000000000000000000000"])");
+    BOOST_CHECK_EQUAL(argsToJsonArray({"1.5"}), R"([1.5])");  // a real number is left to the codec
 }
 
 BOOST_AUTO_TEST_CASE(binariesAreHex)
