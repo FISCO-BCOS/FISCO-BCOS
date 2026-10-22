@@ -1,3 +1,4 @@
+#include "bcos-task/Generator.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
@@ -9,7 +10,6 @@
 #include <atomic>
 #include <chrono>
 #include <future>
-#include <generator>
 #include <iostream>
 #include <memory_resource>
 #include <stdexcept>
@@ -186,7 +186,7 @@ struct SleepTask
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmismatched-new-delete"
 #endif
-std::generator<int> genInt()
+bcos::task::Generator<int> genInt()
 {
     co_yield 1;
     co_yield 2;
