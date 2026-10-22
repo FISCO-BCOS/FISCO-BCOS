@@ -29,6 +29,7 @@
 #include "EthExecutionPolicy.h"
 #include "EthStorageErrorGuard.h"
 #include "EthereumTransition.h"
+#include "EvmoneVm.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -66,22 +67,6 @@ EthBlockInfo buildBlockInfo(
 /// (see evm::ErrorCode in EVMSupport.h).
 protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& error,
     protocol::TransactionReceiptFactory const& rf, int64_t blockNumber);
-
-/// The evmone VM for the calling thread.
-///
-/// An evmone VM must not be shared: it pools ExecutionState objects in an unsynchronised
-/// vector indexed by EVM call depth (VM::get_execution_state resize()s it on demand), and
-/// each pooled slot remembers the host context of the frame that last reset it. Two threads
-/// through one VM race on that vector and one thread's EVM can end up calling into the
-/// other's host, corrupting its EthereumState journal. One VM per thread keeps the pool
-/// alive across calls (no per-transaction evmc_create_evmone) while only ever indexing it
-/// with the current thread's own frames; execution never overlaps itself on one thread
-/// because host reads complete inline or block and the EVM never yields mid-frame.
-inline evmc::VM& threadLocalEvmoneVm()
-{
-    thread_local evmc::VM vm{evmc_create_evmone()};
-    return vm;
-}
 
 class EthereumExecutor
 {
@@ -462,9 +447,9 @@ public:
                             static_cast<int64_t>(evm::GAS_PER_BLOB);
                     }
                     m_receipt = co_await runTransaction(state, m_blockInfo,
-                        executor.get().m_blockHashLookup, transaction.get(), m_rev,
-                        executor.get().vm(), *props, nodeChainId(), m_callParams,
-                        executor.get().m_receiptFactory, blockHeader.get().number());
+                        executor.get().m_blockHashLookup, transaction.get(), m_rev, *props,
+                        nodeChainId(), m_callParams, executor.get().m_receiptFactory,
+                        blockHeader.get().number());
                 }
                 else
                 {

@@ -519,8 +519,8 @@ public:
                 try
                 {
                     m_receipt = co_await opRunDeposit(*m_state, blockInfo, m_ctx->blockHashLookup,
-                        *m_deposit, executor.m_spec, executor.vm(), m_ctx->chainId,
-                        m_ctx->blockGasLeft, *executor.m_receiptFactory, blockHeader.number());
+                        *m_deposit, executor.m_spec, m_ctx->chainId, m_ctx->blockGasLeft,
+                        *executor.m_receiptFactory, blockHeader.number());
                 }
                 catch (...)
                 {
@@ -554,8 +554,8 @@ public:
                     transaction, m_callParams, m_snapshot};
                 m_receipt =
                     co_await eth::runTransaction(*m_state, *m_blockInfo, m_ctx->blockHashLookup,
-                        transaction, executor.m_spec.rev, executor.vm(), m_txProps, m_ctx->chainId,
-                        m_callParams, *executor.m_receiptFactory, blockHeader.number(), policy);
+                        transaction, executor.m_spec.rev, m_txProps, m_ctx->chainId, m_callParams,
+                        *executor.m_receiptFactory, blockHeader.number(), policy);
             }
             catch (...)
             {

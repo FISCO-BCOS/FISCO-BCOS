@@ -28,6 +28,7 @@
 #include <ethereum-executor/EthereumHost.h>
 #include <ethereum-executor/EthereumState.h>
 #include <ethereum-executor/EthereumTransition.h>
+#include <ethereum-executor/EvmoneVm.h>
 #include <opstack-executor/OpEthReceipt.h>
 #include <opstack-executor/OpExecutionPolicy.h>
 #include <opstack-executor/OpForkSpec.h>
@@ -188,7 +189,7 @@ struct OpEthDepositGasLimitReached : std::runtime_error
 template <class Storage>
 task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<Storage>& state,
     eth::EthBlockInfo const& block, eth::BlockHashLookup blockHashLookup, DepositTx const& dep,
-    OpForkSpec const& spec, evmc::VM& vm, uint64_t chainId, int64_t blockGasLeft,
+    OpForkSpec const& spec, uint64_t chainId, int64_t blockGasLeft,
     protocol::TransactionReceiptFactory const& rf, int64_t blockNumber)
 {
     const auto rev = spec.rev;
@@ -263,6 +264,10 @@ task::Task<protocol::TransactionReceipt::Ptr> opRunDeposit(eth::EthereumState<St
             .maxPriorityGasPrice = 0,  // override reports GASPRICE 0 to the EVM
             .blobHashes = {},
         };
+        // The thread's own VM, taken here rather than handed in: this is the thread that runs
+        // the EVM, and nothing before host.call() below can suspend the coroutine (the only
+        // co_await is the storage write-back at the end). See EvmoneVm.h.
+        auto& vm = eth::threadLocalEvmoneVm();
         eth::EthereumHost<Storage, OpPolicy> host{rev, vm, state, block, std::move(blockHashLookup),
             std::move(txContext), eth::EthCallParams{}, chainId, policy};
 
