@@ -28,7 +28,9 @@ namespace bcos::rpc
 {
 /// The JSON-RPC error a refused eth_sendRawTransaction answers with -- one table for both pools,
 /// so the txpool branch and the mempool branch refuse the same transaction with the same code and
-/// the same words.
+/// the same words. The same table names the execution faults a failed eth_call /
+/// eth_estimateGas answers with (EthEndpoint's callFailureError), so a status has one code and
+/// one sentence wherever a Web3 client sees it.
 ///
 /// The split is the one #5555's review recorded. -32602 (InvalidParams) is for a parameter that
 /// is not a transaction this node can accept as-is: bytes that decode but carry no valid

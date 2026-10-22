@@ -15,6 +15,7 @@
 #include "bcos-codec/rlp/RLPDecode.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <limits>
 
 using namespace bcos;
 using namespace bcos::codec::rlp;
@@ -40,12 +41,12 @@ int32_t decodeError(std::string_view hex)
     }
     catch (bcos::codec::rlp::RlpDecodeException const& e)
     {
-        auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
-        if (code == nullptr)
-        {
-            throw;  // exception without the code info: fail loudly, don't mask it
-        }
-        return *code;
+        // INT32_MIN is neither the success sentinel nor a DecodingError value: an exception
+        // without the code info fails loudly here instead of being masked.
+        constexpr int32_t c_noCode = std::numeric_limits<int32_t>::min();
+        auto const code = bcos::codec::rlp::rlpErrorCode(e, c_noCode);
+        BOOST_REQUIRE_NE(code, c_noCode);
+        return code;
     }
 }
 template <typename T>

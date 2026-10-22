@@ -50,8 +50,6 @@ namespace bcostars
 {
 namespace protocol
 {
-const static bcos::crypto::HashType emptyHash;
-
 template <class Container>
 class BufferWriter
 {
