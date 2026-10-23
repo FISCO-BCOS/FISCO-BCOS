@@ -68,8 +68,8 @@ std::shared_ptr<bytes> bcos::crypto::secp256k1Sign(
                                   "secp256k1Sign exception, raw data: " + _hash.hex()));
     }
     int recid = 0;
-    secp256k1_ecdsa_recoverable_signature_serialize_compact(
-        secp256k1Context(), (unsigned char*)signatureData->data(), &recid, rawSig);
+    secp256k1_ecdsa_recoverable_signature_serialize_compact(secp256k1Context(),
+        reinterpret_cast<unsigned char*>(signatureData->data()), &recid, rawSig);
     signatureData->back() = (uint8_t)recid;
     return signatureData;
 }
@@ -107,7 +107,7 @@ bool bcos::crypto::secp256k1Verify(
 KeyPairInterface::UniquePtr bcos::crypto::secp256k1GenerateKeyPair()
 {
     auto keyPair = std::make_unique<Secp256k1KeyPair>();
-    auto* secretData = (unsigned char*)keyPair->secretKey()->mutableData();
+    auto* secretData = reinterpret_cast<unsigned char*>(keyPair->secretKey()->mutableData());
     do
     {
         auto randomSecret = cryptoRandomBytes(SECP256K1_PRIVATE_LEN);

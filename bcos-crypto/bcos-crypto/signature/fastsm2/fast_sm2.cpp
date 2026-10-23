@@ -322,8 +322,8 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of EC_POINT_mul";
         goto done;
     }
-    publicKeyLen = EC_POINT_point2buf(
-        sm2Group, pubPoint, POINT_CONVERSION_UNCOMPRESSED, (unsigned char**)&publicKey, ctx);
+    publicKeyLen = EC_POINT_point2buf(sm2Group, pubPoint, POINT_CONVERSION_UNCOMPRESSED,
+        reinterpret_cast<unsigned char**>(&publicKey), ctx);
     if (publicKeyLen != c_PUBLICKEY_LEN + 1)
     {
         CRYPTO_LOG(WARNING)
@@ -373,7 +373,8 @@ int8_t bcos::crypto::fast_sm2_gen_key_pair(
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: error of EC_KEY_generate_key";
         goto done;
     }
-    if (BN_bn2binpad(EC_KEY_get0_private_key(sm2Key), (unsigned char*)output_private_key->data,
+    if (BN_bn2binpad(EC_KEY_get0_private_key(sm2Key),
+            reinterpret_cast<unsigned char*>(output_private_key->data),
             c_PRIVATEKEY_LEN) != c_PRIVATEKEY_LEN)
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_gen_key_pair: error of BN_bn2binpad for privateKey";

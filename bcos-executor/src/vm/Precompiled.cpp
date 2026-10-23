@@ -903,7 +903,8 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     }
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("secp256k1_recover_public_key success");
     // keccak256 and set first 12 byte to zero
-    auto pubkeyHash = keccak256Hash(bytesConstRef((const byte*)pk->constData(), PUBLIC_KEY_LENGTH));
+    auto pubkeyHash = keccak256Hash(
+        bytesConstRef(reinterpret_cast<const byte*>(pk->constData()), PUBLIC_KEY_LENGTH));
     ret.second = pubkeyHash.asBytes();
     memset(ret.second.data(), 0, 12);
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover success");

@@ -78,7 +78,7 @@ bool DiscreteLogarithmZkp::verifyEitherEqualityProof(bytes const& c1PointData,
     {
         return false;
     }
-    const auto* proof = (const std::uint8_t*)equalityProofData.data();
+    const auto* proof = equalityProofData.data();
     auto check1 = ristrettoScalarFromBits(proof);
     auto check2 = ristrettoScalarFromBits(proof + 32);
     auto m1 = ristrettoScalarFromBits(proof + 64);
@@ -125,7 +125,7 @@ bool DiscreteLogarithmZkp::verifyKnowledgeProof(bytes const& pointData,
     {
         return false;
     }
-    const auto* proof = (const std::uint8_t*)knowledgeProofData.data();
+    const auto* proof = knowledgeProofData.data();
     if (!ristrettoIsValidPoint(proof))
     {
         return false;
@@ -164,7 +164,7 @@ bool DiscreteLogarithmZkp::verifyFormatProof(bytes const& c1Point, bytes const& 
     {
         return false;
     }
-    const auto* proof = (const std::uint8_t*)formatProofData.data();
+    const auto* proof = formatProofData.data();
     if (!ristrettoIsValidPoint(proof) || !ristrettoIsValidPoint(proof + 32))
     {
         return false;
@@ -208,7 +208,7 @@ bool decodeArithmeticProof(bytes const& _proofData, ArithmeticProof* _proof)
     {
         return false;
     }
-    const auto* proof = (const std::uint8_t*)_proofData.data();
+    const auto* proof = _proofData.data();
     if (!ristrettoIsValidPoint(proof) || !ristrettoIsValidPoint(proof + 32) ||
         !ristrettoIsValidPoint(proof + 64))
     {
@@ -330,7 +330,7 @@ bool DiscreteLogarithmZkp::verifyEqualityProof(bytes const& c1Point, bytes const
     {
         return false;
     }
-    const auto* proof = (const std::uint8_t*)equalityProofData.data();
+    const auto* proof = equalityProofData.data();
     auto m1 = ristrettoScalarFromBits(proof);
     if (!ristrettoIsValidPoint(proof + 32) || !ristrettoIsValidPoint(proof + 64))
     {

@@ -56,8 +56,8 @@ bcos::crypto::PublicPtr bcos::crypto::secp256k1PriToPub(bcos::crypto::SecretPtr 
                                   std::to_string(_secret->size())));
     }
     secp256k1_pubkey pubkey;
-    if (secp256k1_ec_pubkey_create(
-            secp256k1Context(), &pubkey, (const unsigned char*)_secret->constData()) == 0)
+    if (secp256k1_ec_pubkey_create(secp256k1Context(), &pubkey,
+            reinterpret_cast<const unsigned char*>(_secret->constData())) == 0)
     {
         BOOST_THROW_EXCEPTION(
             PriToPublicKeyException() << errinfo_comment("secp256k1PriToPub exception"));

@@ -48,12 +48,12 @@ PublicPtr bcos::crypto::ed25519PriToPub(SecretPtr _secretKey)
     // 32-byte seed private key, public key is derived via Ed25519 scalar multiplication
     std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> key(
         EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr,
-            (const unsigned char*)_secretKey->constData(), _secretKey->size()),
+            reinterpret_cast<const unsigned char*>(_secretKey->constData()), _secretKey->size()),
         &EVP_PKEY_free);
     auto pub = std::make_shared<KeyImpl>(ED25519_PUBLIC_LEN);
     size_t publicKeyLen = pub->size();
-    if (!key || EVP_PKEY_get_raw_public_key(
-                    key.get(), (unsigned char*)pub->mutableData(), &publicKeyLen) != 1)
+    if (!key || EVP_PKEY_get_raw_public_key(key.get(),
+                    reinterpret_cast<unsigned char*>(pub->mutableData()), &publicKeyLen) != 1)
     {
         BOOST_THROW_EXCEPTION(
             PriToPublicKeyException() << errinfo_comment("ed25519PriToPub exception"));

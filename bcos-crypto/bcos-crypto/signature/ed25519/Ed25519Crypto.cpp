@@ -38,9 +38,9 @@ using EvpMdCtxPtr = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 std::shared_ptr<bytes> bcos::crypto::ed25519Sign(
     const KeyPairInterface& _keyPair, const HashType& _messageHash, bool _signatureWithPub)
 {
-    EvpPkeyPtr key(
-        EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr,
-            (const unsigned char*)_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()),
+    EvpPkeyPtr key(EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr,
+                       reinterpret_cast<const unsigned char*>(_keyPair.secretKey()->constData()),
+                       _keyPair.secretKey()->size()),
         &EVP_PKEY_free);
     EvpMdCtxPtr ctx(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
     FixedBytes<ED25519_SIGNATURE_LEN> signatureArray;
@@ -79,9 +79,11 @@ KeyPairInterface::UniquePtr bcos::crypto::ed25519GenerateKeyPair()
     size_t publicKeyLen = ed25519KeyPair->publicKey()->size();
     size_t privateKeyLen = ed25519KeyPair->secretKey()->size();
     if (EVP_PKEY_get_raw_public_key(key.get(),
-            (unsigned char*)ed25519KeyPair->publicKey()->mutableData(), &publicKeyLen) != 1 ||
+            reinterpret_cast<unsigned char*>(ed25519KeyPair->publicKey()->mutableData()),
+            &publicKeyLen) != 1 ||
         EVP_PKEY_get_raw_private_key(key.get(),
-            (unsigned char*)ed25519KeyPair->secretKey()->mutableData(), &privateKeyLen) != 1)
+            reinterpret_cast<unsigned char*>(ed25519KeyPair->secretKey()->mutableData()),
+            &privateKeyLen) != 1)
     {
         BOOST_THROW_EXCEPTION(
             GenerateKeyPairException() << errinfo_comment("ed25519GenerateKeyPair exception"));
@@ -92,8 +94,9 @@ KeyPairInterface::UniquePtr bcos::crypto::ed25519GenerateKeyPair()
 bool bcos::crypto::ed25519Verify(
     PublicPtr _pubKey, const HashType& _messageHash, bytesConstRef _signatureData)
 {
-    EvpPkeyPtr key(EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, nullptr,
-                       (const unsigned char*)_pubKey->constData(), _pubKey->size()),
+    EvpPkeyPtr key(
+        EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, nullptr,
+            reinterpret_cast<const unsigned char*>(_pubKey->constData()), _pubKey->size()),
         &EVP_PKEY_free);
     EvpMdCtxPtr ctx(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
     if (!key || !ctx || EVP_DigestVerifyInit(ctx.get(), nullptr, nullptr, nullptr, key.get()) != 1)

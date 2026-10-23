@@ -26,13 +26,19 @@ extern "C" {
 
 struct CInputBuffer
 {
+    // Codacy runs cppcheck per changed file, so members used only from other
+    // translation units are false-flagged here; the layout must stay FFI-shaped.
+    // cppcheck-suppress unusedStructMember
     const char* data;
+    // cppcheck-suppress unusedStructMember
     uintptr_t len;
 };
 
 struct COutputBuffer
 {
+    // cppcheck-suppress unusedStructMember
     char* data;
+    // cppcheck-suppress unusedStructMember
     uintptr_t len;
 };
 
