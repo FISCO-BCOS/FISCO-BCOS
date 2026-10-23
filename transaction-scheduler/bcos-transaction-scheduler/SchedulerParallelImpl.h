@@ -7,6 +7,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <bcos-utilities/BoostLog.h>
 #include <oneapi/tbb/cache_aligned_allocator.h>
@@ -317,7 +318,11 @@ public:
                     }),
             context);
 
-        task::tbb::syncWait(mergeLastStorage(storage, lastStorage));
+        // Outside the pipeline, so this frame has no TBB task and task::tbb::syncWait would
+        // have nothing to suspend (see TBBWait.h's rule). mergeLastStorage merges into the
+        // in-memory mutable layer and completes inline, so the plain wait never actually
+        // blocks and is the cheaper of two equivalent options.
+        task::syncWait(mergeLastStorage(storage, lastStorage));
         m_gc.collect(std::move(writeSet));
         if (offset < count)
         {

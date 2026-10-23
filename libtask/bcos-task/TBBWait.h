@@ -19,9 +19,13 @@
 #include "Task.h"
 #include "Trait.h"
 #include <oneapi/tbb/task.h>
-#include <oneapi/tbb/task_group.h>
+#include <oneapi/tbb/task_arena.h>
 #include <boost/atomic/atomic.hpp>
 #include <boost/atomic/atomic_flag.hpp>
+#include <concepts>
+#include <memory>
+#include <type_traits>
+#include <utility>
 
 namespace bcos::task::tbb
 {
@@ -121,5 +125,67 @@ constexpr inline struct SyncWait
         }
     }
 } syncWait{};
+
+/// Which flavour of wait is legal where
+/// ------------------------------------
+/// `task::tbb::syncWait` suspends the *calling TBB task*
+/// (oneapi::tbb::task::suspend/resume), so it needs a TBB task to suspend. It is legal only
+/// inside a frame that already is one -- a parallel_pipeline filter, a parallel_invoke body --
+/// and those are the frames the block pipeline uses it in.
+///
+/// A frame with no TBB task cannot use it: there is nothing to suspend. There,
+/// `task::syncWait` (the plain, inline flavour) is the correct wait, but only when the awaited
+/// work completes inline and therefore never really blocks. `SchedulerParallelImpl::
+/// executeSinglePass`'s mergeLastStorage is exactly that: it merges into the in-memory mutable
+/// layer and returns, so the plain wait is both correct and cheaper.
+///
+/// `runInCallArena` below is the third case: code on a plain thread (an RPC IO thread driving
+/// eth_call) that must *become* a TBB task. It enqueues into a shared arena, so the caller
+/// returns immediately and the body runs as a real TBB task.
+
+/// The arena the read-only call round trips run in.
+///
+/// Shared, so wrapping a call does not put arena construction on the hot path. Default
+/// concurrency: this is a context, not a throttle.
+inline oneapi::tbb::task_arena& callArena()
+{
+    static oneapi::tbb::task_arena arena;
+    return arena;
+}
+
+/// Hand @p body to callArena() as a TBB task, without waiting for it.
+///
+/// `task_arena::enqueue` wraps the body in an `enqueue_task`, which *is* a TBB task, so
+/// `task::tbb::syncWait` inside it has something to suspend. (An `execute` body would not:
+/// `current_task_ptr()` is null there, and `execute` also blocks the caller until the body
+/// finishes, which is the opposite of what an RPC IO thread wants.)
+///
+/// The caller returns as soon as the task is enqueued: enqueue is a hand-off, and the body runs
+/// later on an arena worker. That asynchrony is the point, but it does mean a completion
+/// callback invoked from the body never re-enters its caller's stack.
+///
+/// libtask/tests/TestCallArena.cpp pins the property this choice rests on, so a oneTBB upgrade
+/// that changes it fails instead of silently reintroducing the hazard: with a single worker
+/// slot, a body that suspends still completes, because the suspended enqueue_task releases the
+/// slot its completer needs. Under `execute` there would be no task to suspend at all -- that
+/// is a fact about which oneTBB context the body runs in, not something the test can observe
+/// from the outside, so it is recorded here rather than asserted there.
+///
+/// @p body must return void: enqueue has nowhere to put a value, so a body with a result would
+/// lose it silently. The constraint below turns that into a compile error.
+///
+/// The body is boxed in a shared_ptr before being handed over because TBB stores an enqueue
+/// functor as `const F` and calls it through that const object, so the body would otherwise have
+/// to be const-invocable. A body that moves out of its captures -- an eth_call moving a
+/// transaction and a callback into the coroutine it starts -- is not, and cannot reasonably be
+/// made so; behind the pointer the body keeps its non-const operator().
+template <class Body>
+    requires std::invocable<Body&> && std::is_void_v<std::invoke_result_t<Body&>> &&
+             std::copy_constructible<std::decay_t<Body>>
+void runInCallArena(Body&& body)
+{
+    auto holder = std::make_shared<std::decay_t<Body>>(std::forward<Body>(body));
+    callArena().enqueue([holder] { (*holder)(); });
+}
 
 }  // namespace bcos::task::tbb
