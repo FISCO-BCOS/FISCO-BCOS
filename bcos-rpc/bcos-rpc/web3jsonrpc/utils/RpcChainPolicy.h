@@ -46,8 +46,8 @@ inline bool usesEthereumFeeSemantics(int executorVersion)
     return executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 }
 
-/// True on the OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION): the only lane that
-/// serves the challenger data plane (debug_getRawHeader / debug_dbGet, ADR 0007).
+/// True on the OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION): the lane whose state
+/// carries OP block metadata. NOT the debug data plane's gate -- that is requireEthereumLane.
 inline bool isOpStackLane(int executorVersion)
 {
     return executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION;
@@ -87,6 +87,26 @@ inline task::Task<void> requireOpStackLane(
     if (!isOpStackLane(executorVersion))
     {
         WEB3_LOG(DEBUG) << LOG_DESC("OP-lane-only method on another lane")
+                        << LOG_KV("method", method) << LOG_KV("executorVersion", executorVersion);
+        BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
+    }
+}
+/// Gate for the methods that need a complete-trie MPT but no OP semantics: served on both the
+/// Ethereum lane (v2) and the OP lane (v3), MethodNotFound on the legacy FISCO lane.
+///
+/// The debug data plane belongs here rather than on the OP lane alone. A node that serves an OP
+/// rollup AS ITS L1 has to answer op-challenger's kona-host, which reads L1 headers and receipts
+/// through debug_getRawHeader / debug_getRawReceipts / debug_dbGet -- and that node is an
+/// Ethereum-lane node, not an OP-lane one. Keeping the OP-only gate made the two roles mutually
+/// exclusive (ADR 0007 assumed the debug namespace only ever served an L2), and op-challenger
+/// could not build an L1-side trace at all.
+inline task::Task<void> requireEthereumLane(
+    bcos::ledger::LedgerInterface& ledger, std::string_view method)
+{
+    auto const executorVersion = co_await readExecutorVersion(ledger);
+    if (!usesEthereumFeeSemantics(executorVersion))
+    {
+        WEB3_LOG(DEBUG) << LOG_DESC("Ethereum/OP-lane-only method on the legacy lane")
                         << LOG_KV("method", method) << LOG_KV("executorVersion", executorVersion);
         BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
     }

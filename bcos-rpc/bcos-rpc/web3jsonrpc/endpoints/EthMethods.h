@@ -97,6 +97,7 @@ enum class EthMethod
     miner_setMaxDASize,
     debug_dbGet,
     debug_getRawHeader,
+    debug_getRawReceipts,
     debug_executePayload
 };
 

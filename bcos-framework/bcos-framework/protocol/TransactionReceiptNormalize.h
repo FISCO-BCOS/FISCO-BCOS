@@ -18,10 +18,12 @@
  */
 #pragma once
 
+#include "Block.h"
 #include "TransactionReceipt.h"
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
 #include <cstddef>
+#include <vector>
 
 namespace bcos::protocol
 {
@@ -40,13 +42,18 @@ namespace bcos::protocol
 ///   differ. Matching the base finishExecute, which also recomputed it unconditionally.
 /// - cumulativeGasUsed is filled when empty; a scheduler-provided value stays (the
 ///   running prefix is a scheduling decision, not a derived field).
-template <class Receipts>
-inline u256 normalizeReceipts(Receipts& receipts)
+/// The numbering/bloom policy, as a reusable cursor, so the two entry points below cannot drift.
+///
+/// `apply` takes the receipt by reference: for Block::receipts() that is the holder itself, which
+/// must stay alive across the call (it is the holder that owns the pointer to the stored receipt).
+struct ReceiptNormalizer
 {
-    u256 cumulativeGasUsed = 0;
+    u256 cumulativeGasUsed;
     size_t logIndex = 0;
     size_t index = 0;
-    for (auto& receipt : receipts)
+
+    template <class Receipt>
+    void apply(Receipt& receipt)
     {
         receipt->setTransactionIndex(index);
         receipt->setLogIndex(logIndex);
@@ -60,7 +67,38 @@ inline u256 normalizeReceipts(Receipts& receipts)
         }
         ++index;
     }
-    return cumulativeGasUsed;
+};
+
+/// Normalize a range of receipt pointers (the shape every scheduler-path caller has).
+template <class Receipts>
+inline u256 normalizeReceipts(Receipts& receipts)
+{
+    ReceiptNormalizer normalizer;
+    for (auto& receipt : receipts)
+    {
+        normalizer.apply(receipt);
+    }
+    return normalizer.cumulativeGasUsed;
+}
+
+/// Normalize a block's own receipts in place.
+///
+/// Block::receipts() yields a holder per receipt BY VALUE, so the range cannot be passed to the
+/// overload above (its elements are const temporaries). Iterating and applying per element keeps
+/// each holder alive for exactly as long as it is used, and the holder writes through to the
+/// receipt the block stores -- the same shape setReceipt relies on.
+///
+/// Takes the block by const reference because the receipts, not the block's container, are what
+/// change: BlockImpl keeps its tars inner mutable and its receipts() builds holders over that
+/// mutable storage, so writing through one obtained from a const Block is not a const_cast.
+inline u256 normalizeReceipts(Block const& block)
+{
+    ReceiptNormalizer normalizer;
+    for (auto receipt : block.receipts())  // by value: the holder owns the pointer while it lives
+    {
+        normalizer.apply(receipt);
+    }
+    return normalizer.cumulativeGasUsed;
 }
 
 }  // namespace bcos::protocol

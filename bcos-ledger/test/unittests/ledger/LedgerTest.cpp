@@ -2270,5 +2270,95 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
     }());
 }
 
+// Regression test for the stored receipt numbering.
+//
+// A block whose receipts reach storage without having gone through
+// protocol::normalizeReceipts (the serial/legacy block drivers hand them straight to the
+// ledger) used to be written with transactionIndex = 0 on EVERY receipt and logIndex
+// restarted per receipt. op-node rejects that outright -- "receipt N has unexpected tx
+// index 0" -- so L1 derivation froze at the first multi-transaction block.
+//
+// The ledger now normalizes an Ethereum-lane block's receipts at write time, which is where
+// every producer funnels. This pins the client-visible contract: transactionIndex is the
+// block position, and logIndex is cumulative across the block.
+BOOST_AUTO_TEST_CASE(ethereumLaneReceiptsAreNumberedOnWrite)
+{
+    initFixture();
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    // A number no other case writes: the ledger dedups a block number it already holds, so
+    // sharing one would make this read the other case's rows instead of its own.
+    header->setNumber(4242);
+    header->setTimestamp(1000);
+    header->setGasLimit(30000000);
+    header->setSealer(0);
+    // Marks the block as Ethereum-lane: only those headers carry the EIP-4844 fields, and only
+    // those block hashes commit to a receiptsRoot that leaves transactionIndex out.
+    header->setExcessBlobGas(0);
+    header->setBlobGasUsed(0);
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    // Three transactions, the first carrying two log entries and the rest one each, so a
+    // per-receipt logIndex restart shows up as a repeated 0.
+    std::vector<protocol::TransactionReceipt::Ptr> expected;
+    std::vector<std::size_t> const logsPerTx{2, 1, 1};
+    for (size_t i = 0; i < logsPerTx.size(); ++i)
+    {
+        auto tx = m_blockFactory->transactionFactory()->createTransaction(i,
+            "0x1000000000000000000000000000000000000000", bcos::bytes{0x60},
+            std::to_string(1000 + i), 1000, "chain0", "group0", 0);
+        block->appendTransaction(tx);
+
+        std::vector<protocol::LogEntry> logs;
+        for (size_t log = 0; log < logsPerTx[i]; ++log)
+        {
+            logs.emplace_back(bcos::bytes(20, 0x10),
+                bcos::h256s{bcos::h256("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+                                       "deadbeefdeadbeef")},
+                bcos::bytes(32, static_cast<bcos::byte>(0xa0 + log)));
+        }
+        auto receipt = m_blockFactory->receiptFactory()->createReceipt2(21000, "", logs, 0,
+            bcos::ref(bcos::bytes{}), 1, "1", protocol::TransactionVersion::V1_VERSION, true);
+        block->appendReceipt(receipt);
+        expected.push_back(receipt);
+    }
+
+    std::promise<bool> prewritePromise;
+    m_ledger->asyncPrewriteBlock(
+        m_storage, nullptr, block,
+        [&](std::string, Error::Ptr&& error) {
+            BOOST_CHECK(!error);
+            prewritePromise.set_value(true);
+        },
+        true, std::nullopt, std::nullopt, true);
+    BOOST_REQUIRE(prewritePromise.get_future().get());
+
+    std::promise<protocol::Block::Ptr> blockPromise;
+    m_ledger->asyncGetBlockDataByNumber(
+        4242, bcos::ledger::RECEIPTS, [&](Error::Ptr error, protocol::Block::Ptr result) {
+            BOOST_CHECK(!error);
+            blockPromise.set_value(std::move(result));
+        });
+    auto readBlock = blockPromise.get_future().get();
+    BOOST_REQUIRE(readBlock != nullptr);
+    BOOST_REQUIRE_EQUAL(readBlock->receiptsSize(), logsPerTx.size());
+
+    std::size_t index = 0;
+    std::size_t logIndex = 0;
+    for (auto receipt : readBlock->receipts())
+    {
+        BOOST_CHECK_MESSAGE(receipt->transactionIndex() == index,
+            "receipt " << index << " stored transactionIndex " << receipt->transactionIndex());
+        BOOST_CHECK_MESSAGE(receipt->logIndex() == logIndex,
+            "receipt " << index << " stored logIndex " << receipt->logIndex() << ", expected "
+                       << logIndex);
+        logIndex += receipt->logEntries().size();
+        ++index;
+    }
+    BOOST_CHECK_EQUAL(index, logsPerTx.size());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
