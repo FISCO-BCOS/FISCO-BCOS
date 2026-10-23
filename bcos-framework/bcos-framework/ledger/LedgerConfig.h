@@ -378,15 +378,11 @@ static_assert(static_cast<int>(ExecutorLane::Opstack) == 3);
 /// the newest slot the node actually wired, which is this one only when the OP slot is
 /// unwired.
 ///
-/// PRE-RELEASE SEMANTICS: executor_version = 2 was introduced mid-branch (2026-08) and is
-/// NOT part of any upstream release — upstream releases have no v2. The version gates
-/// consensus-critical behaviour (Ethereum trie roots for txsRoot/receiptsRoot/stateRoot,
-/// the system-address migration to /apps/), and its exact rules may still change between
-/// commits; no cross-commit compatibility is guaranteed for a chain that ran v2 on a
-/// pre-release binary. Before any formal release ships with v2 selectable, this gate must
-/// be re-hung on a proper feature flag / activation block height (Features::Flag) instead
-/// of a bare version compare — tracked in
-/// https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
+/// The Ethereum lane is a GENESIS property, not a governable one: `executor.version` in
+/// config.genesis seeds the on-chain row, SystemConfigPrecompiled refuses a runtime write that
+/// would enter the lane (compat >= 3.18.0), and neither Ethereum-lane executor serves the
+/// system-config precompile. A v2 chain is v2 from block 0, so the bare version compare IS the
+/// gate — there is no activation height to hang a Features flag on (#5563, closed).
 inline constexpr int ETHEREUM_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::Ethereum);
 
 /// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).

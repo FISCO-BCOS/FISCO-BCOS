@@ -27,6 +27,11 @@
 #include <string>
 #include <string_view>
 
+namespace bcos::cppsdk
+{
+class Sdk;
+}
+
 namespace bcos::ops
 {
 /// returns the `result` member; throws OpsError{1} on transport error or a JSON-RPC `error`
@@ -39,7 +44,14 @@ struct Connection
     std::string group;
     std::string endpoint;
     std::optional<NodeDir> nodeDir;
-    std::shared_ptr<void> keepAlive;  // owns the transport
+    // the node's mode (NodeDir::mode, or --mode): none / el / opstack-el, or unknown for a
+    // bare --rpc; see Mode.h
+    std::string mode = "none";
+    int requestTimeoutMs = 15000;  // --timeout: every RPC of the command, web3 included
+    // host:port of the plaintext web3 HTTP listener when it is enabled (or --web3)
+    std::optional<std::string> web3Endpoint;
+    std::shared_ptr<void> keepAlive;         // owns the transport
+    std::shared_ptr<bcos::cppsdk::Sdk> sdk;  // set by makeWsRpcCall only (AMOP lives there)
 };
 
 std::string buildJsonRpcRequest(std::string_view _method, Json::Value const& _params, int64_t _id);

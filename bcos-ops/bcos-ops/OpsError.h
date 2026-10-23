@@ -23,10 +23,14 @@
 
 namespace bcos::ops
 {
-/// 0: normal; 1: usage or connection error; 2: node reachable but a check failed / auth denied
+/// 0: normal; 1: usage or connection error; 2: node reachable but a check failed / auth denied;
+/// 3: accepted but still pending (EL tx raw past --wait)
 constexpr int c_exitOk = 0;
 constexpr int c_exitUsage = 1;
 constexpr int c_exitChecksFailed = 2;
+/// 3: the transaction was accepted but no receipt arrived within --wait (EL tx raw); it may
+/// still be included later
+constexpr int c_exitPending = 3;
 
 struct OpsError : public std::runtime_error
 {
@@ -34,5 +38,22 @@ struct OpsError : public std::runtime_error
       : std::runtime_error(std::move(_msg)), exitCode(_exitCode)
     {}
     int exitCode;
+};
+
+/// a JSON-RPC `error` member: the node refused the request (a txpool admission rejection carries
+/// the protocol::TransactionStatus value as `code`). Exit code 1 like every other OpsError so
+/// callers that do not care keep their behaviour; tx commands catch it to print the code.
+struct OpsRpcError : public OpsError
+{
+    OpsRpcError(std::string _method, int _code, std::string _message)
+      : OpsError(
+            c_exitUsage, _method + " failed: code=" + std::to_string(_code) + " msg=" + _message),
+        method(std::move(_method)),
+        code(_code),
+        message(std::move(_message))
+    {}
+    std::string method;
+    int code;
+    std::string message;
 };
 }  // namespace bcos::ops

@@ -32,6 +32,7 @@ public:
     Sha3();
     ~Sha3() noexcept override = default;
     HashType hash(bytesConstRef _data) const override;
+    HashType emptyHash() const override;
     bcos::crypto::hasher::AnyHasher hasher() const override;
 };
 }  // namespace bcos::crypto

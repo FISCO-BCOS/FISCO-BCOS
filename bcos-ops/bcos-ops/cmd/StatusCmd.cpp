@@ -19,6 +19,7 @@
 #include "bcos-ops/Args.h"
 #include "bcos-ops/Cli.h"
 #include "bcos-ops/Connect.h"
+#include "bcos-ops/Mode.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/Output.h"
 #include "bcos-ops/collect/RpcCollector.h"
@@ -107,11 +108,22 @@ void renderStatus(
     rows.emplace_back("chain", "height " + show(_status.blockNumber) + "  hash " +
                                    (_status.latestHash ? abridged(*_status.latestHash) : "-") +
                                    "  " + ago(_status.latestTimestamp));
-    rows.emplace_back("consensus",
-        "view " + show(_status.view) + "  leader " + show(_status.leaderIndex) + "  nodes " +
-            show(_status.consensusNodesNum) + "  connected " + show(_status.connectedGroupNodes) +
-            "  quorum " + show(_status.minRequiredQuorum) +
-            (_status.inTimeout && *_status.inTimeout ? "  TIMEOUT" : ""));
+    if (isElMode(_status.mode))
+    {
+        rows.emplace_back("consensus", "none: mode " + _status.mode + " runs no PBFT");
+    }
+    else if (!readsPbft(_status.mode))
+    {
+        rows.emplace_back("consensus", "not read: mode unknown, pass --mode none to read PBFT");
+    }
+    else
+    {
+        rows.emplace_back("consensus",
+            "view " + show(_status.view) + "  leader " + show(_status.leaderIndex) + "  nodes " +
+                show(_status.consensusNodesNum) + "  connected " +
+                show(_status.connectedGroupNodes) + "  quorum " + show(_status.minRequiredQuorum) +
+                (_status.inTimeout && *_status.inTimeout ? "  TIMEOUT" : ""));
+    }
     rows.emplace_back("sync", std::string(!_status.isSyncing ? "-" :
                                           *_status.isSyncing ? "syncing" :
                                                                "idle") +
@@ -178,8 +190,8 @@ int runStatusOn(
         fallbacks.txpoolLimit = static_cast<int64_t>(_connection.nodeDir->txpoolLimit);
         fallbacks.consensusTimeoutMs = _connection.nodeDir->consensusTimeoutMs;
     }
-    auto status =
-        collectFromRpc(_connection.call, _connection.group, _connection.source, fallbacks);
+    auto status = collectFromRpc(
+        _connection.call, _connection.group, _connection.source, fallbacks, _connection.mode);
     auto checks = evaluate(status, _thresholds, nowMs());
     renderStatus(_out, status, checks, _json);
     return anyFailed(checks) || !anyEvaluated(checks) ? c_exitChecksFailed : c_exitOk;
@@ -198,10 +210,15 @@ int runStatus(Args const& _args, std::ostream& _out, std::ostream& _err)
 
 void registerStatusCommand()
 {
-    registerCommand("status",
-        Command{"print the node status snapshot and run the health checks",
-            "[--node-dir <dir> | --rpc <host:port>] [--json] [--stall-factor 2] [--max-lag 10] "
-            "[--timeout 15000]",
-            {}, runStatus, {"stall-factor", "max-lag"}});
+    registerCommand(
+        "status", Command{"print the node status snapshot and run the health checks",
+                      "[--node-dir <dir> | --rpc <host:port>] [--mode none|el|opstack-el] [--json] "
+                      "[--stall-factor 2] [--max-lag 10] [--timeout 15000]\n\n"
+                      "PBFT state (getConsensusStatus) is read only in mode none: the call makes "
+                      "el / opstack-el nodes exit, so a bare --rpc (mode unknown) skips "
+                      "consensus_stable and quorum_connected until --mode none is given. "
+                      "`attach getConsensusStatus` is not gated; a v1 node on the [debug] block "
+                      "driver is not recognised as non-PBFT",
+                      {}, runStatus, {"stall-factor", "max-lag"}});
 }
 }  // namespace bcos::ops

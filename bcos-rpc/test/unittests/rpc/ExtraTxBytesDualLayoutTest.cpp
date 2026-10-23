@@ -78,9 +78,8 @@ void requireRlpThrow(F&& fn, int32_t expectedCode)
     }
     catch (bcos::codec::rlp::RlpDecodeException const& e)
     {
-        auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
-        BOOST_REQUIRE(code != nullptr);
-        BOOST_CHECK_EQUAL(*code, expectedCode);
+        // -1 is no DecodingError value: an exception without the code info fails the check.
+        BOOST_CHECK_EQUAL(bcos::codec::rlp::rlpErrorCode(e, -1), expectedCode);
     }
 }
 
