@@ -33,7 +33,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/GenesisStateRoot.h>
 #include <bcos-storage/KeyPrefixes.h>
-#include <bcos-task/AwaitableValue.h>
+#include <bcos-task/Immediate.h>
 #include <bcos-task/TBBWait.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLog.h>
@@ -83,16 +83,16 @@ inline constexpr bool
     kParallelSweepSafe<Backend, std::void_t<decltype(Backend::kConcurrentSweepSafe)>> =
         Backend::kConcurrentSweepSafe;
 
-/// Whether an awaitable type is a bcos::task::AwaitableValue — the only awaitable that
+/// Whether an awaitable type is a bcos::task::Immediate — the only awaitable that
 /// NEVER suspends by construction (await_ready is always true).
 template <class T>
-inline constexpr bool kIsAwaitableValue = false;
+inline constexpr bool kIsImmediate = false;
 template <class V>
-inline constexpr bool kIsAwaitableValue<bcos::task::AwaitableValue<V>> = true;
+inline constexpr bool kIsImmediate<bcos::task::Immediate<V>> = true;
 
 /// Compile-time enforcement of the sweep's parallel_for safety argument (see init Phase 3):
 /// when the sweep may run multi-shard, the BACKEND-level storage calls must be
-/// never-suspending AwaitableValues, so tbb::syncWait always takes its ready path and never
+/// never-suspending Immediates, so tbb::syncWait always takes its ready path and never
 /// blocks a TBB worker under parallel_for. A backend that goes truly asynchronous breaks the
 /// build here instead of hanging the boot. Backends without the opt-in marker run the
 /// single-shard path and have nothing to prove — the expressions are not even formed.
@@ -107,9 +107,9 @@ struct SweepInlineCompletionCheck<Backend, true>
     using RangeAwaitable = decltype(std::declval<Backend&>().range(
         bcos::storage2::RANGE_SEEK, std::declval<bcos::executor_v1::StateKey&>()));
     using Iterator = bcos::task::AwaitableReturnType<RangeAwaitable>;
-    static constexpr bool value = kIsAwaitableValue<RangeAwaitable> &&
-                                  kIsAwaitableValue<decltype(std::declval<Iterator&>().next())> &&
-                                  kIsAwaitableValue<decltype(std::declval<Backend&>().removeSome(
+    static constexpr bool value = kIsImmediate<RangeAwaitable> &&
+                                  kIsImmediate<decltype(std::declval<Iterator&>().next())> &&
+                                  kIsImmediate<decltype(std::declval<Backend&>().removeSome(
                                       std::declval<std::vector<bcos::executor_v1::StateKey>>()))>;
 };
 
@@ -383,7 +383,7 @@ public:
         // first-byte bound compiled out.
         //
         // parallel_for (not task_group) is safe HERE because every storage call below —
-        // range(), iterator.next(), removeSome() — bottoms out in an AwaitableValue that
+        // range(), iterator.next(), removeSome() — bottoms out in an Immediate that
         // completes synchronously inline, so tbb::syncWait always takes its ready path and
         // never reaches tbb::task::suspend; the TBBWait.h caveat (syncWait blocks the worker
         // under parallel_for once the awaited task really suspends) therefore never triggers.
@@ -393,7 +393,7 @@ public:
         // the fail-loud boot semantics this phase wants.
         static_assert(SweepInlineCompletionCheck<Backend>::value,
             "MPTPruner parallel sweep: the backend opted into kParallelSweepSafe but its "
-            "range()/iterator.next()/removeSome() are not all never-suspending AwaitableValues "
+            "range()/iterator.next()/removeSome() are not all never-suspending Immediates "
             "— tbb::syncWait could block a worker under parallel_for");
         constexpr size_t shardCount = kParallelSweepSafe<Backend> ? SWEEP_SHARDS : 1;
         std::atomic<uint64_t> scanned{0};
