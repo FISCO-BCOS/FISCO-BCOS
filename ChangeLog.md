@@ -3,7 +3,7 @@
 
 **bcos-utilities 日志破坏性变更**：
 
-* 日志管线替换为整行异步 fast path，不再支持自定义 `log.format` 配置项（配置该项会在日志中输出 ERROR 并被忽略）；`log.flush` 默认值由 `true` 改为 `false`（改为队列排空时刷盘，持续洪泛下兜底上界为 100ms + 至多 63 行的写盘延迟，逐行刷盘可显式配置 `flush=true` 恢复）
+* 日志管线替换为整行异步 fast path；`log.format` 自定义格式恢复支持——配置串在 initLog 时编译为整行布局、由生产者线程直接渲染（支持字面量、`%%` 转义及 `%Severity%`、`%TimeStamp(format="...")%`、`%ThreadName%`、`%ThreadID%`、`%LineID%`、`%ProcessID%`、`%Message%`，TimeStamp 支持 date_time 标志 `%Y %y %m %d %H %M %S %f %%`），不支持的语法回退内置布局并在 stderr 与日志中输出 ERROR；`log.flush` 默认值由 `true` 改为 `false`（改为队列排空时刷盘，持续洪泛下兜底上界为 100ms + 至多 63 行的写盘延迟，逐行刷盘可显式配置 `flush=true` 恢复）
 * 持续洪泛超过 sink 槽位池（32768 行）时新日志行会被丢弃（基线 boost 异步管线以内存增长换取不丢行）；积压排空后会输出一条 `[log] dropped N log line(s)` 标记行，累计丢弃计数可通过 `admin_getLogLevel` 响应的 `droppedLines` 字段轮询告警
 * 删除 stat 日志通道及以下导出符号：`FileLoggerHandler`、`StatFileLogger`、`StatFileLoggerHandler`、`c_statLogLevel`、`setStatLogLevel`，下游如有链接引用需移除；同时删除已安装公共头 `BoostLogThreadNameAttribute.h`（含 `bcos::log::thread_name`、`bcos::log::thread_name_impl`），下游如有 `#include` 引用需移除
 * 已安装公共头 `BoostLogInitializer.h` 删除以下公共 API：`sink_t`/`console_sink_t` typedef、两个 `initStatLog` 重载、`initLogSink`/`initHourLogSink`/`initConsoleLogSink`、`setLogFormatter`；下游如 `#include` 该头驱动自建 sink 需迁移
