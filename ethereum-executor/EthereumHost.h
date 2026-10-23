@@ -15,8 +15,10 @@
 #include "EVMPrecompiles.h"
 #include "EVMSupport.h"
 #include "EthereumState.h"
+#include "bcos-framework/protocol/EthCallGasEstimation.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/BoostLog.h"
+#include <algorithm>
 #include <evmc/evmc.hpp>
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
@@ -322,6 +324,10 @@ template <class Storage, class Policy>
 evmc_storage_status EthereumHost<Storage, Policy>::set_storage(
     const address& addr, const bytes32& key, const bytes32& value) noexcept
 {
+    // evmone calls this once per SSTORE, after the EIP-2200 sentry check; marking the frame is
+    // how the estimator learns that this frame needs the extra 2301 of headroom.
+    protocol::gas::recordStorageWrite();
+
     // Follow EVMC documentation https://evmc.ethereum.org/storagestatus.html#autotoc_md3
     // and EIP-2200 specification https://eips.ethereum.org/EIPS/eip-2200.
     auto& storage_slot = m_state.get_storage(addr, key);
@@ -647,9 +653,28 @@ evmc::Result EthereumHost<Storage, Policy>::execute_message(const evmc_message& 
 template <class Storage, class Policy>
 evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) noexcept
 {
+    // Every frame enters here -- depth 0 is the transaction's own call and each nested
+    // CALL/CREATE arrives with depth + 1 -- so this is the one place that sees both ends of
+    // every frame. eth_estimateGas reconstructs each frame's minimum budget from exactly this
+    // bracket plus the per-call-site prefix evmone reports; it is a no-op otherwise.
+    // Every frame enters here -- depth 0 is the transaction's own call and each nested
+    // CALL/CREATE arrives with depth + 1 -- so this is the one place that sees both ends of
+    // every frame. eth_estimateGas reconstructs each frame's minimum budget from exactly this
+    // bracket plus the gas each child was granted; both are plain EVMC host data, so no change
+    // to evmone is involved. Outside an estimate the two calls are a thread-local flag check.
+    if (protocol::gas::g_callGasSession.armed && orig_msg.depth > 0) [[unlikely]]
+        protocol::gas::recordChildAllowance(orig_msg.depth, orig_msg.gas,
+            std::any_of(std::begin(orig_msg.value.bytes), std::end(orig_msg.value.bytes),
+                [](uint8_t b) { return b != 0; }));
+    protocol::gas::recordFrameEnter(orig_msg.depth, orig_msg.gas);
+
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
-        return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+    {
+        // Light exception: the frame is entered and left without running any code.
+        protocol::gas::recordFrameExit(orig_msg.depth, orig_msg.gas);
+        return evmc::Result{EVMC_FAILURE, orig_msg.gas};
+    }
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();
@@ -670,6 +695,8 @@ evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) n
         if (is_03_touched && m_rev >= EVMC_SPURIOUS_DRAGON)
             m_state.touch(addr_03);
     }
+
+    protocol::gas::recordFrameExit(orig_msg.depth, result.gas_left);
     return result;
 }
 
