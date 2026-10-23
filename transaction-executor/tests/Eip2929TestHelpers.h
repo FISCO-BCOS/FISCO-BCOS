@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "../bcos-transaction-executor/EVMCResult.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -304,15 +305,27 @@ inline evmc_message makeCreate2Message(
 
 namespace detail
 {
+/// The runner address the gas-probe wrappers derive from a one-byte tag.
+inline evmc_address runnerAddressFromTag(uint8_t runnerTag)
+{
+    evmc_address runner{};
+    runner.bytes[19] = runnerTag;
+    return runner;
+}
+
+/// Run @p code as the body of a contract at @p runner under @p features: funds an origin
+/// (0x..70), installs the code, builds a HostContext through `fixture.makeHost` and executes
+/// it. Returns the raw EVMC result so callers can read gas_left or the output (issue #5580: the
+/// one harness behind both the EIP-2929 gas probes and the EIP-161/1052 account tests).
+/// @param runnerBalance when set, the runner is funded too — needed when the bytecode makes a
+///        value-carrying CALL.
 template <class Fixture>
-bcos::task::Task<int64_t> measureProbeGasTask(Fixture& fixture,
-    bcos::ledger::Features const& features, bcos::bytes const& code, uint8_t runnerTag,
-    int64_t startGas)
+bcos::task::Task<bcos::executor_v1::EVMCResult> measureProbeGasTask(Fixture& fixture,
+    bcos::ledger::Features const& features, bcos::bytes const& code, evmc_address const& runner,
+    int64_t startGas, std::optional<bcos::u256> runnerBalance = std::nullopt)
 {
     evmc_address origin{};
     origin.bytes[19] = 0x70;
-    evmc_address runner{};
-    runner.bytes[19] = runnerTag;
 
     bcos::ledger::account::EVMAccount<decltype(fixture.rollbackableStorage)> originAcc(
         fixture.rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
@@ -328,6 +341,10 @@ bcos::task::Task<int64_t> measureProbeGasTask(Fixture& fixture,
     {
         co_await runnerAcc.create();
     }
+    if (runnerBalance)
+    {
+        co_await runnerAcc.setBalance(*runnerBalance);
+    }
     auto const hash = fixture.hashImpl->hash(bcos::bytesConstRef(code.data(), code.size()));
     co_await runnerAcc.setCode(code, "", hash);
 
@@ -336,12 +353,17 @@ bcos::task::Task<int64_t> measureProbeGasTask(Fixture& fixture,
             origin, runner, EVMC_CALL, {}, 0, startGas);
     host.mutableMessage().code_address = runner;
     co_await host.prepare();
-    auto const result = co_await host.execute();
+    co_return co_await host.execute();
+}
+
+/// Gas consumed by @p result, or -1 when the execution did not succeed.
+inline int64_t gasUsedOrFailure(bcos::executor_v1::EVMCResult const& result, int64_t startGas)
+{
     if (result.status_code != EVMC_SUCCESS)
     {
-        co_return -1;
+        return -1;
     }
-    co_return startGas - result.gas_left;
+    return startGas - result.gas_left;
 }
 
 template <class Fixture>
@@ -349,8 +371,9 @@ bcos::task::Task<int64_t> measureDoubleExtCodeSizeGasTask(Fixture& fixture,
     bcos::ledger::Features const& features, evmc_address const& target, int64_t startGas,
     uint8_t runnerTag)
 {
-    co_return co_await measureProbeGasTask(
-        fixture, features, doubleExtCodeSizeBytecode(target), runnerTag, startGas);
+    auto const result = co_await measureProbeGasTask(fixture, features,
+        doubleExtCodeSizeBytecode(target), runnerAddressFromTag(runnerTag), startGas);
+    co_return gasUsedOrFailure(result, startGas);
 }
 
 template <class Fixture>
@@ -360,7 +383,9 @@ bcos::task::Task<int64_t> measureTwoAccountsExtCodeSizeGasTask(Fixture& fixture,
 {
     auto code = warmTwoAccountsExtCodeSizeBytecode(target1, target2);
     code.push_back(0x00);  // STOP
-    co_return co_await measureProbeGasTask(fixture, features, code, runnerTag, startGas);
+    auto const result = co_await measureProbeGasTask(
+        fixture, features, code, runnerAddressFromTag(runnerTag), startGas);
+    co_return gasUsedOrFailure(result, startGas);
 }
 }  // namespace detail
 

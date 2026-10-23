@@ -61,7 +61,8 @@ struct NodeStatus
     std::optional<int64_t> txpoolLimit;
     // meta
     std::string source;
-    int64_t collectedAt = 0;  // ms since epoch
+    std::string mode = "none";  // Connection::mode: EL modes run no PBFT
+    int64_t collectedAt = 0;    // ms since epoch
     std::map<std::string, std::string> reasons;
 
     void missing(std::string _field, std::string _reason)

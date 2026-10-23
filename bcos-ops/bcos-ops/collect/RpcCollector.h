@@ -32,8 +32,13 @@ struct LocalFallbacks
     std::optional<int64_t> consensusTimeoutMs;  // the PBFT default, for nodes before 3.18
 };
 
+/// _mode (Connection::mode): in the EL modes getConsensusStatus is not sent — there is no PBFT,
+/// and on a 3.18 el-mode node the call stops the node (ticket 17); the consensus fields are
+/// then missing with reason "el mode" (or "pass --mode none …" for an unknown mode) and
+/// status.mode carries the mode
 NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
-    std::string const& _source, LocalFallbacks const& _fallbacks = {});
+    std::string const& _source, LocalFallbacks const& _fallbacks = {},
+    std::string const& _mode = "none");
 
 /// `getGroupList` → first group id; throws OpsError{1} when there is none
 std::string discoverGroup(RpcCall const& _call);

@@ -1214,6 +1214,7 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     m_rpcListenIP = listenIP;
     m_rpcListenPort = listenPort;
     m_rpcDisableSsl = disableSsl;
+    m_rpcIpcEnable = _pt.get<bool>("rpc.ipc_enable", true);
     m_rpcSmSsl = smSsl;
     m_rpcFilterTimeout = filterTimeout * 1000;  // to milliseconds
     m_rpcMaxProcessBlock = maxProcessBlock;

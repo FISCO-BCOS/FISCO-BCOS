@@ -43,8 +43,11 @@ struct Entry
 
 // Every status that answers with something other than (-32000, its own name); an empty message
 // means the status name. The words are go-ethereum's: core/error.go, core/txpool/errors.go,
-// core/types/transaction.go and transaction_signing.go, core/vm/errors.go (the initcode size),
-// core/txpool/legacypool/legacypool.go.
+// core/types/transaction.go and transaction_signing.go, core/vm/errors.go (the initcode size
+// and the execution faults), core/txpool/legacypool/legacypool.go. The execution rows
+// (NotEnoughCash .. RevertInstruction) serve eth_call / eth_estimateGas (EthEndpoint's
+// callFailureError, issue #5709): a REVERT is code 3 "execution reverted", which is what viem
+// and ethers.js key on to decode the revert data.
 //
 // The rows ascend by TransactionStatus value -- which is also, today, the order the enum declares
 // them in -- because admissionError binary-searches them; the static_assert below holds a new row
@@ -54,6 +57,13 @@ struct Entry
 constexpr auto c_table = std::to_array<Entry>({
     {TS::Unknown, InternalError, "admission could not be decided"},
     {TS::OutOfGasLimit, Web3DefaultError, "intrinsic gas too low"},
+    {TS::NotEnoughCash, Web3DefaultError, "insufficient funds for gas * price + value"},
+    {TS::BadInstruction, Web3DefaultError, "invalid opcode"},
+    {TS::BadJumpDestination, Web3DefaultError, "invalid jump destination"},
+    {TS::OutOfGas, Web3DefaultError, "out of gas"},
+    {TS::OutOfStack, Web3DefaultError, "stack limit reached"},
+    {TS::StackUnderflow, Web3DefaultError, "stack underflow"},
+    {TS::RevertInstruction, Web3ExecutionReverted, "execution reverted"},
     {TS::TxPoolIsFull, Web3DefaultError, "txpool is full"},
     {TS::Malformed, InvalidParams, ""},
     {TS::AlreadyInTxPool, Web3DefaultError, "already known"},

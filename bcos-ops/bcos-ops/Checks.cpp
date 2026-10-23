@@ -16,6 +16,7 @@
  * @file Checks.cpp
  */
 #include "Checks.h"
+#include "Mode.h"
 #include <algorithm>
 #include <limits>
 
@@ -52,6 +53,12 @@ std::vector<Check> evaluate(
         auto limit = _thresholds.stallFactor * static_cast<double>(*_status.consensusTimeoutMs);
         auto limitMs = limit >= 9.2e18 ? std::numeric_limits<int64_t>::max() :
                                          static_cast<int64_t>(std::max(limit, 0.0));
+        if (!readsPbft(_status.mode))
+        {
+            // no PBFT timer drives the blocks: an L1 EL seals every ~12 s and an OP sequencer
+            // follows its CL, so the PBFT-derived limit (2 x 3 s) would flag a healthy node
+            limitMs = std::max<int64_t>(limitMs, c_elStallFloorMs);
+        }
         bool fail = ageMs > limitMs && *_status.pendingTxSize > 0;
         auto check = verdict("height_advancing", fail,
             fail ? "pending txs but no block for " + std::to_string(ageMs) + "ms" : "");
@@ -61,8 +68,12 @@ std::vector<Check> evaluate(
         checks.push_back(std::move(check));
     }
 
-    // 2. consensus_stable
-    if (!_status.inTimeout)
+    // 2. consensus_stable (EL modes: no PBFT, blocks come from the EL sync / the CL)
+    if (!readsPbft(_status.mode))
+    {
+        checks.push_back(skipped("consensus_stable", noPbftReason(_status.mode)));
+    }
+    else if (!_status.inTimeout)
     {
         checks.push_back(skipped("consensus_stable", "inTimeout unknown"));
     }
@@ -107,7 +118,11 @@ std::vector<Check> evaluate(
     }
 
     // 4. quorum_connected
-    if (_status.isConsensusNode && !*_status.isConsensusNode)
+    if (!readsPbft(_status.mode))
+    {
+        checks.push_back(skipped("quorum_connected", noPbftReason(_status.mode)));
+    }
+    else if (_status.isConsensusNode && !*_status.isConsensusNode)
     {
         checks.push_back(skipped("quorum_connected", "not a consensus node"));
     }

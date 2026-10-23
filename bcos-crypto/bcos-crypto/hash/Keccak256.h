@@ -33,6 +33,7 @@ public:
     Keccak256();
     ~Keccak256() noexcept override = default;
     HashType hash(bytesConstRef _data) const override;
+    HashType emptyHash() const override;
     bcos::crypto::hasher::AnyHasher hasher() const override;
 };
 

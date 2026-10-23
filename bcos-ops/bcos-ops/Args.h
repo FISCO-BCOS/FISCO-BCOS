@@ -132,6 +132,20 @@ public:
         {}
         throw OpsError(c_exitUsage, "invalid number for --" + std::string(_name) + ": " + *value);
     }
+    /// --wait in seconds, within (0, c_maxWaitSeconds]; _default when absent. The seconds become
+    /// int milliseconds for the SDK / RPC timeouts, hence the bound
+    double waitSecondsOr(double _default) const
+    {
+        auto seconds = numberOr<double>("wait", _default);
+        if (!(seconds > 0) || seconds > c_maxWaitSeconds)
+        {
+            throw OpsError(c_exitUsage, "--wait expects seconds in (0, " +
+                                            std::to_string(static_cast<int>(c_maxWaitSeconds)) +
+                                            "]");
+        }
+        return seconds;
+    }
+    static constexpr double c_maxWaitSeconds = 3600;
     std::vector<std::string> const& positionals() const { return m_positionals; }
     bool help() const { return flag("help") || flag("h"); }
     /// same options and flags, different positionals (sub-subcommand dispatch)

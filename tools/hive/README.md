@@ -125,13 +125,16 @@ The entrypoint:
   `terminalTotalDifficulty > 0` loudly, and likewise refuses a genesis with no
   `baseFeePerGas` whose `config.londonBlock` is present and non-zero (a
   mid-chain London activation the timestamp ladder cannot express). A genesis
-  with NO `londonBlock` at all (geth's "London never activates") is refused
-  too, and so is one that leaves any of `shanghaiTime`/`cancunTime`/
-  `pragueTime` unscheduled: `[fork_timestamps]` requires london..prague and the
-  node refuses the UINT64_MAX not-scheduled sentinel there, so such a chain has
-  no representation. That includes hive's Paris/Shanghai/Cancun network
-  configs, whose genesis leaves the later forks unscheduled: their suites fail
-  at conversion. Unscheduled optional forks (osaka/bpo1/bpo2) are left out.
+  with NO `londonBlock` at all, however, is geth's "London never activates":
+  `--genesis2ini` emits it faithfully as a pre-London-shaped header plus a
+  never-activating fork ladder (every `*_time` = UINT64_MAX, the not-scheduled
+  sentinel the node parser accepts for the timestamp keys), so the smoke
+  genesis fixtures are served byte-exactly — only executing pre-London blocks
+  is unsupported (the EVM revision floor is London). The same sentinel covers
+  any of `shanghaiTime`/`cancunTime`/`pragueTime` the JSON leaves unscheduled
+  (e.g. hive's Paris/Shanghai/Cancun network configs): the ladder pins them as
+  "never activates" instead of refusing the conversion. Unscheduled optional
+  forks (osaka/bpo1/bpo2) are left out.
 - ~~**Empty alloc**~~ (fixed): `NodeConfig::validateL2Invariants` now exempts the
   L1 EL lane (`[executor] version=2`) from the non-empty-alloc invariant — an
   empty-alloc genesis publishes the canonical empty-trie root as its stateRoot
