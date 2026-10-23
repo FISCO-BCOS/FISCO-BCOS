@@ -70,6 +70,10 @@ public:
     bcos::protocol::BlockHeader::ConstPtr blockHeader() const noexcept;
     bcos::protocol::BlockHeader::Ptr result();
 
+    /// Diagnostic recorder for the block's DmcExecutors (schedulerSeq hand-backs and
+    /// cross-contract schedule-outs). Read-only for tests and tooling.
+    std::shared_ptr<DmcStepRecorder> dmcRecorder() const { return m_dmcRecorder; }
+
     bool isCall();
     bool sysBlock() const;
     /// execute + hash time of this block (ms), recorded by onExecuteFinish and the hash step

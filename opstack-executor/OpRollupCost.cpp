@@ -177,11 +177,11 @@ LegacyL1Cost computeLegacyL1Cost(
     // A true fee < 2^256 implies the full product < 2^256 * 1e6 << 2^512, so a 512-bit
     // multiplication overflow implies fee >= 2^256: saturate (same rule as the Ecotone/Fjord
     // paths — the opValidate balance cap rejects a fee this large either way).
-    constexpr auto kMax512 = ~intx::uint512{0};
+    constexpr auto c_max512 = ~intx::uint512{0};
     const auto baseFee = intx::uint512{params.l1_base_fee};
     const auto scalar = intx::uint512{params.l1_fee_scalar};
-    if ((baseFee != 0 && gasUsed > kMax512 / baseFee) ||
-        (scalar != 0 && gasUsed * baseFee > kMax512 / scalar))
+    if ((baseFee != 0 && gasUsed > c_max512 / baseFee) ||
+        (scalar != 0 && gasUsed * baseFee > c_max512 / scalar))
         return {~intx::uint256{0}, truncatedGasUsed};
     const auto fee = gasUsed * baseFee * scalar / intx::uint512{kLegacyFeeScalarDivisor};
     if (fee > intx::uint512{~intx::uint256{0}})

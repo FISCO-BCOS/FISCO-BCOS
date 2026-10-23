@@ -20,10 +20,6 @@ static void cleanEVMCResult(evmc_result& from)
     from.output_size = 0;
 }
 
-bcos::executor_v1::EVMCResult::EVMCResult(evmc_result from)
-  : evmc_result(from), status{evmcStatusToTransactionStatus(from.status_code)}
-{}
-
 bcos::executor_v1::EVMCResult::EVMCResult(evmc_result from, protocol::TransactionStatus statusCode)
   : evmc_result(from), status(statusCode)
 {}
@@ -93,7 +89,7 @@ bcos::executor_v1::fillErrorOutputInPlace(
 }
 
 bcos::protocol::TransactionStatus bcos::executor_v1::evmcStatusToTransactionStatus(
-    evmc_status_code status)
+    evmc_status_code status, bool mapOrdinaryFailures)
 {
     switch (status)
     {
@@ -112,6 +108,24 @@ bcos::protocol::TransactionStatus bcos::executor_v1::evmcStatusToTransactionStat
     case EVMC_INVALID_INSTRUCTION:
     case EVMC_UNDEFINED_INSTRUCTION:
         return protocol::TransactionStatus::BadInstruction;
+    // Ordinary EVM outcomes (review F3), gated on bit 65: all three are mapped by the
+    // twin evmcStatusToErrorMessage table below. Off, the historical default: throw —
+    // execute()'s catch arm relabels EVMC_INTERNAL_ERROR (with the error-handling flag
+    // OFF, gas_left = ref->gas: a failed contract refunded ALL its gas), so historical
+    // blocks replay unchanged. On, they map to their own statuses and keep evmone's
+    // gas_left.
+    case EVMC_BAD_JUMP_DESTINATION:
+        if (mapOrdinaryFailures)
+            return protocol::TransactionStatus::BadJumpDestination;
+        BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
+    case EVMC_INVALID_MEMORY_ACCESS:
+        if (mapOrdinaryFailures)
+            return protocol::TransactionStatus::StackUnderflow;
+        BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
+    case EVMC_STATIC_MODE_VIOLATION:
+        if (mapOrdinaryFailures)
+            return protocol::TransactionStatus::Unknown;
+        BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     default:
         BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     }
@@ -198,11 +212,10 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::makeErrorEVMCResult(crypto::Has
     EVMCResult result{evmc_result{.status_code = evmStatus,
                           .gas_left = gasLeft,
                           .gas_refund = 0,
+                          .state_gas = {},
                           .output_data = outputData,
                           .output_size = outputSize,
-                          .release = release,
-                          .create_address = {},
-                          .padding = {}},
+                          .release = release},
         status};
 
     return result;
@@ -219,7 +232,6 @@ std::ostream& operator<<(std::ostream& output, const evmc_message& message)
     output << "sender: " << bcos::bytesConstRef(message.sender.bytes) << ", ";
     output << "input_data: " << bcos::bytesConstRef(message.input_data, message.input_size) << ", ";
     output << "value: " << bcos::bytesConstRef(message.value.bytes) << ", ";
-    output << "create2_salt: " << bcos::bytesConstRef(message.create2_salt.bytes) << ", ";
     output << "code_address: " << bcos::bytesConstRef(message.code_address.bytes) << "}";
     return output;
 }
@@ -232,8 +244,7 @@ std::ostream& operator<<(std::ostream& output, const evmc_result& result)
     output << "gas_refund: " << result.gas_refund << ", ";
     output << "output_data: " << bcos::bytesConstRef(result.output_data, result.output_size)
            << ", ";
-    output << "release: " << (result.release != nullptr) << ", ";
-    output << "create_address: " << bcos::bytesConstRef(result.create_address.bytes) << "}";
+    output << "release: " << (result.release != nullptr) << "}";
     return output;
 }
 

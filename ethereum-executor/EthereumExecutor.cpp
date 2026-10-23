@@ -89,17 +89,17 @@ protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& 
         {
         case evm::INTRINSIC_GAS_TOO_LOW:
             return static_cast<int32_t>(TransactionStatus::OutOfGasLimit);
-        case evm::INSUFFICIENT_FUNDS:
+        case evm::INSUFFICIENT_ACCOUNT_FUNDS:
             return static_cast<int32_t>(TransactionStatus::NotEnoughCash);
-        case evm::NONCE_HAS_MAX_VALUE:
+        case evm::NONCE_IS_MAX:
         case evm::NONCE_TOO_HIGH:
         case evm::NONCE_TOO_LOW:
             return static_cast<int32_t>(TransactionStatus::NonceCheckFail);
         case evm::SENDER_NOT_EOA:
             return static_cast<int32_t>(TransactionStatus::SenderNoEOA);
-        case evm::INIT_CODE_SIZE_LIMIT_EXCEEDED:
+        case evm::INITCODE_SIZE_EXCEEDED:
             return static_cast<int32_t>(TransactionStatus::MaxInitCodeSizeExceeded);
-        case evm::GAS_LIMIT_REACHED:
+        case evm::GAS_ALLOWANCE_EXCEEDED:
             return static_cast<int32_t>(TransactionStatus::BlockLimitCheckFail);
         default:
             return static_cast<int32_t>(TransactionStatus::Unknown);

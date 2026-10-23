@@ -8,9 +8,10 @@
 /// (configAt): same ladder, same values, but expressed as constexpr data over
 /// bcos::ledger::OpFork (bcos-framework/ledger/OpForkSchedule.h) so the new
 /// executor path never touches the vendored evmone state layer. The
-/// field-by-field equivalence against bcos-evm's configAt is pinned by
-/// tests/OpForkSpecEquivalenceTest.cpp — when one side moves with a new OP
-/// fork, the other must move with it.
+/// field-by-field equivalence against bcos-evm's configAt is a MANUAL contract —
+/// there is no in-tree equivalence test (tests/OpForkSpecEquivalenceTest.cpp does
+/// not exist); when one side moves with a new OP fork, the other must move with
+/// it by hand and the review must show both tables.
 ///
 /// Table values come from op-geth v1.101702.2; the citations mirror
 /// bcos-evm/opstack/OpPrecompiles.cpp so a future OP Stack change can be

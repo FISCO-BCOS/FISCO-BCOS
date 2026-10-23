@@ -322,7 +322,7 @@ public:
                 m_blockInfo.base_fee = 0;
                 // blob_base_fee is intentionally NOT zeroed for the dry run:
                 // geth's eth_call still enforces the blob-fee cap
-                // (BLOB_FEE_CAP_LESS_THAN_BLOCKS) and still includes the blob
+                // (INSUFFICIENT_MAX_FEE_PER_BLOB_GAS) and still includes the blob
                 // fee in the balance check, so a blob eth_call / estimateGas
                 // keeps those semantics. Only the non-blob price is cleared.
                 // * omitted nonce -> the sender's current nonce. This needs a

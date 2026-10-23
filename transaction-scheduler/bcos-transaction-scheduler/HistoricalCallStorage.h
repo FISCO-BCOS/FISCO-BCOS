@@ -91,10 +91,6 @@ public:
     using AccountType =
         ledger::mpt::MPTAccount<LatestView, ViewNodeStorage<LatestView>, LatestView>;
 
-    /// Marker consumed by executor_v1::hostcontext::isHistoricalStorage(): storages carrying
-    /// it must bypass the global address-keyed executable cache (HostContext.h::getExecutable).
-    constexpr static bool isHistoricalStateStorage = true;
-
     /// @param stateRoot the MPT state root block N committed — its header's stateRoot.
     /// @param accountMode the node's account-table mode (nodeAddressTableMode()): handed to
     ///        every cached MPTAccount so its inherited no-root flat reads/writes target the

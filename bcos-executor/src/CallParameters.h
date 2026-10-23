@@ -36,6 +36,10 @@ struct CallParameters
 
     int64_t contextID = 0;
     int64_t seq = 0;
+    /// Copied from the resumed ExecutionMessage::schedulerSeq (R5 F1): the DMC
+    /// scheduler's last-consumed seq for this tx context. Executor-local — never
+    /// serialized back out; consumed by CoroutineTransactionExecutive::externalCall.
+    int64_t schedulerSeq = -1;
 
     std::string senderAddress;   // common field, readable format
     std::string codeAddress;     // common field, readable format
@@ -67,14 +71,17 @@ struct CallParameters
 
     std::string message;                               // by response, readable format
     std::vector<bcos::protocol::LogEntry> logEntries;  // by response
-    std::optional<u256> createSalt;                    // by response
     std::string newEVMContractAddress;                 // by response, readable format
 
     int32_t status = 0;  // by response
     int32_t evmStatus = 0;
     Type type;
-    bool staticCall = false;      // common field
-    bool create = false;          // by request, is creation
+    bool staticCall = false;  // common field
+    bool create = false;      // by request, is creation
+    // Local host-to-executive hint: opcode CREATE/CREATE2 used to have no recipient.
+    // Sharding must keep them local after ABI 18 pre-derives the address. Native
+    // precompiled creates with explicit recipients retain their shard routing.
+    bool createFromOpcode = false;
     bool internalCreate = false;  // by internal precompiled request, is creation
     /**
      * Internal precompiled contract request, this option is used to

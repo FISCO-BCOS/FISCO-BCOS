@@ -15,6 +15,7 @@
  */
 
 #include "bcos-executor/src/vm/Precompiled.h"
+#include <bcos-framework/ledger/Features.h>
 #include <boost/test/unit_test.hpp>
 #include <intx/intx.hpp>
 
