@@ -33,8 +33,6 @@
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -43,6 +41,8 @@
 #include <string_view>
 
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 
 namespace bcos::ledger::mpt::test
 {

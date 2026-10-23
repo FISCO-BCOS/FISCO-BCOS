@@ -2,6 +2,7 @@
 #include "ExecutivePool.h"
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <stdlib.h>
 #include <boost/test/unit_test.hpp>
 #include <string>

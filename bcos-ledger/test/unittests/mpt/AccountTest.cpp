@@ -20,10 +20,10 @@
 #include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Errors.h>
-#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
+#include <bcos-utilities/Common.h>
 
 namespace bcos::ledger::mpt::test
 {

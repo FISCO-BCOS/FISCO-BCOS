@@ -18,7 +18,7 @@
  * @date 2021-12-29
  */
 #include "PeersRouterTable.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 

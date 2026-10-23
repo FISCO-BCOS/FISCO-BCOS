@@ -19,6 +19,7 @@
  */
 
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/log/core/core.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <map>

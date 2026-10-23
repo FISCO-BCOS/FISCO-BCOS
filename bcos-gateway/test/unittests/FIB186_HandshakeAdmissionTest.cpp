@@ -22,9 +22,9 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
+#include "bcos-utilities/IOServicePool.h"
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::gateway;

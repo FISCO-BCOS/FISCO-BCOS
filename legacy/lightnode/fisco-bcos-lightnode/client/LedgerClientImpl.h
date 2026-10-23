@@ -11,6 +11,7 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>

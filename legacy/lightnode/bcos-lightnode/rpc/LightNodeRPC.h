@@ -20,6 +20,7 @@
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>

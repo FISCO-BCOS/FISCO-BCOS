@@ -16,7 +16,7 @@
 #include "EVMSupport.h"
 #include "EthereumState.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <evmc/evmc.hpp>
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>

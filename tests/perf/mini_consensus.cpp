@@ -30,6 +30,7 @@
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-task/Wait.h>
 #include <execinfo.h>
+#include <boost/property_tree/ini_parser.hpp>
 #include <stdexcept>
 #include <thread>
 

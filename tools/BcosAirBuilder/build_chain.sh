@@ -1541,6 +1541,11 @@ generate_common_ini() {
     ; rotate the log every hour
     ;enable_rotate_by_hour=true
     enable_rate_collector=false
+    ; flush every log line to disk immediately (default false: lines are flushed
+    ; when the log queue drains; under sustained load at most 100ms plus up to 63 lines of write latency)
+    ; under a sustained flood beyond the 32768-line backlog new lines are dropped
+    ; (a "[log] dropped N log line(s)" marker follows; cumulative count via admin_getLogLevel droppedLines)
+    ;flush=false
 EOF
 }
 

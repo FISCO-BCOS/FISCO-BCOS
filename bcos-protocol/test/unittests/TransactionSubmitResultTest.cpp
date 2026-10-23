@@ -8,9 +8,13 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/protocol/Protocol.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
+#include <boost/test/unit_test.hpp>
+
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos::protocol;
 

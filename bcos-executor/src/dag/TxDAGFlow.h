@@ -22,7 +22,7 @@
 #include "./CriticalFields.h"
 #include "./TxDAGInterface.h"
 #include "tbb/flow_graph.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <vector>
 
 #define DAGFLOW_LOG(LEVEL) \

@@ -27,6 +27,7 @@
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+#include <boost/property_tree/ini_parser.hpp>
 // #include "bcos-framework/security/KeyEncryptionType.h"
 #include <algorithm>
 

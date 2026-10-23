@@ -21,6 +21,7 @@
 
 #include "Abi.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/forwards.h>
 #include <json/json.h>
 #include <sys/types.h>

@@ -23,6 +23,7 @@
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/ed25519/Ed25519KeyPair.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <wedpr-crypto/WedprCrypto.h>
 #include <memory>
 

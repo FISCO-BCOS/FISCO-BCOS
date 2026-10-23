@@ -6,6 +6,7 @@
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/vm/HostContext.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <memory>
 

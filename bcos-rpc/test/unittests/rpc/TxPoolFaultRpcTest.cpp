@@ -21,7 +21,6 @@
 #include "../common/RPCFixture.h"
 #include "../common/ThrowingTxPool.h"
 #include "../common/Web3TxSamples.h"
-#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
@@ -32,6 +31,8 @@
 #include <memory>
 #include <string>
 #include <variant>
+
+#include <bcos-protocol/TransactionStatus.h>
 
 using namespace bcos;
 using namespace bcos::rpc;

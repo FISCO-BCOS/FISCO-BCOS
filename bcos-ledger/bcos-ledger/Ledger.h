@@ -31,6 +31,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/compute/detail/lru_cache.hpp>
 #include <atomic>
 #include <utility>

@@ -10,10 +10,10 @@
 
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
-#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 
+#include <bcos-utilities/Common.h>
 #include <cstdint>
 #include <optional>
 

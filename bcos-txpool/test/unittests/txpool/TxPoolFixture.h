@@ -39,9 +39,9 @@
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-txpool/sync/TransactionSync.h>
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>

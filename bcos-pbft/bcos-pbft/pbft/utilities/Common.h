@@ -21,6 +21,7 @@
 #include <bcos-framework/Common.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
 #include <stdint.h>
 #include <string>
 #include <string_view>
@@ -29,10 +30,9 @@
 // runtime-level variant: _level is a bcos::LogLevel value, not a token. Used by the helpers that
 // emit one named event (e.g. PrePrepareRejected) from several sites at different severities, so
 // the event name has exactly one LOG_DESC in the tree.
-#define PBFT_LOG_DYN(_level)                                                              \
-    if (bcos::moduleLogEnabled(bcos::LogModule::PBFT, (_level)))                          \
-    BOOST_LOG_SEV(bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(_level)) \
-        << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
+#define PBFT_LOG_DYN(_level)                                     \
+    if (bcos::moduleLogEnabled(bcos::LogModule::PBFT, (_level))) \
+    bcos::LogStream(_level) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
 #define PBFT_STORAGE_LOG(LEVEL)                                                 \
     BCOS_MODULE_LOG(PBFT, LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT") \
                                  << LOG_BADGE("STORAGE")

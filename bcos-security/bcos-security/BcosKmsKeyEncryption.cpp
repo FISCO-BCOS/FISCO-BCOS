@@ -34,6 +34,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/string.hpp>
 
 using namespace bcos;

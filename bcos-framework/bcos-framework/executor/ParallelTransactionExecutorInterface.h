@@ -31,6 +31,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <memory>
 

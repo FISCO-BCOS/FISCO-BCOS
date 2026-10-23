@@ -19,11 +19,11 @@
 
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 
 namespace bcos::ledger::mpt::test
 {

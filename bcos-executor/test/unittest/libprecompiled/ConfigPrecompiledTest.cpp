@@ -24,6 +24,7 @@
 #include <bcos-framework/storage/Serialize.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/endian/conversion.hpp>
+#include <boost/log/core/core.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 

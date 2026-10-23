@@ -36,6 +36,7 @@
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>

@@ -22,6 +22,7 @@
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-task/Wait.h>
 #include <algorithm>
 #include <chrono>

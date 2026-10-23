@@ -18,6 +18,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
 #include <oneapi/tbb/task_group.h>
 #include <atomic>
 #include <chrono>

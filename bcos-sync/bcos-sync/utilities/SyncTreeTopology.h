@@ -20,7 +20,7 @@
  */
 #pragma once
 #include <bcos-tool/TreeTopology.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <utility>
 
 #define SYNCTREE_LOG(LEVEL)                                                                   \

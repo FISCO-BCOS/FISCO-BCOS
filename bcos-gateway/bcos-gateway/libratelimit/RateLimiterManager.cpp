@@ -21,6 +21,7 @@
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 
 using namespace bcos;
 using namespace bcos::gateway;

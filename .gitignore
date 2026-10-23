@@ -98,3 +98,9 @@ CLAUDE.local.md
 .worktrees/
 .claude/worktrees
 .claude/agents
+
+# Gradle
+.gradle/
+
+# Local build_chain.sh output
+tools/nodes/

@@ -23,8 +23,9 @@
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/txpool/Constant.h>
-#include <bcos-protocol/TransactionStatus.h>
 
+
+#include <bcos-protocol/TransactionStatus.h>
 using namespace bcos;
 using namespace bcos::txvalidator;
 using namespace bcos::protocol;

@@ -20,7 +20,7 @@
 
 #pragma once
 #include <bcos-cpp-sdk/utilities/logger/LogInitializer.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
 

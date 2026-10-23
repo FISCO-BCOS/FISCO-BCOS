@@ -15,6 +15,7 @@
 #include "bcos-gateway/libp2p/P2PSession.h"    // for P2PSession
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-task/Wait.h>
 #include <boost/random.hpp>
 #include <boost/throw_exception.hpp>

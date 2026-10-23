@@ -26,6 +26,7 @@
 #include "rocksdb/convenience.h"
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/LogStream.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>

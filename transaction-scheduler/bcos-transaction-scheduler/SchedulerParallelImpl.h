@@ -9,6 +9,7 @@
 #include "bcos-task/TBBWait.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>

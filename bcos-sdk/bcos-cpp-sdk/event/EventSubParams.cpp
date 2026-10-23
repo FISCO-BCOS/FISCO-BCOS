@@ -20,7 +20,7 @@
 
 #include <bcos-cpp-sdk/event/EventSubParams.h>
 #include <bcos-cpp-sdk/utilities/abi/ContractABIEventTopic.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/json.h>
 #include <exception>
 

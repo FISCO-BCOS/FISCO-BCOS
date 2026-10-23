@@ -22,7 +22,7 @@
 #include <bcos-boostssl/context/ContextConfig.h>
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/interfaces/NodeInfoDef.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <cstdint>
 #include <set>

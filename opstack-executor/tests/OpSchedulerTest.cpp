@@ -47,15 +47,14 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Error.h>
 #include <boost/exception/get_error_info.hpp>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
 
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Error.h>
 #include <opstack-executor/OpAdmissionRollupCost.h>  // makeOpAdmissionRollupCost
-
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
