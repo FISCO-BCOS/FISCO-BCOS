@@ -35,3 +35,16 @@ target_link_libraries(test-ethereum-authorization-list PRIVATE
     evmone::evmone Boost::unit_test_framework)
 set_target_properties(test-ethereum-authorization-list PROPERTIES UNITY_BUILD OFF)
 add_test(NAME test-ethereum-authorization-list COMMAND test-ethereum-authorization-list)
+
+# The per-thread evmone VM invariant (EvmoneVm.h): one VM per thread, reused within a thread.
+# This is the committed form of the negative control for the shared-VM race -- narrowing
+# `thread_local` back to a shared instance makes DifferentThreadsGetDifferentVms fail.
+add_executable(test-ethereum-evmone-vm
+    TestMain.cpp
+    TestEvmoneVmPerThread.cpp)
+target_include_directories(test-ethereum-evmone-vm PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(test-ethereum-evmone-vm PRIVATE
+    ethereum-executor evmone::evmone Boost::unit_test_framework)
+set_target_properties(test-ethereum-evmone-vm PROPERTIES UNITY_BUILD OFF)
+set_target_properties(test-ethereum-evmone-vm PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+add_test(NAME test-ethereum-evmone-vm COMMAND test-ethereum-evmone-vm)

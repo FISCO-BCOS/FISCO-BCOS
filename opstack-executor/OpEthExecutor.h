@@ -53,6 +53,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>  // safeFromQuantity / fromBigEndian
 #include <bcos-utilities/Exceptions.h>
+#include <ethereum-executor/EthereumExecutor.h>  // threadLocalEvmoneVm
 #include <ethereum-executor/EthereumState.h>
 #include <ethereum-executor/EthereumTransition.h>  // validateTransaction / runTransaction
 #include <evmone/evmone.h>
@@ -220,8 +221,7 @@ public:
         std::shared_ptr<OpStorageErrorSlot> errorSlot = {})
       : m_receiptFactory(std::move(receiptFactory)),
         m_spec(spec),
-        m_errorSlot(errorSlot ? std::move(errorSlot) : std::make_shared<OpStorageErrorSlot>()),
-        m_vm(evmc_create_evmone())
+        m_errorSlot(errorSlot ? std::move(errorSlot) : std::make_shared<OpStorageErrorSlot>())
     {}
 
     /// The block-wide storage-error slot shared by every per-tx instance this
@@ -233,7 +233,8 @@ public:
     }
 
     /// Access the EVM instance (needed for system_call functions).
-    evmc::VM& vm() { return m_vm; }
+    /// Per-thread; see threadLocalEvmoneVm(). Valid only during a call on this thread.
+    evmc::VM& vm() { return bcos::executor_v1::eth::threadLocalEvmoneVm(); }
 
     // ---- TransactionExecutor concept: ExecuteContext with prepare/execute/finish ----
     using BlockContext = OpEthBlockContext;
@@ -518,8 +519,8 @@ public:
                 try
                 {
                     m_receipt = co_await opRunDeposit(*m_state, blockInfo, m_ctx->blockHashLookup,
-                        *m_deposit, executor.m_spec, executor.m_vm, m_ctx->chainId,
-                        m_ctx->blockGasLeft, *executor.m_receiptFactory, blockHeader.number());
+                        *m_deposit, executor.m_spec, m_ctx->chainId, m_ctx->blockGasLeft,
+                        *executor.m_receiptFactory, blockHeader.number());
                 }
                 catch (...)
                 {
@@ -553,8 +554,8 @@ public:
                     transaction, m_callParams, m_snapshot};
                 m_receipt =
                     co_await eth::runTransaction(*m_state, *m_blockInfo, m_ctx->blockHashLookup,
-                        transaction, executor.m_spec.rev, executor.m_vm, m_txProps, m_ctx->chainId,
-                        m_callParams, *executor.m_receiptFactory, blockHeader.number(), policy);
+                        transaction, executor.m_spec.rev, m_txProps, m_ctx->chainId, m_callParams,
+                        *executor.m_receiptFactory, blockHeader.number(), policy);
             }
             catch (...)
             {
@@ -808,7 +809,6 @@ private:
     /// Block-wide storage-error slot: shared by every per-tx storage chain this
     /// executor constructs so per-tx faults surface at the block-level check.
     std::shared_ptr<OpStorageErrorSlot> m_errorSlot;
-    evmc::VM m_vm;
 };
 
 }  // namespace bcos::executor_v1::opstack

@@ -29,6 +29,7 @@
 #include "EthExecutionPolicy.h"
 #include "EthStorageErrorGuard.h"
 #include "EthereumTransition.h"
+#include "EvmoneVm.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -112,13 +113,12 @@ public:
     /// committed hashes, which are never modified by the block being executed.
     EthereumExecutor(protocol::TransactionReceiptFactory const& receiptFactory,
         BlockHashLookup blockHashLookup = {})
-      : m_receiptFactory(receiptFactory),
-        m_vm(evmc_create_evmone()),
-        m_blockHashLookup(std::move(blockHashLookup))
+      : m_receiptFactory(receiptFactory), m_blockHashLookup(std::move(blockHashLookup))
     {}
 
     /// Access the EVM instance (needed for system_call functions).
-    evmc::VM& vm() { return m_vm; }
+    /// Per-thread; see threadLocalEvmoneVm(). Valid only during a call on this thread.
+    evmc::VM& vm() { return threadLocalEvmoneVm(); }
 
     /// Execute a single Ethereum transaction.
     ///
@@ -200,8 +200,10 @@ public:
     // context (never shared between contexts), so the three phases of
     // different transactions may run in parallel. The only state shared
     // through the executor is:
-    //   - m_vm              : evmone VM execution is thread-safe (a fresh
-    //                         execution state is created per call).
+    //   - the EVM           : per-THREAD, neither owned nor shared here. evmone pools
+    //                         ExecutionState by call depth and each slot recalls the
+    //                         host context of the frame that reset it, so one VM cannot
+    //                         serve two threads (threadLocalEvmoneVm()).
     //   - m_receiptFactory  : createReceipt allocates a fresh receipt per call.
     //   - m_blockHashLookup : invoked for BLOCKHASH. The production provider
     //                         reads a read-only committed table straight
@@ -445,9 +447,9 @@ public:
                             static_cast<int64_t>(evm::GAS_PER_BLOB);
                     }
                     m_receipt = co_await runTransaction(state, m_blockInfo,
-                        executor.get().m_blockHashLookup, transaction.get(), m_rev,
-                        executor.get().m_vm, *props, nodeChainId(), m_callParams,
-                        executor.get().m_receiptFactory, blockHeader.get().number());
+                        executor.get().m_blockHashLookup, transaction.get(), m_rev, *props,
+                        nodeChainId(), m_callParams, executor.get().m_receiptFactory,
+                        blockHeader.get().number());
                 }
                 else
                 {
@@ -546,7 +548,6 @@ public:
 
 private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
-    evmc::VM m_vm;
     BlockHashLookup m_blockHashLookup;
 };
 

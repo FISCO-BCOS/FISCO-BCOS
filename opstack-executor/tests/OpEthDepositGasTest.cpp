@@ -93,9 +93,10 @@ bcos::protocol::TransactionReceipt::Ptr runIsthmusDeposit(
     MutableStorage& storage, opeth::DepositTx const& dep, eth::EthBlockInfo const& block)
 {
     eth::EthereumState<MutableStorage> state{storage};
-    evmc::VM vm{evmc_create_evmone()};
+    // opRunDeposit takes the calling thread's VM itself (EvmoneVm.h), so the test no longer
+    // builds one: the execution happens on this thread either way.
     return bcos::task::syncWait(
-        opeth::opRunDeposit(state, block, /*blockHashLookup=*/{}, dep, opeth::OP_ISTHMUS_SPEC, vm,
+        opeth::opRunDeposit(state, block, /*blockHashLookup=*/{}, dep, opeth::OP_ISTHMUS_SPEC,
             kChainId, block.gas_limit, *makeReceiptFactory(), block.number));
 }
 

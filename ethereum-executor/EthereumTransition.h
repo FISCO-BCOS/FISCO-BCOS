@@ -21,6 +21,7 @@
 #include "EthExecutionPolicy.h"
 #include "EthereumHost.h"
 #include "EthereumState.h"
+#include "EvmoneVm.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlobSchedule.h"
 #include "bcos-framework/protocol/LogEntry.h"
@@ -344,7 +345,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
 template <class Storage, class Policy = EthL1Policy>
 task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Storage>& state,
     EthBlockInfo const& block, BlockHashLookup blockHashLookup, protocol::Transaction const& tx,
-    evmc_revision rev, evmc::VM& vm, EthTxProperties const& txProps, uint64_t chainId,
+    evmc_revision rev, EthTxProperties const& txProps, uint64_t chainId,
     EthCallParams const& callParams, protocol::TransactionReceiptFactory const& rf,
     int64_t blockNumber, Policy const& policy = Policy{})
 {
@@ -370,6 +371,12 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     const auto tx_max_cost =
         policy.withholdUpfront(sender_acc, tx, block, rev, gasLimit, effective_gas_price);
 
+    // The thread's own VM, taken here rather than handed in as a parameter. This is the thread
+    // that runs the EVM: nothing between this point and host.call() below can suspend the
+    // coroutine, and the function's only co_await is the storage write-back after the receipt
+    // is built. A `evmc::VM&` parameter would instead be bound on the caller's thread and used
+    // on whichever thread this coroutine runs on, an equality nothing enforces (see EvmoneVm.h).
+    auto& vm = threadLocalEvmoneVm();
     EthereumHost<Storage, Policy> host{rev, vm, state, block, std::move(blockHashLookup),
         ethTxContextOf(tx, callParams), callParams, chainId, policy};
 
