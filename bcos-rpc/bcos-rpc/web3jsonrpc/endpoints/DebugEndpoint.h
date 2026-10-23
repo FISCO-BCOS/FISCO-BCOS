@@ -49,9 +49,23 @@ public:
     /// DebugAPI.GetRawHeader.
     task::Task<void> getRawHeader(const Json::Value&, Json::Value&);
 
+    /// debug_getRawReceipts: the RLP encoding of every receipt in a block, in block order, as
+    /// kona-host's L1 data plane reads them (geth's debug_getRawReceipts). Each element is the
+    /// same byte string the block's receipts trie leaf holds, i.e. type-prefix || rlp([status,
+    /// cumulativeGasUsed, logsBloom, logs]).
+    task::Task<void> getRawReceipts(const Json::Value&, Json::Value&);
+
     /// debug_executePayload: kona-host's high-level "execute a payload and return the whole
     /// stateless execution witness" hint. See the .cpp for why it answers MethodNotFound.
     task::Task<void> executePayload(const Json::Value&, Json::Value&);
+
+    /// Resolve the single block parameter both raw-data endpoints take (a block number, a
+    /// tag other than safe/finalized/pending, or a 32-byte hash) to a height, and reject one
+    /// this node does not have. Shared so the header and receipts paths cannot disagree about
+    /// which block a request names -- on the fault-proof data plane two answers for one input
+    /// is a divergence, not a cosmetic difference.
+    task::Task<protocol::BlockNumber> resolveRawBlockParameter(
+        const Json::Value& request, std::string_view method);
 
 private:
     NodeService::Ptr m_nodeService;
