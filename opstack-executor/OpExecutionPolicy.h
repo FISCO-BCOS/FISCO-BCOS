@@ -327,8 +327,11 @@ public:
     /// return-data output, the 256-byte logsBloom (encodeReceiptLeaf requires it), the
     /// creation contractAddress, the OP metadata snapshot and the hex effective gas price.
     template <class Host>
+    /// @param keepOutput accepted for signature parity with EthL1Policy::buildReceipt; the OP
+    ///        receipt has always carried the return data, which is left unchanged here.
     protocol::TransactionReceipt::Ptr buildReceipt(Host& host, evmc::Result const& result,
-        int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber) const
+        int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber,
+        [[maybe_unused]] bool keepOutput = false) const
     {
         // gas_used is int64_t; a runtime non-negative check guards the cast against wrap
         // (evmone guarantees it; under NDEBUG the assert is gone and the consensus surface

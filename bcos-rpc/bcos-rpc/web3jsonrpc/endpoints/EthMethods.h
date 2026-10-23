@@ -89,6 +89,7 @@ enum class EthMethod
     eth_getFilterLogs,
     eth_getLogs,
     eth_maxPriorityFeePerGas,
+    eth_blobBaseFee,
     eth_feeHistory,
     eth_getBlockReceipts,
     txpool_status,

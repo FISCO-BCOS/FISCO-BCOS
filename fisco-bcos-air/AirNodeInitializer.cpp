@@ -21,6 +21,7 @@
 #include "AirNodeInitializer.h"
 #include "libinitializer/Common.h"
 #include "libinitializer/EthereumBlockImport.h"
+#include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/MemPoolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -127,6 +128,25 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // gate keys on it (RpcChainPolicy admits blob transactions only on executor_version == 2).
     // EL-mode sidecar handling stays keyed on the EL flag above.
     nodeService->setExecutorVersion(m_nodeInitializer->executorVersion());
+
+    // EIP-7840 blob schedule ([fork_timestamps] cancun/prague/bpo1/bpo2): eth_blobBaseFee picks
+    // the base-fee update fraction from the head block's timestamp. The block verifier stamps
+    // this schedule into each block's LedgerConfig, but that config is not what the RPC layer
+    // rebuilds from storage, and a v2 genesis records no evmc_revision row — so the fork times
+    // are wired here, from the same NodeConfig the verifier derives them from.
+    // Same source as the setExecutorVersion call above (the ledger-resolved value, not the
+    // local config): the consumer's lane gate reads the chain's executor_version, so gating the
+    // wiring on a different source would let a node answer eth_blobBaseFee on a chain whose
+    // schedule was never installed.
+    if (m_nodeInitializer->executorVersion() == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        auto const forks =
+            bcos::initializer::EthereumSyncInitializer::evmcForkSchedule(*nodeConfig);
+        nodeService->setBlobForkTimes(bcos::protocol::BlobForkTimes{.cancunTime = forks.cancunTime,
+            .pragueTime = forks.pragueTime,
+            .bpo1Time = forks.bpo1Time,
+            .bpo2Time = forks.bpo2Time});
+    }
 
     // The DebugSelfProduce driver and every node serving the Engine API route
     // sendRawTransaction to the in-process mempool instead of txpool — the EngineService
