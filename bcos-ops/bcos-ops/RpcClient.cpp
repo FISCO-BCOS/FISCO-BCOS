@@ -197,6 +197,16 @@ bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs)
     return first == c_tlsAlert || first == c_tlsHandshake;
 }
 
+std::shared_ptr<bcos::cppsdk::Sdk> sdkOf(Connection const& _connection)
+{
+    if (!_connection.sdk)
+    {
+        throw OpsError(c_exitUsage, "amop needs the node's WebSocket RPC (source=" +
+                                        _connection.source + " has no AMOP channel)");
+    }
+    return _connection.sdk;
+}
+
 Connection makeWsRpcCall(
     std::string const& _hostOrName, uint16_t _port, int _connectTimeoutMs, int _requestTimeoutMs)
 {
@@ -234,6 +244,7 @@ Connection makeWsRpcCall(
     connection.source = "rpc";
     connection.endpoint = endpoint;
     connection.keepAlive = transport;
+    connection.sdk = transport->sdk;
     connection.call = [transport, _requestTimeoutMs](
                           std::string_view _method, Json::Value const& _params) -> Json::Value {
         auto id = transport->nextId.fetch_add(1);

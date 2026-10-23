@@ -39,9 +39,19 @@ std::map<std::string, Command>& commandTable()
     // the register functions write through registerCommand → rawTable(), so this one-time
     // initializer never re-enters commandTable()
     static bool const registered = []() {
+        registerAccountCommand();
+        registerAmopCommand();
+        registerAuthCommand();
+        registerBalanceCommand();
+        registerConsensusCommand();
+        registerSysconfigCommand();
         registerStatusCommand();
         registerTxCommand();
+        registerBlockCommand();
         registerAttachCommands();
+        registerLogCommand();
+        registerTuiCommand();
+        registerCommitteeCommand();
         return true;
     }();
     (void)registered;
@@ -72,7 +82,8 @@ void printUsage(std::ostream& _out)
          << "  --rpc <host:port>  connect to a plaintext RPC port instead of --node-dir\n"
          << "  --json             force JSON output (default when stdout is not a TTY)\n"
          << "\nexit codes: 0 ok; 1 usage or connection error; 2 node reachable but a check "
-            "failed or none could be evaluated\n";
+            "failed, none could be evaluated or the node refused the request; 3 accepted but still "
+            "pending (EL tx raw)\n";
 }
 
 int runOps(std::vector<std::string> const& _args, std::ostream& _out, std::ostream& _err)

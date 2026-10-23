@@ -32,6 +32,7 @@ public:
     Sha256();
     ~Sha256() override = default;
     HashType hash(bytesConstRef _data) const override;
+    HashType emptyHash() const override;
     bcos::crypto::hasher::AnyHasher hasher() const override;
 };
 }  // namespace bcos::crypto

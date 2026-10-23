@@ -1,0 +1,269 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file Refresher.cpp
+ */
+#include "Refresher.h"
+#include "bcos-ops/HttpRpc.h"
+#include "bcos-ops/Mode.h"
+#include "bcos-ops/OpsError.h"
+#include "bcos-ops/cmd/CommitteeCmd.h"
+#include <chrono>
+#include <optional>
+
+namespace bcos::ops::tui
+{
+namespace
+{
+int64_t nowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+}  // namespace
+
+Refresher::Refresher(Connection _connection, LocalFallbacks _fallbacks, Thresholds _thresholds,
+    Model& _model, std::function<void()> _onUpdate, int _intervalMs)
+  : m_connection(std::move(_connection)),
+    m_fallbacks(_fallbacks),
+    m_thresholds(_thresholds),
+    m_model(_model),
+    m_onUpdate(std::move(_onUpdate)),
+    m_intervalMs(_intervalMs)
+{
+    if (isElMode(m_connection.mode) && m_connection.web3Endpoint)
+    {
+        // a plain HTTP POST per call (the SDK transport cannot speak to the web3 port), and
+        // stop-aware like every other refresher RPC
+        // the refresh period is 2 s: never wait longer than 5 s, nor longer than --timeout
+        auto inner = makeHttpRpcCall(
+            *m_connection.web3Endpoint, std::min(5000, m_connection.requestTimeoutMs));
+        m_web3 = [this, inner](std::string_view _method, Json::Value const& _params) {
+            if (m_stop)
+            {
+                throw OpsError(c_exitUsage, "refresh stopped");
+            }
+            return inner(_method, _params);
+        };
+    }
+}
+
+Refresher::~Refresher()
+{
+    stop();
+}
+
+void Refresher::start()
+{
+    if (m_thread.joinable())
+    {
+        return;
+    }
+    m_stop = false;
+    m_thread = std::thread([this]() { loop(); });
+}
+
+void Refresher::stop()
+{
+    m_stop = true;
+    {
+        std::lock_guard<std::mutex> lock(m_wakeMutex);
+        m_kick = true;
+    }
+    m_wake.notify_all();
+    if (m_thread.joinable())
+    {
+        m_thread.join();
+    }
+}
+
+void Refresher::refreshNow()
+{
+    {
+        std::lock_guard<std::mutex> lock(m_wakeMutex);
+        m_kick = true;
+    }
+    m_wake.notify_all();
+}
+
+void Refresher::runOnce()
+{
+    try
+    {
+        // every phase goes through a call that refuses to start once stop() was asked, so a
+        // quit waits for the request in flight and nothing after it
+        RpcCall call = [this](std::string_view _method, Json::Value const& _params) {
+            if (m_stop)
+            {
+                throw OpsError(c_exitUsage, "refresh stopped");
+            }
+            return m_connection.call(_method, _params);
+        };
+        auto status = collectFromRpc(
+            call, m_connection.group, m_connection.source, m_fallbacks, m_connection.mode);
+        if (m_stop)
+        {
+            return;
+        }
+        std::optional<TxpoolState> txpool;
+        if (isElMode(m_connection.mode))
+        {
+            txpool = txpoolFetch(m_connection.mode, m_web3 ? &*m_web3 : nullptr, &m_stop);
+        }
+        auto checks = evaluate(status, m_thresholds, nowMs());
+        Json::Value params(Json::arrayValue);
+        params.append(m_connection.group);
+        params.append("");
+        Json::Value consensus;
+        Json::Value sync;
+        Json::Value peers;
+        if (readsPbft(m_connection.mode))  // EL / unknown modes: the call stops el nodes
+        {
+            try
+            {
+                consensus = call("getConsensusStatus", params);
+            }
+            catch (std::exception const&)
+            {}
+        }
+        try
+        {
+            sync = call("getSyncStatus", params);
+        }
+        catch (std::exception const&)
+        {}
+        try
+        {
+            peers = call("getPeers", Json::Value(Json::arrayValue));
+        }
+        catch (std::exception const&)
+        {}
+        if (m_stop)
+        {
+            return;
+        }
+        // the explorer works on a copy outside the lock: up to 50 block fetches per round
+        ExplorerState explorer;
+        {
+            std::lock_guard<std::mutex> lock(m_model.mutex);
+            explorer = m_model.explorer;
+        }
+        explorer.capacity = m_capacity ? m_capacity() : c_explorerMinRows;
+        if (status.blockNumber)
+        {
+            explorerFetch(
+                explorer, m_connection.call, m_connection.group, *status.blockNumber, &m_stop);
+        }
+        auto visible = m_visibleTxs ? m_visibleTxs() : std::make_pair(size_t(0), c_explorerMinRows);
+        explorerFetchStatus(explorer, m_connection.call, m_connection.group, visible.first,
+            visible.second, &m_stop);
+        if (m_detailWants)
+        {
+            explorerFetchWanted(
+                explorer, m_connection.call, m_connection.group, m_detailWants(), &m_stop);
+        }
+        // the gov page (auth chains): committee + proposals through the CLI's reader, built
+        // once on this thread; a copy is updated outside the lock like the explorer
+        std::optional<GovernanceState> governance;
+        auto govWants = m_governanceWants ? m_governanceWants() : GovernanceWants{};
+        if (status.authCheck.value_or(false) && govWants.shown && !m_stop)
+        {
+            {
+                std::lock_guard<std::mutex> lock(m_model.mutex);
+                governance = m_model.governance;
+            }
+            // the reader needs chain facts; a failure there is the gov page's error, not the
+            // round's (status / explorer above stay)
+            try
+            {
+                if (!m_committee)
+                {
+                    Connection stopAware = m_connection;
+                    stopAware.call = call;
+                    m_committee = std::make_unique<CommitteeReader>(stopAware);
+                }
+                governanceFetch(*governance, *m_committee, govWants, &m_stop);
+            }
+            catch (std::exception const& e)
+            {
+                governance->error = e.what();
+            }
+        }
+        std::lock_guard<std::mutex> lock(m_model.mutex);
+        if (governance)
+        {
+            m_model.governance = std::move(*governance);
+        }
+        if (txpool)
+        {
+            m_model.txpool = std::move(*txpool);
+        }
+        m_model.mode = m_connection.mode;
+        m_model.status = std::move(status);
+        m_model.checks = std::move(checks);
+        m_model.explorer = std::move(explorer);
+        m_model.authChain = m_model.status.authCheck.value_or(false);
+        m_model.consensus = std::move(consensus);
+        m_model.sync = std::move(sync);
+        m_model.peers = std::move(peers);
+        m_model.source = m_connection.source;
+        m_model.error.clear();
+        m_model.lastRefreshMs = nowMs();
+    }
+    catch (std::exception const& e)
+    {
+        std::lock_guard<std::mutex> lock(m_model.mutex);
+        m_model.error = e.what();
+        m_model.lastRefreshMs = nowMs();
+    }
+    if (m_onUpdate)
+    {
+        m_onUpdate();
+    }
+}
+
+void Refresher::loop()
+{
+    while (!m_stop)
+    {
+        runOnce();
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(m_intervalMs);
+        while (!m_stop)
+        {
+            auto remaining = deadline - std::chrono::steady_clock::now();
+            if (remaining <= std::chrono::milliseconds(0))
+            {
+                break;
+            }
+            // the countdown is written before m_wakeMutex is taken: holding both would order
+            // them wake → model while the UI thread holds model.mutex and kicks refreshNow()
+            {
+                std::lock_guard<std::mutex> modelLock(m_model.mutex);
+                m_model.refreshInSeconds = static_cast<int>(
+                    std::chrono::duration_cast<std::chrono::seconds>(remaining).count() + 1);
+            }
+            std::unique_lock<std::mutex> lock(m_wakeMutex);
+            if (m_kick)
+            {
+                m_kick = false;
+                break;
+            }
+            m_wake.wait_for(lock,
+                std::min(remaining, std::chrono::nanoseconds(std::chrono::milliseconds(500))));
+        }
+    }
+}
+}  // namespace bcos::ops::tui

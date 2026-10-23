@@ -274,15 +274,32 @@ public:
     /// EIP-7702 delegation cleared back to an EOA is stored that way).
     /// @param knownCodeHash the CODE_HASH row if the caller already read it, to avoid a second
     ///        read on the EXTCODEHASH path.
+    ///
+    /// Read order follows what the caller already knows (issue #5579). With a @p knownCodeHash a
+    /// contract is settled without any read. Without one the existence row is probed first and
+    /// CODE_HASH only for accounts that are there, which trades reads by input: an absent
+    /// address costs 1 read instead of 2, a live contract 2 instead of 1, an EOA 4 either way.
+    /// Both orders answer the same because a CODE_HASH row implies a SYS_TABLES row: every
+    /// production writer runs create() before setCode() (HostContext::execute's CREATE path,
+    /// EthereumState::applyToStorage's exists()||create()).
     task::Task<bool> existsEthereum(
         const h256& emptyCodeHash, std::optional<h256> knownCodeHash = std::nullopt)
     {
-        auto ch = knownCodeHash ? *knownCodeHash : co_await codeHash();
-        if (ch != h256{} && ch != emptyCodeHash)
-            co_return true;  // has code: live regardless of nonce / balance
-
-        if (!co_await exists())
-            co_return false;
+        if (knownCodeHash)
+        {
+            if (*knownCodeHash != h256{} && *knownCodeHash != emptyCodeHash)
+                co_return true;  // has code: live regardless of nonce / balance
+            if (!co_await exists())
+                co_return false;
+        }
+        else
+        {
+            if (!co_await exists())
+                co_return false;
+            auto ch = co_await codeHash();
+            if (ch != h256{} && ch != emptyCodeHash)
+                co_return true;
+        }
 
         auto nonceVal = co_await nonce();
         if (nonceVal.has_value() && u256(nonceVal.value()) != 0)

@@ -19,9 +19,7 @@ concurrency:
 jobs:
   build:
     name: Build
-    # ubuntu-26.04-static is a build CONFIGURATION, not a runner label: it runs
-    # on the ubuntu-26.04 runner with -DBUILD_STATIC=ON (see the matrix comment)
-    runs-on: ${{ matrix.os == 'ubuntu-26.04-static' && 'ubuntu-26.04' || matrix.os }}
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
       actions: write
@@ -48,10 +46,10 @@ jobs:
       CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: "true"
       CCACHE_COMPRESSLEVEL: "1"
-      # One cache per matrix entry: the static leg cannot share the plain x64 leg's entry.
-      # Its TESTS=OFF drops the root-scope -DBOOST_TEST_THREAD_SAFE compile option
-      # (cmake/CompilerSettings.cmake), which changes every translation unit's command
-      # line and therefore its ccache hash, so sharing the x64 scope would be all misses.
+      # One cache per matrix entry: compile flags differ per leg (e.g. the
+      # windows leg is TESTS=OFF), and a flag change alters every translation
+      # unit's command line and therefore its ccache hash, so sharing one scope
+      # would be all misses.
       # Named CACHE_SCOPE rather than CCACHE_*: ccache reads its configuration from
       # CCACHE_-prefixed environment variables, and this is a cache-key component for
       # actions/cache, not a ccache option.
@@ -82,15 +80,6 @@ jobs:
           [
             ubuntu-26.04,
             ubuntu-26.04-arm,
-            # static leg: same gcc-16 toolchain as ubuntu-26.04 but configured with
-            # -DBUILD_STATIC=ON and TESTS=OFF (see "Compute build flags"), so the
-            # fully-static link path used for the release assets is gated on every
-            # PR - binaries are built, linked and smoke-tested with the air
-            # integration test - without recompiling the ~250 test translation
-            # units that the other three legs already build and run. The full
-            # static + unit-test gate still runs on release events, where
-            # ubuntu-26.04 itself builds with -DBUILD_STATIC=ON and TESTS=ON.
-            ubuntu-26.04-static,
             macos-26,
             windows-2025,
           ]
@@ -104,12 +93,6 @@ jobs:
         id: vcpkg-revision
         shell: bash
         run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Set up JDK 11
-        if: matrix.os != 'windows-2025'
-        uses: actions/setup-java@v5
-        with:
-          distribution: "temurin"
-          java-version: "11"
       - uses: lukka/get-cmake@latest
         with:
           cmakeVersion: 3.28.3
@@ -126,7 +109,7 @@ jobs:
       # only, so a PR or a feature-branch push just warms from whatever a base-branch push left
       # behind.
       # The key is scoped per build leg (CACHE_SCOPE = matrix.os) because the legs do not install
-      # the same packages: TESTS appends the tests vcpkg manifest feature and the static leg
+      # the same packages: TESTS appends the tests vcpkg manifest feature and the windows leg
       # configures TESTS=OFF, so an unscoped key would let whichever leg saves first publish an
       # archive set that is missing packages the other legs then have to rebuild from source.
       # The bucket is the UTC date, like the ccache key below: actions/cache entries are
@@ -184,7 +167,7 @@ jobs:
         with:
           node-version: 20
       - name: Install linux dependencies
-        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm' || matrix.os == 'ubuntu-26.04-static'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
@@ -213,27 +196,11 @@ jobs:
         if: matrix.os != 'windows-2025'
         shell: bash
         run: |
-          # The ubuntu-26.04-static leg always builds statically so the -static
-          # link path of the release binaries is gated on every PR, not only
-          # exercised on release events
+          # Release events build the shipped binaries statically (the release
+          # assets are the fully-static tarballs).
           EXTRA_FLAGS=""
-          if [[ "${GITHUB_EVENT_NAME}" == "release" || "${{ matrix.os }}" == "ubuntu-26.04-static" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
             EXTRA_FLAGS="-DBUILD_STATIC=ON"
-          fi
-          # The static leg gates the LINK path, not the test suite: the same test sources
-          # already compile and run on the three other legs, and compiling ~250 test
-          # translation units cost ~2000s per run to re-verify identical code. TESTS=OFF
-          # leaves the static binaries (fisco-bcos + lightnode) and the air integration test
-          # in place; release events still build the shipped static binaries WITH the full
-          # suites via the ubuntu-26.04 leg (see the release branch of the condition above).
-          # This leg also gates the non-unity configuration: unity build can hide a missing
-          # include (a TU compiles because a batch neighbour included the header), and
-          # -DUNITY_BUILD=OFF is the only configuration that surfaces that class - and the
-          # diagnostic switch when a unity miscompile is suspected. TESTS=OFF means only the
-          # production sources get the non-unity pass here; the Coverage job repeats it with
-          # TESTS=ON so the test tree gets one non-unity reference build per run.
-          if [[ "${{ matrix.os }}" == "ubuntu-26.04-static" ]]; then
-            EXTRA_FLAGS="${EXTRA_FLAGS} -DTESTS=OFF -DUNITY_BUILD=OFF"
           fi
           # The hive gate job (hive_smoke) reuses this leg's artifact and also
           # needs eth-sync-check (genesis2ini); tools are off by default.
@@ -242,7 +209,7 @@ jobs:
           fi
           echo "EXTRA_FLAGS=${EXTRA_FLAGS}" >> "$GITHUB_ENV"
       - name: Configure for linux
-        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-static'
+        if: matrix.os == 'ubuntu-26.04'
         run: |
           mkdir -p build
           cd build
@@ -397,11 +364,23 @@ jobs:
           printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY" \
             || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
       - name: Test
-        # the static leg builds with TESTS=OFF (see "Compute build flags")
-        if: matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
+        # the windows leg builds with TESTS=OFF
+        if: matrix.os != 'windows-2025'
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
+      - name: Assert the module suites are registered with ctest
+        # Moved from the removed l2_unit_suites job: a module suite can be
+        # compiled and linked yet never registered with ctest (its directory is
+        # added before testing is enabled in the parent scope), so it runs
+        # nowhere; this step turns that silence into a failure.
+        if: matrix.os != 'windows-2025'
+        run: |
+          cd build
+          for suite in MultiVersionSchedulerTest; do
+            ctest -N -R "${suite}" | grep -qE "Total Tests: [1-9]" || {
+              echo "ERROR: ${suite} is built but not registered with ctest"; exit 1; }
+          done
       - name: Download EEST fixtures
         if: matrix.os != 'windows-2025'
         run: |
@@ -415,8 +394,8 @@ jobs:
             mv fixtures_stable fixtures
           fi
       - name: Run EEST fixture tests
-        # the eest-runner is a test target; the static leg builds with TESTS=OFF
-        if: matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
+        # the eest-runner is a test target; the windows leg builds with TESTS=OFF
+        if: matrix.os != 'windows-2025'
         run: |
           # pipefail so a runner crash (not just a low pass rate) fails the job.
           set -o pipefail
@@ -436,7 +415,8 @@ jobs:
           name: fisco-bcos-ubuntu-26-x86_64
           # eth-sync-check rides along for the hive_smoke job (genesis2ini in
           # the hive client entrypoint); upload-artifact keeps the paths
-          # relative to their least common ancestor (build/).
+          # relative to their least common ancestor (build/). The fisco-bcos
+          # binary is also consumed by the c2_e2e job below.
           path: |
             build/fisco-bcos-air/fisco-bcos
             build/tools/eth-sync-check/eth-sync-check
@@ -458,13 +438,10 @@ jobs:
         with:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
       - name: Integration test - Air
-        # The ubuntu-26.04-static leg included here runs the suite against the
-        # fully-static binary, so CI tests exactly the link configuration
-        # shipped as release assets
-        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm' || matrix.os == 'ubuntu-26.04-static'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
         run: |
           cd tools
-          bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
+          bash .ci/ci_check_air.sh "true"
       - name: Ethereum executor integration test (executor_version=2)
         # Runs a single-node L2 chain with executor_version=2 (ethereum-executor),
         # pre-funds an EOA via genesis alloc, and drives a simple value transfer
@@ -475,7 +452,7 @@ jobs:
         # harness discards the node's stderr, so the root cause is not yet
         # diagnosed; see the air test which likewise excludes macos-26). macOS
         # is excluded until the node startup issue is fixed.
-        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm' || matrix.os == 'ubuntu-26.04-static'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -486,7 +463,7 @@ jobs:
         # Built-in single-node driver (hidden config.ini [debug] enable): builds a
         # single-node AIR chain, patches config.ini to enable it (no pbft/sealer/txpool),
         # and drives eth_sendRawTransaction -> receipt / block reads.
-        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-static'
+        if: matrix.os == 'ubuntu-26.04'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -503,7 +480,7 @@ jobs:
           # Run engine API integration test (curl smoke + Python mock CL)
           bash tools/engine_integration_test.sh build 8551
       - name: Set packaging variables
-        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
+        if: github.event_name == 'release' && matrix.os != 'windows-2025'
         id: pkgvars
         shell: bash
         run: |
@@ -533,7 +510,7 @@ jobs:
           # also expose as step outputs for later reference
           echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
       - name: Create release tarball
-        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
+        if: github.event_name == 'release' && matrix.os != 'windows-2025'
         shell: bash
         run: |
           set -euo pipefail
@@ -546,7 +523,7 @@ jobs:
           # Create tar.gz in repo root with only the binary inside (no extra folders)
           tar -C "$(dirname "$BIN_PATH")" -czf "${PKG_NAME}" "$(basename "$BIN_PATH")"
       - name: Upload assets to GitHub Release
-        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
+        if: github.event_name == 'release' && matrix.os != 'windows-2025'
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -594,11 +571,6 @@ jobs:
             /usr/local/lib/android /opt/hostedtoolcache/CodeQL
           sudo docker image prune --all --force || true
           df -h /
-      - name: Set up JDK 11
-        uses: actions/setup-java@v5
-        with:
-          distribution: "temurin"
-          java-version: "11"
       - uses: lukka/get-cmake@latest
         with:
           cmakeVersion: 3.28.3
@@ -676,7 +648,10 @@ jobs:
           # (RelWithDebInfo -O2 -g + --coverage instrumentation), so the time it
           # spends building is time it is exposed to a runner preemption - a
           # shutdown signal here has already killed it at 89% once.
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DUNITY_BUILD=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          # UNITY_BUILD=ON like the build legs: the non-unity pass cost far more
+          # build time than its diagnostic value (missing-include detection) is
+          # worth here.
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=lld -DTESTS=ON -DCOVERAGE=ON -DUNITY_BUILD=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       # vcpkg installs during Configure, so save right after it (same reasoning as the
       # build matrix): a later flake must not discard a freshly built dependency tree.
       - name: Save vcpkg cache
@@ -825,224 +800,25 @@ jobs:
           printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY" \
             || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
 
-  # Dedicated, lightweight leg for the OP-Stack L2 mode. Kept OUT of the 5-OS
-  # `build` matrix on purpose: multiplying that matrix by an l2 dimension would
-  # double an already heavy C++ build for no extra coverage. L2 mode is a
-  # runtime genesis setting (executor.version >= 3), not a compile-time
-  # variant, so a matrix axis would just rebuild identical
-  # binaries. This job builds once on ubuntu with WITH_L2_CONTRACTS=ON and runs
-  # only the L2-relevant unit suites, then the integration runner (which SKIPs
-  # itself when the A8 devnet is absent).
-  l2_unit_suites:
-    name: L2 unit suites
-    runs-on: ubuntu-26.04
-    permissions:
-      contents: read
-      actions: write
-    env:
-      # Same sizing as the build matrix: 300M holds two or three revisions of the whole
-      # project (measured working set: 103 MB for 325 TUs).
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 300M
-      CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_SLOPPINESS: time_macros,include_file_ctime
-      CCACHE_COMPILERCHECK: content
-      CCACHE_COMPRESS: "true"
-      CCACHE_COMPRESSLEVEL: "1"
-      # vcpkg binary caching into the workspace; see the build matrix's env comment for why
-      # this matters (the archive key folds in the compiler, so a toolchain bump invalidates
-      # the whole vcpkg_installed tree and used to force a ~45 minute rebuild from source).
-      VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/.vcpkg-archives,readwrite'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          clean: false
-      - name: Initialize vcpkg submodule
-        run: git submodule update --init --recursive -- vcpkg
-      - name: Compute vcpkg revision
-        id: vcpkg-revision
-        shell: bash
-        run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Set up JDK 11
-        uses: actions/setup-java@v5
-        with:
-          distribution: "temurin"
-          java-version: "11"
-      - uses: lukka/get-cmake@latest
-        with:
-          cmakeVersion: 3.28.3
-          ninjaVersion: 1.12.1
-      - name: Restore vcpkg cache
-        id: vcpkg-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
-      # Per-package vcpkg archives (VCPKG_BINARY_SOURCES above); the "Save vcpkg archives" step
-      # after Configure publishes them for master/release-* non-PR runs. Scoped per job with a
-      # daily bucket, same as the build matrix - see the comment there.
-      - name: Compute archives bucket
-        id: archives-bucket
-        shell: bash
-        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
-      - name: Restore vcpkg archives
-        uses: actions/cache/restore@v4
-        id: vcpkg-archives
-        with:
-          path: ${{ github.workspace }}/.vcpkg-archives
-          key: vcpkg-archives-l2-${{ runner.os }}-${{ runner.arch }}-v1-${{ steps.archives-bucket.outputs.day }}
-          restore-keys: |
-            vcpkg-archives-l2-${{ runner.os }}-${{ runner.arch }}-v1-
-      - name: Compute ccache bucket
-        id: ccache-bucket
-        shell: bash
-        run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
-      - name: Restore ccache
-        id: ccache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          # Deliberately NOT branch-scoped, unlike the build matrix: c2-e2e.yml's nightly
-          # full run restores this same prefix. This job owns the writes - it builds the
-          # superset of objects and runs on every integration-branch push, while c2-e2e.yml
-          # is restore-only: its --target fisco-bcos build is a strict subset, and a nightly
-          # save would otherwise lock the daily bucket before this job's save. Daily bucket:
-          # at most one entry per scope per day.
-          key: ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-${{ steps.ccache-bucket.outputs.day }}
-          restore-keys: |
-            ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-
-      - name: Install linux dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y --no-install-recommends \
-              wget python3-dev python3-pip git curl zip unzip tar \
-              clang make build-essential libssl-dev zlib1g-dev ca-certificates lld autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16 ccache
-      - name: Install Foundry
-        # WITH_L2_CONTRACTS=ON does find_program(FORGE forge REQUIRED) at
-        # configure time, so forge must be on PATH before cmake runs.
-        # Pinned to 1.5.1: golden storage-layout fixtures and --json output
-        # shape were generated by this version. Do not upgrade without
-        # regenerating storage-layout/*.json and reviewing the diff.
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: 1.5.1
-      - name: Configure (WITH_L2_CONTRACTS=ON)
-        run: |
-          mkdir -p build
-          cd build
-          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=lld -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
-      # vcpkg installs during Configure, so save right after it (same reasoning as the
-      # build matrix): a later flake must not discard a freshly built dependency tree.
-      - name: Save vcpkg cache
-        if: github.event_name != 'pull_request' && steps.vcpkg-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
-      # Gated like the build matrix: master/release-* non-PR runs only, daily bucket. Keep this
-      # key byte-identical to the Restore step above.
-      - name: Report vcpkg archives size
-        if: '!cancelled() && !failure()'
-        shell: bash
-        run: du -sh "${{ github.workspace }}/.vcpkg-archives" || true
-      - name: Save vcpkg archives
-        if: '!cancelled() && !failure() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-''))'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.vcpkg-archives
-          key: vcpkg-archives-l2-${{ runner.os }}-${{ runner.arch }}-v1-${{ steps.archives-bucket.outputs.day }}
-      - name: Build
-        run: |
-          cd build
-          # Same reasoning as the build matrix: unity folds up to 8 sources into one TU, the
-          # heaviest peak at ~3.7 GB of compiler RSS, and an unbounded job count multiplies that
-          # against a 16 GB runner. This job has been failing with a runner shutdown/SIGTERM
-          # rather than a compile error; --parallel 3 bounds it and matches the coverage job.
-          cmake --build . --parallel 3
-      - name: ccache stats
-        # always(): see the build matrix — stats must survive a failed/timed-out build.
-        if: always()
-        run: ccache --show-stats
-      - name: Run L2 unit suites
-        run: |
-          cd build
-          CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3 -R \
-            'NodeConfigAllocsTest|GenesisStateRootTest|LedgerGenesisL2Test|LedgerGenesisAllocsHashTest|PrecompiledMapDisabledInL2Test|PrecompiledMapProductionInvariantTest|KzgPrecompileRegisteredTest|EthEndpointSystemConfigTest|MultiVersionSchedulerTest'
-      - name: Assert the module suites are registered with ctest
-        run: |
-          cd build
-          # A module suite can be compiled and linked yet never registered with ctest (its
-          # directory is added before testing is enabled in the parent scope), so it runs
-          # nowhere; this step turns that silence into a failure.
-          for suite in MultiVersionSchedulerTest; do
-            ctest -N -R "${suite}" | grep -qE "Total Tests: [1-9]" || {
-              echo "ERROR: ${suite} is built but not registered with ctest"; exit 1; }
-          done
-      - name: L2 integration runner (SKIPs without the A8 devnet)
-        run: bash tools/.ci/l2-integration/run-all.sh
-      - name: Upload fisco-bcos for C2 e2e
-        uses: actions/upload-artifact@v4
-        with:
-          name: fisco-bcos-l2-ubuntu
-          path: build/fisco-bcos-air/fisco-bcos
-          retention-days: 1
-      # The vcpkg save is earlier, right after Configure: see there for why.
-      # Base-branch pushes only: a feature-branch push would write an entry no PR ever reads.
-      - name: Save ccache
-        if: '!cancelled() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-'')) && steps.ccache.outputs.cache-primary-key != '''''
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ steps.ccache.outputs.cache-primary-key }}
-      # The daily bucket bounds the write RATE, not the number of live entries: with 7-day
-      # retention ~7 generations per scope would otherwise pile up. After the save, delete
-      # every older generation of this scope's prefix on this ref; restore-keys only ever
-      # reads the newest, so the older ones are dead weight. Non-fatal on purpose: a prune
-      # failure costs cache budget, not the build, and the next push retries.
-      # The prune only deletes after confirming today's entry is in the listing: an
-      # actions/cache/save upload failure surfaces as a warning with a successful step
-      # outcome, and without that gate a silent save failure would let the prune delete
-      # yesterday's generation - the prefix's only entry - and cold-build the next run.
-      - name: Prune previous ccache generations
-        if: '!cancelled() && github.event_name != ''pull_request'' && (github.ref_name == ''master'' || startsWith(github.ref_name, ''release-'')) && steps.ccache.outputs.cache-primary-key != '''''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          prefix='ccache-l2-ubuntu-26.04-${{ runner.arch }}-v1-'
-          keep="${prefix}${{ steps.ccache-bucket.outputs.day }}"
-          if ! listing=$(gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref); then
-            echo "::warning::gh cache list failed; ccache reclamation deferred to the next push"
-            exit 0
-          fi
-          if ! printf '%s' "$listing" | jq -e --arg keep "$keep" --arg ref "$GITHUB_REF" \
-              'any(.[]; .ref == $ref and .key == $keep)' > /dev/null; then
-            echo "::warning::today's ccache entry ${keep} is absent; skipping prune"
-            exit 0
-          fi
-          ids=$(printf '%s' "$listing" | jq -r --arg prefix "$prefix" --arg keep "$keep" --arg ref "$GITHUB_REF" \
-            '.[] | select(.ref == $ref) | select(.key | startswith($prefix)) | select(.key != $keep) | .id') \
-            || { echo "::warning::cache listing parse failed; ccache reclamation deferred to the next push"; exit 0; }
-          count=$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')
-          echo "pruning ${count} stale generation(s) under ${prefix} (keeping ${keep})"
-          printf '%s\n' "$ids" | sed '/^$/d' | xargs -r -n1 gh cache delete --repo "$GITHUB_REPOSITORY" \
-            || echo "::warning::ccache generation prune failed; reclamation deferred to the next push"
-
-  # Full-stack C2 devnet e2e. Reuses the fisco-bcos binary built by
-  # l2_unit_suites (artifact) so this job skips vcpkg configure + C++ build.
+  # Full-stack C2 devnet e2e. Reuses the build job's ubuntu-26.04 artifact
+  # (same pattern as hive_smoke) so this job skips vcpkg configure + C++ build.
+  # The L2 unit suites themselves need no dedicated leg: L2 mode is a runtime
+  # genesis setting (executor.version >= 3), not a compile-time variant, and
+  # WITH_L2_CONTRACTS=ON only wires forge custom targets that are not part of
+  # the default build - so the build matrix's ctest already compiles and runs
+  # every L2 suite, and its binary is byte-equivalent to what a separate L2
+  # leg would produce.
   # STEP-SET TWIN of c2-e2e.yml's c2_e2e job (that one builds fisco-bcos from
   # source): every shared step must be edited in lockstep in both files.
   # Runs on every PR (the workflow itself is skipped only for docs-only changes). It
   # runs the FULL adversarial + kona leg (CONTEST=1, KONA_VERIFY=1) — the same depth
-  # as the nightly c2-e2e.yml job, just reusing the l2_unit_suites binary instead of
+  # as the nightly c2-e2e.yml job, just reusing the build job's binary instead of
   # rebuilding fisco-bcos. The added dispute-game + kona time is a few minutes, judged
   # acceptable for per-PR coverage.
   c2_e2e:
     name: C2 deposit/withdraw e2e
-    needs: [l2_unit_suites]
-    if: needs.l2_unit_suites.result == 'success'
+    needs: [build]
+    if: needs.build.result == 'success'
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
@@ -1070,11 +846,15 @@ jobs:
           ref: dac984d09777de634279025b6f6013106ae42b5c
           path: .ci-op-e2e-tests
 
-      - name: Download fisco-bcos from L2 unit job
+      - name: Download fisco-bcos artifact from the build job
         uses: actions/download-artifact@v4
         with:
-          name: fisco-bcos-l2-ubuntu
-          path: build/fisco-bcos-air
+          name: fisco-bcos-ubuntu-26-x86_64
+          # upload-artifact stores the files relative to their least common
+          # ancestor (build/), so downloading into build/ restores
+          # build/fisco-bcos-air/fisco-bcos (eth-sync-check rides along but
+          # is unused here).
+          path: build
 
       - name: Ensure fisco-bcos executable
         run: chmod +x build/fisco-bcos-air/fisco-bcos
@@ -1087,6 +867,12 @@ jobs:
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
+
+      # Moved from the removed l2_unit_suites job. The scenarios talk JSON-RPC
+      # to a live A8 devnet (curl + jq, installed above) and SKIP themselves
+      # when the devnet is absent, so they need no build artifacts.
+      - name: L2 integration runner (SKIPs without the A8 devnet)
+        run: bash tools/.ci/l2-integration/run-all.sh
 
       - name: Install Foundry (optimism contracts-bedrock pin)
         uses: foundry-rs/foundry-toolchain@v1
