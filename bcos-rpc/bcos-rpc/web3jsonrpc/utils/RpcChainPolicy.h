@@ -46,8 +46,8 @@ inline bool usesEthereumFeeSemantics(int executorVersion)
     return executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 }
 
-/// True on the OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION): the only lane that
-/// serves the challenger data plane (debug_getRawHeader / debug_dbGet, ADR 0007).
+/// True on the OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION): the lane whose state
+/// carries OP block metadata. NOT the debug data plane's gate -- that is requireEthereumLane.
 inline bool isOpStackLane(int executorVersion)
 {
     return executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION;

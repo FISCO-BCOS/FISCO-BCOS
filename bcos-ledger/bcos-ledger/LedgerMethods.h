@@ -35,6 +35,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/protocol/TransactionReceiptNormalize.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
@@ -214,6 +215,18 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
 
     auto inlineTxs = block->transactions();
     auto blockReceipts = block->receipts();
+
+    // Same rule as Ledger::asyncPrewriteBlock: an Ethereum-lane block's receiptsRoot does not
+    // commit transactionIndex, so this is the last place that can give the stored receipts their
+    // block position -- and the one that sees every producer. A legacy FISCO block's root does
+    // commit it, so those are left alone. See asyncPrewriteBlock for the full argument.
+    auto const header = block->blockHeader();
+    auto const* headerPtr = header.get();
+    if (headerPtr != nullptr &&
+        (headerPtr->excessBlobGas().has_value() || headerPtr->blobGasUsed().has_value()))
+    {
+        protocol::normalizeReceipts(*block);
+    }
 
     // SYS_HASH_2_RECEIPT — encoded receipts keyed by tx hash.
     for (size_t i = 0; i < block->receiptsSize(); ++i)
