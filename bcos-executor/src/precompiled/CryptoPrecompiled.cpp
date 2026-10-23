@@ -24,11 +24,11 @@
 #include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/signature/codec/SignatureDataWithPub.h"
 #include "bcos-crypto/signature/sm2.h"
+#include "bcos-crypto/vrf/Curve25519Vrf.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include <wedpr-crypto/WedprCrypto.h>
-#include <wedpr-crypto/WedprUtilities.h>
+#include <cstring>
 
 using namespace bcos;
 using namespace bcos::codec;
@@ -128,18 +128,20 @@ void CryptoPrecompiled::curve25519VRFVerify(
         bytes publicKey;
         bytes proof;
         codec.decode(_paramData, message, publicKey, proof);
-        CInputBuffer rawPublicKey{(const char*)publicKey.data(), publicKey.size()};
-        CInputBuffer rawMsg{(const char*)message.data(), message.size()};
-        CInputBuffer rawProof{(const char*)proof.data(), proof.size()};
-        HashType vrfHash;
-        COutputBuffer outputHash{(char*)vrfHash.data(), vrfHash.size()};
-        if ((wedpr_curve25519_vrf_is_valid_public_key(&rawPublicKey) == WEDPR_SUCCESS) &&
-            (wedpr_curve25519_vrf_verify_utf8(&rawPublicKey, &rawMsg, &rawProof) ==
-                WEDPR_SUCCESS) &&
-            (wedpr_curve25519_vrf_proof_to_hash(&rawProof, &outputHash) == WEDPR_SUCCESS))
+        auto publicKeyRef = bytesConstRef(publicKey.data(), publicKey.size());
+        auto messageRef = bytesConstRef(message.data(), message.size());
+        auto proofRef = bytesConstRef(proof.data(), proof.size());
+        if (curve25519VrfIsValidPublicKey(publicKeyRef) &&
+            curve25519VrfVerify(publicKeyRef, messageRef, proofRef))
         {
-            verifySuccess = true;
-            randomValue = (u256)(vrfHash);
+            auto hashBytes = curve25519VrfProofToHash(proofRef);
+            if (hashBytes.size() == HashType::SIZE)
+            {
+                HashType vrfHash;
+                std::memcpy(vrfHash.data(), hashBytes.data(), HashType::SIZE);
+                verifySuccess = true;
+                randomValue = (u256)(vrfHash);
+            }
         }
     }
     catch (std::exception const& e)

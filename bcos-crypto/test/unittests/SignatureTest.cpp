@@ -101,6 +101,11 @@ BOOST_AUTO_TEST_CASE(testSecp256k1KeyPair)
     BOOST_CHECK(keyPair->publicKey()->data() == testPub->data());
     SecretPtr emptySecret = std::make_shared<KeyImpl>(SECP256K1_PRIVATE_LEN);
     BOOST_CHECK_THROW(Secp256k1KeyPair emptyKeyPair(emptySecret), PriToPublicKeyException);
+    // short secret: secp256k1_ec_pubkey_create would read 32 bytes unconditionally —
+    // must be rejected before the FFI call (base wedpr threw cleanly)
+    SecretPtr shortSecret = std::make_shared<KeyImpl>(SECP256K1_PRIVATE_LEN - 1);
+    BOOST_CHECK_THROW(secp256k1PriToPub(shortSecret), PriToPublicKeyException);
+    BOOST_CHECK_THROW(Secp256k1KeyPair shortKeyPair(shortSecret), PriToPublicKeyException);
 }
 
 BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
@@ -353,6 +358,35 @@ BOOST_AUTO_TEST_CASE(testSM2SignAndVerify)
     auto fastCrypto = std::make_shared<FastSM2Crypto>();
     SM2SignAndVerifyTest(fastCrypto);
 #endif
+}
+
+// fast_sm2_verify copies raw_public_key->len bytes into a fixed 65-byte stack buffer;
+// KeyImpl does not truncate oversized input, so a >64-byte public key must fail cleanly
+// (under ASan any residual overflow would abort the test binary)
+BOOST_AUTO_TEST_CASE(testSM2VerifyOversizedPublicKey)
+{
+    auto signatureCrypto = std::make_shared<SM2Crypto>();
+    auto keyPair = signatureCrypto->generateKeyPair();
+    auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
+    auto signature = signatureCrypto->sign(*keyPair, hashData, false);
+    BOOST_CHECK(signatureCrypto->verify(
+        keyPair->publicKey(), hashData, bytesConstRef(signature->data(), signature->size())));
+
+    // valid 64-byte key with an extra trailing byte
+    auto oversizedPub = std::make_shared<bytes>(keyPair->publicKey()->constData(),
+        keyPair->publicKey()->constData() + keyPair->publicKey()->size());
+    oversizedPub->push_back(0x01);
+    BOOST_CHECK(!signatureCrypto->verify(
+        oversizedPub, hashData, bytesConstRef(signature->data(), signature->size())));
+    // short public key through the bytes-shared_ptr overload: KeyImpl rejects it
+    auto shortPub = std::make_shared<bytes>(keyPair->publicKey()->constData(),
+        keyPair->publicKey()->constData() + keyPair->publicKey()->size() - 1);
+    BOOST_CHECK_THROW(signatureCrypto->verify(
+                          shortPub, hashData, bytesConstRef(signature->data(), signature->size())),
+        InvalidKey);
+    // short public key reaching fast_sm2_verify directly (KeyImpl without the size ctor)
+    BOOST_CHECK(!signatureCrypto->verify(std::make_shared<KeyImpl>(bytes(63, 0x04)), hashData,
+        bytesConstRef(signature->data(), signature->size())));
 }
 
 

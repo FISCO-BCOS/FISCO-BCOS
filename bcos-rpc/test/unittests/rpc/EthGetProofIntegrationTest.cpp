@@ -48,11 +48,12 @@ namespace bcos
 // Linkage-only definition. The BaselineScheduler instantiation inside FullChainFixture
 // references bcos::unhexAddress (declared in bcos-executor/src/Common.h, pulled in by
 // BaselineScheduler.h) from its getABI/getCode members — which this test never calls.
-// The producing library (`executor`) is deliberately NOT linked into test-bcos-rpc:
-// it PUBLIC-links wedprcrypto's Rust static libraries, whose bundled runtime breaks
-// libc++ exception catching binary-wide (see bcos-rpc/test/CMakeLists.txt). This is a
-// verbatim copy of bcos-executor/src/Common.cpp's definition; the linker guarantees it
-// is the only one in this binary.
+// The producing library (`executor`) is deliberately NOT linked into test-bcos-rpc
+// (historically because it PUBLIC-linked wedprcrypto's Rust static libraries, whose
+// bundled runtime broke libc++ exception catching binary-wide; wedprcrypto is gone now,
+// see bcos-rpc/test/CMakeLists.txt). This is a verbatim copy of
+// bcos-executor/src/Common.cpp's definition; the linker guarantees it is the only one in
+// this binary.
 evmc_address unhexAddress(std::string_view view)
 {
     if (view.empty())

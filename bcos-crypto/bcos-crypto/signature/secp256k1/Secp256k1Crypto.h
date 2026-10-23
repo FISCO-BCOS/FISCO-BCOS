@@ -22,6 +22,9 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 
+// forward declaration matching <secp256k1.h> so callers need not include it
+typedef struct secp256k1_context_struct secp256k1_context;
+
 namespace bcos::crypto
 {
 constexpr uint16_t SECP256K1_SIGNATURE_R_LEN = 32;
@@ -37,6 +40,10 @@ constexpr int SECP256K1_SIGNATURE_V = 64;
 inline const u256 c_secp256k1n(
     "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
 inline const u256 c_secp256k1nOver2 = c_secp256k1n / 2;
+
+// the single process-wide secp256k1 context (SIGN | VERIFY), shared by the signature,
+// key-pair and VRF modules
+secp256k1_context* secp256k1Context();
 
 std::shared_ptr<bytes> secp256k1Sign(const KeyPairInterface& _keyPair, const HashType& _hash);
 bool secp256k1Verify(const PublicPtr& _pubKey, const HashType& _hash, bytesConstRef _signatureData);
