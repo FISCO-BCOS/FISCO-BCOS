@@ -20,7 +20,7 @@
  */
 #pragma once
 #include <bcos-framework/Common.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <tbb/parallel_for.h>
 
 // transaction sync lives in the txpool but badges [SYNC]; it follows the SYNC channel so that

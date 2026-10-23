@@ -17,6 +17,7 @@
  */
 #include "AdminMethods.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LineAsyncSink.h>
 #include <algorithm>
 
 namespace bcos::rpc
@@ -67,6 +68,9 @@ Json::Value logLevelsJson()
     {
         result["modules"][module] = levelName(level);
     }
+    // Cumulative lines dropped on log slot-pool overflow since startup;
+    // non-zero means the node lost log lines under sustained pressure.
+    result["droppedLines"] = Json::UInt64(log::droppedLogLines());
     return result;
 }
 

@@ -6,7 +6,7 @@
 #include "P2PClientImpl.h"
 #include <bcos-concepts/Serialize.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos::scheduler
 {

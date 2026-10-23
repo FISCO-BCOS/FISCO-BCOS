@@ -12,6 +12,7 @@
 #include <bcos-framework/Common.h>
 #include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <set>
 #include <string>

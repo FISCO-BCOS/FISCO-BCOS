@@ -18,27 +18,51 @@
  * @file LogCapture.h
  */
 #pragma once
-#include <boost/log/core.hpp>
-#include <boost/log/sinks/sync_frontend.hpp>
-#include <boost/log/sinks/text_ostream_backend.hpp>
-#include <boost/smart_ptr/make_shared_object.hpp>
+#include <bcos-utilities/LineAsyncSink.h>
+#include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 namespace bcos::test
 {
+// The logging pipeline no longer goes through boost::log core, so capturing
+// means registering a whole-line sink: LogStream commits each formatted line
+// to every registered sink on destruction.
 class LogCapture
 {
-public:
-    using Sink = boost::log::sinks::synchronous_sink<boost::log::sinks::text_ostream_backend>;
-
-    LogCapture() : m_stream(boost::make_shared<std::ostringstream>())
+private:
+    class CaptureSink : public log::LineSinkWriter
     {
-        auto backend = boost::make_shared<boost::log::sinks::text_ostream_backend>();
-        backend->add_stream(m_stream);
-        backend->auto_flush(true);
-        m_sink = boost::make_shared<Sink>(backend);
-        boost::log::core::get()->add_sink(m_sink);
+    public:
+        explicit CaptureSink(std::shared_ptr<std::ostringstream> _stream)
+          : m_stream(std::move(_stream))
+        {}
+        // commitLine fans out under a shared lock, so producers on different
+        // threads reach this concurrently — serialize the insertion, as the
+        // base's synchronous_sink did.
+        void writeLine(LogLevel, std::string_view, std::string_view _message) override
+        {
+            std::lock_guard lock(m_mutex);
+            *m_stream << _message << '\n';
+        }
+        std::string str()
+        {
+            std::lock_guard lock(m_mutex);
+            return m_stream->str();
+        }
+
+    private:
+        std::shared_ptr<std::ostringstream> m_stream;
+        std::mutex m_mutex;
+    };
+
+public:
+    LogCapture() : m_stream(std::make_shared<std::ostringstream>())
+    {
+        m_sink = std::make_shared<CaptureSink>(m_stream);
+        log::registerLineSink(m_sink);
     }
     ~LogCapture() { stop(); }
     LogCapture(LogCapture const&) = delete;
@@ -48,7 +72,16 @@ public:
     /// one record per line
     std::string text()
     {
-        stop();
+        if (m_sink)
+        {
+            // unregisterLineSink waits for in-flight writeLine calls, so the
+            // locked read below sees everything collected.
+            log::unregisterLineSink(m_sink.get());
+            auto text = m_sink->str();
+            m_sink.reset();
+            return text;
+        }
+        std::lock_guard lock(m_streamMutex);
         return m_stream->str();
     }
 
@@ -57,13 +90,14 @@ private:
     {
         if (m_sink)
         {
-            boost::log::core::get()->remove_sink(m_sink);
-            m_sink->flush();
+            log::unregisterLineSink(m_sink.get());
             m_sink.reset();
         }
     }
 
-    boost::shared_ptr<std::ostringstream> m_stream;
-    boost::shared_ptr<Sink> m_sink;
+    std::shared_ptr<std::ostringstream> m_stream;
+    std::shared_ptr<CaptureSink> m_sink;
+    // only used when text() runs after stop() detached the sink
+    std::mutex m_streamMutex;
 };
 }  // namespace bcos::test

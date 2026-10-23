@@ -10,8 +10,8 @@
 #include "bcos-framework/engine/Types.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <chrono>
 #include <future>

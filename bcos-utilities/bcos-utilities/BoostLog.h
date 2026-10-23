@@ -13,154 +13,21 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief: define Log
+ * @brief: logging channel names. The logging pipeline no longer goes through
+ *  boost::log core: producers hand fully formatted lines to whole-line sinks
+ *  (see LineAsyncSink.h). Code that only writes log lines should include the
+ *  lightweight LogStream.h instead; BCOS_LOG and the LOG_* macros live there.
  *
- * @file: Log.h
+ * @file: BoostLog.h
  * @author: yujiechen
  * @date 2021-02-24
  */
 #pragma once
 
-#ifdef WIN32
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#ifdef ERROR
-#undef ERROR
-#endif
-
-#ifdef TRACE
-#undef TRACE
-#endif
-
-#ifdef INFO
-#undef INFO
-#endif
-
-#ifdef WARNING
-#undef WARNING
-#endif
-
-#ifdef FATAL
-#undef FATAL
-#endif
-
-#include <boost/log/sources/severity_channel_logger.hpp>
-#include <boost/log/trivial.hpp>
-#include <array>
-#include <atomic>
-#include <optional>
+#include "LogStream.h"
 #include <string>
-#include <string_view>
-#include <utility>
-#include <vector>
-
-// BCOS log format
-#ifndef LOG_BADGE
-#define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
-#endif
-
-#ifndef LOG_TYPE
-#define LOG_TYPE(_TYPE) (_TYPE) << "|"
-#endif
-
-#ifndef LOG_DESC
-#define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
-#endif
-
-#ifndef LOG_KV
-#define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
-#endif
 
 namespace bcos
 {
 extern std::string const FileLogger;
-/// the file logger
-extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level,
-    std::string>
-    FileLoggerHandler;
-
-// the statFileLogger
-extern std::string const StatFileLogger;
-extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level,
-    std::string>
-    StatFileLoggerHandler;
-
-enum LogLevel
-{
-    TRACE = boost::log::trivial::severity_level::trace,
-    DEBUG = boost::log::trivial::severity_level::debug,
-    INFO = boost::log::trivial::severity_level::info,
-    WARNING = boost::log::trivial::severity_level::warning,
-    ERROR = boost::log::trivial::severity_level::error,
-    FATAL = boost::log::trivial::severity_level::fatal,
-};
-
-// atomic: admin_setLogLevel (IPC) and the SIGUSR2 reload (BoostLogInitializer) change it while
-// every logging thread reads it
-extern std::atomic<LogLevel> c_fileLogLevel;
-extern LogLevel c_statLogLevel;
-
-constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
-    requires(std::same_as<decltype(_rhs), LogLevel> || std::integral<decltype(_rhs)>)
-{
-    return static_cast<int>(_lhs) <=> static_cast<int>(_rhs);
-}
-
-void setFileLogLevel(LogLevel const& _level);
-void setStatLogLevel(LogLevel const& _level);
-
-#define BCOS_LOG(level)                                                                \
-    if (bcos::LogLevel::level >= bcos::c_fileLogLevel.load(std::memory_order_relaxed)) \
-    BOOST_LOG_SEV(                                                                     \
-        bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
-
-/// Per-module (channel) log level. A module is the subsystem slot a log macro is wired to; the
-/// badge text it prints is separate and may differ (PBFT_LOG prints [CONSENSUS][PBFT], GATEWAY
-/// covers [Gateway], [P2PService] and [AMOP], EXECUTOR covers [DAG] and [PRECOMPILED]).
-/// A table entry of -1 means "inherit the global c_fileLogLevel".
-enum class LogModule : uint8_t
-{
-    PBFT,
-    TXPOOL,
-    SYNC,
-    SCHEDULER,
-    EXECUTOR,
-    LEDGER,
-    RPC,
-    GATEWAY,
-    FRONT,
-    COUNT
-};
-constexpr int c_inheritGlobalLogLevel = -1;
-extern std::array<std::atomic<int>, static_cast<size_t>(LogModule::COUNT)> c_moduleLogLevel;
-
-inline bool moduleLogEnabled(LogModule _module, LogLevel _level)
-{
-    auto configured =
-        c_moduleLogLevel[static_cast<size_t>(_module)].load(std::memory_order_relaxed);
-    auto threshold = configured == c_inheritGlobalLogLevel ?
-                         static_cast<int>(c_fileLogLevel.load(std::memory_order_relaxed)) :
-                         configured;
-    return static_cast<int>(_level) >= threshold;
-}
-
-std::string_view logModuleName(LogModule _module);
-/// case-insensitive; nullopt when the name is not a channel
-std::optional<LogModule> parseLogModule(std::string_view _name);
-void setModuleLogLevel(LogModule _module, LogLevel _level);
-void resetModuleLogLevel(LogModule _module);
-/// returns false when _name is not a channel
-bool setModuleLogLevel(std::string_view _name, LogLevel _level);
-bool resetModuleLogLevel(std::string_view _name);
-/// only the modules whose level is explicitly set (not inheriting)
-std::vector<std::pair<std::string, LogLevel>> moduleLogLevels();
-
-#define BCOS_MODULE_LOG(MODULE, level)                                          \
-    if (bcos::moduleLogEnabled(bcos::LogModule::MODULE, bcos::LogLevel::level)) \
-    BOOST_LOG_SEV(                                                              \
-        bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
-// for block number log
-#define BLOCK_NUMBER(NUMBER) "[blk-" << (NUMBER) << "]"
-
 }  // namespace bcos

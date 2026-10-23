@@ -23,7 +23,7 @@
 
 #include "../common/FrontServiceBuilder.h"
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <range/v3/view/single.hpp>
 
 using namespace std;

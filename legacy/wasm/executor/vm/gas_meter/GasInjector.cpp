@@ -28,6 +28,7 @@
 #include "src/ir.h"
 #include "src/stream.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <iostream>
 
 using namespace std;

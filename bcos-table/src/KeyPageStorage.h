@@ -23,6 +23,7 @@
 #include "StateStorageInterface.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <fmt/format.h>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>

@@ -28,6 +28,7 @@
 #include "bcos-utilities/RateCollector.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <memory>

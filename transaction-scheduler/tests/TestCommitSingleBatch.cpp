@@ -58,7 +58,6 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/Classify.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
@@ -76,6 +75,8 @@
 #include <optional>
 #include <string>
 #include <vector>
+
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 
 namespace
 {

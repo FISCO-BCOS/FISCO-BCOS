@@ -23,6 +23,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
 #include <algorithm>
 #include <limits>
 #include <string>

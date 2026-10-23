@@ -104,9 +104,9 @@ void logHandshakeFailed(bcos::LogLevel _level, NodeIPEndpoint const& _endpoint,
 {
     if (bcos::moduleLogEnabled(bcos::LogModule::GATEWAY, _level))
     {
-        BOOST_LOG_SEV(bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(_level))
-            << "[NETWORK][Host]" << LOG_DESC("HandshakeFailed") << LOG_KV("endpoint", _endpoint)
-            << LOG_KV("reason", _reason) << LOG_KV("detail", _detail);
+        bcos::LogStream(_level) << "[NETWORK][Host]" << LOG_DESC("HandshakeFailed")
+                                << LOG_KV("endpoint", _endpoint) << LOG_KV("reason", _reason)
+                                << LOG_KV("detail", _detail);
     }
 }
 

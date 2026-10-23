@@ -46,9 +46,9 @@
 #include <bcos-task/Task.h>
 #include <bcos-transaction-scheduler/EthereumChainRollback.h>
 #include <bcos-utilities/Bloom.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/lexical_cast.hpp>
 
 #include <algorithm>

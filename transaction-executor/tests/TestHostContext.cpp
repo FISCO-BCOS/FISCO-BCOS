@@ -25,7 +25,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>

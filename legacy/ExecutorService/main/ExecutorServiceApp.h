@@ -27,6 +27,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Timer.h>
 #include <servant/Application.h>
 

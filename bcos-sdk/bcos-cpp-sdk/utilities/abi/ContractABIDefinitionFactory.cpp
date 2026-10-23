@@ -22,6 +22,7 @@
 #include <bcos-cpp-sdk/utilities/Common.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/string.hpp>
 #include <cstring>
 #include <stdexcept>

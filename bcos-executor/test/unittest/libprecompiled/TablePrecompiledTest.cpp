@@ -21,6 +21,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/log/core/core.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

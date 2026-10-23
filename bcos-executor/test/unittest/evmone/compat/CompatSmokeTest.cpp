@@ -8,8 +8,8 @@
 
 #include "CompatHostContextHarness.h"
 #include "CompatTestFixture.h"
-#include "bcos-utilities/DataConvertUtility.h"
 
+#include "bcos-utilities/DataConvertUtility.h"
 #include <boost/test/unit_test.hpp>
 namespace bcos::test
 {

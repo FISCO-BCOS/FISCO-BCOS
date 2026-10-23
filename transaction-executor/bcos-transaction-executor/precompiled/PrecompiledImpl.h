@@ -9,6 +9,7 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/Overloaded.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>

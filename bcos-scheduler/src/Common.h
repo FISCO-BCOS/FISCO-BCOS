@@ -2,6 +2,7 @@
 
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <cstdint>
 #include <tuple>
 #define SCHEDULER_LOG(LEVEL) BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("SCHEDULER")

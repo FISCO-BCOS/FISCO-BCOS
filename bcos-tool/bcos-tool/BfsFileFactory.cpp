@@ -24,6 +24,7 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage/Table.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
 #include <future>

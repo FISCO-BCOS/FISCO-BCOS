@@ -16,6 +16,7 @@
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <json/forwards.h>
 #include <json/value.h>
 #include <legacy/bcos-ledger/LedgerImpl.h>

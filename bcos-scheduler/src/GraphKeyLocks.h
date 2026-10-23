@@ -2,6 +2,7 @@
 
 #include "Common.h"
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/graph/adjacency_list.hpp>
 #include <functional>
 #include <gsl/span>

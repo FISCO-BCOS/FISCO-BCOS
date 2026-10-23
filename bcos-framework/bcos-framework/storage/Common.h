@@ -22,6 +22,7 @@
 
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cstdlib>

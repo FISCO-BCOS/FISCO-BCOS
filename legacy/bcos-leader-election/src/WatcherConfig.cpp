@@ -20,7 +20,7 @@
  */
 
 #include "WatcherConfig.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <algorithm>
 #include <cstddef>
 #include <set>

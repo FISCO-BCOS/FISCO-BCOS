@@ -25,6 +25,7 @@
 #include "tikv_client.h"
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/LogStream.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <atomic>

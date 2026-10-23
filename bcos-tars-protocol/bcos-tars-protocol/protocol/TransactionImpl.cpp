@@ -30,7 +30,7 @@
 #include <bcos-concepts/Serialize.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <array>

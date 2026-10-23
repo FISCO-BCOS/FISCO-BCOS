@@ -49,7 +49,6 @@
 #include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
@@ -66,6 +65,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 
 namespace
 {

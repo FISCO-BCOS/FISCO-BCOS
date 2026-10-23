@@ -21,6 +21,7 @@
 #include <bcos-framework/Common.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
 #include <stdint.h>
 
 #define RPBFT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("RPBFT")

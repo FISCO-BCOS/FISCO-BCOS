@@ -21,7 +21,7 @@
 #include "SchedulerServiceApp.h"
 #include "Common/TarsUtils.h"
 #include "SchedulerService/SchedulerServiceServer.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "generated/bcos-tars-protocol/tars/TxPoolService.h"
 #include "libinitializer/CommandHelper.h"
@@ -35,6 +35,7 @@
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <util/tc_clientsocket.h>
+#include <boost/property_tree/ini_parser.hpp>
 #include <vector>
 
 using namespace bcostars;

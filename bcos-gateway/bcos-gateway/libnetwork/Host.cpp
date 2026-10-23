@@ -23,6 +23,7 @@
 #include "bcos-utilities/IOServicePool.h"
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>

@@ -14,6 +14,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <benchmark/benchmark.h>
+#include <boost/log/core/core.hpp>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 

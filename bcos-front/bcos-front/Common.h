@@ -20,6 +20,6 @@
 #pragma once
 
 #include <bcos-framework/Common.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define FRONT_LOG(LEVEL) BCOS_MODULE_LOG(FRONT, LEVEL) << "[FrontService]"

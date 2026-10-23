@@ -20,6 +20,7 @@
 #include "transaction-executor/tests/TestBytecode.h"
 #include <bcos-utilities/IOServicePool.h>
 #include <benchmark/benchmark.h>
+#include <boost/log/core/core.hpp>
 #include <boost/throw_exception.hpp>
 #include <random>
 #include <range/v3/view/indirect.hpp>

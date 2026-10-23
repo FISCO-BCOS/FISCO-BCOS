@@ -25,9 +25,9 @@
 #include "bcos-gateway/libamop/TopicManager.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
-#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
+#include "bcos-utilities/IOServicePool.h"
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
