@@ -2,10 +2,6 @@ project(bcos-crypto VERSION ${VERSION})
 
 file(GLOB_RECURSE ALL_SRCS bcos-crypto/*.cpp)
 set(LIB_LIST bcos-utilities TBB::tbb HSM-CRYPTO::sdf-crypto libsecp256k1::secp256k1 OpenSSL::SSL OpenSSL::Crypto)
-# anonymous-namespace helpers in the VRF sources collide with the zkp module's when merged
-# into a unity blob
-file(GLOB VRF_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/bcos-crypto/vrf/*.cpp)
-set_source_files_properties(${VRF_SRCS} PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 if(ONLY_CPP_SDK)
     list(REMOVE_ITEM ALL_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.cpp)
     # the VRF and ZKP modules need libsodium, which is fullnode-only; nothing in the SDK

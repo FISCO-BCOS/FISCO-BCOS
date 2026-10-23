@@ -20,6 +20,7 @@
  */
 #include "DiscreteLogarithmZkp.h"
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/utilities/ByteBufferUtils.h"
 #include "bcos-crypto/zkp/Common.h"
 #include "bcos-crypto/zkp/ristretto/RistrettoGroup.h"
 #include <cstring>
@@ -49,12 +50,12 @@ RistrettoScalarBytes hashToScalar(bytes const& _compressedPoints)
 
 void appendPoint(bytes& _buffer, const RistrettoPointBytes& _point)
 {
-    _buffer.insert(_buffer.end(), _point.begin(), _point.end());
+    appendBytes(_buffer, _point);
 }
 
 void appendPoint(bytes& _buffer, const std::uint8_t* _point)
 {
-    _buffer.insert(_buffer.end(), _point, _point + RISTRETTO_POINT_LEN);
+    appendBytes(_buffer, _point, RISTRETTO_POINT_LEN);
 }
 }  // namespace
 
@@ -63,15 +64,17 @@ bool DiscreteLogarithmZkp::verifyEitherEqualityProof(bytes const& c1PointData,
     bytes const& c2PointData, bytes const& c3PointData, bytes const& equalityProofData,
     bytes const& basePointData, bytes const& blindingBasePointData)
 {
-    constexpr size_t proofLen = 8 * RISTRETTO_SCALAR_LEN;
-    if (equalityProofData.size() < proofLen)
-    {
-        return false;
-    }
+    // points are decoded (and short inputs throw InvalidInputInput) BEFORE the proof-length
+    // check, matching the base wedpr evaluation order
     RistrettoPointBytes c1, c2, c3, basePoint, blindingBasePoint;
     if (!decodePoint(c1PointData, &c1) || !decodePoint(c2PointData, &c2) ||
         !decodePoint(c3PointData, &c3) || !decodePoint(basePointData, &basePoint) ||
         !decodePoint(blindingBasePointData, &blindingBasePoint))
+    {
+        return false;
+    }
+    constexpr size_t proofLen = 8 * RISTRETTO_SCALAR_LEN;
+    if (equalityProofData.size() < proofLen)
     {
         return false;
     }
@@ -109,14 +112,16 @@ bool DiscreteLogarithmZkp::verifyEitherEqualityProof(bytes const& c1PointData,
 bool DiscreteLogarithmZkp::verifyKnowledgeProof(bytes const& pointData,
     bytes const& knowledgeProofData, bytes const& basePointData, bytes const& blindingBasePointData)
 {
-    constexpr size_t proofLen = RISTRETTO_POINT_LEN + 2 * RISTRETTO_SCALAR_LEN;
-    if (knowledgeProofData.size() < proofLen)
-    {
-        return false;
-    }
+    // points are decoded (and short inputs throw InvalidInputInput) BEFORE the proof-length
+    // check, matching the base wedpr evaluation order
     RistrettoPointBytes point, basePoint, blindingBasePoint;
     if (!decodePoint(pointData, &point) || !decodePoint(basePointData, &basePoint) ||
         !decodePoint(blindingBasePointData, &blindingBasePoint))
+    {
+        return false;
+    }
+    constexpr size_t proofLen = RISTRETTO_POINT_LEN + 2 * RISTRETTO_SCALAR_LEN;
+    if (knowledgeProofData.size() < proofLen)
     {
         return false;
     }
@@ -144,16 +149,18 @@ bool DiscreteLogarithmZkp::verifyFormatProof(bytes const& c1Point, bytes const& 
     bytes const& formatProofData, bytes const& c1BasePointData, bytes const& c2BasePointData,
     bytes const& blindingBasePointData)
 {
-    constexpr size_t proofLen = 2 * RISTRETTO_POINT_LEN + 2 * RISTRETTO_SCALAR_LEN;
-    if (formatProofData.size() < proofLen)
-    {
-        return false;
-    }
+    // points are decoded (and short inputs throw InvalidInputInput) BEFORE the proof-length
+    // check, matching the base wedpr evaluation order
     RistrettoPointBytes c1, c2, c1BasePoint, c2BasePoint, blindingBasePoint;
     if (!decodePoint(c1Point, &c1) || !decodePoint(c2Point, &c2) ||
         !decodePoint(c1BasePointData, &c1BasePoint) ||
         !decodePoint(c2BasePointData, &c2BasePoint) ||
         !decodePoint(blindingBasePointData, &blindingBasePoint))
+    {
+        return false;
+    }
+    constexpr size_t proofLen = 2 * RISTRETTO_POINT_LEN + 2 * RISTRETTO_SCALAR_LEN;
+    if (formatProofData.size() < proofLen)
     {
         return false;
     }
@@ -224,12 +231,17 @@ bool DiscreteLogarithmZkp::verifySumProof(bytes const& c1Point, bytes const& c2P
     bytes const& c3Point, bytes const& arithmeticProofData, bytes const& valueBasePointData,
     bytes const& blindingBasePointData)
 {
-    ArithmeticProof proof;
+    // points are decoded (and short inputs throw InvalidInputInput) BEFORE the proof-length
+    // check inside decodeArithmeticProof, matching the base wedpr evaluation order
     RistrettoPointBytes c1, c2, c3, valueBasePoint, blindingBasePoint;
-    if (!decodeArithmeticProof(arithmeticProofData, &proof) || !decodePoint(c1Point, &c1) ||
-        !decodePoint(c2Point, &c2) || !decodePoint(c3Point, &c3) ||
+    if (!decodePoint(c1Point, &c1) || !decodePoint(c2Point, &c2) || !decodePoint(c3Point, &c3) ||
         !decodePoint(valueBasePointData, &valueBasePoint) ||
         !decodePoint(blindingBasePointData, &blindingBasePoint))
+    {
+        return false;
+    }
+    ArithmeticProof proof;
+    if (!decodeArithmeticProof(arithmeticProofData, &proof))
     {
         return false;
     }
@@ -261,12 +273,17 @@ bool DiscreteLogarithmZkp::verifyProductProof(bytes const& c1Point, bytes const&
     bytes const& c3Point, bytes const& arithmeticProofData, bytes const& valueBasePointData,
     bytes const& blindingBasePointData)
 {
-    ArithmeticProof proof;
+    // points are decoded (and short inputs throw InvalidInputInput) BEFORE the proof-length
+    // check inside decodeArithmeticProof, matching the base wedpr evaluation order
     RistrettoPointBytes c1, c2, c3, valueBasePoint, blindingBasePoint;
-    if (!decodeArithmeticProof(arithmeticProofData, &proof) || !decodePoint(c1Point, &c1) ||
-        !decodePoint(c2Point, &c2) || !decodePoint(c3Point, &c3) ||
+    if (!decodePoint(c1Point, &c1) || !decodePoint(c2Point, &c2) || !decodePoint(c3Point, &c3) ||
         !decodePoint(valueBasePointData, &valueBasePoint) ||
         !decodePoint(blindingBasePointData, &blindingBasePoint))
+    {
+        return false;
+    }
+    ArithmeticProof proof;
+    if (!decodeArithmeticProof(arithmeticProofData, &proof))
     {
         return false;
     }
@@ -300,14 +317,16 @@ bool DiscreteLogarithmZkp::verifyProductProof(bytes const& c1Point, bytes const&
 bool DiscreteLogarithmZkp::verifyEqualityProof(bytes const& c1Point, bytes const c2Point,
     bytes const& equalityProofData, bytes const& basePoint1Data, bytes const& basePoint2Data)
 {
-    constexpr size_t proofLen = RISTRETTO_SCALAR_LEN + 2 * RISTRETTO_POINT_LEN;
-    if (equalityProofData.size() < proofLen)
-    {
-        return false;
-    }
+    // points are decoded (and short inputs throw InvalidInputInput) BEFORE the proof-length
+    // check, matching the base wedpr evaluation order
     RistrettoPointBytes c1, c2, basePoint1, basePoint2;
     if (!decodePoint(c1Point, &c1) || !decodePoint(c2Point, &c2) ||
         !decodePoint(basePoint1Data, &basePoint1) || !decodePoint(basePoint2Data, &basePoint2))
+    {
+        return false;
+    }
+    constexpr size_t proofLen = RISTRETTO_SCALAR_LEN + 2 * RISTRETTO_POINT_LEN;
+    if (equalityProofData.size() < proofLen)
     {
         return false;
     }

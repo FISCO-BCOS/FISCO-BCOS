@@ -53,6 +53,14 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     BIGNUM* privateKey = nullptr;
     BIGNUM* bn = nullptr;
     int8_t ret = WEDPR_ERROR;
+    // raw_public_key->len feeds a fixed 65-byte stack buffer below — reject anything but the
+    // exact 64-byte X||Y form before the memcpy (KeyImpl does not truncate oversized input)
+    if (raw_public_key->len != (size_t)c_PUBLICKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_sign: invalid publicKey length")
+                            << LOG_KV("len", raw_public_key->len);
+        return WEDPR_ERROR;
+    }
     uint8_t publicKeyData[65] = {4};
     memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
     bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
@@ -163,6 +171,21 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
     BIGNUM* s = NULL;
     ECDSA_SIG* signData = NULL;
     int8_t ret = WEDPR_ERROR;
+    // raw_public_key->len feeds a fixed 65-byte stack buffer below — reject anything but the
+    // exact 64-byte X||Y form before the memcpy (KeyImpl does not truncate oversized input).
+    // raw_signature is read as exactly r‖s (64 bytes) regardless of its stated length.
+    if (raw_public_key->len != (size_t)c_PUBLICKEY_LEN)
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_verify: invalid publicKey length")
+                            << LOG_KV("len", raw_public_key->len);
+        return WEDPR_ERROR;
+    }
+    if (raw_signature->len < (size_t)(c_R_FIELD_LEN + c_S_FIELD_LEN))
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_verify: invalid signature length")
+                            << LOG_KV("len", raw_signature->len);
+        return WEDPR_ERROR;
+    }
     uint8_t publicKeyData[65] = {4};
     memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
     BIGNUM* bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);

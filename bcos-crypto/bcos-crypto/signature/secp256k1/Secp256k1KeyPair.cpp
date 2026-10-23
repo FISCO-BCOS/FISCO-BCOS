@@ -29,13 +29,6 @@
 using namespace bcos;
 using namespace bcos::crypto;
 
-namespace
-{
-const std::unique_ptr<secp256k1_context, void (*)(secp256k1_context*)> g_SECP256K1_CTX{
-    secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY),
-    &secp256k1_context_destroy};
-}  // namespace
-
 bcos::crypto::Secp256k1KeyPair::Secp256k1KeyPair()
   : KeyPair(SECP256K1_PUBLIC_LEN, SECP256K1_PRIVATE_LEN, KeyPairType::Secp256K1)
 {}
@@ -54,16 +47,24 @@ bcos::crypto::PublicPtr bcos::crypto::Secp256k1KeyPair::priToPub(SecretPtr _secr
 
 bcos::crypto::PublicPtr bcos::crypto::secp256k1PriToPub(bcos::crypto::SecretPtr _secret)
 {
+    // secp256k1_ec_pubkey_create reads exactly 32 bytes unconditionally — a shorter
+    // secret would be an out-of-bounds read
+    if (_secret->size() != SECP256K1_PRIVATE_LEN)
+    {
+        BOOST_THROW_EXCEPTION(PriToPublicKeyException() << errinfo_comment(
+                                  "secp256k1PriToPub exception: invalid secret length " +
+                                  std::to_string(_secret->size())));
+    }
     secp256k1_pubkey pubkey;
     if (secp256k1_ec_pubkey_create(
-            g_SECP256K1_CTX.get(), &pubkey, (const unsigned char*)_secret->constData()) == 0)
+            secp256k1Context(), &pubkey, (const unsigned char*)_secret->constData()) == 0)
     {
         BOOST_THROW_EXCEPTION(
             PriToPublicKeyException() << errinfo_comment("secp256k1PriToPub exception"));
     }
     std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> serializedPubKey{};
     size_t serializedPubKeySize = serializedPubKey.size();
-    secp256k1_ec_pubkey_serialize(g_SECP256K1_CTX.get(), serializedPubKey.data(),
+    secp256k1_ec_pubkey_serialize(secp256k1Context(), serializedPubKey.data(),
         &serializedPubKeySize, &pubkey, SECP256K1_EC_UNCOMPRESSED);
     // drop the 0x04 uncompressed prefix, keep the 64-byte X||Y form
     PublicPtr pubKey = std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN);

@@ -57,6 +57,39 @@ BOOST_AUTO_TEST_CASE(curve25519_golden_vectors)
     BOOST_CHECK_EQUAL(curve25519VrfProofToHash(ref(freshProof)).size(), 32u);
 }
 
+BOOST_AUTO_TEST_CASE(curve25519_unreduced_challenge_rejected)
+{
+    auto message = fromHex("74657374206d657373616765");
+    auto publicKey = fromHex("c4b70a0e351166512f31d0d048cb930f7c84a07953add0e3c4f24a125f56cc57");
+    auto proof = fromHex(
+        "3c0b4d46ef2bb2fe5cb1ae4169b3467092ccdb09a325136cb15d7045366b61402a4f2275e497f8a5ccfb99"
+        "f490aa516899c2cc436592d2b16c6eb1bb3d45670fde272c81e37c049ada64163a83aa256778cb5d474fe5"
+        "5a959e90962b2f0c040f");
+    // sanity: the untouched golden proof verifies
+    BOOST_REQUIRE(curve25519VrfVerify(ref(publicKey), ref(message), ref(proof)));
+
+    // l = 2^252 + 27742317777372353535851937790883648493, little-endian
+    const std::array<std::uint8_t, 32> groupOrder = {0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58,
+        0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+    // replace the challenge c (proof bytes 32..64) by c + l: arithmetically the same scalar
+    // (so all scalar multiplications agree), but dalek compares the challenge BYTES, so the
+    // proof must be rejected — we used to reduce c eagerly and accept it
+    auto forged = proof;
+    std::uint16_t carry = 0;
+    for (size_t i = 0; i < 32; i++)
+    {
+        carry = carry + forged[32 + i] + groupOrder[i];
+        forged[32 + i] = static_cast<byte>(carry & 0xff);
+        carry >>= 8;
+    }
+    // c < l and l < 2^253, so c + l < 2^254: bit 255 stays clear and dalek's from_bits
+    // accepts it as a distinct scalar
+    BOOST_REQUIRE_EQUAL(carry, 0u);
+    BOOST_REQUIRE((forged[63] & 0x80) == 0);
+    BOOST_CHECK(!curve25519VrfVerify(ref(publicKey), ref(message), ref(forged)));
+}
+
 BOOST_AUTO_TEST_CASE(curve25519_negative_cases)
 {
     auto secret = fromHex("72616e646f6d206b6579");

@@ -19,6 +19,7 @@
 #include "Curve25519Vrf.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/random/CryptoRandom.h"
+#include "bcos-crypto/utilities/ByteBufferUtils.h"
 #include "bcos-crypto/zkp/ristretto/RistrettoGroup.h"
 #include <openssl/evp.h>
 #include <boost/throw_exception.hpp>
@@ -44,33 +45,6 @@ std::array<std::uint8_t, 64> sha3_512(bytesConstRef _data)
     return digest;
 }
 
-bcos::bytes concat(std::initializer_list<bytesConstRef> _parts)
-{
-    bcos::bytes out;
-    size_t total = 0;
-    for (auto const& part : _parts)
-    {
-        total += part.size();
-    }
-    out.reserve(total);
-    for (auto const& part : _parts)
-    {
-        out.insert(out.end(), part.begin(), part.end());
-    }
-    return out;
-}
-
-bytesConstRef refOf(bcos::bytes const& _data)
-{
-    return bytesConstRef(_data.data(), _data.size());
-}
-
-template <size_t N>
-bytesConstRef refOf(std::array<std::uint8_t, N> const& _data)
-{
-    return bytesConstRef(_data.data(), N);
-}
-
 // x = SHA3-512(secret) interpreted as a 64-byte little-endian integer reduced mod l
 // (dalek Scalar::hash_from_bytes::<Sha3_512> = from_bytes_mod_order_wide)
 RistrettoScalarBytes secretToScalar(bytesConstRef _secretKey)
@@ -86,16 +60,6 @@ RistrettoPointBytes hashToPoint(bytesConstRef _data)
     auto hash = sha3_512(_data);
     return ristrettoFromHash(hash.data());
 }
-
-void appendPoint(bcos::bytes& _buffer, const RistrettoPointBytes& _point)
-{
-    _buffer.insert(_buffer.end(), _point.begin(), _point.end());
-}
-
-void appendScalar(bcos::bytes& _buffer, const RistrettoScalarBytes& _scalar)
-{
-    _buffer.insert(_buffer.end(), _scalar.begin(), _scalar.end());
-}
 }  // namespace
 
 bcos::bytes bcos::crypto::curve25519VrfDerivePublicKey(bytesConstRef _secretKey)
@@ -109,7 +73,7 @@ bcos::bytes bcos::crypto::curve25519VrfProve(bytesConstRef _secretKey, bytesCons
 {
     auto publicKey = curve25519VrfDerivePublicKey(_secretKey);
     auto x = secretToScalar(_secretKey);
-    auto hashVec = concat({refOf(publicKey), _input});
+    auto hashVec = bytesConcat({refOf(publicKey), _input});
     auto pointH = hashToPoint(refOf(hashVec));
 
     // gamma = x·H
@@ -122,7 +86,7 @@ bcos::bytes bcos::crypto::curve25519VrfProve(bytesConstRef _secretKey, bytesCons
     auto pointKBytes = ristrettoScalarmult(k, pointH);
 
     // c = wide-reduce(SHA3-512(hashVec ‖ pub ‖ gamma ‖ baseK ‖ pointK))
-    auto challengeInput = concat({refOf(hashVec), refOf(publicKey), refOf(gammaBytes),
+    auto challengeInput = bytesConcat({refOf(hashVec), refOf(publicKey), refOf(gammaBytes),
         refOf(baseKBytes), refOf(pointKBytes)});
     auto challengeHash = sha3_512(refOf(challengeInput));
     auto c = ristrettoScalarReduce(challengeHash.data(), challengeHash.size());
@@ -132,9 +96,9 @@ bcos::bytes bcos::crypto::curve25519VrfProve(bytesConstRef _secretKey, bytesCons
 
     bcos::bytes proof;
     proof.reserve(CURVE25519_VRF_PROOF_SIZE);
-    appendPoint(proof, gammaBytes);
-    appendScalar(proof, c);
-    appendScalar(proof, s);
+    appendBytes(proof, gammaBytes);
+    appendBytes(proof, c);
+    appendBytes(proof, s);
     return proof;
 }
 
@@ -158,11 +122,14 @@ bool bcos::crypto::curve25519VrfVerify(
     std::memcpy(pubPoint.data(), _publicKey.data(), RISTRETTO_POINT_LEN);
     RistrettoPointBytes gamma;
     std::memcpy(gamma.data(), _proof.data(), RISTRETTO_POINT_LEN);
-    // c, s as little-endian scalars with bit 255 masked, never rejected (dalek from_bits)
-    auto c = ristrettoScalarFromBits(_proof.data() + RISTRETTO_POINT_LEN);
-    auto s = ristrettoScalarFromBits(_proof.data() + 2 * RISTRETTO_SCALAR_LEN);
+    // c, s as little-endian scalars with bit 255 masked, never rejected (dalek from_bits).
+    // NOT reduced: dalek compares the recomputed challenge against the raw masked bytes,
+    // so c+l (bit 255 still clear) must be rejected even though it is arithmetically
+    // equivalent to c — libsodium reduces internally in the scalar multiplications below.
+    auto c = ristrettoScalarFromBitsRaw(_proof.data() + RISTRETTO_POINT_LEN);
+    auto s = ristrettoScalarFromBitsRaw(_proof.data() + 2 * RISTRETTO_SCALAR_LEN);
 
-    auto hashVec = concat({_publicKey, _input});
+    auto hashVec = bytesConcat({_publicKey, _input});
     auto pointH = hashToPoint(refOf(hashVec));
 
     // u = c·P + s·G1
@@ -171,11 +138,13 @@ bool bcos::crypto::curve25519VrfVerify(
     auto v = ristrettoAdd(ristrettoScalarmult(c, gamma), ristrettoScalarmult(s, pointH));
 
     // c' = wide-reduce(SHA3-512(pub ‖ msg ‖ pub ‖ gamma(from proof) ‖ u ‖ v))
-    auto challengeInput = concat({refOf(hashVec), _publicKey,
+    auto challengeInput = bytesConcat({refOf(hashVec), _publicKey,
         bytesConstRef(_proof.data(), RISTRETTO_POINT_LEN), refOf(u), refOf(v)});
     auto challengeHash = sha3_512(refOf(challengeInput));
     auto cPrime = ristrettoScalarReduce(challengeHash.data(), challengeHash.size());
-    return ristrettoEqual(cPrime, c.data());
+    // dalek compares Scalar by raw bytes: the reduced recomputed challenge must equal the
+    // proof's masked-but-unreduced c byte-for-byte
+    return std::memcmp(cPrime.data(), c.data(), RISTRETTO_SCALAR_LEN) == 0;
 }
 
 bcos::bytes bcos::crypto::curve25519VrfProofToHash(bytesConstRef _proof)

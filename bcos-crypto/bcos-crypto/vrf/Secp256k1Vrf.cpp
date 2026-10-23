@@ -18,6 +18,8 @@
  */
 #include "Secp256k1Vrf.h"
 #include "bcos-crypto/hash/Sha256.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-crypto/utilities/ByteBufferUtils.h"
 #include <secp256k1.h>
 #include <array>
 #include <cstring>
@@ -29,37 +31,12 @@ using namespace bcos::crypto;
 
 namespace
 {
-const std::unique_ptr<secp256k1_context, void (*)(secp256k1_context*)> g_SECP256K1_VRF_CTX{
-    secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY),
-    &secp256k1_context_destroy};
-
 // secp256k1 group order n, big-endian
 constexpr std::array<std::uint8_t, 32> GROUP_ORDER{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE, 0xBA, 0xAE, 0xDC, 0xE6, 0xAF, 0x48, 0xA0, 0x3B,
     0xBF, 0xD2, 0x5E, 0x8C, 0xD0, 0x36, 0x41, 0x41};
 
 using ScalarBE = std::array<std::uint8_t, 32>;
-
-bcos::bytes concat(std::initializer_list<bytesConstRef> _parts)
-{
-    bcos::bytes out;
-    size_t total = 0;
-    for (auto const& part : _parts)
-    {
-        total += part.size();
-    }
-    out.reserve(total);
-    for (auto const& part : _parts)
-    {
-        out.insert(out.end(), part.begin(), part.end());
-    }
-    return out;
-}
-
-bytesConstRef refOf(bcos::bytes const& _data)
-{
-    return bytesConstRef(_data.data(), _data.size());
-}
 
 bool isZero(const ScalarBE& _scalar)
 {
@@ -80,7 +57,7 @@ bool scalarBelowOrder(const std::uint8_t* _scalar)
 // 0 < scalar < n
 bool isValidSecretScalar(const std::uint8_t* _scalar)
 {
-    return secp256k1_ec_seckey_verify(g_SECP256K1_VRF_CTX.get(), _scalar) == 1;
+    return secp256k1_ec_seckey_verify(secp256k1Context(), _scalar) == 1;
 }
 
 // SHA-256(data) as a big-endian scalar; nullopt when the digest is >= n
@@ -103,7 +80,7 @@ bool parsePublicKey(bytesConstRef _encoded, secp256k1_pubkey* _point)
         return false;
     }
     return secp256k1_ec_pubkey_parse(
-               g_SECP256K1_VRF_CTX.get(), _point, _encoded.data(), _encoded.size()) == 1;
+               secp256k1Context(), _point, _encoded.data(), _encoded.size()) == 1;
 }
 
 bcos::bytes serializeCompressed(const secp256k1_pubkey& _point)
@@ -111,7 +88,7 @@ bcos::bytes serializeCompressed(const secp256k1_pubkey& _point)
     bcos::bytes encoded(SECP256K1_VRF_PUBLIC_KEY_SIZE);
     size_t encodedSize = encoded.size();
     secp256k1_ec_pubkey_serialize(
-        g_SECP256K1_VRF_CTX.get(), encoded.data(), &encodedSize, &_point, SECP256K1_EC_COMPRESSED);
+        secp256k1Context(), encoded.data(), &encodedSize, &_point, SECP256K1_EC_COMPRESSED);
     encoded.resize(encodedSize);
     return encoded;
 }
@@ -119,7 +96,7 @@ bcos::bytes serializeCompressed(const secp256k1_pubkey& _point)
 // point = scalar·point; zero scalars are rejected by libsecp256k1
 bool tweakMul(secp256k1_pubkey* _point, const std::uint8_t* _scalar)
 {
-    return secp256k1_ec_pubkey_tweak_mul(g_SECP256K1_VRF_CTX.get(), _point, _scalar) == 1;
+    return secp256k1_ec_pubkey_tweak_mul(secp256k1Context(), _point, _scalar) == 1;
 }
 
 // point = point + addend (the combine API zeroes its output before loading the inputs,
@@ -128,7 +105,7 @@ bool combine(secp256k1_pubkey* _point, const secp256k1_pubkey& _addend)
 {
     secp256k1_pubkey combined;
     const secp256k1_pubkey* points[] = {_point, &_addend};
-    if (secp256k1_ec_pubkey_combine(g_SECP256K1_VRF_CTX.get(), &combined, points, 2) == 0)
+    if (secp256k1_ec_pubkey_combine(secp256k1Context(), &combined, points, 2) == 0)
     {
         return false;
     }
@@ -145,8 +122,7 @@ bcos::bytes bcos::crypto::secp256k1VrfDerivePublicKey(bytesConstRef _secretKey)
         return {};
     }
     secp256k1_pubkey point;
-    if (secp256k1_ec_pubkey_create(g_SECP256K1_VRF_CTX.get(), &point, _secretKey.data()) == 0)
-        [[unlikely]]
+    if (secp256k1_ec_pubkey_create(secp256k1Context(), &point, _secretKey.data()) == 0) [[unlikely]]
     {
         return {};
     }
@@ -163,14 +139,14 @@ bcos::bytes bcos::crypto::secp256k1VrfProve(bytesConstRef _secretKey, bytesConst
     auto publicKey = secp256k1VrfDerivePublicKey(_secretKey);
 
     // H = hash_to_scalar(pub ‖ msg)·G
-    auto hashVec = concat({refOf(publicKey), _input});
+    auto hashVec = bytesConcat({refOf(publicKey), _input});
     auto h = hashToScalar(refOf(hashVec));
     if (!h) [[unlikely]]
     {
         return {};
     }
     secp256k1_pubkey pointH;
-    if (secp256k1_ec_pubkey_create(g_SECP256K1_VRF_CTX.get(), &pointH, h->data()) == 0) [[unlikely]]
+    if (secp256k1_ec_pubkey_create(secp256k1Context(), &pointH, h->data()) == 0) [[unlikely]]
     {
         return {};
     }
@@ -189,7 +165,7 @@ bcos::bytes bcos::crypto::secp256k1VrfProve(bytesConstRef _secretKey, bytesConst
         return {};
     }
     secp256k1_pubkey pointK;
-    if (secp256k1_ec_pubkey_create(g_SECP256K1_VRF_CTX.get(), &pointK, k.data()) == 0) [[unlikely]]
+    if (secp256k1_ec_pubkey_create(secp256k1Context(), &pointK, k.data()) == 0) [[unlikely]]
     {
         return {};
     }
@@ -204,7 +180,7 @@ bcos::bytes bcos::crypto::secp256k1VrfProve(bytesConstRef _secretKey, bytesConst
     auto encodedK = serializeCompressed(pointK);
     auto encodedKH = serializeCompressed(pointKH);
     auto challengeInput =
-        concat({refOf(encodedH), refOf(encodedGamma), refOf(encodedK), refOf(encodedKH)});
+        bytesConcat({refOf(encodedH), refOf(encodedGamma), refOf(encodedK), refOf(encodedKH)});
     auto c = hashToScalar(refOf(challengeInput));
     if (!c) [[unlikely]]
     {
@@ -219,9 +195,8 @@ bcos::bytes bcos::crypto::secp256k1VrfProve(bytesConstRef _secretKey, bytesConst
     else
     {
         std::memcpy(s.data(), _secretKey.data(), s.size());
-        if (secp256k1_ec_seckey_tweak_mul(g_SECP256K1_VRF_CTX.get(), s.data(), c->data()) == 0 ||
-            secp256k1_ec_seckey_tweak_add(g_SECP256K1_VRF_CTX.get(), s.data(), k.data()) == 0)
-            [[unlikely]]
+        if (secp256k1_ec_seckey_tweak_mul(secp256k1Context(), s.data(), c->data()) == 0 ||
+            secp256k1_ec_seckey_tweak_add(secp256k1Context(), s.data(), k.data()) == 0) [[unlikely]]
         {
             return {};
         }
@@ -258,14 +233,14 @@ bool bcos::crypto::secp256k1VrfVerify(
     {
         return false;
     }
-    auto hashVec = concat({_publicKey, _input});
+    auto hashVec = bytesConcat({_publicKey, _input});
     auto h = hashToScalar(refOf(hashVec));
     if (!h)
     {
         return false;
     }
     secp256k1_pubkey pointH;
-    if (secp256k1_ec_pubkey_create(g_SECP256K1_VRF_CTX.get(), &pointH, h->data()) == 0)
+    if (secp256k1_ec_pubkey_create(secp256k1Context(), &pointH, h->data()) == 0)
     {
         return false;
     }
@@ -276,15 +251,15 @@ bool bcos::crypto::secp256k1VrfVerify(
 
     // u = s·G − c·P
     secp256k1_pubkey u;
-    if (secp256k1_ec_pubkey_create(g_SECP256K1_VRF_CTX.get(), &u, s.data()) == 0)
+    if (secp256k1_ec_pubkey_create(secp256k1Context(), &u, s.data()) == 0)
     {
         return false;
     }
     if (!cZero)
     {
         secp256k1_pubkey cP = pubPoint;
-        if (!tweakMul(&cP, c.data()) ||
-            secp256k1_ec_pubkey_negate(g_SECP256K1_VRF_CTX.get(), &cP) == 0 || !combine(&u, cP))
+        if (!tweakMul(&cP, c.data()) || secp256k1_ec_pubkey_negate(secp256k1Context(), &cP) == 0 ||
+            !combine(&u, cP))
         {
             return false;
         }
@@ -299,8 +274,7 @@ bool bcos::crypto::secp256k1VrfVerify(
     {
         secp256k1_pubkey cGamma = gamma;
         if (!tweakMul(&cGamma, c.data()) ||
-            secp256k1_ec_pubkey_negate(g_SECP256K1_VRF_CTX.get(), &cGamma) == 0 ||
-            !combine(&v, cGamma))
+            secp256k1_ec_pubkey_negate(secp256k1Context(), &cGamma) == 0 || !combine(&v, cGamma))
         {
             return false;
         }
@@ -310,7 +284,7 @@ bool bcos::crypto::secp256k1VrfVerify(
     auto encodedU = serializeCompressed(u);
     auto encodedV = serializeCompressed(v);
     auto challengeInput =
-        concat({refOf(encodedH), bytesConstRef(_proof.data(), SECP256K1_VRF_PUBLIC_KEY_SIZE),
+        bytesConcat({refOf(encodedH), bytesConstRef(_proof.data(), SECP256K1_VRF_PUBLIC_KEY_SIZE),
             refOf(encodedU), refOf(encodedV)});
     auto cPrime = hashToScalar(refOf(challengeInput));
     if (!cPrime)

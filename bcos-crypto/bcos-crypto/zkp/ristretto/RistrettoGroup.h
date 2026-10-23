@@ -84,7 +84,7 @@ inline RistrettoPointBytes ristrettoAdd(
     const RistrettoPointBytes& _a, const RistrettoPointBytes& _b)
 {
     detail::ensureSodiumInit();
-    RistrettoPointBytes result;
+    RistrettoPointBytes result = RISTRETTO_IDENTITY;
     int const rc = crypto_core_ristretto255_add(result.data(), _a.data(), _b.data());
     (void)rc;
     return result;
@@ -94,7 +94,7 @@ inline RistrettoPointBytes ristrettoSub(
     const RistrettoPointBytes& _a, const RistrettoPointBytes& _b)
 {
     detail::ensureSodiumInit();
-    RistrettoPointBytes result;
+    RistrettoPointBytes result = RISTRETTO_IDENTITY;
     int const rc = crypto_core_ristretto255_sub(result.data(), _a.data(), _b.data());
     (void)rc;
     return result;
@@ -147,13 +147,25 @@ inline RistrettoScalarBytes ristrettoScalarReduce(const std::uint8_t* _bytes, si
     return scalar;
 }
 
-// decodes a serialized scalar like dalek Scalar::from_bits: the 32-byte little-endian
-// integer with bit 255 cleared, reduced mod l
-inline RistrettoScalarBytes ristrettoScalarFromBits(const std::uint8_t* _bytes)
+// exactly dalek Scalar::from_bits: the 32-byte little-endian integer with bit 255 cleared,
+// NOT reduced mod l. Usable directly as a libsodium scalar (it reduces internally, so
+// scalar·point results are identical); required wherever raw masked bytes are compared.
+inline RistrettoScalarBytes ristrettoScalarFromBitsRaw(const std::uint8_t* _bytes)
 {
-    std::array<std::uint8_t, RISTRETTO_SCALAR_LEN> masked;
+    RistrettoScalarBytes masked;
     std::memcpy(masked.data(), _bytes, RISTRETTO_SCALAR_LEN);
     masked.back() &= 0x7f;
+    return masked;
+}
+
+// decodes a serialized scalar like dalek Scalar::from_bits, then reduces mod l.
+// NOTE: dalek's from_bits itself only masks bit 255 and does NOT reduce; eager reduction
+// is equivalent for scalar arithmetic (libsodium reduces internally on every use) but NOT
+// for byte-equality — verifiers that compare a recomputed challenge against the proof's
+// original scalar bytes must use ristrettoScalarFromBitsRaw for the comparison instead.
+inline RistrettoScalarBytes ristrettoScalarFromBits(const std::uint8_t* _bytes)
+{
+    auto masked = ristrettoScalarFromBitsRaw(_bytes);
     return ristrettoScalarReduce(masked.data(), masked.size());
 }
 

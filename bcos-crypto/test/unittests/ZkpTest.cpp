@@ -250,6 +250,48 @@ BOOST_AUTO_TEST_CASE(testInvalidProofAndPointInput)
     // identity + P = P
     BOOST_CHECK(zkpImpl->aggregateRistrettoPoint(identityPoint, point) == point);
 }
+
+// base wedpr evaluation order: ALL point arguments are decoded (short ones throw
+// InvalidInputInput) BEFORE the proof-length check can return false
+BOOST_AUTO_TEST_CASE(testPointDecodeBeforeProofLengthCheck)
+{
+    auto zkpImpl = std::make_shared<DiscreteLogarithmZkp>();
+    bytes point = fromHex("c2e63cef83875e81ea26e00546102cfbbca50ec21a92d077df9100d1bc3a461e");
+    bytes base_point = fromHex("e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76");
+    bytes blinding_base_point =
+        fromHex("625c50529218ebb9f80e296886f4ac5bb55e06416db27b901c552d3e06ec4871");
+    bytes shortPoint(10, 0x00);
+    bytes shortProof(4, 0x00);
+
+    // short proof + short point: must throw InvalidInputInput from point decoding,
+    // not silently return false
+    BOOST_CHECK_THROW(
+        zkpImpl->verifyKnowledgeProof(shortPoint, shortProof, base_point, blinding_base_point),
+        InvalidInputInput);
+    BOOST_CHECK_THROW(zkpImpl->verifyEitherEqualityProof(
+                          point, shortPoint, point, shortProof, base_point, blinding_base_point),
+        InvalidInputInput);
+    BOOST_CHECK_THROW(zkpImpl->verifyFormatProof(
+                          point, point, shortProof, shortPoint, base_point, blinding_base_point),
+        InvalidInputInput);
+    BOOST_CHECK_THROW(zkpImpl->verifySumProof(
+                          point, point, shortPoint, shortProof, base_point, blinding_base_point),
+        InvalidInputInput);
+    BOOST_CHECK_THROW(
+        zkpImpl->verifyProductProof(point, point, point, shortProof, base_point, shortPoint),
+        InvalidInputInput);
+    BOOST_CHECK_THROW(zkpImpl->verifyEqualityProof(
+                          point, shortPoint, shortProof, base_point, blinding_base_point),
+        InvalidInputInput);
+
+    // all points valid + short proof: no throw, plain false
+    BOOST_CHECK(
+        zkpImpl->verifyKnowledgeProof(point, shortProof, base_point, blinding_base_point) == false);
+    BOOST_CHECK(zkpImpl->verifySumProof(
+                    point, point, point, shortProof, base_point, blinding_base_point) == false);
+    BOOST_CHECK(zkpImpl->verifyProductProof(
+                    point, point, point, shortProof, base_point, blinding_base_point) == false);
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

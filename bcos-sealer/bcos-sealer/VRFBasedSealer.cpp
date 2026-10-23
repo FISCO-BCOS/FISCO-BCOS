@@ -116,12 +116,14 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
             // change elliptic curve, do think twice here.
             vrfPublicKey = crypto::curve25519VrfDerivePublicKey(secretRef);
             // FIB-147: a failed proof must surface here — the previous FFI code shadowed the
-            // result variable, so a failed curve25519 VRF proof was silently accepted. An
-            // empty public key or proof is a failure.
+            // result variable, so a failed curve25519 VRF proof was silently accepted. The
+            // curve25519 VRF never returns empty; its failure surface is a thrown
+            // std::runtime_error, caught by the enclosing try/catch which returns FAILED.
             vrfProof = crypto::curve25519VrfProve(secretRef, inputMsg);
         }
         else if (vrfCurveType == sealer::VrfCurveType::SECKP256K1)
         {
+            // the secp256k1 VRF family reports failure as an empty bytes object, checked below
             vrfPublicKey = crypto::secp256k1VrfDerivePublicKey(secretRef);
             vrfProof = crypto::secp256k1VrfProve(secretRef, inputMsg);
         }

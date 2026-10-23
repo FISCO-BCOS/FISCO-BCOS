@@ -16,12 +16,9 @@
  * @file Buffers.h
  * @brief C-compatible input/output buffer structs and status codes shared by the
  * crypto backends. Layout-identical replacement for wedpr-crypto's
- * WedprUtilities.h so cross-boundary code stays ABI-compatible. Deliberately
- * shares wedpr's include guard: the definitions are identical, so whichever
- * header is included first wins and the other becomes a no-op.
+ * WedprUtilities.h so cross-boundary code stays ABI-compatible.
  */
-#ifndef _WEDPR_UTILITIES_H_
-#define _WEDPR_UTILITIES_H_
+#pragma once
 
 #include <cstdint>
 
@@ -42,5 +39,3 @@ struct COutputBuffer
 const int8_t WEDPR_ERROR = -1;
 const int8_t WEDPR_SUCCESS = 0;
 }  // extern "C"
-
-#endif  // _WEDPR_UTILITIES_H_

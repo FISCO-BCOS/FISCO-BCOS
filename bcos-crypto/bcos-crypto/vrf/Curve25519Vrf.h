@@ -15,7 +15,7 @@
  *
  * @brief Curve25519 (Ristretto255) VRF, byte-compatible with WeDPR-Lab-Crypto's
  * wedpr_curve25519_vrf_* family (curve25519-dalek 1.2.6 semantics). Pure C++
- * reimplementation over the vendored libsodium ref10 ristretto255 code.
+ * reimplementation over the public libsodium ristretto255 API (vcpkg port).
  * @file Curve25519Vrf.h
  */
 #pragma once
@@ -29,13 +29,13 @@ inline constexpr size_t CURVE25519_VRF_PROOF_SIZE = 96;
 inline constexpr size_t CURVE25519_VRF_HASH_SIZE = 32;
 
 // public key = x·G1 with x = SHA3-512(secret) reduced mod l (wide reduce), SEC-encoded as a
-// compressed Ristretto255 point; the secret may be arbitrary bytes. Returns an empty bytes
-// object on failure.
+// compressed Ristretto255 point; the secret may be arbitrary bytes. Never returns empty:
+// throws std::runtime_error if the OpenSSL digest fails.
 bcos::bytes curve25519VrfDerivePublicKey(bytesConstRef _secretKey);
 
 // 96-byte proof: gamma ‖ c ‖ s (c, s little-endian scalars). The nonce is random
 // (64 random bytes wide-reduced, like dalek Scalar::random), so proofs are non-deterministic.
-// Returns an empty bytes object on failure.
+// Never returns empty: throws std::runtime_error if the OpenSSL digest fails.
 bcos::bytes curve25519VrfProve(bytesConstRef _secretKey, bytesConstRef _input);
 
 // never throws: any malformed input (wrong lengths, undecodable points) yields false; the

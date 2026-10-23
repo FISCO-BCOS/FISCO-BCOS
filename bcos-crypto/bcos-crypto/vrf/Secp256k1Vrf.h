@@ -35,8 +35,17 @@ inline constexpr size_t SECP256K1_VRF_HASH_SIZE = 32;
 // instead — no caller ever passes an invalid secret (keypair secrets are always valid).
 bcos::bytes secp256k1VrfDerivePublicKey(bytesConstRef _secretKey);
 
-// 97-byte proof: compressed gamma ‖ c ‖ s (c, s big-endian scalars). Fully deterministic
-// (nonce k = SHA-256(secret), message-independent). Returns an empty bytes object on failure.
+// 97-byte proof: compressed gamma ‖ c ‖ s (c, s big-endian scalars).
+//
+// SECURITY WARNING — deterministic, message-independent nonce: k = SHA-256(secret) does
+// not depend on the input message, so two proofs published under the same key share the
+// same k and leak the secret (s1 − s2 = (c1 − c2)·x mod n). This is inherited verbatim
+// from wedprcrypto and kept for consensus compatibility: the proof wire format is
+// consensus-critical and must not change in this PR. Operators that enable
+// feature_rpbft_vrf_type_secp256k1 must ensure a key never publishes ≥2 proofs. A
+// message-bound nonce (RFC 9381 §5.4.2.1 style) is planned as a feature-gated follow-up.
+//
+// Returns an empty bytes object on failure (invalid secret, or a digest ≥ n).
 bcos::bytes secp256k1VrfProve(bytesConstRef _secretKey, bytesConstRef _input);
 
 // never throws: any malformed input (wrong proof length, undecodable points, scalars >= n)
