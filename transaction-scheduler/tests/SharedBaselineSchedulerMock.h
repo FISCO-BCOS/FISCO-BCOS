@@ -50,7 +50,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
-#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Immediate.h"
 #include "bcos-task/Task.h"
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include <bcos-codec/rlp/Common.h>
@@ -272,7 +272,7 @@ struct ScopedStubFeatures
 /// value they handed out (or in not touching ledgerConfig at all — the default
 /// g_stubFeatures reproduces that: a fresh LedgerConfig already holds a default
 /// Features).
-inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<ledger::getLedgerConfig> /*unused*/,
+inline task::Immediate<void> tag_invoke(ledger::tag_t<ledger::getLedgerConfig> /*unused*/,
     SharedMultiLayerStorage::ViewType& /*storage*/, ledger::LedgerConfig& ledgerConfig,
     protocol::BlockNumber /*blockNumber*/, protocol::BlockFactory& /*blockFactory*/)
 {

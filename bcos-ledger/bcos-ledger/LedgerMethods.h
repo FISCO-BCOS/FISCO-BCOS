@@ -42,7 +42,7 @@
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
-#include "bcos-task/AwaitableValue.h"
+#include "bcos-task/Immediate.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
@@ -61,8 +61,8 @@ struct InvalidConsensusType : public bcos::Exception
 {
 };
 
-inline task::AwaitableValue<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/,
-    auto& ledger, GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
+inline task::Immediate<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*unused*/, auto& ledger,
+    GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig)
 {
     return {ledger.buildGenesisBlock(genesis, ledgerConfig)};
 }

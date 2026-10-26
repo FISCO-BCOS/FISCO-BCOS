@@ -1,7 +1,6 @@
 #include "bcos-task/Generator.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
-#include "bcos-task/pmr/Task.h"
 #include "bcos-utilities/Common.h"
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/task_group.h>
@@ -12,7 +11,6 @@
 #include <chrono>
 #include <future>
 #include <iostream>
-#include <memory_resource>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -179,12 +177,23 @@ struct SleepTask
     constexpr void await_resume() const {}
 };
 
+// GCC -Wmismatched-new-delete false positive: std::generator's promise allocator is diagnosed
+// inside the coroutine body below (the diagnostic points at libstdc++ internals, not this code).
+// It is triggered at -Os + -Werror, so scope the suppression to this construct rather than
+// downgrading the warning for the whole project. Same idiom as bcos-utilities/BucketMap.h.
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
 bcos::task::Generator<int> genInt()
 {
     co_yield 1;
     co_yield 2;
     co_yield 3;
 }
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
+#pragma GCC diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_CASE(generator)
 {
@@ -210,57 +219,6 @@ BOOST_AUTO_TEST_CASE(memoryLeak)
 
     bcos::task::wait(
         []() -> Task<void> { BOOST_CHECK_THROW(co_await taskWithThrow(), std::runtime_error); }());
-}
-
-struct MyMemoryResource : public std::pmr::monotonic_buffer_resource
-{
-    MyMemoryResource(void* buffer, size_t bufferSize)
-      : std::pmr::monotonic_buffer_resource(buffer, bufferSize, std::pmr::get_default_resource())
-    {}
-
-    void* do_allocate(size_t bytes, size_t alignment) override
-    {
-        ++allocate;
-        return std::pmr::monotonic_buffer_resource::do_allocate(bytes, alignment);
-    }
-
-    void do_deallocate(void* p, size_t bytes, size_t alignment) override
-    {
-        ++deallocate;
-        return std::pmr::monotonic_buffer_resource::do_deallocate(p, bytes, alignment);
-    }
-
-    bool do_is_equal(const memory_resource& other) const noexcept override
-    {
-        return std::pmr::monotonic_buffer_resource::do_is_equal(other);
-    }
-
-    void reset()
-    {
-        allocate = 0;
-        deallocate = 0;
-    }
-
-    int allocate = 0;
-    int deallocate = 0;
-};
-
-bcos::task::pmr::Task<void> selfAlloc(
-    int /*unused*/, std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/)
-{
-    std::array<char, 1024> buf{};
-    co_return;
-}
-
-Generator<int> generatorWithAlloc(
-    int total, std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/)
-{
-    std::array<char, 1024> buf{};
-
-    for (auto i = 0; i < total; ++i)
-    {
-        co_yield i;
-    }
 }
 
 Task<bcos::u256> testU256()
