@@ -61,6 +61,13 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
                             << LOG_KV("len", raw_public_key->len);
         return WEDPR_ERROR;
     }
+    // the r‖s write at the end puts exactly 64 bytes into output_signature->data
+    if (output_signature->len < (size_t)(c_R_FIELD_LEN + c_S_FIELD_LEN))
+    {
+        CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_sign: output buffer too small")
+                            << LOG_KV("len", output_signature->len);
+        return WEDPR_ERROR;
+    }
     uint8_t publicKeyData[65] = {4};
     memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
     bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);

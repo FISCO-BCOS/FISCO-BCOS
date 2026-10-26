@@ -421,6 +421,35 @@ BOOST_AUTO_TEST_CASE(testEd25519VerifyShortSignature)
     BOOST_CHECK(!signatureCrypto->verify(keyPair->publicKey(), hashData, bytesConstRef{}));
 }
 
+// positive control for the sizeof(in) fix: a real hash‖pub‖r‖s buffer must verify and
+// recover the signing key's address (reverting to sizeof(_input) turns this red);
+// a truncated input leaves the tail zero-filled and fails verification deterministically
+BOOST_AUTO_TEST_CASE(testEd25519RecoverAddressFromInput)
+{
+    auto signatureCrypto = std::make_shared<Ed25519Crypto>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto keyPair = signatureCrypto->generateKeyPair();
+    auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
+    auto sig = signatureCrypto->sign(*keyPair, hashData, false);
+    BOOST_REQUIRE_EQUAL(sig->size(), ED25519_SIGNATURE_LEN);
+
+    bytes input;
+    input.insert(input.end(), hashData.begin(), hashData.end());
+    auto const& pub = *keyPair->publicKey();
+    input.insert(input.end(), pub.constData(), pub.constData() + pub.size());
+    input.insert(input.end(), sig->begin(), sig->end());
+    BOOST_REQUIRE_EQUAL(input.size(), 32 + pub.size() + sig->size());
+
+    auto [ok, addr] = signatureCrypto->recoverAddress(hashImpl, ref(input));
+    BOOST_CHECK(ok);
+    BOOST_CHECK(addr == calculateAddress(hashImpl, keyPair->publicKey()).asBytes());
+
+    auto truncated = bytes(input.begin(), input.end() - 1);
+    auto [okShort, addrShort] = signatureCrypto->recoverAddress(hashImpl, ref(truncated));
+    BOOST_CHECK(!okShort);
+    BOOST_CHECK(addrShort.empty());
+}
+
 
 BOOST_AUTO_TEST_CASE(testED25519SignAndVerify)
 {
