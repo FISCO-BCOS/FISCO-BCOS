@@ -13,9 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief secp256k1 VRF, byte-compatible with WeDPR-Lab-Crypto's
- * wedpr_secp256k1_vrf_* family (k256 0.13.4 semantics). Pure C++
- * reimplementation over libsecp256k1 and OpenSSL SHA-256.
+ * @brief secp256k1 VRF over libsecp256k1 and OpenSSL SHA-256. Verification and
+ * proofToHash are byte-compatible with WeDPR-Lab-Crypto's wedpr_secp256k1_vrf_* family
+ * (k256 0.13.4 semantics); the prover replaces wedpr's message-independent nonce with a
+ * message-bound one (see secp256k1VrfProve), which changes no consensus-visible value.
  * @file Secp256k1Vrf.h
  */
 #pragma once
@@ -37,15 +38,17 @@ bcos::bytes secp256k1VrfDerivePublicKey(bytesConstRef _secretKey);
 
 // 97-byte proof: compressed gamma ‖ c ‖ s (c, s big-endian scalars).
 //
-// SECURITY WARNING — deterministic, message-independent nonce: k = SHA-256(secret) does
-// not depend on the input message, so two proofs published under the same key share the
-// same k and leak the secret (s1 − s2 = (c1 − c2)·x mod n). This is inherited verbatim
-// from wedprcrypto and kept for consensus compatibility: the proof wire format is
-// consensus-critical and must not change in this PR. Operators that enable
-// feature_rpbft_vrf_type_secp256k1 must ensure a key never publishes ≥2 proofs. A
-// message-bound nonce (RFC 9381 §5.4.2.1 style) is planned as a feature-gated follow-up.
+// The Schnorr nonce is message-bound: k = SHA-256(secret ‖ SHA-256(input)), resampled with
+// an appended counter on the vanishingly unlikely invalid result. wedprcrypto derived
+// k = SHA-256(secret) — message-independent, so two proofs under one key leaked the secret
+// via s1 − s2 = (c1 − c2)·x mod n, and rotation publishes one proof per round under the
+// node key by design, making that inherited key-recovery weakness unmitigable in operation.
+// The fix is prover-side only: gamma and secp256k1VrfProofToHash are independent of k and
+// verification accepts any valid (c, s), so neither the wire format nor any
+// consensus-visible value changes (closes #5731).
 //
-// Returns an empty bytes object on failure (invalid secret, or a digest ≥ n).
+// Deterministic per (secret, input). Returns an empty bytes object on failure (invalid
+// secret, or a digest ≥ n).
 bcos::bytes secp256k1VrfProve(bytesConstRef _secretKey, bytesConstRef _input);
 
 // never throws: any malformed input (wrong proof length, undecodable points, scalars >= n)

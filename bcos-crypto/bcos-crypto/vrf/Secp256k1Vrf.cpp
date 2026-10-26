@@ -156,13 +156,20 @@ bcos::bytes bcos::crypto::secp256k1VrfProve(bytesConstRef _secretKey, bytesConst
     {
         return {};
     }
-    // deterministic, message-independent nonce k = SHA-256(secret)
-    auto kHash = sha256Hash(_secretKey);
+    // Message-bound nonce k = SHA-256(secret ‖ SHA-256(input)): wedprcrypto's
+    // message-independent k = SHA-256(secret) made two proofs under one key leak the secret
+    // via s1 − s2 = (c1 − c2)·x mod n. Prover-side only: gamma and proofToHash are
+    // independent of k and verification accepts any valid (c, s), so no consensus-visible
+    // value changes.
+    auto inputHash = sha256Hash(_input);
+    auto nonceInput = bytesConcat({_secretKey, inputHash.ref()});
     ScalarBE k;
-    std::memcpy(k.data(), kHash.data(), k.size());
-    if (!isValidSecretScalar(k.data())) [[unlikely]]
+    std::memcpy(k.data(), sha256Hash(refOf(nonceInput)).data(), k.size());
+    // resample with an appended counter on the vanishingly unlikely invalid scalar
+    for (std::uint8_t counter = 0; !isValidSecretScalar(k.data()); ++counter)
     {
-        return {};
+        auto retryInput = bytesConcat({refOf(nonceInput), bytesConstRef(&counter, 1)});
+        std::memcpy(k.data(), sha256Hash(refOf(retryInput)).data(), k.size());
     }
     secp256k1_pubkey pointK;
     if (secp256k1_ec_pubkey_create(secp256k1Context(), &pointK, k.data()) == 0) [[unlikely]]

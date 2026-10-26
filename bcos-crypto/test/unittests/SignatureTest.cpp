@@ -389,6 +389,22 @@ BOOST_AUTO_TEST_CASE(testSM2VerifyOversizedPublicKey)
         bytesConstRef(signature->data(), signature->size())));
 }
 
+// SM2Crypto::verify must reject a short signature before constructing the fixed
+// SM2_SIGNATURE_LEN view, which would otherwise read past the caller's buffer (under ASan
+// any residual overread would abort the test binary)
+BOOST_AUTO_TEST_CASE(testSM2VerifyShortSignature)
+{
+    auto signatureCrypto = std::make_shared<SM2Crypto>();
+    auto keyPair = signatureCrypto->generateKeyPair();
+    auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
+    auto signature = signatureCrypto->sign(*keyPair, hashData, false);
+    BOOST_REQUIRE_EQUAL(signature->size(), SM2_SIGNATURE_LEN);
+
+    BOOST_CHECK(!signatureCrypto->verify(
+        keyPair->publicKey(), hashData, bytesConstRef(signature->data(), SM2_SIGNATURE_LEN - 1)));
+    BOOST_CHECK(!signatureCrypto->verify(keyPair->publicKey(), hashData, bytesConstRef{}));
+}
+
 
 BOOST_AUTO_TEST_CASE(testED25519SignAndVerify)
 {

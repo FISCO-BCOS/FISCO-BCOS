@@ -14,7 +14,8 @@ vcpkg_from_github(
         # Backport of upstream jedisct1/libsodium@6702f69 ("Fix compilation with GCC on
         # aarch64", fixes jedisct1/libsodium#1502): 1.0.21's ipcrypt_armcrypto.c mixes
         # signed/unsigned NEON vector types, which GCC >= 15 rejects; drop once the port
-        # moves to a release containing the fix.
+        # moves to a release containing the fix, tracked by
+        # https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5734
         002-gcc-aarch64-ipcrypt.patch
 )
 

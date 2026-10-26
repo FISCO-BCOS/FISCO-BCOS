@@ -16,15 +16,21 @@
  * @brief permanent golden-vector and negative-case tests for the native VRF
  * implementations (bcos-crypto/vrf/). The golden vectors follow the
  * WeDPR-Lab-Crypto VRF spec; byte-compatibility with the real wedprcrypto
- * library was established by the (since removed) VrfDifferentialTest.
+ * library was established by the (since removed) VrfDifferentialTest. The
+ * secp256k1 golden proof is the exception: its gamma and proofHash remain the
+ * wedpr-derived values, while c ‖ s come from the message-bound nonce that
+ * fixed wedpr's key-recovery weakness (#5731).
  * @file VrfTest.cpp
  */
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/Sha256.h"
+#include "bcos-crypto/utilities/ByteBufferUtils.h"
 #include "bcos-crypto/vrf/Curve25519Vrf.h"
 #include "bcos-crypto/vrf/Secp256k1Vrf.h"
 #include "bcos-crypto/zkp/ristretto/RistrettoGroup.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/multiprecision/cpp_int.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -180,18 +186,69 @@ BOOST_AUTO_TEST_CASE(secp256k1_golden_vectors)
     auto secret = fromHex("0000000000000000000000000000000000000000000000000000000000000001");
     auto message = fromHex("74657374");  // "test"
     auto publicKey = fromHex("0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798");
+    // gamma (proof[0..33)) is nonce-independent and remains the wedpr-generated value;
+    // c ‖ s reflect the message-bound nonce that fixed the inherited key-recovery
+    // weakness (#5731)
     auto proof = fromHex(
-        "03e5e9a2b9b0c3ff9083a402169ab513782fd96c0ff9305afd2510c8ff1e3602fc7a0283dcf79755005a"
-        "b93476d982c6fab05fac6a9b2b0f88957a6df34dd8885a664b9aba2093a11132475cf37f5c934de3cbb6"
-        "c0abc07813891b3432784ed2de");
+        "03e5e9a2b9b0c3ff9083a402169ab513782fd96c0ff9305afd2510c8ff1e3602fc18392d105e67b17e01"
+        "a3ac7af2bc82b04165faefc53765bb3abe5c1f98ccde9df86c0f8b0a2ec8bb47fc78b118659d6e52447f"
+        "05d79f073375bc71564f5ba248");
     auto proofHash = fromHex("ed99045774503ff28089e5d7572f800f0bc09dbed064fbf72d1da358c6c60758");
 
     BOOST_CHECK(secp256k1VrfDerivePublicKey(ref(secret)) == publicKey);
-    // prove is deterministic: the output must equal the golden proof byte-for-byte
+    // prove is deterministic per (secret, input): the output must equal the golden proof
+    // byte-for-byte
     BOOST_CHECK(secp256k1VrfProve(ref(secret), ref(message)) == proof);
     BOOST_CHECK(secp256k1VrfVerify(ref(publicKey), ref(message), ref(proof)));
     BOOST_CHECK(secp256k1VrfProofToHash(ref(proof)) == proofHash);
     BOOST_CHECK(secp256k1VrfIsValidPublicKey(ref(publicKey)));
+}
+
+BOOST_AUTO_TEST_CASE(secp256k1_nonce_is_message_bound)
+{
+    // regression pin for #5731: with x = 1 the nonce is recoverable from a proof as
+    // k = (s − c) mod n; it must equal SHA-256(secret ‖ SHA-256(input)) and differ from
+    // wedpr's message-independent SHA-256(secret), under which two proofs leaked the key
+    using boost::multiprecision::cpp_int;
+    auto secret = fromHex("0000000000000000000000000000000000000000000000000000000000000001");
+    const cpp_int groupOrder("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+    auto extractNonce = [&](bytesConstRef input) {
+        auto proof = secp256k1VrfProve(ref(secret), input);
+        BOOST_REQUIRE_EQUAL(proof.size(), SECP256K1_VRF_PROOF_SIZE);
+        auto scalarAt = [&](size_t offset) {
+            cpp_int value = 0;
+            for (size_t i = 0; i < 32; i++)
+            {
+                value <<= 8;
+                value += proof[offset + i];
+            }
+            return value;
+        };
+        // x = 1, so s = k + c·x gives k = (s − c) mod n
+        cpp_int k = (scalarAt(65) + groupOrder - scalarAt(33)) % groupOrder;
+        bytes kBytes(32);
+        for (size_t i = 0; i < 32; i++)
+        {
+            kBytes[31 - i] = static_cast<byte>(k & 0xff);
+            k >>= 8;
+        }
+        return kBytes;
+    };
+    auto expectedNonce = [&](bytesConstRef input) {
+        auto inputHash = sha256Hash(input);
+        auto preImage = bytesConcat({ref(secret), inputHash.ref()});
+        return sha256Hash(refOf(preImage));
+    };
+    auto message1 = fromHex("74657374");
+    auto message2 = fromHex("7465737432");
+    auto k1 = extractNonce(ref(message1));
+    auto k2 = extractNonce(ref(message2));
+    BOOST_CHECK(expectedNonce(ref(message1)).asBytes() == k1);
+    BOOST_CHECK(expectedNonce(ref(message2)).asBytes() == k2);
+    BOOST_CHECK(k1 != k2);
+    auto legacyNonce = sha256Hash(ref(secret));
+    BOOST_CHECK(legacyNonce.asBytes() != k1);
+    BOOST_CHECK(legacyNonce.asBytes() != k2);
 }
 
 BOOST_AUTO_TEST_CASE(secp256k1_negative_cases)

@@ -75,6 +75,12 @@ bool SM2Crypto::verify(PublicPtr _pubKey, const HashType& _hash, bytesConstRef _
     CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
     CInputBuffer messageHash{(const char*)_hash.data(), HashType::SIZE};
 
+    // reject short signatures while the length is still known: the fixed-length view below
+    // would otherwise read past the caller's buffer before any check in the verifier fires
+    if (_signatureData.size() < SM2_SIGNATURE_LEN)
+    {
+        return false;
+    }
     auto signatureWithoutPub = bytesConstRef(_signatureData.data(), SM2_SIGNATURE_LEN);
     CInputBuffer signature{(const char*)signatureWithoutPub.data(), signatureWithoutPub.size()};
     auto verifyResult = m_verifier(&publicKey, &messageHash, &signature);
